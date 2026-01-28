@@ -30,3 +30,10 @@ tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true, features = ["transport"] }
 tonic-prost.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+sui-indexer-alt-framework = { workspace = true, features = ["cluster"] }
+sui-test-transaction-builder.workspace = true
+test-cluster.workspace = true
+tokio-stream.workspace = true
+url.workspace = true

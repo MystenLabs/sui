@@ -1,10 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub use crate::bigtable::client::BigTableClient;
+pub use crate::bigtable::store::BigTableConnection;
+pub use crate::bigtable::store::BigTableStore;
+pub use crate::handlers::BIGTABLE_MAX_MUTATIONS;
+pub use crate::handlers::BigTableHandler;
+pub use crate::handlers::CheckpointsByDigestPipeline;
+pub use crate::handlers::CheckpointsPipeline;
+pub use crate::handlers::EpochLegacyBatch;
+pub use crate::handlers::EpochLegacyPipeline;
+pub use crate::handlers::ObjectsPipeline;
+pub use crate::handlers::PrevEpochUpdate;
+pub use crate::handlers::TransactionsPipeline;
+pub use crate::handlers::set_max_mutations;
+
 use anyhow::Result;
 use async_trait::async_trait;
+use prometheus::Registry;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::EpochId;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
@@ -21,48 +41,12 @@ use sui_types::storage::EpochInfo;
 use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
 
-pub use crate::bigtable::client::BigTableClient;
-pub use crate::bigtable::store::BigTableConnection;
-pub use crate::bigtable::store::BigTableStore;
-pub use crate::handlers::BIGTABLE_MAX_MUTATIONS;
-pub use crate::handlers::BigTableHandler;
-pub use crate::handlers::CheckpointsByDigestPipeline;
-pub use crate::handlers::CheckpointsPipeline;
-pub use crate::handlers::EpochLegacyBatch;
-pub use crate::handlers::EpochLegacyPipeline;
-pub use crate::handlers::ObjectsPipeline;
-pub use crate::handlers::PrevEpochUpdate;
-pub use crate::handlers::TransactionsPipeline;
-pub use crate::handlers::set_max_mutations;
-
 mod bigtable;
 mod handlers;
 pub mod tables;
 
-#[async_trait]
-pub trait KeyValueStoreReader {
-    async fn get_objects(&mut self, objects: &[ObjectKey]) -> Result<Vec<Object>>;
-    async fn get_transactions(
-        &mut self,
-        transactions: &[TransactionDigest],
-    ) -> Result<Vec<TransactionData>>;
-    async fn get_checkpoints(
-        &mut self,
-        sequence_numbers: &[CheckpointSequenceNumber],
-    ) -> Result<Vec<Checkpoint>>;
-    async fn get_checkpoint_by_digest(
-        &mut self,
-        digest: CheckpointDigest,
-    ) -> Result<Option<Checkpoint>>;
-    async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber>;
-    async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>>;
-    async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
-    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>>;
-    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>>;
-    async fn get_events_for_transactions(
-        &mut self,
-        keys: &[TransactionDigest],
-    ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>>;
+pub struct BigTableIndexer {
+    pub indexer: Indexer<BigTableStore>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -96,6 +80,78 @@ pub struct PipelineWatermark {
     pub checkpoint_hi_inclusive: u64,
     pub tx_hi: u64,
     pub timestamp_ms_hi_inclusive: u64,
+}
+
+#[async_trait]
+pub trait KeyValueStoreReader {
+    async fn get_objects(&mut self, objects: &[ObjectKey]) -> Result<Vec<Object>>;
+    async fn get_transactions(
+        &mut self,
+        transactions: &[TransactionDigest],
+    ) -> Result<Vec<TransactionData>>;
+    async fn get_checkpoints(
+        &mut self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Result<Vec<Checkpoint>>;
+    async fn get_checkpoint_by_digest(
+        &mut self,
+        digest: CheckpointDigest,
+    ) -> Result<Option<Checkpoint>>;
+    async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber>;
+    async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>>;
+    async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
+    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>>;
+    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>>;
+    async fn get_events_for_transactions(
+        &mut self,
+        keys: &[TransactionDigest],
+    ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>>;
+}
+
+impl BigTableIndexer {
+    pub async fn new(
+        store: BigTableStore,
+        indexer_args: IndexerArgs,
+        client_args: ClientArgs,
+        ingestion_config: IngestionConfig,
+        config: ConcurrentConfig,
+        registry: &Registry,
+    ) -> Result<Self> {
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            registry,
+        )
+        .await?;
+
+        indexer
+            .concurrent_pipeline(BigTableHandler::new(CheckpointsPipeline), config.clone())
+            .await?;
+        indexer
+            .concurrent_pipeline(
+                BigTableHandler::new(CheckpointsByDigestPipeline),
+                config.clone(),
+            )
+            .await?;
+        indexer
+            .concurrent_pipeline(BigTableHandler::new(TransactionsPipeline), config.clone())
+            .await?;
+        indexer
+            .concurrent_pipeline(BigTableHandler::new(ObjectsPipeline), config.clone())
+            .await?;
+        indexer
+            .concurrent_pipeline(EpochLegacyPipeline, config)
+            .await?;
+
+        Ok(Self { indexer })
+    }
+
+    pub fn pipeline_names(&self) -> Vec<&'static str> {
+        self.indexer.pipelines().collect()
+    }
 }
 
 impl From<sui_indexer_alt_framework_store_traits::CommitterWatermark> for PipelineWatermark {

@@ -2802,7 +2802,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "log",
@@ -15789,12 +15789,16 @@ dependencies = [
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
+ "sui-test-transaction-builder",
  "sui-types",
  "telemetry-subscribers",
+ "test-cluster",
  "tokio",
+ "tokio-stream",
  "tonic 0.14.2",
  "tonic-prost",
  "tracing",
+ "url",
 ]
 
 [[package]]

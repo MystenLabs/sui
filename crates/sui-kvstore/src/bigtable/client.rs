@@ -82,10 +82,19 @@ struct AuthChannel {
 }
 
 impl BigTableClient {
-    pub async fn new_local(instance_id: String) -> Result<Self> {
-        let emulator_host = std::env::var("BIGTABLE_EMULATOR_HOST")?;
+    pub async fn new_local(host: String, instance_id: String) -> Result<Self> {
+        Self::new_for_host(host, instance_id, "local")
+    }
+
+    /// Create a client connected to a specific host.
+    /// Used internally and for testing with mock servers.
+    pub(crate) fn new_for_host(
+        host: String,
+        instance_id: String,
+        client_name: &str,
+    ) -> Result<Self> {
         let auth_channel = AuthChannel {
-            channel: Channel::from_shared(format!("http://{emulator_host}"))?.connect_lazy(),
+            channel: Channel::from_shared(format!("http://{host}"))?.connect_lazy(),
             policy: "https://www.googleapis.com/auth/bigtable.data".to_string(),
             token_provider: None,
             token: Arc::new(RwLock::new(None)),
@@ -93,7 +102,7 @@ impl BigTableClient {
         Ok(Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
-            client_name: "local".to_string(),
+            client_name: client_name.to_string(),
             metrics: None,
             app_profile_id: None,
         })
@@ -200,29 +209,32 @@ impl BigTableClient {
             request.app_profile_id = app_profile_id.clone();
         }
         let mut response = self.client.mutate_rows(request).await?.into_inner();
+        let mut first_error: Option<(i32, String)> = None;
+
         while let Some(part) = response.message().await? {
             for entry in part.entries {
                 if let Some(status) = entry.status {
                     if status.code == 0 {
                         succeeded_indices.push(entry.index as usize);
-                    } else {
-                        let succeeded_keys = succeeded_indices
-                            .iter()
-                            .filter_map(|&i| row_keys.get(i).cloned())
-                            .collect();
-                        return Err(PartialWriteError {
-                            error: anyhow!(
-                                "bigtable write failed {} {}",
-                                status.code,
-                                status.message
-                            ),
-                            succeeded_keys,
-                        }
-                        .into());
+                    } else if first_error.is_none() {
+                        first_error = Some((status.code, status.message));
                     }
                 }
             }
         }
+
+        if let Some((code, message)) = first_error {
+            let succeeded_keys = succeeded_indices
+                .iter()
+                .filter_map(|&i| row_keys.get(i).cloned())
+                .collect();
+            return Err(PartialWriteError {
+                error: anyhow!("bigtable write failed {} {}", code, message),
+                succeeded_keys,
+            }
+            .into());
+        }
+
         Ok(())
     }
 

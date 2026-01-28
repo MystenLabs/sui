@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
-use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
@@ -14,13 +13,8 @@ use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_kvstore::BIGTABLE_MAX_MUTATIONS;
 use sui_kvstore::BigTableClient;
-use sui_kvstore::BigTableHandler;
+use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
-use sui_kvstore::CheckpointsByDigestPipeline;
-use sui_kvstore::CheckpointsPipeline;
-use sui_kvstore::EpochLegacyPipeline;
-use sui_kvstore::ObjectsPipeline;
-use sui_kvstore::TransactionsPipeline;
 use sui_kvstore::set_max_mutations;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
@@ -118,16 +112,6 @@ async fn main() -> Result<()> {
         ingestion_config.checkpoint_buffer_size = v;
     }
 
-    let mut indexer = Indexer::new(
-        store,
-        args.indexer_args,
-        args.client_args,
-        ingestion_config,
-        None,
-        &registry,
-    )
-    .await?;
-
     let mut config = ConcurrentConfig::default();
     if let Some(v) = args.write_concurrency {
         config.committer.write_concurrency = v;
@@ -136,30 +120,18 @@ async fn main() -> Result<()> {
         config.committer.watermark_interval_ms = v.as_millis() as u64;
     }
 
-    indexer
-        .concurrent_pipeline(BigTableHandler::new(CheckpointsPipeline), config.clone())
-        .await?;
-    indexer
-        .concurrent_pipeline(
-            BigTableHandler::new(CheckpointsByDigestPipeline),
-            config.clone(),
-        )
-        .await?;
-    indexer
-        .concurrent_pipeline(BigTableHandler::new(TransactionsPipeline), config.clone())
-        .await?;
-    indexer
-        .concurrent_pipeline(BigTableHandler::new(ObjectsPipeline), config.clone())
-        .await?;
-
-    // DEPRECATED. Delete after migrating readers to new columns.
-    // EpochLegacyPipeline has its own Handler impl due to read-modify-write pattern.
-    indexer
-        .concurrent_pipeline(EpochLegacyPipeline, config)
-        .await?;
+    let bigtable_indexer = BigTableIndexer::new(
+        store,
+        args.indexer_args,
+        args.client_args,
+        ingestion_config,
+        config,
+        &registry,
+    )
+    .await?;
 
     let metrics_handle = metrics_service.run().await?;
-    let service = indexer.run().await?;
+    let service = bigtable_indexer.indexer.run().await?;
 
     match service.attach(metrics_handle).main().await {
         Ok(()) => {}
