@@ -5,14 +5,14 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
 use move_core_types::u256::U256;
+use sui_types::base_types::RESOLVED_STD_OPTION;
+use sui_types::object::option_visitor::OptionVisitor;
 
 use crate::v2::error::FormatError;
 use crate::v2::value::Accessor;
 use crate::v2::value::Slice;
 use crate::v2::value::Value;
 use crate::v2::visitor::address::AddressExtractor;
-use crate::v2::visitor::option::OptionExtractor;
-use crate::v2::visitor::option::is_option;
 use crate::v2::visitor::vec_map::VecMapVisitor;
 use crate::v2::visitor::vec_map::is_vec_map;
 
@@ -144,21 +144,17 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         &mut self,
         driver: &mut AV::StructDriver<'_, 'v, 'v>,
     ) -> Result<Self::Value, Self::Error> {
+        let ty = &driver.struct_layout().type_;
+        if (&ty.address, ty.module.as_ref(), ty.name.as_ref()) == RESOLVED_STD_OPTION {
+            return Ok(OptionVisitor(self).visit_struct(driver)?.flatten());
+        }
+
         let Some(accessor) = self.path.last() else {
-            // Detect if the value being sliced out is the Move representation of an optional, and if so,
-            // extract the underlying value if it is `Some`, or convert it into a `None` otherwise.
-            if is_option(driver.struct_layout()) {
-                return Ok(driver
-                    .next_field(&mut OptionExtractor)?
-                    .and_then(|(_, v)| v)
-                    .map(Value::Slice));
-            } else {
-                while driver.skip_field()?.is_some() {}
-                return Ok(Some(Value::Slice(Slice {
-                    layout: driver.layout()?,
-                    bytes: &driver.bytes()[driver.start()..driver.position()],
-                })));
-            }
+            while driver.skip_field()?.is_some() {}
+            return Ok(Some(Value::Slice(Slice {
+                layout: driver.layout()?,
+                bytes: &driver.bytes()[driver.start()..driver.position()],
+            })));
         };
 
         // If the next accessor is for a dynamic field, try and find the parent ID within this

@@ -3,11 +3,15 @@
 
 use std::sync::Arc;
 
-use prometheus::{
-    Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
-    register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-};
+use prometheus::Histogram;
+use prometheus::HistogramVec;
+use prometheus::IntCounter;
+use prometheus::IntCounterVec;
+use prometheus::Registry;
+use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_histogram_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
+use prometheus::register_int_counter_with_registry;
 
 /// Histogram buckets for the distribution of latency (time between sending a DB request and
 /// receiving a response).
@@ -34,6 +38,14 @@ pub(crate) struct ConsistentReaderMetrics {
 
 #[derive(Clone)]
 pub(crate) struct FullnodeClientMetrics {
+    pub latency: HistogramVec,
+    pub requests_received: IntCounterVec,
+    pub requests_succeeded: IntCounterVec,
+    pub requests_failed: IntCounterVec,
+}
+
+#[derive(Clone)]
+pub(crate) struct LedgerGrpcReaderMetrics {
     pub latency: HistogramVec,
     pub requests_received: IntCounterVec,
     pub requests_succeeded: IntCounterVec,
@@ -154,6 +166,48 @@ impl FullnodeClientMetrics {
             requests_failed: register_int_counter_vec_with_registry!(
                 name("requests_failed"),
                 "Number of failed full node requests",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+        })
+    }
+}
+
+impl LedgerGrpcReaderMetrics {
+    pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
+        let prefix = prefix.unwrap_or("ledger_grpc");
+        let name = |n| format!("{prefix}_{n}");
+
+        Arc::new(Self {
+            latency: register_histogram_vec_with_registry!(
+                name("latency"),
+                "Time taken for ledger service gRPC operations",
+                &["method"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            requests_received: register_int_counter_vec_with_registry!(
+                name("requests_received"),
+                "Number of ledger service requests sent",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_succeeded: register_int_counter_vec_with_registry!(
+                name("requests_succeeded"),
+                "Number of successful ledger service requests",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_failed: register_int_counter_vec_with_registry!(
+                name("requests_failed"),
+                "Number of failed ledger service requests",
                 &["method"],
                 registry,
             )

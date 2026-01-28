@@ -124,6 +124,8 @@ macro_rules! assert_reachable {
         // calling in to antithesis sdk breaks determinisim in simtests (on linux only)
         if !cfg!(msim) {
             $crate::logging::assert_reachable_antithesis!($message);
+        } else {
+            $crate::assert_reachable_simtest!($message);
         }
     }};
 }
@@ -135,8 +137,7 @@ macro_rules! assert_sometimes {
         if !cfg!(msim) {
             $crate::logging::assert_sometimes_antithesis!($expr, $message);
         } else {
-            // evaluate the expression in case it has side effects
-            let _ = $expr;
+            $crate::assert_sometimes_simtest!($expr, $message);
         }
     }};
 }

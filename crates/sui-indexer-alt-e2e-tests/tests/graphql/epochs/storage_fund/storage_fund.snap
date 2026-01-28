@@ -6,21 +6,23 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-17:
+task 1, lines 6-16:
 //# run-graphql
 Response: {
   "data": {
     "e0": {
-      "storageFund": {
-        "totalObjectStorageRebates": "0",
-        "nonRefundableBalance": "0"
+      "systemState": {
+        "storageFund": {
+          "total_object_storage_rebates": "0",
+          "non_refundable_balance": "0"
+        }
       }
     },
     "e1": null
   }
 }
 
-task 2, lines 19-21:
+task 2, lines 18-20:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -28,7 +30,7 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 23-25:
+task 3, lines 22-24:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -36,28 +38,32 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, line 27:
+task 4, line 26:
 //# advance-epoch
 Epoch advanced: 1
 
-task 5, line 29:
+task 5, line 28:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 6, lines 31-42:
+task 6, lines 30-40:
 //# run-graphql
 Response: {
   "data": {
     "e0": {
-      "storageFund": {
-        "totalObjectStorageRebates": "0",
-        "nonRefundableBalance": "0"
+      "systemState": {
+        "storageFund": {
+          "total_object_storage_rebates": "0",
+          "non_refundable_balance": "0"
+        }
       }
     },
     "e1": {
-      "storageFund": {
-        "totalObjectStorageRebates": "2964000",
-        "nonRefundableBalance": "9880"
+      "systemState": {
+        "storageFund": {
+          "total_object_storage_rebates": "2964000",
+          "non_refundable_balance": "9880"
+        }
       }
     }
   }

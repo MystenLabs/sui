@@ -15,6 +15,7 @@ use ciborium::value::{Integer, Value};
 use once_cell::sync::Lazy;
 use p384::ecdsa::signature::Verifier;
 use p384::ecdsa::{Signature, VerifyingKey};
+use rustls_pki_types::{CertificateDer, pem::PemObject};
 use x509_parser::{certificate::X509Certificate, prelude::FromDer};
 
 #[cfg(test)]
@@ -35,8 +36,7 @@ const MAX_CERT_LENGTH: usize = 1024;
 /// Root certificate for AWS Nitro Attestation.
 static ROOT_CERTIFICATE: Lazy<Vec<u8>> = Lazy::new(|| {
     let pem_bytes = include_bytes!("./nitro_root_certificate.pem");
-    let mut pem_cursor = std::io::Cursor::new(pem_bytes);
-    let cert = rustls_pemfile::certs(&mut pem_cursor)
+    let cert = CertificateDer::pem_slice_iter(pem_bytes)
         .next()
         .expect("should have root cert")
         .expect("root cert should be valid");

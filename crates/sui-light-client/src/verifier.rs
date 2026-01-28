@@ -126,8 +126,7 @@ pub async fn get_verified_effects_and_events(
     let prev_ckp_id = checkpoints_list
         .checkpoints
         .iter()
-        .filter(|ckp_id| **ckp_id < seq)
-        .next_back();
+        .rfind(|ckp_id| **ckp_id < seq);
 
     let committee = if let Some(prev_ckp_id) = prev_ckp_id {
         // Read it from the store
@@ -145,9 +144,7 @@ pub async fn get_verified_effects_and_events(
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
         genesis_path.push(&config.genesis_filename);
-        Genesis::load(&genesis_path)?
-            .committee()
-            .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?
+        Genesis::load(&genesis_path)?.committee()
     };
 
     info!("Extracting effects and events for TID: {}", tid);
@@ -217,8 +214,7 @@ pub async fn get_verified_checkpoint(
     let prev_ckp_id = checkpoints_list
         .checkpoints
         .iter()
-        .filter(|ckp_id| **ckp_id < seq)
-        .next_back();
+        .rfind(|ckp_id| **ckp_id < seq);
 
     let committee = if let Some(prev_ckp_id) = prev_ckp_id {
         // Read it from the store
@@ -236,9 +232,7 @@ pub async fn get_verified_checkpoint(
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
         genesis_path.push(&config.genesis_filename);
-        Genesis::load(&genesis_path)?
-            .committee()
-            .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?
+        Genesis::load(&genesis_path)?.committee()
     };
 
     // Verify that committee signed this checkpoint and checkpoint contents with digest

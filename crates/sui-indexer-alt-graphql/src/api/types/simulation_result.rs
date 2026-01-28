@@ -6,9 +6,10 @@ use async_graphql::SimpleObject;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::transaction::TransactionData;
 
-use crate::{error::RpcError, scope::Scope};
-
-use super::{command_result::CommandResult, transaction_effects::TransactionEffects};
+use crate::api::types::command_result::CommandResult;
+use crate::api::types::transaction_effects::TransactionEffects;
+use crate::error::RpcError;
+use crate::scope::Scope;
 
 /// The result of simulating a transaction, including the predicted effects and any errors.
 #[derive(Clone, SimpleObject)]

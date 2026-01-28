@@ -4,4 +4,4 @@ expression: "strands(\"{x'1234' | x'0d0e0f'}\")"
 ---
 { x'1234'
 | x'0d0e0f'
-}
+}@0

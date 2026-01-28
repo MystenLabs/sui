@@ -32,9 +32,7 @@ use move_compiler::{
 };
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    flavor::MoveFlavor,
-    graph::PackageInfo,
-    package::RootPackage,
+    MoveFlavor, PackageInfo, RootPackage,
     schema::{Environment, PackageID},
 };
 use move_symbol_pool::Symbol;
@@ -48,7 +46,7 @@ pub async fn compile_package<W: Write + Send, F: MoveFlavor>(
     env: &Environment,
     writer: &mut W,
 ) -> anyhow::Result<CompiledPackage> {
-    let root_pkg = RootPackage::<F>::load(path, env.clone(), build_config.mode_set()).await?;
+    let root_pkg: RootPackage<F> = build_config.package_loader(path, env).load().await?;
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 

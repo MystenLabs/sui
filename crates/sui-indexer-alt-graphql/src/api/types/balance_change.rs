@@ -7,11 +7,14 @@ use anyhow::Context as _;
 use async_graphql::SimpleObject;
 use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
 use sui_rpc::proto::sui::rpc::v2::BalanceChange as GrpcBalanceChange;
-use sui_types::{TypeTag, object::Owner};
+use sui_types::TypeTag;
+use sui_types::object::Owner;
 
-use crate::{api::scalars::big_int::BigInt, error::RpcError, scope::Scope};
-
-use super::{address::Address, move_type::MoveType};
+use crate::api::scalars::big_int::BigInt;
+use crate::api::types::address::Address;
+use crate::api::types::move_type::MoveType;
+use crate::error::RpcError;
+use crate::scope::Scope;
 
 /// Effects to the balance (sum of coin values per coin type) of addresses and objects.
 #[derive(Clone, SimpleObject)]
@@ -64,5 +67,30 @@ impl BalanceChange {
             coin_type: Some(MoveType::from_native(coin_type, scope)),
             amount: Some(BigInt::from(amount)),
         })
+    }
+
+    /// Convert a stored BalanceChange to a gRPC BalanceChange.
+    pub(crate) fn stored_to_grpc(stored: StoredBalanceChange) -> GrpcBalanceChange {
+        let StoredBalanceChange::V1 {
+            owner,
+            coin_type,
+            amount,
+        } = stored;
+
+        // Extract address from owner
+        let address = match owner {
+            Owner::AddressOwner(addr)
+            | Owner::ObjectOwner(addr)
+            | Owner::ConsensusAddressOwner { owner: addr, .. } => Some(addr),
+            Owner::Shared { .. } | Owner::Immutable => None,
+        };
+
+        let mut grpc = GrpcBalanceChange::default();
+        if let Some(addr) = address {
+            grpc.set_address(addr.to_string());
+        }
+        grpc.set_coin_type(coin_type);
+        grpc.set_amount(amount.to_string());
+        grpc
     }
 }

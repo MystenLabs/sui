@@ -11,7 +11,7 @@ task 1, lines 6-15:
 Response: {
   "data": {
     "e0": {
-      "totalTransactions": null
+      "totalTransactions": 1
     },
     "e1": null,
     "e2": null

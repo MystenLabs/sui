@@ -16,7 +16,7 @@ task 2, line 34:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 36-61:
+task 3, lines 36-62:
 //# run-graphql --cursors "J" "P"
 Response: {
   "data": {
@@ -28,82 +28,108 @@ Response: {
         },
         "nodes": [
           {
-            "name": "A"
+            "name": "A",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::A"
           },
           {
-            "name": "B"
+            "name": "B",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::B"
           },
           {
-            "name": "C"
+            "name": "C",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::C"
           },
           {
-            "name": "D"
+            "name": "D",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::D"
           },
           {
-            "name": "E"
+            "name": "E",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::E"
           },
           {
-            "name": "F"
+            "name": "F",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::F"
           },
           {
-            "name": "G"
+            "name": "G",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::G"
           },
           {
-            "name": "H"
+            "name": "H",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::H"
           },
           {
-            "name": "I"
+            "name": "I",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::I"
           },
           {
-            "name": "J"
+            "name": "J",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::J"
           },
           {
-            "name": "K"
+            "name": "K",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::K"
           },
           {
-            "name": "L"
+            "name": "L",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::L"
           },
           {
-            "name": "M"
+            "name": "M",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::M"
           },
           {
-            "name": "N"
+            "name": "N",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::N"
           },
           {
-            "name": "O"
+            "name": "O",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::O"
           },
           {
-            "name": "P"
+            "name": "P",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::P"
           },
           {
-            "name": "Q"
+            "name": "Q",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::Q"
           },
           {
-            "name": "R"
+            "name": "R",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::R"
           },
           {
-            "name": "S"
+            "name": "S",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::S"
           },
           {
-            "name": "T"
+            "name": "T",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::T"
           },
           {
-            "name": "U"
+            "name": "U",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::U"
           },
           {
-            "name": "V"
+            "name": "V",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::V"
           },
           {
-            "name": "W"
+            "name": "W",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::W"
           },
           {
-            "name": "X"
+            "name": "X",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::X"
           },
           {
-            "name": "Y"
+            "name": "Y",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::Y"
           },
           {
-            "name": "Z"
+            "name": "Z",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::Z"
           }
         ]
       },
@@ -114,13 +140,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "A"
+            "name": "A",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::A"
           },
           {
-            "name": "B"
+            "name": "B",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::B"
           },
           {
-            "name": "C"
+            "name": "C",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::C"
           }
         ]
       },
@@ -131,13 +160,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "X"
+            "name": "X",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::X"
           },
           {
-            "name": "Y"
+            "name": "Y",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::Y"
           },
           {
-            "name": "Z"
+            "name": "Z",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::Z"
           }
         ]
       },
@@ -148,13 +180,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "A"
+            "name": "A",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::A"
           },
           {
-            "name": "B"
+            "name": "B",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::B"
           },
           {
-            "name": "C"
+            "name": "C",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::C"
           }
         ]
       },
@@ -165,13 +200,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "X"
+            "name": "X",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::X"
           },
           {
-            "name": "Y"
+            "name": "Y",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::Y"
           },
           {
-            "name": "Z"
+            "name": "Z",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::Z"
           }
         ]
       },
@@ -182,13 +220,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "K"
+            "name": "K",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::K"
           },
           {
-            "name": "L"
+            "name": "L",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::L"
           },
           {
-            "name": "M"
+            "name": "M",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::M"
           }
         ]
       },
@@ -199,13 +240,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "M"
+            "name": "M",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::M"
           },
           {
-            "name": "N"
+            "name": "N",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::N"
           },
           {
-            "name": "O"
+            "name": "O",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::O"
           }
         ]
       },
@@ -216,19 +260,24 @@ Response: {
         },
         "nodes": [
           {
-            "name": "K"
+            "name": "K",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::K"
           },
           {
-            "name": "L"
+            "name": "L",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::L"
           },
           {
-            "name": "M"
+            "name": "M",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::M"
           },
           {
-            "name": "N"
+            "name": "N",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::N"
           },
           {
-            "name": "O"
+            "name": "O",
+            "fullyQualifiedName": "0x03d73d766e9773666367e461239e8a960d36e470c90fdb94cb95635733e02f66::O"
           }
         ]
       }

@@ -5,12 +5,13 @@ use anyhow::Context;
 use clap::Parser;
 use prometheus::Registry;
 use sui_futures::service::Error;
-use sui_indexer_alt_graphql::{
-    args::{Args, Command},
-    config::{IndexerConfig, RpcLayer},
-    start_rpc,
-};
-use sui_indexer_alt_metrics::{MetricsService, uptime};
+use sui_indexer_alt_graphql::args::Args;
+use sui_indexer_alt_graphql::args::Command;
+use sui_indexer_alt_graphql::config::IndexerConfig;
+use sui_indexer_alt_graphql::config::RpcLayer;
+use sui_indexer_alt_graphql::start_rpc;
+use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_metrics::uptime;
 use tokio::fs;
 
 // Define the `GIT_REVISION` const

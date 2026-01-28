@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use alloy::primitives::Address as EthAddress;
 use anyhow::Result;
 use clap::*;
-use ethers::types::Address as EthAddress;
 use prometheus::Registry;
 use std::collections::HashSet;
 use std::env;
@@ -13,15 +13,13 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
-use sui_bridge::metered_eth_provider::{MeteredEthHttpProvider, new_metered_eth_provider};
+use sui_bridge::metered_eth_provider::new_metered_eth_provider;
 use sui_bridge::sui_bridge_watchdog::Observable;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::utils::get_eth_contract_addresses;
 use sui_config::Config;
-use tokio::task::JoinHandle;
 use tracing::info;
 
-use mysten_metrics::metered_channel::channel;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_metrics::start_prometheus_server;
 
@@ -35,14 +33,8 @@ use sui_bridge::sui_bridge_watchdog::{
 };
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
-use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
-use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
-use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
-use sui_bridge_indexer::{
-    create_eth_subscription_indexer, create_eth_sync_indexer, create_sui_indexer,
-};
-use sui_data_ingestion_core::DataIngestionMetrics;
-use sui_sdk::SuiClientBuilder;
+use sui_bridge_indexer::postgres_manager::get_connection_pool;
+use sui_bridge_indexer::{create_eth_subscription_indexer, create_eth_sync_indexer};
 
 #[derive(Parser, Clone, Debug)]
 struct Args {
@@ -78,14 +70,13 @@ async fn main() -> Result<()> {
     info!("Metrics server started at port {}", config.metric_port);
 
     let indexer_meterics = BridgeIndexerMetrics::new(&registry);
-    let ingestion_metrics = DataIngestionMetrics::new(&registry);
     let bridge_metrics = Arc::new(BridgeMetrics::new(&registry));
 
     let db_url = config.db_url.clone();
     let pool = get_connection_pool(db_url.clone()).await;
 
-    let eth_client: Arc<EthClient<MeteredEthHttpProvider>> = Arc::new(
-        EthClient::<MeteredEthHttpProvider>::new(
+    let eth_client: Arc<EthClient> = Arc::new(
+        EthClient::new(
             &config.eth_rpc_url,
             HashSet::from_iter(vec![]), // dummy
             bridge_metrics.clone(),
@@ -117,12 +108,6 @@ async fn main() -> Result<()> {
     .await?;
     tasks.push(spawn_logged_monitored_task!(eth_sync_indexer.start()));
 
-    if !config.eth_only {
-        let indexer =
-            create_sui_indexer(pool, indexer_meterics, ingestion_metrics, &config).await?;
-        tasks.push(spawn_logged_monitored_task!(indexer.start()));
-    }
-
     let sui_bridge_client =
         Arc::new(SuiBridgeClient::new(&config.sui_rpc_url, bridge_metrics.clone()).await?);
     start_watchdog(
@@ -148,7 +133,7 @@ async fn start_watchdog(
 ) -> Result<()> {
     let watchdog_metrics = WatchdogMetrics::new(registry);
     let eth_provider =
-        Arc::new(new_metered_eth_provider(&config.eth_rpc_url, bridge_metrics.clone()).unwrap());
+        new_metered_eth_provider(&config.eth_rpc_url, bridge_metrics.clone()).unwrap();
     let (
         _committee_address,
         _limiter_address,
@@ -158,7 +143,7 @@ async fn start_watchdog(
         usdt_address,
         wbtc_address,
         lbtc_address,
-    ) = get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider).await?;
+    ) = get_eth_contract_addresses(eth_bridge_proxy_address, eth_provider.clone()).await?;
 
     let eth_vault_balance = EthereumVaultBalance::new(
         eth_provider.clone(),
@@ -230,34 +215,4 @@ async fn start_watchdog(
     BridgeWatchDog::new(observables).run().await;
 
     Ok(())
-}
-
-#[allow(unused)]
-async fn start_processing_sui_checkpoints_by_querying_txns(
-    sui_rpc_url: String,
-    db_url: String,
-    indexer_metrics: BridgeIndexerMetrics,
-) -> Result<Vec<JoinHandle<()>>> {
-    let pg_pool = get_connection_pool(db_url.clone()).await;
-    let (tx, rx) = channel(
-        100,
-        &mysten_metrics::get_metrics()
-            .unwrap()
-            .channel_inflight
-            .with_label_values(&["sui_transaction_processing_queue"]),
-    );
-    let mut handles = vec![];
-    let cursor = read_sui_progress_store(&pg_pool)
-        .await
-        .expect("Failed to read cursor from sui progress store");
-    let sui_client = SuiClientBuilder::default().build(sui_rpc_url).await?;
-    handles.push(spawn_logged_monitored_task!(
-        start_sui_tx_polling_task(sui_client, cursor, tx),
-        "start_sui_tx_polling_task"
-    ));
-    handles.push(spawn_logged_monitored_task!(
-        handle_sui_transactions_loop(pg_pool.clone(), rx, indexer_metrics.clone()),
-        "handle_sui_transcations_loop"
-    ));
-    Ok(handles)
 }

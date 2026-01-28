@@ -75,7 +75,7 @@ impl MockFundsReadInner {
         self.cur_version = new_accumulator_version;
         for (account_id, balance_change) in funds_changes {
             let balance = self
-                .get_account_amoount(&account_id, self.cur_version)
+                .get_account_amount(&account_id, self.cur_version)
                 .unwrap_or_default();
             let new_balance = balance as i128 + balance_change;
             assert!(new_balance >= 0);
@@ -91,7 +91,7 @@ impl MockFundsReadInner {
         }
     }
 
-    fn get_account_amoount(
+    fn get_account_amount(
         &self,
         account_id: &AccumulatorObjId,
         accumulator_version: SequenceNumber,
@@ -103,31 +103,45 @@ impl MockFundsReadInner {
             .and_then(|(_, amount)| *amount)
     }
 
-    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> Option<u128> {
-        let account_amounts = self.amounts.get(account_id)?;
-        account_amounts.values().last().and_then(|b| *b)
+    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber) {
+        let account_amounts = self.amounts.get(account_id);
+        match account_amounts {
+            Some(amounts) => {
+                let (version, amount) = amounts.iter().last().unwrap();
+                (amount.unwrap_or(0), *version)
+            }
+            None => (0, self.cur_version),
+        }
+    }
+
+    fn get_account_amount_at_version(
+        &self,
+        account_id: &AccumulatorObjId,
+        version: SequenceNumber,
+    ) -> u128 {
+        let account_amounts = self.amounts.get(account_id);
+        match account_amounts {
+            Some(amounts) => {
+                let (_, amount) = amounts.range(..=version).last().unwrap();
+                amount.unwrap_or(0)
+            }
+            None => 0,
+        }
     }
 }
 
 impl AccountFundsRead for MockFundsRead {
-    /// Mimic the behavior of child object read.
-    /// Find the balance for the given account at the max version
-    /// less or equal to the given accumulator version.
-    fn get_account_amount(
-        &self,
-        account_id: &AccumulatorObjId,
-        accumulator_version: SequenceNumber,
-    ) -> u128 {
+    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber) {
         let inner = self.inner.read();
-        inner
-            .get_account_amoount(account_id, accumulator_version)
-            .unwrap_or_default()
+        inner.get_latest_account_amount(account_id)
     }
 
-    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> u128 {
+    fn get_account_amount_at_version(
+        &self,
+        account_id: &AccumulatorObjId,
+        version: SequenceNumber,
+    ) -> u128 {
         let inner = self.inner.read();
-        inner
-            .get_latest_account_amount(account_id)
-            .unwrap_or_default()
+        inner.get_account_amount_at_version(account_id, version)
     }
 }

@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
+use std::sync::Arc;
 
 use axum::extract::MatchedPath;
-use http::{StatusCode, header::CONTENT_TYPE};
-use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
+use http::StatusCode;
+use http::header::CONTENT_TYPE;
+use mysten_network::callback::MakeCallbackHandler;
+use mysten_network::callback::ResponseHandler;
 use prometheus::HistogramTimer;
-use tonic::{Code, metadata::GRPC_CONTENT_TYPE};
+use tonic::Code;
+use tonic::metadata::GRPC_CONTENT_TYPE;
 
 use crate::rpc::metrics::RpcMetrics;
 

@@ -12,7 +12,7 @@ const { parentPort } = require('node:worker_threads');
  * back. If an error occurs, send the original text back with the error message.
  */
 parentPort.on('message', async (message) => {
-	const { text, options } = JSON.parse(message);
+	const { text, options, documentUri } = JSON.parse(message);
 
 	return format(text, {
 		parser: 'move',
@@ -24,6 +24,6 @@ parentPort.on('message', async (message) => {
 		autoGroupImports: options.autoGroupImports,
 		enableErrorDebug: options.enableErrorDebug,
 	})
-		.then((text) => parentPort.postMessage({ text }))
-		.catch((err) => parentPort.postMessage({ text, message: err.message }));
+		.then((text) => parentPort.postMessage({ text, documentUri }))
+		.catch((err) => parentPort.postMessage({ text, documentUri, message: err.message }));
 });

@@ -82,7 +82,7 @@ task 13, lines 44-58:
 Response: {
   "data": {
     "epoch1WithCursorsFromFront": {
-      "totalTransactions": 8,
+      "totalTransactions": 11,
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
@@ -96,7 +96,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 3
+                  "sequenceNumber": 2
                 }
               }
             }
@@ -106,7 +106,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 5
+                  "sequenceNumber": 3
                 }
               }
             }
@@ -122,7 +122,7 @@ task 14, lines 60-74:
 Response: {
   "data": {
     "epoch1WithCursorsFromBack": {
-      "totalTransactions": 8,
+      "totalTransactions": 11,
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
@@ -136,7 +136,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 5
+                  "sequenceNumber": 3
                 }
               }
             }
@@ -146,7 +146,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 5
+                  "sequenceNumber": 3
                 }
               }
             }
@@ -162,7 +162,7 @@ task 15, lines 76-90:
 Response: {
   "data": {
     "epoch1WithAfterCursorFromFront": {
-      "totalTransactions": 8,
+      "totalTransactions": 11,
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
@@ -176,7 +176,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 3
+                  "sequenceNumber": 2
                 }
               }
             }
@@ -186,7 +186,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 5
+                  "sequenceNumber": 3
                 }
               }
             }
@@ -202,17 +202,17 @@ task 16, lines 92-106:
 Response: {
   "data": {
     "epoch1WithAfterCursorFromBack": {
-      "totalTransactions": 8,
+      "totalTransactions": 11,
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
           "hasNextPage": false,
-          "startCursor": "OA==",
-          "endCursor": "OQ=="
+          "startCursor": "MTE=",
+          "endCursor": "MTI="
         },
         "edges": [
           {
-            "cursor": "OA==",
+            "cursor": "MTE=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -222,7 +222,7 @@ Response: {
             }
           },
           {
-            "cursor": "OQ==",
+            "cursor": "MTI=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -242,7 +242,7 @@ task 17, lines 108-122:
 Response: {
   "data": {
     "epoch1WithBeforeCursorFromBack": {
-      "totalTransactions": 8,
+      "totalTransactions": 11,
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
@@ -256,7 +256,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 5
+                  "sequenceNumber": 3
                 }
               }
             }
@@ -266,7 +266,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 5
+                  "sequenceNumber": 3
                 }
               }
             }

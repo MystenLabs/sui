@@ -20,4 +20,5 @@ sui-types.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
-sui-move-build.workspace = true
+sui-package-alt.workspace = true
+move-package-alt.workspace = true

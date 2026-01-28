@@ -1,26 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context as _, bail, ensure};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use anyhow::bail;
+use anyhow::ensure;
 use bytes::Bytes;
-use object_store::{
-    aws::AmazonS3Builder, azure::MicrosoftAzureBuilder, gcp::GoogleCloudStorageBuilder,
-    local::LocalFileSystem,
-};
-use std::{path::PathBuf, sync::Arc};
-use sui_indexer_alt_framework::{
-    ingestion::remote_client::RemoteIngestionClient, types::full_checkpoint_content::CheckpointData,
-};
+use object_store::ClientOptions;
+use object_store::aws::AmazonS3Builder;
+use object_store::azure::MicrosoftAzureBuilder;
+use object_store::gcp::GoogleCloudStorageBuilder;
+use object_store::http::HttpBuilder;
+use object_store::local::LocalFileSystem;
+use sui_indexer_alt_framework::ingestion::store_client::StoreIngestionClient;
+use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
 use sui_storage::blob::Blob;
 use tracing::info;
 use url::Url;
 
-use crate::{db::Watermark, restore::storage::HttpStorage};
-
-use super::{
-    format::{FileMetadata, FileType, RootManifest},
-    storage::{Storage, StorageConnectionArgs},
-};
+use crate::db::Watermark;
+use crate::restore::format::FileMetadata;
+use crate::restore::format::FileType;
+use crate::restore::format::RootManifest;
+use crate::restore::storage::HttpStorage;
+use crate::restore::storage::Storage;
+use crate::restore::storage::StorageConnectionArgs;
 
 #[derive(clap::Args, Clone, Debug)]
 #[group(required = true)]
@@ -142,16 +148,19 @@ impl FormalSnapshot {
 
         // Use the remote store to associate the epoch with a watermark pointing to its last
         // transaction.
-        let client = RemoteIngestionClient::new(snapshot_args.remote_store_url)
-            .context("Failed to connect to remote checkpoint store")?;
+        let client = StoreIngestionClient::new(
+            HttpBuilder::new()
+                .with_url(snapshot_args.remote_store_url.to_string())
+                .with_client_options(ClientOptions::new().with_allow_http(true))
+                .build()
+                .map(Arc::new)
+                .context("Failed to connect to remote checkpoint store")?,
+        );
 
         let end_of_epoch_checkpoints: Vec<_> = client
             .end_of_epoch_checkpoints()
             .await
-            .context("Failed to fetch end-of-epoch checkpoints")?
-            .json()
-            .await
-            .context("Failed to parse end-of-epoch checkpoints")?;
+            .context("Failed to fetch end-of-epoch checkpoints")?;
 
         let checkpoint = end_of_epoch_checkpoints
             .get(epoch as usize)
@@ -164,10 +173,7 @@ impl FormalSnapshot {
             &client
                 .checkpoint(checkpoint)
                 .await
-                .context("Failed to fetch end-of-epoch checkpoint")?
-                .bytes()
-                .await
-                .context("Failed to read end-of-epoch checkpoint bytes")?,
+                .context("Failed to fetch end-of-epoch checkpoint")?,
         )
         .context("Failed to deserialize end-of-epoch checkpoint")?;
 

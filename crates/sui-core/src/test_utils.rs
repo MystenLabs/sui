@@ -31,8 +31,6 @@ use tracing::{info, warn};
 
 use crate::authority::AuthorityState;
 
-const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
-
 // note: clippy is confused about this being dead - it appears to only be used in cfg(test), but
 // adding #[cfg(test)] causes other targets to fail
 #[allow(dead_code)]
@@ -52,9 +50,9 @@ where
     (genesis, authority_key)
 }
 
-pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
+pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>, delay: Duration) {
     match timeout(
-        WAIT_FOR_TX_TIMEOUT,
+        delay,
         state
             .get_transaction_cache_reader()
             .notify_read_executed_effects("", &[digest]),
@@ -65,23 +63,6 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
         Err(e) => {
             warn!(?digest, "digest not found!");
             panic!("timed out waiting for effects of digest! {e}");
-        }
-    }
-}
-
-pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
-    match timeout(
-        WAIT_FOR_TX_TIMEOUT,
-        state
-            .get_transaction_cache_reader()
-            .notify_read_executed_effects("", &digests),
-    )
-    .await
-    {
-        Ok(_) => info!(?digests, "all digests found"),
-        Err(e) => {
-            warn!(?digests, "some digests not found!");
-            panic!("timed out waiting for effects of digests! {e}");
         }
     }
 }

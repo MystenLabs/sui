@@ -4,15 +4,15 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
+use anyhow::bail;
 use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    pipeline::Processor,
-    postgres::{Connection, handler::Handler},
-    types::full_checkpoint_content::Checkpoint,
-};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
 use sui_indexer_alt_schema::schema::cp_sequence_numbers;
 

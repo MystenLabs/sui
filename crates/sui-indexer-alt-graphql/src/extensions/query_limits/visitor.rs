@@ -1,23 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, convert::Infallible, rc::Rc, sync::LazyLock};
+use std::collections::HashMap;
+use std::convert::Infallible;
+use std::rc::Rc;
+use std::sync::LazyLock;
 
 use anyhow::anyhow;
-use async_graphql::{
-    Name, Pos, Positioned, Variables,
-    parser::types::{
-        ExecutableDocument, Field, FragmentDefinition, OperationDefinition, OperationType,
-        Selection, SelectionSet,
-    },
-    registry::{MetaField, MetaType, Registry},
-};
-use async_graphql_value::{ConstValue, Value};
+use async_graphql::Name;
+use async_graphql::Pos;
+use async_graphql::Positioned;
+use async_graphql::Variables;
+use async_graphql::parser::types::ExecutableDocument;
+use async_graphql::parser::types::Field;
+use async_graphql::parser::types::FragmentDefinition;
+use async_graphql::parser::types::OperationDefinition;
+use async_graphql::parser::types::OperationType;
+use async_graphql::parser::types::Selection;
+use async_graphql::parser::types::SelectionSet;
+use async_graphql::registry::MetaField;
+use async_graphql::registry::MetaType;
+use async_graphql::registry::Registry;
+use async_graphql_value::ConstValue;
+use async_graphql_value::Value;
 
-use super::{
-    chain::Chain,
-    error::{Error, ErrorKind},
-};
+use crate::extensions::query_limits::chain::Chain;
+use crate::extensions::query_limits::error::Error;
+use crate::extensions::query_limits::error::ErrorKind;
 
 /// Type representing the `__typename` meta field in GraphQL. This doesn't appear in the schema, but
 /// the visitor may still need to visit it.

@@ -151,7 +151,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                             return None;
                         }
                         N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
-                        N::TypeName_::ModuleType(m, _) => Some(m),
+                        N::TypeName_::ModuleType(m, _) => Some(&**m),
                     };
                     if Some(&context.current_module) != defining_module {
                         let msg = "Invalid visibility for 'use fun' declaration";
@@ -229,18 +229,19 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                 (N::UseFunKind::UseAlias, used)
             }
         };
+        let tn_loc = tn.loc;
         let nuf = N::UseFun {
             doc: DocComment::empty(),
             loc,
             attributes,
             is_public,
-            tname: tn,
+            tname: tn.clone(),
             target_function: (target_m, target_f),
             kind,
             used,
         };
         let nuf_loc = nuf.loc;
-        let methods = resolved.entry(tn).or_insert_with(UniqueMap::new);
+        let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
             let tn_msg = match ekind {
@@ -257,7 +258,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                 Declarations::DuplicateItem,
                 (nuf_loc, msg),
                 (prev, "Previously declared here"),
-                (tn.loc, tn_msg)
+                (tn_loc, tn_msg)
             ))
         }
     }
@@ -287,7 +288,7 @@ fn is_valid_method(
         N::TypeName_::ModuleType(m, _) => m,
     };
     if defining_module == target_m {
-        Some((target_f, *tn))
+        Some((target_f, (*tn).clone()))
     } else {
         None
     }

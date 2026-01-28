@@ -190,9 +190,60 @@ pub struct StateSyncConfig {
 
     /// If true, the v2 version of get_checkpoint_contents will be used.
     ///
-    /// If unspecified, this will default to false.
+    /// If unspecified, this will default to true.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_get_checkpoint_contents_v2: Option<bool>,
+
+    /// Maximum lookahead (in checkpoint sequence numbers) for storing unverified checkpoint
+    /// summaries received via PushCheckpointSummary.
+    ///
+    /// If unspecified, this will default to `1,000`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_lookahead: Option<u64>,
+
+    /// Maximum number of checkpoint headers to attempt to sync in a single sync task.
+    ///
+    /// If unspecified, this will default to `400`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_sync_batch_size: Option<u64>,
+
+    /// Maximum serialized size in bytes for a CertifiedCheckpointSummary received via
+    /// PushCheckpointSummary.
+    ///
+    /// If unspecified, this will default to `262,144` (256 KiB).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_summary_size: Option<usize>,
+
+    /// Minimum timeout for checkpoint content downloads (adaptive timeout lower bound).
+    ///
+    /// If unspecified, this will default to `10,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_timeout_min_ms: Option<u64>,
+
+    /// Maximum timeout for checkpoint content downloads (adaptive timeout upper bound).
+    ///
+    /// If unspecified, this will default to `30,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_timeout_max_ms: Option<u64>,
+
+    /// Time window for peer scoring samples.
+    ///
+    /// If unspecified, this will default to `60,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_scoring_window_ms: Option<u64>,
+
+    /// Probability of selecting an unknown peer to explore its throughput.
+    ///
+    /// If unspecified, this will default to `0.1`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exploration_probability: Option<f64>,
+
+    /// Failure rate threshold for marking a peer as failing.
+    /// A peer is marked as failing if its failure rate exceeds this threshold.
+    ///
+    /// If unspecified, this will default to `0.3` (30%).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_failure_rate: Option<f64>,
 }
 
 impl StateSyncConfig {
@@ -267,10 +318,88 @@ impl StateSyncConfig {
     }
 
     pub fn use_get_checkpoint_contents_v2(&self) -> bool {
-        const DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2: bool = false;
+        const DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2: bool = true;
 
         self.use_get_checkpoint_contents_v2
             .unwrap_or(DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2)
+    }
+
+    pub fn max_checkpoint_lookahead(&self) -> u64 {
+        const DEFAULT_MAX_CHECKPOINT_LOOKAHEAD: u64 = 1_000;
+
+        self.max_checkpoint_lookahead
+            .unwrap_or(DEFAULT_MAX_CHECKPOINT_LOOKAHEAD)
+    }
+
+    pub fn max_checkpoint_sync_batch_size(&self) -> u64 {
+        const DEFAULT_MAX_CHECKPOINT_SYNC_BATCH_SIZE: u64 = 400;
+
+        self.max_checkpoint_sync_batch_size
+            .unwrap_or(DEFAULT_MAX_CHECKPOINT_SYNC_BATCH_SIZE)
+    }
+
+    pub fn max_checkpoint_summary_size(&self) -> usize {
+        const DEFAULT_MAX_CHECKPOINT_SUMMARY_SIZE: usize = 256 * 1024; // 256 KiB
+
+        self.max_checkpoint_summary_size
+            .unwrap_or(DEFAULT_MAX_CHECKPOINT_SUMMARY_SIZE)
+    }
+
+    pub fn checkpoint_content_timeout_min(&self) -> Duration {
+        const DEFAULT: Duration = Duration::from_secs(5);
+        self.checkpoint_content_timeout_min_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT)
+    }
+
+    pub fn checkpoint_content_timeout_max(&self) -> Duration {
+        const DEFAULT: Duration = Duration::from_secs(30);
+        self.checkpoint_content_timeout_max_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT)
+    }
+
+    pub fn peer_scoring_window(&self) -> Duration {
+        const DEFAULT: Duration = Duration::from_secs(60);
+        self.peer_scoring_window_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT)
+    }
+
+    pub fn exploration_probability(&self) -> f64 {
+        const DEFAULT: f64 = 0.1;
+        self.exploration_probability.unwrap_or(DEFAULT)
+    }
+
+    pub fn peer_failure_rate(&self) -> f64 {
+        const DEFAULT: f64 = 0.3;
+        self.peer_failure_rate.unwrap_or(DEFAULT)
+    }
+
+    pub fn randomized_for_testing() -> Self {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let config = Self {
+            mailbox_capacity: Some(rng.gen_range(16..=2048)),
+            synced_checkpoint_broadcast_channel_capacity: Some(rng.gen_range(16..=2048)),
+            checkpoint_header_download_concurrency: Some(rng.gen_range(10..=500)),
+            checkpoint_content_download_concurrency: Some(rng.gen_range(10..=500)),
+            max_checkpoint_lookahead: Some(rng.gen_range(100..=2000)),
+            max_checkpoint_sync_batch_size: Some(rng.gen_range(100..=500)),
+            max_checkpoint_summary_size: Some(rng.gen_range(64 * 1024..=512 * 1024)),
+            ..Default::default()
+        };
+        tracing::info!(
+            mailbox_capacity = config.mailbox_capacity.unwrap(),
+            broadcast_capacity = config.synced_checkpoint_broadcast_channel_capacity.unwrap(),
+            header_concurrency = config.checkpoint_header_download_concurrency.unwrap(),
+            content_concurrency = config.checkpoint_content_download_concurrency.unwrap(),
+            lookahead = config.max_checkpoint_lookahead.unwrap(),
+            batch_size = config.max_checkpoint_sync_batch_size.unwrap(),
+            summary_size = config.max_checkpoint_summary_size.unwrap(),
+            "StateSyncConfig::randomized_for_testing"
+        );
+        config
     }
 }
 
@@ -323,7 +452,7 @@ pub struct DiscoveryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub access_type: Option<AccessType>,
 
-    /// Like `seed_peers` in `P2pConfig`, allowlisted peers will awlays be allowed to establish
+    /// Like `seed_peers` in `P2pConfig`, allowlisted peers will always be allowed to establish
     /// connection with this node regardless of the concurrency limit.
     /// Unlike `seed_peers`, a node does not reach out to `allowlisted_peers` preferentially.
     /// It is also used to determine if a peer is accessible when its AccessType is Private.
@@ -332,6 +461,12 @@ pub struct DiscoveryConfig {
     /// to this peer, nor advertise this peer's info to other peers in the network.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub allowlisted_peers: Vec<AllowlistedPeer>,
+
+    /// Size of the Discovery loop's mailbox.
+    ///
+    /// If unspecified, this will default to `1,024`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mailbox_capacity: Option<usize>,
 }
 
 impl DiscoveryConfig {
@@ -357,6 +492,12 @@ impl DiscoveryConfig {
     pub fn access_type(&self) -> AccessType {
         // defaults None to Public
         self.access_type.unwrap_or(AccessType::Public)
+    }
+
+    pub fn mailbox_capacity(&self) -> usize {
+        const MAILBOX_CAPACITY: usize = 1_024;
+
+        self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
     }
 }
 

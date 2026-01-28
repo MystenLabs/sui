@@ -20,11 +20,10 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 //**************************************************************************************************
@@ -304,13 +303,12 @@ pub enum BuiltinTypeName_ {
 }
 pub type BuiltinTypeName = Spanned<BuiltinTypeName_>;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-#[allow(clippy::large_enum_variant)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TypeName_ {
     // exp-list/tuple type
     Multiple(usize),
     Builtin(BuiltinTypeName),
-    ModuleType(ModuleIdent, DatatypeName),
+    ModuleType(Arc<ModuleIdent>, DatatypeName),
 }
 // TODO: This should also be an Arc, so that TypeName can be cheaply cloned
 pub type TypeName = Spanned<TypeName_>;
@@ -329,7 +327,6 @@ pub struct TParam {
 pub struct TVar(pub u64);
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-#[allow(clippy::large_enum_variant)]
 pub enum TypeInner {
     Unit,
     Ref(bool, Type),
@@ -632,7 +629,7 @@ impl SyntaxMethodEntry {
     }
 }
 
-static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
+static BUILTIN_TYPE_ALL_NAMES: LazyLock<BTreeSet<Symbol>> = LazyLock::new(|| {
     [
         BuiltinTypeName_::ADDRESS,
         BuiltinTypeName_::SIGNER,
@@ -650,7 +647,7 @@ static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
     .collect()
 });
 
-static BUILTIN_TYPE_NUMERIC: Lazy<BTreeSet<BuiltinTypeName_>> = Lazy::new(|| {
+static BUILTIN_TYPE_NUMERIC: LazyLock<BTreeSet<BuiltinTypeName_>> = LazyLock::new(|| {
     [
         BuiltinTypeName_::U8,
         BuiltinTypeName_::U16,
@@ -663,11 +660,11 @@ static BUILTIN_TYPE_NUMERIC: Lazy<BTreeSet<BuiltinTypeName_>> = Lazy::new(|| {
     .collect()
 });
 
-static BUILTIN_TYPE_BITS: Lazy<BTreeSet<BuiltinTypeName_>> =
-    Lazy::new(|| BUILTIN_TYPE_NUMERIC.clone());
+static BUILTIN_TYPE_BITS: LazyLock<BTreeSet<BuiltinTypeName_>> =
+    LazyLock::new(|| BUILTIN_TYPE_NUMERIC.clone());
 
-static BUILTIN_TYPE_ORDERED: Lazy<BTreeSet<BuiltinTypeName_>> =
-    Lazy::new(|| BUILTIN_TYPE_BITS.clone());
+static BUILTIN_TYPE_ORDERED: LazyLock<BTreeSet<BuiltinTypeName_>> =
+    LazyLock::new(|| BUILTIN_TYPE_BITS.clone());
 
 impl BuiltinTypeName_ {
     pub const ADDRESS: &'static str = "address";
@@ -754,7 +751,7 @@ impl TParamID {
     }
 }
 
-static BUILTIN_FUNCTION_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
+static BUILTIN_FUNCTION_ALL_NAMES: LazyLock<BTreeSet<Symbol>> = LazyLock::new(|| {
     [BuiltinFunction_::FREEZE, BuiltinFunction_::ASSERT_MACRO]
         .into_iter()
         .map(Symbol::from)
@@ -818,22 +815,23 @@ impl TypeName_ {
     pub fn single_type(&self) -> Option<TypeName_> {
         match self {
             TypeName_::Multiple(_) => None,
-            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(*self),
+            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(self.clone()),
         }
     }
 
     pub fn datatype_name(&self) -> Option<(ModuleIdent, DatatypeName)> {
         match self {
             TypeName_::Builtin(_) | TypeName_::Multiple(_) => None,
-            TypeName_::ModuleType(mident, n) => Some((*mident, *n)),
+            TypeName_::ModuleType(mident, n) => Some((*mident.as_ref(), *n)),
         }
     }
 }
 
-pub static UNIT_TYPE: Lazy<Type_> = Lazy::new(|| TypeInner::Unit.into());
-pub static ANYTHING_TYPE: Lazy<Type_> = Lazy::new(|| TypeInner::Anything.into());
-pub static VOID_TYPE: Lazy<Type_> = Lazy::new(|| TypeInner::Void.into());
-pub static UNRESOLVED_ERROR_TYPE: Lazy<Type_> = Lazy::new(|| TypeInner::UnresolvedError.into());
+pub static UNIT_TYPE: LazyLock<Type_> = LazyLock::new(|| TypeInner::Unit.into());
+pub static ANYTHING_TYPE: LazyLock<Type_> = LazyLock::new(|| TypeInner::Anything.into());
+pub static VOID_TYPE: LazyLock<Type_> = LazyLock::new(|| TypeInner::Void.into());
+pub static UNRESOLVED_ERROR_TYPE: LazyLock<Type_> =
+    LazyLock::new(|| TypeInner::UnresolvedError.into());
 
 impl Type_ {
     pub fn builtin_(b: BuiltinTypeName, ty_args: Vec<Type>) -> Type_ {
@@ -1081,6 +1079,17 @@ impl Value_ {
 impl Clone for Type_ {
     fn clone(&self) -> Self {
         Type_(Arc::clone(&self.0))
+    }
+}
+
+impl Clone for TypeName_ {
+    fn clone(&self) -> Self {
+        use TypeName_::*;
+        match self {
+            Multiple(n) => Multiple(*n),
+            Builtin(b) => Builtin(*b),
+            ModuleType(m, n) => ModuleType(Arc::clone(m), *n),
+        }
     }
 }
 
@@ -2189,4 +2198,24 @@ impl AstDebug for LambdaLValues_ {
         });
         w.write("| ");
     }
+}
+
+// *************************************************************************************************
+// Size Tests
+// *************************************************************************************************
+
+#[test]
+fn naming_ast_sizes() {
+    assert_eq!(
+        std::mem::size_of::<TypeName>(),
+        104,
+        "TypeName size changed"
+    );
+    assert_eq!(
+        std::mem::size_of::<TypeInner>(),
+        160,
+        "TypeInner size changed"
+    );
+    assert_eq!(std::mem::size_of::<Type_>(), 8, "Type_ size changed");
+    assert_eq!(std::mem::size_of::<Type>(), 48, "Type size changed");
 }

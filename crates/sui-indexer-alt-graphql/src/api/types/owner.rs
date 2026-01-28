@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{SimpleObject, Union};
+use async_graphql::SimpleObject;
+use async_graphql::Union;
 use sui_types::object::Owner as NativeOwner;
 
-use crate::{api::scalars::uint53::UInt53, scope::Scope};
-
-use super::address::Address;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address::Address;
+use crate::scope::Scope;
 
 /// The object's owner kind.
 #[derive(Union, Clone)]
@@ -63,7 +64,7 @@ impl Owner {
 
         match native {
             NO::AddressOwner(a) => O::Address(AddressOwner {
-                address: Some(Address::with_address(scope.without_root_version(), a)),
+                address: Some(Address::with_address(scope.without_root_bound(), a)),
             }),
 
             NO::ObjectOwner(a) => O::Object(ObjectOwner {
@@ -83,7 +84,7 @@ impl Owner {
                 owner,
             } => O::ConsensusAddress(ConsensusAddressOwner {
                 start_version: Some(start_version.into()),
-                address: Some(Address::with_address(scope.without_root_version(), owner)),
+                address: Some(Address::with_address(scope.without_root_bound(), owner)),
             }),
         }
     }

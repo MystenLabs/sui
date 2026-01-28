@@ -1,0 +1,263 @@
+---
+title: Referrals
+description: Learn about the DeepBook referral system and how to earn referral fees.
+keywords:
+  [
+    referral,
+    deepbook referral,
+    referral fees,
+    referral rewards,
+    mint referral,
+    claim referral,
+    set referral,
+    referral multiplier,
+    deepbookv3,
+  ]
+---
+
+The DeepBook referral system allows users to earn fees by referring traders to the platform. Referrers can mint a `DeepBookPoolReferral` object for a specific pool, and traders can associate their `BalanceManager` with a referral. When traders with an associated referral execute trades, a portion of their trading fees is allocated to the referrer based on the referral multiplier.
+
+## How referrals work
+
+1. **Mint a referral:** Anyone can mint a `DeepBookPoolReferral` for a specific pool with a specified multiplier. The referral is permanently tied to the pool it was minted from and can only earn fees from trades in that pool.
+2. **Set referral:** Traders associate their `BalanceManager` with a pool-specific referral using a `TradeCap`. Each `BalanceManager` can be associated with different referrals from different pools simultaneously.
+3. **Earn fees:** When taker orders are executed by the balance manager in that pool, referral fees are automatically allocated based on the multiplier. Maker orders do not generate referral fees.
+4. **Claim rewards:** Referrers can claim their accumulated fees in base, quote, and DEEP tokens.
+
+## API
+
+The following are the referral-related functions that DeepBook exposes.
+
+<details>
+<summary>Mint a referral</summary>
+
+Mint a new `DeepBookPoolReferral` object for a specific pool with a specified multiplier. The multiplier determines the portion of trading fees allocated to the referrer. The multiplier must be a multiple of 0.1 (e.g., 0.1, 0.2, 0.3, ...) and cannot exceed 2.0. Returns the ID of the created referral.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="mint_referral"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Update referral multiplier</summary>
+
+Update the multiplier for an existing pool referral. Only the referral owner can update the multiplier. The new multiplier must be a multiple of 0.1 and cannot exceed 2.0.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="update_pool_referral_multiplier"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Claim referral rewards</summary>
+
+Claim accumulated referral fees for a pool referral. Only the referral owner can claim rewards. Returns three `Coin` objects representing the accumulated fees in base asset, quote asset, and DEEP tokens.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="claim_pool_referral_rewards"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Get referral balances</summary>
+
+View the current accumulated balances for a pool referral without claiming them. Returns the amounts in base, quote, and DEEP tokens.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="get_pool_referral_balances"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Get referral multiplier</summary>
+
+Get the current multiplier for a pool referral.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="pool_referral_multiplier"
+	noComments
+/>
+
+</details>
+
+## `BalanceManager` referral functions
+
+These functions are available on the `BalanceManager` to associate or disassociate a referral.
+
+<details>
+<summary>Set referral</summary>
+
+Associate a `BalanceManager` with a pool-specific referral. Requires a `TradeCap` to authorize the operation. Once set, all trades executed by this balance manager in the referral's pool will generate referral fees according to the referral's multiplier. Any previously set referral for the same pool is replaced.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="set_balance_manager_referral"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Unset referral</summary>
+
+Remove the referral association from a `BalanceManager` for a specific pool. Requires a `TradeCap` to authorize the operation. After unsetting, trades in that pool will no longer generate referral fees.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="unset_balance_manager_referral"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Get referral ID</summary>
+
+Retrieve the referral ID currently associated with a `BalanceManager` for a specific pool, if any. Returns `Option<ID>` which is `none` if no referral is set for that pool.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="get_balance_manager_referral_id"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Get referral owner</summary>
+
+Get the owner address of a pool referral object.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="balance_manager_referral_owner"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Get referral pool ID</summary>
+
+Get the pool ID associated with a pool referral object.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="balance_manager_referral_pool_id"
+	noComments
+/>
+
+</details>
+
+## Events
+
+<details>
+<summary>`DeepBookReferralCreatedEvent`</summary>
+
+Emitted when a new referral is minted.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DeepBookReferralCreatedEvent"
+/>
+
+</details>
+
+<details>
+<summary>`DeepBookReferralSetEvent`</summary>
+
+Emitted when a referral is set or unset on a balance manager.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DeepBookReferralSetEvent"
+/>
+
+</details>
+
+<details>
+<summary>`ReferralClaimed`</summary>
+
+Emitted when a referral owner claims their accumulated fees.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="ReferralClaimed"
+/>
+
+</details>
+
+<details>
+<summary>`ReferralFeeEvent`</summary>
+
+Emitted when referral fees are allocated during trade execution.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="ReferralFeeEvent"
+/>
+
+</details>
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>

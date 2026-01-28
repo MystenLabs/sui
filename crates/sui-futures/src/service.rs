@@ -141,7 +141,7 @@ impl Service {
     }
 
     /// Runs the service, waiting for interrupt signals from the operating system to trigger
-    /// graceful shutdown, within the defualt grace period.
+    /// graceful shutdown, within the default grace period.
     pub async fn main(self) -> Result<(), Error> {
         self.wait_for_shutdown(GRACE, terminate).await
     }
@@ -216,7 +216,9 @@ impl Service {
     /// Returns with an error if any of the constituent tasks produced an error during shutdown,
     /// otherwise waits for all tasks (primary and secondy) to complete successfully.
     pub async fn shutdown(mut self) -> Result<(), Error> {
-        let _ = future::join_all(self.exits).await;
+        for exit in self.exits {
+            exit.await;
+        }
         if let Err(e) = future::try_join(run(&mut self.fsts), run(&mut self.snds)).await {
             error!("Task failure during shutdown: {e:#}");
             return Err(Error::Task(e));

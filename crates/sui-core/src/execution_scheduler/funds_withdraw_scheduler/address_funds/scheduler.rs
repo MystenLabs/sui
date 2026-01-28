@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use super::{
     FundsSettlement, ScheduleResult, ScheduleStatus, TxFundsWithdraw,
@@ -10,7 +13,7 @@ use super::{
 use crate::accumulators::funds_read::AccountFundsRead;
 use futures::stream::FuturesUnordered;
 use mysten_metrics::monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-use sui_types::base_types::SequenceNumber;
+use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
 use tokio::sync::oneshot;
 use tracing::debug;
 
@@ -56,6 +59,13 @@ impl WithdrawReservations {
             },
             receivers,
         )
+    }
+
+    pub fn all_accounts(&self) -> BTreeSet<AccumulatorObjId> {
+        self.withdraws
+            .iter()
+            .flat_map(|withdraw| withdraw.reservations.keys().cloned())
+            .collect()
     }
 
     pub fn notify_skip_schedule(self) {
@@ -188,7 +198,6 @@ impl FundsWithdrawScheduler {
                     withdraws: withdraws.clone(),
                     senders: intermediate_senders,
                 };
-                debug!("Scheduling withdraws on scheduler: {}", name);
                 scheduler.schedule_withdraws(reservations).await;
             }
 
@@ -268,8 +277,7 @@ impl FundsWithdrawScheduler {
                 "Settling funds changes: {:?}",
                 settlement.funds_changes,
             );
-            for (name, scheduler) in &self.innards {
-                debug!("Settling funds on scheduler: {}", name);
+            for scheduler in self.innards.values() {
                 scheduler.settle_funds(settlement.clone()).await;
             }
         }

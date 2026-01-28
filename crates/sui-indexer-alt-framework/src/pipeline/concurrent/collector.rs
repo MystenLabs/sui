@@ -1,27 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use sui_futures::service::Service;
-use tokio::{
-    sync::{SetOnce, mpsc},
-    time::{MissedTickBehavior, interval},
-};
-use tracing::{debug, info};
+use tokio::sync::SetOnce;
+use tokio::sync::mpsc;
+use tokio::time::MissedTickBehavior;
+use tokio::time::interval;
+use tracing::debug;
+use tracing::info;
 
-use crate::{
-    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    pipeline::{CommitterConfig, IndexedCheckpoint, WatermarkPart},
-};
-
-use super::{BatchStatus, BatchedRows, Handler};
+use crate::metrics::CheckpointLagMetricReporter;
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::CommitterConfig;
+use crate::pipeline::IndexedCheckpoint;
+use crate::pipeline::WatermarkPart;
+use crate::pipeline::concurrent::BatchStatus;
+use crate::pipeline::concurrent::BatchedRows;
+use crate::pipeline::concurrent::Handler;
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
@@ -225,14 +225,14 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use sui_pg_db::{Connection, Db};
+    use sui_pg_db::Connection;
+    use sui_pg_db::Db;
     use tokio::sync::mpsc;
 
-    use crate::{
-        metrics::tests::test_metrics,
-        pipeline::{Processor, concurrent::BatchStatus},
-        types::full_checkpoint_content::Checkpoint,
-    };
+    use crate::metrics::tests::test_metrics;
+    use crate::pipeline::Processor;
+    use crate::pipeline::concurrent::BatchStatus;
+    use crate::types::full_checkpoint_content::Checkpoint;
 
     use super::*;
 

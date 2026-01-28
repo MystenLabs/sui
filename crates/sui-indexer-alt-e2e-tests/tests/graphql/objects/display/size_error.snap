@@ -8,7 +8,7 @@ A: object(0,0)
 
 task 1, lines 13-62:
 //# publish --sender A
-events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [126, 201, 249, 157, 6, 41, 55, 68, 252, 71, 106, 242, 177, 154, 44, 3, 34, 157, 189, 65, 147, 4, 190, 129, 146, 9, 109, 166, 80, 28, 97, 154] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [126, 201, 249, 157, 6, 41, 55, 68, 252, 71, 106, 242, 177, 154, 44, 3, 34, 157, 189, 65, 147, 4, 190, 129, 146, 9, 109, 166, 80, 28, 97, 154, 1, 0, 1, 1, 99, 72, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125] }
+events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [129, 41, 201, 248, 47, 73, 144, 221, 182, 15, 173, 221, 207, 69, 77, 105, 133, 82, 17, 163, 48, 239, 50, 92, 13, 67, 240, 140, 118, 68, 129, 197] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [129, 41, 201, 248, 47, 73, 144, 221, 182, 15, 173, 221, 207, 69, 77, 105, 133, 82, 17, 163, 48, 239, 50, 92, 13, 67, 240, 140, 118, 68, 129, 197, 1, 0, 1, 1, 99, 72, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125] }
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 18019600,  storage_rebate: 0, non_refundable_storage_fee: 0
@@ -31,7 +31,9 @@ Response: {
   "data": {
     "object": {
       "asMoveObject": {
-        "contents": null
+        "contents": {
+          "display": null
+        }
       }
     }
   },

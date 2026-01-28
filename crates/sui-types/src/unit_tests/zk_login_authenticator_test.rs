@@ -109,6 +109,7 @@ fn zklogin_sign_personal_message() {
         true,
         Some(30),
         true,
+        true,
     );
     let res = authenticator.verify_authenticator(
         &intent_msg,

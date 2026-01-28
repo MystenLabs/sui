@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses P=0x0 Q=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses P=0x0 Q=0x0 --simulator
 
 //# publish --upgradeable --sender A
 module P::M {
@@ -54,6 +54,7 @@ module P::O {
 
 fragment M on MoveModule {
   name
+  fullyQualifiedName
   fileFormatVersion
   bytes
   disassembly

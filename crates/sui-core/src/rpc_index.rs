@@ -179,18 +179,6 @@ impl From<u64> for BalanceIndexInfo {
 }
 
 impl BalanceIndexInfo {
-    fn invert(self) -> Self {
-        // Check for potential overflow when negating i128::MIN
-        assert!(
-            self.balance_delta != i128::MIN,
-            "Cannot invert balance_delta: would overflow i128"
-        );
-
-        Self {
-            balance_delta: -self.balance_delta,
-        }
-    }
-
     fn merge_delta(&mut self, other: &Self) {
         self.balance_delta += other.balance_delta;
     }
@@ -421,28 +409,6 @@ impl EventsCompactionFilter {
 }
 
 impl IndexStoreTables {
-    fn track_coin_balance_change(
-        object: &Object,
-        owner: &SuiAddress,
-        is_removal: bool,
-        balance_changes: &mut HashMap<BalanceKey, BalanceIndexInfo>,
-    ) -> Result<(), StorageError> {
-        if let Some((struct_tag, value)) = get_balance_and_type_if_coin(object)? {
-            let key = BalanceKey {
-                owner: *owner,
-                coin_type: struct_tag,
-            };
-
-            let mut delta = BalanceIndexInfo::from(value);
-            if is_removal {
-                delta = delta.invert();
-            }
-
-            balance_changes.entry(key).or_default().merge_delta(&delta);
-        }
-        Ok(())
-    }
-
     fn extract_version_if_package(
         object: &Object,
     ) -> Option<(PackageVersionKey, PackageVersionInfo)> {
@@ -841,6 +807,23 @@ impl IndexStoreTables {
                 cp,
             );
 
+            let balance_changes = info.balance_changes.iter().filter_map(|change| {
+                if let TypeTag::Struct(coin_type) = &change.coin_type {
+                    Some((
+                        BalanceKey {
+                            owner: change.address,
+                            coin_type: coin_type.as_ref().to_owned(),
+                        },
+                        BalanceIndexInfo {
+                            balance_delta: change.amount,
+                        },
+                    ))
+                } else {
+                    None
+                }
+            });
+            batch.partial_merge_batch(&self.balance, balance_changes)?;
+
             let digest = tx.transaction.digest();
             batch.insert_batch(&self.transactions, [(digest, info)])?;
 
@@ -868,21 +851,13 @@ impl IndexStoreTables {
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
         let mut coin_index: HashMap<CoinIndexKey, CoinIndexInfo> = HashMap::new();
-        let mut balance_changes: HashMap<BalanceKey, BalanceIndexInfo> = HashMap::new();
         let mut package_version_index: Vec<(PackageVersionKey, PackageVersionInfo)> = vec![];
 
         for tx in &checkpoint.transactions {
             // determine changes from removed objects
             for removed_object in tx.removed_objects_pre_version() {
                 match removed_object.owner() {
-                    Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
-                        Self::track_coin_balance_change(
-                            removed_object,
-                            owner,
-                            true,
-                            &mut balance_changes,
-                        )?;
-
+                    Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                         let owner_key = OwnerIndexKey::from_object(removed_object);
                         batch.delete_batch(&self.owner, [owner_key])?;
                     }
@@ -900,14 +875,7 @@ impl IndexStoreTables {
             for (object, old_object) in tx.changed_objects() {
                 if let Some(old_object) = old_object {
                     match old_object.owner() {
-                        Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
-                            Self::track_coin_balance_change(
-                                old_object,
-                                owner,
-                                true,
-                                &mut balance_changes,
-                            )?;
-
+                        Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                             let owner_key = OwnerIndexKey::from_object(old_object);
                             batch.delete_batch(&self.owner, [owner_key])?;
                         }
@@ -926,13 +894,7 @@ impl IndexStoreTables {
                 }
 
                 match object.owner() {
-                    Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
-                        Self::track_coin_balance_change(
-                            object,
-                            owner,
-                            false,
-                            &mut balance_changes,
-                        )?;
+                    Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                         let owner_key = OwnerIndexKey::from_object(object);
                         let owner_info = OwnerIndexInfo::new(object);
                         batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
@@ -970,7 +932,6 @@ impl IndexStoreTables {
         }
 
         batch.insert_batch(&self.coin, coin_index)?;
-        batch.partial_merge_batch(&self.balance, balance_changes)?;
         batch.insert_batch(&self.package_version, package_version_index)?;
 
         Ok(())
@@ -1714,6 +1675,27 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                     self.batch
                         .insert_batch(&self.tables.dynamic_field, [(field_key, ())])?;
                 }
+
+                // Index address balances
+                if parent == SUI_ACCUMULATOR_ROOT_OBJECT_ID.into()
+                    && let Some((owner, coin_type, balance)) = get_address_balance_info(&object)
+                {
+                    let balance_key = BalanceKey { owner, coin_type };
+                    let balance_info = BalanceIndexInfo {
+                        balance_delta: balance,
+                    };
+                    self.balance_changes
+                        .entry(balance_key)
+                        .or_default()
+                        .merge_delta(&balance_info);
+
+                    if self.balance_changes.len() >= BALANCE_FLUSH_THRESHOLD {
+                        self.batch.partial_merge_batch(
+                            &self.tables.balance,
+                            std::mem::take(&mut self.balance_changes),
+                        )?;
+                    }
+                }
             }
 
             Owner::Shared { .. } | Owner::Immutable => {}
@@ -1848,6 +1830,27 @@ fn get_balance_and_type_if_coin(object: &Object) -> Result<Option<(StructTag, u6
             )))
         }
     }
+}
+
+fn get_address_balance_info(object: &Object) -> Option<(SuiAddress, StructTag, i128)> {
+    let move_object = object.data.try_as_move()?;
+
+    let TypeTag::Struct(coin_type) = move_object.type_().balance_accumulator_field_type_maybe()?
+    else {
+        return None;
+    };
+
+    let (key, value): (
+        sui_types::accumulator_root::AccumulatorKey,
+        sui_types::accumulator_root::AccumulatorValue,
+    ) = move_object.try_into().ok()?;
+
+    let balance = value.as_u128()? as i128;
+    if balance <= 0 {
+        return None;
+    }
+
+    Some((key.owner, *coin_type, balance))
 }
 
 #[cfg(test)]

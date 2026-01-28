@@ -88,8 +88,8 @@ pub async fn main() {
                 exec_digests.transaction, exec_digests.effects
             );
 
-            if events.is_some() {
-                for event in events.as_ref().unwrap().data.iter() {
+            if let Some(ref events) = events {
+                for event in events.data.iter() {
                     let type_layout = resolver
                         .type_layout(event.type_.clone().into())
                         .await

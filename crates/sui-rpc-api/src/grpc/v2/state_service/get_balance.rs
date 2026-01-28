@@ -4,8 +4,10 @@
 use crate::{ErrorReason, Result, RpcError, RpcService};
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::{Balance, GetBalanceRequest, GetBalanceResponse};
+use sui_sdk_types::Address;
 use sui_sdk_types::StructTag;
 use sui_types::base_types::SuiAddress;
+use sui_types::storage::BalanceInfo;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 #[tracing::instrument(skip(service))]
@@ -24,12 +26,13 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
                 .with_description("missing owner")
                 .with_reason(ErrorReason::FieldMissing)
         })?
-        .parse::<SuiAddress>()
+        .parse::<Address>()
         .map_err(|e| {
             FieldViolation::new("owner")
                 .with_description(format!("invalid owner: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
+    let owner = SuiAddress::from(owner);
 
     let coin_type = request
         .coin_type
@@ -52,11 +55,61 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
         .get_balance(&owner, &core_coin_type)?
         .unwrap_or_default(); // Use default (zero) if no balance found
 
-    let mut balance = Balance::default();
-    balance.coin_type = Some(coin_type.to_string());
-    balance.balance = Some(balance_info.balance);
+    let balance = render_balance(service, owner, core_coin_type, balance_info);
 
-    let mut response = GetBalanceResponse::default();
-    response.balance = Some(balance);
-    Ok(response)
+    Ok(GetBalanceResponse::default().with_balance(balance))
+}
+
+pub(super) fn render_balance(
+    service: &RpcService,
+    owner: SuiAddress,
+    coin_type: move_core_types::language_storage::StructTag,
+    balance_info: BalanceInfo,
+) -> Balance {
+    let mut balance = Balance::default()
+        .with_coin_type(coin_type.to_canonical_string(true))
+        .with_balance(balance_info.balance);
+
+    if balance_info.balance == 0 {
+        return balance;
+    }
+
+    // When looking up an Address's balance for a particular coin type, there is a possibility that
+    // the value we read is "newer" (further ahead in time) than the summed balance we've read from
+    // the indexes.
+    //
+    // This inconsistency should in practice be hard to see (as its a race) but it can lead to
+    // slightly inconsistent responses:
+    //
+    // - If the Address balance is greater than it was at the checkpoint corrisponding to our index
+    // read, then we'll clamp the value returned to what was in the indexes and its possible that
+    // we under report the balance stored in `Coin<T>`s by saying that the address has no coin
+    // balance.
+    //
+    // - If the Address balance is less than it was at the checkpoint corrisponding to our index
+    // read, then we can possibly over-inflate the balance stored in `Coin<T>`s.
+    if let Some(address_balance) = service.reader.lookup_address_balance(owner, coin_type) {
+        balance.set_address_balance(address_balance);
+
+        match address_balance.cmp(&balance_info.balance) {
+            std::cmp::Ordering::Less => {
+                // If the AddressBalance is less than the total balance we read from the indexes,
+                // then the difference is attributed to coins
+                balance.set_coin_balance(balance_info.balance.saturating_sub(address_balance));
+            }
+            std::cmp::Ordering::Equal => {}
+            std::cmp::Ordering::Greater => {
+                // There is a potential race where the Address balance we read is newer than what
+                // we read from the indexes, and if its higher then lets just cap it based on what
+                // we have in the indexes.
+                balance.set_address_balance(balance_info.balance);
+            }
+        }
+    } else {
+        // If there is no AddressBalance for this coin type, then all the balance is attributed to
+        // coins
+        balance.set_coin_balance(balance_info.balance);
+    }
+
+    balance
 }

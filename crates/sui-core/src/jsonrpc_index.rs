@@ -19,6 +19,7 @@ use prometheus::{
     register_int_counter_with_registry,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use sui_types::accumulator_event::AccumulatorEvent;
 use typed_store::TypedStoreError;
 use typed_store::rocksdb::compaction_filter::Decision;
 
@@ -118,6 +119,7 @@ const ENV_VAR_INVALIDATE_INSTEAD_OF_UPDATE: &str = "INVALIDATE_INSTEAD_OF_UPDATE
 pub struct TotalBalance {
     pub balance: i128,
     pub num_coins: i64,
+    pub address_balance: u64,
 }
 
 #[derive(Debug)]
@@ -239,6 +241,8 @@ pub struct IndexStoreTables {
     owner_index: DBMap<OwnerIndexKey, ObjectInfo>,
 
     coin_index_2: DBMap<CoinIndexKey2, CoinInfo>,
+    // Simple index that just tracks the existance of an address balance for an address.
+    address_balances: DBMap<(SuiAddress, TypeTag), ()>,
 
     /// This is an index of object references to currently existing dynamic field object, indexed by the
     /// composite key of the object ID of their parent and the object ID of the dynamic field object.
@@ -634,6 +638,7 @@ impl IndexStore {
                 let entry = map.entry(coin_type).or_insert(TotalBalance {
                     num_coins: 0,
                     balance: 0,
+                    address_balance: 0,
                 });
                 entry.num_coins -= 1;
                 entry.balance -= coin.balance.value() as i128;
@@ -678,6 +683,7 @@ impl IndexStore {
                 let entry = map.entry(coin_type).or_insert(TotalBalance {
                     num_coins: 0,
                     balance: 0,
+                    address_balance: 0,
                 });
                 entry.num_coins += 1;
                 entry.balance += coin.balance.value() as i128;
@@ -733,6 +739,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
+        accumulator_events: Vec<AccumulatorEvent>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
@@ -785,6 +792,15 @@ impl IndexStore {
 
         // Coin Index
         let cache_updates = self.index_coin(digest, &mut batch, &object_index_changes, tx_coins)?;
+
+        // update address balances index
+        let address_balance_updates = accumulator_events.into_iter().filter_map(|event| {
+            let ty = &event.write.address.ty;
+            // Only process events with Balance<T> types
+            let coin_type = sui_types::balance::Balance::maybe_get_balance_type_param(ty)?;
+            Some(((event.write.address.address, coin_type), ()))
+        });
+        batch.insert_batch(&self.tables.address_balances, address_balance_updates)?;
 
         // Owner index
         batch.delete_batch(
@@ -1537,6 +1553,19 @@ impl IndexStore {
             .collect())
     }
 
+    pub fn get_address_balance_coin_types_iter(
+        &self,
+        owner: SuiAddress,
+    ) -> impl Iterator<Item = TypeTag> {
+        let start_key = (owner, TypeTag::Bool);
+        self.tables()
+            .address_balances
+            .safe_iter_with_bounds(Some(start_key), None)
+            .map(|result| result.expect("iterator db error"))
+            .take_while(move |(key, _)| key.0 == owner)
+            .map(|(key, _)| key.1)
+    }
+
     pub fn get_owned_coins_iterator(
         coin_index: &DBMap<CoinIndexKey2, CoinInfo>,
         owner: SuiAddress,
@@ -1765,7 +1794,11 @@ impl IndexStore {
             balance += coin_info.balance as i128;
             num_coins += 1;
         }
-        Ok(TotalBalance { balance, num_coins })
+        Ok(TotalBalance {
+            balance,
+            num_coins,
+            address_balance: 0,
+        })
     }
 
     /// Read all balances for a `SuiAddress` from the backend database
@@ -1798,6 +1831,7 @@ impl IndexStore {
                 TotalBalance {
                     num_coins: coin_object_count,
                     balance: total_balance,
+                    address_balance: 0,
                 },
             );
         }
@@ -1839,6 +1873,7 @@ impl IndexStore {
                 Ok(TotalBalance {
                     balance: old_balance.balance + balance_delta.balance,
                     num_coins: old_balance.num_coins + balance_delta.num_coins,
+                    address_balance: old_balance.address_balance,
                 })
             } else {
                 balance_delta.clone()
@@ -1872,10 +1907,12 @@ impl IndexStore {
                     let old = new_balance.entry(key.clone()).or_insert(TotalBalance {
                         balance: 0,
                         num_coins: 0,
+                        address_balance: 0,
                     });
                     let new_total = TotalBalance {
                         balance: old.balance + delta.balance,
                         num_coins: old.num_coins + delta.num_coins,
+                        address_balance: old.address_balance,
                     };
                     new_balance.insert(key.clone(), new_total);
                 }
@@ -1955,6 +1992,7 @@ mod tests {
             &TransactionDigest::random(),
             1234,
             Some(tx_coins),
+            vec![],
         )?;
 
         let balance_from_db = IndexStore::get_balance_from_db(
@@ -1997,6 +2035,7 @@ mod tests {
             &TransactionDigest::random(),
             1234,
             Some(tx_coins),
+            vec![],
         )?;
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),

@@ -5,21 +5,30 @@
 //! the implementation applies a bound based on the reader low watermark that needs to consider the
 //! progress of the pruner across multiple tables.
 
-use std::{str::FromStr, time::Duration};
+use std::str::FromStr;
+use std::time::Duration;
 
 use reqwest::Client;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use simulacrum::Simulacrum;
-use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find};
-use sui_types::{
-    base_types::SuiAddress,
-    crypto::{Signature, Signer, get_account_key_pair},
-    digests::TransactionDigest,
-    effects::TransactionEffectsAPI,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Transaction, TransactionData},
-};
+use sui_indexer_alt::config::ConcurrentLayer;
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::config::PipelineLayer;
+use sui_indexer_alt::config::PrunerLayer;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::Signature;
+use sui_types::crypto::Signer;
+use sui_types::crypto::get_account_key_pair;
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+
+use sui_indexer_alt_e2e_tests::FullCluster;
+use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
+use sui_indexer_alt_e2e_tests::find;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;

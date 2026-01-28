@@ -85,7 +85,7 @@ Use these functions to borrow assets from margin pools. Borrowing is subject to 
 - `managerKey`: String that identifies the margin manager.
 - `amount`: Number representing the amount to borrow.
 
-<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="borrowBase,borrowBase" signatureOnly />
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="borrowBase,borrowQuote" signatureOnly />
 
 ### `repayBase`, `repayQuote`
 
@@ -111,9 +111,37 @@ Use `liquidate` to liquidate an undercollateralized margin manager. The call ret
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="liquidate" signatureOnly />
 
+### `setMarginManagerReferral`
+
+Use `setMarginManagerReferral` to set a pool-specific referral for the margin manager. The referral must be a `DeepBookPoolReferral` minted for the pool associated with the margin manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the margin manager.
+- `referral`: String representing the referral ID.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="setMarginManagerReferral" signatureOnly />
+
+### `unsetMarginManagerReferral`
+
+Use `unsetMarginManagerReferral` to remove the referral association from a margin manager for a specific pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the margin manager.
+- `poolKey`: String that identifies the DeepBook pool.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="unsetMarginManagerReferral" signatureOnly />
+
 ## Read-only functions
 
 The following functions query margin manager state without modifying it.
+
+### `riskRatio`
+
+Query the risk ratio of the margin manager, which represents the ratio of assets to debt. Higher ratios indicate healthier positions.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="riskRatio" signatureOnly />
 
 ### `owner`, `deepbookPool`, `marginPoolId`
 

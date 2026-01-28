@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
-use async_graphql::{CustomValidator, InputObject, InputValueError};
+use async_graphql::CustomValidator;
+use async_graphql::InputObject;
+use async_graphql::InputValueError;
 
-use crate::{
-    api::scalars::{owner_kind::OwnerKind, sui_address::SuiAddress, type_filter::TypeFilter},
-    intersect,
-};
+use crate::api::scalars::owner_kind::OwnerKind;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeFilter;
+use crate::intersect;
 
 /// A filter over the live object set, the filter can be one of:
 ///

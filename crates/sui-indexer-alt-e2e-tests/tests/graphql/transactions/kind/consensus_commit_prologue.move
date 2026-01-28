@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --simulator
+//# init --protocol-version 108 --simulator
 
 //# advance-clock --duration-ns 1000000
 

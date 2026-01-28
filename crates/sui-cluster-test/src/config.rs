@@ -41,14 +41,9 @@ pub struct ClusterTestOpt {
     pub pg_address: Option<String>,
     #[clap(long)]
     pub config_dir: Option<PathBuf>,
-    /// URL for the indexer RPC server
+    /// URL for the graphql RPC server
     #[clap(long)]
     pub graphql_address: Option<String>,
-    /// Indicate that an indexer and graphql service should be started
-    ///
-    /// Only used with a local cluster
-    #[clap(long)]
-    pub with_indexer_and_graphql: bool,
 }
 
 impl ClusterTestOpt {
@@ -62,7 +57,6 @@ impl ClusterTestOpt {
             pg_address: None,
             config_dir: None,
             graphql_address: None,
-            with_indexer_and_graphql: false,
         }
     }
 }

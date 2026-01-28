@@ -3,7 +3,7 @@
 
 use async_graphql::SimpleObject;
 
-use super::programmable::ProgrammableTransaction;
+use crate::api::types::transaction_kind::programmable::ProgrammableTransaction;
 
 /// ProgrammableSystemTransaction is identical to ProgrammableTransaction, but GraphQL does not allow multiple variants with the same type.
 #[derive(SimpleObject, Clone)]

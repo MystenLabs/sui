@@ -913,8 +913,8 @@ impl NodeMetrics {
             ).unwrap(),
             finalizer_skipped_voting_blocks: register_int_counter_vec_with_registry!(
                 "finalizer_skipped_voting_blocks",
-                "Number of blocks skipped from voting due to potentially not being an immediate descendant.",
-                &["authority"],
+                "Number of times where another block skipped voting due to potentially out of GC bound. Authority is from the voted block.",
+                &["authority", "type"],
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

@@ -19,7 +19,7 @@ public fun transfer<T: key>(obj: T, recipient: address)
 public fun public_transfer<T: key + store>(obj: T, recipient: address)
 ```
 
-An object's ownership can change over the life of that object, either by adding it as a [dynamic object field](/concepts/dynamic-fields.mdx), transferring it to a different address, or making it [immutable](/guides/developer/objects/object-ownership/immutable.mdx). However, after you create an object and set its ownership, it cannot be [shared](/guides/developer/objects/object-ownership/shared.mdx).
+An object's ownership can change over the life of that object, either by adding it as a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx), transferring it to a different address, or making it [immutable](/guides/developer/objects/object-ownership/immutable.mdx). However, after you create an object and set its ownership, it cannot be [shared](/guides/developer/objects/object-ownership/shared.mdx).
 
 <ImportContent source="examples/move/basics/sources/object_basics.move" mode="code" fun="create" noComments />
 

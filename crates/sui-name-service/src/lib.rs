@@ -211,6 +211,15 @@ impl NameServiceConfig {
         .unwrap()
     }
 
+    pub fn name_record_type(&self) -> StructTag {
+        StructTag {
+            address: self.package_address.into(),
+            module: ident_str!("name_record").to_owned(),
+            name: ident_str!("NameRecord").to_owned(),
+            type_params: vec![],
+        }
+    }
+
     // Create a config based on the package and object ids published on mainnet
     pub fn mainnet() -> Self {
         const MAINNET_NS_PACKAGE_ADDRESS: &str =

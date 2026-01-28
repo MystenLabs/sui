@@ -19,7 +19,6 @@ use move_core_types::runtime_value::{MoveStruct, MoveValue};
 use move_core_types::u256::U256;
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::{RunCommand, SyntaxChoice};
-use sui_graphql_rpc::test_infra::cluster::SnapshotLagConfig;
 use sui_types::balance::Balance;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
@@ -28,9 +27,9 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
 };
-use sui_types::type_input::TypeInput;
 
 pub const SUI_ARGS_LONG: &str = "sui-args";
+const DEFAULT_CONSISTENT_RANGE: usize = 300;
 
 #[derive(Clone, Debug, clap::Parser)]
 pub struct SuiRunArgs {
@@ -74,14 +73,10 @@ pub struct SuiInitArgs {
     pub reference_gas_price: Option<u64>,
     #[clap(long = "default-gas-price")]
     pub default_gas_price: Option<u64>,
-    #[clap(flatten)]
-    pub snapshot_config: SnapshotLagConfig,
     #[clap(long = "flavor")]
     pub flavor: Option<Flavor>,
-    /// The number of epochs to keep in the database. Epochs outside of this range will be pruned by
-    /// the indexer.
-    #[clap(long = "epochs-to-keep")]
-    pub epochs_to_keep: Option<u64>,
+    #[clap(long = "consistent-range", default_value_t = DEFAULT_CONSISTENT_RANGE)]
+    pub consistent_range: usize,
     /// Dir for simulacrum to write checkpoint files to. To be passed to the offchain indexer and
     /// reader.
     #[clap(long)]
@@ -101,6 +96,9 @@ pub struct SuiInitArgs {
     /// Enable non-exclusive write objects for testing
     #[clap(long = "enable-non-exclusive-write-objects")]
     pub enable_non_exclusive_writes: bool,
+    /// Enable using address balance as gas payments feature for testing
+    #[clap(long = "enable-address-balance-gas-payments")]
+    pub enable_address_balance_gas_payments: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -121,6 +119,8 @@ pub struct TransferObjectCommand {
     pub sender: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-budget-from-address-balance")]
+    pub gas_budget_from_address_balance: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
 }
@@ -139,6 +139,8 @@ pub struct ProgrammableTransactionCommand {
     pub sponsor: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-budget-from-address-balance")]
+    pub gas_budget_from_address_balance: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
     #[clap(long = "gas-payment", value_parser = parse_fake_id)]
@@ -170,6 +172,8 @@ pub struct UpgradePackageCommand {
     pub sender: String,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-budget-from-address-balance")]
+    pub gas_budget_from_address_balance: Option<u64>,
     #[clap(long = "dry-run")]
     pub dry_run: bool,
     #[clap(long = "syntax")]
@@ -761,10 +765,8 @@ impl SuiValue {
                             type_tag
                         )
                     })?;
-                let inner_type_input = TypeInput::from(inner_type);
                 CallArg::FundsWithdrawal(FundsWithdrawalArg::balance_from_sender(
-                    amount,
-                    inner_type_input,
+                    amount, inner_type,
                 ))
             }
         })

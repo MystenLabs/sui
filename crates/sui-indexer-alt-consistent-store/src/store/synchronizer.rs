@@ -1,14 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::{Context, bail, ensure};
-use sui_futures::{future::with_slow_future_monitor, service::Service};
-use tokio::sync::{Barrier, mpsc};
-use tracing::{debug, info, warn};
+use anyhow::Context;
+use anyhow::bail;
+use anyhow::ensure;
+use sui_futures::future::with_slow_future_monitor;
+use sui_futures::service::Service;
+use tokio::sync::Barrier;
+use tokio::sync::mpsc;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
-use crate::db::{Db, Watermark};
+use crate::db::Db;
+use crate::db::Watermark;
 
 /// The synchronizer will emit a message if it has been waiting to synchronize with other tasks for
 /// this long without making progress.

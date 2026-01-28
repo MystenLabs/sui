@@ -362,6 +362,10 @@ def main():
         elif sys.argv[1] == "update-base":
             update_base_commit()
             sys.exit(0)
+        elif sys.argv[1] == "update-all":
+            update_base_commit()
+            auto_update_config()
+            # fall through to run the default sparse checkout behavior
         elif sys.argv[1] == "git":
             # check if there are any ignored files
             if get_ignored_files():

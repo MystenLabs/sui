@@ -5,7 +5,7 @@ use anyhow::Result;
 use object_store::aws::AmazonS3ConfigKey;
 use object_store::gcp::GoogleConfigKey;
 use object_store::path::Path;
-use object_store::{ClientOptions, ObjectStore, RetryConfig};
+use object_store::{ClientOptions, ObjectStore, ObjectStoreExt, RetryConfig};
 use std::str::FromStr;
 use std::time::Duration;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;

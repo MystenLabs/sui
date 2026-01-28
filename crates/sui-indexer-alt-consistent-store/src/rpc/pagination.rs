@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
-use bincode::{Decode, Encode};
-use serde::{Serialize, de::DeserializeOwned};
+use bincode::Decode;
+use bincode::Encode;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::End;
 
-use crate::db::{
-    iter::{FwdIter, RevIter},
-    map::DbMap,
-};
-
-use super::error::{RpcError, db_error};
+use crate::db::iter::FwdIter;
+use crate::db::iter::RevIter;
+use crate::db::map::DbMap;
+use crate::rpc::error::RpcError;
+use crate::rpc::error::db_error;
 
 #[DefaultConfig]
 pub struct PaginationConfig {
@@ -109,6 +110,14 @@ impl<'r> Page<'r> {
                 pred,
             )
         }
+    }
+
+    pub(super) fn limit(&self) -> usize {
+        self.limit
+    }
+
+    pub(super) fn is_from_front(&self) -> bool {
+        self.is_from_front
     }
 
     fn paginate_from_front<K, V, E>(
@@ -236,12 +245,15 @@ impl Default for PaginationConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::{convert::Infallible, sync::Arc};
+    use std::convert::Infallible;
+    use std::sync::Arc;
 
     use sui_indexer_alt_framework::store::CommitterWatermark;
     use tempfile::TempDir;
 
-    use crate::db::{Db, Watermark, key};
+    use crate::db::Db;
+    use crate::db::Watermark;
+    use crate::db::key;
 
     use super::*;
 

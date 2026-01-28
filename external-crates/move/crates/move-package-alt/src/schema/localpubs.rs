@@ -3,7 +3,10 @@ use indoc::indoc;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::{flavor::MoveFlavor, schema::LockfileDependencyInfo};
+use crate::{
+    flavor::MoveFlavor,
+    schema::{LocalDepInfo, LockfileGitDepInfo, OnChainDepInfo},
+};
 
 use super::{
     EnvironmentID, EnvironmentName, PublishAddresses, RenderToml,
@@ -28,7 +31,7 @@ pub struct ParsedEphemeralPubs<F: MoveFlavor> {
 #[serde(bound = "", rename_all = "kebab-case")]
 #[derive_where(Clone)]
 pub struct LocalPub<F: MoveFlavor> {
-    pub source: LockfileDependencyInfo,
+    pub source: EphemeralDependencyInfo,
 
     #[serde(flatten)]
     pub addresses: PublishAddresses,
@@ -37,6 +40,18 @@ pub struct LocalPub<F: MoveFlavor> {
 
     #[serde(flatten)]
     pub metadata: F::PublishedMetadata,
+}
+
+/// An `EphemeralDependencyInfo` is like a lockfile dependency, except that local paths are
+/// absolute instead of relative. This is so that ephemeral pubfiles can be reused across packages
+/// in a single filesystem (but can't be used if packages are moved to a different path)
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(bound = "", rename_all = "kebab-case")]
+#[serde(untagged)]
+pub enum EphemeralDependencyInfo {
+    Local(LocalDepInfo),
+    OnChain(OnChainDepInfo),
+    Git(LockfileGitDepInfo),
 }
 
 impl<F: MoveFlavor> RenderToml for ParsedEphemeralPubs<F> {
@@ -64,6 +79,16 @@ impl<F: MoveFlavor> RenderToml for ParsedEphemeralPubs<F> {
 
             "#
         ));
+
+        toml.to_string()
+    }
+}
+
+impl RenderToml for EphemeralDependencyInfo {
+    fn render_as_toml(&self) -> String {
+        let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");
+
+        flatten_toml(toml.as_item_mut());
 
         toml.to_string()
     }
@@ -106,7 +131,7 @@ mod tests {
             build-config = { edition = "2024", flavor = "vanilla" }
 
             [[published]]
-            source = { root = true }
+            source = { local = "." }
             published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
             original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
             version = 2

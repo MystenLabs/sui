@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --addresses test=0x0 --simulator
+//# init --protocol-version 108 --accounts A B --addresses test=0x0 --simulator
 
 //# publish
 module test::events_test {
@@ -196,6 +196,21 @@ module test::events_test {
           package { address }
           name
         }
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors 1000 2000
+{ # Test cursors being out of bounds
+  outOfBounds: transactionEffects(digest: "@{digest_3}") {
+    events(after: "@{cursor_0}", before: "@{cursor_1}") {
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+      }
+      nodes {
+        sequenceNumber
       }
     }
   }

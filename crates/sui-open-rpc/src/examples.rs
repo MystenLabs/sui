@@ -844,6 +844,7 @@ impl RpcExampleProvider {
             coin_object_count: 15,
             total_balance: 3000000000,
             locked_balance: HashMap::new(),
+            funds_in_address_balance: 42,
         };
         Examples::new(
             "suix_getAllBalances",
@@ -898,6 +899,7 @@ impl RpcExampleProvider {
             coin_object_count: 15,
             total_balance: 15,
             locked_balance: HashMap::new(),
+            funds_in_address_balance: 42,
         };
 
         Examples::new(

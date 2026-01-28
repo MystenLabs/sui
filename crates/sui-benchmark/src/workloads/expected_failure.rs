@@ -54,6 +54,7 @@ impl ExpectedFailurePayload {
                 tx
             }
             ExpectedFailureType::Random => unreachable!(),
+            ExpectedFailureType::ObjectLockConflict => unreachable!(),
             ExpectedFailureType::NoFailure => unreachable!(),
         }
     }
@@ -214,14 +215,16 @@ pub struct ExpectedFailureWorkload {
 impl Workload<dyn Payload> for ExpectedFailureWorkload {
     async fn init(
         &mut self,
-        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         _system_state_observer: Arc<SystemStateObserver>,
     ) {
     }
 
     async fn make_test_payloads(
         &self,
-        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let (transfer_tokens, payload_gas) = self.payload_gas.split_at(self.num_tokens as usize);

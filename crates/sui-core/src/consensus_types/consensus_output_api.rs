@@ -117,7 +117,7 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
             })
             .join(", ");
         let digest = self.rejected_transactions_digest();
-        format!("digest: {digest}; {str}")
+        format!("({digest}): [{str}]")
     }
 }
 

@@ -1,41 +1,54 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_trait::async_trait;
-use lru::LruCache;
-use move_binary_format::file_format::{
-    AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
-    Signature as MoveSignature, SignatureIndex, Visibility,
-};
-use move_command_line_common::display::RenderResult;
-use move_command_line_common::{display::try_render_constant, error_bitset::ErrorBitset};
-use move_core_types::annotated_value::MoveEnumLayout;
-use move_core_types::language_storage::ModuleId;
+use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex};
-use std::{borrow::Cow, collections::BTreeMap};
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use async_trait::async_trait;
+use lru::LruCache;
+use move_binary_format::CompiledModule;
+use move_binary_format::errors::Location;
+use move_binary_format::file_format::AbilitySet;
+use move_binary_format::file_format::DatatypeHandleIndex;
+use move_binary_format::file_format::DatatypeTyParameter;
+use move_binary_format::file_format::EnumDefinitionIndex;
+use move_binary_format::file_format::FunctionDefinitionIndex;
+use move_binary_format::file_format::Signature as MoveSignature;
+use move_binary_format::file_format::SignatureIndex;
+use move_binary_format::file_format::SignatureToken;
+use move_binary_format::file_format::StructDefinitionIndex;
+use move_binary_format::file_format::StructFieldInformation;
+use move_binary_format::file_format::TableIndex;
+use move_binary_format::file_format::Visibility;
+use move_command_line_common::display::RenderResult;
+use move_command_line_common::display::try_render_constant;
+use move_command_line_common::error_bitset::ErrorBitset;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::annotated_value::MoveEnumLayout;
+use move_core_types::annotated_value::MoveFieldLayout;
+use move_core_types::annotated_value::MoveStructLayout;
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::language_storage::ModuleId;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use sui_types::Identifier;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::is_primitive_type_tag;
-use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction};
-use sui_types::type_input::{StructInput, TypeInput};
+use sui_types::move_package::MovePackage;
+use sui_types::move_package::TypeOrigin;
+use sui_types::object::Object;
+use sui_types::transaction::Argument;
+use sui_types::transaction::CallArg;
+use sui_types::transaction::Command;
+use sui_types::transaction::ProgrammableTransaction;
+use sui_types::type_input::StructInput;
+use sui_types::type_input::TypeInput;
 
 use crate::error::Error;
-use move_binary_format::errors::Location;
-use move_binary_format::{
-    CompiledModule,
-    file_format::{
-        DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, StructFieldInformation,
-        TableIndex,
-    },
-};
-use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
-    language_storage::{StructTag, TypeTag},
-};
-use sui_types::move_package::{MovePackage, TypeOrigin};
-use sui_types::object::Object;
-use sui_types::{Identifier, base_types::SequenceNumber};
 
 pub mod error;
 
@@ -1807,13 +1820,16 @@ mod tests {
     use async_trait::async_trait;
     use move_binary_format::file_format::Ability;
     use move_core_types::ident_str;
+    use std::path::PathBuf;
+    use std::str::FromStr;
     use std::sync::Arc;
-    use std::{path::PathBuf, str::FromStr, sync::RwLock};
+    use std::sync::RwLock;
     use sui_types::base_types::random_object_ref;
     use sui_types::transaction::ObjectArg;
 
     use move_compiler::compiled_unit::NamedCompiledModule;
-    use sui_move_build::{BuildConfig, CompiledPackage};
+    use sui_move_build::BuildConfig;
+    use sui_move_build::CompiledPackage;
 
     use super::*;
 

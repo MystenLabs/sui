@@ -9,6 +9,15 @@ import os
 import random
 import argparse
 import threading
+import tempfile
+import shutil
+import fcntl
+
+def reset_stdout_blocking():
+    """Reset stdout to blocking mode (child processes may set it non-blocking)."""
+    fd = sys.stdout.fileno()
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags & ~os.O_NONBLOCK)
 
 print_lock = threading.Lock()
 def safe_print(*args, **kwargs):
@@ -17,11 +26,94 @@ def safe_print(*args, **kwargs):
             print(*args, **kwargs)
             sys.stdout.flush()
         except BlockingIOError:
-            sys.exit(1)
+            reset_stdout_blocking()
+            print(*args, **kwargs)
+            sys.stdout.flush()
+
+def collect_satisfied_assertions(log_dir):
+    """Collect all satisfied assertions from log files in the directory.
+
+    Returns (reached_set, sometimes_set) where:
+    - reached_set: locations of reachable assertions that were reached
+    - sometimes_set: locations of sometimes assertions where condition was true
+    """
+    reached = set()
+    sometimes = set()
+    if not os.path.isdir(log_dir):
+        return reached, sometimes
+    for filename in os.listdir(log_dir):
+        filepath = os.path.join(log_dir, filename)
+        if filename.endswith(".reached"):
+            with open(filepath, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        reached.add(line)
+        elif filename.endswith(".sometimes"):
+            with open(filepath, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        sometimes.add(line)
+    return reached, sometimes
+
+def print_reachability_summary(binary_path, reached_assertions, sometimes_assertions):
+    """Print summary of reached vs unreached assertions."""
+    try:
+        # Import the reachpoints module
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        sys.path.insert(0, script_dir)
+        from reachpoints import extract_reach_points, thin_if_universal
+
+        path_to_use, tmp_handle = thin_if_universal(binary_path, "arm64")
+        try:
+            all_points = extract_reach_points(path_to_use)
+        finally:
+            if tmp_handle is not None:
+                try:
+                    os.unlink(tmp_handle.name)
+                except OSError:
+                    pass
+
+        # Separate by type and deduplicate by location
+        reachable_points = {p.loc: p.msg for p in all_points if p.assertion_type == "reachable"}
+        sometimes_points = {p.loc: p.msg for p in all_points if p.assertion_type == "sometimes"}
+
+        reached_locs = reached_assertions & set(reachable_points.keys())
+        unreached_locs = set(reachable_points.keys()) - reached_assertions
+        satisfied_locs = sometimes_assertions & set(sometimes_points.keys())
+        unsatisfied_locs = set(sometimes_points.keys()) - sometimes_assertions
+
+        total = len(reachable_points) + len(sometimes_points)
+        satisfied = len(reached_locs) + len(satisfied_locs)
+
+        # Build the full summary as a single string to avoid partial output
+        lines = []
+        lines.append("\n" + "=" * 60)
+        lines.append(f"REACHABILITY: {satisfied}/{total} assertions satisfied")
+        lines.append("=" * 60)
+
+        for loc in sorted(reachable_points.keys()):
+            msg = reachable_points[loc]
+            status = "\033[92m[+]\033[0m" if loc in reached_locs else "\033[93m[-]\033[0m"
+            lines.append(f"{status} reachable {loc}: {msg}")
+
+        for loc in sorted(sometimes_points.keys()):
+            msg = sometimes_points[loc]
+            status = "\033[92m[+]\033[0m" if loc in satisfied_locs else "\033[93m[-]\033[0m"
+            lines.append(f"{status} sometimes {loc}: {msg}")
+
+        # Print all at once and flush
+        output = "\n".join(lines)
+        print(output, flush=True)
+
+    except Exception as e:
+        safe_print(f"Warning: Could not analyze reachability assertions: {e}")
 
 parser = argparse.ArgumentParser(description='Run the simulator with different seeds')
 parser.add_argument('testname', type=str, help='Name of test to run')
 parser.add_argument('--test', type=str, help='Name of the test binary run', required=True)
+parser.add_argument('--no-capture', action='store_true', help='Whether to output logs as the test runs', default=False)
 parser.add_argument('--exact', action='store_true', help='Use exact matching for test name', default=False)
 parser.add_argument('--num-seeds', type=int, help='Number of seeds to run', default=200)
 parser.add_argument(
@@ -31,6 +123,7 @@ parser.add_argument(
 )
 parser.add_argument('--concurrency', type=int, help='Number of concurrent tests to run', default=os.cpu_count())
 parser.add_argument('--no-build', action='store_true', help='Skip building the test binary')
+parser.add_argument('--no-reachability', action='store_true', help='Disable reachability assertion tracking')
 args = parser.parse_args()
 
 def run_command(command, env_vars):
@@ -46,9 +139,11 @@ def run_command(command, env_vars):
         exit_code = process.returncode
         if exit_code != 0:
             safe_print(f"Command '{command}' failed with exit code {exit_code} for seed: " + env_vars["MSIM_TEST_SEED"])
+            if not args.no_capture:
+                safe_print(f"Run the script with --no-capture to see more details including error logs from simtest framework.")
             safe_print(f"stdout:\n=========================={stdout.decode('utf-8')}\n==========================")
             if stderr:
-              safe_print(f"stderr:\n=========================={stderr.decode('utf-8')}\n==========================")
+                safe_print(f"stderr:\n=========================={stderr.decode('utf-8')}\n==========================")
         else:
           safe_print("-- seed passed %s" % env_vars["MSIM_TEST_SEED"])
 
@@ -72,11 +167,8 @@ def main(commands):
             exit_code = future.result()
             if exit_code != 0:
                 all_passed = False
-                safe_print(f"Command '{cmd}' failed with exit code {exit_code}")
-                sys.exit(1)
 
-        if all_passed:
-            safe_print("\033[92mAll tests passed successfully!\033[0m")
+        return all_passed
 
 if __name__ == "__main__":
     repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode("utf-8").strip()
@@ -101,23 +193,59 @@ if __name__ == "__main__":
         safe_print(f"run: `$ ls -ltr target/simulator/deps/ | tail` to find recent test binaries");
         sys.exit(1)
 
+    # Create temp directory for reachable assertion logs
+    reach_log_dir = None
+    if not args.no_reachability:
+        reach_log_dir = tempfile.mkdtemp(prefix="reach_assertions_")
+        safe_print(f"Reachability log directory: {reach_log_dir}")
+
     commands = []
+
+    if args.no_capture:
+      rust_log = "error"
+    else:
+      rust_log = "off"
 
     for i in range(1, args.num_seeds + 1):
         next_seed = args.seed_start + i
-        commands.append(("%s --test-threads 1 %s %s" % (binary, '--exact' if args.exact else '', args.testname), {
+        env_vars = {
           "MSIM_TEST_SEED": "%d" % next_seed,
-          "RUST_LOG": "off",
-        }))
+          "RUST_LOG": rust_log,
+          "MSIM_WATCHDOG_TIMEOUT_MS": "120000",
+        }
+        if reach_log_dir:
+            env_vars["MSIM_LOG_REACHABLE_ASSERTIONS"] = reach_log_dir
+        commands.append(("%s --test-threads 1 %s %s %s" % (binary, '--no-capture' if args.no_capture else '', '--exact' if args.exact else '', args.testname), env_vars))
 
-    # register clean up code to kill all child processes when we exit
-    import atexit
+    # register clean up code to kill all child processes on Ctrl+C
     import signal
     def kill_child_processes(*args):
         safe_print("Killing child processes")
         os.killpg(0, signal.SIGKILL)
         sys.exit(0)
-    atexit.register(kill_child_processes)
     signal.signal(signal.SIGINT, kill_child_processes)
 
-    main(commands)
+    try:
+        all_passed = main(commands)
+
+        # Reset stdout to blocking mode (child processes may have changed it)
+        reset_stdout_blocking()
+
+        # Collect and report reachability results
+        if reach_log_dir:
+            reached, sometimes = collect_satisfied_assertions(reach_log_dir)
+            print_reachability_summary(binary, reached, sometimes)
+
+        if all_passed:
+            safe_print("\033[92mAll tests passed successfully!\033[0m")
+
+        # Ensure all output is flushed before exit
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+        if not all_passed:
+            sys.exit(1)
+    finally:
+        # Clean up temp directory
+        if reach_log_dir:
+            shutil.rmtree(reach_log_dir, ignore_errors=True)

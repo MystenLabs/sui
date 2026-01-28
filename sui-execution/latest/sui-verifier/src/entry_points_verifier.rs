@@ -60,8 +60,8 @@ pub fn verify_module(
 
         // find candidate entry functions and check their parameters
         // (ignore other functions)
-        if !func_def.is_entry {
-            // it's not an entry function
+        if !func_def.is_entry || verifier_config.disable_entry_point_signature_check {
+            // it's not an entry function or the check is now disabled
             continue;
         }
         verify_entry_function_impl(module, func_def, verifier_config)

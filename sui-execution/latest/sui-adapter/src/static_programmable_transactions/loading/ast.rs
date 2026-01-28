@@ -70,6 +70,8 @@ pub enum ObjectMutability {
 #[derive(Debug)]
 #[cfg_attr(debug_assertions, derive(Clone))]
 pub struct FundsWithdrawalArg {
+    // if true, it was from a compatibility object input, not a intentional withdrawal argument
+    pub from_compatibility_object: bool,
     /// The full type `sui::funds_accumulator::Withdrawal<T>`
     pub ty: Type,
     pub owner: AccountAddress,
@@ -284,6 +286,42 @@ impl Datatype {
             addresses.extend(arg.all_addresses());
         }
         addresses
+    }
+}
+
+impl Command {
+    pub fn arguments_mut(&mut self) -> Box<dyn Iterator<Item = &mut Argument> + '_> {
+        match self {
+            Command::MoveCall(mc) => Box::new(mc.arguments.iter_mut()),
+            Command::TransferObjects(objs, recipient) => {
+                Box::new(objs.iter_mut().chain(std::iter::once(recipient)))
+            }
+            Command::SplitCoins(coin, amounts) => {
+                Box::new(std::iter::once(coin).chain(amounts.iter_mut()))
+            }
+            Command::MergeCoins(coin, coins) => {
+                Box::new(std::iter::once(coin).chain(coins.iter_mut()))
+            }
+            Command::MakeMoveVec(_, elements) => Box::new(elements.iter_mut()),
+            Command::Publish(_, _, _) => Box::new(std::iter::empty()),
+            Command::Upgrade(_, _, _, obj, _) => Box::new(std::iter::once(obj)),
+        }
+    }
+
+    pub fn arguments(&self) -> Box<dyn Iterator<Item = &Argument> + '_> {
+        match self {
+            Command::MoveCall(mc) => Box::new(mc.arguments.iter()),
+            Command::TransferObjects(objs, recipient) => {
+                Box::new(objs.iter().chain(std::iter::once(recipient)))
+            }
+            Command::SplitCoins(coin, amounts) => {
+                Box::new(std::iter::once(coin).chain(amounts.iter()))
+            }
+            Command::MergeCoins(coin, coins) => Box::new(std::iter::once(coin).chain(coins.iter())),
+            Command::MakeMoveVec(_, elements) => Box::new(elements.iter()),
+            Command::Publish(_, _, _) => Box::new(std::iter::empty()),
+            Command::Upgrade(_, _, _, obj, _) => Box::new(std::iter::once(obj)),
+        }
     }
 }
 

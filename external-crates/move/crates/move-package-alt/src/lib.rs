@@ -6,17 +6,27 @@
 //!
 //! TODO: major modules, etc
 
-pub mod cli;
-pub mod compatibility;
-pub mod dependency;
-pub mod errors;
-pub mod flavor;
+mod compatibility;
+mod dependency;
+mod errors;
+mod flavor;
+mod graph;
+mod logging;
+mod package;
+
 pub mod git;
-pub mod graph;
-pub(crate) mod logging;
-pub mod package;
 pub mod schema;
 pub mod test_utils;
 
-pub use package::package_impl::cache_package;
 pub use package::paths::read_name_from_manifest;
+
+// TODO: maybe put Vanilla into test_utils
+// TODO: maybe put SourcePackageLayout, NamedAddress into schema
+
+pub use errors::{PackageError, PackageResult};
+pub use flavor::{MoveFlavor, Vanilla};
+pub use graph::{NamedAddress, PackageInfo};
+pub use package::layout::SourcePackageLayout;
+pub use package::{
+    RootPackage, package_impl::cache_package, package_loader::PackageLoader, paths::PackagePath,
+};

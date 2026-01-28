@@ -29,6 +29,7 @@ CHANGELOG.md
 /crates/sui-core/src/consensus_adapter.rs @MystenLabs/consensus
 /crates/sui-core/src/consensus_handler.rs @MystenLabs/consensus
 /crates/sui-core/src/consensus_manager/ @MystenLabs/consensus
+/crates/sui-core/src/consensus_validator.rs @MystenLabs/consensus
 /crates/sui-core/src/transaction_driver/ @MystenLabs/consensus
 /crates/sui-core/src/transaction_orchestrator.rs @MystenLabs/consensus
 /crates/sui-core/src/validator_client_monitor/ @MystenLabs/consensus

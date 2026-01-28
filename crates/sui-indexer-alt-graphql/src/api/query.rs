@@ -1,52 +1,72 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context as _, anyhow};
-use async_graphql::{Context, Object, Result, connection::Connection};
+use anyhow::Context as _;
+use anyhow::anyhow;
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::Result;
+use async_graphql::connection::Connection;
 use futures::future::try_join_all;
-use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
+use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
+use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 
-use crate::{
-    api::{
-        mutation::TransactionInputError,
-        scalars::{base64::Base64, json::Json},
-        types::{
-            epoch::CEpoch, simulation_result::SimulationResult,
-            transaction_effects::TransactionEffects,
-        },
-    },
-    error::{RpcError, bad_user_input, upcast},
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-    task::chain_identifier::ChainIdentifier,
-};
-
-use super::{
-    scalars::{
-        digest::Digest, domain::Domain, sui_address::SuiAddress, type_filter::TypeInput,
-        uint53::UInt53,
-    },
-    types::{
-        address::Address,
-        checkpoint::{CCheckpoint, Checkpoint, filter::CheckpointFilter},
-        coin_metadata::CoinMetadata,
-        epoch::Epoch,
-        event::{CEvent, Event, filter::EventFilter},
-        move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
-        move_type::{self, MoveType},
-        name_service::name_to_address,
-        object::{self, Object, ObjectKey, VersionFilter},
-        object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-        protocol_configs::ProtocolConfigs,
-        service_config::ServiceConfig,
-        transaction::{
-            CTransaction, Transaction,
-            filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
-        },
-        zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
-    },
-};
+use crate::api::mutation::TransactionInputError;
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::digest::Digest;
+use crate::api::scalars::domain::Domain;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::json::Json;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address;
+use crate::api::types::address::Address;
+use crate::api::types::address::AddressKey;
+use crate::api::types::checkpoint::CCheckpoint;
+use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::checkpoint::filter::CheckpointFilter;
+use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field::DynamicField;
+use crate::api::types::epoch::CEpoch;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::event::CEvent;
+use crate::api::types::event::Event;
+use crate::api::types::event::filter::EventFilter;
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::move_package::PackageCheckpointFilter;
+use crate::api::types::move_package::PackageKey;
+use crate::api::types::move_package::{self as move_package};
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_type::{self as move_type};
+use crate::api::types::name_record::NameRecord;
+use crate::api::types::node::Node;
+use crate::api::types::object::Object;
+use crate::api::types::object::ObjectKey;
+use crate::api::types::object::VersionFilter;
+use crate::api::types::object::{self as object};
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::protocol_configs::ProtocolConfigs;
+use crate::api::types::service_config::ServiceConfig;
+use crate::api::types::simulation_result::SimulationResult;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::transaction_effects::TransactionEffects;
+use crate::api::types::zklogin::ZkLoginIntentScope;
+use crate::api::types::zklogin::ZkLoginVerifyResult;
+use crate::api::types::zklogin::{self as zklogin};
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
+use crate::task::chain_identifier::ChainIdentifier;
 
 #[derive(Default)]
 pub struct Query {
@@ -57,27 +77,100 @@ pub struct Query {
 
 #[Object]
 impl Query {
+    /// Fetch a `Node` by its globally unique `ID`. Returns `null` if the node cannot be found (e.g., the underlying data was pruned or never existed).
+    async fn node(&self, ctx: &Context<'_>, id: Id) -> Result<Option<Node>, RpcError> {
+        let scope = self.scope(ctx)?;
+        Ok(match id {
+            Id::Address(a) => Some(Node::Address(Box::new(Address::with_address(scope, a)))),
+
+            Id::Checkpoint(s) => Checkpoint::with_sequence_number(scope, Some(s))
+                .map(Box::new)
+                .map(Node::Checkpoint),
+
+            Id::DynamicFieldByAddress(a) => {
+                let object = Object::with_address(scope, a);
+                DynamicField::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::DynamicField)
+            }
+
+            Id::DynamicFieldByRef(a, v, d) => {
+                let object = Object::with_ref(&scope, a, v, d);
+                DynamicField::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::DynamicField)
+            }
+
+            Id::Epoch(e) => Some(Node::Epoch(Box::new(Epoch::with_id(scope, e)))),
+
+            Id::MoveObjectByAddress(a) => {
+                let object = Object::with_address(scope, a);
+                MoveObject::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::MoveObject)
+            }
+
+            Id::MoveObjectByRef(a, v, d) => {
+                let object = Object::with_ref(&scope, a, v, d);
+                MoveObject::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::MoveObject)
+            }
+
+            Id::MovePackage(a) => Some(Node::MovePackage(Box::new(MovePackage::with_address(
+                scope, a,
+            )))),
+
+            Id::ObjectByAddress(a) => Some(Node::Object(Box::new(Object::with_address(scope, a)))),
+
+            Id::ObjectByRef(a, v, d) => {
+                Some(Node::Object(Box::new(Object::with_ref(&scope, a, v, d))))
+            }
+
+            Id::Transaction(d) => Some(Node::Transaction(Box::new(Transaction::with_digest(
+                scope, d,
+            )))),
+        })
+    }
+
     /// Look-up an account by its SuiAddress.
     ///
-    /// If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+    /// If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or descendant object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
     ///
     /// - The root object of the object it is wrapped in, if it is wrapped.
     /// - The root object of its owner, if it is owned by another object.
     /// - The object itself, if it is not object-owned or wrapped.
     ///
     /// Specifying a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
+    ///
+    /// If `atCheckpoint` is specified, the address will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
+    ///
+    /// If none of the above are specified, the address is fetched at the checkpoint being viewed.
+    ///
+    /// If the address is fetched by name and the name does not resolve to an address (e.g. the name does not exist or has expired), `null` is returned.
     async fn address(
         &self,
         ctx: &Context<'_>,
-        address: SuiAddress,
+        address: Option<SuiAddress>,
+        name: Option<Domain>,
         root_version: Option<UInt53>,
-    ) -> Result<Address, RpcError> {
-        let mut scope = self.scope(ctx)?;
-        if let Some(version) = root_version {
-            scope = scope.with_root_version(version.into());
-        }
-
-        Ok(Address::with_address(scope, address.into()))
+        at_checkpoint: Option<UInt53>,
+    ) -> Result<Option<Address>, RpcError<address::Error>> {
+        Address::by_key(
+            ctx,
+            self.scope(ctx)?,
+            AddressKey {
+                address,
+                name,
+                root_version,
+                at_checkpoint,
+            },
+        )
+        .await
     }
 
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
@@ -180,6 +273,22 @@ impl Query {
         Event::paginate(ctx, scope, page, filter.unwrap_or_default())
             .await
             .map(Some)
+    }
+
+    /// Fetch addresses by their keys.
+    ///
+    /// Returns a list of addresses that is guaranteed to be the same length as `keys`. If an address in `keys` is fetched by name and the name does not resolve to an address, its corresponding entry in the result will be `null`.
+    async fn multi_get_addresses(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<AddressKey>,
+    ) -> Result<Vec<Option<Address>>, RpcError<address::Error>> {
+        let scope = self.scope(ctx)?;
+        try_join_all(
+            keys.into_iter()
+                .map(|k| Address::by_key(ctx, scope.clone(), k)),
+        )
+        .await
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -294,6 +403,17 @@ impl Query {
         try_join_all(types).await
     }
 
+    /// Look-up a Name Service NameRecord by its domain name.
+    ///
+    /// Returns `null` if the record does not exist or has expired.
+    async fn name_record(
+        &self,
+        ctx: &Context<'_>,
+        name: Domain,
+    ) -> Result<Option<NameRecord>, RpcError<object::Error>> {
+        NameRecord::by_domain(ctx, self.scope(ctx)?, name.into()).await
+    }
+
     /// Fetch an object by its address.
     ///
     /// If `version` is specified, the object will be fetched at that exact version.
@@ -308,7 +428,7 @@ impl Query {
     ///
     /// If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
     ///
-    /// If none of the above are specified, the object is fetched at the latest checkpoint.
+    /// If none of the above are specified, the object is fetched at the checkpoint being viewed.
     ///
     /// It is an error to specify more than one of `version`, `rootVersion`, or `atCheckpoint`.
     ///
@@ -390,7 +510,7 @@ impl Query {
     ///
     /// If `atCheckpoint` is specified, the package loaded is the one with the largest version among all packages sharing an original ID with the package at `address` and was published at or before `atCheckpoint`.
     ///
-    /// If neither are specified, the package is fetched at the latest checkpoint.
+    /// If neither are specified, the package is fetched at the checkpoint being viewed.
     ///
     /// It is an error to specify both `version` and `atCheckpoint`, and `null` will be returned if the package cannot be found as of the latest checkpoint, or the address points to an object that is not a package.
     ///
@@ -486,21 +606,6 @@ impl Query {
     async fn service_config(&self, ctx: &Context<'_>) -> Result<ServiceConfig, RpcError> {
         let scope = self.scope(ctx)?;
         Ok(ServiceConfig { scope })
-    }
-
-    /// Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
-    async fn suins_name(
-        &self,
-        ctx: &Context<'_>,
-        address: Domain,
-        root_version: Option<UInt53>,
-    ) -> Result<Option<Address>, RpcError> {
-        let mut scope = self.scope(ctx)?;
-        if let Some(version) = root_version {
-            scope = scope.with_root_version(version.into());
-        }
-
-        name_to_address(ctx, &scope, &address).await
     }
 
     /// Fetch a transaction by its digest.

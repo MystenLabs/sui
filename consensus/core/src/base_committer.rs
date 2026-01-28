@@ -291,7 +291,7 @@ impl BaseCommitter {
 
         // TODO: Re-evaluate this check once we have a better way to handle/track byzantine authorities.
         if leader_blocks.len() > 1 {
-            tracing::warn!(
+            tracing::debug!(
                 "Multiple blocks found for leader slot {leader_slot}: {:?}",
                 leader_blocks
             );
