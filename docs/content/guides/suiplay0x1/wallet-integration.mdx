@@ -17,7 +17,7 @@ You have several options for what wallet you develop for on the SuiPlay0X1. Ther
 
 With self-custodial wallets, users control their private keys and own their assets directly. Users that already own a wallet are typically familiar with wallet functionality and seed phrase security and storage. For users new to Web3, you must guide them through the process of obtaining a wallet and educating them on proper seed phrase management.
 
-With self-custodial wallets, the usual payment flow has users pay their own gas fees, which reduces your costs but requires users to fund their wallets to pay for transactions. You can change this flow through the use of [sponsored transactions](https://docs.sui.io/concepts/transactions/sponsored-transactions) where you pay gas fees on behalf of your users. This can reduce friction for users (especially new-to-Web3 users) because you can make the wallet onboarding experience considerably less involved for users. You must consider the long-term financial impact for your project, however, and make sure the sponsored transactions you offer are sustainable for your goals. 
+With self-custodial wallets, the usual payment flow has users pay their own gas fees, which reduces your costs but requires users to fund their wallets to pay for transactions. You can change this flow through the use of [sponsored transactions](https://docs.sui.io/guides/developer/transactions/sponsor-txn) where you pay gas fees on behalf of your users. This can reduce friction for users (especially new-to-Web3 users) because you can make the wallet onboarding experience considerably less involved for users. You must consider the long-term financial impact for your project, however, and make sure the sponsored transactions you offer are sustainable for your goals. 
  
 Self-custodial wallets have the most portability in terms of being able to interact with other applications on chain.
 
@@ -129,7 +129,7 @@ This option is effectively a special case of the recommended approach. If your g
 **Tradeoffs**
 
 - Provides on-chain wallet activity per user, while still maintaining simple UX and obfuscating wallet mechanics from the user.
-- Unlike custodial wallets, users still need to pay for gas. You can always [sponsor transactions](https://docs.sui.io/concepts/transactions/sponsored-transactions) instead to assume this responsibility.
+- Unlike custodial wallets, users still need to pay for gas. You can always [sponsor transactions](https://docs.sui.io/guides/developer/transactions/sponsor-txn) instead to assume this responsibility.
 - In essence, the wallet is self-custodied by users in this scenario as you do not have access to the private keys. Users do not need to record or protect seed phrases, however. 
 - Ultimately, you can’t avoid users having a wallet if you want them to experience Web3 benefits. The Playtron ecosystem provides this as the game OS shows user assets and the companion app always serves game-centric wallet needs. If you use a custodial wallet, you must consider how to show users their assets, teach them how to transfer assets, and other needs that Playtron provides out of the box.
 

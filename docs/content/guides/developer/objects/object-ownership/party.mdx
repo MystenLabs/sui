@@ -34,7 +34,7 @@ A party object's ownership can change over its lifetime, either by adding it as 
 
 Use party objects when you want an object to be versioned by [consensus](/concepts/sui-architecture/consensus.mdx), such as for operational convenience. If an object is only used with other party or [shared](/guides/developer/objects/object-ownership/shared.mdx) objects, converting it to a party object has no additional performance cost.
 
-Party objects can be used by multiple inflight [transactions](/concepts/transactions.mdx) at the same time. This contrasts with [address-owned](/guides/developer/objects/object-ownership/address-owned.mdx) objects, which only allow a single inflight transaction. Many applications can benefit from the ability to pipeline multiple transactions on the same party object.
+Party objects can be used by multiple inflight [transactions](/guides/developer/transactions/txn-overview.mdx) at the same time. This contrasts with [address-owned](/guides/developer/objects/object-ownership/address-owned.mdx) objects, which only allow a single inflight transaction. Many applications can benefit from the ability to pipeline multiple transactions on the same party object.
 
 :::info
 
