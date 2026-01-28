@@ -4804,10 +4804,6 @@ impl ProtocolConfig {
         self.feature_flags.mysticeti_fastpath = val;
     }
 
-    pub fn set_disable_preconsensus_locking_for_testing(&mut self, val: bool) {
-        self.feature_flags.disable_preconsensus_locking = val;
-    }
-
     pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.accept_passkey_in_multisig = val;
     }

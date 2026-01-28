@@ -9,7 +9,6 @@ use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
-use nonempty::NonEmpty;
 use prometheus::{
     Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
     register_gauge_with_registry, register_histogram_vec_with_registry,
@@ -868,58 +867,29 @@ impl ValidatorService {
             }
 
             // Create claims with aliases and / or immutable objects.
-            if epoch_store.protocol_config().address_aliases()
-                || epoch_store.protocol_config().disable_preconsensus_locking()
-            {
-                let mut claims = vec![];
+            let mut claims = vec![];
 
-                if epoch_store.protocol_config().disable_preconsensus_locking() {
-                    let immutable_object_ids = self
-                        .collect_immutable_object_ids(verified_transaction.tx(), state)
-                        .await?;
-                    if !immutable_object_ids.is_empty() {
-                        claims.push(TransactionClaim::ImmutableInputObjects(
-                            immutable_object_ids,
-                        ));
-                    }
-                }
-
-                let (tx, aliases) = verified_transaction.into_inner();
-                if epoch_store.protocol_config().address_aliases() {
-                    if epoch_store
-                        .protocol_config()
-                        .fix_checkpoint_signature_mapping()
-                    {
-                        claims.push(TransactionClaim::AddressAliasesV2(aliases));
-                    } else {
-                        let v1_aliases: Vec<_> = tx
-                            .data()
-                            .intent_message()
-                            .value
-                            .required_signers()
-                            .into_iter()
-                            .zip_eq(aliases.into_iter().map(|(_, seq)| seq))
-                            .collect();
-                        #[allow(deprecated)]
-                        claims.push(TransactionClaim::AddressAliases(
-                            NonEmpty::from_vec(v1_aliases)
-                                .expect("must have at least one required_signer"),
-                        ));
-                    }
-                }
-
-                let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
-
-                consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
-                    &state.name,
-                    tx_with_claims,
-                ));
-            } else {
-                consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
-                    &state.name,
-                    verified_transaction.into_tx().into(),
+            let immutable_object_ids = self
+                .collect_immutable_object_ids(verified_transaction.tx(), state)
+                .await?;
+            if !immutable_object_ids.is_empty() {
+                claims.push(TransactionClaim::ImmutableInputObjects(
+                    immutable_object_ids,
                 ));
             }
+
+            let (tx, aliases) = verified_transaction.into_inner();
+            if epoch_store.protocol_config().address_aliases() {
+                claims.push(TransactionClaim::AddressAliasesV2(aliases));
+            }
+
+            let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
+
+            consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
+                &state.name,
+                tx_with_claims,
+            ));
+
             transaction_indexes.push(idx);
             total_size_bytes += tx_size;
         }

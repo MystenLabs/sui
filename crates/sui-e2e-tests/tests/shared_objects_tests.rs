@@ -546,15 +546,15 @@ async fn replay_shared_object_transaction() {
     }
 }
 
-/// Test that when preconsensus locking is disabled, conflicting owned object transactions
-/// in the same consensus commit are handled correctly via post-consensus lock conflict detection.
+/// Test that conflicting owned object transactions in the same consensus commit are handled
+/// correctly via post-consensus lock conflict detection.
 /// The first transaction in consensus order should succeed, and the second should be dropped
 /// with ObjectLockConflict status.
 ///
 /// This test uses soft bundle submission to guarantee both transactions end up in the same
 /// consensus commit, ensuring we always test the post-consensus conflict detection path.
 #[sim_test]
-async fn test_disable_preconsensus_locking_conflicting_owned_transactions() {
+async fn test_conflicting_owned_transactions() {
     // Create cluster with multiple gas coins for the sender
     let test_cluster = TestClusterBuilder::new()
         .with_accounts(vec![AccountConfig {
