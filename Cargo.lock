@@ -15783,6 +15783,7 @@ dependencies = [
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
+ "rustls 0.23.31",
  "serde",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
