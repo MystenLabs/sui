@@ -183,10 +183,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             // objects here are of size (limit + 1), where the last one is the cursor for the next page
             let has_next_page = objects.len() > limit;
             objects.truncate(limit);
-            let next_cursor = objects.last().cloned().and_then(|o_info| {
-                let bcs = bcs::to_bytes(&o_info.object_id).unwrap();
-                let encoded_string = base64::engine::general_purpose::STANDARD.encode(&bcs);
-                Some(encoded_string)
+            let next_cursor = objects.last().cloned().map(|o_info| {
+                base64::engine::general_purpose::STANDARD
+                    .encode(bcs::to_bytes(&o_info.object_id).unwrap())
             });
 
             let data = match options.is_not_in_object_info() {
