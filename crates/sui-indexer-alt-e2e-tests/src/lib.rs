@@ -48,6 +48,7 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_pg_db::Db;
 use sui_pg_db::DbArgs;
+use sui_pg_db::DbConfig;
 use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
 use sui_rpc::field::FieldMask;
@@ -340,7 +341,7 @@ impl OffchainCluster {
             no_ide: true,
         };
 
-        let db = Db::for_read(database_url.clone(), DbArgs::default())
+        let db = Db::new(DbConfig::for_read(database_url.clone(), DbArgs::default()))
             .await
             .context("Failed to connect to database")?;
 

@@ -19,6 +19,7 @@ use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::{self};
 use sui_pg_db::Db;
 use sui_pg_db::DbArgs;
+use sui_pg_db::DbConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
@@ -152,8 +153,12 @@ async fn test_indexer_cluster_with_grpc_streaming() {
     };
 
     // Create writer/reader for database operations
-    let reader = Db::for_read(url.clone(), DbArgs::default()).await.unwrap();
-    let writer = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
+    let reader = Db::new(DbConfig::for_read(url.clone(), DbArgs::default()))
+        .await
+        .unwrap();
+    let writer = Db::new(DbConfig::for_write(url.clone(), DbArgs::default()))
+        .await
+        .unwrap();
 
     // Create the schema for the test.
     {

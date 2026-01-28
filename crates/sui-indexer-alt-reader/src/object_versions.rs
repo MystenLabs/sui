@@ -320,6 +320,7 @@ mod tests {
     use sui_indexer_alt_schema::schema::obj_versions;
     use sui_pg_db::Db;
     use sui_pg_db::DbArgs;
+    use sui_pg_db::DbConfig;
     use sui_pg_db::temp::TempDb;
     use sui_types::digests::ObjectDigest;
 
@@ -332,7 +333,9 @@ mod tests {
         let temp_db = TempDb::new().unwrap();
         let url = temp_db.database().url();
 
-        let writer = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
+        let writer = Db::new(DbConfig::for_write(url.clone(), DbArgs::default()))
+            .await
+            .unwrap();
         let reader = PgReader::new(None, Some(url.clone()), DbArgs::default(), &registry)
             .await
             .unwrap();

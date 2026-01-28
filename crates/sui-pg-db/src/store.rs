@@ -222,7 +222,7 @@ impl store::Store for Db {
     type Connection<'c> = Connection<'c>;
 
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
-        Ok(Connection(self.0.get().await?))
+        self.connect().await
     }
 }
 
