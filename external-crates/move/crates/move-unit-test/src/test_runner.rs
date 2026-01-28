@@ -43,6 +43,7 @@ use regex::Regex;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
 
 use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_types::gas::GasMeter;
 
 /// Test state common to all tests
 pub struct SharedTestingConfig {
@@ -313,14 +314,14 @@ impl SharedTestingConfig {
         } else {
             None
         };
+
+        let execution_bound: u64 = Gas::new(self.execution_bound).to_unit().into();
+        let remaining_gas: u64 = gas_meter.remaining_gas().into();
+        let gas_used = execution_bound - remaining_gas;
+
         let test_run_info = TestRunInfo::new(
             now.elapsed(),
-            // TODO(Gas): This doesn't look quite right...
-            //            We're not computing the number of instructions executed even with a unit gas schedule.
-            Gas::new(self.execution_bound)
-                .checked_sub(gas_meter.remaining_gas())
-                .unwrap()
-                .into(),
+            gas_used,
             trace,
         );
         match session.finish_with_extensions().0 {
