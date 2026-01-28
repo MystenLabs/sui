@@ -201,13 +201,7 @@ impl Client {
             tx
         })
         .with_signatures(signatures)
-        .with_read_mask(FieldMask::from_paths([
-            "transaction.bcs",
-            "effects.bcs",
-            "events.bcs",
-            "balance_changes",
-            "checkpoint",
-        ]));
+        .with_read_mask(ExecutedTransaction::proto_read_mask());
 
         Ok(request)
     }
@@ -216,15 +210,8 @@ impl Client {
         &mut self,
         digest: &TransactionDigest,
     ) -> Result<ExecutedTransaction> {
-        let request = proto::GetTransactionRequest::new(&(*digest).into()).with_read_mask(
-            FieldMask::from_paths([
-                "transaction.bcs",
-                "effects.bcs",
-                "events.bcs",
-                "balance_changes",
-                "checkpoint",
-            ]),
-        );
+        let request = proto::GetTransactionRequest::new(&(*digest).into())
+            .with_read_mask(ExecutedTransaction::proto_read_mask());
 
         let (metadata, resp, _extentions) = self
             .0
@@ -384,8 +371,69 @@ pub struct ExecutedTransaction {
     pub transaction: TransactionData,
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
+    #[allow(unused)]
+    changed_objects: Vec<proto::ChangedObject>,
+    #[allow(unused)]
+    unchanged_loaded_runtime_objects: Vec<proto::ObjectReference>,
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
     pub checkpoint: Option<u64>,
+    #[allow(unused)]
+    timestamp: Option<prost_types::Timestamp>,
+}
+
+impl ExecutedTransaction {
+    fn proto_read_mask() -> FieldMask {
+        use proto::ExecutedTransaction;
+        FieldMask::from_paths([
+            ExecutedTransaction::path_builder()
+                .transaction()
+                .bcs()
+                .finish(),
+            ExecutedTransaction::path_builder().effects().bcs().finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .unchanged_loaded_runtime_objects()
+                .finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .changed_objects()
+                .finish(),
+            ExecutedTransaction::path_builder().events().bcs().finish(),
+            ExecutedTransaction::path_builder()
+                .balance_changes()
+                .finish(),
+            ExecutedTransaction::path_builder().checkpoint(),
+            ExecutedTransaction::path_builder().timestamp(),
+        ])
+    }
+    // pub fn get_new_package_obj(&self) -> Option<ObjectRef> {
+    //     self.object_changes.as_ref().and_then(|changes| {
+    //         changes
+    //             .iter()
+    //             .find(|change| matches!(change, ObjectChange::Published { .. }))
+    //             .map(|change| change.object_ref())
+    //     })
+    // }
+
+    // pub fn get_new_package_upgrade_cap(&self) -> Option<ObjectRef> {
+    //     self.object_changes.as_ref().and_then(|changes| {
+    //         changes
+    //             .iter()
+    //             .find(|change| {
+    //                 matches!(change, ObjectChange::Created {
+    //                     owner: Owner::AddressOwner(_),
+    //                     object_type: StructTag {
+    //                         address: SUI_FRAMEWORK_ADDRESS,
+    //                         module,
+    //                         name,
+    //                         ..
+    //                     },
+    //                     ..
+    //                 } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
+    //             })
+    //             .map(|change| change.object_ref())
+    //     })
+    // }
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
@@ -475,6 +523,12 @@ fn executed_transaction_try_from_proto(
         events,
         balance_changes,
         checkpoint: executed_transaction.checkpoint,
+        changed_objects: executed_transaction.effects().changed_objects().to_owned(),
+        unchanged_loaded_runtime_objects: executed_transaction
+            .effects()
+            .unchanged_loaded_runtime_objects()
+            .to_owned(),
+        timestamp: executed_transaction.timestamp,
     }
     .pipe(Ok)
 }
