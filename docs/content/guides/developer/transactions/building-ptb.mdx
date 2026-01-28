@@ -50,7 +50,7 @@ transfers.forEach((transfer, index) => {
 });
 ```
 
-After you have the Transaction defined, you can directly execute it with a `SuiClient` and `KeyPair` using `client.signAndExecuteTransaction`.
+After you have the Transaction defined, you can directly execute it with a Sui client and `KeyPair` using `client.signAndExecuteTransaction`.
 
 ```ts
 client.signAndExecuteTransaction({ signer: keypair, transaction: tx });

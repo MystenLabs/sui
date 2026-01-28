@@ -228,17 +228,14 @@ function OwnedGame({
 }): ReactElement {
   const adminKey = game.admin ? new MultiSigPublicKey(new Uint8Array(game.admin)) : null;
 
-  const client = useSuiClient();
-  const signAndExecute = useExecutor();
-  const multiSignAndExecute = useExecutor({
+  const client = useCurrentClient();
+  const { mutate: signAndExecute } = useExecutor();
+  const { mutate: multiSignAndExecute } = useExecutor({
     execute: ({ bytes, signature }) => {
       const multiSig = adminKey!!.combinePartialSignatures([signature]);
-      return client.executeTransactionBlock({
-        transactionBlock: bytes,
-        signature: [multiSig, signature],
-        options: {
-          showRawEffects: true,
-        },
+      return client.core.executeTransaction({
+        transaction: bytes,
+        signatures: [multiSig, signature],
       });
     },
   });
@@ -253,7 +250,7 @@ function OwnedGame({
     signAndExecute(
       {
         tx: tx.sendMark(turnCap?.data!!, row, col),
-        options: { showObjectChanges: true },
+        showObjectChanges: true,
       },
       ({ objectChanges }) => {
         const mark = objectChanges?.find(

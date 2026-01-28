@@ -436,7 +436,7 @@ First, initialize your backend project. To do this, you need to follow these ste
 - Create a new file named `init.ts`
 
 ```typescript title='init.ts'
-import { SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import * as dotenv from 'dotenv';
@@ -452,8 +452,9 @@ dotenv.config({ path: '../.env' });
 const phrase = process.env.ADMIN_PHRASE;
 const fullnode = process.env.FULLNODE!;
 const keypair = Ed25519Keypair.deriveKeypair(phrase!);
-const client = new SuiClient({
-	url: fullnode,
+const client = new SuiGrpcClient({
+	baseUrl: fullnode,
+	network: 'mainnet',
 });
 
 const packageId = process.env.PACKAGE_ID;
@@ -511,11 +512,6 @@ async function signAndExecuteTransaction(transaction: Transaction) {
 		.signAndExecuteTransaction({
 			signer: keypair,
 			transaction,
-			requestType: 'WaitForLocalExecution',
-			options: {
-				showObjectChanges: true,
-				showEffects: true,
-			},
 		})
 		.then(function (res) {
 			logger.info(res);
@@ -538,16 +534,16 @@ The code of init.ts does the following:
   - Gets an array of cities from the `getCities` function.
   - Gets an array of 1,000 geonameids from the `get1000Geonameids` function.
   - Gets an array of weather oracle dynamic fields from the `getWeatherOracleDynamicFields` function, which contains the geonameids of the existing cities in the weather oracle.
-  - Initializes a counter and a transaction block object.
+  - Initializes a counter and a transaction object.
   - Loops through the cities array and checks if the city's geonameid is not in the weather oracle dynamic fields array and is in the 1,000 geonameids array.
-  - If the condition is met, adds a `moveCall` to the transaction block, which calls the `add_city` method of the weather oracle contract with the city's information, such as `geonameid`, `asciiname`, `country`, `latitude`, and `longitude`.
-  - Increments the counter and checks if it reaches the `NUMBER_OF_CITIES`. If so, calls another async function, `signAndExecuteTransaction`, with the transaction block as an argument, which signs and executes the transaction block on the blockchain and logs the result. The code then resets the counter and the transaction block.
-  - After the loop ends, calls the `signAndExecuteTransaction` function again with the remaining transaction block.
+  - If the condition is met, adds a `moveCall` command to the transaction, which calls the `add_city` method of the weather oracle contract with the city's information, such as `geonameid`, `asciiname`, `country`, `latitude`, and `longitude`.
+  - Increments the counter and checks if it reaches the `NUMBER_OF_CITIES`. If so, calls another async function, `signAndExecuteTransaction`, with the transaction as an argument, which signs and executes the transaction on the blockchain and logs the result. The code then resets the counter and the transaction.
+  - After the loop ends, calls the `signAndExecuteTransaction` function again with the remaining transaction.
 
 You have now initialized the `WeatherOracle` shared object. The next step is to learn how to update them every 10 minutes with the latest weather data from the OpenWeatherMap API.
 
 ```typescript title='index.ts'
-import { SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import * as dotenv from 'dotenv';
@@ -563,8 +559,9 @@ dotenv.config({ path: '../.env' });
 const phrase = process.env.ADMIN_PHRASE;
 const fullnode = process.env.FULLNODE!;
 const keypair = Ed25519Keypair.deriveKeypair(phrase!);
-const client = new SuiClient({
-	url: fullnode,
+const client = new SuiGrpcClient({
+	baseUrl: fullnode,
+	network: 'mainnet',
 });
 
 const packageId = process.env.PACKAGE_ID;
@@ -667,14 +664,14 @@ The code in `index.ts` does the following:
 - Defines some constants, such as `CHUNK_SIZE`, `MS`, `MINUTE`, and `TEN_MINUTES`. These constants are used to control the frequency and size of the updates that the code performs.
 - Defines an async function called `performUpdates`, which takes two arguments: `cities` and `weatherOracleDynamicFields`. This function is the main logic of the code, and it does the following:
   - Filters the `cities` array based on the `weatherOracleDynamicFields` array, which contains the names and object IDs of the weather oracle dynamic fields that the code needs to update.
-  - Loops through the filtered cities in chunks of `CHUNK_SIZE`, and for each chunk, it calls another async function called `getTransaction`, which returns a transaction block that contains the Move calls to update the weather oracle dynamic fields with the latest weather data from the `OpenWeatherMap` API.
-  - Tries to sign and execute the transaction block using the client and key pair, and catches any errors that may occur.
+  - Loops through the filtered cities in chunks of `CHUNK_SIZE`, and for each chunk, it calls another async function called `getTransaction`, which returns a transaction that contains the Move calls to update the weather oracle dynamic fields with the latest weather data from the `OpenWeatherMap` API.
+  - Tries to sign and execute the transaction using the client and key pair, and catches any errors that may occur.
   - Calculates the time it took to perform the updates, and sets a timeout to call itself again after `TEN_MINUTES` minus the elapsed time.
 - The code defines another async function called `getTransaction`, which takes one argument: `cities`. This function does the following:
-  - Creates a new transaction block object.
+  - Creates a new transaction object.
   - Loops through the `cities` array, and for each city, it calls another async function called `getWeatherData`, which takes the `latitude`, `longitude`, and `appid` as arguments, and returns the weather data for the city from the OpenWeatherMap API.
-  - Checks if the weather data is valid, and if so, adds a Move call to the transaction block, which calls the `update` function of the target package and module, and passes the admin cap, the weather oracle id, the geoname id, and the weather data as arguments.
-  - Returns the transaction block object.
+  - Checks if the weather data is valid, and if so, adds a Move call command to the transaction, which calls the `update` function of the target package and module, and passes the admin cap, the weather oracle id, the geoname id, and the weather data as arguments.
+  - Returns the transaction object.
 - An async `run` function is defined, which does the following:
   - Calls another async function called `getCities`, which returns an array of city objects that contain information such as name, geoname id, latitude, and longitude.
   - Calls another async function called `getWeatherOracleDynamicFields`, which takes the package id, the module name, and the client as arguments, and returns an array of weather oracle dynamic field objects that contain information such as name and object id.
