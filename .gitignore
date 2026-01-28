@@ -37,6 +37,7 @@ Move.lock
 
 # Python
 .pyc
+scripts/simtest/__pycache__/**
 
 # Node.js
 node_modules

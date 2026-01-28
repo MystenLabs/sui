@@ -13,6 +13,8 @@ mod consensus_dag_tests {
     use rand::{SeedableRng as _, rngs::StdRng};
     use sui_macros::sim_test;
 
+    const MAX_STEP: u32 = 3;
+
     #[sim_test]
     async fn test_randomized_dag_with_4_authorities() {
         let config = RandomDagConfig {
@@ -39,7 +41,7 @@ mod consensus_dag_tests {
             reject_percentage: 5,
             equivocators: vec![],
         };
-        test_randomized_dag_with_reject_votes(config, 5, 100).await;
+        test_randomized_dag_with_reject_votes(config, 6, 100).await;
     }
 
     #[sim_test]
@@ -71,7 +73,7 @@ mod consensus_dag_tests {
                 (AuthorityIndex::new_for_test(1), 1),
             ],
         };
-        test_randomized_dag_with_reject_votes(config, 5, 100).await;
+        test_randomized_dag_with_reject_votes(config, 6, 100).await;
     }
 
     #[sim_test]
@@ -83,7 +85,7 @@ mod consensus_dag_tests {
             reject_percentage: 5,
             equivocators: vec![(AuthorityIndex::new_for_test(0), 3)],
         };
-        test_randomized_dag_with_reject_votes(config, 5, 100).await;
+        test_randomized_dag_with_reject_votes(config, 6, 100).await;
     }
 
     async fn test_randomized_dag_with_reject_votes(
@@ -115,7 +117,7 @@ mod consensus_dag_tests {
             let mut finalized_commits = vec![];
             let mut last_decided = Slot::new_for_test(0, 0);
 
-            for block in dag.random_iter(&mut rng) {
+            for block in dag.random_iter(&mut rng, MAX_STEP) {
                 fixture.try_accept_blocks(vec![block]);
 
                 let (finalized, new_last_decided) = fixture.try_commit(last_decided).await;
