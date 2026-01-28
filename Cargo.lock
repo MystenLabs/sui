@@ -14647,6 +14647,7 @@ dependencies = [
  "strum_macros 0.27.1",
  "sui-authority-aggregation",
  "sui-config",
+ "sui-dynamic-rpc-validator",
  "sui-execution",
  "sui-framework",
  "sui-genesis-builder",
@@ -14805,6 +14806,18 @@ dependencies = [
  "sui-types",
  "thiserror 1.0.69",
  "tokio",
+]
+
+[[package]]
+name = "sui-dynamic-rpc-validator"
+version = "0.1.0"
+dependencies = [
+ "libloading 0.8.6",
+ "mysten-metrics",
+ "parking_lot 0.12.3",
+ "prometheus",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

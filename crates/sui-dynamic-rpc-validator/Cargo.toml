@@ -1,0 +1,33 @@
+[package]
+name = "sui-dynamic-rpc-validator"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[lints]
+workspace = true
+
+[lib]
+# Library providing the interface and loader for dynamic RPC validation
+name = "sui_dynamic_rpc_validator"
+path = "src/lib.rs"
+
+[[example]]
+# Reference implementation compiled as a shared object
+name = "reference_validator"
+path = "examples/reference_impl.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+libloading = "0.8"
+parking_lot.workspace = true
+prometheus.workspace = true
+tracing.workspace = true
+mysten-metrics.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[build-dependencies]

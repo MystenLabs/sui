@@ -419,6 +419,7 @@ pub struct ValidatorService {
     metrics: Arc<ValidatorServiceMetrics>,
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
+    dynamic_validator: Option<Arc<crate::dynamic_rpc_validator::DynamicRpcValidator>>,
 }
 
 impl ValidatorService {
@@ -427,6 +428,7 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         validator_metrics: Arc<ValidatorServiceMetrics>,
         client_id_source: Option<ClientIdSource>,
+        dynamic_validator: Option<Arc<crate::dynamic_rpc_validator::DynamicRpcValidator>>,
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
         Self {
@@ -435,6 +437,7 @@ impl ValidatorService {
             metrics: validator_metrics,
             traffic_controller,
             client_id_source,
+            dynamic_validator,
         }
     }
 
@@ -449,6 +452,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: None,
             client_id_source: None,
+            dynamic_validator: None,
         }
     }
 
@@ -570,6 +574,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source,
+            dynamic_validator: _,
         } = self.clone();
 
         let submitter_client_addr = if let Some(client_id_source) = &client_id_source {
@@ -1691,6 +1696,42 @@ fn normalize(err: SuiError) -> Weight {
     }
 }
 
+/// Helper to validate RPC request if dynamic validator is configured
+fn validate_rpc_with_protobuf<T: prost::Message>(
+    validator: &Option<Arc<crate::dynamic_rpc_validator::DynamicRpcValidator>>,
+    rpc_method: crate::dynamic_rpc_validator::RpcMethod,
+    request: &T,
+) -> Result<(), tonic::Status> {
+    if let Some(validator) = validator {
+        let request_bytes = request.encode_to_vec();
+        if !validator.validate(rpc_method, &request_bytes) {
+            return Err(tonic::Status::permission_denied(format!(
+                "Request rejected by dynamic validator for RPC: {:?}",
+                rpc_method
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Helper to validate RPC request using BCS encoding
+fn validate_rpc_with_bcs<T: serde::Serialize>(
+    validator: &Option<Arc<crate::dynamic_rpc_validator::DynamicRpcValidator>>,
+    rpc_method: crate::dynamic_rpc_validator::RpcMethod,
+    request: &T,
+) -> Result<(), tonic::Status> {
+    if let Some(validator) = validator
+        && let Ok(request_bytes) = bcs::to_bytes(request)
+        && !validator.validate(rpc_method, &request_bytes)
+    {
+        return Err(tonic::Status::permission_denied(format!(
+            "Request rejected by dynamic validator for RPC: {:?}",
+            rpc_method
+        )));
+    }
+    Ok(())
+}
+
 /// Implements generic pre- and post-processing. Since this is on the critical
 /// path, any heavy lifting should be done in a separate non-blocking task
 /// unless it is necessary to override the return value.
@@ -1718,6 +1759,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<RawSubmitTxRequest>,
     ) -> Result<tonic::Response<RawSubmitTxResponse>, tonic::Status> {
+        // Dynamic RPC validation
+        validate_rpc_with_protobuf(
+            &self.dynamic_validator,
+            crate::dynamic_rpc_validator::RpcMethod::SubmitTransaction,
+            request.get_ref()
+        )?;
+
         let validator_service = self.clone();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
@@ -1735,6 +1783,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<RawWaitForEffectsRequest>,
     ) -> Result<tonic::Response<RawWaitForEffectsResponse>, tonic::Status> {
+        // Dynamic RPC validation
+        validate_rpc_with_protobuf(
+            &self.dynamic_validator,
+            crate::dynamic_rpc_validator::RpcMethod::WaitForEffects,
+            request.get_ref()
+        )?;
+
         handle_with_decoration!(self, wait_for_effects_impl, request)
     }
 
@@ -1742,6 +1797,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<ObjectInfoRequest>,
     ) -> Result<tonic::Response<ObjectInfoResponse>, tonic::Status> {
+        // Dynamic RPC validation (using BCS for non-protobuf type)
+        validate_rpc_with_bcs(
+            &self.dynamic_validator,
+            crate::dynamic_rpc_validator::RpcMethod::ObjectInfo,
+            request.get_ref()
+        )?;
+
         handle_with_decoration!(self, object_info_impl, request)
     }
 
@@ -1749,6 +1811,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<TransactionInfoRequest>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+        // Dynamic RPC validation (using BCS for non-protobuf type)
+        validate_rpc_with_bcs(
+            &self.dynamic_validator,
+            crate::dynamic_rpc_validator::RpcMethod::TransactionInfo,
+            request.get_ref()
+        )?;
+
         handle_with_decoration!(self, transaction_info_impl, request)
     }
 
@@ -1756,6 +1825,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<CheckpointRequest>,
     ) -> Result<tonic::Response<CheckpointResponse>, tonic::Status> {
+        // Dynamic RPC validation (using BCS for non-protobuf type)
+        validate_rpc_with_bcs(
+            &self.dynamic_validator,
+            crate::dynamic_rpc_validator::RpcMethod::Checkpoint,
+            request.get_ref()
+        )?;
+
         handle_with_decoration!(self, checkpoint_impl, request)
     }
 
@@ -1763,6 +1839,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<CheckpointRequestV2>,
     ) -> Result<tonic::Response<CheckpointResponseV2>, tonic::Status> {
+        // Dynamic RPC validation (using BCS for non-protobuf type)
+        validate_rpc_with_bcs(
+            &self.dynamic_validator,
+            crate::dynamic_rpc_validator::RpcMethod::CheckpointV2,
+            request.get_ref()
+        )?;
+
         handle_with_decoration!(self, checkpoint_v2_impl, request)
     }
 
@@ -1770,6 +1853,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
+        // Dynamic RPC validation (using BCS for non-protobuf type)
+        validate_rpc_with_bcs(
+            &self.dynamic_validator,
+            crate::dynamic_rpc_validator::RpcMethod::GetSystemStateObject,
+            request.get_ref()
+        )?;
+
         handle_with_decoration!(self, get_system_state_object_impl, request)
     }
 
@@ -1778,6 +1868,13 @@ impl Validator for ValidatorService {
         request: tonic::Request<sui_types::messages_grpc::RawValidatorHealthRequest>,
     ) -> Result<tonic::Response<sui_types::messages_grpc::RawValidatorHealthResponse>, tonic::Status>
     {
+        // Dynamic RPC validation
+        validate_rpc_with_protobuf(
+            &self.dynamic_validator,
+            crate::dynamic_rpc_validator::RpcMethod::ValidatorHealth,
+            request.get_ref()
+        )?;
+
         handle_with_decoration!(self, validator_health_impl, request)
     }
 }
