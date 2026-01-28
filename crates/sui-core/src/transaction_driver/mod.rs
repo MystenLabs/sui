@@ -26,7 +26,7 @@ use rand::Rng;
 use sui_types::{
     committee::EpochId,
     error::{ErrorCategory, UserInputError},
-    messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult},
+    messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
     transaction::TransactionDataAPI as _,
 };
 use tokio::{
@@ -353,8 +353,11 @@ where
                 .record_interaction_result(OperationFeedback {
                     authority_name: name,
                     display_name: auth_agg.get_display_name(&name),
-                    // Both single writer and shared object transactions now go through consensus
-                    operation: OperationType::Consensus,
+                    operation: if tx_type == TxType::SingleWriter {
+                        OperationType::FastPath
+                    } else {
+                        OperationType::Consensus
+                    },
                     ping_type,
                     result: Ok(start_time.elapsed()),
                 });
