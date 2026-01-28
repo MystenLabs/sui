@@ -50,7 +50,7 @@ To use all the features of dApp Kit, wrap your app with `Provider` components.
 
 Open the root component that renders your app (the default location the Vite template uses is `src/main.tsx`) and integrate or replace the current code with the following.
 
-The first `Provider` to set up is the `QueryClientProvider` from `@tanstack/react-query`. This `Provider` manages request state for various hooks in app kit. If you're already using `@tanstack/react-query`, dApp Kit can share the same `QueryClient` instance.
+The first `Provider` to set up is the `QueryClientProvider` from `@tanstack/react-query`. This `Provider` manages request state for various hooks in dApp Kit. If you're already using `@tanstack/react-query`, dApp Kit can share the same `QueryClient` instance.
 
 ```ts
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

@@ -207,7 +207,7 @@ tx.setGasPayment([coin1, coin2]);
 
 Gas coins should be objects containing the coins objectId, version, and digest (ie `{ objectId: string, version: string | number, digest: string }`).
 
-### app / Wallet integration
+### App / Wallet integration
 
 The Wallet Standard interface now supports the `Transaction` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from apps into wallets must provide a `Transaction` class. You can then serialize this PTB class and send it to your wallet for execution.
 
