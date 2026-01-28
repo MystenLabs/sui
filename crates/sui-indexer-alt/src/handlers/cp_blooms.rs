@@ -5,25 +5,20 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use diesel::ExpressionMethods;
-use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Connection;
 use sui_indexer_alt_framework::postgres::handler::Handler;
-use sui_indexer_alt_framework::types::SUI_CLOCK_ADDRESS;
-use sui_indexer_alt_framework::types::SUI_SYSTEM_ADDRESS;
-use sui_indexer_alt_framework::types::base_types::SuiAddress;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::full_checkpoint_content::ExecutedTransaction;
 use sui_indexer_alt_framework::types::object::Owner;
 use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
+use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
 use sui_indexer_alt_schema::cp_blooms::CpBloomFilter;
 use sui_indexer_alt_schema::cp_blooms::MAX_FOLD_DENSITY;
 use sui_indexer_alt_schema::cp_blooms::MIN_FOLD_BYTES;
 use sui_indexer_alt_schema::cp_blooms::StoredCpBlooms;
-use sui_indexer_alt_schema::cp_blooms::bytea_or;
 use sui_indexer_alt_schema::schema::cp_blooms;
 
 /// Indexes bloom filters per checkpoint for transaction scanning.
@@ -39,8 +34,8 @@ impl Processor for CpBlooms {
         let cp_num = checkpoint.summary.sequence_number;
 
         let mut bloom = CpBloomFilter::new();
-        for tx in checkpoint.transactions.iter() {
-            insert_tx_values(tx, &mut bloom);
+        for tx in &checkpoint.transactions {
+            insert_tx_addresses(tx, &mut bloom);
         }
 
         if bloom.popcount() == 0 {
@@ -61,17 +56,12 @@ impl Handler for CpBlooms {
             return Ok(0);
         }
 
-        // Upsert with bytea_or to merge bloom filters on conflict.
-        // This ensures bits are accumulated, never lost - if a checkpoint is reprocessed,
-        // the new bits are OR'd with existing bits rather than replacing them.
+        // Each row stores a single checkpoint's bloom filter. On conflict (reprocessing),
+        // the filter would be identical, so we can safely ignore duplicates.
         let inserted = diesel::insert_into(cp_blooms::table)
             .values(values)
             .on_conflict(cp_blooms::cp_sequence_number)
-            .do_update()
-            .set(cp_blooms::bloom_filter.eq(bytea_or(
-                cp_blooms::bloom_filter,
-                excluded(cp_blooms::bloom_filter),
-            )))
+            .do_nothing()
             .execute(conn)
             .await?;
 
@@ -82,50 +72,62 @@ impl Handler for CpBlooms {
 /// Inserts values from a transaction into bloom filter.
 ///
 /// Values include:
-/// - Transaction sender (excluding system addresses)
+/// - Transaction sender
 /// - Recipient addresses of changed objects
-/// - Object IDs of all changed objects (excluding clock)
+/// - Object IDs of all changed objects
 /// - Package IDs from Move calls
 /// - Addresses from emitted events (package, type address, type params)
-pub(crate) fn insert_tx_values(tx: &ExecutedTransaction, bloom: &mut impl Extend<Vec<u8>>) {
-    if tx.transaction.sender() != SUI_SYSTEM_ADDRESS.into()
-        && tx.transaction.sender() != SuiAddress::ZERO
-    {
-        bloom.extend([tx.transaction.sender().to_vec()]);
-    }
+///
+/// Common addresses (e.g., 0x0, clock) are filtered out as they appear in most
+/// checkpoints and would defeat the bloom filter's purpose.
+pub(crate) fn insert_tx_addresses(tx: &ExecutedTransaction, bloom: &mut impl Extend<Vec<u8>>) {
+    let sender = std::iter::once(tx.transaction.sender().to_vec());
 
-    bloom.extend(tx.effects.all_changed_objects().into_iter().filter_map(
-        |(_, owner, _)| match owner {
+    let recipients = tx
+        .effects
+        .all_changed_objects()
+        .into_iter()
+        .filter_map(|(_, owner, _)| match owner {
             Owner::AddressOwner(address) => Some(address.to_vec()),
             _ => None,
-        },
-    ));
+        });
+
+    let object_ids = tx
+        .effects
+        .object_changes()
+        .into_iter()
+        .map(|change| change.id.to_vec());
+
+    let package_ids = tx
+        .transaction
+        .move_calls()
+        .into_iter()
+        .map(|(_, package_id, _, _)| package_id.to_vec());
+
+    let event_addresses = tx
+        .events
+        .iter()
+        .flat_map(|evs| evs.data.iter())
+        .flat_map(|ev| {
+            std::iter::once(ev.type_.address.to_vec())
+                .chain(std::iter::once(ev.package_id.to_vec()))
+                .chain(
+                    ev.type_
+                        .type_params
+                        .iter()
+                        .flat_map(|tp| tp.all_addresses())
+                        .map(|addr| addr.to_vec()),
+                )
+        });
 
     bloom.extend(
-        tx.effects
-            .object_changes()
-            .into_iter()
-            .filter(|change| change.id != SUI_CLOCK_ADDRESS.into())
-            .map(|change| change.id.to_vec()),
+        sender
+            .chain(recipients)
+            .chain(object_ids)
+            .chain(package_ids)
+            .chain(event_addresses)
+            .filter(|bytes| !should_skip_for_bloom(bytes)),
     );
-
-    bloom.extend(
-        tx.transaction
-            .move_calls()
-            .into_iter()
-            .map(|(_, package_id, _, _)| package_id.to_vec()),
-    );
-
-    for ev in tx.events.iter().flat_map(|evs| evs.data.iter()) {
-        bloom.extend([ev.type_.address.to_vec(), ev.package_id.to_vec()]);
-        bloom.extend(
-            ev.type_
-                .type_params
-                .iter()
-                .flat_map(|tp| tp.all_addresses())
-                .map(|addr| addr.to_vec()),
-        );
-    }
 }
 
 #[cfg(test)]
@@ -135,7 +137,7 @@ mod tests {
     use diesel::QueryDsl;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::Indexer;
-    use sui_indexer_alt_schema::cp_blooms::hash;
+    use sui_indexer_alt_schema::cp_blooms::CpBloomFilter;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
@@ -154,7 +156,7 @@ mod tests {
     /// Check if a key might be in a folded bloom filter.
     fn folded_bloom_contains(folded_bytes: &[u8], key: &[u8]) -> bool {
         let folded_bits = folded_bytes.len() * 8;
-        hash(key).all(|bit_idx| {
+        CpBloomFilter::hash(key).all(|bit_idx| {
             let folded_idx = bit_idx % folded_bits;
             folded_bytes[folded_idx / 8] & (1 << (folded_idx % 8)) != 0
         })
@@ -225,14 +227,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_cp_blooms_filter_accuracy() {
+        let package_id = ObjectID::from_single_byte(0x42);
         let mut builder = TestCheckpointBuilder::new(0);
-        // Use sender_idx=1 and 2 to avoid SuiAddress::ZERO which is filtered out
         builder = builder
             .start_transaction(1)
-            .add_move_call(ObjectID::ZERO, "module", "function")
+            .add_move_call(package_id, "module", "function")
             .finish_transaction()
             .start_transaction(2)
-            .add_move_call(ObjectID::ZERO, "module", "function")
+            .add_move_call(package_id, "module", "function")
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
 
@@ -242,8 +244,14 @@ mod tests {
         let bloom_bytes = &values[0].bloom_filter;
 
         assert!(
-            folded_bloom_contains(bloom_bytes, &ObjectID::ZERO.to_vec()),
+            folded_bloom_contains(bloom_bytes, &package_id.to_vec()),
             "Should contain package ID from move call"
+        );
+
+        // Common addresses should be filtered out
+        assert!(
+            !folded_bloom_contains(bloom_bytes, &ObjectID::ZERO.to_vec()),
+            "Should NOT contain common address ObjectID::ZERO"
         );
 
         let sender_0 = checkpoint.transactions[0].transaction.sender();
@@ -274,19 +282,20 @@ mod tests {
         );
     }
 
-    /// Test that committing the same checkpoint twice merges bits (bytea_or behavior).
-    /// This verifies that reprocessing a checkpoint accumulates bits rather than
-    /// replacing them, preventing data loss from partial/incomplete processing.
+    /// Test that committing the same checkpoint twice uses do_nothing behavior.
+    /// This verifies that reprocessing a checkpoint keeps the original data
+    /// since the filter would be identical when reprocessing.
     #[tokio::test]
     async fn test_cp_blooms_merge_on_conflict() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        // First commit: checkpoint 0 with package call to ObjectID::ZERO
+        // First commit: checkpoint 0 with package call
+        let package1 = ObjectID::from_single_byte(0x42);
         let mut builder1 = TestCheckpointBuilder::new(0);
         builder1 = builder1
             .start_transaction(1)
-            .add_move_call(ObjectID::ZERO, "module", "function")
+            .add_move_call(package1, "module", "function")
             .finish_transaction();
         let checkpoint1 = Arc::new(builder1.build_checkpoint());
         let values1 = CpBlooms.process(&checkpoint1).await.unwrap();
@@ -298,29 +307,20 @@ mod tests {
         let stored1 = get_all_bloom_filters(&mut conn).await;
         assert_eq!(stored1.len(), 1);
         assert!(
-            folded_bloom_contains(&stored1[0].bloom_filter, &ObjectID::ZERO.to_vec()),
-            "First commit should contain ObjectID::ZERO"
+            folded_bloom_contains(&stored1[0].bloom_filter, &package1.to_vec()),
+            "First commit should contain package1"
         );
         assert!(
             folded_bloom_contains(&stored1[0].bloom_filter, &sender1.to_vec()),
             "First commit should contain sender1"
         );
 
-        // Second commit: same checkpoint 0 but with different package (ObjectID::from_single_byte(1))
-        // In real scenarios this might happen if indexer restarts or retries
-        let package2 = ObjectID::from_single_byte(1);
-        let mut builder2 = TestCheckpointBuilder::new(0);
-        builder2 = builder2
-            .start_transaction(2) // Different sender
-            .add_move_call(package2, "other_module", "other_function")
-            .finish_transaction();
-        let checkpoint2 = Arc::new(builder2.build_checkpoint());
-        let values2 = CpBlooms.process(&checkpoint2).await.unwrap();
-        let sender2 = checkpoint2.transactions[0].transaction.sender();
+        // Second commit: same checkpoint 0 (simulating reprocessing)
+        // Since it's the same checkpoint, the bloom filter would be identical
+        // and do_nothing keeps the original row
+        CpBlooms::commit(&values1, &mut conn).await.unwrap();
 
-        CpBlooms::commit(&values2, &mut conn).await.unwrap();
-
-        // Verify BOTH sets of keys are present after merge
+        // Verify data is unchanged (do_nothing preserves original)
         let stored2 = get_all_bloom_filters(&mut conn).await;
         assert_eq!(
             stored2.len(),
@@ -328,24 +328,14 @@ mod tests {
             "Should still have only one row for checkpoint 0"
         );
 
-        // Keys from first commit should survive
+        // Keys from first commit should still be present
         assert!(
-            folded_bloom_contains(&stored2[0].bloom_filter, &ObjectID::ZERO.to_vec()),
-            "ObjectID::ZERO from first commit should survive bytea_or merge"
+            folded_bloom_contains(&stored2[0].bloom_filter, &package1.to_vec()),
+            "package1 should still be present after do_nothing"
         );
         assert!(
             folded_bloom_contains(&stored2[0].bloom_filter, &sender1.to_vec()),
-            "sender1 from first commit should survive bytea_or merge"
-        );
-
-        // Keys from second commit should also be present
-        assert!(
-            folded_bloom_contains(&stored2[0].bloom_filter, &package2.to_vec()),
-            "package2 from second commit should be present after merge"
-        );
-        assert!(
-            folded_bloom_contains(&stored2[0].bloom_filter, &sender2.to_vec()),
-            "sender2 from second commit should be present after merge"
+            "sender1 should still be present after do_nothing"
         );
     }
 }

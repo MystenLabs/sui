@@ -14,19 +14,20 @@ use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::postgres::Connection;
 use sui_indexer_alt_framework::postgres::Db;
+use sui_indexer_alt_schema::cp_bloom_blocks::BLOOM_BLOCK_BYTES;
 use sui_indexer_alt_schema::cp_bloom_blocks::CpBlockedBloomFilter;
 use sui_indexer_alt_schema::cp_bloom_blocks::StoredCpBloomBlock;
-use sui_indexer_alt_schema::cp_bloom_blocks::cp_block_id;
+use sui_indexer_alt_schema::cp_bloom_blocks::cp_block_index;
 use sui_indexer_alt_schema::cp_blooms::bytea_or;
 use sui_indexer_alt_schema::schema::cp_bloom_blocks;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::handlers::cp_blooms::insert_tx_values;
+use crate::handlers::cp_blooms::insert_tx_addresses;
 
 /// Blocked bloom filters that span multiple checkpoints for efficient range queries.
 ///
 /// Checkpoints are assigned to 1000-checkpoint blocks:
-/// - `cp_block_id(cp_num) = cp_num / 1000`
+/// - `cp_block_index(cp_num) = cp_num / 1000`
 /// - Block 0: checkpoints 0-999
 /// - Block 1: checkpoints 1000-1999
 /// - etc.
@@ -39,7 +40,7 @@ pub(crate) struct CheckpointBloom {
     pub cp_sequence_number: i64,
     /// Sparse bloom blocks (bloom_block_index -> bloom bytes).
     /// Only non-zero blocks are included.
-    pub blocks: BTreeMap<u16, Vec<u8>>,
+    pub blocks: BTreeMap<u16, [u8; BLOOM_BLOCK_BYTES]>,
 }
 
 #[async_trait]
@@ -50,15 +51,15 @@ impl Processor for CpBloomBlocks {
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
         let cp_num = checkpoint.summary.sequence_number;
-        let block_id = cp_block_id(cp_num);
+        let block_id = cp_block_index(cp_num);
         let seed = block_id as u128;
 
         let mut bloom = CpBlockedBloomFilter::new(seed);
-        for tx in checkpoint.transactions.iter() {
-            insert_tx_values(tx, &mut bloom);
+        for tx in &checkpoint.transactions {
+            insert_tx_addresses(tx, &mut bloom);
         }
 
-        let blocks: BTreeMap<u16, Vec<u8>> = bloom
+        let blocks = bloom
             .into_sparse_blocks()
             .map(|(idx, data)| (idx as u16, data))
             .collect();
@@ -70,11 +71,11 @@ impl Processor for CpBloomBlocks {
     }
 }
 
-/// Batch for a single cp_block_id, containing bloom blocks.
+/// Batch for a single cp_block_index, containing bloom blocks.
 #[derive(Default)]
 pub(crate) struct CpBlockBatch {
     /// Bloom blocks keyed by bloom_block_index.
-    blocks: BTreeMap<u16, Vec<u8>>,
+    blocks: BTreeMap<u16, [u8; BLOOM_BLOCK_BYTES]>,
 }
 
 #[async_trait]
@@ -88,7 +89,7 @@ impl Handler for CpBloomBlocks {
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
         for cp_bloom in values {
-            let block_id = cp_block_id(cp_bloom.cp_sequence_number as u64);
+            let block_id = cp_block_index(cp_bloom.cp_sequence_number as u64);
 
             let cp_block = batch.entry(block_id).or_default();
 
@@ -115,14 +116,14 @@ impl Handler for CpBloomBlocks {
 
         let rows: Vec<StoredCpBloomBlock> = batch
             .iter()
-            .flat_map(|(cp_block_id, cp_block)| {
+            .flat_map(|(cp_block_index, cp_block)| {
                 cp_block
                     .blocks
                     .iter()
                     .map(move |(bloom_block_index, bloom_bytes)| StoredCpBloomBlock {
-                        cp_block_id: *cp_block_id,
+                        cp_block_index: *cp_block_index,
                         bloom_block_index: *bloom_block_index as i16,
-                        bloom_filter: bloom_bytes.clone(),
+                        bloom_filter: bloom_bytes.to_vec(),
                     })
             })
             .collect();
@@ -130,7 +131,7 @@ impl Handler for CpBloomBlocks {
         let count = diesel::insert_into(cp_bloom_blocks::table)
             .values(&rows)
             .on_conflict((
-                cp_bloom_blocks::cp_block_id,
+                cp_bloom_blocks::cp_block_index,
                 cp_bloom_blocks::bloom_block_index,
             ))
             .do_update()
@@ -152,13 +153,12 @@ mod tests {
     use diesel::QueryDsl;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::Indexer;
-    use sui_indexer_alt_schema::cp_bloom_blocks::hash;
 
     use crate::MIGRATIONS;
 
     /// Build a CheckpointBloom from a checkpoint number and list of keys.
     fn make_checkpoint_bloom(cp_num: i64, keys: &[&[u8]]) -> CheckpointBloom {
-        let block_id = cp_block_id(cp_num as u64);
+        let block_id = cp_block_index(cp_num as u64);
         let seed = block_id as u128;
         let mut bloom = CpBlockedBloomFilter::new(seed);
         for key in keys {
@@ -175,18 +175,18 @@ mod tests {
 
     /// Check if a key is present in a bloom filter block.
     fn block_contains_key(block_data: &[u8], key: &[u8], seed: u128) -> bool {
-        hash(key, seed)
+        CpBlockedBloomFilter::hash(key, seed)
             .1
             .all(|idx| (block_data[idx / 8] & (1 << (idx % 8))) != 0)
     }
 
-    /// Load all bloom blocks for a given cp_block_id.
+    /// Load all bloom blocks for a given cp_block_index.
     async fn get_bloom_blocks(
         conn: &mut Connection<'_>,
-        cp_block_id: i64,
+        cp_block_index: i64,
     ) -> Vec<StoredCpBloomBlock> {
         cp_bloom_blocks::table
-            .filter(cp_bloom_blocks::cp_block_id.eq(cp_block_id))
+            .filter(cp_bloom_blocks::cp_block_index.eq(cp_block_index))
             .order_by(cp_bloom_blocks::bloom_block_index)
             .load(conn)
             .await
@@ -230,9 +230,9 @@ mod tests {
         let seed = 0u128;
 
         // Find two keys that hash to the same bloom_block_index to test the merge behavior.
-        // (cp_block_id, bloom_block_index).
+        // (cp_block_index, bloom_block_index).
         let key1 = b"key_0";
-        let (target_block_idx, _) = hash(key1, seed);
+        let (target_block_idx, _) = CpBlockedBloomFilter::hash(key1, seed);
 
         // key_104 hashes to the same bloom_block_index as key_0 with seed 0
         let key2 = b"key_104";
@@ -300,8 +300,8 @@ mod tests {
         assert!(!blocks0.is_empty(), "cp_block 0 should have data");
         assert!(!blocks1.is_empty(), "cp_block 1 should have data");
 
-        assert_eq!(blocks0[0].cp_block_id, 0);
-        assert_eq!(blocks1[0].cp_block_id, 1);
+        assert_eq!(blocks0[0].cp_block_index, 0);
+        assert_eq!(blocks1[0].cp_block_index, 1);
 
         let seed0 = 0u128;
         let seed1 = 1u128;
@@ -342,7 +342,7 @@ mod tests {
 
         // Verify every key can be found (no false negatives)
         for (i, key) in test_keys.iter().enumerate() {
-            let (block_idx, _) = hash(key, seed);
+            let (block_idx, _) = CpBlockedBloomFilter::hash(key, seed);
 
             let block = blocks
                 .iter()
@@ -393,7 +393,7 @@ mod tests {
         // Check batch 1 keys are in DB before merge
         let blocks_before = get_bloom_blocks(&mut conn, 0).await;
         for (i, key) in batch1_keys.iter().enumerate() {
-            let (block_idx, _) = hash(key, seed);
+            let (block_idx, _) = CpBlockedBloomFilter::hash(key, seed);
             let block = blocks_before
                 .iter()
                 .find(|b| b.bloom_block_index == block_idx as i16)
@@ -415,7 +415,7 @@ mod tests {
 
         // Check ALL keys from batch 1 survive the bytea_or merge
         for (i, key) in batch1_keys.iter().enumerate() {
-            let (block_idx, _) = hash(key, seed);
+            let (block_idx, _) = CpBlockedBloomFilter::hash(key, seed);
 
             let block = blocks_after
                 .iter()
@@ -431,7 +431,7 @@ mod tests {
 
         // Check batch 2 keys are also present
         for (i, key) in batch2_keys.iter().enumerate() {
-            let (block_idx, _) = hash(key, seed);
+            let (block_idx, _) = CpBlockedBloomFilter::hash(key, seed);
 
             let block = blocks_after
                 .iter()
