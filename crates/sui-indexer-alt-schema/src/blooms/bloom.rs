@@ -86,10 +86,11 @@ impl<T: AsRef<[u8]>, const BYTES: usize, const HASHES: u32, const SEED: u128> Ex
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::blooms::hash;
     use crate::cp_blooms::MAX_FOLD_DENSITY;
     use crate::cp_blooms::MIN_FOLD_BYTES;
+
+    use super::*;
 
     // Test bloom filter with specific dimensions
     type TestBloomFilter = BloomFilter<1024, 5, 67>;
