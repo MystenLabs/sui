@@ -254,7 +254,7 @@ async fn pending_exec_full() {
 
     // Wait for execution.
     for cert in certs {
-        wait_for_tx(*cert.digest(), authority_state.clone()).await;
+        wait_for_tx(*cert.digest(), authority_state.clone(), Duration::from_secs(15)).await;
     }
 }
 

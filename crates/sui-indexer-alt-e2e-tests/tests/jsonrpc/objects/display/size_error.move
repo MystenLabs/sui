@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses test=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses test=0x0 --simulator
 
 // Test that Display limits the overall output size (by default to 1MB).
 

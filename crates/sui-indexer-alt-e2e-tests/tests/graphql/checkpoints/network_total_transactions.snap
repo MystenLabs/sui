@@ -33,7 +33,7 @@ task 4, lines 18-21:
 Response: {
   "data": {
     "c1": {
-      "networkTotalTransactions": 2
+      "networkTotalTransactions": 3
     }
   }
 }
@@ -47,7 +47,7 @@ task 6, lines 25-28:
 Response: {
   "data": {
     "c2": {
-      "networkTotalTransactions": 2
+      "networkTotalTransactions": 4
     }
   }
 }
@@ -77,7 +77,7 @@ task 10, lines 40-43:
 Response: {
   "data": {
     "c3": {
-      "networkTotalTransactions": 4
+      "networkTotalTransactions": 7
     }
   }
 }
@@ -101,15 +101,15 @@ Response: {
       },
       {
         "sequenceNumber": 1,
-        "networkTotalTransactions": 2
+        "networkTotalTransactions": 3
       },
       {
         "sequenceNumber": 2,
-        "networkTotalTransactions": 2
+        "networkTotalTransactions": 4
       },
       {
         "sequenceNumber": 3,
-        "networkTotalTransactions": 4
+        "networkTotalTransactions": 7
       }
     ]
   }
@@ -122,7 +122,7 @@ Response: {
     "multiGetCheckpoints": [
       {
         "sequenceNumber": 2,
-        "networkTotalTransactions": 2
+        "networkTotalTransactions": 4
       },
       null,
       {

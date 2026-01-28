@@ -207,7 +207,7 @@ pub fn global_use_funs(info: &NamingProgramInfo) -> ResolvedUseFuns {
                 debug_display!((tn, (global_use_funs.get(tn).unwrap()))),
                 debug_display!((tn, &public_methods))
             );
-            global_use_funs.insert(*tn, public_methods);
+            global_use_funs.insert(tn.clone(), public_methods);
         }
     }
     global_use_funs
@@ -246,7 +246,7 @@ impl FoundMethod<'_, '_> {
         match self {
             FoundMethod::Global(_) => (),
             FoundMethod::Outer(_, used) => {
-                used.insert((*tn, *method_name));
+                used.insert((tn.clone(), *method_name));
             }
             FoundMethod::Local(use_fun) => {
                 use_fun.used = true;
@@ -1704,7 +1704,7 @@ pub fn make_struct_type(
     ty_args_opt: Option<Vec<Type>>,
 ) -> (Type, Vec<Type>) {
     context.emit_warning_if_deprecated(m, n.0, None);
-    let tn = sp(loc, TypeName_::ModuleType(*m, *n));
+    let tn = sp(loc, TypeName_::ModuleType((*m).into(), *n));
     let sdef = context.struct_definition(m, n);
     match ty_args_opt {
         None => {
@@ -1848,7 +1848,7 @@ pub fn make_enum_type(
     ty_args_opt: Option<Vec<Type>>,
 ) -> (Type, Vec<Type>) {
     context.emit_warning_if_deprecated(mident, enum_.0, None);
-    let tn = sp(loc, TypeName_::ModuleType(*mident, *enum_));
+    let tn = sp(loc, TypeName_::ModuleType((*mident).into(), *enum_));
     let edef = context.enum_definition(mident, enum_);
     match ty_args_opt {
         None => {
@@ -1965,7 +1965,7 @@ pub fn make_method_call_type(
                 return None;
             }
             TypeName_::Builtin(sp!(_, bt_)) => context.env().primitive_definer(*bt_),
-            TypeName_::ModuleType(m, _) => Some(m),
+            TypeName_::ModuleType(m, _) => Some(&**m),
         };
         let finfo_opt = defining_module.and_then(|m| {
             let finfo = context
@@ -2692,7 +2692,7 @@ pub fn unfold_type_recur(subst: &Subst, ty @ sp!(loc, t_): &Type) -> Type {
         TI::Ref(mut_, inner) => sp(*loc, TI::Ref(*mut_, unfold_type_recur(subst, inner)).into()),
         TI::Apply(ab_opt, tn, args) => {
             let args = args.iter().map(|ty| unfold_type_recur(subst, ty)).collect();
-            sp(*loc, TI::Apply(ab_opt.clone(), *tn, args).into())
+            sp(*loc, TI::Apply(ab_opt.clone(), tn.clone(), args).into())
         }
         TI::Fun(args, ret) => {
             let args = args.iter().map(|ty| unfold_type_recur(subst, ty)).collect();
@@ -2753,7 +2753,7 @@ pub fn subst_tparams(subst: &TParamSubst, ty @ sp!(loc, t_): &Type) -> Type {
             .clone(),
         TI::Apply(k, n, ty_args) => {
             let ftys = ty_args.iter().map(|t| subst_tparams(subst, t)).collect();
-            sp(*loc, TI::Apply(k.clone(), *n, ftys).into())
+            sp(*loc, TI::Apply(k.clone(), n.clone(), ftys).into())
         }
         TI::Fun(args, result) => {
             let ftys = args.iter().map(|t| subst_tparams(subst, t)).collect();
@@ -2821,7 +2821,7 @@ pub fn ready_tvars(subst: &Subst, ty @ sp!(loc, t_): &Type) -> Type {
         TI::Ref(mut_, t) => sp(*loc, TI::Ref(*mut_, ready_tvars(subst, t)).into()),
         TI::Apply(k, n, tys) => {
             let tys = tys.iter().map(|t| ready_tvars(subst, t)).collect();
-            sp(*loc, TI::Apply(k.clone(), *n, tys).into())
+            sp(*loc, TI::Apply(k.clone(), n.clone(), tys).into())
         }
         TI::Fun(args, result) => {
             let args = args.iter().map(|t| ready_tvars(subst, t)).collect();
@@ -2918,7 +2918,7 @@ fn instantiate_impl_opt(
                 keep_tanything,
                 *loc,
                 abilities_opt.clone(),
-                *n,
+                n.clone(),
                 ty_args.clone(),
             );
             Some(sp(*loc, ty_))
@@ -3157,7 +3157,7 @@ pub fn give_tparams_all_abilities(ty @ sp!(loc, ty_): &Type) -> Type {
         TI::Apply(k, n, ty_args) => {
             let ty_ = TI::Apply(
                 k.clone(),
-                *n,
+                n.clone(),
                 ty_args.iter().map(give_tparams_all_abilities).collect(),
             )
             .into();
@@ -3310,7 +3310,10 @@ fn join_impl(
                 k2
             );
             let (subst, tys) = join_impl_types(counter, subst, case, tys1, tys2)?;
-            Ok((subst, sp(*rhs_loc, TI::Apply(k2.clone(), *n2, tys).into())))
+            Ok((
+                subst,
+                sp(*rhs_loc, TI::Apply(k2.clone(), n2.clone(), tys).into()),
+            ))
         }
         (TI::Fun(a1, _), TI::Fun(a2, _)) if a1.len() != a2.len() => {
             Err(TypingError::FunArityMismatch(

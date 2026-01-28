@@ -3,7 +3,9 @@
 **/.vscode/
 **/.idea/
 **/CLAUDE-local.md
-**/.claude/
+**/CLAUDE.local.md
+**/.claude/*
+!**/.claude/skills/
 **/.opencode/
 
 # OSX
@@ -35,6 +37,7 @@ Move.lock
 
 # Python
 .pyc
+scripts/simtest/__pycache__/**
 
 # Node.js
 node_modules

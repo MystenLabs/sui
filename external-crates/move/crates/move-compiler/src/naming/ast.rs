@@ -303,13 +303,12 @@ pub enum BuiltinTypeName_ {
 }
 pub type BuiltinTypeName = Spanned<BuiltinTypeName_>;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-#[allow(clippy::large_enum_variant)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TypeName_ {
     // exp-list/tuple type
     Multiple(usize),
     Builtin(BuiltinTypeName),
-    ModuleType(ModuleIdent, DatatypeName),
+    ModuleType(Arc<ModuleIdent>, DatatypeName),
 }
 // TODO: This should also be an Arc, so that TypeName can be cheaply cloned
 pub type TypeName = Spanned<TypeName_>;
@@ -328,7 +327,6 @@ pub struct TParam {
 pub struct TVar(pub u64);
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-#[allow(clippy::large_enum_variant)]
 pub enum TypeInner {
     Unit,
     Ref(bool, Type),
@@ -817,14 +815,14 @@ impl TypeName_ {
     pub fn single_type(&self) -> Option<TypeName_> {
         match self {
             TypeName_::Multiple(_) => None,
-            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(*self),
+            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(self.clone()),
         }
     }
 
     pub fn datatype_name(&self) -> Option<(ModuleIdent, DatatypeName)> {
         match self {
             TypeName_::Builtin(_) | TypeName_::Multiple(_) => None,
-            TypeName_::ModuleType(mident, n) => Some((*mident, *n)),
+            TypeName_::ModuleType(mident, n) => Some((*mident.as_ref(), *n)),
         }
     }
 }
@@ -1081,6 +1079,17 @@ impl Value_ {
 impl Clone for Type_ {
     fn clone(&self) -> Self {
         Type_(Arc::clone(&self.0))
+    }
+}
+
+impl Clone for TypeName_ {
+    fn clone(&self) -> Self {
+        use TypeName_::*;
+        match self {
+            Multiple(n) => Multiple(*n),
+            Builtin(b) => Builtin(*b),
+            ModuleType(m, n) => ModuleType(Arc::clone(m), *n),
+        }
     }
 }
 
@@ -2189,4 +2198,24 @@ impl AstDebug for LambdaLValues_ {
         });
         w.write("| ");
     }
+}
+
+// *************************************************************************************************
+// Size Tests
+// *************************************************************************************************
+
+#[test]
+fn naming_ast_sizes() {
+    assert_eq!(
+        std::mem::size_of::<TypeName>(),
+        104,
+        "TypeName size changed"
+    );
+    assert_eq!(
+        std::mem::size_of::<TypeInner>(),
+        160,
+        "TypeInner size changed"
+    );
+    assert_eq!(std::mem::size_of::<Type_>(), 8, "Type_ size changed");
+    assert_eq!(std::mem::size_of::<Type>(), 48, "Type size changed");
 }

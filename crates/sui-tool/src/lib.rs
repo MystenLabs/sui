@@ -847,7 +847,7 @@ pub async fn download_formal_snapshot(
         None,
     ));
     let genesis = Genesis::load(genesis).unwrap();
-    let genesis_committee = genesis.committee()?;
+    let genesis_committee = genesis.committee();
     let committee_store = Arc::new(CommitteeStore::new(
         path.join("epochs"),
         &genesis_committee,

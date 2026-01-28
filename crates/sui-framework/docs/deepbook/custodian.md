@@ -414,7 +414,7 @@ Move <code>quantity</code> from the unlocked balance of <code>user</code> to the
 
 ## Function `unlock_balance`
 
-Move <code>quantity</code> from the locked balance of <code>user</code> to the unlocked balacne of <code>user</code>
+Move <code>quantity</code> from the locked balance of <code>user</code> to the unlocked balance of <code>user</code>
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../deepbook/custodian.md#deepbook_custodian_unlock_balance">unlock_balance</a>&lt;T&gt;(<a href="../deepbook/custodian.md#deepbook_custodian">custodian</a>: &<b>mut</b> <a href="../deepbook/custodian.md#deepbook_custodian_Custodian">deepbook::custodian::Custodian</a>&lt;T&gt;, user: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, quantity: u64)

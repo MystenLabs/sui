@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/mixed_address_module_empty_invalid_0.move:2:12
+  │
+1 │ address a {
+  │         - Address previously specified here
+2 │     module a::m { }
+  │            ^ Redundant address specification

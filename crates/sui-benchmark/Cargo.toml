@@ -45,11 +45,13 @@ telemetry-subscribers.workspace = true
 roaring.workspace = true
 regex.workspace = true
 fastcrypto-zkp.workspace = true
+derive_more.workspace = true
 
 move-core-types.workspace = true
 mysten-metrics.workspace = true
 test-cluster.workspace = true
 sysinfo.workspace = true
+mysten-common.workspace = true
 
 sui-move-build.workspace = true
 
@@ -61,5 +63,4 @@ sui-macros.workspace = true
 sui-rpc.workspace = true
 sui-simulator.workspace = true
 typed-store.workspace = true
-mysten-common.workspace = true
 zstd.workspace = true

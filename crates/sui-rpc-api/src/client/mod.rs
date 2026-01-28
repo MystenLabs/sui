@@ -1,20 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use tap::Pipe;
-use tonic::metadata::MetadataMap;
-
+use bytes::Bytes;
+use futures::stream::Stream;
+use futures::stream::TryStreamExt;
 use prost_types::FieldMask;
+use std::time::Duration;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::TryFromProtoError;
-use sui_rpc::proto::sui::rpc::v2 as proto;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_rpc::proto::sui::rpc::v2::{self as proto, GetServiceInfoRequest};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
+use tap::Pipe;
+use tonic::Status;
+use tonic::metadata::MetadataMap;
 
 pub use sui_rpc::client::HeadersInterceptor;
 pub use sui_rpc::client::ResponseExt;
@@ -22,7 +27,10 @@ pub use sui_rpc::client::ResponseExt;
 pub type Result<T, E = tonic::Status> = std::result::Result<T, E>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-use tonic::Status;
+pub struct Page<T> {
+    pub items: Vec<T>,
+    pub next_page_token: Option<Bytes>,
+}
 
 #[derive(Clone)]
 pub struct Client(sui_rpc::Client);
@@ -173,6 +181,144 @@ impl Client {
 
         execute_transaction_response_try_from_proto(&response)
             .map_err(|e| status_from_error_with_metadata(e, metadata))
+    }
+
+    pub async fn get_chain_identifier(&self) -> Result<ChainIdentifier> {
+        let response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_service_info(GetServiceInfoRequest::default())
+            .await?
+            .into_inner();
+        let chain_id = response
+            .chain_id()
+            .parse::<sui_sdk_types::Digest>()
+            .map_err(|e| TryFromProtoError::invalid("chain_id", e))
+            .map_err(|e| Status::from_error(e.into()))?;
+
+        Ok(ChainIdentifier::from(
+            sui_types::digests::CheckpointDigest::from(chain_id),
+        ))
+    }
+
+    pub async fn get_owned_objects(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<move_core_types::language_storage::StructTag>,
+        page_size: Option<u32>,
+        page_token: Option<Bytes>,
+    ) -> Result<Page<Object>> {
+        let mut request = proto::ListOwnedObjectsRequest::default()
+            .with_owner(owner.to_string())
+            .with_read_mask(FieldMask::from_paths(["bcs"]));
+        if let Some(object_type) = object_type {
+            request.set_object_type(object_type.to_canonical_string(true));
+        }
+
+        if let Some(page_size) = page_size {
+            request.set_page_size(page_size);
+        }
+
+        if let Some(page_token) = page_token {
+            request.set_page_token(page_token);
+        }
+
+        let (metadata, response, _extentions) = self
+            .0
+            .clone()
+            .state_client()
+            .list_owned_objects(request)
+            .await?
+            .into_parts();
+
+        let objects = response
+            .objects()
+            .iter()
+            .map(object_try_from_proto)
+            .collect::<Result<_, _>>()
+            .map_err(|e| status_from_error_with_metadata(e, metadata))?;
+
+        Ok(Page {
+            items: objects,
+            next_page_token: response.next_page_token,
+        })
+    }
+
+    pub fn list_owned_objects(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<move_core_types::language_storage::StructTag>,
+    ) -> impl Stream<Item = Result<Object>> + 'static {
+        let mut request = proto::ListOwnedObjectsRequest::default()
+            .with_owner(owner.to_string())
+            .with_read_mask(FieldMask::from_paths(["bcs"]));
+
+        if let Some(object_type) = object_type {
+            request.set_object_type(object_type.to_canonical_string(true));
+        }
+
+        self.0
+            .list_owned_objects(request)
+            .and_then(|object| async move {
+                object_try_from_proto(&object).map_err(|e| Status::from_error(e.into()))
+            })
+    }
+
+    pub async fn get_reference_gas_price(&self) -> Result<u64> {
+        let request = proto::GetEpochRequest::default()
+            .with_read_mask(FieldMask::from_paths(["epoch", "reference_gas_price"]));
+
+        let response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        Ok(response.epoch().reference_gas_price())
+    }
+
+    /// Wait for a transaction to be available in the ledger AND indexed (equivalent to WaitForLocalExecution)
+    pub async fn wait_for_transaction(
+        &self,
+        digest: &sui_types::digests::TransactionDigest,
+    ) -> Result<(), anyhow::Error> {
+        const WAIT_FOR_LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
+        const WAIT_FOR_LOCAL_EXECUTION_DELAY: Duration = Duration::from_millis(200);
+        const WAIT_FOR_LOCAL_EXECUTION_INTERVAL: Duration = Duration::from_millis(500);
+
+        let mut client = self.0.clone();
+        let mut client = client.ledger_client();
+
+        tokio::time::timeout(WAIT_FOR_LOCAL_EXECUTION_TIMEOUT, async {
+            // Apply a short delay to give the full node a chance to catch up.
+            tokio::time::sleep(WAIT_FOR_LOCAL_EXECUTION_DELAY).await;
+
+            let mut interval = tokio::time::interval(WAIT_FOR_LOCAL_EXECUTION_INTERVAL);
+            loop {
+                interval.tick().await;
+
+                let request = proto::GetTransactionRequest::default()
+                    .with_digest(digest.to_string())
+                    .with_read_mask(prost_types::FieldMask::from_paths(["digest", "checkpoint"]));
+
+                if let Ok(response) = client.get_transaction(request).await {
+                    let tx = response.into_inner().transaction;
+                    if let Some(executed_tx) = tx {
+                        // Check that transaction is indexed (checkpoint field is populated)
+                        if executed_tx.checkpoint.is_some() {
+                            break;
+                        }
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for transaction indexing: {}", digest))?;
+
+        Ok(())
     }
 }
 

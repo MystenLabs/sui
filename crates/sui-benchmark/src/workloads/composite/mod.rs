@@ -3,41 +3,65 @@
 
 mod operations;
 
+use derive_more::Add;
+use mysten_common::random::get_rng;
 pub use operations::{
-    ALL_OPERATIONS, AddressBalanceDeposit, AddressBalanceWithdraw, ObjectBalanceDeposit,
-    ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead, SharedCounterIncrement,
-    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
-    TestCoinObjectWithdraw, describe_flags,
+    ALL_OPERATIONS, AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw,
+    ObjectBalanceDeposit, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
+    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
+    TestCoinMint, TestCoinObjectWithdraw, describe_flags,
 };
+use rand::seq::SliceRandom;
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER, Workload,
     WorkloadBuilder,
 };
-use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
+use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams, gas_to_multi_gas};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
 use operations::{InitRequirement, Operation, OperationResources, ResourceRequest};
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng, thread_rng};
+use rand::Rng;
 use std::collections::HashMap;
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::TypeTag;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
 use sui_types::transaction::{Argument, Command, ObjectArg, SharedObjectMutability, Transaction};
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
-use tracing::{error, info};
+use tracing::{debug, info, trace};
+
+use super::MultiGas;
+
+const MAX_BATCH_SIZE: usize = 4;
+
+macro_rules! update_gas {
+    ($gas:expr, $effects:expr) => {{
+        let new_gas_ref = $effects.gas_object().0;
+        if new_gas_ref.0 == ObjectID::ZERO {
+            info!("No gas object, skipping update");
+            return;
+        }
+        assert_eq!($gas.0, new_gas_ref.0, "ObjectIDs must match");
+        info!(
+            "Updating gas object from {:?} to {:?} for tx {:?}",
+            $gas,
+            new_gas_ref,
+            $effects.digest()
+        );
+        *$gas = new_gas_ref;
+    }};
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OperationSet(u32);
@@ -79,11 +103,16 @@ impl Default for OperationSet {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Add, Copy, Clone)]
 pub struct OperationSetStats {
+    pub signed_and_sent_count: u64,
     pub success_count: u64,
-    pub failure_count: u64,
+    pub abort_count: u64,
+    pub permanent_failure_count: u64,
+    pub retriable_failure_count: u64,
+    pub unknown_rejection_count: u64,
     pub cancellation_count: u64,
+    pub insufficient_funds_count: u64,
 }
 
 #[derive(Debug, Default)]
@@ -96,12 +125,48 @@ impl CompositionMetrics {
         Self::default()
     }
 
+    pub fn sum_all(&self) -> OperationSetStats {
+        let mut stats = OperationSetStats::default();
+        for stat in self.stats.values() {
+            stats = stats + *stat;
+        }
+        stats
+    }
+
+    pub fn record_signed_and_sent(&mut self, op_set: OperationSet) {
+        self.stats
+            .entry(op_set.raw())
+            .or_default()
+            .signed_and_sent_count += 1;
+    }
+
     pub fn record_success(&mut self, op_set: OperationSet) {
         self.stats.entry(op_set.raw()).or_default().success_count += 1;
     }
 
-    pub fn record_failure(&mut self, op_set: OperationSet) {
-        self.stats.entry(op_set.raw()).or_default().failure_count += 1;
+    pub fn record_abort(&mut self, op_set: OperationSet) {
+        self.stats.entry(op_set.raw()).or_default().abort_count += 1;
+    }
+
+    pub fn record_permanent_failure(&mut self, op_set: OperationSet) {
+        self.stats
+            .entry(op_set.raw())
+            .or_default()
+            .permanent_failure_count += 1;
+    }
+
+    pub fn record_retriable_failure(&mut self, op_set: OperationSet) {
+        self.stats
+            .entry(op_set.raw())
+            .or_default()
+            .retriable_failure_count += 1;
+    }
+
+    pub fn record_unknown_rejection(&mut self, op_set: OperationSet) {
+        self.stats
+            .entry(op_set.raw())
+            .or_default()
+            .unknown_rejection_count += 1;
     }
 
     pub fn record_cancellation(&mut self, op_set: OperationSet) {
@@ -111,13 +176,20 @@ impl CompositionMetrics {
             .cancellation_count += 1;
     }
 
+    pub fn record_insufficient_funds(&mut self, op_set: OperationSet) {
+        self.stats
+            .entry(op_set.raw())
+            .or_default()
+            .insufficient_funds_count += 1;
+    }
+
     pub fn get_stats(&self, op_set: OperationSet) -> Option<&OperationSetStats> {
         self.stats.get(&op_set.raw())
     }
 
     pub fn cancellation_rate(&self, op_set: OperationSet) -> Option<f64> {
         self.stats.get(&op_set.raw()).map(|s| {
-            let total = s.success_count + s.failure_count + s.cancellation_count;
+            let total = s.success_count + s.abort_count + s.cancellation_count;
             if total == 0 {
                 0.0
             } else {
@@ -129,14 +201,14 @@ impl CompositionMetrics {
     pub fn total_transactions(&self, op_set: OperationSet) -> u64 {
         self.stats
             .get(&op_set.raw())
-            .map(|s| s.success_count + s.failure_count + s.cancellation_count)
+            .map(|s| s.success_count + s.abort_count + s.cancellation_count)
             .unwrap_or(0)
     }
 
     pub fn total_transactions_all(&self) -> u64 {
         self.stats
             .values()
-            .map(|s| s.success_count + s.failure_count + s.cancellation_count)
+            .map(|s| s.success_count + s.abort_count + s.cancellation_count)
             .sum()
     }
 
@@ -145,7 +217,7 @@ impl CompositionMetrics {
     }
 
     pub fn total_failures_all(&self) -> u64 {
-        self.stats.values().map(|s| s.failure_count).sum()
+        self.stats.values().map(|s| s.abort_count).sum()
     }
 
     pub fn total_cancellations_all(&self) -> u64 {
@@ -181,6 +253,7 @@ pub struct CompositeWorkloadConfig {
     pub shared_counter_hotness: f32,
     pub address_balance_amount: u64,
     pub address_balance_gas_probability: f32,
+    pub conflicting_transaction_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -198,6 +271,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(TestCoinAddressDeposit::FLAG, 0.1);
         probabilities.insert(TestCoinAddressWithdraw::FLAG, 0.1);
         probabilities.insert(TestCoinObjectWithdraw::FLAG, 0.1);
+        probabilities.insert(AddressBalanceOverdraw::FLAG, 0.1);
         Self {
             probabilities,
             ..Default::default()
@@ -213,7 +287,8 @@ impl CompositeWorkloadConfig {
         self.probabilities.get(&desc.flag).copied().unwrap_or(0.0)
     }
 
-    pub fn sample_operations(&self, rng: &mut impl Rng) -> Vec<Box<dyn Operation>> {
+    pub fn sample_operations(&self) -> Vec<Box<dyn Operation>> {
+        let mut rng = get_rng();
         let mut ops: Vec<Box<dyn Operation>> = ALL_OPERATIONS
             .iter()
             .filter(|desc| rng.gen_bool(self.probability_for(desc) as f64))
@@ -252,7 +327,8 @@ impl Default for CompositeWorkloadConfig {
             num_shared_counters: 10,
             shared_counter_hotness: 0.5,
             address_balance_amount: 1000,
-            address_balance_gas_probability: 0.0,
+            address_balance_gas_probability: 0.5,
+            conflicting_transaction_probability: 0.1,
             metrics: None,
         }
     }
@@ -271,7 +347,8 @@ pub struct OperationPool {
 }
 
 impl OperationPool {
-    pub fn select_counter(&self, rng: &mut impl Rng) -> (ObjectID, SequenceNumber) {
+    pub fn select_counter(&self) -> (ObjectID, SequenceNumber) {
+        let mut rng = get_rng();
         if self.shared_counters.is_empty() {
             panic!("No shared counters available");
         }
@@ -286,12 +363,15 @@ impl OperationPool {
 
 pub struct CompositePayload {
     config: Arc<CompositeWorkloadConfig>,
-    pool: Arc<RwLock<OperationPool>>,
-    gas: Gas,
-    rng: SmallRng,
+    fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
+    pool: Arc<OperationPool>,
+    gas: Mutex<MultiGas>,
+    // for each tx in the batch, which gas coin index did it use?
+    current_batch_num_conflicting_transactions: usize,
+    current_batch_gas_map: Vec<usize>,
+    current_batch_op_sets: Vec<OperationSet>,
     system_state_observer: Arc<SystemStateObserver>,
     metrics: Arc<Mutex<CompositionMetrics>>,
-    current_op_set: OperationSet,
     nonce_counter: AtomicU32,
 }
 
@@ -314,7 +394,6 @@ impl CompositePayload {
         op: &dyn Operation,
         pool: &OperationPool,
         config: &CompositeWorkloadConfig,
-        rng: &mut SmallRng,
     ) -> OperationResources {
         let mut counter = None;
         let mut randomness = None;
@@ -324,7 +403,7 @@ impl CompositePayload {
         for req in op.resource_requests() {
             match req {
                 ResourceRequest::SharedCounter => {
-                    counter = Some(pool.select_counter(rng));
+                    counter = Some(pool.select_counter());
                 }
                 ResourceRequest::Randomness => {
                     randomness = Some(pool.randomness_initial_shared_version);
@@ -350,67 +429,237 @@ impl CompositePayload {
         }
     }
 
-    fn sample_operations(&mut self) -> Vec<Box<dyn Operation>> {
-        self.config.sample_operations(&mut self.rng)
-    }
-}
-
-impl Payload for CompositePayload {
-    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
-        let mut metrics = self.metrics.lock().unwrap();
-        if effects.is_cancelled() {
-            metrics.record_cancellation(self.current_op_set);
-        } else if effects.is_ok() {
-            metrics.record_success(self.current_op_set);
-        } else {
-            metrics.record_failure(self.current_op_set);
-            effects.print_gas_summary();
-            error!("Composite tx failed... Status: {:?}", effects.status());
-        }
-        drop(metrics);
-        self.gas.0 = effects.gas_object().0;
+    fn sample_operations(&self) -> Vec<Box<dyn Operation>> {
+        self.config.sample_operations()
     }
 
-    fn make_transaction(&mut self) -> Transaction {
-        let system_state = self.system_state_observer.state.borrow().clone();
-        let rgp = system_state.reference_gas_price;
-        let current_epoch = system_state.epoch;
-
+    fn generate_transaction(
+        &mut self,
+        mut tx_builder: TestTransactionBuilder,
+        account_state: &AccountState,
+        keypair: &AccountKeyPair,
+    ) -> Transaction {
         let ops = self.sample_operations();
 
-        self.current_op_set = OperationSet::new();
+        let mut current_op_set = OperationSet::new();
         for op in &ops {
-            self.current_op_set = self.current_op_set.with(op.operation_flag());
+            current_op_set = current_op_set.with(op.operation_flag());
         }
+        self.metrics
+            .lock()
+            .unwrap()
+            .record_signed_and_sent(current_op_set);
+        self.current_batch_op_sets.push(current_op_set);
 
         let op_names: Vec<&str> = ops.iter().map(|op| op.name()).collect();
-        tracing::trace!(
+
+        tracing::debug!(
             "Building composite transaction with operations: {:?}",
             op_names
         );
 
-        let pool = self.pool.read().unwrap();
-
-        let use_address_balance_gas = self
-            .rng
-            .gen_bool(self.config.address_balance_gas_probability as f64);
-
-        let mut tx_builder = TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp);
         {
             let builder = tx_builder.ptb_builder_mut();
             for op in &ops {
                 let resources =
-                    Self::resolve_resources_for_op(op.as_ref(), &pool, &self.config, &mut self.rng);
-                op.apply(builder, &resources, &mut self.rng);
+                    Self::resolve_resources_for_op(op.as_ref(), &self.pool, &self.config);
+                op.apply(builder, &resources, account_state);
             }
         }
 
-        if use_address_balance_gas {
-            let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
-            tx_builder =
-                tx_builder.with_address_balance_gas(pool.chain_identifier, current_epoch, nonce);
+        tx_builder.build_and_sign(keypair)
+    }
+}
+
+#[async_trait]
+impl Payload for CompositePayload {
+    fn make_new_payload(&mut self, _: &ExecutionEffects) {
+        unimplemented!();
+    }
+
+    fn make_transaction(&mut self) -> Transaction {
+        unimplemented!()
+    }
+
+    fn is_batched(&self) -> bool {
+        true
+    }
+
+    async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
+        let batch_size = get_rng().gen_range(1..=MAX_BATCH_SIZE);
+
+        let system_state = self.system_state_observer.state.borrow().clone();
+        let rgp = system_state.reference_gas_price;
+        let current_epoch = system_state.epoch;
+
+        let (current_batch_gas, sender, keypair) = {
+            let gas = self.gas.lock().unwrap();
+            assert!(
+                gas.0.len() >= batch_size,
+                "Not enough gas coins available in pool"
+            );
+            (gas.0.clone(), gas.1, gas.2.clone())
+        };
+
+        self.current_batch_gas_map.clear();
+        self.current_batch_num_conflicting_transactions = 0;
+        self.current_batch_op_sets.clear();
+        let mut transactions = Vec::with_capacity(batch_size);
+
+        let account_state = AccountState::new(sender, &self.fullnode_proxies).await;
+
+        let mut used_gas = vec![];
+
+        let mut rng = get_rng();
+
+        for (i, gas) in current_batch_gas.iter().take(batch_size).enumerate() {
+            let builder = if rng.gen_bool(self.config.address_balance_gas_probability as f64) {
+                let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
+                TestTransactionBuilder::new_with_address_balance_gas(
+                    sender,
+                    rgp,
+                    self.pool.chain_identifier,
+                    current_epoch,
+                    nonce,
+                )
+            } else {
+                used_gas.push(i);
+                TestTransactionBuilder::new(sender, *gas, rgp)
+            };
+            // even if we didn't use gas, we still need to write an index for every tx
+            self.current_batch_gas_map.push(i);
+
+            transactions.push(self.generate_transaction(builder, &account_state, &keypair));
         }
-        tx_builder.build_and_sign(self.gas.2.as_ref())
+
+        self.current_batch_num_conflicting_transactions = if rng
+            .gen_bool(self.config.conflicting_transaction_probability as f64)
+            && !used_gas.is_empty()
+        {
+            let num_conflicting_transactions = rng.gen_range(1..=used_gas.len());
+            for gas_idx in used_gas.iter().take(num_conflicting_transactions) {
+                let gas = current_batch_gas[*gas_idx];
+                self.current_batch_gas_map.push(*gas_idx);
+
+                // use rgp + 1 to ensure we never make a duplicate transaction here
+                let builder = TestTransactionBuilder::new(sender, gas, rgp + 1);
+                transactions.push(self.generate_transaction(builder, &account_state, &keypair));
+            }
+            num_conflicting_transactions
+        } else {
+            0
+        };
+
+        debug!(
+            num_conflicting_transactions = self.current_batch_num_conflicting_transactions,
+            "built batch: {:?}",
+            transactions
+                .iter()
+                .map(|tx| tx.digest())
+                .collect::<Vec<_>>(),
+        );
+        transactions
+    }
+
+    fn handle_batch_results(&mut self, results: &BatchExecutionResults) {
+        debug!(
+            "Handling batch results: {:?}",
+            results.results.iter().map(|r| r.digest).collect::<Vec<_>>()
+        );
+        let mut metrics = self.metrics.lock().unwrap();
+
+        let mut permanent_failure_count = 0;
+        let mut unknown_rejection_count = 0;
+
+        let mut gas = self.gas.lock().unwrap();
+        for (i, result) in results.results.iter().enumerate() {
+            let gas_idx = self.current_batch_gas_map[i];
+            trace!("result: {}", result.description());
+            assert!(
+                gas_idx < gas.0.len(),
+                "result should correspond to a gas coin"
+            );
+            let op_set = self.current_batch_op_sets[i];
+            match &result.status {
+                BatchedTransactionStatus::Success { effects } => {
+                    if effects.is_cancelled() {
+                        metrics.record_cancellation(op_set);
+                    } else if effects.is_insufficient_funds() {
+                        metrics.record_insufficient_funds(op_set);
+                    } else if effects.is_ok() {
+                        metrics.record_success(op_set);
+                    } else {
+                        metrics.record_abort(op_set);
+                    }
+                    update_gas!(&mut gas.0[gas_idx], effects);
+                }
+                BatchedTransactionStatus::PermanentFailure { error } => {
+                    permanent_failure_count += 1;
+                    metrics.record_permanent_failure(op_set);
+                    tracing::debug!(
+                        "Transaction {} ({}) rejected with error: {:?}",
+                        i,
+                        result.digest,
+                        error
+                    );
+                }
+                BatchedTransactionStatus::RetriableFailure { error } => {
+                    metrics.record_retriable_failure(op_set);
+                    tracing::debug!(
+                        "Transaction {} ({}) had retriable failure: {:?}",
+                        i,
+                        result.digest,
+                        error
+                    );
+                }
+                BatchedTransactionStatus::UnknownRejection => {
+                    unknown_rejection_count += 1;
+                    metrics.record_unknown_rejection(op_set);
+                    tracing::debug!(
+                        "Transaction {} ({}) had unknown rejection",
+                        i,
+                        result.digest,
+                    );
+                }
+            }
+        }
+        // we have to be conservative and include unknown rejections here
+        assert!(
+            permanent_failure_count + unknown_rejection_count
+                >= self.current_batch_num_conflicting_transactions,
+            "failure count should be greater than or equal to the number of conflicting transactions"
+        );
+        self.current_batch_op_sets.clear();
+    }
+}
+
+pub struct AccountState {
+    pub sender: SuiAddress,
+    pub sui_balance: u64,
+}
+
+impl AccountState {
+    pub async fn new(
+        sender: SuiAddress,
+        fullnode_proxies: &Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
+    ) -> Self {
+        let mut retries = 0;
+        while retries < 3 {
+            let proxy = fullnode_proxies.choose(&mut get_rng()).unwrap();
+            let Ok(sui_balance) = proxy.get_sui_address_balance(sender).await else {
+                info!("Failed to get sui balance for address {sender}");
+                retries += 1;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            };
+            return Self {
+                sender,
+                sui_balance,
+            };
+        }
+        // If this panic happens in practice, we could just return a zero balance,
+        // it wouldn't hurt the test suite overall unles it is happening every time
+        panic!("Failed to get sui balance for address {sender} - return zero balance");
     }
 }
 
@@ -554,7 +803,8 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             balance_pool: None,
             test_coin_cap: None,
             init_gas,
-            payload_gas,
+            payload_gas: payload_gas.into_iter().map(gas_to_multi_gas).collect(),
+            num_payloads: self.num_payloads,
             metrics: self.metrics.clone(),
             chain_identifier: None,
         }))
@@ -570,7 +820,8 @@ pub struct CompositeWorkload {
     balance_pool: Option<(ObjectID, SequenceNumber)>,
     test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     init_gas: Vec<Gas>,
-    payload_gas: Vec<Gas>,
+    payload_gas: Vec<MultiGas>,
+    num_payloads: u64,
     metrics: Arc<Mutex<CompositionMetrics>>,
     chain_identifier: Option<sui_types::digests::ChainIdentifier>,
 }
@@ -585,14 +836,15 @@ impl CompositeWorkload {
 impl Workload<dyn Payload> for CompositeWorkload {
     async fn init(
         &mut self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         if self.package_id.is_some() {
             return;
         }
 
-        self.chain_identifier = Some(proxy.get_chain_identifier());
+        self.chain_identifier = Some(execution_proxy.get_chain_identifier());
         info!("Chain identifier: {:?}", self.chain_identifier);
 
         let gas_price = system_state_observer.state.borrow().reference_gas_price;
@@ -608,7 +860,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             .publish_async(path)
             .await
             .build_and_sign(head.2.as_ref());
-        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.expect("Package publish should succeed");
 
         let mut treasury_cap_ref = None;
@@ -626,7 +878,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             }
         }
         for obj_ref in owned_refs {
-            if let Ok(obj) = proxy.get_object(obj_ref.0).await {
+            if let Ok(obj) = execution_proxy.get_object(obj_ref.0).await {
                 let obj_type = obj.type_().map(|t| t.to_string()).unwrap_or_default();
                 if obj_type.contains("TreasuryCap") {
                     treasury_cap_ref = Some(obj.compute_object_reference());
@@ -642,7 +894,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .call_counter_create(self.package_id.unwrap())
                 .build_and_sign(keypair.as_ref());
-            let proxy_ref = proxy.clone();
+            let proxy_ref = execution_proxy.clone();
             futures.push(async move {
                 let (_, execution_result) = proxy_ref.execute_transaction_block(transaction).await;
                 let (obj_ref, owner) = execution_result.unwrap().created()[0].clone();
@@ -658,7 +910,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
         self.shared_counters = join_all(futures).await;
         info!("Created {} shared counters", self.shared_counters.len());
 
-        let obj = proxy
+        let obj = execution_proxy
             .get_object(SUI_RANDOMNESS_STATE_OBJECT_ID)
             .await
             .expect("Failed to get randomness object");
@@ -686,8 +938,11 @@ impl Workload<dyn Payload> for CompositeWorkload {
             );
 
             let mut futures = vec![];
-            for (idx, (gas, sender, keypair)) in self.payload_gas.iter().enumerate() {
-                let mut tx_builder = TestTransactionBuilder::new(*sender, *gas, gas_price);
+            for (idx, (gas_coins, sender, keypair)) in self.payload_gas.iter().enumerate() {
+                assert_eq!(gas_coins.len(), 1);
+                let gas = gas_coins[0];
+
+                let mut tx_builder = TestTransactionBuilder::new(*sender, gas, gas_price);
                 {
                     let builder = tx_builder.ptb_builder_mut();
                     let amount_arg = builder.pure(seed_amount).unwrap();
@@ -715,32 +970,33 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 }
                 let tx = tx_builder.build_and_sign(keypair.as_ref());
 
-                let proxy_ref = proxy.clone();
+                let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
                     let (_, execution_result) = proxy_ref.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("Seed deposit should succeed");
-                    (idx, effects.gas_object().0)
+                    (idx, effects)
                 });
             }
 
             let results = join_all(futures).await;
-            for (idx, new_gas_ref) in results {
-                self.payload_gas[idx].0 = new_gas_ref;
+            for (idx, effects) in results {
+                update_gas!(&mut self.payload_gas[idx].0[0], effects);
             }
             info!("Seeded {} address balances", self.payload_gas.len());
         }
 
         if init_requirements.contains(&InitRequirement::CreateBalancePool) {
             info!("Creating balance pool for object balance operations");
-            let (gas, sender, keypair) = self.payload_gas.first().unwrap();
+            let (multi_gas, sender, keypair) = &mut self.payload_gas[0];
+            let gas = &mut multi_gas[0];
             let tx = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .move_call(self.package_id.unwrap(), "balance_pool", "create", vec![])
                 .build_and_sign(keypair.as_ref());
 
-            let (_, execution_result) = proxy.execute_transaction_block(tx).await;
+            let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Balance pool creation should succeed");
 
-            self.payload_gas[0].0 = effects.gas_object().0;
+            update_gas!(gas, effects);
 
             let (obj_ref, owner) = effects.created()[0].clone();
             let initial_shared_version = match owner {
@@ -755,19 +1011,15 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
         if init_requirements.contains(&InitRequirement::SeedBalancePool) {
             let seed_amount = self.config.address_balance_amount * 100;
-            info!(
-                "Seeding balance pool with {} MIST",
-                seed_amount * self.payload_gas.len() as u64
-            );
+            info!("Seeding balance pool with {} MIST", seed_amount);
 
-            let (gas, sender, keypair) = self.payload_gas.first().unwrap();
+            let (multi_gas, sender, keypair) = &mut self.payload_gas[0];
+            let gas = &mut multi_gas[0];
             let (pool_id, pool_version) = self.balance_pool.unwrap();
             let mut tx_builder = TestTransactionBuilder::new(*sender, *gas, gas_price);
             {
                 let builder = tx_builder.ptb_builder_mut();
-                let amount_arg = builder
-                    .pure(seed_amount * self.payload_gas.len() as u64)
-                    .unwrap();
+                let amount_arg = builder.pure(seed_amount).unwrap();
                 let coin =
                     builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
                 let Argument::Result(coin_idx) = coin else {
@@ -798,9 +1050,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
             }
             let tx = tx_builder.build_and_sign(keypair.as_ref());
 
-            let (_, execution_result) = proxy.execute_transaction_block(tx).await;
+            let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Balance pool seed should succeed");
-            self.payload_gas[0].0 = effects.gas_object().0;
+            update_gas!(gas, effects);
             info!("Seeded balance pool");
         }
 
@@ -817,7 +1069,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     )
                     .build_and_sign(keypair.as_ref());
 
-                let (_, execution_result) = proxy.execute_transaction_block(tx).await;
+                let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
                 let effects = execution_result.expect("TestCoinCap creation should succeed");
 
                 self.init_gas[0].0 = effects.gas_object().0;
@@ -853,7 +1105,8 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         type_params: vec![],
                     }));
 
-                for (idx, (gas, sender, keypair)) in self.payload_gas.clone().iter().enumerate() {
+                for (gas, sender, keypair) in self.payload_gas.iter_mut() {
+                    let gas = &mut gas[0];
                     let mut tx_builder = TestTransactionBuilder::new(*sender, *gas, gas_price);
                     {
                         let builder = tx_builder.ptb_builder_mut();
@@ -883,9 +1136,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     }
                     let tx = tx_builder.build_and_sign(keypair.as_ref());
 
-                    let (_, execution_result) = proxy.execute_transaction_block(tx).await;
+                    let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("TEST_COIN seed deposit should succeed");
-                    self.payload_gas[idx].0 = effects.gas_object().0;
+                    update_gas!(gas, effects);
                 }
                 info!(
                     "Seeded {} TEST_COIN address balances",
@@ -895,11 +1148,75 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 info!("TestCoinCap not available - skipping TEST_COIN address balance seeding");
             }
         }
+
+        // split remaining gas coins into 4 equal parts
+        {
+            let mut futures = vec![];
+            for (idx, (gas_coins, sender, keypair)) in self.payload_gas.iter().enumerate() {
+                assert_eq!(gas_coins.len(), 1);
+                let gas = gas_coins[0];
+                let gas_obj = execution_proxy
+                    .get_object(gas.0)
+                    .await
+                    .expect("Gas object should exist");
+                // take original gas coin, split the remaining balance into 4 equal parts
+                let gas_balance = gas_obj.as_coin_maybe().unwrap().balance.value();
+                let split_amount = gas_balance / MAX_BATCH_SIZE as u64;
+
+                let mut tx_builder = TestTransactionBuilder::new(*sender, gas, gas_price);
+                {
+                    let builder = tx_builder.ptb_builder_mut();
+                    let split_amount_arg = builder.pure(split_amount).unwrap();
+                    let coin = builder.command(Command::SplitCoins(
+                        Argument::GasCoin,
+                        vec![split_amount_arg, split_amount_arg, split_amount_arg],
+                    ));
+                    let Argument::Result(coin_idx) = coin else {
+                        panic!("SplitCoins should return Result");
+                    };
+                    let new_coin_args = (0..MAX_BATCH_SIZE - 1)
+                        .map(|i| Argument::NestedResult(coin_idx, i as u16))
+                        .collect();
+                    builder.transfer_args(*sender, new_coin_args);
+                }
+                let tx = tx_builder.build_and_sign(keypair.as_ref());
+                let proxy_ref = execution_proxy.clone();
+                futures.push(async move {
+                    let (_, execution_result) = proxy_ref.execute_transaction_block(tx).await;
+                    let effects = execution_result.expect("Seed deposit should succeed");
+                    (idx, effects)
+                });
+            }
+
+            let results = join_all(futures).await;
+
+            for (idx, effects) in results {
+                let cur_gas = &mut self.payload_gas[idx];
+                assert_eq!(cur_gas.0.len(), 1);
+                update_gas!(&mut cur_gas.0[0], effects);
+                for (new_coin_ref, new_coin_owner) in effects.created().into_iter() {
+                    if let Owner::AddressOwner(new_owner_address) = new_coin_owner {
+                        assert_eq!(new_owner_address, cur_gas.1);
+                        cur_gas.0.push(new_coin_ref);
+                    } else {
+                        panic!("unexpected owner type: {:?}", new_coin_owner);
+                    }
+                }
+            }
+            for multi_gas in self.payload_gas.iter_mut() {
+                assert_eq!(multi_gas.0.len(), MAX_BATCH_SIZE);
+            }
+            info!(
+                "Split remaining gas coins into {} equal parts",
+                MAX_BATCH_SIZE
+            );
+        }
     }
 
     async fn make_test_payloads(
         &self,
-        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         info!("Creating composite workload payloads...");
@@ -913,7 +1230,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             }))
         });
 
-        let pool = Arc::new(RwLock::new(OperationPool {
+        let operation_pool = Arc::new(OperationPool {
             shared_counters: self.shared_counters.clone(),
             package_id: self.package_id.unwrap(),
             randomness_initial_shared_version: self.randomness_initial_shared_version.unwrap(),
@@ -922,21 +1239,27 @@ impl Workload<dyn Payload> for CompositeWorkload {
             test_coin_cap: self.test_coin_cap,
             test_coin_type,
             chain_identifier: self.chain_identifier.unwrap(),
-        }));
+        });
 
         let config = Arc::new(self.config.clone());
-        let base_seed: u64 = thread_rng().r#gen();
+
+        if config.address_balance_gas_probability > 0.0 && config.address_balance_amount == 0 {
+            panic!("Address balance gas probability is set to 0 but address balance amount is 0");
+        }
 
         let mut payloads: Vec<Box<dyn Payload>> = vec![];
-        for (i, gas) in self.payload_gas.iter().enumerate() {
+        for i in 0..self.num_payloads {
+            let gas = self.payload_gas[i as usize].clone();
             payloads.push(Box::new(CompositePayload {
                 config: config.clone(),
-                pool: pool.clone(),
-                gas: gas.clone(),
-                rng: SmallRng::seed_from_u64(base_seed.wrapping_add(i as u64)),
+                fullnode_proxies: fullnode_proxies.clone(),
+                pool: operation_pool.clone(),
+                gas: Mutex::new(gas),
+                current_batch_op_sets: vec![],
+                current_batch_num_conflicting_transactions: 0,
+                current_batch_gas_map: vec![],
                 system_state_observer: system_state_observer.clone(),
                 metrics: self.metrics.clone(),
-                current_op_set: OperationSet::new(),
                 nonce_counter: AtomicU32::new(0),
             }));
         }

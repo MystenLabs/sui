@@ -462,18 +462,20 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         AuthorityAggregator<NetworkAuthorityClient>,
         BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
     ) {
+        let genesis_committee = self.get_genesis().unwrap().committee();
         let network_committee = self.get_network_committee();
         let auth_clients = make_authority_clients_with_timeout_config(
             &network_committee,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
         );
-        let auth_agg = self.build_custom_clients(auth_clients.clone());
+        let auth_agg = self.build_custom_clients(&genesis_committee, auth_clients.clone());
         (auth_agg, auth_clients)
     }
 
     pub fn build_custom_clients<C: Clone>(
         self,
+        genesis_committee: &Committee,
         authority_clients: BTreeMap<AuthorityName, C>,
     ) -> AuthorityAggregator<C> {
         let committee = self.get_committee();
@@ -485,7 +487,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
 
         let committee_store = self
             .committee_store
-            .unwrap_or_else(|| Arc::new(CommitteeStore::new_for_testing(&committee)));
+            .unwrap_or_else(|| Arc::new(CommitteeStore::new_for_testing(genesis_committee)));
 
         let timeouts_config = self.timeouts_config.unwrap_or_default();
 
@@ -515,6 +517,6 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
                 )
             })
             .collect();
-        self.build_custom_clients(clients)
+        self.build_custom_clients(&committee, clients)
     }
 }

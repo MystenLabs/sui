@@ -11,6 +11,7 @@ use crate::grpc::alpha::event_service_proto::{
 use bytes::Bytes;
 use prost::Message;
 use std::str::FromStr;
+use sui_macros::fail_point_if;
 use sui_rpc::proto::sui::rpc::v2::{Bcs, Event};
 use sui_types::base_types::SuiAddress;
 
@@ -198,7 +199,8 @@ pub fn list_authenticated_events(
             break;
         }
 
-        let authenticated_event = to_authenticated_event(
+        #[allow(unused_mut)]
+        let mut authenticated_event = to_authenticated_event(
             &stream_id,
             cp,
             accumulator_version,
@@ -206,6 +208,15 @@ pub fn list_authenticated_events(
             event_idx,
             &ev,
         );
+
+        fail_point_if!("corrupt_authenticated_event", || {
+            if let Some(event) = authenticated_event.event.as_mut() {
+                if let Some(bcs) = event.contents.as_mut() {
+                    bcs.value = Some(vec![0xDE, 0xAD, 0xBE, 0xEF].into());
+                }
+            }
+        });
+
         let event_size = authenticated_event.encoded_len();
 
         if i > 0 && size_bytes + event_size > MAX_PAGE_SIZE_BYTES {

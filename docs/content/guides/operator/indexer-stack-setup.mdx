@@ -418,6 +418,30 @@ It will produce output similar to the following:
 	<ImportContent source="examples/prod-config/graphql.toml" mode="code" />
 </details>
 
+## Indexer/GraphQL Postgres-compatible Database Setup
+
+Both the indexer and GraphQL server require a Postgres-compatible database shared between them.
+
+These GraphQL request throughputs were tested against the following recommended specs:
+- 500 requests per second when the indexer is backfilling from genesis or running a restore
+- 1000 requests per second when the indexer is indexing from the network tip (~4.25 checkpoints per second)
+
+### AlloyDB Omni
+
+AlloyDB Omni recommends 8GB RAM per vCPU [link](https://docs.cloud.google.com/alloydb/omni/containers/current/docs/plan-installation#hardware). Allocating less than this results in the database closing Indexer and GraphQL connections during load testing.
+
+#### Hardware requirements
+
+- **CPU:** 6 cores
+- **Memory:** 48GB
+
+### Vanilla Postgres
+
+#### Hardware requirements
+
+- **CPU:** 6 cores
+- **Memory:** 48GB
+
 ## Related links
 
 <RelatedLink to="/concepts/data-access/graphql-indexer" />

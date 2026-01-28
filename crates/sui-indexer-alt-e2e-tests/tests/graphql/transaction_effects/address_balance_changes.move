@@ -3,7 +3,7 @@
 
 // Test send_funds and redeem_funds from sui::balance
 
-//# init --protocol-version 106 --addresses test=0x0 --accounts A B C --enable-accumulators --simulator --enable-address-balance-gas-payments
+//# init --protocol-version 108 --addresses test=0x0 --accounts A B C --enable-accumulators --simulator --enable-address-balance-gas-payments
 
 // Send 1000000000 from A to B and A to C
 //# programmable --sender A --inputs 1000000000 @B @C

@@ -58,7 +58,7 @@ impl CommitteeFixture {
     }
 
     pub fn from_network_config(network_config: &NetworkConfig) -> Self {
-        let committee = network_config.genesis.committee().unwrap();
+        let committee = network_config.genesis.committee();
         Self {
             epoch: committee.epoch,
             validators: committee

@@ -278,11 +278,31 @@ impl CommitFinalizer {
             .pending_commits
             .get_mut(index)
             .unwrap_or_else(|| panic!("Commit {} does not exist. len = {}", index, num_commits));
-        // Estimate conservatively the GC round of the blocks voting and certifying this commit's leader.
+
+        // Estimate conservatively the GC round of the blocks voting and certifying this commit's leader of round (R).
+        //
+        // The key question we try to answer: "Could the voting blocks (R+1) and certifying blocks (R+2) have seen all blocks in this commit at the time they were proposed by their respective nodes, or
+        // could they have discarded them due to their local GC round already advanced by being ahead in their commit round?"
+        //
+        // It's not possible to know the exact GC round that was used when the voting and certifying blocks were proposed, so we use the most conservative threshold.
+        // We assume that the nodes proposing those blocks had already committed the `commit_state.commit.leader.round + INDIRECT_REJECT_DEPTH` - (R+3) and we calculate the gc_round of it as the cut off.
+        //
+        // Why we use the (R+3) leader round though?
+        //
+        // According to the protocol (R+3) is the min num of rounds needed for the leader's certificate to appear in a commit. Since we can't know which exact blocks form the certificate, we assume (R+3) being this minimum
+        // limit which also aligns with the assumptions made in the indirect finalization logic.
+        //
+        // So we assume as if the blocks that certify the leader (R) had advanced to the commit (R+3), and thus any block below the `vote_gc_round`, the gc round after the (R+3) leader was committed, could have been locally gced
+        // and never been voted by the certifying blocks.
         let vote_gc_round = self
             .dag_state
             .read()
             .calculate_gc_round(commit_state.commit.leader.round + INDIRECT_REJECT_DEPTH);
+        tracing::debug!(
+            "Trying to direct finalize commit {} using vote GC round {}",
+            commit_state.commit.commit_ref,
+            vote_gc_round,
+        );
 
         // Each commit can only try direct finalization once.
         assert!(!commit_state.pending_blocks.is_empty());
@@ -509,6 +529,10 @@ impl CommitFinalizer {
     }
 
     async fn try_indirect_finalize_pending_transactions_in_first_commit(&mut self) {
+        tracing::debug!(
+            "Trying to indirectly finalize pending transactions in first commit {}",
+            self.pending_commits[0].commit.commit_ref,
+        );
         let _scope = monitored_scope(
             "CommitFinalizer::try_indirect_finalize_pending_transactions_in_first_commit",
         );
@@ -757,7 +781,7 @@ impl CommitFinalizer {
     /// (via DagState::link_causal_history()), votes against blocks in the DAG
     /// below the proposer's GC round are skipped. Implicit accept votes cannot be assumed
     /// for these GC'ed blocks. However, blocks do not carry the GC round when they are proposed.
-    /// So this function computes the highest possible GC round when proposing the current block,
+    /// So this function computes the highest possible GC round when the current block was proposed,
     /// and use it as the minimum round threshold for implicit accept votes. Even if the computed
     /// GC round here is higher than the actual GC round used by the current block, it is still
     /// correct although less efficient.
@@ -780,8 +804,9 @@ impl CommitFinalizer {
             return false;
         }
         // current_commit_index is the commit index which includes the current / voting block.
-        // When proposing the current block, the latest possible GC round is the GC round computed
-        // from the leader of the previous commit (current_commit_index - 1).
+        // When the current block was proposed, the latest/highest possible GC round that could have been used is the GC round computed
+        // from the leader of the previous commit (current_commit_index - 1). This acts as the most conservative threshold to make sure
+        // that the current block had actually "seen" the blocks within it's local GC bound.
         let (commit_index, gc_round) = *gc_rounds
             .get((current_commit_index - 1 - pending_commit_index) as usize)
             .unwrap();
@@ -1316,7 +1341,7 @@ mod tests {
                 .map(|i| {
                     let mut ancestors = ancestors.clone();
                     if i == 0 {
-                        // Link to the GC'ed block B2(2).
+                        // Link to the GC'ed block B1(3).
                         ancestors.push(block_rejected.reference());
                     }
                     create_block(r, i, ancestors, 0, vec![])
@@ -1352,8 +1377,8 @@ mod tests {
         assert_eq!(finalized_commits.len(), 4);
 
         // Check rejected transactions.
-        // B1(3) txn 1 gets rejected, even though there are has 3 blocks links to B1(3) without rejecting txn 1.
-        // This is because there are only 2 accept votes for this transaction, which is less than the quorum threshold.
+        // B1(3) all transactions get rejected as it is effectively voted only by one block from authority 3 (the block it self) and authority 0. Due to vote compression only the first block of authority 0 is counted.
+        // The block is out of GC bound for the B7(1) and B7(2) blocks which are committed by the leader of round 8. Thus no accept votes are counted from authorities 1 & 2.
         let rejected_transactions = finalized_commits[0].rejected_transactions_by_block.clone();
         assert_eq!(rejected_transactions.len(), 1);
         assert_eq!(

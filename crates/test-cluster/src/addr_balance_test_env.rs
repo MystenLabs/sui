@@ -108,7 +108,7 @@ impl TestEnv {
                 .await
                 .unwrap()
                 .into_iter()
-                .map(|(_, obj)| obj.object_ref())
+                .map(|(_, obj)| obj.compute_object_reference())
                 .collect();
 
             self.gas_objects.insert(address, gas);
