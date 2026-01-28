@@ -44,6 +44,7 @@ use crate::{
     error::{Error, SuiRpcInputError},
     with_tracing,
 };
+use base64::Engine;
 
 pub fn spawn_subscription<S, T>(
     sink: PendingSubscriptionSink,
@@ -345,19 +346,31 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         &self,
         parent_object_id: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage> {
         with_tracing!(async move {
             let limit = cap_page_limit(limit);
             self.metrics.get_dynamic_fields_limit.observe(limit as f64);
+            let cursor = match cursor {
+                Some(c) => {
+                    let decoded = base64::engine::general_purpose::STANDARD
+                        .decode(&c)
+                        .map_err(|e| Error::SuiRpcInputError(SuiRpcInputError::Base64(e.into())))?;
+                    let object_id: ObjectID = bcs::from_bytes(&decoded).unwrap();
+                    Some(object_id)
+                }
+                None => None,
+            };
             let mut data = self
                 .state
                 .get_dynamic_fields(parent_object_id, cursor, limit + 1)
                 .map_err(Error::from)?;
             let has_next_page = data.len() > limit;
             data.truncate(limit);
-            let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.0));
+            let next_cursor = data.last().cloned().and_then(|c| {
+                Some(base64::engine::general_purpose::STANDARD.encode(bcs::to_bytes(&c.0).unwrap()))
+            });
             self.metrics
                 .get_dynamic_fields_result_size
                 .observe(data.len() as f64);

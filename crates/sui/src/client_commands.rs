@@ -188,7 +188,7 @@ pub enum SuiClientCommands {
         id: ObjectID,
         /// Optional paging cursor
         #[clap(long)]
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         /// Maximum item returned per page
         #[clap(long, default_value = "50")]
         limit: usize,
@@ -2109,7 +2109,7 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
                 let df_refs = DynamicFieldOutput {
                     has_next_page: df_refs.has_next_page,
-                    next_cursor: df_refs.next_cursor,
+                    next_cursor: df_refs.next_cursor.clone(),
                     data: df_refs.data.clone(),
                 };
 
@@ -2547,7 +2547,7 @@ pub struct AddressesOutput {
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldOutput {
     pub has_next_page: bool,
-    pub next_cursor: Option<ObjectID>,
+    pub next_cursor: Option<String>,
     pub data: Vec<DynamicFieldInfo>,
 }
 

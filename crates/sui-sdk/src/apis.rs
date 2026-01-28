@@ -137,7 +137,7 @@ impl ReadApi {
     pub async fn get_dynamic_fields(
         &self,
         object_id: ObjectID,
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> SuiRpcResult<DynamicFieldPage> {
         Ok(self
