@@ -4,7 +4,6 @@
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
 use rand::random;
-use sui_types::effects::TransactionEffectsAPI;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -12,6 +11,7 @@ use std::time::Duration;
 use sui_macros::sim_test;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SuiAddress};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, TransactionData};
 use sui_types::{SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::{TestCluster, TestClusterBuilder};

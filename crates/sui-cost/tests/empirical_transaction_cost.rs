@@ -3,7 +3,6 @@
 
 use insta::assert_json_snapshot;
 use serde::{Deserialize, Serialize};
-use sui_types::effects::TransactionEffectsAPI;
 use std::{collections::BTreeMap, path::PathBuf};
 use strum_macros::Display;
 use strum_macros::EnumString;
@@ -15,6 +14,7 @@ use sui_types::base_types::{FullObjectRef, ObjectRef, SuiAddress};
 use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GAS;
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::TransactionData;

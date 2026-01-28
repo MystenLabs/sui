@@ -13,8 +13,8 @@ use rand::rngs::OsRng;
 use sui_config::node::RunWithRange;
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
 use sui_json_rpc_types::{
-    EventPage, SuiEvent, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    EventPage, SuiEvent, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -1311,7 +1311,13 @@ async fn transfer_coin(
         )
         .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
-    Ok((object_to_send.0, sender, receiver, resp.transaction.digest(), gas_object))
+    Ok((
+        object_to_send.0,
+        sender,
+        receiver,
+        resp.transaction.digest(),
+        gas_object,
+    ))
 }
 
 #[sim_test]

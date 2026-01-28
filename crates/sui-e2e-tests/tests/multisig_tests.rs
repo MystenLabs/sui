@@ -22,7 +22,6 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::{effects::TransactionEffectsAPI, error::UserInputError};
 use sui_types::messages_grpc::{SubmitTxRequest, SubmitTxResponse, SubmitTxResult};
 use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::passkey_authenticator::{PasskeyAuthenticator, to_signing_message};
@@ -44,6 +43,7 @@ use sui_types::{
     crypto::{SignatureScheme, ToFromBytes},
     error::SuiErrorKind,
 };
+use sui_types::{effects::TransactionEffectsAPI, error::UserInputError};
 use test_cluster::{TestCluster, TestClusterBuilder};
 use url::Url;
 async fn do_upgraded_multisig_test() -> SuiResult<SubmitTxResponse> {

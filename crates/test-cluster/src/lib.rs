@@ -17,9 +17,7 @@ use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_json_rpc_api::CoinReadApiClient;
-use sui_json_rpc_types::{
-    Balance, SuiTransactionBlockEffectsAPI, TransactionFilter,
-};
+use sui_json_rpc_types::{Balance, SuiTransactionBlockEffectsAPI, TransactionFilter};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};

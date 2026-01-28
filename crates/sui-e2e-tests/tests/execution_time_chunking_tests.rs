@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::identifier::Identifier;
-use sui_types::effects::TransactionEffectsAPI;
 use std::num::NonZeroU32;
 use std::time::Duration;
 use sui_config::node::ExecutionTimeObserverConfig;
@@ -16,6 +15,7 @@ use sui_protocol_config::{
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution::ExecutionTimeObservationChunkKey;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state;
@@ -214,10 +214,7 @@ async fn create_shared_counter(
         .find(|obj| obj.1.is_shared())
         .unwrap();
 
-    (
-        created_obj.0.0,
-        created_obj.0.1,
-    )
+    (created_obj.0.0, created_obj.0.1)
 }
 
 async fn send_transactions(

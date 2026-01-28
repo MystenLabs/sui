@@ -56,7 +56,8 @@ impl TestCaseImpl for RandomBeaconTest {
         );
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![response.transaction.digest()], 5).await;
+        ctx.let_fullnode_sync(vec![response.transaction.digest()], 5)
+            .await;
 
         Ok(())
     }

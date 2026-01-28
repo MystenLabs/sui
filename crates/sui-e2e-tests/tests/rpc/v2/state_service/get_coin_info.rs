@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prost_types::FieldMask;
-use sui_types::effects::TransactionEffectsAPI;
 use std::path::PathBuf;
 use std::str::FromStr;
 use sui_macros::sim_test;
@@ -15,6 +14,7 @@ use sui_rpc::proto::sui::rpc::v2::regulated_coin_metadata::CoinRegulatedState;
 use sui_rpc::proto::sui::rpc::v2::state_service_client::StateServiceClient;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::coin_registry::Currency;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::{ObjectArg, TransactionData};

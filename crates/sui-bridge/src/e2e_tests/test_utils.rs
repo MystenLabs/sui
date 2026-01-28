@@ -48,8 +48,8 @@ use std::sync::Arc;
 use sui_config::local_ip_utils::get_available_port;
 use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::{
-    SuiEvent, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionFilter,
+    SuiEvent, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionFilter,
 };
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::SuiClient;

@@ -20,7 +20,6 @@ use crate::types::{AddTokensOnEvmAction, BridgeAction};
 use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
 use alloy::primitives::{Address as EthAddress, U256};
 use alloy::providers::Provider;
-use sui_types::effects::TransactionEffectsAPI;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
@@ -28,6 +27,7 @@ use sui_types::bridge::{
     BridgeChainId, BridgeTokenMetadata, BridgeTrait, TOKEN_ID_ETH, get_bridge,
 };
 use sui_types::crypto::get_key_pair;
+use sui_types::effects::TransactionEffectsAPI;
 use tracing::info;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]

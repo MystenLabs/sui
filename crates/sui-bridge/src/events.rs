@@ -22,7 +22,6 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_json_rpc_types::SuiEvent;
-use sui_types::event::Event;
 use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress;
@@ -32,6 +31,7 @@ use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::bridge::MoveTypeCommitteeMemberRegistration;
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::ToFromBytes;
+use sui_types::event::Event;
 use sui_types::parse_sui_type_tag;
 
 // `TokendDepositedEvent` emitted in bridge.move

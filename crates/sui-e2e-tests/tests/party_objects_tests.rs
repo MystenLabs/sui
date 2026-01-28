@@ -812,9 +812,7 @@ async fn party_coin_grpc() {
     let kind = sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
 
-    cluster
-        .sign_and_execute_transaction(&tx_data)
-        .await;
+    cluster.sign_and_execute_transaction(&tx_data).await;
 
     // run a list operation to make sure the party and non-party coins show up
     let resp = ledger_service_client

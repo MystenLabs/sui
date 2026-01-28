@@ -160,7 +160,6 @@ async fn test_list_package_versions_with_upgrades() {
         .sign_and_execute_transaction(&transaction_data)
         .await;
 
-
     let new_package_id = response.get_new_package_obj().unwrap().0;
     package_ids.push(new_package_id);
 

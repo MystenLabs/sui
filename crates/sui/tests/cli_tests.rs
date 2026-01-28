@@ -52,8 +52,7 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiRawData,
-    SuiTransactionBlockEffectsAPI,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -2599,18 +2598,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     // Get the mutated objects
     let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         (
-            response
-                .effects
-                .mutated()
-                .first()
-                .unwrap()
-                .0.0,
-            response
-                .effects
-                .mutated()
-                .get(1)
-                .unwrap()
-                .0.0,
+            response.effects.mutated().first().unwrap().0.0,
+            response.effects.mutated().get(1).unwrap().0.0,
         )
     } else {
         panic!()
@@ -2935,7 +2924,8 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
             .into_iter()
             .next()
             .unwrap()
-            .0.0;
+            .0
+            .0;
         get_parsed_object_assert_existence(object_id, context).await
     } else {
         panic!("Command failed")
@@ -2989,7 +2979,8 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
             .into_iter()
             .next()
             .unwrap()
-            .0.0;
+            .0
+            .0;
         get_parsed_object_assert_existence(object_id, context).await
     } else {
         panic!("Command failed")
@@ -3056,14 +3047,13 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
             .into_iter()
             .next()
             .unwrap()
-            .0.0;
+            .0
+            .0;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
         let new_object_refs = r.effects.created();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
-            new_objects.push(
-                get_parsed_object_assert_existence(obj_ref.0.0, context).await,
-            );
+            new_objects.push(get_parsed_object_assert_existence(obj_ref.0.0, context).await);
         }
         (updated_obj, new_objects)
     } else {
@@ -3123,14 +3113,13 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
             .into_iter()
             .next()
             .unwrap()
-            .0.0;
+            .0
+            .0;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
         let new_object_refs = r.effects.created();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
-            new_objects.push(
-                get_parsed_object_assert_existence(obj_ref.0.0, context).await,
-            );
+            new_objects.push(get_parsed_object_assert_existence(obj_ref.0.0, context).await);
         }
         (updated_obj, new_objects)
     } else {
@@ -3193,14 +3182,13 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
             .into_iter()
             .next()
             .unwrap()
-            .0.0;
+            .0
+            .0;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
         let new_object_refs = r.effects.created();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
-            new_objects.push(
-                get_parsed_object_assert_existence(obj_ref.0.0, context).await,
-            );
+            new_objects.push(get_parsed_object_assert_existence(obj_ref.0.0, context).await);
         }
         (updated_obj, new_objects)
     } else {
@@ -3931,10 +3919,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
     if let SuiClientCommandResult::TransactionBlock(response) = pay_sui {
         assert!(response.effects.status().is_ok());
         // check gas coin used
-        assert_eq!(
-            response.effects.gas_object().0.0,
-            object_id1
-        );
+        assert_eq!(response.effects.gas_object().0.0, object_id1);
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -4022,10 +4007,7 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
         assert!(response.effects.status().is_ok());
         assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
-        assert_eq!(
-            response.effects.gas_object().0.0,
-            object_id1
-        );
+        assert_eq!(response.effects.gas_object().0.0, object_id1);
     } else {
         panic!("PayAllSui test failed");
     }
@@ -4075,10 +4057,7 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     // we check if object1 is owned by address 2 and if the gas object used is object_id2
     if let SuiClientCommandResult::TransactionBlock(response) = transfer {
         assert!(response.effects.status().is_ok());
-        assert_eq!(
-            response.effects.gas_object().0.0,
-            object_id2
-        );
+        assert_eq!(response.effects.gas_object().0.0, object_id2);
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -4129,10 +4108,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     // is correct
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
         assert!(response.effects.status().is_ok());
-        assert_eq!(
-            response.effects.gas_object().0.0,
-            object_id1
-        );
+        assert_eq!(response.effects.gas_object().0.0, object_id1);
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -4170,10 +4146,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     .await?;
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
         assert!(response.effects.status().is_ok());
-        assert_eq!(
-            response.effects.gas_object().0.0,
-            object_id1
-        );
+        assert_eq!(response.effects.gas_object().0.0, object_id1);
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -4252,10 +4225,7 @@ async fn test_transfer_gas_smash() -> Result<(), anyhow::Error> {
     };
 
     assert!(response.effects.status().is_ok());
-    assert_eq!(
-        response.effects.gas_object().0.0,
-        object_id0
-    );
+    assert_eq!(response.effects.gas_object().0.0, object_id0);
     let objs_refs = client
         .read_api()
         .get_owned_objects(
@@ -4480,13 +4450,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
         assert!(response.effects.status().is_ok());
         let gas_used = response.effects.gas_object().0.0;
         assert_eq!(gas_used, object_id1);
-        assert!(
-            response
-                .effects
-                .gas_cost_summary()
-                .gas_used()
-                <= gas_estimate.unwrap()
-        );
+        assert!(response.effects.gas_cost_summary().gas_used() <= gas_estimate.unwrap());
     } else {
         panic!("TransferSui test failed");
     }
