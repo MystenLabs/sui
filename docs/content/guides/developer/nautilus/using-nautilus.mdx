@@ -4,11 +4,21 @@ description: Details on how to use Nautilus with the reproducible build template
 keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
 ---
 
-[Nautilus](/guides/developer/nautilus/index.mdx) is a framework for secure and verifiable off-chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
+[Nautilus](/guides/developer/nautilus/index.mdx) is a reproducible build template and reference implementation for secure and verifiable off-chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
 
 The [Nautilus repo](https://github.com/MystenLabs/nautilus) provides scaffolding such as reproducible builds, signature formatting, and HTTPS traffic forwarding. This allows you to focus on implementing the off-chain computation logic inside the enclave.
 
-The framework also provides an on-chain template that includes the minimal smart contract code required to register a Nautilus instance and its public key. 
+The template also provides an on-chain template that includes the minimal smart contract code required to register a Nautilus instance and its public key. 
+
+:::important
+Nautilus is NOT just about running code in a TEE. The key value proposition is **on-chain verification** of computation integrity:
+
+1. PCRs (enclave measurements) are registered on-chain
+2. Enclave attestation is verified on-chain before trusting the public key
+3. Every computation result must be signature-verified on-chain
+
+Without on-chain verification, you're just running a centralized backend in AWS.
+:::
 
 ## Developer workflow 
 
@@ -43,7 +53,7 @@ Frontend code is not included in this guide.
 
 - [x] Install [Make](https://www.gnu.org/software/make/).
 
-- [x] Install the Sui CLI](/guides/developer/getting-started/sui-install.mdx).
+- [x] [Install the Sui CLI](/guides/developer/getting-started/sui-install.mdx).
 
 - [x] Download or git clone the [Nautilus repo](https://github.com/MystenLabs/nautilus).
 
@@ -76,7 +86,7 @@ aws configure sso
 
 When prompted, fill in the following fields:
 
-- SSO start URL: `https://d-926756e6a4.awsapps.com/start/#`
+- SSO start URL: `<your-sso-start-url>`
 
 - SSO region: `us-east-1`
 
@@ -419,7 +429,7 @@ aws ec2 start-instances --instance-ids <instance-id>
 To reconnect to your instance: 
 
 ```bash
-ssh -i ~/.ssh/nautilus-seint-2598.pem ec2-user@18.208.226.122
+ssh -i ~/.ssh/<your-alias>.pem ec2-user@<public-ip>
 cd nautilus
 make ENCLAVE_APP=weather-example
 make run
