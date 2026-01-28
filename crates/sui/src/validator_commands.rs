@@ -13,11 +13,13 @@ use std::{
 use sui_genesis_builder::validator_info::GenesisValidatorInfo;
 use url::{ParseError, Url};
 
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_types::{
     SUI_SYSTEM_PACKAGE_ID,
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{AuthorityPublicKey, DEFAULT_EPOCH_ID, NetworkPublicKey, Signable},
     dynamic_field::Field,
+    effects::TransactionEffectsAPI,
     multiaddr::Multiaddr,
     object::Owner,
     sui_system_state::{
@@ -42,9 +44,7 @@ use sui_bridge::sui_client::SuiClient as SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::{
     build_committee_register_transaction, build_committee_update_url_transaction,
 };
-use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_keys::{
     key_derive::generate_new_key,
     keypair_file::{
@@ -224,27 +224,27 @@ pub enum SuiValidatorCommandResponse {
     MakeValidatorInfo,
     DisplayMetadata,
     BecomeCandidate {
-        response: Option<SuiTransactionBlockResponse>,
+        response: Option<ExecutedTransaction>,
         serialized_unsigned_transaction: Option<String>,
     },
     JoinCommittee {
-        response: Option<SuiTransactionBlockResponse>,
+        response: Option<ExecutedTransaction>,
         serialized_unsigned_transaction: Option<String>,
     },
     LeaveCommittee {
-        response: Option<SuiTransactionBlockResponse>,
+        response: Option<ExecutedTransaction>,
         serialized_unsigned_transaction: Option<String>,
     },
     UpdateMetadata {
-        response: Option<SuiTransactionBlockResponse>,
+        response: Option<ExecutedTransaction>,
         serialized_unsigned_transaction: Option<String>,
     },
     UpdateGasPrice {
-        response: Option<SuiTransactionBlockResponse>,
+        response: Option<ExecutedTransaction>,
         serialized_unsigned_transaction: Option<String>,
     },
     ReportValidator {
-        response: Option<SuiTransactionBlockResponse>,
+        response: Option<ExecutedTransaction>,
         serialized_unsigned_transaction: Option<String>,
     },
     SerializedPayload(String),
@@ -253,11 +253,11 @@ pub enum SuiValidatorCommandResponse {
         serialized_data: String,
     },
     RegisterBridgeCommittee {
-        execution_response: Option<SuiTransactionBlockResponse>,
+        execution_response: Option<ExecutedTransaction>,
         serialized_unsigned_transaction: Option<String>,
     },
     UpdateBridgeCommitteeURL {
-        execution_response: Option<SuiTransactionBlockResponse>,
+        execution_response: Option<ExecutedTransaction>,
         serialized_unsigned_transaction: Option<String>,
     },
 }
@@ -655,7 +655,7 @@ impl SuiValidatorCommand {
                     let response = context.execute_transaction_must_succeed(tx).await;
                     println!(
                         "Committee registration successful. Transaction digest: {}",
-                        response.digest
+                        response.transaction.digest()
                     );
                     SuiValidatorCommandResponse::RegisterBridgeCommittee {
                         execution_response: Some(response),
@@ -733,7 +733,7 @@ impl SuiValidatorCommand {
                     let response = context.execute_transaction_must_succeed(tx).await;
                     println!(
                         "Update Bridge validator node URL successful. Transaction digest: {}",
-                        response.digest
+                        response.transaction.digest()
                     );
                     SuiValidatorCommandResponse::UpdateBridgeCommitteeURL {
                         execution_response: Some(response),
@@ -825,7 +825,7 @@ async fn update_gas_price(
     gas_price: u64,
     gas_budget: u64,
     serialize_unsigned_transaction: bool,
-) -> Result<(Option<SuiTransactionBlockResponse>, Option<String>)> {
+) -> Result<(Option<ExecutedTransaction>, Option<String>)> {
     let (_status, _summary, cap_obj_ref) = get_cap_object_ref(context, operation_cap_id).await?;
 
     // TODO: Only active/pending validators can set gas price.
@@ -851,7 +851,7 @@ async fn report_validator(
     undo_report: bool,
     gas_budget: u64,
     serialize_unsigned_transaction: bool,
-) -> Result<(Option<SuiTransactionBlockResponse>, Option<String>)> {
+) -> Result<(Option<ExecutedTransaction>, Option<String>)> {
     let (status, summary, cap_obj_ref) = get_cap_object_ref(context, operation_cap_id).await?;
 
     let validator_address = summary.sui_address;
@@ -952,7 +952,7 @@ async fn call_0x5(
     call_args: Vec<CallArg>,
     gas_budget: u64,
     serialize_unsigned_transaction: bool,
-) -> anyhow::Result<(Option<SuiTransactionBlockResponse>, Option<String>)> {
+) -> anyhow::Result<(Option<ExecutedTransaction>, Option<String>)> {
     let sender = context.active_address()?;
     let tx_data =
         construct_unsigned_0x5_txn(context, sender, function, call_args, gas_budget).await?;
@@ -966,18 +966,10 @@ async fn call_0x5(
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;
     let transaction = Transaction::from_data(tx_data, vec![signature]);
-    let sui_client = context.get_client().await?;
-    let response = sui_client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            transaction,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects(),
-            Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await
-        .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    let response = context
+        .grpc_client()?
+        .execute_transaction_and_wait_for_checkpoint(&transaction)
+        .await?;
     Ok((Some(response), None))
 }
 
@@ -1057,18 +1049,16 @@ impl Display for SuiValidatorCommandResponse {
     }
 }
 
-pub fn write_transaction_response(
-    response: &SuiTransactionBlockResponse,
-) -> Result<String, fmt::Error> {
+pub fn write_transaction_response(response: &ExecutedTransaction) -> Result<String, fmt::Error> {
     // we requested with for full_content, so the following content should be available.
-    let success = response.status_ok().unwrap();
+    let success = response.effects.status().is_ok();
     let lines = vec![
         String::from("----- Transaction Digest ----"),
-        response.digest.to_string(),
+        response.transaction.digest().to_string(),
         String::from("\n----- Transaction Data ----"),
-        response.transaction.as_ref().unwrap().to_string(),
+        serde_json::to_string_pretty(&response.transaction).unwrap(),
         String::from("----- Transaction Effects ----"),
-        response.effects.as_ref().unwrap().to_string(),
+        serde_json::to_string_pretty(&response.effects).unwrap(),
     ];
     let mut writer = String::new();
     for line in lines {
@@ -1259,7 +1249,7 @@ async fn update_metadata(
     metadata: MetadataUpdate,
     gas_budget: u64,
     serialize_unsigned_transaction: bool,
-) -> anyhow::Result<(Option<SuiTransactionBlockResponse>, Option<String>)> {
+) -> anyhow::Result<(Option<ExecutedTransaction>, Option<String>)> {
     use ValidatorStatus::*;
     match metadata {
         MetadataUpdate::Name { name } => {
