@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::DBMetrics;
+use crate::{DBMetrics, StorageType, util::ensure_database_type};
 use bincode::Options;
 use prometheus::{HistogramTimer, Registry};
 use serde::de::DeserializeOwned;
@@ -35,6 +35,7 @@ pub fn open(path: &Path, key_shape: KeyShape, db_name: String) -> Arc<Db> {
     let registry = new_db_registry(db_name);
     registry_service.add(registry.clone());
     let metrics = Metrics::new_in(&registry);
+    ensure_database_type(path, StorageType::TideHunter).expect("failed to open tidehunter db");
     let db = Db::open(path, key_shape, Arc::new(thdb_config()), metrics)
         .expect("failed to open tidehunter db");
     db.start_periodic_snapshot();
