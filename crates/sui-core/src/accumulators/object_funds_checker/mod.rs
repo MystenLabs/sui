@@ -16,16 +16,12 @@ use sui_types::{
     execution_params::FundsWithdrawStatus,
     transaction::TransactionDataAPI,
 };
-use tokio::{
-    sync::{oneshot, watch},
-    time::Instant,
-};
+use tokio::sync::{oneshot, watch};
 use tracing::{debug, instrument};
 
 use crate::{
     accumulators::funds_read::AccountFundsRead,
-    authority::{ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore},
-    execution_scheduler::ExecutionScheduler,
+    authority::authority_per_epoch_store::AuthorityPerEpochStore,
 };
 
 #[cfg(test)]
@@ -36,8 +32,17 @@ mod unit_tests;
 /// Note that there is no need to have a separate InsufficientFunds variant.
 /// If the funds are insufficient, the execution would still have to abort and rely on
 /// a rescheduling to be able to execute again.
-pub enum ObjectFundsWithdrawStatus {
+pub enum ObjectFundsCheckResult {
+    NoCheckNeeded,
     SufficientFunds,
+    NeedsRetry(ObjectFundsRetryKind),
+}
+
+pub enum ObjectFundsRetryKind {
+    InsufficientFunds,
+    // TODO: Remove this once we remove all the fastpath code.
+    // This can also be triggered in some tests today.
+    FastPathAbort,
     // The receiver will be notified when the funds are determined to be sufficient or insufficient.
     // The bool is true if the funds are sufficient, false if the funds are insufficient.
     Pending(oneshot::Receiver<FundsWithdrawStatus>),
@@ -78,20 +83,19 @@ impl ObjectFundsChecker {
     }
 
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
-    pub fn should_commit_object_funds_withdraws(
+    pub fn check_object_funds_withdraw_sufficiency(
         &self,
         certificate: &VerifiedExecutableTransaction,
+        accumulator_version: Option<SequenceNumber>,
         effects: &TransactionEffects,
-        execution_env: &ExecutionEnv,
         funds_read: &Arc<dyn AccountFundsRead>,
-        execution_scheduler: &Arc<ExecutionScheduler>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> bool {
+    ) -> ObjectFundsCheckResult {
         if effects.status().is_err() {
             // This transaction already failed. It does not matter any more
             // whether it has sufficient object funds or not.
             debug!("Transaction failed, committing effects");
-            return true;
+            return ObjectFundsCheckResult::NoCheckNeeded;
         }
         let address_funds_reservations: BTreeSet<_> = certificate
             .transaction_data()
@@ -121,77 +125,17 @@ impl ObjectFundsChecker {
         // If there are no object withdraws, we can skip checking object funds.
         if object_withdraws.is_empty() {
             debug!("No object withdraws, committing effects");
-            return true;
+            return ObjectFundsCheckResult::NoCheckNeeded;
         }
-        let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version else {
+        let Some(accumulator_version) = accumulator_version else {
             // Fastpath transactions that perform object funds withdraws
             // must wait for consensus to assign the accumulator version.
             // We cannot optimize the scheduling by processing fastpath object withdraws
             // sooner because these may get reverted, and we don't want them
             // pollute the scheduler tracking state.
-            // TODO: We could however optimize execution by caching
-            // the execution state to avoid re-execution.
-            return false;
+            return ObjectFundsCheckResult::NeedsRetry(ObjectFundsRetryKind::FastPathAbort);
         };
-        match self.check_object_funds(object_withdraws, accumulator_version, funds_read.as_ref()) {
-            // Sufficient funds, we can go ahead and commit the execution results as it is.
-            ObjectFundsWithdrawStatus::SufficientFunds => {
-                debug!("Object funds sufficient, committing effects");
-                true
-            }
-            // Currently insufficient funds. We need to wait until it reach a deterministic state
-            // before we can determine if it is really insufficient (to include potential deposits)
-            // At that time we will have to re-enqueue the transaction for execution again.
-            // Re-enqueue is handled here so the caller does not need to worry about it.
-            ObjectFundsWithdrawStatus::Pending(receiver) => {
-                let scheduler = execution_scheduler.clone();
-                let cert = certificate.clone();
-                let mut execution_env = execution_env.clone();
-                let epoch_store = epoch_store.clone();
-                tokio::task::spawn(async move {
-                    // It is possible that checkpoint executor finished executing
-                    // the current epoch and went ahead with epoch change asynchronously,
-                    // while this is still waiting.
-                    let _ = epoch_store
-                        .within_alive_epoch(async move {
-                            let tx_digest = cert.digest();
-                            match receiver.await {
-                                Ok(FundsWithdrawStatus::MaybeSufficient) => {
-                                    // The withdraw state is now deterministically known,
-                                    // so we can enqueue the transaction again and it will check again
-                                    // whether it is sufficient or not in the next execution.
-                                    // TODO: We should be able to optimize this by avoiding re-execution.
-                                    debug!(?tx_digest, "Object funds possibly sufficient");
-                                }
-                                Ok(FundsWithdrawStatus::Insufficient) => {
-                                    // Re-enqueue with insufficient funds status, so it will be executed
-                                    // in the next execution and fail through early error.
-                                    // FIXME: We need to also track the amount of gas that was used,
-                                    // so that we could charge properly in the next execution when we
-                                    // go through early error. Otherwise we would undercharge.
-                                    execution_env = execution_env.with_insufficient_funds();
-                                    debug!(?tx_digest, "Object funds insufficient");
-                                }
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Error receiving funds withdraw status: {:?}",
-                                        e
-                                    );
-                                }
-                            }
-                            scheduler.send_transaction_for_execution(
-                                &cert,
-                                execution_env,
-                                // TODO: Should the enqueue_time be the original enqueue time
-                                // of this transaction?
-                                Instant::now(),
-                            );
-                        })
-                        .await;
-                });
-                false
-            }
-        }
+        self.check_object_funds(object_withdraws, accumulator_version, funds_read.as_ref())
     }
 
     fn check_object_funds(
@@ -199,18 +143,15 @@ impl ObjectFundsChecker {
         object_withdraws: BTreeMap<AccumulatorObjId, u64>,
         accumulator_version: SequenceNumber,
         funds_read: &dyn AccountFundsRead,
-    ) -> ObjectFundsWithdrawStatus {
+    ) -> ObjectFundsCheckResult {
         let last_settled_version = *self.last_settled_version_receiver.borrow();
         if accumulator_version <= last_settled_version {
             // If the version we are withdrawing from is already settled, we have all the information
             // we need to determine if the funds are sufficient or not.
             if self.try_withdraw(funds_read, &object_withdraws, accumulator_version) {
-                return ObjectFundsWithdrawStatus::SufficientFunds;
+                return ObjectFundsCheckResult::SufficientFunds;
             } else {
-                let (sender, receiver) = oneshot::channel();
-                // unwrap is safe because the receiver is defined right above.
-                sender.send(FundsWithdrawStatus::Insufficient).unwrap();
-                return ObjectFundsWithdrawStatus::Pending(receiver);
+                return ObjectFundsCheckResult::NeedsRetry(ObjectFundsRetryKind::InsufficientFunds);
             }
         }
 
@@ -235,7 +176,7 @@ impl ObjectFundsChecker {
             // Next time during execution we will check again.
             let _ = sender.send(FundsWithdrawStatus::MaybeSufficient);
         });
-        ObjectFundsWithdrawStatus::Pending(receiver)
+        ObjectFundsCheckResult::NeedsRetry(ObjectFundsRetryKind::Pending(receiver))
     }
 
     fn try_withdraw(

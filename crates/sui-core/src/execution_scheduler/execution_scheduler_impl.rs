@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    accumulators::funds_read::AccountFundsRead,
+    accumulators::{funds_read::AccountFundsRead, object_funds_checker::ObjectFundsRetryKind},
     authority::{
         AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
         shared_object_version_manager::Schedulable,
@@ -30,6 +30,7 @@ use sui_types::{
     digests::TransactionDigest,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
+    execution_params::FundsWithdrawStatus,
     storage::InputKey,
     transaction::{
         SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
@@ -289,7 +290,7 @@ impl ExecutionScheduler {
         };
     }
 
-    pub fn send_transaction_for_execution(
+    fn send_transaction_for_execution(
         &self,
         cert: &VerifiedExecutableTransaction,
         execution_env: ExecutionEnv,
@@ -640,6 +641,58 @@ impl ExecutionScheduler {
         }
         *guard = address_funds_withdraw_scheduler;
         drop(guard);
+    }
+
+    pub fn wait_for_object_funds_and_reschedule(
+        self: &Arc<Self>,
+        retry_kind: ObjectFundsRetryKind,
+        cert: &VerifiedExecutableTransaction,
+        execution_env: &ExecutionEnv,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        let scheduler = self.clone();
+        let cert = cert.clone();
+        let mut execution_env = execution_env.clone();
+        let epoch_store = epoch_store.clone();
+        tokio::task::spawn(async move {
+            // It is possible that checkpoint executor finished executing
+            // the current epoch and went ahead with epoch change asynchronously,
+            // while this is still waiting.
+            let _ = epoch_store
+                .within_alive_epoch(async move {
+                    let tx_digest = cert.digest();
+                    match retry_kind {
+                        ObjectFundsRetryKind::FastPathAbort => {
+                            return;
+                        }
+                        ObjectFundsRetryKind::InsufficientFunds => {
+                            execution_env = execution_env.with_insufficient_funds();
+                            debug!(?tx_digest, "Object funds insufficient");
+                        }
+                        ObjectFundsRetryKind::Pending(receiver) => match receiver.await {
+                            Ok(FundsWithdrawStatus::MaybeSufficient) => {
+                                debug!(?tx_digest, "Object funds possibly sufficient");
+                            }
+                            Ok(FundsWithdrawStatus::Insufficient) => {
+                                execution_env = execution_env.with_insufficient_funds();
+                                debug!(?tx_digest, "Object funds insufficient");
+                            }
+                            Err(e) => {
+                                tracing::error!("Error receiving funds withdraw status: {:?}", e);
+                                return;
+                            }
+                        },
+                    }
+                    scheduler.send_transaction_for_execution(
+                        &cert,
+                        execution_env,
+                        // TODO: Should the enqueue_time be the original enqueue time
+                        // of this transaction?
+                        Instant::now(),
+                    );
+                })
+                .await;
+        });
     }
 
     pub fn check_execution_overload(

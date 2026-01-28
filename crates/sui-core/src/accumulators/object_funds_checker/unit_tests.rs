@@ -22,7 +22,7 @@ use sui_types::{
 };
 
 use crate::{
-    accumulators::object_funds_checker::{ObjectFundsChecker, ObjectFundsWithdrawStatus},
+    accumulators::object_funds_checker::{ObjectFundsCheckResult, ObjectFundsChecker},
     authority::{
         ExecutionEnv, shared_object_version_manager::AssignedVersions,
         test_authority_builder::TestAuthorityBuilder,
@@ -43,7 +43,7 @@ async fn test_sufficient_balance() {
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
     );
-    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
+    assert!(matches!(status, ObjectFundsCheckResult::ReadyToCommit));
 }
 
 #[tokio::test]
@@ -59,7 +59,7 @@ async fn test_insufficient_balance() {
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
     );
-    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsCheckResult::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
     // Since the withdraw version is the same as the last settled version, the scheduler can immediately
@@ -82,7 +82,7 @@ async fn test_pending_wait() {
         SequenceNumber::from_u64(2),
         funds_read.as_ref(),
     );
-    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsCheckResult::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
     checker.settle_accumulator_version(SequenceNumber::from_u64(1));
@@ -107,7 +107,7 @@ async fn test_pending_then_sufficient() {
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
     );
-    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsCheckResult::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
     funds_read.settle_funds_changes(
@@ -123,7 +123,7 @@ async fn test_pending_then_sufficient() {
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
     );
-    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
+    assert!(matches!(status, ObjectFundsCheckResult::ReadyToCommit));
 }
 
 #[tokio::test]
@@ -139,7 +139,7 @@ async fn test_pending_then_insufficient() {
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
     );
-    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsCheckResult::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
     funds_read.settle_funds_changes(
@@ -155,7 +155,7 @@ async fn test_pending_then_insufficient() {
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
     );
-    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsCheckResult::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
     let result = receiver.await.unwrap();
@@ -179,7 +179,7 @@ async fn test_multiple_withdraws() {
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
     );
-    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
+    assert!(matches!(status, ObjectFundsCheckResult::ReadyToCommit));
 }
 
 #[tokio::test]
@@ -209,7 +209,7 @@ async fn test_account_version_ahead_of_schedule() {
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
     );
-    let ObjectFundsWithdrawStatus::Pending(receiver) = result else {
+    let ObjectFundsCheckResult::Pending(receiver) = result else {
         panic!("Expected pending status");
     };
     let result = receiver.await.unwrap();
@@ -220,7 +220,7 @@ async fn test_account_version_ahead_of_schedule() {
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
     );
-    assert!(matches!(result, ObjectFundsWithdrawStatus::SufficientFunds));
+    assert!(matches!(result, ObjectFundsCheckResult::ReadyToCommit));
 }
 
 #[tokio::test]
@@ -237,7 +237,7 @@ async fn test_settle_ahead_of_schedule() {
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
     );
-    let ObjectFundsWithdrawStatus::Pending(receiver) = result else {
+    let ObjectFundsCheckResult::Pending(receiver) = result else {
         panic!("Expected pending status");
     };
     let result = receiver.await.unwrap();
@@ -262,13 +262,13 @@ async fn test_check_out_of_order() {
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
     );
-    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
+    assert!(matches!(status, ObjectFundsCheckResult::ReadyToCommit));
     let status = checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account2), 100)]),
         SequenceNumber::from_u64(1),
         funds_read.as_ref(),
     );
-    let ObjectFundsWithdrawStatus::Pending(_) = status else {
+    let ObjectFundsCheckResult::Pending(_) = status else {
         panic!("Expected pending status");
     };
     let status = checker.check_object_funds(
@@ -276,7 +276,7 @@ async fn test_check_out_of_order() {
         SequenceNumber::from_u64(0),
         funds_read.as_ref(),
     );
-    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsCheckResult::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
     let result = receiver.await.unwrap();
@@ -326,7 +326,7 @@ async fn test_should_commit_early_exits() {
 
     let effects = effects_builder.clone().build();
     // Normal path that triggers object funds check. Should not commit since insufficient funds.
-    assert!(!checker.should_commit_object_funds_withdraws(
+    assert!(!checker.check_object_funds_withdraw_sufficiency(
         &tx,
         &effects,
         &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
@@ -338,7 +338,7 @@ async fn test_should_commit_early_exits() {
         &epoch_store,
     ));
     // Fastpath path transactions that have object funds withdraws must wait.
-    assert!(!checker.should_commit_object_funds_withdraws(
+    assert!(!checker.check_object_funds_withdraw_sufficiency(
         &tx,
         &effects,
         &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(vec![], None)),
@@ -355,7 +355,7 @@ async fn test_should_commit_early_exits() {
             None,
         ))
         .build();
-    assert!(checker.should_commit_object_funds_withdraws(
+    assert!(checker.check_object_funds_withdraw_sufficiency(
         &tx,
         &effects,
         &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(

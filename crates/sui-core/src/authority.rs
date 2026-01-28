@@ -4,7 +4,7 @@
 
 use crate::accumulators::coin_reservations::CoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
-use crate::accumulators::object_funds_checker::ObjectFundsChecker;
+use crate::accumulators::object_funds_checker::{ObjectFundsCheckResult, ObjectFundsChecker};
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -2101,17 +2101,28 @@ impl AuthorityState {
 
         let object_funds_checker = self.object_funds_checker.load();
         // FIXME: effects contain merged funds changes. But we need the sum of all the withdraws per account.
-        if let Some(object_funds_checker) = object_funds_checker.as_ref()
-            && !object_funds_checker.should_commit_object_funds_withdraws(
+        if let Some(object_funds_checker) = object_funds_checker.as_ref() {
+            match object_funds_checker.check_object_funds_withdraw_sufficiency(
                 certificate,
+                execution_env.assigned_versions.accumulator_version,
                 &effects,
-                &execution_env,
                 self.get_account_funds_read(),
-                &self.execution_scheduler,
                 epoch_store,
-            )
-        {
-            return ExecutionOutput::RetryLater;
+            ) {
+                ObjectFundsCheckResult::NoCheckNeeded | ObjectFundsCheckResult::SufficientFunds => {
+                    // Fallback to continue with the commit.
+                }
+                ObjectFundsCheckResult::NeedsRetry(kind) => {
+                    self.execution_scheduler
+                        .wait_for_object_funds_and_reschedule(
+                            kind,
+                            certificate,
+                            &execution_env,
+                            epoch_store,
+                        );
+                    return ExecutionOutput::RetryLater;
+                }
+            }
         }
 
         if let Some(expected_effects_digest) = expected_effects_digest
