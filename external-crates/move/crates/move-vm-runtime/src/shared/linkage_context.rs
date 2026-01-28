@@ -3,10 +3,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
+use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_core_types::language_storage::{ModuleId, TypeTag};
 
-use crate::shared::types::{OriginalId, VersionId};
+use crate::{
+    partial_vm_error,
+    shared::types::{OriginalId, VersionId},
+};
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
 /// table, allowing the same module in storage to be run against different dependencies.
@@ -46,12 +49,10 @@ impl LinkageContext {
         version_id: VersionId,
     ) -> PartialVMResult<()> {
         if self.linkage_table.contains_key(&version_id) {
-            return Err(
-                PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
-                    .with_message(format!(
-                        "Package ID {version_id} is a key in the current linkage context"
-                    )),
-            );
+            return Err(partial_vm_error!(
+                LINKER_ERROR,
+                "Package ID {version_id} is a key in the current linkage context"
+            ));
         };
         self.linkage_table.insert(original_id, version_id);
         Ok(())
@@ -84,8 +85,7 @@ impl LinkageContext {
             .get(module_id.address())
             .map(|remapped_address| ModuleId::new(*remapped_address, module_id.name().into()))
             .ok_or_else(|| {
-                PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
-                    .with_message(format!("Did not find {module_id} in linkage table"))
+                partial_vm_error!(LINKER_ERROR, "Did not find {module_id} in linkage table")
             })
     }
 

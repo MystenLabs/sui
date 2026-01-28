@@ -23,6 +23,7 @@ use crate::{
     },
     jit::execution::ast::Type,
     natives::extensions::NativeContextExtensions,
+    partial_vm_error,
 };
 pub use move_binary_format::errors::PartialVMError;
 use move_binary_format::{errors::PartialVMResult, file_format::AbilitySet};
@@ -58,12 +59,9 @@ pub type NativeFunctionTable = Vec<(AccountAddress, Identifier, Identifier, Nati
 macro_rules! pop_arg {
     ($arguments:ident, $t:ty) => {{
         use $crate::execution::values::VMValueCast;
-        use $crate::natives::functions::{PartialVMError, StatusCode};
         match $arguments.pop_back().map(|v| VMValueCast::<$t>::cast(v)) {
             None => {
-                return Err(PartialVMError::new(
-                    StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                ));
+                return Err($crate::partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR));
             }
             Some(Err(e)) => return Err(e),
             Some(Ok(v)) => v,
@@ -201,7 +199,7 @@ impl NativeFunctions {
                 .or_insert_with(HashMap::new);
 
             if funcs.insert(func_name.into_string(), func).is_some() {
-                return Err(PartialVMError::new(StatusCode::DUPLICATE_NATIVE_FUNCTION));
+                return Err(partial_vm_error!(DUPLICATE_NATIVE_FUNCTION));
             }
         }
         Ok(Self(map))
@@ -246,8 +244,9 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
 macro_rules! debug_writeln {
     ($($toks: tt)*) => {
         writeln!($($toks)*).map_err(|_|
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("failed to write to buffer".to_string())
+            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "failed to write to buffer"
+            )
         )
     };
 }

@@ -185,10 +185,10 @@ pub fn stdlib_native_functions(
 macro_rules! inner_gas_params {
     ($gas_params:expr) => {{
         $gas_params.0.as_ref().ok_or_else(|| {
-            move_binary_format::errors::PartialVMError::new(
-                move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            $crate::partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "native function gas parameters not specified"
             )
-            .with_message("native function gas parameters not specified".to_string())
         })
     }};
 }

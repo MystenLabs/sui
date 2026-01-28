@@ -1,8 +1,8 @@
-use crate::validation::deserialization::ast::Package;
+use crate::{partial_vm_error, validation::deserialization::ast::Package};
 
 use move_binary_format::{
     CompiledModule, IndexKind,
-    errors::{Location, PartialVMError, VMResult, verification_error},
+    errors::{Location, VMResult, verification_error},
 };
 use move_core_types::{resolver::SerializedPackage, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
@@ -24,15 +24,13 @@ pub(crate) fn package(vm_config: &VMConfig, pkg: SerializedPackage) -> VMResult<
 
         // The name of the module in the mapping, and the name of the module itself should be equal
         if mname.as_ident_str() != module.self_id().name() {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!(
-                        "Module name mismatch: mapping has '{}', module has '{}'",
-                        mname.as_ident_str(),
-                        module.self_id().name()
-                    ))
-                    .finish(Location::Package(pkg.version_id)),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Module name mismatch: mapping has '{}', module has '{}'",
+                mname.as_ident_str(),
+                module.self_id().name()
+            )
+            .finish(Location::Package(pkg.version_id)));
         }
 
         if module.address() != &pkg.original_id {
@@ -46,20 +44,21 @@ pub(crate) fn package(vm_config: &VMConfig, pkg: SerializedPackage) -> VMResult<
 
         // Impossible for a package to have two modules with the same name at this point.
         if modules.insert(module.self_id(), module).is_some() {
-            return Err(PartialVMError::new(StatusCode::DUPLICATE_MODULE_NAME)
-                .with_message(format!(
-                    "Duplicate module name found: '{}'",
-                    mname.as_ident_str()
-                ))
-                .finish(Location::Package(pkg.version_id)));
+            return Err(partial_vm_error!(
+                DUPLICATE_MODULE_NAME,
+                "Duplicate module name found: '{}'",
+                mname.as_ident_str()
+            )
+            .finish(Location::Package(pkg.version_id)));
         }
     }
 
     // Packages must be non-empty
     if modules.is_empty() {
-        return Err(PartialVMError::new(StatusCode::EMPTY_PACKAGE)
-            .with_message("Empty packages are not allowed.".to_string())
-            .finish(Location::Package(pkg.version_id)));
+        return Err(
+            partial_vm_error!(EMPTY_PACKAGE, "Empty packages are not allowed.")
+                .finish(Location::Package(pkg.version_id)),
+        );
     }
 
     Ok(Package::new(

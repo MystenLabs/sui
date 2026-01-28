@@ -12,15 +12,15 @@
 // dependencies fail the linkage checks in this module.
 
 use crate::{
+    partial_vm_error,
     shared::types::{OriginalId, VersionId},
     validation::verification::ast::{Module, Package},
 };
 use move_binary_format::{
     CompiledModule,
-    errors::{Location, PartialVMError, VMResult},
+    errors::{Location, VMResult},
 };
 use move_bytecode_verifier::{cyclic_dependencies, dependencies};
-use move_core_types::vm_status::StatusCode;
 use std::collections::{BTreeMap, HashMap};
 
 /// Verifies that all packages in the provided map have valid linkage and no cyclic dependencies
@@ -103,7 +103,7 @@ fn verify_package_no_cyclic_relationships(
             } else {
                 let version_id = relocation_map
                     .get(original_module_id.address())
-                    .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))?;
+                    .ok_or_else(|| partial_vm_error!(MISSING_DEPENDENCY))?;
                 cached_packages
                     .get(version_id)
                     .and_then(|p| p.modules.get(&original_module_id.to_owned()))
@@ -111,7 +111,7 @@ fn verify_package_no_cyclic_relationships(
 
             module
                 .map(|m| m.value.immediate_dependencies())
-                .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
+                .ok_or_else(|| partial_vm_error!(MISSING_DEPENDENCY))
         })?;
 
         // Remove all visited modules from the to-visit set.
@@ -143,18 +143,17 @@ fn verify_package_valid_linkage(
                     Ok(&m.value)
                 } else {
                     let Some(version_id) = relocation_map.get(module_id.address()) else {
-                        return Err(PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                            .finish(Location::Undefined));
+                        return Err(
+                            partial_vm_error!(MISSING_DEPENDENCY).finish(Location::Undefined)
+                        );
                     };
                     let package = cached_packages.get(version_id).ok_or_else(|| {
-                        PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                            .finish(Location::Package(*version_id))
+                        partial_vm_error!(MISSING_DEPENDENCY).finish(Location::Package(*version_id))
                     })?;
                     // Question: Should this be a `Location::Module(module_id)` instead of
                     // `Package`?
                     let module = package.modules.get(&module_id.to_owned()).ok_or_else(|| {
-                        PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                            .finish(Location::Package(*version_id))
+                        partial_vm_error!(MISSING_DEPENDENCY).finish(Location::Package(*version_id))
                     })?;
                     Ok(&module.value)
                 }

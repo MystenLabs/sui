@@ -9,6 +9,7 @@ use crate::{
     },
     execution::vm::MoveVM,
     natives::{extensions::NativeExtensions, functions::NativeFunctions},
+    partial_vm_error,
     runtime::{MoveRuntime, telemetry::MoveRuntimeTelemetry},
     shared::{
         linkage_context::LinkageContext,
@@ -16,12 +17,11 @@ use crate::{
     },
     validation::verification::ast as verif_ast,
 };
-use move_binary_format::errors::{Location, PartialVMError, VMResult};
+use move_binary_format::errors::{Location, VMResult};
 use move_binary_format::file_format::CompiledModule;
 use move_core_types::{
     account_address::AccountAddress,
     resolver::{ModuleResolver, SerializedPackage},
-    vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
 use std::collections::BTreeSet;
@@ -55,12 +55,12 @@ impl InMemoryTestAdapter {
 
     pub fn get_package(&self, original_id: &OriginalId) -> VMResult<SerializedPackage> {
         let Ok([Some(pkg)]) = self.storage.get_packages_static([*original_id]) else {
-            return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!(
-                    "Cannot find package {:?} in data cache",
-                    original_id
-                ))
-                .finish(Location::Package(*original_id)));
+            return Err(partial_vm_error!(
+                LINKER_ERROR,
+                "Cannot find package {:?} in data cache",
+                original_id
+            )
+            .finish(Location::Package(*original_id)));
         };
         Ok(pkg)
     }
@@ -84,12 +84,12 @@ impl InMemoryTestAdapter {
 
             // Attempt to retrieve the package's modules from the store
             let Ok([Some(pkg)]) = self.storage.get_packages_static([package_id]) else {
-                return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                    .with_message(format!(
-                        "Cannot find {:?} in data cache when building linkage context",
-                        package_id
-                    ))
-                    .finish(Location::Undefined));
+                return Err(partial_vm_error!(
+                    LINKER_ERROR,
+                    "Cannot find {:?} in data cache when building linkage context",
+                    package_id
+                )
+                .finish(Location::Undefined));
             };
 
             // Process each module and add its dependencies to the to_process list

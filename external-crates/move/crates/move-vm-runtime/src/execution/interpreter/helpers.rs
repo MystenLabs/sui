@@ -14,11 +14,11 @@ use crate::{
         ArenaType, FunctionInstantiation, StructInstantiation, Type, TypeNodeCount, TypeSubst,
         VariantInstantiation,
     },
+    partial_vm_error,
     shared::constants::MAX_TYPE_INSTANTIATION_NODES,
 };
 
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::vm_status::StatusCode;
+use move_binary_format::errors::PartialVMResult;
 
 pub fn instantiate_generic_function(
     fun_inst: &FunctionInstantiation,
@@ -37,7 +37,7 @@ pub fn instantiate_generic_function(
     for ty in type_params.iter().chain(instantiation.iter()) {
         sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
         if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
+            return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
         }
     }
     Ok(instantiation)
@@ -81,13 +81,13 @@ fn instantiate_datatype_common(
     for ty in type_params.iter() {
         sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
         if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
+            return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
         }
     }
     for ty in ty_args.iter() {
         sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
         if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
+            return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
         }
     }
 

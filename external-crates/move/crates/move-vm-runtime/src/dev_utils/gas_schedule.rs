@@ -7,12 +7,15 @@
 //! It is important to note that the cost schedule defined in this file does not track hashing
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
-use crate::shared::{
-    gas::{GasMeter, SimpleInstruction},
-    views::{SizeConfig, TypeView, ValueView},
+use crate::{
+    partial_vm_error,
+    shared::{
+        gas::{GasMeter, SimpleInstruction},
+        views::{SizeConfig, TypeView, ValueView},
+    },
 };
 use move_binary_format::{
-    errors::{PartialVMError, PartialVMResult},
+    errors::PartialVMResult,
     file_format::{
         Bytecode, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
         FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex,
@@ -28,7 +31,6 @@ use move_core_types::{
     },
     language_storage::ModuleId,
     u256,
-    vm_status::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -170,7 +172,7 @@ impl<'a> GasStatus<'a> {
             }
             None => {
                 self.gas_left = InternalGas::new(0);
-                Err(PartialVMError::new(StatusCode::OUT_OF_GAS))
+                Err(partial_vm_error!(OUT_OF_GAS))
             }
         }
     }

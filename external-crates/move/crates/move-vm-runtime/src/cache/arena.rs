@@ -3,12 +3,11 @@
 
 #![allow(unsafe_code)]
 
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::vm_status::StatusCode;
+use move_binary_format::errors::PartialVMResult;
 
 use bumpalo::Bump;
 
-use crate::shared::vm_pointer::VMPointer;
+use crate::{partial_vm_error, shared::vm_pointer::VMPointer};
 
 // -------------------------------------------------------------------------------------------------
 // Types - Arenas for Cache Allocations
@@ -58,7 +57,7 @@ impl Arena {
                 std::mem::ManuallyDrop::new(Vec::from_raw_parts(slice.as_mut_ptr(), size, size))
             }))
         } else {
-            Err(PartialVMError::new(StatusCode::PACKAGE_ARENA_LIMIT_REACHED))
+            Err(partial_vm_error!(PACKAGE_ARENA_LIMIT_REACHED))
         }
     }
 
@@ -75,7 +74,7 @@ impl Arena {
                 std::mem::ManuallyDrop::new(Box::from_raw(slice as *mut T))
             }))
         } else {
-            Err(PartialVMError::new(StatusCode::PACKAGE_ARENA_LIMIT_REACHED))
+            Err(partial_vm_error!(PACKAGE_ARENA_LIMIT_REACHED))
         }
     }
 

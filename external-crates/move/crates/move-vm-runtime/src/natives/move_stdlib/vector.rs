@@ -10,7 +10,7 @@ use crate::{
         functions::{NativeContext, NativeFunction, NativeResult},
         make_module_natives,
     },
-    pop_arg,
+    partial_vm_error, pop_arg,
     shared::views::{SizeConfig, ValueView},
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -42,9 +42,16 @@ pub fn native_empty(
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
+    let ty = ty_args.first().ok_or_else(|| {
+        partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "native vector::empty must have one type argument"
+        )
+    })?;
+
     NativeResult::map_partial_vm_result_one(
         context.gas_used(),
-        (&ty_args[0]).try_into().and_then(Vector::empty),
+        ty.try_into().and_then(Vector::empty),
     )
 }
 
@@ -114,8 +121,10 @@ pub fn native_push_back(
     native_charge_gas_early_exit!(context, gas_params.base);
 
     let Some(e) = args.pop_back() else {
-        return Err(PartialVMError::new(StatusCode::VECTOR_OPERATION_ERROR)
-            .with_message("Internal error: missing argument in native push_back".to_string()));
+        return Err(partial_vm_error!(
+            VECTOR_OPERATION_ERROR,
+            "Internal error: missing argument in native push_back"
+        ));
     };
 
     let r = pop_arg!(args, VectorRef);
@@ -301,7 +310,7 @@ fn native_error_to_abort(err: PartialVMError) -> PartialVMError {
     let (major_status, sub_status_opt, message_opt, exec_state_opt, indices, offsets) =
         err.all_data();
     let new_err = match major_status {
-        StatusCode::VECTOR_OPERATION_ERROR => PartialVMError::new(StatusCode::ABORTED),
+        StatusCode::VECTOR_OPERATION_ERROR => partial_vm_error!(ABORTED),
         _ => PartialVMError::new(major_status),
     };
     let new_err = match sub_status_opt {
