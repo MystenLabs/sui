@@ -10,10 +10,10 @@ keywords: [ wallet, wallets, sui, playtron, cross-chain, ethereum, solana, link,
 
 SuiLink provides the following capabilities:
 
-- **Cross-chain identity verification**: Link wallets from Ethereum, Solana, and other Sui addresses to your primary Sui wallet.
+- **Cross-chain identity verification**: Link wallets from [Ethereum](/concepts/sui-for-ethereum.mdx), [Solana](/concepts/sui-for-solana.mdx), and other Sui addresses to your primary Sui wallet.
 - **Non-transferable proof of ownership**: Receive a [soulbound NFT](/guides/developer/nft/nft-soulbound.mdx) that cryptographically verifies wallet ownership.
-- **Enhanced discoverability**: Projects in the Sui ecosystem can discover you based on your activity across all connected wallets.
-- **Reward eligibility**: Unlock opportunities for cross-chain rewards, priority features, and exclusive events within the Sui network.
+- **Enhanced discoverability**: Projects in the [Sui ecosystem](https://github.com/sui-foundation/awesome-sui/tree/main) can discover you based on your activity across all connected wallets.
+- **Reward eligibility**: Unlock opportunities for cross-chain rewards, priority features, and [exclusive events](https://luma.com/sui-network) within the Sui network.
 
 ### Supported networks
 
@@ -74,6 +74,10 @@ If you are building an application on Sui, you can integrate SuiLink to verify c
 
 To retrieve a user's SuiLink connections, use the following dApp Kit SDK query:
 
+<Tabs>
+
+<TabItem label="ETH and SOL" value="ethsolquery">
+
 ```typescript
 const ethSolSuiLinks = suiClient.getOwnedObjects({
   owner: suiAddress,
@@ -85,7 +89,13 @@ const ethSolSuiLinks = suiClient.getOwnedObjects({
     showType: true,
   },
 });
+```
 
+</TabItem>
+
+<TabItem label="Sui-to-Sui" value="suitosuiquery">
+
+```typescript
 const suiSuiLinks = suiClient.getOwnedObjects({
   owner: suiAddress,
   filter: {
@@ -97,6 +107,8 @@ const suiSuiLinks = suiClient.getOwnedObjects({
   },
 });
 ```
+
+</TabItem>
 
 This returns all SuiLink NFTs owned by the specified Sui address. Each NFT contains information about the linked wallet.
 
@@ -136,7 +148,9 @@ After retrieving a user's SuiLink objects, you can verify their ownership of spe
 3. Verify the presence of the required asset
 4. Attribute benefits to the user through their Sui wallet
 
-For example, to verify Ethereum assets:
+<Tabs>
+
+<TabItem label="Ethereum" value="ethverify">
 
 ```typescript
 // Get the user's SuiLink objects
@@ -156,6 +170,78 @@ for (const ethAddress of ethereumAddresses) {
   const assets = await fetchEthereumAssets(ethAddress); // Use Alchemy or similar
   
   if (assets.includes(requiredNFT)) {
+    // Grant benefit to user through their Sui wallet
+    grantBenefit(userSuiAddress);
+  }
+}
+```
+
+</TabItem>
+
+<TabItem label="Solana" value="solverify">
+
+```typescript
+// Get the user's SuiLink objects
+const suilinks = await suiClient.getOwnedObjects({
+  owner: userSuiAddress,
+  filter: { Package: SUILINK_PACKAGE_ID_ETH_SOL },
+  options: { showContent: true, showType: true },
+});
+
+// Extract linked Solana addresses
+const solanaAddresses = suilinks.data
+  .filter(obj => {
+    const type = (obj.data?.content as any)?.type || '';
+    return type.includes('solana::Solana');
+})
+  .map(obj => {
+    const fields = (obj.data?.content as any)?.fields;
+    return fields?.network_address;
+});
+
+// Query Solana blockchain for assets at these addresses
+for (const solanaAddress of solanaAddresses) {
+  const publicKey = new PublicKey(solanaAddress);
+  const assets = await metaplex.nfts().findAllByOwner({ owner: publicKey });
+    
+  if (assets.some(nft => nft.mintAddress.toString() === requiredNFT)) {
+    // Grant benefit to user through their Sui wallet
+    grantBenefit(userSuiAddress);
+  }
+}
+```
+
+</TabItem>
+
+<TabItem label="Sui" value="suiverify">
+
+```typescript
+// Get the user's SuiLink objects
+const suilinks = await suiClient.getOwnedObjects({
+  owner: userSuiAddress,
+  filter: { Package: SUILINK_PACKAGE_ID_SUI },
+  options: { showContent: true, showType: true },
+});
+
+// Extract linked Sui addresses
+const suiAddresses = suilinks.data
+  .filter(obj => {
+    const type = (obj.data?.content as any)?.type || '';
+    return type.includes('sui::Sui');
+})
+  .map(obj => {
+    const fields = (obj.data?.content as any)?.fields;
+    return fields?.network_address;
+});
+
+// Query Sui blockchain for assets at these addresses
+for (const linkedSuiAddress of suiAddresses) {
+  const assets = await suiClient.getOwnedObjects({
+    owner: linkedSuiAddress,
+    options: { showContent: true, showType: true },
+  });
+    
+  if (assets.data.some(obj => obj.data?.objectId === requiredNFT)) {
     // Grant benefit to user through their Sui wallet
     grantBenefit(userSuiAddress);
   }
