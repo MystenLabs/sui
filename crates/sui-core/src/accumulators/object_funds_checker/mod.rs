@@ -245,10 +245,6 @@ impl ObjectFundsChecker {
         accumulator_version: SequenceNumber,
     ) -> bool {
         for (obj_id, amount) in object_withdraws {
-            // It is safe to get the latest funds here because this function is called during execution,
-            // which means this transaction is not committed yet,
-            // so the settlement transaction at the end of the same consensus commit cannot have settled yet.
-            // That is, we must be blocked by this transaction in order to make progress.
             let funds = funds_read.get_account_amount_at_version(obj_id, accumulator_version);
             // Reading inner without a top-level lock is safe because no two transactions can be withdrawing
             // from the same account at the same time.
