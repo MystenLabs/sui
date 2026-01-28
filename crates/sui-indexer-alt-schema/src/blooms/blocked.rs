@@ -34,6 +34,8 @@
 //! ```
 //!
 
+use std::collections::HashMap;
+
 use crate::blooms::hash::DoubleHasher;
 use crate::blooms::hash::set_bit;
 
@@ -41,7 +43,7 @@ use crate::blooms::hash::set_bit;
 pub struct BlockedBloomProbe {
     pub block_idx: usize,
     pub byte_offsets: Vec<usize>,
-    pub bit_masks: Vec<usize>,
+    pub bit_masks: Vec<u8>,
 }
 
 /// A generic blocked bloom filter.
@@ -99,6 +101,33 @@ impl<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>
             .take(HASHES as usize)
             .map(move |h| (h as usize) % bits_per_block);
         (block_idx, bit_iter)
+    }
+
+    /// Probes for membership checks, returning block index, byte offsets and bit masks.
+    ///
+    /// Used for SQL `bloom_contains` checks: for each (byte_offset, bit_mask) pair,
+    /// verifies `(bloom_filter[byte_offset] & bit_mask) == bit_mask`.
+    pub fn probe(
+        values: impl IntoIterator<Item = impl AsRef<[u8]>>,
+        seed: u128,
+    ) -> Vec<BlockedBloomProbe> {
+        let mut by_block: HashMap<usize, (Vec<usize>, Vec<u8>)> = HashMap::new();
+        for value in values {
+            let (block_idx, bits) = Self::hash(value.as_ref(), seed);
+            let entry = by_block.entry(block_idx).or_default();
+            for b in bits {
+                entry.0.push(b / 8);
+                entry.1.push(1u8 << (b % 8));
+            }
+        }
+        by_block
+            .into_iter()
+            .map(|(block_idx, (byte_offsets, bit_masks))| BlockedBloomProbe {
+                block_idx,
+                byte_offsets,
+                bit_masks,
+            })
+            .collect()
     }
 }
 
