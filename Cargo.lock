@@ -8672,6 +8672,7 @@ dependencies = [
  "insta",
  "move-binary-format",
  "move-core-types",
+ "move-symbol-pool",
  "packed_struct",
  "serde",
  "sha2 0.9.9",
