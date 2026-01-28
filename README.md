@@ -55,32 +55,26 @@ Components unique to the Sui documentation are as follows:
 ├── client
 │   ├── pushfeedback-toc.js
 ├── components/
-│   ├── Cards/
-│   ├── ExampleImport/
-│   ├── Glossary/
-│   ├── ImportContent/
-│   ├── RelatedLink/
-│   ├── SidebarIframe/
-│   ├── Snippet/
-│   ├── ThemeToggle/
-│   └── UnsafeLink/
+│   └── API
+│   └── BetaTag
+│   └── EffortBox
+│   └── GetStartedLink
+│   └── GraphqlBetaLink
+│   └── HomepageFeatures
+│   └── Protocol
+│   └── ProtocolConfig
 ├── css/
-│   └── details.css
+│   └── custom.css
+│   └── fonts.css
 ├── js/
-│   ├── convert-release-notes.js
-│   ├── tabs-md.client.js
-│   └── utils.js
+│   └── convert-awesome-sui.mjs
+│   └── update-cli-output.js
 ├── plugins/
-│   ├── descriptions/
-│   ├── inject-code/
-│   ├── plausible/
-│   ├── tabs-md-client/
-│   │   └── index.mjs
-│   └── remark-glossary.js
-└── rehype/
-    ├── rehype-fix-anchor-urls.mjs
-    ├── rehype-raw-only.mjs
-    └── rehype-tabs.mjs
+│   └── askcookbook
+│   └── betatag
+│   └── effort
+│   └── framework
+│   └── protocol
 ```
 
 ## Walrus-specific components
