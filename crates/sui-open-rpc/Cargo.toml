@@ -10,7 +10,6 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-base64.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
