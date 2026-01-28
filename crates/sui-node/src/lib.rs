@@ -1542,11 +1542,26 @@ impl SuiNode {
         consensus_adapter: Arc<ConsensusAdapter>,
         prometheus_registry: &Registry,
     ) -> Result<SpawnOnce> {
+        use sui_core::dynamic_rpc_validator::{DynamicRpcValidator, DynamicValidatorMetrics};
+
+        // Create dynamic RPC validator if configured
+        let dynamic_validator = if config.dynamic_rpc_validator_config.library_path.is_some() {
+            let validator_metrics = Arc::new(DynamicValidatorMetrics::new(prometheus_registry));
+            Some(Arc::new(DynamicRpcValidator::new(
+                config.dynamic_rpc_validator_config.library_path.clone(),
+                config.dynamic_rpc_validator_config.check_interval(),
+                validator_metrics,
+            )))
+        } else {
+            None
+        };
+
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
             config.policy_config.clone().map(|p| p.client_id_source),
+            dynamic_validator,
         );
 
         let mut server_conf = mysten_network::config::Config::new();
