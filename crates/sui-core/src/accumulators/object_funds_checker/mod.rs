@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use mysten_common::assert_reachable;
 use parking_lot::RwLock;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
@@ -136,6 +137,7 @@ impl ObjectFundsChecker {
         match self.check_object_funds(object_withdraws, accumulator_version, funds_read.as_ref()) {
             // Sufficient funds, we can go ahead and commit the execution results as it is.
             ObjectFundsWithdrawStatus::SufficientFunds => {
+                assert_reachable!("object funds sufficient");
                 debug!("Object funds sufficient, committing effects");
                 true
             }
@@ -157,6 +159,7 @@ impl ObjectFundsChecker {
                             let tx_digest = cert.digest();
                             match receiver.await {
                                 Ok(FundsWithdrawStatus::MaybeSufficient) => {
+                                    assert_reachable!("object funds maybe sufficient");
                                     // The withdraw state is now deterministically known,
                                     // so we can enqueue the transaction again and it will check again
                                     // whether it is sufficient or not in the next execution.
@@ -164,6 +167,7 @@ impl ObjectFundsChecker {
                                     debug!(?tx_digest, "Object funds possibly sufficient");
                                 }
                                 Ok(FundsWithdrawStatus::Insufficient) => {
+                                    assert_reachable!("object funds insufficient");
                                     // Re-enqueue with insufficient funds status, so it will be executed
                                     // in the next execution and fail through early error.
                                     // FIXME: We need to also track the amount of gas that was used,

@@ -2111,6 +2111,7 @@ impl AuthorityState {
                 epoch_store,
             )
         {
+            assert_reachable!("retry object withdraw later");
             return ExecutionOutput::RetryLater;
         }
 
