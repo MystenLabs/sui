@@ -7,6 +7,8 @@ use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
@@ -21,6 +23,9 @@ use crate::metrics::RpcMetrics;
 /// A bundle of different interfaces to data, for use by JSON-RPC method implementations.
 #[derive(Clone)]
 pub(crate) struct Context {
+    /// Access to the Consistent Store.
+    consistent_reader: ConsistentReader,
+
     /// Direct access to the database, for running SQL queries.
     pg_reader: PgReader,
 
@@ -54,6 +59,7 @@ impl Context {
         bigtable_instance: Option<String>,
         db_args: DbArgs,
         bigtable_args: BigtableArgs,
+        consistent_reader_args: ConsistentReaderArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
@@ -81,7 +87,12 @@ impl Context {
             config.package_resolver.clone(),
         ));
 
+        let consistent_reader =
+            ConsistentReader::new(Some("jsonrpc_consistent"), consistent_reader_args, registry)
+                .await?;
+
         Ok(Self {
+            consistent_reader,
             pg_reader,
             pg_loader,
             kv_loader,
@@ -89,6 +100,11 @@ impl Context {
             metrics,
             config: Arc::new(config),
         })
+    }
+
+    /// For performing reads against the Consistent Store.
+    pub(crate) fn consistent_reader(&self) -> &ConsistentReader {
+        &self.consistent_reader
     }
 
     /// For performing arbitrary SQL queries on the Postgres db.
@@ -101,9 +117,8 @@ impl Context {
         &self.pg_loader
     }
 
-    /// For performing point look-ups on the kv store.
-    /// Depends on the configuration of the indexer, the kv store may be backed by
-    /// eitherBigtable or Postgres.
+    /// For performing point look-ups on the kv store. Depends on the configuration of the indexer,
+    /// the kv store may be backed by either Bigtable or Postgres.
     pub(crate) fn kv_loader(&self) -> &KvLoader {
         &self.kv_loader
     }
