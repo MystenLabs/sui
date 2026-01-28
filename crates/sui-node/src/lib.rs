@@ -1562,6 +1562,20 @@ impl SuiNode {
         consensus_adapter: Arc<ConsensusAdapter>,
         prometheus_registry: &Registry,
     ) -> Result<SpawnOnce> {
+        use sui_core::dynamic_rpc_validator::{DynamicRpcValidator, DynamicValidatorMetrics};
+
+        // Create dynamic RPC validator if configured
+        let dynamic_validator = if config.dynamic_rpc_validator_config.library_path.is_some() {
+            let validator_metrics = Arc::new(DynamicValidatorMetrics::new(prometheus_registry));
+            Some(Arc::new(DynamicRpcValidator::new(
+                config.dynamic_rpc_validator_config.library_path.clone(),
+                config.dynamic_rpc_validator_config.check_interval(),
+                validator_metrics,
+            )))
+        } else {
+            None
+        };
+
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
@@ -1576,7 +1590,8 @@ impl SuiNode {
         server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
         server_conf.load_shed = config.grpc_load_shed;
         let mut server_builder =
-            ServerBuilder::from_config(&server_conf, GrpcMetrics::new(prometheus_registry));
+            ServerBuilder::from_config(&server_conf, GrpcMetrics::new(prometheus_registry))
+                .with_dynamic_validator(dynamic_validator);
 
         server_builder = server_builder.add_service(ValidatorServer::new(validator_service));
 

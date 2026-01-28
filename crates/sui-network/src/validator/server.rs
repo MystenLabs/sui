@@ -33,6 +33,7 @@ pub struct ServerBuilder<M: MetricsCallbackProvider = DefaultMetricsCallbackProv
     metrics_provider: M,
     router: tonic::service::Routes,
     health_reporter: tonic_health::server::HealthReporter,
+    dynamic_validator: Option<std::sync::Arc<sui_dynamic_rpc_validator::DynamicRpcValidator>>,
 }
 
 impl<M: MetricsCallbackProvider> ServerBuilder<M> {
@@ -45,11 +46,22 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
             metrics_provider,
             router,
             health_reporter,
+            dynamic_validator: None,
         }
     }
 
     pub fn health_reporter(&self) -> tonic_health::server::HealthReporter {
         self.health_reporter.clone()
+    }
+
+    /// Set the dynamic RPC validator for request validation.
+    /// When set, all incoming gRPC requests will be validated before reaching handlers.
+    pub fn with_dynamic_validator(
+        mut self,
+        validator: Option<std::sync::Arc<sui_dynamic_rpc_validator::DynamicRpcValidator>>,
+    ) -> Self {
+        self.dynamic_validator = validator;
+        self
     }
 
     /// Add a new service to this Server.
@@ -91,7 +103,10 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
             Some(HeaderValue::from_str(path).unwrap())
         }
 
+        let validation_layer =
+            super::validation_layer::ValidationLayer::new(self.dynamic_validator);
         let limiting_layers = ServiceBuilder::new()
+            .layer(validation_layer)
             .option_layer(
                 self.config
                     .load_shed

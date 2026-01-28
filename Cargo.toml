@@ -115,6 +115,7 @@ members = [
   "crates/sui-data-store",
   "crates/sui-default-config",
   "crates/sui-display",
+  "crates/sui-dynamic-rpc-validator",
   "crates/sui-e2e-tests",
   "crates/sui-enum-compat-util",
   "crates/sui-faucet",
@@ -392,6 +393,7 @@ hex = "0.4.3"
 hex-literal = "0.3.4"
 http = "1"
 http-body = "1"
+http-body-util = "0.1"
 humantime = "2.1.0"
 hyper = "1"
 hyper-util = "0.1.6"
@@ -700,6 +702,7 @@ sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-data-store = { path = "crates/sui-data-store" }
 sui-default-config = { path = "crates/sui-default-config" }
 sui-display = { path = "crates/sui-display" }
+sui-dynamic-rpc-validator = { path = "crates/sui-dynamic-rpc-validator" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
