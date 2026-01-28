@@ -19,7 +19,7 @@ function escapeRegex(s) {
 }
 
 function buildMatcher(entries) {
-    // Build alternation, longest-first to prefer “JSON API” over “API”
+    // Build alternation, longest-first to prefer "JSON API" over "API"
     const terms = entries.flatMap((e) => [e.label, ...(e.aliases || [])]).filter(Boolean);
 
     // De-duplicate (case-insensitive)
@@ -35,7 +35,7 @@ function buildMatcher(entries) {
 
     unique.sort((a, b) => b.length - a.length);
 
-    // \b isn’t great for Unicode; use custom boundaries: start|non-word on left/right
+    // \b isn't great for Unicode; use custom boundaries: start|non-word on left/right
     // Also allow inside parentheses/quotes by treating those as boundaries too.
     const pattern = unique.map(escapeRegex).join("|");
     // If no entries, make a regex that never matches
@@ -43,7 +43,7 @@ function buildMatcher(entries) {
 
     // Left boundary: start or not letter/number/underscore
     // Right boundary: end or not letter/number/underscore
-    const regex = new RegExp(`(^|[^\\p{L}\\p{N}_])(${pattern})(?=([^\\p{L}\\p{N}_]|$))`, "giu");
+    const regex = new RegExp(`(^|[^\\p{L}\\p{N}_])(${pattern})(?=[^\\p{L}\\p{N}_]|$)`, "giu");
     return { regex, keys: unique };
 }
 
@@ -77,7 +77,7 @@ function loadGlossary(glossaryPath) {
  * @param {{glossaryFile?: string}} options
  */
 function remarkGlossary(options = {}) {
-    console.log('>>> remarkGlossary plugin loaded'); // Add this
+    console.log(">>> remarkGlossary plugin loaded");
 
     const glossaryFile = options.glossaryFile || "static/glossary.json";
     const absPath = path.isAbsolute(glossaryFile)
@@ -97,11 +97,9 @@ function remarkGlossary(options = {}) {
     // Nodes we should NOT process beneath
     const BLOCK_SKIP = new Set(["code", "pre"]);
     const INLINE_SKIP = new Set(["inlineCode", "link", "linkReference"]);
-    // If author already used <Term>, skip inside it
-    const MDX_SKIP = new Set(["mdxJsxTextElement", "mdxJsxFlowElement"]);
 
     return function transformer(tree) {
-        console.log('>>> Processing file with', entries.length, 'glossary entries');
+        console.log(">>> Processing file with", entries.length, "glossary entries");
 
         // Track which terms have been processed on this page (case-insensitive)
         const processedTerms = new Set();
@@ -127,16 +125,25 @@ function remarkGlossary(options = {}) {
             /** @type {any[]} */
             const nextChildren = [];
 
+            // Reset regex lastIndex for each node
+            regex.lastIndex = 0;
+
             // Iterate all matches while preserving unmatched segments
             while ((m = regex.exec(value)) !== null) {
                 const [full, leftBoundary, term] = m;
-                const start = m.index;
-                const before = value.slice(last, start);
-                if (before)
-                    nextChildren.push({
-                        type: "text",
-                        value: before + (leftBoundary || ""),
-                    });
+                const matchStart = m.index;
+                const termStart = matchStart + (leftBoundary?.length || 0);
+
+                // Text before the match (not including leftBoundary)
+                const before = value.slice(last, matchStart);
+                if (before) {
+                    nextChildren.push({ type: "text", value: before });
+                }
+
+                // Add leftBoundary as separate text if present
+                if (leftBoundary) {
+                    nextChildren.push({ type: "text", value: leftBoundary });
+                }
 
                 const key = String(term).toLowerCase();
                 const entry = byKey.get(key);
@@ -162,8 +169,6 @@ function remarkGlossary(options = {}) {
                             name: "Term",
                             attributes: [
                                 { type: "mdxJsxAttribute", name: "lookup", value: entry.label },
-                                // You can also add data attributes if you want:
-                                // {type: 'mdxJsxAttribute', name: 'data-term', value: entry.label},
                             ],
                             children: [{ type: "text", value: term }],
                         });
@@ -172,7 +177,9 @@ function remarkGlossary(options = {}) {
                         nextChildren.push({ type: "text", value: term });
                     }
                 }
-                last = start + full.length;
+
+                // Move past the full match
+                last = matchStart + full.length;
             }
 
             if (last === 0) return; // no matches, keep node as-is
