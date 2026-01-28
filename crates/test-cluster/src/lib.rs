@@ -18,12 +18,12 @@ use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_json_rpc_api::CoinReadApiClient;
 use sui_json_rpc_types::{
-    Balance, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    TransactionFilter,
+    Balance, SuiTransactionBlockEffectsAPI, TransactionFilter,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::apis::QuorumDriverApi;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
@@ -46,6 +46,7 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::messages_grpc::{
@@ -599,7 +600,7 @@ impl TestCluster {
     pub async fn sign_and_execute_transaction(
         &self,
         tx_data: &TransactionData,
-    ) -> SuiTransactionBlockResponse {
+    ) -> ExecutedTransaction {
         let tx = self.wallet.sign_transaction(tx_data).await;
         self.execute_transaction(tx).await
     }
@@ -803,7 +804,7 @@ impl TestCluster {
     /// Also expects the effects status to be ExecutionStatus::Success.
     /// This function is recommended for transaction execution since it most resembles the
     /// production path.
-    pub async fn execute_transaction(&self, tx: Transaction) -> SuiTransactionBlockResponse {
+    pub async fn execute_transaction(&self, tx: Transaction) -> ExecutedTransaction {
         self.wallet.execute_transaction_must_succeed(tx).await
     }
 
@@ -930,13 +931,10 @@ impl TestCluster {
             .await
             .transfer_sui(Some(amount), receiver)
             .build();
-        let effects = self
-            .sign_and_execute_transaction(&tx)
-            .await
-            .effects
-            .unwrap();
-        assert_eq!(&SuiExecutionStatus::Success, effects.status());
-        effects.created().first().unwrap().object_id()
+        let effects = self.sign_and_execute_transaction(&tx).await.effects;
+        assert!(effects.status().is_ok());
+        // assert_eq!(&SuiExecutionStatus::Success, effects.status());
+        effects.created().first().unwrap().0.0
     }
 
     pub async fn get_sui_balance(&self, address: SuiAddress) -> Balance {

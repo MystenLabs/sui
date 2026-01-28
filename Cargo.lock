@@ -17126,6 +17126,7 @@ dependencies = [
  "shared-crypto",
  "sui-genesis-builder",
  "sui-move-build",
+ "sui-rpc-api",
  "sui-sdk",
  "sui-types",
 ]
@@ -17759,6 +17760,7 @@ dependencies = [
  "sui-macros",
  "sui-node",
  "sui-protocol-config",
+ "sui-rpc-api",
  "sui-sdk",
  "sui-simulator",
  "sui-swarm",

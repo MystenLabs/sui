@@ -243,7 +243,6 @@ async fn run_actual_costs()
             .sign_and_execute_transaction(&tx)
             .await
             .effects
-            .unwrap()
             .gas_cost_summary()
             .clone();
 

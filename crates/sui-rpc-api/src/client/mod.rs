@@ -406,34 +406,46 @@ impl ExecutedTransaction {
             ExecutedTransaction::path_builder().timestamp(),
         ])
     }
-    // pub fn get_new_package_obj(&self) -> Option<ObjectRef> {
-    //     self.object_changes.as_ref().and_then(|changes| {
-    //         changes
-    //             .iter()
-    //             .find(|change| matches!(change, ObjectChange::Published { .. }))
-    //             .map(|change| change.object_ref())
-    //     })
-    // }
 
-    // pub fn get_new_package_upgrade_cap(&self) -> Option<ObjectRef> {
-    //     self.object_changes.as_ref().and_then(|changes| {
-    //         changes
-    //             .iter()
-    //             .find(|change| {
-    //                 matches!(change, ObjectChange::Created {
-    //                     owner: Owner::AddressOwner(_),
-    //                     object_type: StructTag {
-    //                         address: SUI_FRAMEWORK_ADDRESS,
-    //                         module,
-    //                         name,
-    //                         ..
-    //                     },
-    //                     ..
-    //                 } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
-    //             })
-    //             .map(|change| change.object_ref())
-    //     })
-    // }
+    pub fn get_new_package_obj(&self) -> Option<sui_types::base_types::ObjectRef> {
+        use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+
+        self.changed_objects
+            .iter()
+            .find(|o| matches!(o.output_state(), OutputObjectState::PackageWrite))
+            .and_then(|o| {
+                let id = o.object_id().parse().ok()?;
+                let version = o.output_version().into();
+                let digest = o.output_digest().parse().ok()?;
+                Some((id, version, digest))
+            })
+    }
+
+    pub fn get_new_package_upgrade_cap(&self) -> Option<sui_types::base_types::ObjectRef> {
+        use sui_rpc::proto::sui::rpc::v2::changed_object::IdOperation;
+        use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+        use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
+
+        const UPGRADE_CAP: &str = "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap";
+
+        self.changed_objects
+            .iter()
+            .find(|o| {
+                matches!(o.id_operation(), IdOperation::Created)
+                    && matches!(o.output_state(), OutputObjectState::ObjectWrite)
+                    && matches!(
+                        o.output_owner().kind(),
+                        OwnerKind::Address | OwnerKind::ConsensusAddress
+                    )
+                    && o.object_type() == UPGRADE_CAP
+            })
+            .and_then(|o| {
+                let id = o.object_id().parse().ok()?;
+                let version = o.output_version().into();
+                let digest = o.output_digest().parse().ok()?;
+                Some((id, version, digest))
+            })
+    }
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
