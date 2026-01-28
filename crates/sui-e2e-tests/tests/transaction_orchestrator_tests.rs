@@ -142,45 +142,37 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     // Stop 2 validators and we lose quorum
     test_cluster.stop_node(&validator_addresses[0]);
     test_cluster.stop_node(&validator_addresses[1]);
+    // TODO: stop the fullnode as well, after we fix releasing the DB handles when stopping the fullnode.
 
     let txn = txns.swap_remove(0);
-    // Expect tx to fail
-    execute_with_orchestrator(
-        &orchestrator,
-        txn.clone(),
-        ExecuteTransactionRequestType::WaitForLocalExecution,
+    // Expect tx to timeout.
+    let result = timeout(
+        Duration::from_secs(10),
+        execute_with_orchestrator(
+            &orchestrator,
+            txn.clone(),
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        ),
     )
-    .await
-    .unwrap_err();
+    .await;
+    assert!(result.is_err());
 
-    // Because the tx did not go through, we expect to see it in the WAL log if it
-    // was submitted via quorum driver. Transaction driver submitted tx would have
-    // been removed from wal on timeout/error.
+    // Because the tx was inflight, we expect to see it in the WAL log.
     let pending_txes: Vec<_> = orchestrator
         .load_all_pending_transactions_in_test()?
         .into_iter()
         .map(|t| t.into_inner())
         .collect();
-    if !pending_txes.is_empty() {
-        assert_eq!(pending_txes, vec![txn.clone()]);
-    }
+    assert_eq!(pending_txes, vec![txn.clone()]);
 
-    // Bring up 1 validator, we obtain quorum again and tx should succeed
+    // Bring up 1 validator so there's quorum again.
     test_cluster.start_node(&validator_addresses[0]).await;
     tokio::task::yield_now().await;
-    execute_with_orchestrator(
-        &orchestrator,
-        txn,
-        ExecuteTransactionRequestType::WaitForLocalExecution,
-    )
-    .await
-    .unwrap();
 
-    // TODO: wal erasing is done in the loop handling effects, so may have some delay.
-    // However, once the refactoring is completed the wal removal will be done before
-    // response is returned and we will not need the sleep.
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-    // The tx should be erased in wal log.
+    // The transaction should eventually be retried and succeed now that quorum is restored.
+    // Wait for the WAL to be cleared.
+    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
     let pending_txes = orchestrator.load_all_pending_transactions_in_test()?;
     assert!(pending_txes.is_empty());
     assert!(orchestrator.empty_pending_tx_log_in_test());
