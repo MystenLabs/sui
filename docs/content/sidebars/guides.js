@@ -120,7 +120,7 @@ const guides = [
             'guides/developer/transactions/sponsor-txn',
             {
             type: 'category',
-            label: 'Transaction authentication',
+            label: 'Transaction Authentication',
               items: [
               'guides/developer/transactions/transaction-auth/intent-signing',
               'guides/developer/transactions/transaction-auth/multisig',
