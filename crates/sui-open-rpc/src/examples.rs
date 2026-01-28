@@ -1169,11 +1169,13 @@ impl RpcExampleProvider {
             .map(Into::into)
             .collect::<Vec<_>>();
 
-        let next_cursor = ObjectID::new(self.rng.r#gen());
+        let next_cursor =
+            fastcrypto::encoding::Base64::from_bytes(&ObjectID::new(self.rng.r#gen()).into_bytes())
+                .encoded();
 
         let page = DynamicFieldPage {
             data: dynamic_fields,
-            next_cursor: Some(next_cursor),
+            next_cursor: Some(next_cursor.clone()),
             has_next_page: true,
         };
 
@@ -1183,7 +1185,7 @@ impl RpcExampleProvider {
                 "Gets dynamic fields for the object the request provides in a paginated list of `limit` dynamic field results per page. The default limit is 50.",
                 vec![
                     ("parent_object_id", json!(object_id)),
-                    ("cursor", json!(ObjectID::new(self.rng.r#gen()))),
+                    ("cursor", json!(next_cursor)),
                     ("limit", json!(3)),
                 ],
                 json!(page),
