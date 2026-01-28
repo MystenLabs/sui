@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 110
+version: 111
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -48,6 +48,7 @@ feature_flags:
   enable_poseidon: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
+  enable_group_ops_native_function_msm: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
   enable_nitro_attestation_all_nonzero_pcrs_parsing: true
@@ -72,6 +73,7 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
+  enable_vdf: true
   record_consensus_determined_version_assignments_in_prologue: true
   record_consensus_determined_version_assignments_in_prologue_v2: true
   fresh_vm_on_framework_upgrade: true
@@ -112,6 +114,7 @@ feature_flags:
   type_tags_in_object_runtime: true
   enable_accumulators: true
   create_root_accumulator_object: true
+  enable_authenticated_event_streams: true
   enable_address_balance_gas_payments: true
   enable_multi_epoch_transaction_expiration: true
   enable_ptb_execution_v2: true
@@ -123,6 +126,7 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
+  include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true
@@ -138,11 +142,13 @@ feature_flags:
   include_cancelled_randomness_txns_in_prologue: true
   address_aliases: true
   fix_checkpoint_signature_mapping: true
+  enable_object_funds_withdraw: true
   consensus_skip_gced_blocks_in_direct_finalization: true
   gas_rounding_halve_digits: true
   flexible_tx_context_positions: true
   disable_entry_point_signature_check: true
   restrict_hot_or_not_entry_functions: true
+  split_checkpoints_in_consensus_handler: true
   consensus_always_accept_system_transactions: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
@@ -385,6 +391,8 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
+vdf_verify_vdf_cost: 1500
+vdf_hash_to_input_cost: 100
 nitro_attestation_parse_base_cost: 2650
 nitro_attestation_parse_cost_per_byte: 50
 nitro_attestation_verify_base_cost: 2481600

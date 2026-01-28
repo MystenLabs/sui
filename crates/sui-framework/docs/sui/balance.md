@@ -494,6 +494,14 @@ accumulator.
 ## Function `withdraw_funds_from_object`
 
 Create a <code>Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;</code> from an object to withdraw funds from it.
+Note: This function always succeeds, regardless of amount withdrawn. If the object
+balance is overdrawn during the course of the transaction, the transaction will be
+aborted after Move execution has completed. This means that it is not possible to
+detect overdraws at the time of withdrawal.
+
+Note that detecting overdraw is not robustly possible even using <code><a href="../sui/balance.md#sui_balance_settled_funds_value">settled_funds_value</a></code>,
+since that value does not include any unsettled withdrawals made by prior transactions
+from the current consensus commit.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_withdraw_funds_from_object">withdraw_funds_from_object</a>&lt;T&gt;(obj: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, <a href="../sui/balance.md#sui_balance_value">value</a>: u64): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;
@@ -549,9 +557,8 @@ the current consensus commit. Can read either address-owned or object-owned bala
 
 ## Function `pending_funds_deposits`
 
-Read the total pending deposits for the given address within the current transaction.
-This is the sum of all <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;</code> values sent via <code><a href="../sui/balance.md#sui_balance_send_funds">send_funds</a></code> to the address during this
-transaction, before they are settled.
+Read the value of the sum of the total pending deposits for type T, to the given address,
+sent by the current transaction up to this point in time.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_pending_funds_deposits">pending_funds_deposits</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64
@@ -576,9 +583,8 @@ transaction, before they are settled.
 
 ## Function `pending_funds_withdrawals`
 
-Read the total pending withdrawals for the given address within the current transaction.
-This is the sum of all <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;</code> values being withdrawn from the address during this
-transaction, before they are settled.
+Read the value of the sum of the total pending withdrawals for type T, from the given address,
+withdrawn by the current transaction up to this point in time.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_pending_funds_withdrawals">pending_funds_withdrawals</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64
@@ -603,9 +609,15 @@ transaction, before they are settled.
 
 ## Function `positive_pending_funds_value`
 
-Read the expected balance for the given address after the current transaction settles.
-Returns <code>Some(settled + deposits - withdrawals)</code> if the result is non-negative,
-or <code>None</code> if the result would underflow (withdrawals exceed settled + deposits).
+Read the value of the pending balance of type T, for the given address,
+up to this point in time. The returned value is the sum of the settled balance
+plus pending deposits, minus pending withdrawals.
+
+The returned value does not include and deposits or withdrawals made by
+other concurrently executing transactions.
+
+Because object withdrawals always appear to succeed in Move, this value can
+be negative, in which case the function returns None.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_positive_pending_funds_value">positive_pending_funds_value</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, <b>address</b>: <b>address</b>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
@@ -621,15 +633,12 @@ or <code>None</code> if the result would underflow (withdrawals exceed settled +
     root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>,
     <b>address</b>: <b>address</b>,
 ): Option&lt;u64&gt; {
-    <b>let</b> settled = <a href="../sui/balance.md#sui_balance_settled_funds_value">settled_funds_value</a>&lt;T&gt;(root, <b>address</b>);
-    <b>let</b> deposits = <a href="../sui/balance.md#sui_balance_pending_funds_deposits">pending_funds_deposits</a>&lt;T&gt;(<b>address</b>);
-    <b>let</b> withdrawals = <a href="../sui/balance.md#sui_balance_pending_funds_withdrawals">pending_funds_withdrawals</a>&lt;T&gt;(<b>address</b>);
-    <b>let</b> total_available = (settled <b>as</b> u128) + (deposits <b>as</b> u128);
-    <b>if</b> (total_available &gt;= (withdrawals <b>as</b> u128)) {
-        <a href="../std/option.md#std_option_some">std::option::some</a>(((total_available - (withdrawals <b>as</b> u128)) <b>as</b> u64))
-    } <b>else</b> {
-        <a href="../std/option.md#std_option_none">std::option::none</a>()
-    }
+    <b>let</b> settled = <a href="../sui/balance.md#sui_balance_settled_funds_value">settled_funds_value</a>&lt;T&gt;(root, <b>address</b>) <b>as</b> u128;
+    <b>let</b> deposits = <a href="../sui/balance.md#sui_balance_pending_funds_deposits">pending_funds_deposits</a>&lt;T&gt;(<b>address</b>) <b>as</b> u128;
+    <b>let</b> withdrawals = <a href="../sui/balance.md#sui_balance_pending_funds_withdrawals">pending_funds_withdrawals</a>&lt;T&gt;(<b>address</b>) <b>as</b> u128;
+    <b>let</b> total_available = settled + deposits;
+    <b>if</b> (total_available &gt;= withdrawals) option::some((total_available - withdrawals) <b>as</b> u64)
+    <b>else</b> option::none()
 }
 </code></pre>
 
