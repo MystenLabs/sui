@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::identifier::Identifier;
+use sui_types::effects::TransactionEffectsAPI;
 use std::num::NonZeroU32;
 use std::time::Duration;
 use sui_config::node::ExecutionTimeObserverConfig;
 use sui_core::authority::execution_time_estimator::{
     EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY, EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY,
 };
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_protocol_config::{
@@ -209,16 +209,14 @@ async fn create_shared_counter(
 
     let created_obj = response
         .effects
-        .unwrap()
         .created()
-        .iter()
-        .find(|obj| obj.owner.is_shared())
-        .unwrap()
-        .clone();
+        .into_iter()
+        .find(|obj| obj.1.is_shared())
+        .unwrap();
 
     (
-        created_obj.reference.object_id,
-        created_obj.reference.version,
+        created_obj.0.0,
+        created_obj.0.1,
     )
 }
 
@@ -278,7 +276,7 @@ async fn send_transactions(
 
         let res = test_cluster.execute_transaction(signed_tx).await;
         assert_eq!(
-            res.effects.unwrap().executed_epoch(),
+            res.effects.executed_epoch(),
             0,
             "all txns to execute in epoch 0"
         );

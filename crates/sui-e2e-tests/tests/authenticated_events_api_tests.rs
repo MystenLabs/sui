@@ -107,7 +107,7 @@ async fn emit_multiple_test_events(
     sender: SuiAddress,
     start_value: u64,
     count: u64,
-) -> sui_json_rpc_types::SuiTransactionBlockResponse {
+) -> sui_rpc_api::client::ExecutedTransaction {
     let rgp = test_cluster.get_reference_gas_price().await;
     let mut ptb = ProgrammableTransactionBuilder::new();
     let start = ptb.pure(start_value).unwrap();
@@ -141,7 +141,7 @@ async fn emit_large_test_event(
     sender: SuiAddress,
     value: u64,
     size: u64,
-) -> sui_json_rpc_types::SuiTransactionBlockResponse {
+) -> sui_rpc_api::client::ExecutedTransaction {
     let rgp = test_cluster.get_reference_gas_price().await;
     let mut ptb = ProgrammableTransactionBuilder::new();
     let val = ptb.pure(value).unwrap();

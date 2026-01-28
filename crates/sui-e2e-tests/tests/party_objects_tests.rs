@@ -4,7 +4,6 @@
 use rand::distributions::Distribution;
 use std::net::SocketAddr;
 use std::time::Duration;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
@@ -47,14 +46,13 @@ async fn party_object_deletion() {
     let effects = test_cluster
         .sign_and_execute_transaction(&transaction)
         .await
-        .effects
-        .unwrap();
+        .effects;
 
     assert_eq!(effects.deleted().len(), 1);
-    assert_eq!(effects.shared_objects().len(), 1);
+    assert_eq!(effects.input_consensus_objects().len(), 1);
 
     // assert the shared object was deleted
-    let deleted_obj_id = effects.deleted()[0].object_id;
+    let deleted_obj_id = effects.deleted()[0].0;
     assert_eq!(deleted_obj_id, object_id);
 }
 
@@ -233,19 +231,18 @@ async fn party_object_transfer() {
     let effects = test_cluster
         .sign_and_execute_transaction(&transaction)
         .await
-        .effects
-        .unwrap();
+        .effects;
 
-    assert_eq!(effects.shared_objects().len(), 1);
+    assert_eq!(effects.input_consensus_objects().len(), 1);
     let mutated_party = effects
         .mutated()
-        .iter()
-        .filter(|obj| matches!(obj.owner, Owner::ConsensusAddressOwner { .. }))
+        .into_iter()
+        .filter(|obj| matches!(obj.1, Owner::ConsensusAddressOwner { .. }))
         .collect::<Vec<_>>();
     assert_eq!(mutated_party.len(), 1);
-    let mutated_party = mutated_party[0];
+    let mutated_party = &mutated_party[0];
     assert_eq!(
-        mutated_party.owner,
+        mutated_party.1,
         Owner::ConsensusAddressOwner {
             start_version: object_initial_shared_version.next(),
             owner: SuiAddress::ZERO,
@@ -678,9 +675,7 @@ async fn party_object_grpc() {
         .build();
     test_cluster
         .sign_and_execute_transaction(&transaction)
-        .await
-        .effects
-        .unwrap();
+        .await;
 
     // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated
@@ -819,9 +814,7 @@ async fn party_coin_grpc() {
 
     cluster
         .sign_and_execute_transaction(&tx_data)
-        .await
-        .effects
-        .unwrap();
+        .await;
 
     // run a list operation to make sure the party and non-party coins show up
     let resp = ledger_service_client
@@ -997,9 +990,7 @@ async fn party_object_jsonrpc() {
         .build();
     test_cluster
         .sign_and_execute_transaction(&transaction)
-        .await
-        .effects
-        .unwrap();
+        .await;
 
     // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated

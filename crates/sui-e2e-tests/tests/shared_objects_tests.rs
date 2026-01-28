@@ -416,7 +416,7 @@ async fn call_shared_object_contract() {
     // Transaction fails
     assert_eq!(
         effects.status(),
-        ExecutionStatus::Failure {
+        &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidObjectByMutRef,

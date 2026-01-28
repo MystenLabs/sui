@@ -22,7 +22,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::error::UserInputError;
+use sui_types::{effects::TransactionEffectsAPI, error::UserInputError};
 use sui_types::messages_grpc::{SubmitTxRequest, SubmitTxResponse, SubmitTxResult};
 use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::passkey_authenticator::{PasskeyAuthenticator, to_signing_message};
@@ -371,7 +371,7 @@ async fn test_multisig_e2e() {
         .transfer_sui(None, SuiAddress::ZERO)
         .build_and_sign_multisig(multisig_pk.clone(), &[&keys[0], &keys[1]], 0b011);
     let res = context.execute_transaction_must_succeed(tx1).await;
-    assert!(res.status_ok().unwrap());
+    assert!(res.effects.status().is_ok());
 
     // 2. sign with key 1 and 2 executes successfully.
     let gas = test_cluster
@@ -381,7 +381,7 @@ async fn test_multisig_e2e() {
         .transfer_sui(None, SuiAddress::ZERO)
         .build_and_sign_multisig(multisig_pk.clone(), &[&keys[1], &keys[2]], 0b110);
     let res = context.execute_transaction_must_succeed(tx2).await;
-    assert!(res.status_ok().unwrap());
+    assert!(res.effects.status().is_ok());
 
     // 3. signature 2 and 1 swapped fails to execute.
     let gas = test_cluster

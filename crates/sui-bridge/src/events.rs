@@ -22,6 +22,7 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_json_rpc_types::SuiEvent;
+use sui_types::event::Event;
 use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress;
@@ -474,6 +475,19 @@ macro_rules! declare_events {
                 $(
                     if &event.type_ == $variant.get().unwrap() {
                         let event_struct: $event_struct = bcs::from_bytes(event.bcs.bytes()).map_err(|e| BridgeError::InternalError(format!("Failed to deserialize event to {}: {:?}", stringify!($event_struct), e)))?;
+                        return Ok(Some(SuiBridgeEvent::$variant(event_struct.try_into()?)));
+                    }
+                )*
+                Ok(None)
+            }
+
+            pub fn try_from_event(event: &Event) -> BridgeResult<Option<SuiBridgeEvent>> {
+                init_all_struct_tags(); // Ensure all tags are initialized
+
+                // Unwrap safe: we inited above
+                $(
+                    if &event.type_ == $variant.get().unwrap() {
+                        let event_struct: $event_struct = bcs::from_bytes(&event.contents).map_err(|e| BridgeError::InternalError(format!("Failed to deserialize event to {}: {:?}", stringify!($event_struct), e)))?;
                         return Ok(Some(SuiBridgeEvent::$variant(event_struct.try_into()?)));
                     }
                 )*

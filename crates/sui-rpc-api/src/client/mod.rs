@@ -366,10 +366,11 @@ impl Client {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct ExecutedTransaction {
     pub transaction: TransactionData,
     pub effects: TransactionEffects,
+    clever_error: Option<proto::CleverError>,
     pub events: Option<TransactionEvents>,
     #[allow(unused)]
     changed_objects: Vec<proto::ChangedObject>,
@@ -378,6 +379,7 @@ pub struct ExecutedTransaction {
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
     pub checkpoint: Option<u64>,
     #[allow(unused)]
+    #[serde(skip)]
     timestamp: Option<prost_types::Timestamp>,
 }
 
@@ -390,6 +392,13 @@ impl ExecutedTransaction {
                 .bcs()
                 .finish(),
             ExecutedTransaction::path_builder().effects().bcs().finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .status()
+                .error()
+                .abort()
+                .clever_error()
+                .finish(),
             ExecutedTransaction::path_builder()
                 .effects()
                 .unchanged_loaded_runtime_objects()
@@ -422,7 +431,6 @@ impl ExecutedTransaction {
     }
 
     pub fn get_new_package_upgrade_cap(&self) -> Option<sui_types::base_types::ObjectRef> {
-        use sui_rpc::proto::sui::rpc::v2::changed_object::IdOperation;
         use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
         use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
 
@@ -431,8 +439,7 @@ impl ExecutedTransaction {
         self.changed_objects
             .iter()
             .find(|o| {
-                matches!(o.id_operation(), IdOperation::Created)
-                    && matches!(o.output_state(), OutputObjectState::ObjectWrite)
+                matches!(o.output_state(), OutputObjectState::ObjectWrite)
                     && matches!(
                         o.output_owner().kind(),
                         OwnerKind::Address | OwnerKind::ConsensusAddress
@@ -515,6 +522,13 @@ fn executed_transaction_try_from_proto(
         .bcs()
         .deserialize()
         .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?;
+    let clever_error = executed_transaction
+        .effects()
+        .status()
+        .error()
+        .abort()
+        .clever_error_opt()
+        .cloned();
     let events = executed_transaction
         .events
         .as_ref()
@@ -532,6 +546,7 @@ fn executed_transaction_try_from_proto(
     ExecutedTransaction {
         transaction,
         effects,
+        clever_error,
         events,
         balance_changes,
         checkpoint: executed_transaction.checkpoint,

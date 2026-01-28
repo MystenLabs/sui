@@ -3,10 +3,10 @@
 
 use insta::assert_json_snapshot;
 use serde::{Deserialize, Serialize};
+use sui_types::effects::TransactionEffectsAPI;
 use std::{collections::BTreeMap, path::PathBuf};
 use strum_macros::Display;
 use strum_macros::EnumString;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_test_transaction_builder::publish_basics_package_and_make_counter;

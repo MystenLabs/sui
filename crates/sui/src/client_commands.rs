@@ -47,12 +47,12 @@ use sui_json_rpc_types::{
     DynamicFieldPage, SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData,
     SuiProtocolConfigValue, SuiRawData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{BuildConfig, CompiledPackage, PackageDependencies};
 use sui_package_management::LockCommand;
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::{
     SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
     SuiClient,
@@ -65,7 +65,9 @@ use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
+    effects::TransactionEffectsAPI,
     error::SuiErrorKind,
+    execution_status::ExecutionStatus,
     gas::GasCostSummary,
     gas_coin::GasCoin,
     message_envelope::Envelope,
@@ -1080,23 +1082,8 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::TransactionBlock { digest } => {
-                let client = context.get_client().await?;
                 let _ = context.cache_chain_id().await?;
-                let tx_read = client
-                    .read_api()
-                    .get_transaction_with_options(
-                        digest,
-                        SuiTransactionBlockResponseOptions {
-                            show_input: true,
-                            show_raw_input: false,
-                            show_effects: true,
-                            show_events: true,
-                            show_object_changes: true,
-                            show_balance_changes: false,
-                            show_raw_effects: false,
-                        },
-                    )
-                    .await?;
+                let tx_read = context.grpc_client()?.get_transaction(&digest).await?;
                 SuiClientCommandResult::TransactionBlock(tx_read)
             }
 
@@ -2233,7 +2220,11 @@ impl Display for SuiClientCommandResult {
                 }
             }
             SuiClientCommandResult::TransactionBlock(response) => {
-                write!(writer, "{}", response)?;
+                write!(
+                    writer,
+                    "{}",
+                    serde_json::to_string_pretty(&response).unwrap()
+                )?;
             }
             SuiClientCommandResult::RawObject(raw_object_read) => {
                 let raw_object = match raw_object_read.object() {
@@ -2481,7 +2472,7 @@ impl SuiClientCommandResult {
         }
     }
 
-    pub fn tx_block_response(&self) -> Option<&SuiTransactionBlockResponse> {
+    pub fn tx_block_response(&self) -> Option<&ExecutedTransaction> {
         use SuiClientCommandResult::*;
         match self {
             TransactionBlock(b) => Some(b),
@@ -2491,20 +2482,13 @@ impl SuiClientCommandResult {
 
     pub async fn prerender_clever_errors(mut self, context: &mut WalletContext) -> Self {
         match &mut self {
-            SuiClientCommandResult::DryRun(DryRunTransactionBlockResponse { effects, .. })
-            | SuiClientCommandResult::TransactionBlock(SuiTransactionBlockResponse {
-                effects: Some(effects),
-                ..
-            }) => {
+            SuiClientCommandResult::DryRun(DryRunTransactionBlockResponse { effects, .. }) => {
                 let client = context.get_client().await.expect("Cannot connect to RPC");
                 prerender_clever_errors(effects, client.read_api()).await
             }
 
-            SuiClientCommandResult::TransactionBlock(SuiTransactionBlockResponse {
-                effects: None,
-                ..
-            }) => (),
-            SuiClientCommandResult::ActiveAddress(_)
+            SuiClientCommandResult::TransactionBlock(_)
+            | SuiClientCommandResult::ActiveAddress(_)
             | SuiClientCommandResult::ActiveEnv(_)
             | SuiClientCommandResult::Addresses(_)
             | SuiClientCommandResult::Balance(_, _)
@@ -2660,6 +2644,7 @@ impl ObjectsOutput {
 
 #[derive(Serialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
@@ -2683,7 +2668,7 @@ pub enum SuiClientCommandResult {
     SerializedUnsignedTransaction(TransactionData),
     Switch(SwitchResponse),
     SyncClientState,
-    TransactionBlock(SuiTransactionBlockResponse),
+    TransactionBlock(ExecutedTransaction),
     VerifyBytecodeMeter {
         success: bool,
         max_package_ticks: Option<u128>,
@@ -3157,20 +3142,14 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         } else {
             let transaction = Transaction::new(sender_signed_data);
             debug!("Executing transaction: {:?}", transaction);
-            let mut response = context
+            let response = context
                 .execute_transaction_may_fail(transaction.clone())
                 .await?;
             debug!("Transaction executed: {:?}", transaction);
-            if let Some(effects) = response.effects.as_mut() {
-                prerender_clever_errors(effects, client.read_api()).await;
-            }
-            let effects = response.effects.as_ref().ok_or_else(|| {
-                anyhow!("Effects from SuiTransactionBlockResult should not be empty")
-            })?;
-            if let SuiExecutionStatus::Failure { error } = effects.status() {
+            if let ExecutionStatus::Failure { error, .. } = response.effects.status() {
                 return Err(anyhow!(
                     "Error executing transaction '{}': {error}",
-                    response.digest
+                    response.transaction.digest()
                 ));
             }
             Ok(SuiClientCommandResult::TransactionBlock(response))
@@ -3441,7 +3420,7 @@ async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
 pub fn update_publication(
     chain_id: &str,
     command: LockCommand,
-    response: &SuiTransactionBlockResponse,
+    response: &ExecutedTransaction,
     _build_config: &MoveBuildConfig,
     publication: Option<&mut Publication<SuiFlavor>>,
 ) -> Result<Publication<SuiFlavor>, anyhow::Error> {

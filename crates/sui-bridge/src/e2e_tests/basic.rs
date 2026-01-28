@@ -20,10 +20,10 @@ use crate::types::{AddTokensOnEvmAction, BridgeAction};
 use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
 use alloy::primitives::{Address as EthAddress, U256};
 use alloy::providers::Provider;
+use sui_types::effects::TransactionEffectsAPI;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_types::bridge::{
     BridgeChainId, BridgeTokenMetadata, BridgeTrait, TOKEN_ID_ETH, get_bridge,
 };
@@ -387,10 +387,10 @@ async fn test_add_new_coins_on_sui_and_eth() {
     .unwrap();
 
     let response = bridge_test_cluster.sign_and_execute_transaction(&tx).await;
-    let effects = response.effects.unwrap();
-    assert_eq!(effects.status(), &SuiExecutionStatus::Success);
+    let effects = response.effects;
+    assert!(effects.status().is_ok());
     assert!(response.events.unwrap().data.iter().any(|e| {
-        let sui_bridge_event = SuiBridgeEvent::try_from_sui_event(e).unwrap().unwrap();
+        let sui_bridge_event = SuiBridgeEvent::try_from_event(e).unwrap().unwrap();
         match sui_bridge_event {
             SuiBridgeEvent::NewTokenEvent(e) => {
                 assert_eq!(e.token_id, token_id);

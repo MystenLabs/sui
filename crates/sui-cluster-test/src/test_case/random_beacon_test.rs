@@ -3,9 +3,9 @@
 
 use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::{emit_new_random_u128, publish_basics_package};
+use sui_types::effects::TransactionEffectsAPI;
 use tracing::info;
 
 pub struct RandomBeaconTest;
@@ -36,11 +36,10 @@ impl TestCaseImpl for RandomBeaconTest {
         let package_ref = publish_basics_package(wallet_context).await;
 
         let response = emit_new_random_u128(wallet_context, package_ref.0).await;
-        assert_eq!(
-            *response.effects.as_ref().unwrap().status(),
-            SuiExecutionStatus::Success,
+        assert!(
+            response.effects.status().is_ok(),
             "Generate new random value txn failed: {:?}",
-            *response.effects.as_ref().unwrap().status()
+            *response.effects.status()
         );
 
         // Check that only the expected event was emitted.
@@ -57,7 +56,7 @@ impl TestCaseImpl for RandomBeaconTest {
         );
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![response.digest], 5).await;
+        ctx.let_fullnode_sync(vec![response.transaction.digest()], 5).await;
 
         Ok(())
     }
