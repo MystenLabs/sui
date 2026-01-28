@@ -1,0 +1,187 @@
+[
+  {
+    "id": "archival-service",
+    "label": "Archival Service",
+    "definition": "A gRPC API layer that exposes access to this store, enabling point lookups of historical data, ex., LedgerService."
+  },
+  {
+    "id": "archival-store",
+    "label": "Archival Store",
+    "definition": "A long-term storage system that holds checkpoint-indexed Sui data, i.e., Bigtable."
+  },
+  {
+    "id": "causal-history",
+    "label": "Causal history",
+    "definition": "The relationship between an object in Sui and its direct predecessors and successors. This history is essential to the causal order Sui uses to process transactions."
+  },
+  {
+    "id": "causal-order",
+    "label": "Causal order",
+    "definition": "A representation of the relationship between transactions and the objects they produce, laid out as dependencies. Validators cannot execute a transaction dependent on objects created by a prior transaction that has not finished. Rather than total order, Sui uses causal order (a partial order)."
+  },
+  {
+    "id": "certificate",
+    "label": "Certificate",
+    "definition": "The mechanism proving a transaction was approved or certified. Validators vote on transactions, and aggregators collect a Byzantine-resistant majority of these votes into a certificate and broadcast it to all Sui validators, thereby ensuring finality."
+  },
+  {
+    "id": "closed-loop-token",
+    "label": "Closed-Loop Token",
+    "definition": "A token that can be used only for a specific service, by an authorized account, or a token that certain accounts can be blocked from using."
+  },
+  {
+    "id": "deepbook",
+    "label": "DeepBook",
+    "definition": "A decentralized central limit order book (CLOB) built on Sui. The Sui documentation refers to the DeepBook standard as \"DeepBookV3\" to avoid confusion with the recently deprecated version of DeepBook (DeepBookV2)."
+  },
+  {
+    "id": "devnet",
+    "label": "Devnet",
+    "definition": "A development network where data is wiped regularly as part of scheduled software updates."
+  },
+  {
+    "id": "epoch",
+    "label": "Epoch",
+    "definition": "Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration epochs. During a particular epoch, the set of validators participating in the network is fixed."
+  },
+  {
+    "id": "equivocation",
+    "label": "Equivocation",
+    "definition": "The malicious action of dishonest actors giving conflicting information for the same message, such as inconsistent or duplicate voting."
+  },
+  {
+    "id": "eventual-consistency",
+    "label": "Eventual consistency",
+    "definition": "The consensus model employed by Sui; if one honest validator certifies the transaction, all of the other honest validators will too eventually."
+  },
+  {
+    "id": "finality",
+    "label": "Finality",
+    "definition": "The assurance a transaction will not be revoked. This stage is considered closure for an exchange or other blockchain transaction."
+  },
+  {
+    "id": "gas",
+    "label": "Gas",
+    "definition": "The computational effort required for executing operations on the Sui network. In Sui, gas is paid with the network's native currency SUI. The cost of executing a transaction in SUI units is referred to as the transaction fee."
+  },
+  {
+    "id": "genesis",
+    "label": "Genesis",
+    "definition": "The initial act of creating accounts and gas objects for a Sui network. Sui provides a genesis command that allows users to create and inspect the genesis object setting up the network for operation."
+  },
+  {
+    "id": "localnet",
+    "label": "Localnet",
+    "definition": "A locally created development network running on your local machine."
+  },
+  {
+    "id": "kiosk",
+    "label": "Kiosk",
+    "definition": "A decentralized system for commerce applications on Sui. The Sui Kiosk standard consists of Kiosk objects: shared objects owned by individual parties that store assets that can be sold or traded."
+  },
+  {
+    "id": "mainnet",
+    "label": "Mainnet",
+    "definition": "The Sui production network."
+  },
+  {
+    "id": "multi-writer-objects",
+    "label": "Multi-writer objects",
+    "definition": "Objects that are owned by more than one address. Transactions affecting multi-writer objects require consensus in Sui. This contrasts with transactions affecting only single-writer objects, which require only a confirmation of the owner's address contents."
+  },
+  {
+    "id": "mysticeti",
+    "label": "Mysticeti",
+    "definition": "The consensus protocol used on Sui. Mysticeti is a high-throughput, Directed Acyclic Graph (DAG)-based Byzantine consensus protocol."
+  },
+  {
+    "id": "object",
+    "label": "Object",
+    "definition": "The basic unit of storage in Sui. Sui objects have one of the following primary states: Immutable (cannot be modified) or Mutable (can be modified). Mutable objects are further divided into Owned (modified only by its owner) or Shared (modified by anyone)."
+  },
+  {
+    "id": "operation-cap",
+    "label": "Operation Cap",
+    "definition": "Allows a validator to authorize another account to perform certain actions on its behalf."
+  },
+  {
+    "id": "proof-of-stake",
+    "label": "Proof-of-stake",
+    "definition": "A blockchain consensus mechanism where the voting weight of each validator is proportional to a bonded amount of the network's native currency (called their stake in the network)."
+  },
+  {
+    "id": "single-writer-objects",
+    "label": "Single-writer objects",
+    "definition": "Objects owned by one address. In Sui, transactions affecting only single-writer objects owned by the same address may proceed with only a verification of the sender's address, greatly speeding transaction times."
+  },
+  {
+    "id": "smart-contract",
+    "label": "Smart contract",
+    "definition": "An agreement based upon the protocol for conducting transactions in a blockchain. In Sui, smart contracts are written in the Move programming language."
+  },
+  {
+    "id": "sui",
+    "label": "Sui",
+    "definition": "The Sui blockchain and the Sui open source project as a whole."
+  },
+  {
+    "id": "sui-token",
+    "label": "SUI",
+    "definition": "The native token to the Sui network."
+  },
+  {
+    "id": "sui-keystore",
+    "label": "Sui Keystore",
+    "definition": "A secure storage system for managing your Sui cryptographic key pairs."
+  },
+  {
+    "id": "sui-keytool",
+    "label": "Sui Keytool",
+    "definition": "A CLI tool that provides commands for managing and generating addresses, and interacting with private keys, signatures, or zkLogin."
+  },
+  {
+    "id": "suilink",
+    "label": "SuiLink",
+    "definition": "A Mysten Labs product that connects wallets across chains to support use cases such as cross chain wallet verification, asset ownership verification, and asset distributions across chains."
+  },
+  {
+    "id": "sui-object-display",
+    "label": "Sui Object Display",
+    "definition": "A template engine that enables on-chain management of off-chain representation (display) for a type."
+  },
+  {
+    "id": "soulbound",
+    "label": "Soulbound",
+    "definition": "An asset that is bound to an account and cannot be transferred."
+  },
+  {
+    "id": "testnet",
+    "label": "Testnet",
+    "definition": "A development network. Data deployed to Testnet persists through the regular update process, but might be wiped when necessary. Testnet data wipes are announced ahead of time."
+  },
+  {
+    "id": "total-order",
+    "label": "Total order",
+    "definition": "The ordered presentation of the history of all transactions processed by a traditional blockchain up to a given time. This is maintained by many blockchain systems, as the only way to process transactions. In contrast, Sui uses a causal (partial) order wherever possible and safe."
+  },
+  {
+    "id": "transaction",
+    "label": "Transaction",
+    "definition": "A change to the blockchain. This may be a simple transaction affecting only single-writer, single-address objects, such as minting an NFT or transferring an NFT or another token. More complex transactions affecting objects that are shared or owned by multiple addresses go through consensus."
+  },
+  {
+    "id": "transfer",
+    "label": "Transfer",
+    "definition": "Switching the owner address of a token to a new one via command in Sui."
+  },
+  {
+    "id": "validator",
+    "label": "Validator",
+    "definition": "In Sui, validators do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or certificate."
+  },
+  {
+    "id": "wallet-standard",
+    "label": "Wallet Standard",
+    "definition": "A cross-chain standard that defines how dApps can automatically discover and interact with wallets."
+  }
+]

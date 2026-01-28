@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 */
 
-
-
 import React, { useMemo } from "react";
 import { useGlossary } from "./GlossaryProvider";
 

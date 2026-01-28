@@ -5,6 +5,8 @@ import { fileURLToPath } from "url";
 import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
+import remarkGlossary from "./src/shared/plugins/remark-glossary.js";
+
 const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 
 const effortRemarkPlugin = require("./src/plugins/effort");
@@ -169,6 +171,7 @@ const config = {
             [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],
             effortRemarkPlugin,
             betaRemarkPlugin,
+            [remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }],
           ],
           rehypePlugins: [katex],
         },
@@ -179,6 +182,9 @@ const config = {
             require.resolve("./src/css/details.css"),
           ],
         },
+        pages: {
+          remarkPlugins: [[remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }]],
+        }
       },
     ],
   ],

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 */
 
-
 // plugins/remark-glossary.js
 // Auto-wraps glossary terms with <Term>…</Term> in MDX content.
 //
@@ -78,6 +77,8 @@ function loadGlossary(glossaryPath) {
  * @param {{glossaryFile?: string}} options
  */
 function remarkGlossary(options = {}) {
+    console.log('>>> remarkGlossary plugin loaded'); // Add this
+
     const glossaryFile = options.glossaryFile || "static/glossary.json";
     const absPath = path.isAbsolute(glossaryFile)
         ? glossaryFile
@@ -100,6 +101,8 @@ function remarkGlossary(options = {}) {
     const MDX_SKIP = new Set(["mdxJsxTextElement", "mdxJsxFlowElement"]);
 
     return function transformer(tree) {
+        console.log('>>> Processing file with', entries.length, 'glossary entries');
+
         // Track which terms have been processed on this page (case-insensitive)
         const processedTerms = new Set();
 

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 */
 
-
 import React from "react";
 import NavbarColorModeToggle from "@theme/Navbar/ColorModeToggle";
 import { useLocation } from "@docusaurus/router";

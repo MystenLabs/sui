@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 */
 
-
 import type { LoadContext, Plugin } from "@docusaurus/types";
 
 export type PlausibleOptions = {

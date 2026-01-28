@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 */
 
-
 // Rewrites custom headings like:
 //   ##step Title
 //   ###substep Another Title
