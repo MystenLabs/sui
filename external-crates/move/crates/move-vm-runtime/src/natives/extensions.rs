@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use better_any::{Tid, TidExt};
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::vm_status::StatusCode;
+use move_binary_format::errors::PartialVMResult;
 use parking_lot::RwLock;
 use std::{any::TypeId, collections::HashMap, sync::Arc};
+
+use crate::invariant_violation;
 
 /// A data type to represent a heterogeneous collection of extensions which are available to
 /// native functions. A value to this is passed into the session function execution.
@@ -42,30 +43,22 @@ impl<'a> NativeContextExtensions<'a> {
     pub fn get<T: NativeExtensionMarker<'a>>(&self) -> PartialVMResult<&T> {
         self.map
             .get(&T::id())
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("native extension not found".to_string())
-            })
+            .ok_or_else(|| invariant_violation!("native extension not found"))
             .and_then(|t| {
-                t.as_ref().downcast_ref::<T>().ok_or_else(|| {
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("downcast error".to_string())
-                })
+                t.as_ref()
+                    .downcast_ref::<T>()
+                    .ok_or_else(|| invariant_violation!("downcast error"))
             })
     }
 
     pub fn get_mut<T: NativeExtensionMarker<'a>>(&mut self) -> PartialVMResult<&mut T> {
         self.map
             .get_mut(&T::id())
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("native extension not found".to_string())
-            })
+            .ok_or_else(|| invariant_violation!("native extension not found"))
             .and_then(|t| {
-                t.as_mut().downcast_mut::<T>().ok_or_else(|| {
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("downcast error".to_string())
-                })
+                t.as_mut()
+                    .downcast_mut::<T>()
+                    .ok_or_else(|| invariant_violation!("downcast error"))
             })
     }
 
@@ -73,15 +66,11 @@ impl<'a> NativeContextExtensions<'a> {
         // can't use expect below because it requires `T: Debug`.
         self.map
             .remove(&T::id())
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("native extension not found".to_string())
-            })
+            .ok_or_else(|| invariant_violation!("native extension not found"))
             .and_then(|t| {
-                t.downcast_box::<T>().map(|t| *t).map_err(|_| {
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("downcast error".to_string())
-                })
+                t.downcast_box::<T>()
+                    .map(|t| *t)
+                    .map_err(|_| invariant_violation!("downcast error"))
             })
     }
 }

@@ -407,7 +407,11 @@ fn op_step_impl(
             let reference = state.pop_operand_as::<VariantRef>()?;
             gas_meter.charge_variant_switch(&reference)?;
             let tag = reference.get_tag()?;
-            state.call_stack.current_frame.pc = jump_table_ptr[tag as usize];
+            state.call_stack.current_frame.pc =
+                *jump_table_ptr.get(tag as usize).ok_or_else(|| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!("VariantSwitch: invalid tag {} for variant", tag,))
+                })?;
         }
         // -- OTHER OPCODES ----------------------
         Bytecode::Pop => {

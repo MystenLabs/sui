@@ -4,6 +4,7 @@
 
 use crate::{
     execution::values::{Value, Vector, VectorRef},
+    invariant_violation,
     jit::execution::ast::Type,
     native_charge_gas_early_exit,
     natives::{
@@ -42,9 +43,13 @@ pub fn native_empty(
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
+    let ty = ty_args
+        .get(0)
+        .ok_or_else(|| invariant_violation!("native vector::empty must have one type argument"))?;
+
     NativeResult::map_partial_vm_result_one(
         context.gas_used(),
-        (&ty_args[0]).try_into().and_then(Vector::empty),
+        ty.try_into().and_then(Vector::empty),
     )
 }
 
