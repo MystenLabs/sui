@@ -1,40 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context;
-use anyhow::bail;
-use insta::assert_debug_snapshot;
-use move_core_types::ident_str;
-use move_core_types::language_storage::StructTag;
-use move_core_types::u256::U256;
 use serde::Deserialize;
 use serde_json::json;
 use sui_json_rpc_types::Coin;
 use sui_json_rpc_types::Page;
-use sui_types::Identifier;
-use sui_types::SUI_COIN_REGISTRY_ADDRESS;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
-use sui_types::TypeTag;
-use sui_types::base_types::ObjectDigest;
-use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
-use sui_types::coin::CoinMetadata;
-use sui_types::coin::TreasuryCap;
-use sui_types::crypto::Signature;
-use sui_types::crypto::Signer;
 use sui_types::crypto::get_account_key_pair;
-use sui_types::deny_list_v2::DenyCapV2;
-use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GAS;
-use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::Argument;
-use sui_types::transaction::Command;
 use sui_types::transaction::GasData;
-use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
@@ -44,26 +21,7 @@ use sui_indexer_alt_e2e_tests::find;
 
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 
-#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
-#[serde(rename_all = "camelCase")]
-struct CoinMetadataResponse {
-    name: String,
-    decimals: u8,
-    description: String,
-    icon_url: Option<String>,
-    symbol: String,
-}
-
-#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
-#[serde(rename_all = "camelCase")]
-struct BalanceResponse {
-    coin_type: String,
-    coin_object_count: usize,
-    total_balance: u64,
-    funds_in_address_balance: u64,
-}
-
-/// Deserialized successful JSON-RPC response for `suix_getOwnedObjects`.
+/// Deserialized successful JSON-RPC response for `suix_getCoins`.
 #[derive(Deserialize)]
 struct Response {
     result: Page<Coin, String>,
@@ -101,7 +59,7 @@ async fn test_coins_in_desc_balance_order() {
 /// coin, the next query using the cursor will return the coin at its latest state instead of the
 /// same 100_000 coin balance.
 #[tokio::test]
-async fn test_coins_inconsistency() {
+async fn test_coins_pagination_and_inconsistency() {
     // SUI coin is available from genesis, no need to publish
     let mut cluster = FullCluster::new().await.unwrap();
     let with_prefix = true;
@@ -109,16 +67,17 @@ async fn test_coins_inconsistency() {
     let (a, akp) = get_account_key_pair();
     let (b, _) = get_account_key_pair();
 
-    create_coin(&mut cluster, a, 100_000);
-    create_coin(&mut cluster, a, 200_000);
     create_coin(&mut cluster, a, 300_000);
+    create_coin(&mut cluster, a, 200_000);
+    create_coin(&mut cluster, a, 100_000);
+    create_coin(&mut cluster, a, 10_000);
 
     cluster.create_checkpoint().await;
 
     // Retrieve the object ref of the coin with 100_000
     let Response {
         result: Page { data, .. },
-    } = get_coins(&cluster, a, &gas_type, None, 3).await;
+    } = get_coins(&cluster, a, &gas_type, None, 10).await;
     let to_mutate = data
         .iter()
         .find(|coin| coin.balance == 100_000)
@@ -145,7 +104,7 @@ async fn test_coins_inconsistency() {
     } = get_coins(&cluster, a, &gas_type, next_cursor.clone(), 2).await;
 
     let balances: Vec<u64> = data.iter().map(|coin| coin.balance).collect();
-    assert_eq!(balances, vec![100_000]);
+    assert_eq!(balances, vec![100_000, 10_000]);
     assert!(!has_next_page);
 
     // Split off some of A's gas and transfer it to B using a sponsored transaction
@@ -190,7 +149,47 @@ async fn test_coins_inconsistency() {
         },
     } = get_coins(&cluster, a, &gas_type, next_cursor, 2).await;
     let balances: Vec<u64> = data.iter().map(|coin| coin.balance).collect();
-    assert_eq!(balances, vec![60_000]);
+    assert_eq!(balances, vec![60_000, 10_000]);
+    assert!(!has_next_page);
+}
+
+#[tokio::test]
+async fn test_coins_pagination_and_creation() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let with_prefix = true;
+    let gas_type = GAS::type_().to_canonical_string(with_prefix);
+    let (a, _) = get_account_key_pair();
+
+    create_coin(&mut cluster, a, 300_000);
+    create_coin(&mut cluster, a, 100_000);
+
+    cluster.create_checkpoint().await;
+
+    let Response {
+        result:
+            Page {
+                data,
+                has_next_page,
+                next_cursor,
+            },
+    } = get_coins(&cluster, a, &gas_type, None, 1).await;
+    let balances: Vec<u64> = data.iter().map(|coin| coin.balance).collect();
+
+    assert!(has_next_page);
+    assert_eq!(balances, vec![300_000]);
+
+    create_coin(&mut cluster, a, 200_000);
+    cluster.create_checkpoint().await;
+
+    let Response {
+        result: Page {
+            data,
+            has_next_page,
+            ..
+        },
+    } = get_coins(&cluster, a, &gas_type, next_cursor, 2).await;
+    let balances: Vec<u64> = data.iter().map(|coin| coin.balance).collect();
+    assert_eq!(balances, vec![200_000, 100_000]);
     assert!(!has_next_page);
 }
 
