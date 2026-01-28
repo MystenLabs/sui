@@ -1055,7 +1055,55 @@ fn is_typed_mod_modified(
         debug_assert!(false);
         return false;
     };
-    modified_files.contains(mod_file_path)
+    if modified_files.contains(mod_file_path) {
+        return true;
+    }
+
+    // TODO: Module extensions are not fully supported yet. This check prevents a crash but
+    // doesn't provide full IDE support for extension members.
+    //
+    // When both the extended module and extension are in user space, extension members get
+    // inlined into the extended module during expansion. If only the extension file is modified,
+    // the extended module's definition location (checked above) appears unchanged. Without
+    // checking member locations, we'd use stale cached data with incorrect file hashes.
+    //
+    // This is NOT a problem when the extended module is a dependency (pre-compiled lib) because
+    // extensions cannot be applied to pre-compiled modules - they lack the expansion-level AST
+    // needed for inlining.
+    let is_member_modified = |loc: &Loc| -> bool {
+        let Some(member_file_path) = file_paths.get(&loc.file_hash()) else {
+            eprintln!(
+                "no file path for member in typed module {}",
+                mident.value.module
+            );
+            debug_assert!(false);
+            return false;
+        };
+        modified_files.contains(member_file_path)
+    };
+
+    for (name_loc, _, _) in &mdef.functions {
+        if is_member_modified(&name_loc) {
+            return true;
+        }
+    }
+    for (name_loc, _, _) in &mdef.structs {
+        if is_member_modified(&name_loc) {
+            return true;
+        }
+    }
+    for (name_loc, _, _) in &mdef.enums {
+        if is_member_modified(&name_loc) {
+            return true;
+        }
+    }
+    for (name_loc, _, _) in &mdef.constants {
+        if is_member_modified(&name_loc) {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Checks if any of the package modules's were modified.

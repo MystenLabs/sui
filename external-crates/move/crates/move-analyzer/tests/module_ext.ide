@@ -1,0 +1,26 @@
+// Tests if definition in extended module is recognized
+{
+  "UseDef": {
+    "project": "tests/module-ext",
+    "file_tests": {
+      "M1.move": [
+        {
+          "use_line": 5,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 6,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 12,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 17,
+          "use_ndx": 0
+        }        
+      ]
+    }
+  }
+}
