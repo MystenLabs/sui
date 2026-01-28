@@ -4,6 +4,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_core::test_utils::wait_for_tx;
 use sui_core::transaction_driver::SubmitTransactionOptions;
 use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_macros::sim_test;
@@ -165,13 +166,21 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
         .collect();
     assert_eq!(pending_txes, vec![txn.clone()]);
 
-    // Bring up 1 validator so there's quorum again.
+    // Bring back both validators so there's quorum again.
+    // TODO: investigate why only starting one validator can prevent the txn from
+    // being executed for > 120s.
     test_cluster.start_node(&validator_addresses[0]).await;
+    test_cluster.start_node(&validator_addresses[1]).await;
     tokio::task::yield_now().await;
 
     // The transaction should eventually be retried and succeed now that quorum is restored.
-    // Wait for the WAL to be cleared.
-    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+    // Wait for txn to be executed.
+    wait_for_tx(
+        *txn.digest(),
+        orchestrator.authority_state().clone(),
+        Duration::from_secs(120),
+    )
+    .await;
 
     let pending_txes = orchestrator.load_all_pending_transactions_in_test()?;
     assert!(pending_txes.is_empty());
