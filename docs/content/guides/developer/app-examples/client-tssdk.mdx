@@ -24,13 +24,13 @@ The Sui TypeScript SDK (@mysten/sui) provides all the low-level functionality ne
 
 For more information on the Sui TypeScript SDK, see the [Sui TypeScript SDK documentation](https://sdk.mystenlabs.com/typescript).
 
-## What is app Kit?
+## What is dApp Kit?
 
-app Kit (@mysten/dapp-kit) is a collection of React hooks, components, and utilities that make building apps on Sui straightforward. For more information on app Kit, see the [app Kit documentation](https://sdk.mystenlabs.com/dapp-kit).
+dApp Kit (@mysten/dapp-kit) is a collection of React hooks, components, and utilities that make building apps on Sui straightforward. For more information on dApp Kit, see the [dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit).
 
 ## Installing dependencies
 
-To get started, you need a React app. The following steps apply to any React app, so you can follow the same steps to add app Kit to an existing React app. If you are starting a new project, you can use Vite to scaffold a new React app.
+To get started, you need a React app. The following steps apply to any React app, so you can follow the same steps to add dApp Kit to an existing React app. If you are starting a new project, you can use Vite to scaffold a new React app.
 
 Run the following command in your terminal or console, and select React as the framework, and then select a TypeScript template:
 
@@ -38,7 +38,7 @@ Run the following command in your terminal or console, and select React as the f
 $ npm init vite
 ```
 
-Now that you have a React app, you can install the necessary dependencies to use app Kit:
+Now that you have a React app, you can install the necessary dependencies to use dApp Kit:
 
 ```sh npm2yarn
 $ npm install @mysten/sui @mysten/dapp-kit @tanstack/react-query
@@ -46,11 +46,11 @@ $ npm install @mysten/sui @mysten/dapp-kit @tanstack/react-query
 
 ## Setting up Provider components
 
-To use all the features of app Kit, wrap your app with `Provider` components.
+To use all the features of dApp Kit, wrap your app with `Provider` components.
 
 Open the root component that renders your app (the default location the Vite template uses is `src/main.tsx`) and integrate or replace the current code with the following.
 
-The first `Provider` to set up is the `QueryClientProvider` from `@tanstack/react-query`. This `Provider` manages request state for various hooks in app kit. If you're already using `@tanstack/react-query`, app Kit can share the same `QueryClient` instance.
+The first `Provider` to set up is the `QueryClientProvider` from `@tanstack/react-query`. This `Provider` manages request state for various hooks in app kit. If you're already using `@tanstack/react-query`, dApp Kit can share the same `QueryClient` instance.
 
 ```ts
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -66,7 +66,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 ```
 
-Next, set up the `SuiClientProvider`. This `Provider` delivers a `SuiClient` instance from `@mysten/sui` to all the hooks in app Kit. This `Provider` manages which network app Kit connects to, and can accept configuration for multiple networks. In this exercise, you connect to `devnet`.
+Next, set up the `SuiClientProvider`. This `Provider` delivers a `SuiClient` instance from `@mysten/sui` to all the hooks in dApp Kit. This `Provider` manages which network dApp Kit connects to, and can accept configuration for multiple networks. In this exercise, you connect to `devnet`.
 
 ```ts
 import { SuiClientProvider } from '@mysten/dapp-kit';
@@ -120,7 +120,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
 ## Connecting to a wallet
 
-With all `Providers` set up, you can use app Kit hooks and components. To allow users to connect their wallets to your app, add a `ConnectButton`.
+With all `Providers` set up, you can use dApp Kit hooks and components. To allow users to connect their wallets to your app, add a `ConnectButton`.
 
 ```ts
 import { ConnectButton } from '@mysten/dapp-kit';
