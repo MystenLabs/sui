@@ -74,10 +74,6 @@ If you are building an application on Sui, you can integrate SuiLink to verify c
 
 To retrieve a user's SuiLink connections, use the following dApp Kit SDK query:
 
-<Tabs>
-
-<TabItem label="ETH and SOL" value="ethsolquery">
-
 ```typescript
 const ethSolSuiLinks = suiClient.getOwnedObjects({
   owner: suiAddress,
@@ -89,13 +85,7 @@ const ethSolSuiLinks = suiClient.getOwnedObjects({
     showType: true,
   },
 });
-```
 
-</TabItem>
-
-<TabItem label="Sui-to-Sui" value="suitosuiquery">
-
-```typescript
 const suiSuiLinks = suiClient.getOwnedObjects({
   owner: suiAddress,
   filter: {
@@ -107,10 +97,6 @@ const suiSuiLinks = suiClient.getOwnedObjects({
   },
 });
 ```
-
-</TabItem>
-
-</Tabs>
 
 This returns all SuiLink NFTs owned by the specified Sui address. Each NFT contains information about the linked wallet.
 
