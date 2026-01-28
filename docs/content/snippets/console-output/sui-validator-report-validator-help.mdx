@@ -1,0 +1,31 @@
+```sh
+Report or un-report a validator. Report or un-report a validator
+
+Usage: sui validator report-validator [OPTIONS] <reportee-address>
+
+Arguments:
+  <reportee-address>  The Sui Address of the validator is being reported or un-reported
+
+Options:
+      --operation-cap-id <operation-cap-id>
+          Optional when sender is reporter validator itself and it holds the Cap object. Required
+          when sender is not the reporter validator itself. Validator's OperationCap ID can be found
+          by using the `display-metadata` subcommand
+      --undo-report <undo-report>
+          If true, undo an existing report [possible values: true, false]
+      --serialize-unsigned-transaction
+          Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction
+          data (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The
+          string can be used to execute transaction with `sui client execute-signed-tx --tx-bytes
+          <TX_BYTES>`
+      --gas-budget <gas-budget>
+          Gas budget for this transaction
+  -q, --quiet
+          Display less output
+      --json
+          Return command outputs in json format
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```

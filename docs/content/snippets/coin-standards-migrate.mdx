@@ -1,0 +1,41 @@
+## Migration from Coin to Currency Standard
+
+Sui provides a migration path from the `CoinMetadata<T>` system while maintaining backward compatibility.
+
+The migration system is designed with specific constraints to maintain data integrity and preserve existing functionality. Migration can only occur permissionlessly when done by reference, meaning the original `CoinMetadata` object remains intact while its data is copied to create a new `Currency` entry in the registry. This approach allows for safe registration of new currency data and updates to existing currency data, but only as long as the `MetadataCap` has not yet been claimed.
+
+The system cannot allow permissionless migration by value, however, where the original `CoinMetadata` object would be consumed or destroyed during migration. This restriction exists because some coins have governance mechanisms that control `CoinMetadata` updates. Allowing value-based migration would irreversibly break those existing governance workflows by destroying the metadata objects that governance systems expect to manage.
+
+The destruction of legacy `CoinMetadata` objects is only permitted after the corresponding `MetadataCap` has been claimed, serving as proof that the currency's owner has taken control through the new registry system. This ensures that legacy metadata cannot be accidentally destroyed while governance systems still depend on it, and provides a clear transition path where owners must explicitly claim control before legacy objects can be cleaned up.
+
+This design preserves backward compatibility while enabling a smooth transition to the centralized registry system, protecting existing governance mechanisms until owners are ready to migrate fully to the new system.
+
+Some of the benefits to migrate to the Coin Registry include:
+
+- **Centralized management:** Single source of truth for all coin information.
+- **Enhanced features:** Access to advanced supply models and regulatory tracking.
+- **Ecosystem integration:** Better support for wallets, exchanges, and dApps.
+- **Future-proofing:** Access to ongoing registry enhancements.
+
+### Migration process
+
+1. **Metadata migration:** Use `migrate_legacy_metadata<T>()` to create a new `Currency<T>` entry based on existing `CoinMetadata<T>` information.
+    <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="migrate_legacy_metadata" noTitle signatureOnly noComments />
+
+1. **Regulatory migration:** For coins with deny list capabilities, use:
+   - `migrate_regulated_state_by_metadata<T>()`: Migrate based on existing metadata.
+
+        <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="migrate_regulated_state_by_metadata" noTitle signatureOnly noComments />
+
+   - `migrate_regulated_state_by_cap<T>()`: Migrate based on deny capability.
+
+        <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="migrate_regulated_state_by_cap" noTitle signatureOnly noComments />
+
+### Migration function mappings
+
+Update smart contract logic that relies on the `coin` module to use the `coin_registry` module instead:
+
+- `coin::create_currency` -> `coin_registry::new_currency_with_otw`
+- `coin::create_regulated_currency_v2` -> `coin_registry::new_currency_with_otw`
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="new_currency_with_otw" signatureOnly noComments />
