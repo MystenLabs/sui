@@ -3,7 +3,7 @@
 
 use anyhow::{Context, Result, anyhow};
 use clap::*;
-
+use mysten_common::debug_fatal;
 use prometheus::Registry;
 use rand::Rng;
 use rand::seq::SliceRandom;
@@ -26,6 +26,70 @@ use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
 use sui_benchmark::system_state_observer::SystemStateObserver;
 use tokio::runtime::Builder;
 use tokio::sync::Barrier;
+
+/// Parse command line arguments, tolerating unknown flags.
+/// Unknown flags are logged via `debug_fatal!` and ignored.
+fn parse_args_tolerant() -> Opts {
+    let args: Vec<String> = std::env::args().collect();
+    parse_args_from_tolerant(args)
+}
+
+fn parse_args_from_tolerant(args: Vec<String>) -> Opts {
+    match Opts::try_parse_from(&args) {
+        Ok(opts) => opts,
+        Err(e) => {
+            if let clap::error::ErrorKind::UnknownArgument = e.kind() {
+                let unknown_arg = extract_unknown_arg(&e);
+                debug_fatal!(
+                    "Unknown command line argument: {}. Ignoring and proceeding.",
+                    unknown_arg
+                );
+                let filtered_args = filter_unknown_arg(&args, &unknown_arg);
+                parse_args_from_tolerant(filtered_args)
+            } else {
+                e.exit()
+            }
+        }
+    }
+}
+
+fn extract_unknown_arg(error: &clap::Error) -> String {
+    for (kind, value) in error.context() {
+        if matches!(kind, clap::error::ContextKind::InvalidArg) {
+            if let Some(s) = value.to_string().strip_prefix("--") {
+                return s.to_string();
+            }
+            return value.to_string();
+        }
+    }
+    "unknown".to_string()
+}
+
+fn filter_unknown_arg(args: &[String], unknown_arg: &str) -> Vec<String> {
+    let flag_with_dashes = format!("--{}", unknown_arg);
+    let mut result = Vec::new();
+    let mut skip_next = false;
+
+    for arg in args {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+
+        if arg == &flag_with_dashes {
+            skip_next = true;
+            continue;
+        }
+
+        if arg.starts_with(&format!("{}=", flag_with_dashes)) {
+            continue;
+        }
+
+        result.push(arg.clone());
+    }
+
+    result
+}
 
 /// To spin up a local cluster and direct some load
 /// at it with 50/50 shared and owned traffic, use
@@ -53,7 +117,7 @@ use tokio::sync::Barrier;
 /// --transfer-object 50```
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opts: Opts = Opts::parse();
+    let opts: Opts = parse_args_tolerant();
 
     // TODO: query the network for the current protocol version.
     let protocol_config = match opts.protocol_version {
