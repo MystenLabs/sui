@@ -4,7 +4,6 @@
 use diesel::prelude::*;
 use sui_field_count::FieldCount;
 
-use crate::blooms::blocked;
 use crate::blooms::blocked::BlockedBloomFilter;
 use crate::schema::cp_bloom_blocks;
 
@@ -27,28 +26,22 @@ pub const TOTAL_BLOOM_BITS: usize = NUM_BLOOM_BLOCKS * BLOOM_BLOCK_BITS;
 pub const NUM_HASHES: u32 = 5;
 
 /// Blocked bloom filter with checkpoint block dimensions.
-pub type CpBlockedBloomFilter =
-    BlockedBloomFilter<{ BLOOM_BLOCK_BYTES }, { NUM_BLOOM_BLOCKS }, { NUM_HASHES }>;
+pub type CpBlockedBloomFilter = BlockedBloomFilter<BLOOM_BLOCK_BYTES, NUM_BLOOM_BLOCKS, NUM_HASHES>;
 
 /// Stored bloom block in the database (one row per bloom block per checkpoint block).
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount, QueryableByName)]
 #[diesel(table_name = cp_bloom_blocks)]
 pub struct StoredCpBloomBlock {
     /// Checkpoint block ID (cp_num / CP_BLOCK_SIZE).
-    pub cp_block_id: i64,
+    pub cp_block_index: i64,
     /// Index of this bloom block within the 128-block filter (0-127).
     pub bloom_block_index: i16,
     /// Bloom filter bytes for this block.
     pub bloom_filter: Vec<u8>,
 }
 
-/// Hashes a value using `CpBlockedBloomFilter` dimensions.
-pub fn hash(value: &[u8], seed: u128) -> (usize, impl Iterator<Item = usize>) {
-    blocked::hash::<BLOOM_BLOCK_BYTES, NUM_BLOOM_BLOCKS, NUM_HASHES>(value, seed)
-}
-
 /// The block a checkpoint belongs to. Checkpoints in a block share the same bloom filter and the block
 /// id is used as the seed for the blocked bloom filter hash functions.
-pub fn cp_block_id(cp_num: u64) -> i64 {
+pub fn cp_block_index(cp_num: u64) -> i64 {
     (cp_num / CP_BLOCK_SIZE) as i64
 }

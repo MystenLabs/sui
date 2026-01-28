@@ -21,8 +21,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    cp_bloom_blocks (cp_block_id, bloom_block_index) {
-        cp_block_id -> Int8,
+    cp_bloom_blocks (cp_block_index, bloom_block_index) {
+        cp_block_index -> Int8,
         bloom_block_index -> Int2,
         bloom_filter -> Bytea,
     }
