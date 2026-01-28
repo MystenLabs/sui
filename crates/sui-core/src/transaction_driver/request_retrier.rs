@@ -3,7 +3,7 @@
 
 use std::{collections::VecDeque, sync::Arc};
 
-use sui_types::{base_types::AuthorityName, messages_grpc::TxType};
+use sui_types::base_types::AuthorityName;
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
@@ -43,15 +43,11 @@ impl<A: Clone> RequestRetrier<A> {
     pub(crate) fn new(
         auth_agg: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
-        tx_type: TxType,
         allowed_validators: Vec<String>,
         blocked_validators: Vec<String>,
     ) -> Self {
-        let ranked_validators = client_monitor.select_shuffled_preferred_validators(
-            &auth_agg.committee,
-            tx_type,
-            SELECT_LATENCY_DELTA,
-        );
+        let ranked_validators = client_monitor
+            .select_shuffled_preferred_validators(&auth_agg.committee, SELECT_LATENCY_DELTA);
         let ranked_clients = ranked_validators
             .into_iter()
             .map(|name| (name, auth_agg.get_display_name(&name)))
@@ -174,13 +170,7 @@ mod tests {
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
         let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-        let mut retrier = RequestRetrier::new(
-            &auth_agg,
-            &client_monitor,
-            TxType::SingleWriter,
-            vec![],
-            vec![],
-        );
+        let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![]);
 
         for name in auth_agg.committee.names() {
             retrier.next_target().unwrap();
@@ -222,13 +212,8 @@ mod tests {
                 authorities[0].concise().to_string(), // This one exists in auth_agg
             ];
 
-            let retrier = RequestRetrier::new(
-                &auth_agg,
-                &client_monitor,
-                TxType::SingleWriter,
-                allowed_validators,
-                vec![],
-            );
+            let retrier =
+                RequestRetrier::new(&auth_agg, &client_monitor, allowed_validators, vec![]);
 
             // Should only have 1 remaining client (the known validator)
             assert_eq!(retrier.ranked_clients.len(), 1);
@@ -242,13 +227,8 @@ mod tests {
                 unknown_validator2.concise().to_string(),
             ];
 
-            let retrier = RequestRetrier::new(
-                &auth_agg,
-                &client_monitor,
-                TxType::SingleWriter,
-                allowed_validators,
-                vec![],
-            );
+            let retrier =
+                RequestRetrier::new(&auth_agg, &client_monitor, allowed_validators, vec![]);
 
             // Should have no remaining clients since none of the allowed validators exist
             assert_eq!(retrier.ranked_clients.len(), 0);
@@ -275,13 +255,8 @@ mod tests {
         // Only the last validator will be picked up.
         let allowed_validator = auth_agg.committee.names().nth(3).unwrap();
 
-        let mut retrier = RequestRetrier::new(
-            &auth_agg,
-            &client_monitor,
-            TxType::SingleWriter,
-            vec![],
-            blocked_display_names,
-        );
+        let mut retrier =
+            RequestRetrier::new(&auth_agg, &client_monitor, vec![], blocked_display_names);
 
         // The last validator will be picked up.
         assert_eq!(retrier.next_target().unwrap().0, *allowed_validator);
@@ -297,13 +272,7 @@ mod tests {
         // Add retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier = RequestRetrier::new(
-                &auth_agg,
-                &client_monitor,
-                TxType::SingleWriter,
-                vec![],
-                vec![],
-            );
+            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![]);
 
             // 25% stake.
             retrier
@@ -339,13 +308,7 @@ mod tests {
         // Add mix of retriable and non-retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier = RequestRetrier::new(
-                &auth_agg,
-                &client_monitor,
-                TxType::SingleWriter,
-                vec![],
-                vec![],
-            );
+            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![]);
 
             // 25% stake retriable error.
             retrier

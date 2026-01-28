@@ -33,7 +33,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) certified_effects_ack_successes: IntCounterVec,
     pub(crate) validator_selections: IntCounterVec,
     pub(crate) submit_amplification_factor: Histogram,
-    pub(crate) latency_check_runs: IntCounterVec,
+    pub(crate) latency_check_runs: IntCounter,
 }
 
 impl TransactionDriverMetrics {
@@ -169,10 +169,9 @@ impl TransactionDriverMetrics {
                 registry,
             )
             .unwrap(),
-            latency_check_runs: register_int_counter_vec_with_registry!(
+            latency_check_runs: register_int_counter_with_registry!(
                 "transaction_driver_latency_check_runs",
-                "Number of times the latency check runs",
-                &["tx_type"],
+                "Number of times the latency check runs for consensus path",
                 registry,
             )
             .unwrap(),

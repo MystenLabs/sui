@@ -69,7 +69,6 @@ impl TransactionSubmitter {
         let mut retrier = RequestRetrier::new(
             authority_aggregator,
             client_monitor,
-            tx_type,
             options.allowed_validators.clone(),
             options.blocked_validators.clone(),
         );
