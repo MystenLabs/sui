@@ -1169,9 +1169,10 @@ impl RpcExampleProvider {
             .map(Into::into)
             .collect::<Vec<_>>();
 
-        let next_cursor =
-            fastcrypto::encoding::Base64::from_bytes(&ObjectID::new(self.rng.r#gen()).into_bytes())
-                .encoded();
+        let next_cursor = fastcrypto::encoding::Base64::from_bytes(
+            &bcs::to_bytes(&ObjectID::new(self.rng.r#gen())).unwrap(),
+        )
+        .encoded();
 
         let page = DynamicFieldPage {
             data: dynamic_fields,
