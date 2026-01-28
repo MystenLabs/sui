@@ -201,13 +201,7 @@ impl Client {
             tx
         })
         .with_signatures(signatures)
-        .with_read_mask(FieldMask::from_paths([
-            "transaction.bcs",
-            "effects.bcs",
-            "events.bcs",
-            "balance_changes",
-            "checkpoint",
-        ]));
+        .with_read_mask(ExecutedTransaction::proto_read_mask());
 
         Ok(request)
     }
@@ -216,15 +210,8 @@ impl Client {
         &mut self,
         digest: &TransactionDigest,
     ) -> Result<ExecutedTransaction> {
-        let request = proto::GetTransactionRequest::new(&(*digest).into()).with_read_mask(
-            FieldMask::from_paths([
-                "transaction.bcs",
-                "effects.bcs",
-                "events.bcs",
-                "balance_changes",
-                "checkpoint",
-            ]),
-        );
+        let request = proto::GetTransactionRequest::new(&(*digest).into())
+            .with_read_mask(ExecutedTransaction::proto_read_mask());
 
         let (metadata, resp, _extentions) = self
             .0
@@ -379,13 +366,93 @@ impl Client {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct ExecutedTransaction {
     pub transaction: TransactionData,
     pub effects: TransactionEffects,
+    pub clever_error: Option<proto::CleverError>,
     pub events: Option<TransactionEvents>,
+    #[allow(unused)]
+    changed_objects: Vec<proto::ChangedObject>,
+    #[allow(unused)]
+    unchanged_loaded_runtime_objects: Vec<proto::ObjectReference>,
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
     pub checkpoint: Option<u64>,
+    #[allow(unused)]
+    #[serde(skip)]
+    timestamp: Option<prost_types::Timestamp>,
+}
+
+impl ExecutedTransaction {
+    fn proto_read_mask() -> FieldMask {
+        use proto::ExecutedTransaction;
+        FieldMask::from_paths([
+            ExecutedTransaction::path_builder()
+                .transaction()
+                .bcs()
+                .finish(),
+            ExecutedTransaction::path_builder().effects().bcs().finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .status()
+                .error()
+                .abort()
+                .clever_error()
+                .finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .unchanged_loaded_runtime_objects()
+                .finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .changed_objects()
+                .finish(),
+            ExecutedTransaction::path_builder().events().bcs().finish(),
+            ExecutedTransaction::path_builder()
+                .balance_changes()
+                .finish(),
+            ExecutedTransaction::path_builder().checkpoint(),
+            ExecutedTransaction::path_builder().timestamp(),
+        ])
+    }
+
+    pub fn get_new_package_obj(&self) -> Option<sui_types::base_types::ObjectRef> {
+        use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+
+        self.changed_objects
+            .iter()
+            .find(|o| matches!(o.output_state(), OutputObjectState::PackageWrite))
+            .and_then(|o| {
+                let id = o.object_id().parse().ok()?;
+                let version = o.output_version().into();
+                let digest = o.output_digest().parse().ok()?;
+                Some((id, version, digest))
+            })
+    }
+
+    pub fn get_new_package_upgrade_cap(&self) -> Option<sui_types::base_types::ObjectRef> {
+        use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+        use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
+
+        const UPGRADE_CAP: &str = "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap";
+
+        self.changed_objects
+            .iter()
+            .find(|o| {
+                matches!(o.output_state(), OutputObjectState::ObjectWrite)
+                    && matches!(
+                        o.output_owner().kind(),
+                        OwnerKind::Address | OwnerKind::ConsensusAddress
+                    )
+                    && o.object_type() == UPGRADE_CAP
+            })
+            .and_then(|o| {
+                let id = o.object_id().parse().ok()?;
+                let version = o.output_version().into();
+                let digest = o.output_digest().parse().ok()?;
+                Some((id, version, digest))
+            })
+    }
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
@@ -455,6 +522,13 @@ fn executed_transaction_try_from_proto(
         .bcs()
         .deserialize()
         .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?;
+    let clever_error = executed_transaction
+        .effects()
+        .status()
+        .error()
+        .abort()
+        .clever_error_opt()
+        .cloned();
     let events = executed_transaction
         .events
         .as_ref()
@@ -472,9 +546,16 @@ fn executed_transaction_try_from_proto(
     ExecutedTransaction {
         transaction,
         effects,
+        clever_error,
         events,
         balance_changes,
         checkpoint: executed_transaction.checkpoint,
+        changed_objects: executed_transaction.effects().changed_objects().to_owned(),
+        unchanged_loaded_runtime_objects: executed_transaction
+            .effects()
+            .unchanged_loaded_runtime_objects()
+            .to_owned(),
+        timestamp: executed_transaction.timestamp,
     }
     .pipe(Ok)
 }

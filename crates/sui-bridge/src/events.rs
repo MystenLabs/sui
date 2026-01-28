@@ -31,6 +31,7 @@ use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::bridge::MoveTypeCommitteeMemberRegistration;
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::ToFromBytes;
+use sui_types::event::Event;
 use sui_types::parse_sui_type_tag;
 
 // `TokendDepositedEvent` emitted in bridge.move
@@ -474,6 +475,19 @@ macro_rules! declare_events {
                 $(
                     if &event.type_ == $variant.get().unwrap() {
                         let event_struct: $event_struct = bcs::from_bytes(event.bcs.bytes()).map_err(|e| BridgeError::InternalError(format!("Failed to deserialize event to {}: {:?}", stringify!($event_struct), e)))?;
+                        return Ok(Some(SuiBridgeEvent::$variant(event_struct.try_into()?)));
+                    }
+                )*
+                Ok(None)
+            }
+
+            pub fn try_from_event(event: &Event) -> BridgeResult<Option<SuiBridgeEvent>> {
+                init_all_struct_tags(); // Ensure all tags are initialized
+
+                // Unwrap safe: we inited above
+                $(
+                    if &event.type_ == $variant.get().unwrap() {
+                        let event_struct: $event_struct = bcs::from_bytes(&event.contents).map_err(|e| BridgeError::InternalError(format!("Failed to deserialize event to {}: {:?}", stringify!($event_struct), e)))?;
                         return Ok(Some(SuiBridgeEvent::$variant(event_struct.try_into()?)));
                     }
                 )*

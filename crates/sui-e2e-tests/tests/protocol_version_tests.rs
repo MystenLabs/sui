@@ -69,7 +69,6 @@ mod sim_only_tests {
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
     use sui_json_rpc_api::WriteApiClient;
-    use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::Chain;
@@ -591,11 +590,10 @@ mod sim_only_tests {
         })
         .await
         .mutated()
-        .iter()
-        .find(|oref| oref.reference.object_id == obj.0.id())
+        .into_iter()
+        .find(|oref| oref.0.0 == obj.0.id())
         .unwrap()
-        .reference
-        .to_object_ref()
+        .0
     }
 
     async fn dev_inspect_call(cluster: &TestCluster, call: ProgrammableMoveCall) -> u64 {
@@ -634,19 +632,11 @@ mod sim_only_tests {
             .await
             .created()
             .iter()
-            .map(|oref| {
-                FullObjectRef::from_object_ref_and_owner(
-                    oref.reference.to_object_ref(),
-                    &oref.owner,
-                )
-            })
+            .map(|oref| FullObjectRef::from_object_ref_and_owner(oref.0, &oref.1))
             .collect()
     }
 
-    async fn execute(
-        cluster: &TestCluster,
-        ptb: ProgrammableTransaction,
-    ) -> SuiTransactionBlockEffects {
+    async fn execute(cluster: &TestCluster, ptb: ProgrammableTransaction) -> TransactionEffects {
         let context = &cluster.wallet;
         let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
 
@@ -661,11 +651,7 @@ mod sim_only_tests {
             ))
             .await;
 
-        context
-            .execute_transaction_must_succeed(txn)
-            .await
-            .effects
-            .unwrap()
+        context.execute_transaction_must_succeed(txn).await.effects
     }
 
     async fn expect_upgrade_failed(cluster: &TestCluster) {

@@ -988,7 +988,10 @@ pub async fn upgrade_package_with_wallet(
 
     let resp = context.execute_transaction_must_succeed(transaction).await;
 
-    (resp.get_new_package_obj().unwrap(), resp.digest)
+    (
+        resp.get_new_package_obj().unwrap(),
+        resp.transaction.digest(),
+    )
 }
 
 /// Write a Published.toml file into the package at `pkg_path`. It will set the environment to

@@ -12,10 +12,10 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_move_build::BuildConfig;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::base_types::{ConsensusObjectSequenceKey, ObjectID, ObjectRef, SuiAddress};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
 use sui_types::transaction::{CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TransactionData};
@@ -193,7 +193,7 @@ impl SurferState {
             "Successfully executed transaction {:?} with response {:?}",
             tx, response
         );
-        let effects = response.effects.unwrap();
+        let effects = response.effects;
         info!(
             "[{:?}] Calling Move function {:?}::{:?} returned {:?}",
             self.address,
@@ -212,15 +212,15 @@ impl SurferState {
     }
 
     #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
-    async fn process_tx_effects(&mut self, effects: &SuiTransactionBlockEffects) {
-        for (owned_ref, write_kind) in effects.all_changed_objects() {
-            if matches!(owned_ref.owner, Owner::ObjectOwner(_)) {
+    async fn process_tx_effects(&mut self, effects: &TransactionEffects) {
+        for (obj_ref, owner, write_kind) in effects.all_changed_objects() {
+            if matches!(owner, Owner::ObjectOwner(_)) {
                 // For object owned objects, we don't need to do anything.
                 // We also cannot read them because in the case of shared objects, there can be
                 // races and the child object may no longer exist.
                 continue;
             }
-            let obj_ref = owned_ref.reference.to_object_ref();
+            // let obj_ref = owned_ref.reference.to_object_ref();
             let object = self
                 .cluster
                 .get_object_from_fullnode_store(&obj_ref.0)
@@ -231,7 +231,7 @@ impl SurferState {
                 continue;
             }
             let struct_tag = object.struct_tag().unwrap();
-            match owned_ref.owner {
+            match owner {
                 Owner::Immutable => {
                     self.immutable_objects
                         .write()
@@ -374,7 +374,7 @@ impl SurferState {
             }
         };
         info!("Successfully published package in {:?}", path);
-        self.process_tx_effects(&response.effects.unwrap()).await;
+        self.process_tx_effects(&response.effects).await;
     }
 
     pub fn matching_owned_objects_count(&self, type_tag: &StructTag) -> usize {
