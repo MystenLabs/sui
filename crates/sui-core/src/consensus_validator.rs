@@ -9,7 +9,9 @@ use std::{
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
+use itertools::Itertools;
 use mysten_metrics::monitored_scope;
+use nonempty::NonEmpty;
 use prometheus::{
     IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry,
@@ -138,11 +140,21 @@ impl SuiTxValidator {
                         )
                         .into());
                     }
-                    if epoch_store.protocol_config().address_aliases() && tx.aliases().is_none() {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransactionV2 must contain an aliases claim".to_string(),
-                        )
-                        .into());
+                    if epoch_store.protocol_config().address_aliases() {
+                        let has_aliases = if epoch_store
+                            .protocol_config()
+                            .fix_checkpoint_signature_mapping()
+                        {
+                            tx.aliases().is_some()
+                        } else {
+                            tx.aliases_v1().is_some()
+                        };
+                        if !has_aliases {
+                            return Err(SuiErrorKind::UnexpectedMessage(
+                                "ConsensusTransactionKind::UserTransactionV2 must contain an aliases claim".to_string(),
+                            )
+                            .into());
+                        }
                     }
                     // TODO(fastpath): move deterministic verifications of user transactions here.
                 }
@@ -243,7 +255,8 @@ impl SuiTxValidator {
         tx: PlainTransactionWithClaims,
     ) -> SuiResult<()> {
         // Extract claims before consuming the transaction
-        let aliases = tx.aliases();
+        let aliases_v2 = tx.aliases();
+        let aliases_v1 = tx.aliases_v1();
         let claimed_immutable_ids = tx.get_immutable_objects();
         let inner_tx = tx.into_tx();
 
@@ -272,11 +285,42 @@ impl SuiTxValidator {
         let verified_tx = epoch_store.verify_transaction_with_current_aliases(inner_tx)?;
 
         // aliases must have data when address_aliases() is enabled.
-        if epoch_store.protocol_config().address_aliases()
-            && (*verified_tx.aliases() != aliases.unwrap()
-                || fail_point_always_report_aliases_changed)
-        {
-            return Err(SuiErrorKind::AliasesChanged.into());
+        if epoch_store.protocol_config().address_aliases() {
+            let aliases_match = if epoch_store
+                .protocol_config()
+                .fix_checkpoint_signature_mapping()
+            {
+                // V2 format comparison
+                let Some(claimed_v2) = aliases_v2 else {
+                    return Err(
+                        SuiErrorKind::InvalidRequest("missing address alias claim".into()).into(),
+                    );
+                };
+                *verified_tx.aliases() == claimed_v2
+            } else {
+                // V1 format comparison: derive V1 from verified_tx and compare
+                let Some(claimed_v1) = aliases_v1 else {
+                    return Err(
+                        SuiErrorKind::InvalidRequest("missing address alias claim".into()).into(),
+                    );
+                };
+                let computed_v1: Vec<_> = verified_tx
+                    .tx()
+                    .data()
+                    .intent_message()
+                    .value
+                    .required_signers()
+                    .into_iter()
+                    .zip_eq(verified_tx.aliases().iter().map(|(_, seq)| *seq))
+                    .collect();
+                let computed_v1 =
+                    NonEmpty::from_vec(computed_v1).expect("must have at least one signer");
+                computed_v1 == claimed_v1
+            };
+
+            if !aliases_match || fail_point_always_report_aliases_changed {
+                return Err(SuiErrorKind::AliasesChanged.into());
+            }
         }
 
         let inner_tx = verified_tx.into_tx();
