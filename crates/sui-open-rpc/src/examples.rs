@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::str::FromStr;
 
+use base64::Engine;
 use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::identifier::Identifier;
@@ -1282,10 +1283,12 @@ impl RpcExampleProvider {
             })
             .collect::<Vec<_>>();
 
-        let next_cursor = items.last().unwrap().object_id();
+        let next_cursor = items.last().unwrap().object_id().unwrap();
+        let next_cursor =
+            base64::engine::general_purpose::STANDARD.encode(bcs::to_bytes(&next_cursor).unwrap());
         let result = ObjectsPage {
             data: items,
-            next_cursor: Some(next_cursor.unwrap()),
+            next_cursor: Some(next_cursor),
             has_next_page: true,
         };
 

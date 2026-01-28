@@ -3804,7 +3804,7 @@
           "name": "cursor",
           "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
-            "$ref": "#/components/schemas/ObjectID"
+            "type": "string"
           }
         },
         {
@@ -3821,7 +3821,7 @@
         "name": "ObjectsPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_String"
         }
       },
       "examples": [
@@ -3912,7 +3912,7 @@
                   }
                 }
               ],
-              "nextCursor": "0xe26860fac6839ce2d7ed7e6f29d276a1b4c23f2d9a9b6f0d8b2c17beace292b7",
+              "nextCursor": "4mhg+saDnOLX7X5vKdJ2obTCPy2am28NiywXvqzikrc=",
               "hasNextPage": true
             }
           }
@@ -8218,7 +8218,7 @@
           }
         }
       },
-      "Page_for_SuiObjectResponse_and_ObjectID": {
+      "Page_for_SuiObjectResponse_and_String": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
@@ -8236,13 +8236,9 @@
             "type": "boolean"
           },
           "nextCursor": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           }
         }

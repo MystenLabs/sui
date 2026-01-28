@@ -84,7 +84,7 @@ impl ReadApi {
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> SuiRpcResult<ObjectsPage> {
         Ok(self

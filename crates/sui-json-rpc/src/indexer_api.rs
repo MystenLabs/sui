@@ -44,6 +44,7 @@ use crate::{
     error::{Error, SuiRpcInputError},
     with_tracing,
 };
+use base64::Engine;
 
 pub fn spawn_subscription<S, T>(
     sink: PendingSubscriptionSink,
@@ -155,7 +156,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         with_tracing!(async move {
@@ -164,6 +165,16 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             self.metrics.get_owned_objects_limit.observe(limit as f64);
             let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
             let options = options.unwrap_or_default();
+            let cursor = match cursor {
+                Some(c) => {
+                    let decoded = base64::engine::general_purpose::STANDARD
+                        .decode(&c)
+                        .map_err(|e| Error::SuiRpcInputError(SuiRpcInputError::Base64(e.into())))?;
+                    let object_id: ObjectID = bcs::from_bytes(&decoded).unwrap();
+                    Some(object_id)
+                }
+                None => None,
+            };
             let mut objects = self
                 .state
                 .get_owner_objects_with_limit(address, cursor, limit + 1, filter)
@@ -172,10 +183,11 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             // objects here are of size (limit + 1), where the last one is the cursor for the next page
             let has_next_page = objects.len() > limit;
             objects.truncate(limit);
-            let next_cursor = objects
-                .last()
-                .cloned()
-                .map_or(cursor, |o_info| Some(o_info.object_id));
+            let next_cursor = objects.last().cloned().and_then(|o_info| {
+                let bcs = bcs::to_bytes(&o_info.object_id).unwrap();
+                let encoded_string = base64::engine::general_purpose::STANDARD.encode(&bcs);
+                Some(encoded_string)
+            });
 
             let data = match options.is_not_in_object_info() {
                 true => {
