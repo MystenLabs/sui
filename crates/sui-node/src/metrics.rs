@@ -147,7 +147,7 @@ impl MetricsCallbackProvider for GrpcMetrics {
 
 #[cfg(test)]
 mod tests {
-    use mysten_metrics::start_prometheus_server;
+    use mysten_metrics::{MetricsServer, start_prometheus_server};
     use prometheus::{IntCounter, Registry};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -156,7 +156,9 @@ mod tests {
         let port: u16 = 8081;
         let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
 
-        let registry_service = start_prometheus_server(socket);
+        let MetricsServer {
+            registry_service, ..
+        } = start_prometheus_server(socket);
 
         tokio::task::yield_now().await;
 

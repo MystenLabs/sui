@@ -3,6 +3,7 @@
 
 use super::node::RuntimeType;
 use futures::FutureExt;
+use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 use std::thread;
 use sui_config::NodeConfig;
@@ -93,12 +94,12 @@ impl Container {
             let runtime = builder.enable_all().build().unwrap();
 
             runtime.block_on(async move {
-                let registry_service = mysten_metrics::start_prometheus_server(config.metrics_address);
+                let metrics_server = mysten_metrics::start_prometheus_server(config.metrics_address);
                 info!(
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
-                    config.metrics_address
+                    metrics_server.listen_address
                 );
-                let server = SuiNode::start(config, registry_service).await.unwrap();
+                let server = SuiNode::start(config, metrics_server).await.unwrap();
                 // Notify that we've successfully started the node
                 let _ = startup_sender.send(Arc::downgrade(&server));
                 // run until canceled
@@ -120,6 +121,10 @@ impl Container {
     /// Get a SuiNodeHandle to the node owned by the container.
     pub fn get_node_handle(&self) -> Option<SuiNodeHandle> {
         Some(SuiNodeHandle::new(self.node.upgrade()?))
+    }
+
+    pub fn metrics_address(&self) -> Option<SocketAddr> {
+        self.node.upgrade().map(|n| n.metrics_address())
     }
 
     /// Check to see that the Node is still alive by checking if the receiving side of the

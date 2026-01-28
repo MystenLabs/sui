@@ -21,7 +21,7 @@ use sui_config::Config;
 use tracing::info;
 
 use mysten_metrics::spawn_logged_monitored_task;
-use mysten_metrics::start_prometheus_server;
+use mysten_metrics::{MetricsServer, start_prometheus_server};
 
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::sui_bridge_watchdog::{
@@ -64,7 +64,9 @@ async fn main() -> Result<()> {
     // Init metrics server
     let metrics_address =
         SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), config.metric_port);
-    let registry_service = start_prometheus_server(metrics_address);
+    let MetricsServer {
+        registry_service, ..
+    } = start_prometheus_server(metrics_address);
     let registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
     info!("Metrics server started at port {}", config.metric_port);

@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use anyhow::anyhow;
+use std::net::SocketAddr;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 use sui_config::NodeConfig;
@@ -91,6 +92,14 @@ impl Node {
             .unwrap()
             .as_ref()
             .and_then(|c| c.get_node_handle())
+    }
+
+    pub fn metrics_address(&self) -> Option<SocketAddr> {
+        self.container
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|c| c.metrics_address())
     }
 
     /// Perform a health check on this Node by:

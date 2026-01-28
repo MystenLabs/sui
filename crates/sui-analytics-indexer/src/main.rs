@@ -24,7 +24,9 @@ async fn main() -> Result<()> {
     let config: IndexerConfig = serde_yaml::from_str(&std::fs::read_to_string(&args[1])?)?;
     info!("Parsed config: {:#?}", config);
 
-    let registry_service = mysten_metrics::start_prometheus_server(
+    let mysten_metrics::MetricsServer {
+        registry_service, ..
+    } = mysten_metrics::start_prometheus_server(
         format!(
             "{}:{}",
             config.client_metric_host, config.client_metric_port

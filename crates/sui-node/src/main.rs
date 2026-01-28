@@ -77,8 +77,8 @@ fn main() {
 
     let runtimes = SuiRuntimes::new(&config);
     let metrics_rt = runtimes.metrics.enter();
-    let registry_service = mysten_metrics::start_prometheus_server(config.metrics_address);
-    let prometheus_registry = registry_service.default_registry();
+    let metrics_server = mysten_metrics::start_prometheus_server(config.metrics_address);
+    let prometheus_registry = metrics_server.registry_service.default_registry();
 
     // Initialize logging
     let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
@@ -96,7 +96,7 @@ fn main() {
 
     info!(
         "Started Prometheus HTTP endpoint at {}",
-        config.metrics_address
+        metrics_server.listen_address
     );
 
     {
@@ -108,7 +108,7 @@ fn main() {
                 metrics_config.push_interval_seconds,
                 push_url.clone(),
                 config.network_key_pair().copy(),
-                registry_service.clone(),
+                metrics_server.registry_service.clone(),
             );
         }
     }
@@ -131,7 +131,7 @@ fn main() {
 
     let server_version = ServerVersion::new(env!("CARGO_BIN_NAME"), VERSION);
     runtimes.sui_node.spawn(async move {
-        match sui_node::SuiNode::start_async(config, registry_service, server_version).await {
+        match sui_node::SuiNode::start_async(config, metrics_server, server_version).await {
             Ok(sui_node) => node_once_cell_clone
                 .set(sui_node)
                 .expect("Failed to set node in AsyncOnceCell"),

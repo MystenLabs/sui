@@ -79,7 +79,9 @@ async fn main() -> Result<()> {
     }
     let _guard = config.with_env().init();
 
-    let registry_service = mysten_metrics::start_prometheus_server(
+    let mysten_metrics::MetricsServer {
+        registry_service, ..
+    } = mysten_metrics::start_prometheus_server(
         format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
             .parse()
             .unwrap(),

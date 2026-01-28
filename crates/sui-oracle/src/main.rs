@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use mysten_metrics::start_prometheus_server;
+use mysten_metrics::{MetricsServer, start_prometheus_server};
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::Config;
@@ -29,7 +29,9 @@ async fn main() -> anyhow::Result<()> {
         WalletContext::new(&args.client_config_path)?.with_request_timeout(Duration::from_secs(10)); // request times out after 10 secs
 
     // Init metrics server
-    let registry_service = start_prometheus_server(config.metrics_address);
+    let MetricsServer {
+        registry_service, ..
+    } = start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
 
     // Init logging

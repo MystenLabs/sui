@@ -835,8 +835,9 @@ pub async fn download_formal_snapshot(
     }
 
     // Start prometheus server so that we can serve metrics during snapshot download
-    let registry_service =
-        mysten_metrics::start_prometheus_server("127.0.0.1:9184".parse().unwrap());
+    let mysten_metrics::MetricsServer {
+        registry_service, ..
+    } = mysten_metrics::start_prometheus_server("127.0.0.1:9184".parse().unwrap());
     let prometheus_registry = registry_service.default_registry();
     DBMetrics::init(registry_service.clone());
     mysten_metrics::init_metrics(&prometheus_registry);

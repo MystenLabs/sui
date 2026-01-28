@@ -599,12 +599,17 @@ pub fn bridge_uptime_metric(
     Box::new(metric)
 }
 
+pub struct MetricsServer {
+    pub registry_service: RegistryService,
+    pub listen_address: SocketAddr,
+}
+
 pub const METRICS_ROUTE: &str = "/metrics";
 
 // Creates a new http server that has as a sole purpose to expose
 // and endpoint that prometheus agent can use to poll for the metrics.
-// A RegistryService is returned that can be used to get access in prometheus Registries.
-pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
+// A MetricsServer is returned that can be used to get access in prometheus Registries.
+pub fn start_prometheus_server(addr: SocketAddr) -> MetricsServer {
     let registry = Registry::new();
 
     let registry_service = RegistryService::new(registry);
@@ -613,21 +618,37 @@ pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
         // prometheus uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
         // can't yet run it in the simulator.
         warn!("not starting prometheus server in simulator");
-        return registry_service;
+        return MetricsServer {
+            registry_service,
+            listen_address: addr,
+        };
     }
+
+    let tcp_listener =
+        std::net::TcpListener::bind(addr).expect("failed to bind prometheus server address");
+    let local_addr = tcp_listener
+        .local_addr()
+        .expect("failed to get local address");
+    tcp_listener
+        .set_nonblocking(true)
+        .expect("failed to set non-blocking");
 
     let app = Router::new()
         .route(METRICS_ROUTE, get(metrics))
         .layer(Extension(registry_service.clone()));
 
     tokio::spawn(async move {
-        let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+        let listener = tokio::net::TcpListener::from_std(tcp_listener)
+            .expect("failed to create tokio TcpListener from std");
         axum::serve(listener, app.into_make_service())
             .await
             .unwrap();
     });
 
-    registry_service
+    MetricsServer {
+        registry_service,
+        listen_address: local_addr,
+    }
 }
 
 pub async fn metrics(

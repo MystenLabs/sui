@@ -548,7 +548,7 @@ impl FullnodeConfigBuilder {
                 .unwrap_or(validator_config.network_address),
             metrics_address: self
                 .metrics_address
-                .unwrap_or(local_ip_utils::new_local_tcp_socket_for_testing()),
+                .unwrap_or_else(|| SocketAddr::new(localhost.parse().unwrap(), 0)),
             admin_interface_port: self
                 .admin_interface_port
                 .unwrap_or(local_ip_utils::get_available_port(&localhost)),

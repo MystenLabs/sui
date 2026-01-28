@@ -19,7 +19,9 @@ async fn main() -> Result<()> {
     let pd_api_key = env::var("PD_API_KEY").expect("PD_API_KEY env var must be set");
     let sf_password = env::var("SF_PASSWORD").expect("SF_PASSWORD env var must be set");
 
-    let registry_service = mysten_metrics::start_prometheus_server(
+    let mysten_metrics::MetricsServer {
+        registry_service, ..
+    } = mysten_metrics::start_prometheus_server(
         format!(
             "{}:{}",
             config.client_metric_host, config.client_metric_port

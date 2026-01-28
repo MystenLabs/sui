@@ -19,6 +19,7 @@ use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::future::Future;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
@@ -248,6 +249,7 @@ pub struct SuiNode {
     state: Arc<AuthorityState>,
     transaction_orchestrator: Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
+    metrics_address: SocketAddr,
     metrics: Arc<SuiNodeMetrics>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
 
@@ -298,11 +300,11 @@ static MAX_JWK_KEYS_PER_FETCH: usize = 100;
 impl SuiNode {
     pub async fn start(
         config: NodeConfig,
-        registry_service: RegistryService,
+        metrics_server: mysten_metrics::MetricsServer,
     ) -> Result<Arc<SuiNode>> {
         Self::start_async(
             config,
-            registry_service,
+            metrics_server,
             ServerVersion::new("sui-node", "unknown"),
         )
         .await
@@ -445,9 +447,13 @@ impl SuiNode {
 
     pub async fn start_async(
         config: NodeConfig,
-        registry_service: RegistryService,
+        metrics_server: mysten_metrics::MetricsServer,
         server_version: ServerVersion,
     ) -> Result<Arc<SuiNode>> {
+        let mysten_metrics::MetricsServer {
+            registry_service,
+            listen_address: metrics_address,
+        } = metrics_server;
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
@@ -898,6 +904,7 @@ impl SuiNode {
             state,
             transaction_orchestrator,
             registry_service,
+            metrics_address,
             metrics: sui_node_metrics,
             checkpoint_metrics,
 
@@ -1702,6 +1709,10 @@ impl SuiNode {
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.state.clone()
+    }
+
+    pub fn metrics_address(&self) -> SocketAddr {
+        self.metrics_address
     }
 
     // Only used for testing because of how epoch store is loaded.

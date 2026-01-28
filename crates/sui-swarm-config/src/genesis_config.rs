@@ -266,7 +266,7 @@ impl GenesisConfig {
 }
 
 fn default_socket_address() -> SocketAddr {
-    local_ip_utils::new_local_tcp_socket_for_testing()
+    SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 0)
 }
 
 fn default_multiaddr_address() -> Multiaddr {

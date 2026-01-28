@@ -47,7 +47,9 @@ async fn main() -> Result<()> {
         std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", app.credentials.clone());
     };
     let server_version = Some(ServerVersion::new("sui-kv-rpc", VERSION));
-    let registry_service = mysten_metrics::start_prometheus_server(
+    let mysten_metrics::MetricsServer {
+        registry_service, ..
+    } = mysten_metrics::start_prometheus_server(
         format!("{}:{}", app.metrics_host, app.metrics_port).parse()?,
     );
     let registry: Registry = registry_service.default_registry();

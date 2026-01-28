@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
 #[cfg(msim)]
 use std::sync::{Arc, atomic::AtomicI16};
 use sui_types::multiaddr::Multiaddr;
@@ -120,20 +119,6 @@ pub fn new_udp_address_for_testing(host: &str) -> Multiaddr {
     format!("/ip4/{}/udp/{}", host, get_available_port(host))
         .parse()
         .unwrap()
-}
-
-/// Returns a new unique TCP address in String format for localhost, by finding a new available port on localhost.
-pub fn new_local_tcp_socket_for_testing_string() -> String {
-    format!(
-        "{}:{}",
-        localhost_for_testing(),
-        get_available_port(&localhost_for_testing())
-    )
-}
-
-/// Returns a new unique TCP address (SocketAddr) for localhost, by finding a new available port on localhost.
-pub fn new_local_tcp_socket_for_testing() -> SocketAddr {
-    new_local_tcp_socket_for_testing_string().parse().unwrap()
 }
 
 /// Returns a new unique TCP address (Multiaddr) for localhost, by finding a new available port on localhost.

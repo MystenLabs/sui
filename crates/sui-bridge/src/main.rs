@@ -3,7 +3,7 @@
 
 use clap::Parser;
 use fastcrypto::traits::KeyPair;
-use mysten_metrics::start_prometheus_server;
+use mysten_metrics::{MetricsServer, start_prometheus_server};
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
@@ -35,7 +35,9 @@ async fn main() -> anyhow::Result<()> {
     // Init metrics server
     let metrics_address =
         SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), config.metrics_port);
-    let registry_service = start_prometheus_server(metrics_address);
+    let MetricsServer {
+        registry_service, ..
+    } = start_prometheus_server(metrics_address);
     let prometheus_registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&prometheus_registry);
     info!("Metrics server started at port {}", config.metrics_port);
