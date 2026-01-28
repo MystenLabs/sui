@@ -16,7 +16,7 @@ if ! git diff --quiet --exit-code -- $path || ! git diff --cached --quiet --exit
 fi
 
 # parse -t option to get test duration, -s flag for split version, -d flag for description, and -u flag for upgrade
-while getopts t:d:sua:l:h flag
+while getopts t:d:sua:l:mhr: flag
 do
     case "${flag}" in
         t) TEST_DURATION=${OPTARG};;
@@ -25,7 +25,12 @@ do
         u) UPGRADE=true;;
         a) ALT_COMMIT=${OPTARG};;
         l) LOG_LEVEL=${OPTARG};;
-        h) echo "Usage: run-antithesis-tests [-t test_duration] [-s] [-d description] [-u] [-a alt_commit] [-l log_level]"; exit 0;;
+        m) STRESS_FROM_MAIN=true;;
+        r) WORKFLOW_BRANCH=${OPTARG};;
+        h) echo "Usage: run-antithesis-tests [-t test_duration] [-s] [-d description] [-u] [-a alt_commit] [-l log_level] [-m] [-r branch]"
+           echo "  -m: use origin/main for stress image (default: current branch)"
+           echo "  -r: branch/tag/SHA in sui-operations repo to run workflow from"
+           exit 0;;
     esac
 done
 
@@ -50,6 +55,10 @@ cd $SUI_OPS_REPO
 
 cmd="gh workflow run .github/workflows/run-antithesis-tests.yaml -f sui_commit=$COMMIT -f test_duration=$TEST_DURATION"
 
+if [ -n "$WORKFLOW_BRANCH" ]; then
+  cmd="$cmd -r $WORKFLOW_BRANCH"
+fi
+
 if [ -n "$DESCRIPTION" ]; then
   cmd="$cmd -f description='$DESCRIPTION'"
 fi
@@ -68,6 +77,11 @@ if [ -n "$LOG_LEVEL" ]; then
     exit 1
   fi
   cmd="$cmd -f log_level=$LOG_LEVEL"
+fi
+
+# Use current branch for stress image by default, unless -m flag is set
+if [ "$STRESS_FROM_MAIN" != true ]; then
+  cmd="$cmd -f stress_commit=$branch"
 fi
 
 echo Running: $cmd
