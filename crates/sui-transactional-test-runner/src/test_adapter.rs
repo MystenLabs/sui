@@ -1576,9 +1576,7 @@ impl SuiTestAdapter {
             // Try and parse the encoded cursor, if it fails, assume the cursor is a plain
             // JSON cursor.
             let c = self.interpolate_contents(s, &variables)?;
-            println!("Raw cursor {idx}: {}", &c);
             let encoded = Base64::encode(cursor::parse(&c).unwrap_or_else(|_| c.into_bytes()));
-            println!("Encoded cursor {idx}: {}", &encoded);
 
             // Add the encoded cursor to the variables map because they may get used in the query.
             variables.insert(format!("cursor_{idx}"), encoded);
