@@ -9,6 +9,7 @@ use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
+use nonempty::NonEmpty;
 use prometheus::{
     Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
     register_gauge_with_registry, register_histogram_vec_with_registry,
@@ -885,7 +886,26 @@ impl ValidatorService {
 
                 let (tx, aliases) = verified_transaction.into_inner();
                 if epoch_store.protocol_config().address_aliases() {
-                    claims.push(TransactionClaim::AddressAliasesV2(aliases));
+                    if epoch_store
+                        .protocol_config()
+                        .fix_checkpoint_signature_mapping()
+                    {
+                        claims.push(TransactionClaim::AddressAliasesV2(aliases));
+                    } else {
+                        let v1_aliases: Vec<_> = tx
+                            .data()
+                            .intent_message()
+                            .value
+                            .required_signers()
+                            .into_iter()
+                            .zip_eq(aliases.into_iter().map(|(_, seq)| seq))
+                            .collect();
+                        #[allow(deprecated)]
+                        claims.push(TransactionClaim::AddressAliases(
+                            NonEmpty::from_vec(v1_aliases)
+                                .expect("must have at least one required_signer"),
+                        ));
+                    }
                 }
 
                 let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
