@@ -1897,7 +1897,7 @@ impl CheckpointBuilder {
                 .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
         );
 
-        let mut sorted: Vec<TransactionEffects> = Vec::new();
+        let mut all_effects: Vec<TransactionEffects> = Vec::new();
         let mut all_root_digests: Vec<TransactionDigest> = Vec::new();
 
         let last_checkpoint =
@@ -1967,6 +1967,9 @@ impl CheckpointBuilder {
                 self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
 
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+            let tx_index_offset = all_effects.len() as u64;
+            let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+
             if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
                 if cfg!(debug_assertions) {
                     for tx in unsorted.iter() {
@@ -1983,24 +1986,25 @@ impl CheckpointBuilder {
                         &sorted,
                         checkpoint_roots.height,
                         next_checkpoint_seq,
-                        0, // TODO we may remove offset param post split_checkpoints_in_consensus_handler;
-                           // all txn effects now included in sorted; no need for offset.
+                        tx_index_offset,
                     )
                     .await;
                 debug!(?tx_key, "executed settlement transactions");
 
                 sorted.extend(settlement_effects);
             }
+
+            all_effects.extend(sorted);
         }
 
         #[cfg(msim)]
         {
             self.expensive_consensus_commit_prologue_invariants_check_v2(
                 &all_root_digests,
-                &sorted,
+                &all_effects,
             );
         }
-        Ok((sorted, all_root_digests.into_iter().collect()))
+        Ok((all_effects, all_root_digests.into_iter().collect()))
     }
 
     // Extracts the consensus commit prologue digest and effects from the root transactions.
