@@ -98,6 +98,8 @@ jobs:
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+      - name: Install BigTable emulator
+        run: gcloud components install cbt bigtable 2>/dev/null || true
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
