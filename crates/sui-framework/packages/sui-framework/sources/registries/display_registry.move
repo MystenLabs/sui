@@ -192,14 +192,6 @@ public fun cap_id<T>(display: &Display<T>): Option<ID> {
     display.cap_id
 }
 
-public(package) fun create_internal(ctx: &mut TxContext) {
-    assert!(ctx.sender() == @0x0, ENotSystemAddress);
-
-    // TODO: Replace with known system address.
-    transfer::share_object(DisplayRegistry { id: object::new(ctx) });
-    transfer::transfer(SystemMigrationCap { id: object::new(ctx) }, SYSTEM_MIGRATION_ADDRESS);
-}
-
 public(package) fun migration_cap_receiver(): address {
     SYSTEM_MIGRATION_ADDRESS
 }
@@ -221,8 +213,22 @@ macro fun new_display<$T>(
     (display, cap)
 }
 
-// Create a new display registry object callable only from 0x0 (end of epoch)
 #[allow(unused_function)]
+/// Create a new display registry object callable only from 0x0 (end of epoch)
 fun create(ctx: &mut TxContext) {
-    create_internal(ctx);
+    assert!(ctx.sender() == @0x0, ENotSystemAddress);
+
+    transfer::share_object(DisplayRegistry {
+        id: object::sui_display_registry_object_id(),
+    });
+
+    transfer::transfer(
+        SystemMigrationCap { id: object::new(ctx) },
+        SYSTEM_MIGRATION_ADDRESS,
+    );
+}
+
+#[test_only]
+public(package) fun create_internal(ctx: &mut TxContext) {
+    create(ctx);
 }
