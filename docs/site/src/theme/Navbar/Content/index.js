@@ -98,20 +98,30 @@ function SearchLauncher() {
   );
 }
 
+function KapaButton() {
+  const handleClick = () => {
+    if (typeof window !== "undefined" && window.Kapa) {
+      window.Kapa.open();
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="kapa-trigger-btn flex items-center gap-2.5 cursor-pointer bg-white text-gray-900 font-semibold text-base px-5 py-2.5 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors mx-2"
+    >
+      <img src="/img/logo.svg" alt="" width="23" height="23" />
+      Ask Sui AI
+    </button>
+  );
+}
+
 export default function NavbarContent() {
   const mobileSidebar = useMobileSidebarSafe();
   const items = useNavbarItems();
   const [leftItems, rightItems] = splitNavbarItems(items);
   const searchBarItem = items.find((item) => item.type === "search");
-
-  React.useEffect(() => {
-    try {
-      window.initCookbook?.();
-    } catch (e) {
-      // Gracefully ignore errors if something goes wrong
-      console.error("Error initializing Ask Cookbook", e);
-    }
-  }, []);
 
   return (
     <NavbarContentLayout
@@ -123,16 +133,17 @@ export default function NavbarContent() {
         </>
       }
       right={
-        <>
+        <div className="flex items-center gap-3">
           <NavbarItems items={rightItems} />
           <ThemeToggle />
+          <KapaButton />
           {!searchBarItem && (
             <NavbarSearch>
               <SearchLauncher />
               <GetStartedLink />
             </NavbarSearch>
           )}
-        </>
+        </div>
       }
     />
   );
