@@ -4509,8 +4509,7 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        // temporarily disable while debugging
-                        cfg.feature_flags.split_checkpoints_in_consensus_handler = false;
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
                     }
                     cfg.feature_flags.validate_zklogin_public_identifier = true;
                     cfg.feature_flags.fix_checkpoint_signature_mapping = true;
