@@ -25,6 +25,9 @@ on:
         type: string
         required: true
 
+permissions:
+  contents: write
+
 env:
   SUI_COMMIT: "${{ github.event.client_payload.sui_commit || inputs.sui_commit }}"
   TAG_NAME: "${{ github.event.client_payload.tag_name || inputs.tag_name }}"
@@ -37,7 +40,7 @@ jobs:
     steps:
     - name: Create or update tag via GitHub API
       env:
-        GH_TOKEN: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Check if tag already exists
         if gh api repos/${{ github.repository }}/git/refs/tags/${{ env.TAG_NAME }} --silent 2>/dev/null; then
@@ -52,4 +55,4 @@ jobs:
             -f sha="${{ env.SUI_COMMIT }}"
         fi
 
-        echo "✅ Tag ${{ env.TAG_NAME }} now points to ${{ env.SUI_COMMIT }}"
+        echo "Tag ${{ env.TAG_NAME }} now points to ${{ env.SUI_COMMIT }}"
