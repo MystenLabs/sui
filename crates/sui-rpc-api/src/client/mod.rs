@@ -388,6 +388,26 @@ impl Client {
             .take()
             .unwrap_or_default())
     }
+
+    pub async fn get_system_state(&self, epoch: Option<u64>) -> Result<Box<proto::SystemState>> {
+        let mut request = proto::GetEpochRequest::default();
+        if let Some(epoch) = epoch {
+            request.set_epoch(epoch);
+        }
+        request.set_read_mask(FieldMask::from_paths([
+            proto::Epoch::path_builder().epoch(),
+            proto::Epoch::path_builder().system_state().finish(),
+        ]));
+        let mut response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        Ok(response.epoch_mut().system_state.take().unwrap_or_default())
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
