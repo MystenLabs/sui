@@ -1238,6 +1238,52 @@ async fn test_simulate_transaction_effects_json() {
 }
 
 #[tokio::test]
+async fn test_simulate_transaction_payload_bypasses_query_limit() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    let mut tx_builder = validator_cluster.test_transaction_builder().await;
+    let payload_size = GraphQlConfig::default().limits.max_query_payload_size;
+    tx_builder
+        .ptb_builder_mut()
+        .pure_bytes(vec![0u8; payload_size as usize], false);
+
+    let tx_data = tx_builder.build();
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects { status }
+                    error
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    assert_eq!(
+        result.pointer("/data/simulateTransaction/effects/status"),
+        Some(&json!("SUCCESS"))
+    );
+    assert_eq!(
+        result.pointer("/data/simulateTransaction/error"),
+        Some(&serde_json::Value::Null)
+    );
+}
+
+#[tokio::test]
 async fn test_simulate_transaction_transaction_json() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
