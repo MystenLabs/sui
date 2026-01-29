@@ -90,7 +90,7 @@ pub(crate) struct ObjectCursor {
 pub(crate) type Cursor = BcsCursor<ObjectCursor>;
 pub(crate) type ObjectIDs = PageResponse<ObjectID, String>;
 
-pub(crate) type CursorV2 = BcsCursor<Vec<u8>>;
+// pub(crate) type CursorV2 = BcsCursor<Vec<u8>>;
 
 impl SuiObjectDataFilter {
     /// Whether this is a compound filter (which is implemented using sequential scan), or a simple
