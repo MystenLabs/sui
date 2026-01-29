@@ -55,7 +55,7 @@ public fun add(e1: &Encryption, e2: &Encryption): Encryption {
     }
 }
 
-public fun add_assign<T>(a: &mut EncryptedAmount4U32<T>, b: &EncryptedAmount4U16<T>) {
+public fun add_assign(a: &mut EncryptedAmount4U32, b: &EncryptedAmount4U16) {
     a.l0 = add(&a.l0, &b.l0);
     a.l1 = add(&a.l1, &b.l1);
     a.l2 = add(&a.l2, &b.l2);
@@ -66,24 +66,24 @@ public fun add_assign<T>(a: &mut EncryptedAmount4U32<T>, b: &EncryptedAmount4U16
 // Stored as two u32 encryptions, which can be decrypted by user.
 // Value is l0 + 2^32 * l1.
 // Well formedness is not verified.
-public struct EncryptedAmount2U32Unverified<phantom T> has copy, drop, store {
+public struct EncryptedAmount2U32Unverified has copy, drop, store {
     // maybe phantom T?
     l0: Encryption,
     l1: Encryption,
 }
 
-public fun encrypted_amount_2_u32_unverified<T>(
+public fun encrypted_amount_2_u32_unverified(
     encryptions: vector<Encryption>,
-): EncryptedAmount2U32Unverified<T> {
+): EncryptedAmount2U32Unverified {
     assert!(encryptions.length() == 2);
-    EncryptedAmount2U32Unverified<T> {
+    EncryptedAmount2U32Unverified {
         l0: encryptions[0],
         l1: encryptions[1],
     }
 }
 
-public fun encrypted_amount_2_u_32_zero<T>(pk: &Element<Point>): EncryptedAmount2U32Unverified<T> {
-    EncryptedAmount2U32Unverified<T> {
+public fun encrypted_amount_2_u_32_zero(pk: &Element<Point>): EncryptedAmount2U32Unverified {
+    EncryptedAmount2U32Unverified {
         l0: encrypt_zero(pk),
         l1: encrypt_zero(pk),
     }
@@ -93,7 +93,7 @@ public fun encrypted_amount_2_u_32_zero<T>(pk: &Element<Point>): EncryptedAmount
 // Stored as four u16 encryptions, which can be decrypted by user and aggregated.
 // Value is l0 + 2^16 * l1 + 2^32 * l2 + 2^48 * l3.
 // Well formedness is verified.
-public struct EncryptedAmount4U16<phantom T> has copy, drop, store {
+public struct EncryptedAmount4U16 has copy, drop, store {
     // maybe phantom T?
     l0: Encryption,
     l1: Encryption,
@@ -101,9 +101,9 @@ public struct EncryptedAmount4U16<phantom T> has copy, drop, store {
     l3: Encryption,
 }
 
-public fun encrypted_amount_4_u16<T>(encryptions: vector<Encryption>): EncryptedAmount4U16<T> {
+public fun encrypted_amount_4_u16(encryptions: vector<Encryption>): EncryptedAmount4U16 {
     assert!(encryptions.length() == 4);
-    EncryptedAmount4U16<T> {
+    EncryptedAmount4U16 {
         l0: encryptions[0],
         l1: encryptions[1],
         l2: encryptions[2],
@@ -111,11 +111,8 @@ public fun encrypted_amount_4_u16<T>(encryptions: vector<Encryption>): Encrypted
     }
 }
 
-public fun encrypted_amount_4_u16_from_value<T>(
-    value: u64,
-    pk: &Element<Point>,
-): EncryptedAmount4U16<T> {
-    EncryptedAmount4U16<T> {
+public fun encrypted_amount_4_u16_from_value(value: u64, pk: &Element<Point>): EncryptedAmount4U16 {
+    EncryptedAmount4U16 {
         l0: encrypt_trivial((value & 0xFFFF) as u16, pk),
         l1: encrypt_trivial(((value >> 16) & 0xFFFF) as u16, pk),
         l2: encrypt_trivial(((value >> 32) & 0xFFFF) as u16, pk),
@@ -123,8 +120,8 @@ public fun encrypted_amount_4_u16_from_value<T>(
     }
 }
 
-public fun encrypted_amount_4_u16_zero<T>(pk: &Element<Point>): EncryptedAmount4U16<T> {
-    EncryptedAmount4U16<T> {
+public fun encrypted_amount_4_u16_zero(pk: &Element<Point>): EncryptedAmount4U16 {
+    EncryptedAmount4U16 {
         l0: encrypt_zero(pk),
         l1: encrypt_zero(pk),
         l2: encrypt_zero(pk),
@@ -136,16 +133,16 @@ public fun encrypted_amount_4_u16_zero<T>(pk: &Element<Point>): EncryptedAmount4
 // Four u16 encryptions that may overflow to u32.
 // Value is l0 + 2^16 * l1 + 2^32 * l2 + 2^48 * l3.
 // Well formedness is verified.
-public struct EncryptedAmount4U32<phantom T> has copy, drop, store {
+public struct EncryptedAmount4U32 has copy, drop, store {
     l0: Encryption,
     l1: Encryption,
     l2: Encryption,
     l3: Encryption,
 }
 
-public fun encrypted_amount_4_u32<T>(encryptions: vector<Encryption>): EncryptedAmount4U32<T> {
+public fun encrypted_amount_4_u32(encryptions: vector<Encryption>): EncryptedAmount4U32 {
     assert!(encryptions.length() == 4);
-    EncryptedAmount4U32<T> {
+    EncryptedAmount4U32 {
         l0: encryptions[0],
         l1: encryptions[1],
         l2: encryptions[2],
@@ -153,8 +150,8 @@ public fun encrypted_amount_4_u32<T>(encryptions: vector<Encryption>): Encrypted
     }
 }
 
-public fun encrypted_amount_4_u32_zero<T>(pk: &Element<Point>): EncryptedAmount4U32<T> {
-    EncryptedAmount4U32<T> {
+public fun encrypted_amount_4_u32_zero(pk: &Element<Point>): EncryptedAmount4U32 {
+    EncryptedAmount4U32 {
         l0: encrypt_zero(pk),
         l1: encrypt_zero(pk),
         l2: encrypt_zero(pk),
@@ -162,16 +159,14 @@ public fun encrypted_amount_4_u32_zero<T>(pk: &Element<Point>): EncryptedAmount4
     }
 }
 
-public fun encrypted_amount_4_u32_from_4_u16<T>(
-    ea: EncryptedAmount4U16<T>,
-): EncryptedAmount4U32<T> {
-    let EncryptedAmount4U16<T> {
+public fun encrypted_amount_4_u32_from_4_u16(ea: EncryptedAmount4U16): EncryptedAmount4U32 {
+    let EncryptedAmount4U16 {
         l0,
         l1,
         l2,
         l3,
     } = ea;
-    EncryptedAmount4U32<T> {
+    EncryptedAmount4U32 {
         l0,
         l1,
         l2,
