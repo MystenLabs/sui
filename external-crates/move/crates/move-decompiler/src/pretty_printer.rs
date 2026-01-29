@@ -429,10 +429,7 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
             .concat(exp(context, &args[1]))
             .concat(D::text(")")),
 
-        DataOp::VecPopBack(_) => maybe_parens(context, &args[0])
-            .concat(D::text(".pop_back("))
-            .concat(exp(context, &args[1]))
-            .concat(D::text(")")),
+        DataOp::VecPopBack(_) => maybe_parens(context, &args[0]).concat(D::text(".pop_back()")),
 
         DataOp::VecSwap(_) => maybe_parens(context, &args[0])
             .concat(D::text(".swap("))
