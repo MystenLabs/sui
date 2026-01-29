@@ -108,7 +108,11 @@ async fn transfer_coin(
         .build();
     let tx = wallet.sign_transaction(&tx_data).await;
 
-    wallet.execute_transaction_must_succeed(tx).await.digest
+    wallet
+        .execute_transaction_must_succeed(tx)
+        .await
+        .transaction
+        .digest()
 }
 
 #[tokio::test]

@@ -12,7 +12,6 @@ use std::{
     },
 };
 use sui_core::accumulators::balances::get_all_balances_for_owner;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -257,9 +256,8 @@ async fn test_accumulators_disabled() {
         .execute_transaction_may_fail(signed)
         .await
         .unwrap()
-        .effects
-        .unwrap();
-    let gas = effects.gas_object().reference.to_object_ref();
+        .effects;
+    let gas = effects.gas_object().0;
     let status = effects.status().clone();
     assert!(status.is_err());
 
@@ -293,9 +291,8 @@ async fn test_accumulators_disabled() {
         .execute_transaction_may_fail(signed)
         .await
         .unwrap()
-        .effects
-        .unwrap();
-    let gas = effects.gas_object().reference.to_object_ref();
+        .effects;
+    let gas = effects.gas_object().0;
     let status = effects.status().clone();
     assert!(status.is_err());
 
@@ -310,10 +307,8 @@ async fn test_accumulators_disabled() {
         .sign_and_execute_transaction(&tx)
         .await
         .effects
-        .unwrap()
         .gas_object()
-        .reference
-        .to_object_ref();
+        .0;
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
@@ -759,7 +754,7 @@ async fn test_sponsored_address_balance_storage_rebates() {
         .cluster
         .execute_transaction(signed_create_txn)
         .await;
-    let create_effects = create_resp.effects.as_ref().unwrap();
+    let create_effects = create_resp.effects;
 
     assert!(
         create_effects.status().is_ok(),
@@ -790,13 +785,13 @@ async fn test_sponsored_address_balance_storage_rebates() {
         sender_actual
     );
 
-    let created_objects: Vec<_> = create_effects.created().iter().collect();
+    let created_objects: Vec<_> = create_effects.created();
     assert_eq!(
         created_objects.len(),
         1,
         "Should have created exactly one object"
     );
-    let created_obj = created_objects[0].reference.to_object_ref();
+    let created_obj = created_objects[0].0;
     let delete_txn = create_delete_transaction_address_balance(
         sender,
         gas_test_package_id,
@@ -829,7 +824,7 @@ async fn test_sponsored_address_balance_storage_rebates() {
         .cluster
         .execute_transaction(signed_delete_txn)
         .await;
-    let delete_effects = delete_resp.effects.as_ref().unwrap();
+    let delete_effects = delete_resp.effects;
 
     assert!(
         delete_effects.status().is_ok(),
@@ -2181,7 +2176,7 @@ async fn test_multiple_deposits_merged_in_effects() {
     let res = test_cluster
         .sign_and_execute_transaction(&initial_deposit)
         .await;
-    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+    let gas = res.effects.gas_object().0;
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
@@ -2722,7 +2717,7 @@ async fn test_get_all_balances() {
             .build();
 
         let res = test_cluster.sign_and_execute_transaction(&tx).await;
-        res.effects.unwrap().gas_object().reference.to_object_ref()
+        res.effects.gas_object().0
     };
 
     let recipient = SuiAddress::random_for_testing_only();
@@ -2733,7 +2728,7 @@ async fn test_get_all_balances() {
             .build();
 
         let res = test_cluster.sign_and_execute_transaction(&tx).await;
-        res.effects.unwrap().gas_object().reference.to_object_ref()
+        res.effects.gas_object().0
     };
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
@@ -3001,7 +2996,7 @@ async fn test_transaction_executes_in_next_epoch_with_one_epoch_range() {
         .unwrap();
 
     assert!(
-        response.effects.unwrap().status().is_ok(),
+        response.effects.status().is_ok(),
         "Transaction with 1-epoch range should execute successfully in next epoch"
     );
 }
@@ -3263,13 +3258,13 @@ async fn address_balance_stress_test() {
                         .await
                     {
                         Ok(response) => {
-                            let effects = response.effects.unwrap();
+                            let effects = response.effects;
                             if effects.status().is_ok() {
                                 success_count.fetch_add(1, Ordering::Relaxed);
                             } else {
                                 failure_count.fetch_add(1, Ordering::Relaxed);
                             }
-                            current_gas = effects.gas_object().reference.to_object_ref();
+                            current_gas = effects.gas_object().0;
                         }
                         Err(err) => {
                             let err_str = err.to_string();
@@ -3345,7 +3340,7 @@ async fn test_address_balance_gas_merge_accumulator_events() {
         )
         .build();
     let resp = test_cluster.sign_and_execute_transaction(&deposit_tx).await;
-    let gas = resp.effects.unwrap().gas_object().reference.to_object_ref();
+    let gas = resp.effects.gas_object().0;
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();

@@ -52,6 +52,7 @@ hex-literal = { version = "0.3.4", optional = true }
 test-cluster = { workspace = true, optional = true }
 sui-sdk-types.workspace = true
 sui-rpc.workspace = true
+sui-rpc-api.workspace = true
 tonic.workspace = true
 tower.workspace = true
 thiserror.workspace = true

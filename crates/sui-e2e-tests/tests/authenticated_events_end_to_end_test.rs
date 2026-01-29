@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
 use sui_keys::keystore::AccountKeystore;
 use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_types::accumulator_root::EventCommitment;
 use sui_types::{
     accumulator_root::{self as ar, EventStreamHead},
@@ -52,7 +52,7 @@ async fn try_emit_authenticated_event(
     package_id: ObjectID,
     sender: SuiAddress,
     value: u64,
-) -> anyhow::Result<SuiTransactionBlockResponse> {
+) -> anyhow::Result<ExecutedTransaction> {
     let rgp = test_cluster.get_reference_gas_price().await;
 
     let mut ptb = ProgrammableTransactionBuilder::new();
@@ -134,7 +134,7 @@ async fn authenticated_events_single_event_test() {
         .await
         .expect("Transaction should succeed");
 
-    let effects = resp.effects.as_ref().unwrap();
+    let effects = resp.effects;
     assert!(
         effects.status().is_ok(),
         "Transaction effects should be successful"
@@ -145,12 +145,12 @@ async fn authenticated_events_single_event_test() {
 
     let event = &acc_events[0];
     assert_eq!(
-        event.address,
+        event.write.address.address,
         SuiAddress::from(AccountAddress::from(package_id))
     );
 
     let state = test_cluster.fullnode_handle.sui_node.state();
-    let stream_head = load_event_stream_head_by_object_id(&state, event.accumulator_obj)
+    let stream_head = load_event_stream_head_by_object_id(&state, *event.accumulator_obj.inner())
         .await
         .expect("EventStreamHead should be available");
 
@@ -171,7 +171,7 @@ async fn authenticated_events_multiple_events_test() {
             .await
             .expect("Transaction should succeed");
 
-        let effects = resp.effects.as_ref().unwrap();
+        let effects = resp.effects;
         assert!(
             effects.status().is_ok(),
             "Transaction effects should be successful"
@@ -180,10 +180,10 @@ async fn authenticated_events_multiple_events_test() {
         let acc_events = effects.accumulator_events();
         assert_eq!(acc_events.len(), 1);
         assert_eq!(
-            acc_events[0].address,
+            acc_events[0].write.address.address,
             SuiAddress::from(AccountAddress::from(package_id))
         );
-        last_event_obj_id = Some(acc_events[0].accumulator_obj);
+        last_event_obj_id = Some(*acc_events[0].accumulator_obj.inner());
     }
 
     tracing::info!("package_id: {package_id:?}, last_event_obj_id: {last_event_obj_id:?}");
@@ -206,7 +206,7 @@ async fn authenticated_events_disabled_test() {
     let result = try_emit_authenticated_event(&mut test_cluster, package_id, sender, 42).await;
 
     let response = result.expect("Transaction should execute to effects");
-    let effects = response.effects.as_ref().unwrap();
+    let effects = response.effects;
 
     assert!(
         effects.status().is_err(),
@@ -243,10 +243,10 @@ async fn authenticated_events_mmr_validation_test() {
             .await
             .expect("Transaction should succeed");
 
-        let effects = resp.effects.as_ref().unwrap();
+        let effects = resp.effects;
         let acc_events = effects.accumulator_events();
         if !acc_events.is_empty() {
-            accumulator_obj_id = Some(acc_events[0].accumulator_obj);
+            accumulator_obj_id = Some(*acc_events[0].accumulator_obj.inner());
         }
     }
 

@@ -52,7 +52,6 @@ mod test {
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
-    use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};

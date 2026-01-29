@@ -31,7 +31,6 @@ use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use sui_config::local_ip_utils;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectRef;
@@ -42,6 +41,7 @@ use sui_types::bridge::{BridgeChainId, BridgeCommitteeSummary, TOKEN_ID_USDC};
 use sui_types::crypto::ToFromBytes;
 use sui_types::crypto::get_key_pair;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
@@ -335,7 +335,7 @@ pub async fn bridge_token(
     let bridge_events = events
         .data
         .iter()
-        .filter_map(|event| SuiBridgeEvent::try_from_sui_event(event).unwrap())
+        .filter_map(|event| SuiBridgeEvent::try_from_event(event).unwrap())
         .collect::<Vec<_>>();
     bridge_events
         .iter()
@@ -409,9 +409,9 @@ pub async fn approve_action_with_validator_secrets(
     expected_token_receiver?;
 
     let expected_token_receiver = expected_token_receiver.unwrap();
-    for created in resp.effects.unwrap().created() {
-        if created.owner == Owner::AddressOwner(expected_token_receiver) {
-            return Some(created.reference.to_object_ref());
+    for created in resp.effects.created() {
+        if created.1 == Owner::AddressOwner(expected_token_receiver) {
+            return Some(created.0);
         }
     }
     panic!(

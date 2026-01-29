@@ -128,7 +128,11 @@ async fn test_net_determinism() {
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     let txn = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
-    let digest = test_cluster.execute_transaction(txn).await.digest;
+    let digest = test_cluster
+        .execute_transaction(txn)
+        .await
+        .transaction
+        .digest();
 
     sleep(Duration::from_millis(1000)).await;
 

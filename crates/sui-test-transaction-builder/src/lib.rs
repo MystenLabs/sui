@@ -7,9 +7,8 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
 use sui_move_build::{BuildConfig, CompiledPackage};
-use sui_sdk::rpc_types::{
-    SuiObjectDataOptions, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-};
+use sui_rpc_api::client::ExecutedTransaction;
+use sui_sdk::rpc_types::SuiObjectDataOptions;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::balance::Balance;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
@@ -17,6 +16,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{AccountKeyPair, Signature, Signer, get_key_pair};
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GAS;
 use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
@@ -878,13 +878,11 @@ pub async fn publish_basics_package_and_make_counter(
         .await;
     let counter_ref = resp
         .effects
-        .unwrap()
         .created()
         .iter()
-        .find(|obj_ref| matches!(obj_ref.owner, Owner::Shared { .. }))
+        .find(|obj_ref| matches!(obj_ref.1, Owner::Shared { .. }))
         .unwrap()
-        .reference
-        .to_object_ref();
+        .0;
     (package_ref, counter_ref)
 }
 
@@ -908,13 +906,11 @@ pub async fn publish_basics_package_and_make_party_object(
         .await;
     let object_ref = resp
         .effects
-        .unwrap()
         .created()
         .iter()
-        .find(|obj_ref| matches!(obj_ref.owner, Owner::ConsensusAddressOwner { .. }))
+        .find(|obj_ref| matches!(obj_ref.1, Owner::ConsensusAddressOwner { .. }))
         .unwrap()
-        .reference
-        .to_object_ref();
+        .0;
     (package_ref, object_ref)
 }
 
@@ -927,7 +923,7 @@ pub async fn increment_counter(
     package_id: ObjectID,
     counter_id: ObjectID,
     initial_shared_version: SequenceNumber,
-) -> SuiTransactionBlockResponse {
+) -> ExecutedTransaction {
     let gas_object = if let Some(gas_object_id) = gas_object_id {
         context.get_object_ref(gas_object_id).await.unwrap()
     } else {
@@ -952,7 +948,7 @@ pub async fn increment_counter(
 pub async fn emit_new_random_u128(
     context: &WalletContext,
     package_id: ObjectID,
-) -> SuiTransactionBlockResponse {
+) -> ExecutedTransaction {
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let rgp = context.get_reference_gas_price().await.unwrap();
 
@@ -1011,7 +1007,7 @@ pub async fn publish_nfts_package(
         .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
     let package_id = resp.get_new_package_obj().unwrap().0;
-    (package_id, gas_id, resp.digest)
+    (package_id, gas_id, resp.transaction.digest())
 }
 
 /// Pre-requisite: `publish_nfts_package` must be called before this function.  Executes a
@@ -1033,17 +1029,9 @@ pub async fn create_nft(
         .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
 
-    let object_id = resp
-        .effects
-        .as_ref()
-        .unwrap()
-        .created()
-        .first()
-        .unwrap()
-        .reference
-        .object_id;
+    let object_id = resp.effects.created().first().unwrap().0.0;
 
-    (sender, object_id, resp.digest)
+    (sender, object_id, resp.transaction.digest())
 }
 
 /// Executes a transaction to delete the given NFT.
@@ -1052,7 +1040,7 @@ pub async fn delete_nft(
     sender: SuiAddress,
     package_id: ObjectID,
     nft_to_delete: ObjectRef,
-) -> SuiTransactionBlockResponse {
+) -> ExecutedTransaction {
     let gas = context
         .get_one_gas_object_owned_by_address(sender)
         .await

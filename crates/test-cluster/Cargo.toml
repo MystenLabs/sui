@@ -37,6 +37,7 @@ prometheus.workspace = true
 sui-keys.workspace = true
 sui-sdk.workspace = true
 sui-test-transaction-builder.workspace = true
+sui-rpc-api.workspace = true
 
 move-binary-format.workspace = true
 

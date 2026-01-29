@@ -13,7 +13,7 @@ use crate::crypto::{
 use crate::digests::{CheckpointArtifactsDigest, Digest, ObjectDigest};
 use crate::effects::{TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
 use crate::error::SuiResult;
-use crate::full_checkpoint_content::CheckpointData;
+use crate::full_checkpoint_content::{Checkpoint, CheckpointData};
 use crate::gas::GasCostSummary;
 use crate::global_state_hash::GlobalStateHash;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -259,6 +259,18 @@ impl From<&[TransactionEffects]> for CheckpointArtifacts {
 impl From<&CheckpointData> for CheckpointArtifacts {
     fn from(checkpoint_data: &CheckpointData) -> Self {
         let effects = checkpoint_data
+            .transactions
+            .iter()
+            .map(|tx| &tx.effects)
+            .collect::<Vec<_>>();
+
+        Self::from(effects.as_slice())
+    }
+}
+
+impl From<&Checkpoint> for CheckpointArtifacts {
+    fn from(checkpoint: &Checkpoint) -> Self {
+        let effects = checkpoint
             .transactions
             .iter()
             .map(|tx| &tx.effects)

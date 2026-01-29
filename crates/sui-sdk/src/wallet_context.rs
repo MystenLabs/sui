@@ -11,11 +11,12 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_config::{Config, PersistedConfig};
-use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{Signature, SuiKeyPair};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Object;
 
 use std::sync::OnceLock;
@@ -478,14 +479,11 @@ impl WalletContext {
 
     /// Execute a transaction and wait for it to be locally executed on the fullnode.
     /// Also expects the effects status to be ExecutionStatus::Success.
-    pub async fn execute_transaction_must_succeed(
-        &self,
-        tx: Transaction,
-    ) -> SuiTransactionBlockResponse {
+    pub async fn execute_transaction_must_succeed(&self, tx: Transaction) -> ExecutedTransaction {
         tracing::debug!("Executing transaction: {:?}", tx);
         let response = self.execute_transaction_may_fail(tx).await.unwrap();
         assert!(
-            response.status_ok().unwrap(),
+            response.effects.status().is_ok(),
             "Transaction failed: {:?}",
             response
         );
@@ -498,26 +496,10 @@ impl WalletContext {
     pub async fn execute_transaction_may_fail(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<SuiTransactionBlockResponse> {
-        let digest = tx.digest().to_owned();
-        let client = self.get_client().await?;
-
-        let response = client
-            .quorum_driver_api()
-            .execute_transaction_block(
-                tx,
-                SuiTransactionBlockResponseOptions::new()
-                    .with_effects()
-                    .with_input()
-                    .with_events()
-                    .with_object_changes()
-                    .with_balance_changes(),
-                Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await?;
-
-        self.grpc_client()?.wait_for_transaction(&digest).await?;
-
-        Ok(response)
+    ) -> anyhow::Result<ExecutedTransaction> {
+        self.grpc_client()?
+            .execute_transaction_and_wait_for_checkpoint(&tx)
+            .await
+            .map_err(Into::into)
     }
 }
