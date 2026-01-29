@@ -200,8 +200,8 @@ impl DynamicField {
     }
 
     /// The structured representation of the object's contents.
-    pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
-        self.super_.contents(ctx).await
+    pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Option<Result<MoveValue, RpcError>> {
+        self.super_.contents(ctx).await.ok()?
     }
 
     /// The domain explicitly configured as the default Name Service name for this address.
@@ -219,8 +219,8 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<Error>> {
-        self.super_.dynamic_field(ctx, name).await
+    ) -> Option<Result<DynamicField, RpcError<Error>>> {
+        self.super_.dynamic_field(ctx, name).await.ok()?
     }
 
     /// Dynamic fields owned by this object.
@@ -233,10 +233,11 @@ impl DynamicField {
         after: Option<CLive>,
         last: Option<u64>,
         before: Option<CLive>,
-    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>> {
+    ) -> Option<Result<Connection<String, DynamicField>, RpcError<object::Error>>> {
         self.super_
             .dynamic_fields(ctx, first, after, last, before)
             .await
+            .ok()?
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
@@ -246,8 +247,8 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<Error>> {
-        self.super_.dynamic_object_field(ctx, name).await
+    ) -> Option<Result<DynamicField, RpcError<Error>>> {
+        self.super_.dynamic_object_field(ctx, name).await.ok()?
     }
 
     /// Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
@@ -256,8 +257,8 @@ impl DynamicField {
     pub(crate) async fn has_public_transfer(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<bool>, RpcError> {
-        self.super_.has_public_transfer(ctx).await
+    ) -> Option<Result<bool, RpcError>> {
+        self.super_.has_public_transfer(ctx).await.ok()?
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -286,8 +287,8 @@ impl DynamicField {
     pub(crate) async fn move_object_bcs(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError> {
-        self.super_.move_object_bcs(ctx).await
+    ) -> Option<Result<Base64, RpcError>> {
+        self.super_.move_object_bcs(ctx).await.ok()?
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -655,7 +656,8 @@ impl DynamicField {
     pub(crate) async fn native(&self, ctx: &Context<'_>) -> Result<&Option<NativeField>, RpcError> {
         self.native
             .get_or_try_init(async || {
-                let Some(value) = self.super_.contents(ctx).await? else {
+                let Some(value) = self.super_.contents(ctx).await.ok().flatten().transpose()?
+                else {
                     return Ok(None);
                 };
 
