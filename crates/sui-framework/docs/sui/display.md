@@ -28,6 +28,7 @@ More entry functions might be added in the future depending on the use cases.
 -  [Function `is_authorized`](#sui_display_is_authorized)
 -  [Function `version`](#sui_display_version)
 -  [Function `fields`](#sui_display_fields)
+-  [Function `destroy`](#sui_display_destroy)
 -  [Function `create_internal`](#sui_display_create_internal)
 -  [Function `add_internal`](#sui_display_add_internal)
 
@@ -505,6 +506,32 @@ Read the <code><a href="../sui/display.md#sui_display_fields">fields</a></code> 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/display.md#sui_display_fields">fields</a>&lt;T: key&gt;(d: &<a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt;): &VecMap&lt;String, String&gt; {
     &d.<a href="../sui/display.md#sui_display_fields">fields</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_display_destroy"></a>
+
+## Function `destroy`
+
+Allow destroying legacy display objects.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/display.md#sui_display_destroy">destroy</a>&lt;T: key&gt;(<a href="../sui/display.md#sui_display">display</a>: <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/display.md#sui_display_destroy">destroy</a>&lt;T: key&gt;(<a href="../sui/display.md#sui_display">display</a>: <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt;) {
+    <b>let</b> <a href="../sui/display.md#sui_display_Display">Display</a> { id, .. } = <a href="../sui/display.md#sui_display">display</a>;
+    id.delete();
 }
 </code></pre>
 
