@@ -309,6 +309,35 @@ impl Client {
             })
     }
 
+    pub async fn get_dynamic_fields(
+        &self,
+        parent: ObjectID,
+        page_size: Option<u32>,
+        page_token: Option<Bytes>,
+    ) -> Result<proto::ListDynamicFieldsResponse> {
+        let mut request = proto::ListDynamicFieldsRequest::default()
+            .with_parent(parent.to_string())
+            .with_read_mask(FieldMask::from_paths(["*"]));
+
+        if let Some(page_size) = page_size {
+            request.set_page_size(page_size);
+        }
+
+        if let Some(page_token) = page_token {
+            request.set_page_token(page_token);
+        }
+
+        let response = self
+            .0
+            .clone()
+            .state_client()
+            .list_dynamic_fields(request)
+            .await?
+            .into_inner();
+
+        Ok(response)
+    }
+
     pub async fn get_reference_gas_price(&self) -> Result<u64> {
         let request = proto::GetEpochRequest::default()
             .with_read_mask(FieldMask::from_paths(["epoch", "reference_gas_price"]));
