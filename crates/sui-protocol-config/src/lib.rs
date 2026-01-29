@@ -291,6 +291,7 @@ const MAX_PROTOCOL_VERSION: u64 = 109;
 //              Enable address aliases on testnet.
 //              Enable poseidon_bn254 on mainnet.
 // Version 109: New framework.
+//              Enable Display Registry in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4461,7 +4462,11 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.enable_poseidon = true;
                 }
-                109 => {}
+                109 => {
+                    if chain == Chain::Unknown {
+                        cfg.feature_flags.enable_display_registry = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
