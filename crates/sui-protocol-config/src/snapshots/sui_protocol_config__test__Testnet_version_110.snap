@@ -112,6 +112,7 @@ feature_flags:
   type_tags_in_object_runtime: true
   enable_accumulators: true
   create_root_accumulator_object: true
+  enable_authenticated_event_streams: true
   enable_address_balance_gas_payments: true
   enable_multi_epoch_transaction_expiration: true
   enable_ptb_execution_v2: true
@@ -144,6 +145,7 @@ feature_flags:
   disable_entry_point_signature_check: true
   restrict_hot_or_not_entry_functions: true
   consensus_always_accept_system_transactions: true
+  split_checkpoints_in_consensus_handler: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
