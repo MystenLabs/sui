@@ -183,7 +183,7 @@ impl VMValueCast<Value> for VMValue {
 }
 
 impl ValueView for Value {
-    fn visit(&self, visitor: &mut impl move_vm_types::views::ValueVisitor) {
+    fn visit(&self, visitor: &mut impl move_vm_types::views::ValueVisitor) -> move_binary_format::errors::PartialVMResult<()> {
         self.0.visit(visitor)
     }
 }

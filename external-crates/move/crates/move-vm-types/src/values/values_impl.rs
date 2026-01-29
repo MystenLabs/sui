@@ -3812,47 +3812,48 @@ impl Drop for Locals {
 *
 **************************************************************************************/
 impl Container {
-    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) {
+    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) -> PartialVMResult<()> {
         use Container::*;
 
         match self {
             Locals(_) => unreachable!("Should not ba able to visit a Locals container directly"),
             Vec(r) => {
                 let r = r.borrow();
-                if visitor.visit_vec(depth, r.len()) {
+                if visitor.visit_vec(depth, r.len())? {
                     for val in r.iter() {
-                        val.visit_impl(visitor, depth + 1);
+                        val.visit_impl(visitor, depth + 1)?;
                     }
                 }
             }
             Struct(r) => {
                 let r = r.borrow();
-                if visitor.visit_struct(depth, r.len()) {
+                if visitor.visit_struct(depth, r.len())? {
                     for val in r.iter() {
-                        val.visit_impl(visitor, depth + 1);
+                        val.visit_impl(visitor, depth + 1)?;
                     }
                 }
             }
             Variant(r) => {
                 let r = &*r.borrow().1;
-                if visitor.visit_variant(depth, r.len()) {
+                if visitor.visit_variant(depth, r.len())? {
                     for val in r.iter() {
-                        val.visit_impl(visitor, depth + 1);
+                        val.visit_impl(visitor, depth + 1)?;
                     }
                 }
             }
-            VecU8(r) => visitor.visit_vec_u8(depth, &r.borrow()),
-            VecU16(r) => visitor.visit_vec_u16(depth, &r.borrow()),
-            VecU32(r) => visitor.visit_vec_u32(depth, &r.borrow()),
-            VecU64(r) => visitor.visit_vec_u64(depth, &r.borrow()),
-            VecU128(r) => visitor.visit_vec_u128(depth, &r.borrow()),
-            VecU256(r) => visitor.visit_vec_u256(depth, &r.borrow()),
-            VecBool(r) => visitor.visit_vec_bool(depth, &r.borrow()),
-            VecAddress(r) => visitor.visit_vec_address(depth, &r.borrow()),
+            VecU8(r) => visitor.visit_vec_u8(depth, &r.borrow())?,
+            VecU16(r) => visitor.visit_vec_u16(depth, &r.borrow())?,
+            VecU32(r) => visitor.visit_vec_u32(depth, &r.borrow())?,
+            VecU64(r) => visitor.visit_vec_u64(depth, &r.borrow())?,
+            VecU128(r) => visitor.visit_vec_u128(depth, &r.borrow())?,
+            VecU256(r) => visitor.visit_vec_u256(depth, &r.borrow())?,
+            VecBool(r) => visitor.visit_vec_bool(depth, &r.borrow())?,
+            VecAddress(r) => visitor.visit_vec_address(depth, &r.borrow())?,
         }
+        Ok(())
     }
 
-    fn visit_indexed(&self, visitor: &mut impl ValueVisitor, depth: usize, idx: usize) {
+    fn visit_indexed(&self, visitor: &mut impl ValueVisitor, depth: usize, idx: usize) -> PartialVMResult<()> {
         use Container::*;
 
         match self {
@@ -3871,7 +3872,7 @@ impl Container {
 }
 
 impl ContainerRef {
-    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) {
+    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) -> PartialVMResult<()> {
         use ContainerRef::*;
 
         let (container, is_global) = match self {
@@ -3879,14 +3880,15 @@ impl ContainerRef {
             Global { container, .. } => (container, false),
         };
 
-        if visitor.visit_ref(depth, is_global) {
-            container.visit_impl(visitor, depth + 1);
+        if visitor.visit_ref(depth, is_global)? {
+            container.visit_impl(visitor, depth + 1)?;
         }
+        Ok(())
     }
 }
 
 impl IndexedRef {
-    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) {
+    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) -> PartialVMResult<()> {
         use ContainerRef::*;
 
         let (container, is_global) = match &self.container_ref {
@@ -3894,14 +3896,15 @@ impl IndexedRef {
             Global { container, .. } => (container, false),
         };
 
-        if visitor.visit_ref(depth, is_global) {
-            container.visit_indexed(visitor, depth, self.idx)
+        if visitor.visit_ref(depth, is_global)? {
+            container.visit_indexed(visitor, depth, self.idx)?;
         }
+        Ok(())
     }
 }
 
 impl ValueImpl {
-    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) {
+    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) -> PartialVMResult<()> {
         use ValueImpl::*;
 
         match self {
@@ -3925,35 +3928,36 @@ impl ValueImpl {
 }
 
 impl ValueView for ValueImpl {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.visit_impl(visitor, 0)
     }
 }
 
 impl ValueView for Value {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.0.visit(visitor)
     }
 }
 
 impl ValueView for Struct {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
-        if visitor.visit_struct(0, self.fields.len()) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
+        if visitor.visit_struct(0, self.fields.len())? {
             for val in self.fields.iter() {
-                val.visit_impl(visitor, 1);
+                val.visit_impl(visitor, 1)?;
             }
         }
+        Ok(())
     }
 }
 
 impl ValueView for Vector {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.0.visit_impl(visitor, 0)
     }
 }
 
 impl ValueView for IntegerValue {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         use IntegerValue::*;
 
         match self {
@@ -3968,7 +3972,7 @@ impl ValueView for IntegerValue {
 }
 
 impl ValueView for Reference {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         use ReferenceImpl::*;
 
         match &self.0 {
@@ -3979,25 +3983,25 @@ impl ValueView for Reference {
 }
 
 impl ValueView for VectorRef {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.0.visit_impl(visitor, 0)
     }
 }
 
 impl ValueView for StructRef {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.0.visit_impl(visitor, 0)
     }
 }
 
 impl ValueView for SignerRef {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.0.visit_impl(visitor, 0)
     }
 }
 
 impl ValueView for VariantRef {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.0.visit_impl(visitor, 0)
     }
 }
@@ -4031,7 +4035,7 @@ impl Vector {
         }
 
         impl<'b> ValueView for ElemView<'b> {
-            fn visit(&self, visitor: &mut impl ValueVisitor) {
+            fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 self.container.visit_indexed(visitor, 0, self.idx)
             }
         }
@@ -4051,7 +4055,7 @@ impl Reference {
         struct ValueBehindRef<'b>(&'b ReferenceImpl);
 
         impl<'b> ValueView for ValueBehindRef<'b> {
-            fn visit(&self, visitor: &mut impl ValueVisitor) {
+            fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 use ReferenceImpl::*;
 
                 match self.0 {
@@ -4073,13 +4077,14 @@ impl GlobalValue {
         struct Wrapper<'b>(&'b Rc<RefCell<Vec<ValueImpl>>>);
 
         impl<'b> ValueView for Wrapper<'b> {
-            fn visit(&self, visitor: &mut impl ValueVisitor) {
+            fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 let r = self.0.borrow();
-                if visitor.visit_struct(0, r.len()) {
+                if visitor.visit_struct(0, r.len())? {
                     for val in r.iter() {
-                        val.visit_impl(visitor, 1);
+                        val.visit_impl(visitor, 1)?;
                     }
                 }
+                Ok(())
             }
         }
 
