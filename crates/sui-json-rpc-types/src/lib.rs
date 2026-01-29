@@ -36,7 +36,7 @@ mod sui_object;
 mod sui_protocol;
 mod sui_transaction;
 
-pub type DynamicFieldPage = Page<DynamicFieldInfo, ObjectID>;
+pub type DynamicFieldPage = Page<DynamicFieldInfo, String>;
 /// `next_cursor` points to the last item in the page;
 /// Reading with `next_cursor` will start from the next item after `next_cursor` if
 /// `next_cursor` is `Some`, otherwise it will start from the first item.

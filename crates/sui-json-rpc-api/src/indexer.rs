@@ -84,7 +84,7 @@ pub trait IndexerApi {
         /// The ID of the parent object
         parent_object_id: ObjectID,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage>;
