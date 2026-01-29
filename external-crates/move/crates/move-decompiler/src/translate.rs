@@ -270,8 +270,30 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             exps.push(Out::Exp::Switch(Box::new(cond), enum_, cases));
             Out::Exp::Seq(exps)
         }
-        D::Structured::Jump(_) | D::Structured::JumpIf { .. } => {
-            unreachable!("Jump nodes should not be present in the final output")
+        D::Structured::Jump(target) => {
+            let label = target.index() as u64;
+            Out::Exp::Unstructured(vec![Out::UnstructuredNode::Goto(label)])
+        }
+        D::Structured::JumpIf(code, then_target, else_target) => {
+            let term = terms.remove(&(code as u32).into()).unwrap();
+            let Exp::Seq(mut seq) = term else {
+                panic!("Expected Seq for JumpIf condition")
+            };
+            let cond = seq.pop().unwrap();
+
+            let then_label = then_target.index() as u64;
+            let else_label = else_target.index() as u64;
+
+            seq.push(Out::Exp::IfElse(
+                Box::new(cond),
+                Box::new(Out::Exp::Unstructured(vec![
+                    Out::UnstructuredNode::Goto(then_label),
+                ])),
+                Box::new(Some(Out::Exp::Unstructured(vec![
+                    Out::UnstructuredNode::Goto(else_label),
+                ]))),
+            ));
+            Out::Exp::Seq(seq)
         }
     }
 }

@@ -44,6 +44,11 @@ impl Graph {
             }
         }
 
+        // For empty input (trivial functions with no basic blocks), ensure start_node exists
+        while cfg.node_count() <= start_node.index() {
+            cfg.add_node(());
+        }
+
         // Add all edges from the input
         for edge in input.values().flat_map(|value| value.edges()) {
             cfg.add_edge(edge.0, edge.1, ());
@@ -118,6 +123,13 @@ impl Graph {
             .map(|(node_id, _)| *node_id);
 
         for latch_node in latch_nodes {
+            // Handle self-loops: if the latch node is the same as the start node,
+            // just add the start node to loop_nodes
+            if latch_node == node_start {
+                loop_nodes.insert(node_start);
+                continue;
+            }
+
             let paths = petgraph::algo::all_simple_paths::<Vec<_>, _, RandomState>(
                 &self.cfg, node_start, latch_node, 0, None,
             )
@@ -154,7 +166,20 @@ impl Graph {
             .get(loop_header)
             .all_children()
             .collect::<HashSet<_>>();
+
+        let max_iterations = self.cfg.node_count() * 2;
+        let mut iterations = 0;
+
         while succ_nodes.len() > 1 && !new_nodes.is_empty() {
+            iterations += 1;
+            if iterations > max_iterations {
+                eprintln!(
+                    "Warning: refine_loop_nodes exceeded {} iterations for loop header {:?}, stopping refinement",
+                    max_iterations, loop_header
+                );
+                break;
+            }
+
             new_nodes.clear();
             for node in succ_nodes.clone() {
                 if self
@@ -170,8 +195,8 @@ impl Graph {
                         .filter(|node| !loop_nodes.contains(node) && dom_nodes.contains(node));
                     new_nodes.extend(nodes);
                 }
-                succ_nodes.extend(new_nodes.iter().cloned());
             }
+            succ_nodes.extend(new_nodes.iter().cloned());
         }
         (loop_nodes, succ_nodes)
     }
@@ -229,10 +254,24 @@ fn compute_post_dominators<N, E>(
     graph: &petgraph::Graph<N, E>,
     input: &BTreeMap<D::Label, D::Input>,
 ) -> (NodeIndex, Dominators<NodeIndex>) {
-    // Make an empty, reversed version of the graph
-    let mut graph = petgraph::graph::DiGraph::<(), ()>::from_edges(
-        graph.edge_references().map(|e| (e.target(), e.source())),
-    );
+    // Collect node count and edges before creating reversed graph
+    let node_count = graph.node_count();
+    let edges: Vec<_> = graph.edge_references().map(|e| (e.target(), e.source())).collect();
+
+    // Create reversed graph, preserving all nodes (even those with no edges)
+    let mut graph = petgraph::graph::DiGraph::<(), ()>::new();
+
+    // First, add all nodes from the original graph
+    for _ in 0..node_count {
+        graph.add_node(());
+    }
+
+    // Then, add all reversed edges
+    for (target, source) in edges {
+        graph.add_edge(target, source, ());
+    }
+
+    // Add the synthetic return node
     let return_: NodeIndex = graph.add_node(());
     if config.debug_print.control_flow_graph {
         println!("Return node: {return_:?}");

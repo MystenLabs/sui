@@ -131,13 +131,9 @@ fn structure_loop(
             .get(loop_head)
             .all_children()
             .any(|child| child == succ_node)
+        && let Some(succ_structured) = structured_blocks.remove(&succ_node)
     {
-        result = D::Structured::Seq(vec![
-            result,
-            structured_blocks.remove(&succ_node).unwrap_or_else(|| {
-                panic!("Expected successor node {succ_node:?} to be structured")
-            }),
-        ]);
+        result = D::Structured::Seq(vec![result, succ_structured]);
     }
     structured_blocks.insert(loop_head, result);
 }
@@ -185,7 +181,7 @@ fn insert_breaks(
             LatchKind::Break => DS::Break,
             LatchKind::InLoop => DS::Seq(vec![]),
             LatchKind::Latch => DS::Jump(next),
-            LatchKind::OtherLoop => todo!(),
+            LatchKind::OtherLoop => DS::Jump(next),
         };
         Box::new(conseq)
     }
@@ -240,9 +236,7 @@ fn insert_breaks(
                 (LatchKind::Break, LatchKind::Break) => DS::Break,
                 (LatchKind::Latch, LatchKind::Latch) => DS::JumpIf(code, next, other),
                 (LatchKind::InLoop, LatchKind::InLoop) => unreachable!(),
-                // TODO handle otherloop cases
-                (LatchKind::OtherLoop, _) | (_, LatchKind::OtherLoop) => todo!(),
-                // Mixed cases
+                // Mixed cases (including OtherLoop)
                 (conseq_lk, alt_lk) => {
                     let conseq = lower_conseq(conseq_lk, next);
                     let alt = lower_alt(alt_lk, other);
@@ -289,11 +283,13 @@ fn structure_acyclic(
         let result =
             structure_acyclic_region(config, graph, structured_blocks, input, node, inside_loop);
         structured_blocks.insert(node, result);
-    } else {
-        assert!(matches!(&input[&node], D::Input::Code(..)));
-        let code_node = input.remove(&node).unwrap();
+    } else if let Some(code_node) = input.remove(&node) {
+        assert!(matches!(&code_node, D::Input::Code(..)));
         let result = structure_code_node(config, graph, structured_blocks, node, code_node);
         structured_blocks.insert(node, result);
+    } else {
+        // Empty function with no input - create empty sequence
+        structured_blocks.insert(node, D::Structured::Seq(vec![]));
     }
 }
 
