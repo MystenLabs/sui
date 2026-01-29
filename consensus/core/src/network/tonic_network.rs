@@ -85,6 +85,10 @@ impl TonicClient {
             .accept_compressed(CompressionEncoding::Zstd);
         Ok(client)
     }
+
+    pub(crate) fn update_peer_address(&self, peer: AuthorityIndex, addresses: Vec<Multiaddr>) {
+        self.channel_pool.update_address(peer, addresses);
+    }
 }
 
 // TODO: make sure callsites do not send request to own index, and return error otherwise.
@@ -357,6 +361,8 @@ struct ChannelPool {
     context: Arc<Context>,
     // Size is limited by known authorities in the committee.
     channels: RwLock<BTreeMap<AuthorityIndex, Channel>>,
+    // Address overrides for peers, indexed by AuthorityIndex
+    address_overrides: RwLock<BTreeMap<AuthorityIndex, Multiaddr>>,
 }
 
 impl ChannelPool {
@@ -364,6 +370,41 @@ impl ChannelPool {
         Self {
             context,
             channels: RwLock::new(BTreeMap::new()),
+            address_overrides: RwLock::new(BTreeMap::new()),
+        }
+    }
+
+    // Update the address override for a peer. If the list of addresses is empty, the override is cleared.
+    fn update_address(&self, peer: AuthorityIndex, addresses: Vec<Multiaddr>) {
+        {
+            let mut overrides = self.address_overrides.write();
+
+            // Treat the empty list as a clear operation.
+            if addresses.is_empty() {
+                overrides.remove(&peer);
+                info!("Cleared address override for peer {}", peer);
+                return;
+            }
+
+            // Otherwise, set the first address as the override.
+            // TODO: support multiple addresses. For now, we only support one address per peer.
+            let address = addresses.first().cloned().unwrap();
+            if let Some(previous_address) = overrides.insert(peer, address.clone()) {
+                info!(
+                    "Updated address override for peer {} from {} to {}",
+                    peer, previous_address, address
+                );
+            } else {
+                info!("Set address override for peer {} to {}", peer, address);
+            }
+        }
+
+        let mut channels = self.channels.write();
+        if channels.remove(&peer).is_some() {
+            info!(
+                "Cleared cached channel for peer {} due to address update",
+                peer
+            );
         }
     }
 
@@ -381,7 +422,16 @@ impl ChannelPool {
         }
 
         let authority = self.context.committee.authority(peer);
-        let address = to_host_port_str(&authority.address).map_err(|e| {
+
+        let peer_address = {
+            let overrides = self.address_overrides.read();
+            overrides
+                .get(&peer)
+                .cloned()
+                .unwrap_or_else(|| authority.address.clone())
+        };
+
+        let address = to_host_port_str(&peer_address).map_err(|e| {
             ConsensusError::NetworkConfig(format!("Cannot convert address to host:port: {e:?}"))
         })?;
         let address = format!("https://{address}");
@@ -710,6 +760,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
 
     fn client(&self) -> Arc<Self::Client> {
         self.client.clone()
+    }
+
+    fn update_peer_address(&self, peer: AuthorityIndex, addresses: Vec<Multiaddr>) {
+        self.client.update_peer_address(peer, addresses);
     }
 
     async fn install_service(&mut self, service: Arc<S>) {

@@ -426,10 +426,32 @@ where
 
     pub(crate) fn update_peer_address(
         &self,
-        _network_pubkey: NetworkPublicKey,
-        _addresses: Vec<Multiaddr>,
+        network_pubkey: NetworkPublicKey,
+        addresses: Vec<Multiaddr>,
     ) {
-        todo!("Update the peer addresses for the consensus authority");
+        // Find the peer index for this network key
+        let Some(peer) = self
+            .context
+            .committee
+            .authorities()
+            .find(|(_, authority)| authority.network_key == network_pubkey)
+            .map(|(index, _)| index)
+        else {
+            warn!(
+                "Network public key {:?} not found in committee, ignoring address update",
+                network_pubkey
+            );
+            return;
+        };
+
+        // Update the address in the network manager
+        self.network_manager.update_peer_address(peer, addresses);
+
+        // Re-subscribe to the peer to force reconnection with new address
+        if peer != self.context.own_index {
+            info!("Re-subscribing to peer {} after address update", peer);
+            self.subscriber.subscribe(peer);
+        }
     }
 }
 
