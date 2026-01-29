@@ -108,8 +108,23 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
+          mkdir -p ${{ env.TMP_BUILD_DIR }}-light
           aws s3 cp s3://sui-releases/${{ env.s3_existing_archive }} ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
           tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
+          
+          # Download light archive if it exists
+          LIGHT_ARCHIVE=$(echo "${{ env.s3_existing_archive }}" | sed 's/.tgz/-light.tgz/')
+          if aws s3 ls s3://sui-releases/${LIGHT_ARCHIVE} 2>/dev/null; then
+            aws s3 cp s3://sui-releases/${LIGHT_ARCHIVE} ./tmp/sui-${{ env.sui_tag }}-${os_type}-light.tgz
+            tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}-light.tgz -C ${{ env.TMP_BUILD_DIR }}-light
+          else
+            # Create light package from full package if light doesn't exist yet
+            for binary in $(cat ${{ env.BINARY_LIST_FILE }} | jq -r '.light_binaries[]'); do
+              cp ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}-light/${binary}${{ env.extention }}
+            done
+            tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}-light.tgz -C ${{ env.TMP_BUILD_DIR }}-light .
+            aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}-light.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}-light.tgz || true
+          fi
 
       - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_existing_archive == '' }}
@@ -169,6 +184,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
+          mkdir -p ${{ env.TMP_BUILD_DIR }}-light
 
           [ ! -f ${{ env.BINARY_LIST_FILE }} ] && echo "${{ env.BINARY_LIST_FILE }} cannot be found" && exit 1
           for binary in $(cat ${{ env.BINARY_LIST_FILE }} | jq -r '.release_binaries[]'); do
@@ -176,11 +192,19 @@ jobs:
             mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
           done
 
+          # Copy light binaries to light build directory
+          for binary in $(cat ${{ env.BINARY_LIST_FILE }} | jq -r '.light_binaries[]'); do
+            export binary=$(echo ${binary} | tr -d $'\r')
+            cp ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}-light/${binary}${{ env.extention }}
+          done
+
           mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
+          tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}-light.tgz -C ${{ env.TMP_BUILD_DIR }}-light .
 
           # Upload tar balls to s3 so that we don't have to rebuild if they have already built
           aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
+          aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}-light.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}-light.tgz || true
 
       - name: Publish Windows sui binary to Chocolatey
         if: ${{ matrix.os == 'windows-ghcloud' && contains(env.sui_tag, 'testnet') }}
@@ -210,6 +234,7 @@ jobs:
           if-no-files-found: error
           path: |
             ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+            ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}-light.tgz
 
       - name: Attach artifacts to ${{ env.sui_tag }} release in GH
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
@@ -217,6 +242,7 @@ jobs:
           tag_name: ${{ env.sui_tag }}
           files: |
             ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+            ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}-light.tgz
 
   trigger-walrus-testnet-tag-update:
     name: Trigger Walrus Testnet Tag Update

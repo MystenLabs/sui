@@ -9,6 +9,10 @@
         "sui-test-validator",
         "move-analyzer"
     ],
+    "light_binaries": [
+        "sui",
+        "move-analyzer"
+    ],
     "internal_binaries": [
         "stress",
         "sui-proxy",
