@@ -1,0 +1,213 @@
+---
+title: Margin Risks
+description: Understand the risks of margin trading on DeepBook, including liquidation, interest rate fluctuations, and how to protect your positions.
+keywords:
+  [
+    margin risks,
+    liquidation,
+    leverage risks,
+    interest rate risk,
+    margin trading risks,
+    deepbook margin,
+    collateral,
+    forced liquidation,
+  ]
+---
+
+Margin trading amplifies both gains and losses. Before using DeepBook Margin, it's critical to understand the risks involved. This guide explains the key risks and provides concrete examples to help you make informed decisions.
+
+## Liquidation risk
+
+The most significant risk in margin trading is **liquidation** - the forced closure of your position when it becomes too risky for the protocol to maintain.
+
+### How liquidation works
+
+When you borrow funds to trade, you must maintain a minimum [risk ratio](./contract-information/risk-ratio.mdx) (the ratio of your total assets to total debts). If your position's risk ratio falls to or below the **Liquidation Risk Ratio**, anyone can liquidate your position.
+
+During liquidation:
+1. A liquidator repays part of your debt
+2. They receive your collateral plus a liquidation reward (typically 2%)
+3. The margin pool also takes a fee (typically 3%)
+4. You lose a portion of your collateral and may be left with a smaller position
+
+### Example: Getting liquidated on SUI/USDC
+
+Let's walk through a concrete example using the SUI/USDC trading pair, which has a **Liquidation Risk Ratio of 1.1**.
+
+**Opening position:**
+- You deposit **100 USDC** as collateral
+- You borrow **400 USDC** worth of SUI (at a SUI price of $4.00, you receive 100 SUI)
+- Your position: 100 USDC collateral + 100 SUI (worth $400)
+- Total assets = $500, Total debt = $400
+- **Starting risk ratio = 500 / 400 = 1.25** (5x leverage)
+
+**The path to liquidation:**
+
+| SUI Price | SUI Value | Total Assets | Risk Ratio | Status |
+|-----------|-----------|--------------|------------|--------|
+| $4.00 | $400 | $500 | 1.25 | Safe (at min borrow ratio) |
+| $3.80 | $380 | $480 | 1.20 | Warning zone |
+| $3.60 | $360 | $460 | 1.15 | Danger zone |
+| $3.40 | $340 | $440 | 1.10 | **Liquidatable** |
+| $3.20 | $320 | $420 | 1.05 | Underwater |
+
+**What happens at $3.40 SUI:**
+- Your risk ratio hits 1.1 (the liquidation threshold)
+- Your position can now be liquidated by anyone
+- A 15% price drop from your entry ($4.00 to $3.40) triggers liquidation
+- After liquidation rewards (5% total), you lose approximately **$22** of your original $100 collateral
+- Your remaining position is restored to a 1.25 risk ratio, but with significantly less equity
+
+**Key insight:** With 5x leverage, a mere **15% adverse price movement** can trigger liquidation. Without leverage, you'd simply be down 15% on paper.
+
+### Liquidation is immediate and irreversible
+
+Unlike traditional margin calls that give you time to add collateral, DeFi liquidations happen instantly:
+- There's no warning phone call
+- There's no grace period to deposit more funds
+- Once your ratio hits the threshold, any liquidator can execute immediately
+- You cannot cancel or prevent it once it's triggered
+
+## Interest rate risk
+
+When you borrow funds, you pay interest that accrues continuously. This interest is **variable** and can change significantly based on pool utilization.
+
+### How interest rates fluctuate
+
+DeepBook Margin uses a [kinked interest rate model](./contract-information/interest-rates.mdx) where rates increase gradually up to an optimal utilization point, then spike dramatically.
+
+**Current USDC pool parameters:**
+
+| Utilization | Interest Rate (APR) |
+|-------------|---------------------|
+| 0% | 0% |
+| 50% | 7.5% |
+| 80% (optimal) | 12% |
+| 85% | 37% |
+| 90% (max) | 62% |
+
+### Example: Interest rate spike
+
+Imagine you open a leveraged position expecting to pay ~12% APR (at 80% utilization):
+
+1. **Day 1:** Pool utilization is 75%, you're paying ~11% APR
+2. **Day 3:** A large borrower enters, pushing utilization to 85%
+3. **Your rate jumps to 37% APR** - more than 3x what you expected
+4. **Day 7:** Utilization hits 89%, your rate is now ~57% APR
+
+On a $400 borrow:
+- At 12% APR: ~$0.13/day in interest
+- At 57% APR: ~$0.62/day in interest
+
+Over a month, this difference compounds significantly and can erode your position's equity even if prices don't move against you.
+
+### Interest compounds your liquidation risk
+
+Interest accrues to your debt, which means:
+- Your total debt increases over time
+- Your risk ratio decreases even if asset prices stay flat
+- Long-term leveraged positions can drift toward liquidation purely from interest
+
+**Example:** Starting with a 1.25 risk ratio and 37% APR interest:
+- After 30 days, approximately 3% is added to your debt
+- Risk ratio drops from 1.25 to ~1.21
+- You're now closer to liquidation without any price movement
+
+## Price volatility risk
+
+Cryptocurrency prices are highly volatile. Leverage amplifies this volatility on your equity.
+
+### Leverage multiplies losses (and gains)
+
+| Leverage | 10% Price Drop | 20% Price Drop | 30% Price Drop |
+|----------|----------------|----------------|----------------|
+| 1x (no leverage) | -10% equity | -20% equity | -30% equity |
+| 2x | -20% equity | -40% equity | -60% equity |
+| 3x | -30% equity | -60% equity | -90% equity |
+| 5x | -50% equity | -100% equity | Liquidated |
+
+With 5x leverage on SUI/USDC:
+- A 10% SUI price drop = 50% loss on your equity
+- A 20% SUI price drop = 100% loss (complete wipeout before liquidation fees)
+
+### Volatility can happen fast
+
+Crypto markets can move 10-20% in hours. Flash crashes, exchange outages, or major news events can trigger rapid price movements that liquidate leveraged positions before you can react.
+
+## Oracle risk
+
+DeepBook Margin uses Pyth price oracles to value your assets and debts. Oracle-related risks include:
+
+- **Price delays:** Oracle prices may lag behind real market prices during volatile periods
+- **Price manipulation:** Although Pyth is designed to be manipulation-resistant, extreme market conditions could affect price accuracy
+- **Oracle downtime:** If the oracle fails to update, positions may be liquidated at stale prices
+
+## Risk mitigation strategies
+
+### 1. Use less than maximum leverage
+
+Just because you can borrow at 5x doesn't mean you should. Consider:
+- Using 2-3x leverage instead of 5x
+- This gives you more room for price fluctuations before liquidation
+
+### 2. Monitor your risk ratio actively
+
+- Check your position regularly, especially during volatile markets
+- Set up alerts if possible
+- Know your liquidation price
+
+### 3. Use Take Profit / Stop Loss orders
+
+DeepBook Margin supports [TPSL orders](./contract-information/tpsl.mdx) that automatically close your position:
+- Set a stop loss above your liquidation price
+- This exits your position with a smaller loss rather than getting liquidated
+
+### 4. Maintain collateral reserves
+
+- Keep additional funds ready to deposit if your position approaches liquidation
+- Remember that adding collateral improves your risk ratio
+
+### 5. Understand the interest rate environment
+
+- Check current pool utilization before borrowing
+- Be prepared for rates to increase
+- Factor interest costs into your position sizing
+
+### 6. Start small
+
+If you're new to margin trading:
+- Start with small position sizes
+- Learn how the system works with money you can afford to lose
+- Gradually increase size as you gain experience
+
+## Summary of key risks
+
+| Risk | What Can Happen | How to Mitigate |
+|------|-----------------|-----------------|
+| Liquidation | Position forcibly closed, lose collateral + fees | Use less leverage, set stop losses, monitor positions |
+| Interest rates | Borrowing costs spike unexpectedly | Check utilization, factor in rate variability |
+| Price volatility | Rapid losses amplified by leverage | Lower leverage, stop losses, position sizing |
+| Oracle risk | Prices may not reflect true market | Understand oracle mechanics, avoid extreme leverage |
+
+## Related links
+
+<RelatedLink
+	href="./contract-information/risk-ratio"
+	label="Risk Ratio"
+	desc="Detailed explanation of risk ratios and liquidation thresholds."
+/>
+<RelatedLink
+	href="./contract-information/interest-rates"
+	label="Interest Rates"
+	desc="How borrow interest rates are calculated."
+/>
+<RelatedLink
+	href="./contract-information/tpsl"
+	label="Take Profit / Stop Loss"
+	desc="Set up automated orders to manage risk."
+/>
+<RelatedLink
+	href="./contract-information"
+	label="Contract Information"
+	desc="View current risk parameters for all trading pairs."
+/>
