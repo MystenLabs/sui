@@ -1437,7 +1437,9 @@
                 "zklogin_auth": false
               },
               "attributes": {
+                "accumulator_emit_cost_base": null,
                 "accumulator_object_storage_cost": null,
+                "accumulator_pending_balance_cost_base": null,
                 "address_from_bytes_cost_base": {
                   "u64": "52"
                 },
