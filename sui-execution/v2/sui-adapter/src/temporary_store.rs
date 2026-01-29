@@ -140,6 +140,7 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
+            accumulator_total_withdraws: results.accumulator_total_withdraws,
         }
     }
 

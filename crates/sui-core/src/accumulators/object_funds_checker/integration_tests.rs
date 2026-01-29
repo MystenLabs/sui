@@ -292,4 +292,50 @@ async fn test_object_withdraw_multiple_withdraws() {
     );
 }
 
-// FIXME: More tests coming.
+#[tokio::test]
+async fn test_object_withdraw_and_deposit_same_transaction() {
+    let env = TestEnv::new().await;
+    env.fund_address(env.vault_obj.into(), 1).await;
+
+    let gas = env.oref(&env.gas_obj).await;
+    // In the same transaction, we are withdrawing from the object account
+    // and depositing back to the same object account twice.
+    // This should result in a total withdraw amount of 2, even though
+    // if we merge all accumulator events they will balance out to 0.
+    let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj).await),
+            vec![(1, env.vault_obj.into())],
+        )
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj).await),
+            vec![(1, env.vault_obj.into())],
+        )
+        .build();
+    let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
+    let digest = *cert.digest();
+    let accumulator_version = env.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).await.1;
+    let output = env
+        .authority
+        // Fastpath execution
+        .try_execute_immediately(
+            &cert,
+            ExecutionEnv::new()
+                .with_assigned_versions(AssignedVersions::new(vec![], Some(accumulator_version))),
+            &env.epoch_store,
+        )
+        .await;
+    assert!(matches!(output, ExecutionOutput::RetryLater));
+    let effects = env
+        .authority
+        .notify_read_effects("test", digest)
+        .await
+        .unwrap();
+    assert!(matches!(
+        effects.status(),
+        ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+            ..
+        }
+    ));
+}

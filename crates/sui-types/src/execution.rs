@@ -4,6 +4,7 @@
 use crate::{
     MoveTypeTagTrait, SUI_SYSTEM_ADDRESS,
     accumulator_event::AccumulatorEvent,
+    accumulator_root::AccumulatorObjId,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     error::SuiError,
@@ -96,6 +97,11 @@ pub struct ExecutionResultsV2 {
     pub user_events: Vec<Event>,
     /// All accumulator events emitted in this transaction.
     pub accumulator_events: Vec<AccumulatorEvent>,
+    /// For each accumulator account, the total amount of withdraws in this transaction.
+    /// That is, the sum of all withdraws from this account in this transaction,
+    /// without considering deposits to the account. We need to track this
+    /// in order to check whether object funds withdraws are sufficient for the account.
+    pub accumulator_total_withdraws: BTreeMap<AccumulatorObjId, u128>,
 
     /// Used to track SUI conservation in settlement transactions. Settlement transactions
     /// gather up withdraws and deposits from other transactions, and record them to accumulator
@@ -131,6 +137,9 @@ impl ExecutionResultsV2 {
         self.user_events.extend(new_results.user_events);
         self.accumulator_events
             .extend(new_results.accumulator_events);
+        for (obj_id, total_withdraws) in new_results.accumulator_total_withdraws {
+            *self.accumulator_total_withdraws.entry(obj_id).or_default() += total_withdraws;
+        }
         self.settlement_input_sui += new_results.settlement_input_sui;
         self.settlement_output_sui += new_results.settlement_output_sui;
     }

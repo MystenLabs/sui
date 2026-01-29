@@ -172,6 +172,7 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
+            accumulator_total_withdraws: results.accumulator_total_withdraws,
         }
     }
 
@@ -516,6 +517,13 @@ impl<'backing> TemporaryStore<'backing> {
     /// Add an accumulator event to the execution results, merging with any existing
     /// event for the same accumulator object.
     pub fn add_accumulator_event(&mut self, event: AccumulatorEvent) {
+        if let Some(amount) = event.write.get_fund_withdraw_amount() {
+            *self
+                .execution_results
+                .accumulator_total_withdraws
+                .entry(event.accumulator_obj)
+                .or_default() += amount;
+        }
         let obj_id = *event.accumulator_obj.inner();
         for existing in self.execution_results.accumulator_events.iter_mut() {
             if *existing.accumulator_obj.inner() == obj_id {
