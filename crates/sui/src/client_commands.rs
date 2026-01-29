@@ -1717,8 +1717,8 @@ impl SuiClientCommands {
                     .build_async_from_root_pkg(&mut root_pkg)
                     .await?;
 
-                let client = context.get_client().await?;
-                BytecodeSourceVerifier::new(client.read_api())
+                let client = context.grpc_client()?;
+                BytecodeSourceVerifier::new(&client)
                     .verify(&compiled_package, mode, &environment)
                     .await?;
 
