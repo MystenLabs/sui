@@ -1433,14 +1433,9 @@ async fn publish_init_events_without_local_execution() {
         .await
         .build();
     let tx = test_cluster.sign_transaction(&tx_data).await;
-    let client = test_cluster.wallet.get_client().await.unwrap();
+    let client = test_cluster.wallet.grpc_client().unwrap();
     let response = client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            tx,
-            SuiTransactionBlockResponseOptions::new().with_events(),
-            Some(ExecuteTransactionRequestType::WaitForEffectsCert),
-        )
+        .execute_transaction_and_wait_for_checkpoint(&tx)
         .await
         .unwrap();
     assert_eq!(response.events.unwrap().data.len(), 1);
