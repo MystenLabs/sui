@@ -15551,6 +15551,7 @@ dependencies = [
  "bcs",
  "diesel",
  "diesel_migrations",
+ "move-core-types",
  "serde",
  "siphasher 1.0.1",
  "sui-field-count",

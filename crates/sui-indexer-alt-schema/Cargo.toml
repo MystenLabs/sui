@@ -14,6 +14,7 @@ serde.workspace = true
 bcs.workspace = true
 siphasher = "1.0"
 
+move-core-types.workspace = true
 sui-field-count.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
