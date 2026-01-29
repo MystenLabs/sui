@@ -7,6 +7,7 @@ use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
+use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
@@ -156,15 +157,16 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    fn merge_accumulator_events(
-        accumulator_events: &[AccumulatorEvent],
-    ) -> impl Iterator<Item = (ObjectID, EffectsObjectChange)> + '_ {
-        accumulator_events
+    /// Ensure that there is one entry for each accumulator object in the accumulator events.
+    fn merge_accumulator_events(&mut self) {
+        self.execution_results.accumulator_events = self
+            .execution_results
+            .accumulator_events
             .iter()
             .fold(
-                BTreeMap::<ObjectID, Vec<AccumulatorWriteV1>>::new(),
+                BTreeMap::<AccumulatorObjId, Vec<AccumulatorWriteV1>>::new(),
                 |mut map, event| {
-                    map.entry(*event.accumulator_obj.inner())
+                    map.entry(event.accumulator_obj)
                         .or_default()
                         .push(event.write.clone());
                     map
@@ -172,13 +174,9 @@ impl<'backing> TemporaryStore<'backing> {
             )
             .into_iter()
             .map(|(obj_id, writes)| {
-                (
-                    obj_id,
-                    EffectsObjectChange::new_from_accumulator_write(AccumulatorWriteV1::merge(
-                        writes,
-                    )),
-                )
+                AccumulatorEvent::new(obj_id, AccumulatorWriteV1::merge(writes))
             })
+            .collect();
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
@@ -243,7 +241,17 @@ impl<'backing> TemporaryStore<'backing> {
                     ),
                 )
             })
-            .chain(Self::merge_accumulator_events(&results.accumulator_events))
+            .chain(results.accumulator_events.iter().cloned().map(
+                |AccumulatorEvent {
+                     accumulator_obj,
+                     write,
+                 }| {
+                    (
+                        *accumulator_obj.inner(),
+                        EffectsObjectChange::new_from_accumulator_write(write),
+                    )
+                },
+            ))
             .collect()
     }
 
@@ -258,6 +266,7 @@ impl<'backing> TemporaryStore<'backing> {
         epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         self.update_object_version_and_prev_tx();
+        self.merge_accumulator_events();
 
         // Regardless of execution status (including aborts), we insert the previous transaction
         // for any successfully received objects during the transaction.
@@ -528,17 +537,8 @@ impl<'backing> TemporaryStore<'backing> {
         self.mutate_input_object(system_state_wrapper);
     }
 
-    /// Add an accumulator event to the execution results, merging with any existing
-    /// event for the same accumulator object.
+    /// Add an accumulator event to the execution results.
     pub fn add_accumulator_event(&mut self, event: AccumulatorEvent) {
-        let obj_id = *event.accumulator_obj.inner();
-        for existing in self.execution_results.accumulator_events.iter_mut() {
-            if *existing.accumulator_obj.inner() == obj_id {
-                existing.write =
-                    AccumulatorWriteV1::merge(vec![existing.write.clone(), event.write]);
-                return;
-            }
-        }
         self.execution_results.accumulator_events.push(event);
     }
 
