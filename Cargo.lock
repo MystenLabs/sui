@@ -14007,6 +14007,7 @@ dependencies = [
  "sui-pg-db",
  "sui-protocol-config",
  "sui-replay-2",
+ "sui-rpc",
  "sui-rpc-api",
  "sui-sdk",
  "sui-simulator",
