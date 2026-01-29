@@ -10,8 +10,8 @@ use sui::group_ops::{Self, Element};
 /////////////////////////////////////////////
 ////// Elliptic curve operations //////
 
-public struct Scalar {}
-public struct Point {}
+public struct Scalar has store {}
+public struct Point has store {}
 
 // Const elements.
 const SCALAR_ZERO_BYTES: vector<u8> =
@@ -76,7 +76,7 @@ public fun scalar_inv(e: &Element<Scalar>): Element<Scalar> {
     scalar_div(e, &scalar_one())
 }
 
-public fun hash_to_scalar(m: &vector<u8>): Element<Point> {
+public fun hash_to_scalar(m: &vector<u8>): Element<Scalar> {
     group_ops::hash_to(SCALAR_TYPE, m)
 }
 

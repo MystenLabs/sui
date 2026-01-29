@@ -1,0 +1,163 @@
+module sui::twisted_elgamal;
+
+use sui::group_ops::Element;
+use sui::ristretto255::{Self, Point, Scalar};
+
+const H_BYTES: vector<u8> = x"34ce1477c14558178089500a39c864e0f607b3c1f41ab398400e4a9de6d2c446";
+
+public fun g(): Element<Point> {
+    ristretto255::generator()
+}
+
+public fun h(): Element<Point> {
+    ristretto255::point_from_bytes(&H_BYTES)
+}
+
+public struct Encryption has copy, drop, store {
+    ciphertext: Element<Point>,
+    decryption_handle: Element<Point>,
+}
+
+/// Create a new Twisted ElGamal encryption:
+///  - ciphertext = r*G + m*H
+///  - decryption_handle = r*pk = r*x*G
+public fun encryption(ciphertext: Element<Point>, decryption_handle: Element<Point>): Encryption {
+    Encryption {
+        ciphertext,
+        decryption_handle,
+    }
+}
+
+/// Trivial encryption without randomness.
+public fun encrypt_zero(pk: &Element<Point>): Encryption {
+    Encryption {
+        ciphertext: g(),
+        decryption_handle: *pk,
+    }
+}
+
+/// Trivial encryption without randomness.
+public fun encrypt_trivial(amount: u16, pk: &Element<Point>): Encryption {
+    Encryption {
+        ciphertext: ristretto255::point_add(
+            &g(),
+            &ristretto255::point_mul(&ristretto255::scalar_from_u64(amount as u64), &h()),
+        ),
+        decryption_handle: *pk,
+    }
+}
+
+/// Add two Twisted ElGamal encryptions. The result is an encryption of the sum of the plaintexts in the scalar field, so beware of overflow.
+public fun add(e1: &Encryption, e2: &Encryption): Encryption {
+    Encryption {
+        ciphertext: ristretto255::point_add(&e1.ciphertext, &e2.ciphertext),
+        decryption_handle: ristretto255::point_add(&e1.decryption_handle, &e2.decryption_handle),
+    }
+}
+
+public fun add_assign<T>(a: &mut EncryptedAmount4U32<T>, b: &EncryptedAmount4U16<T>) {
+    a.l0 = add(&a.l0, &b.l0);
+    a.l1 = add(&a.l1, &b.l1);
+    a.l2 = add(&a.l2, &b.l2);
+    a.l3 = add(&a.l3, &b.l3);
+}
+
+// Encrypted u64 amount.
+// Stored as two u32 encryptions, which can be decrypted by user.
+// Value is l0 + 2^32 * l1.
+// Well formedness is not verified.
+public struct EncryptedAmount2U32Unverified<phantom T> has copy, drop, store {
+    // maybe phantom T?
+    l0: Encryption,
+    l1: Encryption,
+}
+
+public fun encrypted_amount_2_u32_unverified<T>(
+    encryptions: vector<Encryption>,
+): EncryptedAmount2U32Unverified<T> {
+    assert!(encryptions.length() == 2);
+    EncryptedAmount2U32Unverified<T> {
+        l0: encryptions[0],
+        l1: encryptions[1],
+    }
+}
+
+public fun encrypted_amount_2_u_32_zero<T>(pk: &Element<Point>): EncryptedAmount2U32Unverified<T> {
+    EncryptedAmount2U32Unverified<T> {
+        l0: encrypt_zero(pk),
+        l1: encrypt_zero(pk),
+    }
+}
+
+// Encrypted u64 amount.
+// Stored as four u16 encryptions, which can be decrypted by user and aggregated.
+// Value is l0 + 2^16 * l1 + 2^32 * l2 + 2^48 * l3.
+// Well formedness is verified.
+public struct EncryptedAmount4U16<phantom T> has copy, drop, store {
+    // maybe phantom T?
+    l0: Encryption,
+    l1: Encryption,
+    l2: Encryption,
+    l3: Encryption,
+}
+
+public fun encrypted_amount_4_u16<T>(encryptions: vector<Encryption>): EncryptedAmount4U16<T> {
+    assert!(encryptions.length() == 4);
+    EncryptedAmount4U16<T> {
+        l0: encryptions[0],
+        l1: encryptions[1],
+        l2: encryptions[2],
+        l3: encryptions[3],
+    }
+}
+
+public fun encrypted_amount_4_u16_from_value<T>(
+    value: u64,
+    pk: &Element<Point>,
+): EncryptedAmount4U16<T> {
+    EncryptedAmount4U16<T> {
+        l0: encrypt_trivial((value & 0xFFFF) as u16, pk),
+        l1: encrypt_trivial(((value >> 16) & 0xFFFF) as u16, pk),
+        l2: encrypt_trivial(((value >> 32) & 0xFFFF) as u16, pk),
+        l3: encrypt_trivial(((value >> 48) & 0xFFFF) as u16, pk),
+    }
+}
+
+public fun encrypted_amount_4_u16_zero<T>(pk: &Element<Point>): EncryptedAmount4U16<T> {
+    EncryptedAmount4U16<T> {
+        l0: encrypt_zero(pk),
+        l1: encrypt_zero(pk),
+        l2: encrypt_zero(pk),
+        l3: encrypt_zero(pk),
+    }
+}
+
+// Encrypted u64 amount.
+// Four u16 encryptions that may overflow to u32.
+// Value is l0 + 2^16 * l1 + 2^32 * l2 + 2^48 * l3.
+// Well formedness is verified.
+public struct EncryptedAmount4U32<phantom T> has copy, drop, store {
+    l0: Encryption,
+    l1: Encryption,
+    l2: Encryption,
+    l3: Encryption,
+}
+
+public fun encrypted_amount_4_u32<T>(encryptions: vector<Encryption>): EncryptedAmount4U32<T> {
+    assert!(encryptions.length() == 4);
+    EncryptedAmount4U32<T> {
+        l0: encryptions[0],
+        l1: encryptions[1],
+        l2: encryptions[2],
+        l3: encryptions[3],
+    }
+}
+
+public fun encrypted_amount_4_u32_zero<T>(pk: &Element<Point>): EncryptedAmount4U32<T> {
+    EncryptedAmount4U32<T> {
+        l0: encrypt_zero(pk),
+        l1: encrypt_zero(pk),
+        l2: encrypt_zero(pk),
+        l3: encrypt_zero(pk),
+    }
+}
