@@ -135,6 +135,7 @@ feature_flags:
   use_new_commit_handler: true
   better_loader_errors: true
   generate_df_type_layouts: true
+  enable_display_registry: true
   private_generics_verifier_v2: true
   deprecate_global_storage_ops: true
   consensus_skip_gced_accept_votes: true
