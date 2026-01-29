@@ -3629,7 +3629,7 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
                             .with_previous_transaction(),
                     ),
                 )),
-                cursor,
+                cursor.clone(),
                 Some(1),
             )
             .await?;

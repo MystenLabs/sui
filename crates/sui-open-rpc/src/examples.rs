@@ -1263,7 +1263,6 @@ impl RpcExampleProvider {
             SuiObjectDataFilter::Version(version),
         ]));
         let query = json!(SuiObjectResponseQuery { filter, options });
-        let object_id = ObjectID::new(self.rng.r#gen());
 
         let items = (0..3)
             .map(|_| {
@@ -1282,10 +1281,13 @@ impl RpcExampleProvider {
             })
             .collect::<Vec<_>>();
 
-        let next_cursor = items.last().unwrap().object_id();
+        let next_cursor = items.last().unwrap().object_id().unwrap();
+        let next_cursor =
+            fastcrypto::encoding::Base64::from_bytes(&bcs::to_bytes(&next_cursor).unwrap())
+                .encoded();
         let result = ObjectsPage {
             data: items,
-            next_cursor: Some(next_cursor.unwrap()),
+            next_cursor: Some(next_cursor.clone()),
             has_next_page: true,
         };
 
@@ -1296,7 +1298,7 @@ impl RpcExampleProvider {
                 vec![
                     ("address", json!(owner)),
                     ("query", json!(query)),
-                    ("cursor", json!(object_id)),
+                    ("cursor", json!(next_cursor)),
                     ("limit", json!(3)),
                 ],
                 json!(result),
