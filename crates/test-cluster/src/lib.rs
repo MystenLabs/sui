@@ -21,6 +21,7 @@ use sui_json_rpc_types::{Balance, SuiTransactionBlockEffectsAPI, TransactionFilt
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
+use sui_rpc_api::Client;
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::apis::QuorumDriverApi;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -72,6 +73,7 @@ pub struct FullNodeHandle {
     pub sui_node: SuiNodeHandle,
     pub sui_client: SuiClient,
     pub rpc_client: HttpClient,
+    pub grpc_client: Client,
     pub rpc_url: String,
 }
 
@@ -81,11 +83,13 @@ impl FullNodeHandle {
         let rpc_client = HttpClientBuilder::default().build(&rpc_url).unwrap();
 
         let sui_client = SuiClientBuilder::default().build(&rpc_url).await.unwrap();
+        let grpc_client = Client::new(&rpc_url).unwrap();
 
         Self {
             sui_node,
             sui_client,
             rpc_client,
+            grpc_client,
             rpc_url,
         }
     }
@@ -104,6 +108,10 @@ impl TestCluster {
 
     pub fn sui_client(&self) -> &SuiClient {
         &self.fullnode_handle.sui_client
+    }
+
+    pub fn grpc_client(&self) -> Client {
+        self.fullnode_handle.grpc_client.clone()
     }
 
     pub fn rpc_url(&self) -> &str {
