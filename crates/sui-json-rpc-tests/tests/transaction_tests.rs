@@ -168,11 +168,9 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
 async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await;
 
-    let context = &cluster.wallet;
-
     let mut tx_responses: Vec<SuiTransactionBlockResponse> = Vec::new();
 
-    let client = context.get_client().await.unwrap();
+    let client = cluster.sui_client().clone();
 
     for address in cluster.get_addresses() {
         let objects = client
@@ -346,8 +344,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_query_transaction_blocks() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await;
-    let context = &cluster.wallet;
-    let client = context.get_client().await.unwrap();
+    let client = cluster.sui_client().clone();
 
     let address = cluster.get_address_0();
     let objects = client
