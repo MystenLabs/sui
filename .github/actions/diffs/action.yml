@@ -35,7 +35,7 @@ outputs:
 runs:
   using: composite
   steps:
-  - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
   - name: Detect Changes
     uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # pin@v3.0.2
     id: diff
