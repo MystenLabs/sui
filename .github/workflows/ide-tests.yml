@@ -39,9 +39,7 @@ jobs:
   
       - name: pnpm setup
         uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # pin@v4.2.0
-        with:
-          version: 9.1.1
-  
+
       - name: Verify PNPM Cache Directory
         run: |
           PNPM_STORE_PATH="$( pnpm store path --silent )"

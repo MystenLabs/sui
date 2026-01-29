@@ -15,8 +15,6 @@ runs:
     # Disabled for now as it makes test runs take longer
     # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
     - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # pin@v4.2.0
-      with:
-        version: 9.1.1
 
     - name: Check s3 if binaries have been uploaded already
       continue-on-error: true
