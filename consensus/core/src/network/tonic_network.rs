@@ -1220,3 +1220,124 @@ fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {
     }
     chunks
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{context::Clock, metrics::initialise_metrics};
+    use consensus_config::{Parameters, local_committee_and_keys};
+    use prometheus::Registry;
+    use sui_protocol_config::ProtocolConfig;
+
+    fn create_test_context_and_client() -> (Arc<Context>, TonicClient) {
+        let (committee, mut keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
+        let parameters = Parameters::default();
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let metrics = initialise_metrics(Registry::new());
+
+        let context = Arc::new(Context::new(
+            0,
+            committee.to_authority_index(0).unwrap(),
+            committee,
+            parameters,
+            protocol_config,
+            metrics,
+            Arc::new(Clock::default()),
+        ));
+
+        let (network_keypair, _protocol_keypair) = keypairs.remove(0);
+        let client = TonicClient::new(context.clone(), network_keypair);
+
+        (context, client)
+    }
+
+    #[test]
+    fn test_update_peer_address() {
+        let (context, client) = create_test_context_and_client();
+
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let new_address: Multiaddr = "/ip4/127.0.0.1/udp/9000".parse().unwrap();
+
+        client.update_peer_address(peer, vec![new_address.clone()]);
+
+        // Verify the override was set
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert_eq!(overrides.get(&peer), Some(&new_address));
+        }
+
+        // Update with a different address
+        let newer_address: Multiaddr = "/ip4/127.0.0.1/udp/9001".parse().unwrap();
+        client.update_peer_address(peer, vec![newer_address.clone()]);
+
+        // Verify the override was updated
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert_eq!(overrides.get(&peer), Some(&newer_address));
+        }
+
+        // Verify channels map doesn't contain the peer
+        {
+            let channels = client.channel_pool.channels.read();
+            assert!(!channels.contains_key(&peer));
+        }
+    }
+
+    #[test]
+    fn test_clear_peer_address() {
+        let (context, client) = create_test_context_and_client();
+
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let new_address: Multiaddr = "/ip4/127.0.0.1/udp/9000".parse().unwrap();
+
+        // Set address override
+        client.update_peer_address(peer, vec![new_address]);
+
+        // Verify the override was set
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert!(overrides.contains_key(&peer));
+        }
+
+        // Clear the override with empty list
+        client.update_peer_address(peer, vec![]);
+
+        // Verify the override was cleared
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert!(!overrides.contains_key(&peer));
+        }
+    }
+
+    #[test]
+    fn test_different_peers_independent() {
+        let (context, client) = create_test_context_and_client();
+
+        let peer1 = context.committee.to_authority_index(1).unwrap();
+        let peer2 = context.committee.to_authority_index(2).unwrap();
+
+        let address1: Multiaddr = "/ip4/127.0.0.1/udp/9000".parse().unwrap();
+        let address2: Multiaddr = "/ip4/127.0.0.1/udp/9001".parse().unwrap();
+
+        // Set different addresses for different peers
+        client.update_peer_address(peer1, vec![address1.clone()]);
+        client.update_peer_address(peer2, vec![address2.clone()]);
+
+        // Verify both overrides are set correctly
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert_eq!(overrides.get(&peer1), Some(&address1));
+            assert_eq!(overrides.get(&peer2), Some(&address2));
+        }
+
+        // Clear one peer's override
+        client.update_peer_address(peer1, vec![]);
+
+        // Verify only peer1's override was cleared
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert!(!overrides.contains_key(&peer1));
+            assert_eq!(overrides.get(&peer2), Some(&address2));
+        }
+    }
+}
