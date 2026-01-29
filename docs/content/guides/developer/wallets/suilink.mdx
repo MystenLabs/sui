@@ -75,6 +75,9 @@ If you are building an application on Sui, you can integrate SuiLink to verify c
 To retrieve a user's SuiLink connections, use the following dApp Kit SDK query:
 
 ```typescript
+const SUILINK_PACKAGE_ID_ETH_SOL = '0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3';
+const SUILINK_PACKAGE_ID_SUI = '0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5';
+
 const SuiLink = bcs.struct('SuiLink', {
   id: bcs.struct('UID', { id: bcs.Address }),
   network_address: bcs.String,
@@ -133,8 +136,8 @@ After retrieving a user's SuiLink objects, you can verify their ownership of spe
 
 1. Extract the `network_address` from the SuiLink NFT.
 2. Use the appropriate blockchain API to query assets at that address. The examples use [Alchemy](https://www.alchemy.com/) for Ethereum, and [Metaplex](https://www.metaplex.com/) for Solana.
-3. Verify the presence of the required asset
-4. Attribute benefits to the user through their Sui wallet
+3. Verify the presence of the required asset.
+4. Attribute benefits to the user through their Sui wallet.
 
 <Tabs>
 
