@@ -229,7 +229,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-ghcloud' || matrix.os == 'ubuntu-arm64' }}
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # pin@4.4.3
         with:
-          name: sui-binaries-${{ matrix.os }}
+          name: sui-binaries-${{ matrix.os }}-light
           if-no-files-found: error
           path: |
             ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}-light.tgz
