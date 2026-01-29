@@ -474,8 +474,6 @@ pub fn build_accumulator_barrier_tx(
         "building barrier transaction with {objects_created} objects created and {objects_destroyed} objects destroyed in {num_settlements} settlement tx"
     );
 
-    debug!("barrier settlement effects: {:#?}", settlement_effects); //TODO-DNS
-
     let mut builder = ProgrammableTransactionBuilder::new();
     let root = builder
         .input(CallArg::Object(ObjectArg::SharedObject {
