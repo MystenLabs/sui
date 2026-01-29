@@ -364,6 +364,30 @@ impl Client {
 
         Ok(())
     }
+
+    pub async fn get_protocol_config(&self, epoch: Option<u64>) -> Result<proto::ProtocolConfig> {
+        let mut request = proto::GetEpochRequest::default();
+        if let Some(epoch) = epoch {
+            request.set_epoch(epoch);
+        }
+        request.set_read_mask(FieldMask::from_paths([
+            proto::Epoch::path_builder().epoch(),
+            proto::Epoch::path_builder().protocol_config().finish(),
+        ]));
+        let mut response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        Ok(response
+            .epoch_mut()
+            .protocol_config
+            .take()
+            .unwrap_or_default())
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
