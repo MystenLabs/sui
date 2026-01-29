@@ -16,6 +16,7 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
+use sui_rpc::proto::sui::rpc::v2::{self as proto};
 
 use anyhow::{Context, anyhow, bail, ensure};
 use bip32::DerivationPath;
@@ -43,10 +44,10 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, DynamicFieldInfo,
-    DynamicFieldPage, SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData,
-    SuiProtocolConfigValue, SuiRawData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiCoinMetadata,
+    SuiData, SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiParsedData, SuiProtocolConfigValue, SuiRawData,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
@@ -190,10 +191,10 @@ pub enum SuiClientCommands {
         id: ObjectID,
         /// Optional paging cursor
         #[clap(long)]
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         /// Maximum item returned per page
         #[clap(long, default_value = "50")]
-        limit: usize,
+        limit: u32,
     },
 
     /// List all Sui environments
@@ -899,11 +900,14 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
+                let page_token = cursor
+                    .map(|c| Base64::decode(&c))
+                    .transpose()?
+                    .map(Into::into);
                 let df_read = client
-                    .read_api()
-                    .get_dynamic_fields(id, cursor, Some(limit))
+                    .get_dynamic_fields(id, Some(limit), page_token)
                     .await?;
                 SuiClientCommandResult::DynamicFieldQuery(df_read)
             }
@@ -2090,12 +2094,6 @@ impl Display for SuiClientCommandResult {
                 write!(f, "{}", table)?;
             }
             SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
-                let df_refs = DynamicFieldOutput {
-                    has_next_page: df_refs.has_next_page,
-                    next_cursor: df_refs.next_cursor,
-                    data: df_refs.data.clone(),
-                };
-
                 let json_obj = json!(df_refs);
                 let mut table = json_to_table(&json_obj);
                 let style = TableStyle::rounded().horizontals([]);
@@ -2525,14 +2523,6 @@ pub struct AddressesOutput {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DynamicFieldOutput {
-    pub has_next_page: bool,
-    pub next_cursor: Option<ObjectID>,
-    pub data: Vec<DynamicFieldInfo>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NewAddressOutput {
     pub alias: String,
     pub address: SuiAddress,
@@ -2652,7 +2642,7 @@ pub enum SuiClientCommandResult {
     Balance(Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>, bool),
     ChainIdentifier(String),
     ComputeTransactionDigest(TransactionData),
-    DynamicFieldQuery(DynamicFieldPage),
+    DynamicFieldQuery(proto::ListDynamicFieldsResponse),
     DryRun(DryRunTransactionBlockResponse),
     DevInspect(DevInspectResults),
     Envs(Vec<SuiEnv>, Option<String>),

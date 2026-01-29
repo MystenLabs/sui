@@ -51,6 +51,7 @@ uuid.workspace = true
 url.workspace = true
 
 sui-rpc-api.workspace = true
+sui-rpc.workspace = true
 sui-config.workspace = true
 sui-bridge.workspace = true
 sui-data-store.workspace = true
