@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Client","ExecutedTransaction","HeadersInterceptor","Page"],"trait":["ResponseExt"],"type":["BoxError","Result"]};
