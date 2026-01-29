@@ -20,12 +20,14 @@ jobs:
 
       - name: Check all links at *.md and doc files
         id: lychee
-        uses: lycheeverse/lychee-action@v1.8.0
+        uses: lycheeverse/lychee-action@a8c4c7cb88f0c7386610c35eb25108e448569cb0 # pin@v2.7.0
         with:
           output: ${{ env.LYCHEE_OUT }}
           format: markdown
           ## Do not fail this step on broken links
           fail: false
+          ## Do not fail if no links are found (v2 default is true)
+          failIfEmpty: false
           ## Allow pages replying with 200 (Ok)in at most 20 seconds
           ## This checks all md files in the repo
           args: >-
@@ -40,7 +42,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Find the last report issue open
-        uses: micalevisk/last-issue-action@v2.1
+        uses: micalevisk/last-issue-action@305829d9728f47beb0029417167a0af890edfd6e # pin@v2.1
         id: last_issue
         with:
           state: open
@@ -52,7 +54,7 @@ jobs:
 
       - name: Create issue from report file
         if: ${{ steps.last_issue.outputs.has_found == 'false' }}
-        uses: peter-evans/create-issue-from-file@v4
+        uses: peter-evans/create-issue-from-file@433e51abf769039ee20ba1293a088ca19d573b7f # pin@v4
         with:
           title: Link checker report
           content-filepath: ${{ env.LYCHEE_OUT }}
@@ -64,7 +66,7 @@ jobs:
 
       - name: Update last report open issue created
         if: ${{ steps.last_issue.outputs.has_found == 'true' }}
-        uses: peter-evans/create-issue-from-file@v4
+        uses: peter-evans/create-issue-from-file@433e51abf769039ee20ba1293a088ca19d573b7f # pin@v4
         with:
           title: Link checker report
           content-filepath: ${{ env.LYCHEE_OUT }}
@@ -75,6 +77,6 @@ jobs:
 
       - name: Close last report open issue
         if: ${{ steps.lychee.outputs.exit_code == 0 }}
-        uses: peter-evans/close-issue@v3
+        uses: peter-evans/close-issue@276d7966e389d888f011539a86c8920025ea0626 # pin@v3
         with:
           issue-number: ${{ steps.last_issue.outputs.issue_number }}
