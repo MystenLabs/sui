@@ -13,7 +13,7 @@ use crate::{
     },
     jit::execution::ast::{ArenaType, Function, Type, TypeSubst},
 };
-use move_binary_format::errors::{PartialVMError, VMError, VMResult};
+use move_binary_format::errors::{PartialVMError, PartialVMResult, VMError, VMResult};
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value::MoveTypeLayout as AnnotatedTypeLayout,
@@ -195,11 +195,27 @@ impl StackType {
 impl VMTracer<'_> {
     /// Emit an error event to the trace if `true`
     fn emit_trace_error_if_err(&mut self, is_err: bool) {
+        self.emit_trace_error_with_msg_if_err(is_err, "Unknown");
+    }
+
+    /// Emit an error event to the trace if `true`
+    fn emit_trace_error_with_msg_if_err(&mut self, is_err: bool, msg: &str) {
         if is_err {
-            self.trace.effect(EF::ExecutionError(
-                "!! TRACING ERROR !! Events below this may be incorrect.".to_string(),
-            ));
+            self.report_error(msg);
         }
+    }
+
+    /// Emit an error event to the trace if `false`
+    fn trace_assert(&mut self, assert_exp: bool, msg: &str) {
+        self.emit_trace_error_with_msg_if_err(!assert_exp, msg);
+    }
+
+    /// Emit an error event to the trace
+    fn report_error(&mut self, msg: &str) {
+        self.trace.effect(EF::ExecutionError(format!(
+            "!! TRACING ERROR !! Err: {}. Events below this may be incorrect.",
+            msg
+        )));
     }
 
     fn current_frame(&self) -> Option<&FrameInfo> {
@@ -442,10 +458,10 @@ impl VMTracer<'_> {
                 let location = match &ty.ref_type {
                     ReferenceKind::Filled { location, .. } => location.clone(),
                     ReferenceKind::Value => loc.clone(),
-                    _ => panic!(
-                        "We tried to access a local that was not initialized at {:?}",
-                        loc
-                    ),
+                    _ => {
+                        debug_assert!(false, "Tried to resolve an uninitialized local");
+                        return None;
+                    }
                 };
                 self.make_trace_value(vtables, machine, location, ref_ty)
             }
@@ -498,7 +514,8 @@ impl VMTracer<'_> {
                         into_annotated_move_value(&value, &type_)?
                     }
                     ReferenceKind::Empty { .. } => {
-                        panic!("We tried to access a local that was not initialized")
+                        debug_assert!(false, "We tried to access a local that was not initialized");
+                        return None;
                     }
                     ReferenceKind::Filled { location, .. } => {
                         self.root_location_snapshot(vtables, machine, &location)?
@@ -506,7 +523,7 @@ impl VMTracer<'_> {
                 }
             }
             RuntimeLocation::Stack(stack_idx) => {
-                let ty = self.type_stack.get(*stack_idx)?;
+                let ty = self.type_stack.get(*stack_idx)?.clone();
                 match &ty.ref_type {
                     None | Some((_, RuntimeLocation::Global(_))) => {
                         let value = machine.operand_stack.value.get(*stack_idx)?;
@@ -675,7 +692,11 @@ impl VMTracer<'_> {
                 return_types: function_type_info.return_types.clone(),
             },
         );
-        let version_id = get_version_id(vtables, &function.module_id(&self.interner));
+
+        let Ok(version_id) = get_version_id(vtables, &function.module_id(&self.interner)) else {
+            self.report_error("Failed to get version id");
+            return None;
+        };
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
@@ -733,9 +754,8 @@ impl VMTracer<'_> {
             return_values,
             *remaining_gas,
         );
-        self.active_frames
-            .pop_last()
-            .expect("Unbalanced frame close");
+        let last_frame_opt = self.active_frames.pop_last();
+        self.trace_assert(last_frame_opt.is_some(), "Unbalanced frame close");
         Some(())
     }
 
@@ -803,7 +823,11 @@ impl VMTracer<'_> {
                 return_types: function_type_info.return_types.clone(),
             },
         );
-        let version_id = get_version_id(vtables, &function.module_id(&self.interner));
+
+        let Ok(version_id) = get_version_id(vtables, &function.module_id(&self.interner)) else {
+            self.report_error("Failed to get version id");
+            return None;
+        };
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
@@ -837,8 +861,11 @@ impl VMTracer<'_> {
         function: &Function,
     ) -> Option<()> {
         if function.is_native() {
-            self.handle_native_return(machine, function)
-                .expect("Native function return failed -- this should not happen.");
+            let native_return = self.handle_native_return(machine, function);
+            self.trace_assert(
+                native_return.is_some(),
+                "Native function return failed -- this should not happen.",
+            );
         }
 
         let return_values = (0..function.return_type_count())
@@ -859,9 +886,8 @@ impl VMTracer<'_> {
             return_values,
             *remaining_gas,
         );
-        self.active_frames
-            .pop_last()
-            .expect("Unbalanced frame close");
+        let last_frame_opt = self.active_frames.pop_last();
+        self.trace_assert(last_frame_opt.is_some(), "Unbalanced frame close");
         Some(())
     }
 
@@ -1039,9 +1065,10 @@ impl VMTracer<'_> {
 
         // NB: Do _not_ use the frames pc here, as it will be incremented by the interpreter to the
         // next instruction already.
-        let pc = self
-            .pc
-            .expect("PC always set by this point by `open_instruction`");
+        let Some(pc) = self.pc else {
+            self.report_error("PC should always set by this point by `open_instruction`");
+            return None;
+        };
 
         // NB: At the start of this function (i.e., at this point) the operand stack in the VM, and
         // the type stack in the tracer are _out of sync_. This is because the VM has already
@@ -1222,7 +1249,8 @@ impl VMTracer<'_> {
                 let value = self.resolve_stack_value(vtables, machine, 0)?;
                 let effects = self.register_post_effects(vec![EF::Push(value)]);
                 let TypeTag::Struct(s_type) = vtables.type_to_type_tag(&struct_type).ok()? else {
-                    panic!("Expected struct, got {:#?}", struct_type);
+                    self.report_error(&format!("Expected struct, got {:#?}", struct_type));
+                    return None;
                 };
                 self.trace.instruction(
                     instruction,
@@ -1235,7 +1263,8 @@ impl VMTracer<'_> {
             B::Unpack(_) | B::UnpackGeneric(_) => {
                 let ty = self.type_stack.pop()?;
                 let AnnotatedTypeLayout::Struct(s) = ty.layout else {
-                    panic!("Expected struct, got {:#?}", ty.layout);
+                    self.report_error(&format!("Expected struct, got {:#?}", ty));
+                    return None;
                 };
                 let field_tys = s.fields.iter().map(|t| t.layout.clone());
                 for field_ty in field_tys {
@@ -1359,7 +1388,8 @@ impl VMTracer<'_> {
                 let value_ty = self.type_stack.pop()?;
 
                 let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
-                    panic!("Expected struct, got {:?}", value_ty.layout)
+                    self.report_error(&format!("Expected struct, got {:#?}", value_ty.layout));
+                    return None;
                 };
                 let field_offset = fh_ptr.offset;
                 let field_layout = slayout.fields.get(field_offset)?.layout.clone();
@@ -1387,7 +1417,8 @@ impl VMTracer<'_> {
                 let value_ty = self.type_stack.pop()?;
 
                 let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
-                    panic!("Expected struct, got {:?}", value_ty.layout)
+                    self.report_error(&format!("Expected struct, got {:#?}", value_ty.layout));
+                    return None;
                 };
                 let field_offset = fh_ptr.offset;
                 let field_layout = slayout.fields.get(field_offset)?.layout.clone();
@@ -1438,7 +1469,8 @@ impl VMTracer<'_> {
                 self.type_stack.pop()?;
                 let ref_ty = self.type_stack.pop()?;
                 let AnnotatedTypeLayout::Vector(ty) = ref_ty.layout else {
-                    panic!("Expected vector, got {:?}", ref_ty.layout,);
+                    self.report_error(&format!("Expected vector, got {:#?}", ref_ty.layout));
+                    return None;
                 };
                 let EF::Pop(TraceValue::RuntimeValue {
                     value: SerializableMoveValue::U64(i),
@@ -1487,9 +1519,10 @@ impl VMTracer<'_> {
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::VecPopBack(_) => {
-                let reference_ty = self.type_stack.pop()?;
-                let AnnotatedTypeLayout::Vector(ty) = reference_ty.layout else {
-                    panic!("Expected vector, got {:?}", reference_ty.layout);
+                let ref_ty = self.type_stack.pop()?;
+                let AnnotatedTypeLayout::Vector(ty) = ref_ty.layout else {
+                    self.report_error(&format!("Expected vector, got {:#?}", ref_ty.layout));
+                    return None;
                 };
                 let a_layout = StackType {
                     layout: (*ty).clone(),
@@ -1504,7 +1537,8 @@ impl VMTracer<'_> {
             B::VecUnpack(_, n) => {
                 let ty = self.type_stack.pop()?;
                 let AnnotatedTypeLayout::Vector(ty) = ty.layout else {
-                    panic!("Expected vector, got {:?}", ty.layout);
+                    self.report_error(&format!("Expected vector, got {:#?}", ty.layout));
+                    return None;
                 };
                 for _ in 0..*n {
                     let a_layout = StackType {
@@ -1585,7 +1619,8 @@ impl VMTracer<'_> {
                     _ => unreachable!(),
                 };
                 let AnnotatedTypeLayout::Enum(e) = ty.layout else {
-                    panic!("Expected enum, got {:#?}", ty.layout);
+                    self.report_error(&format!("Expected enum, got {:#?}", ty.layout));
+                    return None;
                 };
                 let variant_layout = e.variants.iter().find(|v| v.0.1 == tag)?;
                 let mut effects = vec![];
@@ -1629,7 +1664,8 @@ impl VMTracer<'_> {
                     _ => unreachable!(),
                 };
                 let AnnotatedTypeLayout::Enum(e) = ty.layout else {
-                    panic!("Expected enum, got {:#?}", ty.layout);
+                    self.report_error(&format!("Expected enum, got {:#?}", ty.layout));
+                    return None;
                 };
                 let variant_layout = e.variants.iter().find(|v| v.0.1 == tag)?;
                 let location = ty.ref_type.as_ref()?.1.clone();
@@ -1765,9 +1801,10 @@ impl<'a> VMTracer<'a> {
                       -- this is most likely a bug in the tracer"
                     .to_string(),
             };
-            let pc = self
-                .pc
-                .expect("PC always set by this point by `open_instruction`");
+            let Some(pc) = self.pc else {
+                self.report_error("PC always set by this point by `open_instruction`");
+                return;
+            };
             let instruction =
                 &machine.call_stack.current_frame.function.to_ref().code()[pc as usize];
             let effects = self.register_post_effects(vec![EF::ExecutionError(error_string)]);
@@ -1850,9 +1887,11 @@ fn into_annotated_move_value(
     Some(value.as_annotated_move_value(type_)?.into())
 }
 
-fn get_version_id(vtables: &VMDispatchTables, original_id: &ModuleId) -> AccountAddress {
+fn get_version_id(
+    vtables: &VMDispatchTables,
+    original_id: &ModuleId,
+) -> PartialVMResult<AccountAddress> {
     vtables
         .get_package(original_id.address())
-        .expect("Package must be loaded")
-        .version_id
+        .map(|pkg| pkg.version_id)
 }

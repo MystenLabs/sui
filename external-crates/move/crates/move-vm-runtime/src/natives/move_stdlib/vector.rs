@@ -113,7 +113,11 @@ pub fn native_push_back(
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
-    let e = args.pop_back().unwrap();
+    let Some(e) = args.pop_back() else {
+        return Err(PartialVMError::new(StatusCode::VECTOR_OPERATION_ERROR)
+            .with_message("Internal error: missing argument in native push_back".to_string()));
+    };
+
     let r = pop_arg!(args, VectorRef);
 
     if gas_params.legacy_per_abstract_memory_unit != 0.into() {

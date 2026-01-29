@@ -12,7 +12,7 @@ pub mod type_name;
 pub mod unit_test;
 pub mod vector;
 
-use crate::natives::functions::{NativeFunctionTable, NativeFunctions, make_table_from_iter};
+use crate::natives::functions::{NativeFunctionTable, NativeFunctions, make_table};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 
@@ -167,7 +167,7 @@ pub fn stdlib_native_function_table(
         add_natives!("unit_test", unit_test::make_all(gas_params.unit_test));
     }
 
-    make_table_from_iter(move_std_addr, natives)
+    make_table(move_std_addr, natives)
 }
 
 pub fn stdlib_native_functions(

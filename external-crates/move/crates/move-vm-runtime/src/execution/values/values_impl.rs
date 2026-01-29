@@ -2600,15 +2600,17 @@ impl Value {
     }
 
     pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
-        let res = bcs::to_bytes(&AnnotatedValue { layout, val: self });
-        debug_assert!(
-            res.is_ok(),
-            "BCS failed to serialize value {:?} with layout {:?}. Error: {:?}",
-            self,
-            layout,
-            res.err().unwrap()
-        );
-        res.ok()
+        match bcs::to_bytes(&AnnotatedValue { layout, val: self }) {
+            Ok(bytes) => Some(bytes),
+            Err(e) => {
+                debug_assert!(
+                    false,
+                    "BCS failed to serialize value {:?} with layout {:?}. Error: {:?}",
+                    self, layout, e
+                );
+                None
+            }
+        }
     }
 
     pub fn serialize(&self) -> Option<Vec<u8>> {

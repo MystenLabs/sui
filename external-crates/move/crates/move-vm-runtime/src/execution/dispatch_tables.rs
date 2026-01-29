@@ -24,6 +24,7 @@ use crate::{
         vm_pointer::VMPointer,
     },
 };
+
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{AbilitySet, TypeParameterIndex},
@@ -35,14 +36,12 @@ use move_core_types::{
     runtime_value,
     vm_status::StatusCode,
 };
-
 use move_vm_config::runtime::VMConfig;
 
-use lru::LruCache;
+use quick_cache::unsync::Cache as QCache;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    num::NonZeroUsize,
     sync::Arc,
 };
 
@@ -76,11 +75,12 @@ pub struct VMDispatchTables {
     /// avoid grabbing write-locks and toward the possibility these may change based on linkage
     /// (e.g., type ugrades or similar).
     /// [SAFETY] Ordering of inner maps is not guaranteed
-    /// NB: This cache is mutated during execution, so VMDispatchTables cannot be fully immutable.
+    /// NB: This cache is mutated during execution, so we make a new one for each VM instantiation.
+    /// This also means VMDispatchTables cannot be fully immutable, so we must make a copy of the
+    /// entire dispatch table for each usage.
+    ///
     /// However, the contents of the cache do not affect execution correctness, only performance.
-    /// To this end, we do not wrap this in an Arc<_> or similar -- to do so would introduce a
-    /// RwLock that may be contended during execution.
-    pub(crate) type_depths: LruCache<VirtualTableKey, DepthFormula>,
+    pub(crate) type_depths: QCache<VirtualTableKey, DepthFormula>,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -180,7 +180,7 @@ impl VMDispatchTables {
             loaded_packages,
             defining_id_origins,
             link_context,
-            type_depths: LruCache::new(NonZeroUsize::new(TYPE_DEPTH_LRU_SIZE).unwrap()),
+            type_depths: QCache::new(TYPE_DEPTH_LRU_SIZE),
         })
     }
 
@@ -489,13 +489,10 @@ impl VMDispatchTables {
         let mut formula = DepthFormula::normalize(formulas);
         // add 1 for the struct/variant itself
         formula.add(1);
-        let prev = self.type_depths.put(datatype_name.clone(), formula.clone());
-        if prev.is_some() {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Recursive type?".to_owned()),
-            );
-        }
+        // Insert without checking if it was already present; this is a pure optmization, so we do
+        // not care about overwriting.
+        self.type_depths
+            .insert(datatype_name.clone(), formula.clone());
         Ok(formula)
     }
 

@@ -149,17 +149,14 @@ impl NativeResult {
     }
 }
 
-pub fn make_table(
-    addr: AccountAddress,
-    elems: &[(&str, &str, NativeFunction)],
-) -> NativeFunctionTable {
-    make_table_from_iter(addr, elems.iter().cloned())
-}
-
-pub fn make_table_from_iter<S: Into<Box<str>>>(
+/// Make a table of native functions associated with a module and member name.
+/// Each name must be a valid Identifier, or this function will panic.
+pub fn make_table<S: Into<Box<str>>>(
     addr: AccountAddress,
     elems: impl IntoIterator<Item = (S, S, NativeFunction)>,
 ) -> NativeFunctionTable {
+    // [SAEFTY] This is done during creation, and crashing at startup due to bad natives is
+    // preferable to launching with invalid nativs.
     elems
         .into_iter()
         .map(|(module_name, func_name, func)| {
@@ -364,15 +361,6 @@ macro_rules! native_charge_gas_early_exit {
                 NFE_OUT_OF_GAS,
             ));
         }
-    }};
-}
-
-/// Total cost of a native call so far
-#[macro_export]
-macro_rules! native_gas_total_cost {
-    ($native_context:ident, $gas_left:ident) => {{
-        // Its okay to unwrap because the budget can never be less than the gas left
-        $native_context.gas_budget().checked_sub($gas_left).unwrap()
     }};
 }
 

@@ -27,14 +27,17 @@ use crate::{
         vm_pointer::VMPointer,
     },
 };
-use fail::fail_point;
+
 use move_binary_format::errors::*;
 use move_core_types::{
     gas_algebra::{NumArgs, NumBytes},
-    vm_status::StatusCode,
+    vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::{VMConfig, VMRuntimeLimitsConfig};
+
+use fail::fail_point;
 use smallvec::SmallVec;
+use tracing::error;
 
 use std::{collections::VecDeque, sync::Arc};
 
@@ -924,8 +927,7 @@ fn call_function(
     } else {
         // Note: the caller will find the callee's return values at the top of the shared
         // operand stack when the new frame returns.
-        push_call_frame(state, run_context, function, ty_args)
-            .map_err(|err| state.maybe_core_dump(err))?;
+        push_call_frame(state, run_context, function, ty_args).map_err(finalize_execution_error)?;
     }
     Ok(())
 }
@@ -1119,7 +1121,7 @@ fn partial_error_to_error<T>(
             state.call_stack.current_frame.function().index(),
             state.call_stack.current_frame.pc,
         ));
-        state.maybe_core_dump(err)
+        finalize_execution_error(err)
     })
 }
 
@@ -1193,4 +1195,19 @@ fn check_depth_of_type_impl(
     };
 
     Ok(ty_depth)
+}
+
+/// Given an `VMStatus`, rewrite a `Verification` into an `InvariantViolation` before returning.
+fn finalize_execution_error(err: VMError) -> VMError {
+    if err.status_type() == StatusType::Verification {
+        error!("Verification error during runtime: {:?}", err);
+        let new_err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
+        let new_err = match err.message() {
+            None => new_err.with_message("No message provided for core dump".to_owned()),
+            Some(msg) => new_err.with_message(msg.to_owned()),
+        };
+        new_err.finish(err.location().clone())
+    } else {
+        err
+    }
 }
