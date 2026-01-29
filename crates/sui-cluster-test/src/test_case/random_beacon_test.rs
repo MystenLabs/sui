@@ -65,8 +65,12 @@ impl TestCaseImpl for RandomBeaconTest {
 
 impl RandomBeaconTest {
     async fn is_beacon_enabled(wallet_context: &WalletContext) -> bool {
-        let client = wallet_context.get_client().await.unwrap();
-        let config = client.read_api().get_protocol_config(None).await.unwrap();
-        *config.feature_flags.get("random_beacon").unwrap()
+        let config = wallet_context
+            .grpc_client()
+            .unwrap()
+            .get_protocol_config(None)
+            .await
+            .unwrap();
+        *config.feature_flags().get("random_beacon").unwrap()
     }
 }
