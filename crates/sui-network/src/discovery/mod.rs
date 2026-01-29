@@ -10,10 +10,12 @@ use mysten_common::debug_fatal;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
     time::Duration,
 };
+
+use crate::endpoint_manager::AddressSource;
 use sui_config::p2p::{AccessType, DiscoveryConfig, P2pConfig};
 use sui_types::crypto::{NetworkKeyPair, Signer, ToFromBytes, VerifyingKey};
 use sui_types::digests::Digest;
@@ -53,8 +55,11 @@ pub use server::GetKnownPeersResponseV2;
 /// Message types for the discovery system mailbox.
 #[derive(Debug)]
 pub enum DiscoveryMessage {
-    /// Update the address for a single peer.
-    PeerAddressChange(PeerInfo),
+    PeerAddressChange {
+        peer_id: PeerId,
+        source: AddressSource,
+        addresses: Vec<anemo::types::Address>,
+    },
 }
 
 /// A Handle to the Discovery subsystem. The Discovery system will be shut down once all Handles
@@ -66,13 +71,19 @@ pub struct Handle {
 }
 
 impl Handle {
-    /// Updates the address for a single peer in the p2p network.
-    ///
-    /// If the peer's address has changed, the discovery system will
-    /// forcibly reconnect to the peer at the new address.
-    pub fn peer_address_change(&self, peer_info: PeerInfo) {
+    /// Updates the address for a single peer from a specific source.
+    pub fn peer_address_change(
+        &self,
+        peer_id: PeerId,
+        source: AddressSource,
+        addresses: Vec<anemo::types::Address>,
+    ) {
         self.sender
-            .try_send(DiscoveryMessage::PeerAddressChange(peer_info))
+            .try_send(DiscoveryMessage::PeerAddressChange {
+                peer_id,
+                source,
+                addresses,
+            })
             .expect("Discovery mailbox should not overflow or be closed")
     }
 }
@@ -84,6 +95,7 @@ struct State {
     our_info: Option<SignedNodeInfo>,
     connected_peers: HashMap<PeerId, ()>,
     known_peers: HashMap<PeerId, VerifiedSignedNodeInfo>,
+    peer_address_overrides: HashMap<PeerId, BTreeMap<AddressSource, Vec<anemo::types::Address>>>,
 }
 
 /// The information necessary to dial another peer.
@@ -202,8 +214,12 @@ impl DiscoveryEventLoop {
 
     fn handle_message(&mut self, message: DiscoveryMessage) {
         match message {
-            DiscoveryMessage::PeerAddressChange(peer_info) => {
-                self.handle_peer_address_change(peer_info);
+            DiscoveryMessage::PeerAddressChange {
+                peer_id,
+                source,
+                addresses,
+            } => {
+                self.handle_peer_address_change(peer_id, source, addresses);
             }
         }
     }
@@ -247,21 +263,64 @@ impl DiscoveryEventLoop {
         }
     }
 
-    fn handle_peer_address_change(&mut self, peer_info: PeerInfo) {
-        debug!(?peer_info, "Add committee member as preferred peer.");
-        if let Some(old_peer_info) = self.network.known_peers().insert(peer_info.clone())
-            && old_peer_info.address != peer_info.address
+    fn handle_peer_address_change(
+        &mut self,
+        peer_id: PeerId,
+        source: AddressSource,
+        addresses: Vec<anemo::types::Address>,
+    ) {
+        debug!(
+            ?peer_id,
+            ?source,
+            ?addresses,
+            "Received peer address change"
+        );
+
+        // Update stored addresses.
         {
-            // Forcibly reconnect to the peer if its address(es) changed.
-            // If no valid new address is provided, we will remain disconnected.
-            let _ = self.network.disconnect(peer_info.peer_id);
-            if let Some(address) = peer_info.address.first().cloned() {
+            let mut state = self.state.write().unwrap();
+            let source_map = state.peer_address_overrides.entry(peer_id).or_default();
+
+            if addresses.is_empty() {
+                source_map.remove(&source);
+                if source_map.is_empty() {
+                    state.peer_address_overrides.remove(&peer_id);
+                }
+            } else {
+                source_map.insert(source, addresses);
+            }
+        }
+
+        // Reconfigure network if priority addresses changed.
+        let priority_addresses = self
+            .state
+            .read()
+            .unwrap()
+            .peer_address_overrides
+            .get(&peer_id)
+            .and_then(|sources| sources.first_key_value().map(|(_, addrs)| addrs.clone()))
+            .unwrap_or_default();
+        let current_addresses = self
+            .network
+            .known_peers()
+            .get(&peer_id)
+            .map(|info| info.address.clone())
+            .unwrap_or_default();
+        if priority_addresses != current_addresses {
+            let new_peer_info = PeerInfo {
+                peer_id,
+                affinity: PeerAffinity::High,
+                address: priority_addresses.clone(),
+            };
+
+            self.network.known_peers().insert(new_peer_info);
+            let _ = self.network.disconnect(peer_id);
+
+            if let Some(address) = priority_addresses.first().cloned() {
                 let network = self.network.clone();
                 self.tasks.spawn(async move {
                     // If this fails, ConnectionManager will retry.
-                    let _ = network
-                        .connect_with_peer_id(address, peer_info.peer_id)
-                        .await;
+                    let _ = network.connect_with_peer_id(address, peer_id).await;
                 });
             }
         }
