@@ -206,8 +206,8 @@ pub fn package(
             )| {
                 Ok((
                     IntraPackageKey {
-                        module_name: interner.intern_identifier(&module_name),
-                        member_name: interner.intern_identifier(&type_name),
+                        module_name: interner.intern_identifier(&module_name)?,
+                        member_name: interner.intern_identifier(&type_name)?,
                     },
                     origin_id,
                 ))
@@ -566,7 +566,7 @@ fn datatypes(
             let original_id = module_original_id;
             let datatype_info =
                 context.arena_box(Datatype::Struct(VMPointer::from_ref(struct_)))?;
-            let name = context.interner.intern_identifier(&name);
+            let name = context.interner.intern_identifier(&name)?;
             let descriptor = DatatypeDescriptor::new(name, defining_id, original_id, datatype_info);
             Ok(descriptor)
         })
@@ -579,7 +579,7 @@ fn datatypes(
             let defining_id = defining_id(context, version_id, &enum_.def_vtable_key)?;
             let original_id = module_original_id;
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
-            let name = context.interner.intern_identifier(&name);
+            let name = context.interner.intern_identifier(&name)?;
             let descriptor = DatatypeDescriptor::new(name, defining_id, original_id, datatype_info);
             Ok(descriptor)
         })
@@ -607,7 +607,7 @@ fn structs(
             let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
 
             let name = module.identifier_at(struct_handle.name);
-            let member_name = context.interner.intern_ident_str(name);
+            let member_name = context.interner.intern_ident_str(name)?;
             let def_vtable_key =
                 VirtualTableKey::from_parts(*original_id, *module_name, member_name);
 
@@ -636,7 +636,7 @@ fn structs(
             let field_names: Vec<IdentifierKey> = field_names
                 .iter()
                 .map(|name| context.interner.intern_identifier(name))
-                .collect::<Vec<_>>();
+                .collect::<PartialVMResult<Vec<_>>>()?;
             let field_names = context.arena_vec(field_names.into_iter())?;
 
             let type_parameters =
@@ -672,7 +672,7 @@ fn enums(
             let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
 
             let name = module.identifier_at(enum_handle.name);
-            let member_name = context.interner.intern_ident_str(name);
+            let member_name = context.interner.intern_ident_str(name)?;
             let def_vtable_key =
                 VirtualTableKey::from_parts(*original_id, *module_name, member_name);
 

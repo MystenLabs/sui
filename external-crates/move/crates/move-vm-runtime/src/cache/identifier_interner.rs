@@ -51,31 +51,30 @@ impl IdentifierInterner {
         if let Some(result) = self.0.try_resolve(&key.0) {
             unsafe { Ok(Identifier::new_unchecked(result)) }
         } else {
-            Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Failed to find {key_type} key in ident interner.")),
-            )
+            Err(PartialVMError::new(StatusCode::INVALID_MOVE_RUNTIME_ERROR)
+                .with_message(format!("Failed to find {key_type} key in ident interner.")))
         }
     }
 
     /// Get the interned identifier value. This may raise an invariant error if `try_get_or_intern`
     /// fails, but that's likely a serious OOM issue.
-    pub(crate) fn intern_identifier(&self, ident: &Identifier) -> IdentifierKey {
+    pub(crate) fn intern_identifier(&self, ident: &Identifier) -> PartialVMResult<IdentifierKey> {
         self.get_or_intern_str_internal(ident.borrow_str())
     }
 
     /// Get the interned identifier string value. This may raise an invariant error if
     /// `get_or_intern` fails, but that's likely a serious OOM issue.
-    pub(crate) fn intern_ident_str(&self, ident_str: &IdentStr) -> IdentifierKey {
+    pub(crate) fn intern_ident_str(&self, ident_str: &IdentStr) -> PartialVMResult<IdentifierKey> {
         self.get_or_intern_str_internal(ident_str.borrow_str())
     }
 
-    fn get_or_intern_str_internal(&self, string: &str) -> IdentifierKey {
+    fn get_or_intern_str_internal(&self, string: &str) -> PartialVMResult<IdentifierKey> {
         // Prefer to panic here rather than propagate OOM errors throughout the VM---reporting an
         // invariant violation during an OOM could result in a consensus issue.
         match self.0.try_get_or_intern(string) {
-            Ok(result) => IdentifierKey(result),
-            Err(err) => panic!("Identifier interner OOM: {err:?}"),
+            Ok(result) => Ok(IdentifierKey(result)),
+            Err(err) => Err(PartialVMError::new(StatusCode::INVALID_MOVE_RUNTIME_ERROR)
+                .with_message(format!("Identifier interner OOM: {err:?}"))),
         }
     }
 

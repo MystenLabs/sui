@@ -201,7 +201,7 @@ impl VMDispatchTables {
                 .with_message(format!("Package {} not found", package))
         })?;
 
-        let interned = self.interner.intern_identifier(module_id);
+        let interned = self.interner.intern_identifier(module_id)?;
 
         package
             .loaded_modules
@@ -288,8 +288,14 @@ impl VMDispatchTables {
                         ))
                         .finish(Location::Undefined)
                 })?;
-                let module_name = self.interner.intern_identifier(&struct_tag.module);
-                let member_name = self.interner.intern_identifier(&struct_tag.name);
+                let module_name = self
+                    .interner
+                    .intern_identifier(&struct_tag.module)
+                    .map_err(|e| e.finish(Location::Package(defining_id)))?;
+                let member_name = self
+                    .interner
+                    .intern_identifier(&struct_tag.name)
+                    .map_err(|e| e.finish(Location::Package(defining_id)))?;
                 let key = VirtualTableKey {
                     package_key,
                     inner_pkg_key: IntraPackageKey {
@@ -306,7 +312,7 @@ impl VMDispatchTables {
                 // loaded.
                 if datatype.original_id.address() != &package_key {
                     return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        PartialVMError::new(StatusCode::INVALID_MOVE_RUNTIME_ERROR)
                             .with_message(format!(
                                 "Runtime ID resolution of {defining_id} => {package_key} does not match runtime ID of loaded type: {}",
                                 datatype.original_id.address()
@@ -319,7 +325,7 @@ impl VMDispatchTables {
                 // have loaded.
                 if datatype.defining_id.address() != &defining_id {
                     return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        PartialVMError::new(StatusCode::INVALID_MOVE_RUNTIME_ERROR)
                             .with_message(format!(
                                 "Defining ID {defining_id} does not match defining ID of loaded type: {}", datatype.defining_id.address()
                             ))
