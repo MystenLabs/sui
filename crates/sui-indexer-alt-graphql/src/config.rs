@@ -279,11 +279,11 @@ impl Limits {
             max_query_payload_size: self.max_query_payload_size,
             max_tx_payload_size: self.max_tx_payload_size,
             tx_payload_args: BTreeSet::from([
-                ("Mutation", "executeTransaction", "txBytes"),
+                ("Mutation", "executeTransaction", "transactionDataBcs"),
                 ("Mutation", "executeTransaction", "signatures"),
                 ("Query", "simulateTransaction", "transaction"),
-                ("Query", "verifyZkloginSignature", "bytes"),
-                ("Query", "verifyZkloginSignature", "signature"),
+                ("Query", "verifyZkLoginSignature", "bytes"),
+                ("Query", "verifyZkLoginSignature", "signature"),
             ]),
         }
     }

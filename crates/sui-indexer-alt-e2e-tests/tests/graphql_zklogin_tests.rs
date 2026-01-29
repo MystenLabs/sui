@@ -170,7 +170,6 @@ impl FullCluster {
 
 #[tokio::test]
 async fn test_verify_transaction() {
-    telemetry_subscribers::init_for_testing();
     let cluster = FullCluster::new().await.unwrap();
 
     let (kp, pk, inputs) =
@@ -215,7 +214,6 @@ async fn test_verify_transaction() {
 
 #[tokio::test]
 async fn test_verify_personal_message() {
-    telemetry_subscribers::init_for_testing();
     let cluster = FullCluster::new().await.unwrap();
 
     let (kp, pk, inputs) =
@@ -257,8 +255,49 @@ async fn test_verify_personal_message() {
 }
 
 #[tokio::test]
+async fn test_verify_zklogin_payload_bypasses_query_limit() {
+    let cluster = FullCluster::new().await.unwrap();
+
+    let (kp, pk, inputs) =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+
+    let addr = pk.into();
+    let payload_size = GraphQlConfig::default().limits.max_query_payload_size as usize;
+    let bytes = vec![0u8; payload_size + 64];
+
+    let message = IntentMessage::new(
+        Intent::personal_message(),
+        PersonalMessage {
+            message: bytes.clone(),
+        },
+    );
+    let signature = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+        inputs.clone(),
+        2,
+        Signature::new_secure(&message, kp),
+    ));
+
+    let result = cluster
+        .verify_zklogin(
+            bytes,
+            signature.as_ref().to_owned(),
+            "PERSONAL_MESSAGE",
+            addr,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result,
+        ZkLoginResult {
+            success: true,
+            error: None,
+        }
+    );
+}
+
+#[tokio::test]
 async fn test_verify_invalid_scope() {
-    telemetry_subscribers::init_for_testing();
     let cluster = FullCluster::new().await.unwrap();
 
     let (kp, pk, inputs) =
@@ -295,7 +334,6 @@ async fn test_verify_invalid_scope() {
 
 #[tokio::test]
 async fn test_verify_invalid_transaction() {
-    telemetry_subscribers::init_for_testing();
     let cluster = FullCluster::new().await.unwrap();
 
     let (kp, pk, inputs) =
@@ -338,7 +376,6 @@ async fn test_verify_invalid_transaction() {
 
 #[tokio::test]
 async fn test_verify_wrong_address() {
-    telemetry_subscribers::init_for_testing();
     let cluster = FullCluster::new().await.unwrap();
 
     let (kp, pk, inputs) =
@@ -381,7 +418,6 @@ async fn test_verify_wrong_address() {
 
 #[tokio::test]
 async fn test_verify_invalid_signature() {
-    telemetry_subscribers::init_for_testing();
     let cluster = FullCluster::new().await.unwrap();
 
     let (_, pk, _) = &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
@@ -402,7 +438,6 @@ async fn test_verify_invalid_signature() {
 
 #[tokio::test]
 async fn test_verify_not_zklogin_signature() {
-    telemetry_subscribers::init_for_testing();
     let cluster = FullCluster::new().await.unwrap();
 
     // Create a regular Ed25519 keypair
