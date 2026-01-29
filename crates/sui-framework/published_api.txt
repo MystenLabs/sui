@@ -1363,6 +1363,12 @@ sui_coin_registry_object_id
 sui_coin_registry_address
 	public(package) fun
 	0x2::object
+sui_display_registry_object_id
+	public(package) fun
+	0x2::object
+sui_display_registry_address
+	public(package) fun
+	0x2::object
 bridge
 	fun
 	0x2::object
@@ -2929,12 +2935,78 @@ version
 fields
 	public fun
 	0x2::display
+destroy
+	public(package) fun
+	0x2::display
 create_internal
 	fun
 	0x2::display
 add_internal
 	fun
 	0x2::display
+DisplayRegistry
+	public struct
+	0x2::display_registry
+SystemMigrationCap
+	public struct
+	0x2::display_registry
+Display
+	public struct
+	0x2::display_registry
+DisplayCap
+	public struct
+	0x2::display_registry
+DisplayKey
+	public struct
+	0x2::display_registry
+new
+	public fun
+	0x2::display_registry
+new_with_publisher
+	public fun
+	0x2::display_registry
+unset
+	public fun
+	0x2::display_registry
+set
+	public fun
+	0x2::display_registry
+clear
+	public fun
+	0x2::display_registry
+share
+	public fun
+	0x2::display_registry
+claim
+	public fun
+	0x2::display_registry
+claim_with_publisher
+	public fun
+	0x2::display_registry
+migrate_v1_to_v2_with_system_migration_cap
+	public fun
+	0x2::display_registry
+migrate_v1_to_v2
+	public fun
+	0x2::display_registry
+destroy_system_migration_cap
+	entry fun
+	0x2::display_registry
+delete_legacy
+	public fun
+	0x2::display_registry
+fields
+	public fun
+	0x2::display_registry
+cap_id
+	public fun
+	0x2::display_registry
+migration_cap_receiver
+	public(package) fun
+	0x2::display_registry
+create
+	fun
+	0x2::display_registry
 Curve
 	public struct
 	0x2::groth16

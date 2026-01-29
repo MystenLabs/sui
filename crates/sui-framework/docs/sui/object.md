@@ -21,6 +21,8 @@ Sui object identifiers
 -  [Function `sui_accumulator_root_address`](#sui_object_sui_accumulator_root_address)
 -  [Function `sui_coin_registry_object_id`](#sui_object_sui_coin_registry_object_id)
 -  [Function `sui_coin_registry_address`](#sui_object_sui_coin_registry_address)
+-  [Function `sui_display_registry_object_id`](#sui_object_sui_display_registry_object_id)
+-  [Function `sui_display_registry_address`](#sui_object_sui_display_registry_address)
 -  [Function `bridge`](#sui_object_bridge)
 -  [Function `address_alias_state`](#sui_object_address_alias_state)
 -  [Function `uid_as_inner`](#sui_object_uid_as_inner)
@@ -196,6 +198,16 @@ The hardcoded ID for the Coin Registry Object.
 
 
 <pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_COIN_REGISTRY_OBJECT_ID">SUI_COIN_REGISTRY_OBJECT_ID</a>: <b>address</b> = 0xc;
+</code></pre>
+
+
+
+<a name="sui_object_SUI_DISPLAY_REGISTRY_OBJECT_ID"></a>
+
+The hardcoded ID for the Display Registry Object.
+
+
+<pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_DISPLAY_REGISTRY_OBJECT_ID">SUI_DISPLAY_REGISTRY_OBJECT_ID</a>: <b>address</b> = 0xd;
 </code></pre>
 
 
@@ -556,6 +568,58 @@ This should only be called once from <code><a href="../sui/coin_registry.md#sui_
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_address">sui_coin_registry_address</a>(): <b>address</b> {
     <a href="../sui/object.md#sui_object_SUI_COIN_REGISTRY_OBJECT_ID">SUI_COIN_REGISTRY_OBJECT_ID</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_object_sui_display_registry_object_id"></a>
+
+## Function `sui_display_registry_object_id`
+
+Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>DisplayRegistry</code> object.
+This should only be called once from <code><a href="../sui/display_registry.md#sui_display_registry">display_registry</a></code>.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_object_id">sui_display_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_object_id">sui_display_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+    <a href="../sui/object.md#sui_object_UID">UID</a> {
+        <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_DISPLAY_REGISTRY_OBJECT_ID">SUI_DISPLAY_REGISTRY_OBJECT_ID</a> },
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_object_sui_display_registry_address"></a>
+
+## Function `sui_display_registry_address`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_address">sui_display_registry_address</a>(): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_address">sui_display_registry_address</a>(): <b>address</b> {
+    <a href="../sui/object.md#sui_object_SUI_DISPLAY_REGISTRY_OBJECT_ID">SUI_DISPLAY_REGISTRY_OBJECT_ID</a>
 }
 </code></pre>
 
