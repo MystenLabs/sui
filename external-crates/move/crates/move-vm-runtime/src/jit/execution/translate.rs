@@ -12,8 +12,10 @@ use crate::{
         dispatch_tables::{DefinitionMap, IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::Value,
     },
+    invariant_violation,
     jit::{execution::ast::*, optimization::ast as input},
     natives::functions::NativeFunctions,
+    partial_vm_error,
     shared::{
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
@@ -29,7 +31,6 @@ use move_binary_format::{
 };
 use move_core_types::{
     identifier::Identifier, language_storage::ModuleId, resolver::IntraPackageName,
-    vm_status::StatusCode,
 };
 
 use indexmap::IndexMap;
@@ -122,20 +123,17 @@ impl PackageContext<'_> {
         }
         match self.vtable_funs.get(&vtable_entry.inner_pkg_key) {
             Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
-            None => Err(
-                PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(
-                    match self
-                        .interner
-                        .resolve_ident(&vtable_entry.inner_pkg_key.member_name, "function name")
-                    {
-                        Ok(fn_name) => format!(
-                            "Function {}::{} not found in vtable",
-                            self.version_id, fn_name,
-                        ),
-                        Err(_) => "Function with unknown name not found in vtable".to_string(),
-                    },
-                ),
-            ),
+            None => Err(partial_vm_error!(
+                FUNCTION_RESOLUTION_FAILURE,
+                "Function not found in vtable with name: {}",
+                match self
+                    .interner
+                    .resolve_ident(&vtable_entry.inner_pkg_key.member_name, "function name")
+                {
+                    Ok(fn_name) => format!("'{}::{}'", self.version_id, fn_name,),
+                    Err(_) => "'unknown name'".to_string(),
+                },
+            )),
         }
     }
 
@@ -157,22 +155,18 @@ impl FunctionContext<'_, '_> {
         signature_index: &SignatureIndex,
     ) -> PartialVMResult<VMPointer<ArenaType>> {
         let Some(tys) = self.definitions.signatures.get(signature_index.0 as usize) else {
-            return Err(
-                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                    "could not find the signature for a vector-related bytecode \
+            return Err(partial_vm_error!(
+                VERIFIER_INVARIANT_VIOLATION,
+                "could not find the signature for a vector-related bytecode \
                         in the signature table"
-                        .to_owned(),
-                ),
-            );
+            ));
         };
         if tys.to_ref().len() != 1 {
-            return Err(
-                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                    "the type argument for vector-related bytecode \
-                        expects one and only one signature token"
-                        .to_owned(),
-                ),
-            );
+            return Err(partial_vm_error!(
+                VERIFIER_INVARIANT_VIOLATION,
+                "the type argument for vector-related bytecode \
+                    expects one and only one signature token"
+            ));
         };
         let ty = VMPointer::from_ref(&tys.to_ref()[0]);
         Ok(ty)
@@ -259,12 +253,6 @@ fn modules(
 ) -> PartialVMResult<()> {
     use std::collections::BTreeMap;
 
-    macro_rules! make_invariant_violation {
-        ($msg:expr) => {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message($msg)
-        };
-    }
-
     #[derive(Copy, Clone, Eq, PartialEq)]
     enum State {
         NotVisited,
@@ -306,10 +294,7 @@ fn modules(
                     // enters Visiting only from NotVisited, and transitions to Visited
                     // immediately after loading, so we never reach here twice for the same module.
                     let input_module = input_modules.get(&cur_id).ok_or_else(|| {
-                        make_invariant_violation!(format!(
-                            "Module {} not found in initial modules",
-                            cur_id
-                        ))
+                        invariant_violation!("Module {} not found in initial modules", cur_id)
                     })?;
                     let loaded_module =
                         module(package_context, package_context.version_id, input_module)?;
@@ -318,19 +303,16 @@ fn modules(
                         .insert(cur_key, loaded_module)
                         .is_some()
                     {
-                        return Err(make_invariant_violation!(format!(
+                        return Err(invariant_violation!(
                             "Module {} already loaded in package context",
                             cur_id
-                        )));
+                        ));
                     }
                     state.insert(cur_id, State::Visited);
                 }
                 State::NotVisited => {
                     let input_module = input_modules.get(&cur_id).ok_or_else(|| {
-                        make_invariant_violation!(format!(
-                            "Module {} not found in initial modules",
-                            cur_id
-                        ))
+                        invariant_violation!("Module {} not found in initial modules", cur_id)
                     })?;
 
                     // Collect unvisited dependencies, checking for cycles.
@@ -342,10 +324,10 @@ fn modules(
                         .filter_map(|dep| {
                             match state.get(dep).copied().unwrap_or(State::NotVisited) {
                                 State::Visited => None,
-                                State::Visiting => Some(Err(make_invariant_violation!(format!(
+                                State::Visiting => Some(Err(invariant_violation!(
                                     "Cycle detected when loading module for package: {}",
                                     dep
-                                )))),
+                                ))),
                                 State::NotVisited => Some(Ok(dep.clone())),
                             }
                         })
@@ -360,19 +342,19 @@ fn modules(
                             .insert(cur_key, loaded_module)
                             .is_some()
                         {
-                            return Err(make_invariant_violation!(format!(
+                            return Err(invariant_violation!(
                                 "Module {} already loaded in package context",
                                 cur_id
-                            )));
+                            ));
                         }
                         state.insert(cur_id, State::Visited);
                     } else {
                         // Has unvisited dependencies: mark as Visiting and process deps first.
                         if state.insert(cur_id.clone(), State::Visiting).is_some() {
-                            return Err(make_invariant_violation!(format!(
+                            return Err(invariant_violation!(
                                 "Module {} added to load queue as unvisited twice",
                                 cur_id
-                            )));
+                            ));
                         }
                         stack.push(cur_id);
                         stack.extend(unvisited_deps);
@@ -537,10 +519,12 @@ fn datatypes(
             .type_origin_table
             .get(&name.inner_pkg_key)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::LOOKUP_FAILED).with_message(
+                partial_vm_error!(
+                    LOOKUP_FAILED,
+                    "Type origin not found for {}",
                     match name.to_string(context.interner) {
-                        Ok(name_str) => format!("Type origin not found for type {}", name_str),
-                        Err(_) => "Type origin not found for unnamed type".to_string(),
+                        Ok(name_str) => format!("type {}", name_str),
+                        Err(_) => "unnamed type".to_string(),
                     },
                 )
             })?;
@@ -938,8 +922,9 @@ fn constants(
         .map(|constant| {
             let value = Value::deserialize_constant(constant)
                 .ok_or_else(|| {
-                    PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                        "Verifier failed to verify the deserialization of constants".to_owned(),
+                    partial_vm_error!(
+                        VERIFIER_INVARIANT_VIOLATION,
+                        "Verifier failed to verify the deserialization of constants"
                     )
                 })?
                 .into_constant_value(&context.package_arena)?;
@@ -985,11 +970,11 @@ fn preallocate_functions(
             .map(|fun| (fun.name.clone(), VMPointer::from_ref(fun))),
     )
     .map_err(|key| match key.member_name(package_context.interner) {
-        Ok(fn_name) => PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-            .with_message(format!(
-                "Duplicate function key {}::{}",
-                package_context.version_id, fn_name,
-            )),
+        Ok(fn_name) => invariant_violation!(
+            "Duplicate function key {}::{}",
+            package_context.version_id,
+            fn_name,
+        ),
         Err(err) => err,
     })?;
     Ok((loaded_functions, fun_map))
@@ -1020,17 +1005,13 @@ fn function_bodies(
 
     for fun in functions.iter_mut() {
         let Some(opt_fun) = optimized_fns.remove(&fun.index) else {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!(
-                        "failed to find function {}::{} in optimized function list",
-                        package_context.version_id,
-                        fun.name
-                            .to_short_string(package_context.interner)
-                            .unwrap_or_else(|_| "unknown".to_string()),
-                    ),
-                ),
-            );
+            return Err(invariant_violation!(
+                "failed to find function {}::{} in optimized function list",
+                package_context.version_id,
+                fun.name
+                    .to_short_string(package_context.interner)
+                    .unwrap_or_else(|_| "unknown".to_string()),
+            ));
         };
         let input::Function {
             ndx: _,
@@ -1194,19 +1175,16 @@ pub(crate) fn flatten_and_renumber_input_bytcode_and_jumptables(
 
         // Check for overflow when adding bytecode length
         let bytecode_len_u16 = u16::try_from(bytecodes.len()).map_err(|_| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                format!("Bytecode block size {} exceeds u16::MAX", bytecodes.len()),
-            )
+            invariant_violation!("Bytecode block size {} exceeds u16::MAX", bytecodes.len(),)
         })?;
 
         current_offset = current_offset
             .checked_add(bytecode_len_u16)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!(
-                        "Bytecode offset overflow: {} + {} exceeds u16::MAX",
-                        current_offset, bytecode_len_u16
-                    ),
+                invariant_violation!(
+                    "Bytecode offset overflow: {} + {} exceeds u16::MAX",
+                    current_offset,
+                    bytecode_len_u16
                 )
             })?;
 
@@ -1234,10 +1212,7 @@ fn compute_renumbered_jump_tables(
                 .into_iter()
                 .map(|target| match offset_map.get(&target) {
                     Some(&new_offset) => Ok(new_offset),
-                    None => Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(format!("Invalid jump table offset {}", target)),
-                    ),
+                    None => Err(invariant_violation!("Invalid jump table offset {}", target)),
                 })
                 .collect::<PartialVMResult<Vec<_>>>()
         })
@@ -1254,10 +1229,7 @@ fn compute_renumbered_bytecode(
     ) -> PartialVMResult<FF::CodeOffset> {
         match offset_map.get(&target) {
             Some(&new_offset) => Ok(new_offset),
-            None => Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Invalid branch target {}", target)),
-            ),
+            None => Err(invariant_violation!("Invalid branch target {}", target,)),
         }
     }
 

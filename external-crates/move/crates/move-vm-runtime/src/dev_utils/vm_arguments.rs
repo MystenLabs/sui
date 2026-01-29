@@ -9,10 +9,11 @@ use crate::{
         vm::MoveVM,
     },
     jit::execution::ast::Type,
+    partial_vm_error,
     shared::gas::GasMeter,
 };
-use move_binary_format::errors::{Location, PartialVMError, PartialVMResult, VMResult};
-use move_core_types::{identifier::IdentStr, language_storage::ModuleId, vm_status::StatusCode};
+use move_binary_format::errors::{Location, PartialVMResult, VMResult};
+use move_core_types::{identifier::IdentStr, language_storage::ModuleId};
 use move_trace_format::format::MoveTraceBuilder;
 use std::{borrow::Borrow, collections::BTreeMap};
 use tracing::warn;
@@ -96,15 +97,12 @@ impl ValueFrame {
         serialized_args: Vec<impl Borrow<[u8]>>,
     ) -> PartialVMResult<()> {
         if arg_tys.len() != serialized_args.len() {
-            return Err(
-                PartialVMError::new(StatusCode::NUMBER_OF_ARGUMENTS_MISMATCH).with_message(
-                    format!(
-                        "argument length mismatch: expected {} got {}",
-                        arg_tys.len(),
-                        serialized_args.len()
-                    ),
-                ),
-            );
+            return Err(partial_vm_error!(
+                NUMBER_OF_ARGUMENTS_MISMATCH,
+                "argument length mismatch: expected {} got {}",
+                arg_tys.len(),
+                serialized_args.len()
+            ));
         }
 
         // Arguments for the invoked function. These can be owned values or references
@@ -151,9 +149,7 @@ fn deserialize_value(
         Ok(layout) => layout,
         Err(_err) => {
             warn!("[VM] failed to get layout from type");
-            return Err(PartialVMError::new(
-                StatusCode::INVALID_PARAM_TYPE_FOR_DESERIALIZATION,
-            ));
+            return Err(partial_vm_error!(INVALID_PARAM_TYPE_FOR_DESERIALIZATION));
         }
     };
 
@@ -161,9 +157,7 @@ fn deserialize_value(
         Some(val) => Ok(val),
         None => {
             warn!("[VM] failed to deserialize argument");
-            Err(PartialVMError::new(
-                StatusCode::FAILED_TO_DESERIALIZE_ARGUMENT,
-            ))
+            Err(partial_vm_error!(FAILED_TO_DESERIALIZE_ARGUMENT))
         }
     }
 }
