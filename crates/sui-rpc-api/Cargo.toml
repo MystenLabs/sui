@@ -42,6 +42,7 @@ sui-protocol-config.workspace = true
 sui-package-resolver.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
+sui-transaction-builder.workspace = true
 
 # dependencies for the protobuf definitions
 roaring.workspace = true

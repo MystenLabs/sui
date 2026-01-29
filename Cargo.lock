@@ -16640,6 +16640,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-rpc",
  "sui-sdk-types",
+ "sui-transaction-builder",
  "sui-types",
  "tap",
  "thiserror 1.0.69",
