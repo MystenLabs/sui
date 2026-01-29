@@ -346,14 +346,9 @@ async fn execute_shared_on_first_three_authorities(
 async fn test_execution_with_dependencies() {
     telemetry_subscribers::init_for_testing();
 
-    // Disable randomness, it can't be constructed with fake authorities in this test anyway.
-    // Also disable preconsensus locking since this test uses the Quorum Driver flow
-    // (extract_cert) which requires signed transaction storage that only happens with
-    // preconsensus locking enabled.
+    // Disable randomness, it can't be constructed with fake authorities in this test.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -517,14 +512,9 @@ fn create_executable_for_test(
 async fn test_per_object_overload() {
     telemetry_subscribers::init_for_testing();
 
-    // Disable randomness, it can't be constructed with fake authorities in this test anyway.
-    // Also disable preconsensus locking since this test uses the Quorum Driver flow
-    // (extract_cert) which requires signed transaction storage that only happens with
-    // preconsensus locking enabled.
+    // Disable randomness, it can't be constructed with fake authorities in this test.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -646,14 +636,9 @@ async fn test_per_object_overload() {
 async fn test_txn_age_overload() {
     telemetry_subscribers::init_for_testing();
 
-    // Disable randomness, it can't be constructed with fake authorities in this test anyway.
-    // Also disable preconsensus locking since this test uses the Quorum Driver flow
-    // (extract_cert) which requires signed transaction storage that only happens with
-    // preconsensus locking enabled.
+    // Disable randomness, it can't be constructed with fake authorities in this test.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config.set_address_aliases_for_testing(false);
         config
     });
 

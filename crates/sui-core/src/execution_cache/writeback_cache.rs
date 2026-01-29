@@ -84,7 +84,7 @@ use sui_types::storage::{
     FullObjectKey, InputKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
 };
 use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
-use sui_types::transaction::{TransactionDataAPI, VerifiedSignedTransaction, VerifiedTransaction};
+use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
 use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -2327,22 +2327,6 @@ impl TransactionCacheRead for WritebackCache {
 }
 
 impl ExecutionCacheWrite for WritebackCache {
-    fn acquire_transaction_locks(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
-        signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult {
-        self.object_locks.acquire_transaction_locks(
-            self,
-            epoch_store,
-            owned_input_objects,
-            tx_digest,
-            signed_transaction,
-        )
-    }
-
     fn validate_owned_object_versions(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
         ObjectLocks::validate_owned_object_versions(self, owned_input_objects)
     }

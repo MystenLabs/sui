@@ -390,10 +390,16 @@ where
 {
     use crate::consensus_test_utils::TestConsensusCommit;
     use sui_types::messages_consensus::ConsensusTransaction;
+    use sui_types::transaction::PlainTransactionWithClaims;
 
     let consensus_transactions: Vec<ConsensusTransaction> = transactions
         .iter()
-        .map(|tx| ConsensusTransaction::new_user_transaction_message(&authority.name, tx.clone()))
+        .map(|tx| {
+            ConsensusTransaction::new_user_transaction_v2_message(
+                &authority.name,
+                PlainTransactionWithClaims::no_aliases(tx.clone()),
+            )
+        })
         .collect();
 
     let epoch_store = authority.epoch_store_for_testing();

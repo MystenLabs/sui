@@ -867,39 +867,29 @@ impl ValidatorService {
             }
 
             // Create claims with aliases and / or immutable objects.
-            if epoch_store.protocol_config().address_aliases()
-                || epoch_store.protocol_config().disable_preconsensus_locking()
-            {
-                let mut claims = vec![];
+            let mut claims = vec![];
 
-                if epoch_store.protocol_config().disable_preconsensus_locking() {
-                    let immutable_object_ids = self
-                        .collect_immutable_object_ids(verified_transaction.tx(), state)
-                        .await?;
-                    if !immutable_object_ids.is_empty() {
-                        claims.push(TransactionClaim::ImmutableInputObjects(
-                            immutable_object_ids,
-                        ));
-                    }
-                }
-
-                let (tx, aliases) = verified_transaction.into_inner();
-                if epoch_store.protocol_config().address_aliases() {
-                    claims.push(TransactionClaim::AddressAliasesV2(aliases));
-                }
-
-                let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
-
-                consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
-                    &state.name,
-                    tx_with_claims,
-                ));
-            } else {
-                consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
-                    &state.name,
-                    verified_transaction.into_tx().into(),
+            let immutable_object_ids = self
+                .collect_immutable_object_ids(verified_transaction.tx(), state)
+                .await?;
+            if !immutable_object_ids.is_empty() {
+                claims.push(TransactionClaim::ImmutableInputObjects(
+                    immutable_object_ids,
                 ));
             }
+
+            let (tx, aliases) = verified_transaction.into_inner();
+            if epoch_store.protocol_config().address_aliases() {
+                claims.push(TransactionClaim::AddressAliasesV2(aliases));
+            }
+
+            let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
+
+            consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
+                &state.name,
+                tx_with_claims,
+            ));
+
             transaction_indexes.push(idx);
             total_size_bytes += tx_size;
         }
