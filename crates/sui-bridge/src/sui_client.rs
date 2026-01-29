@@ -1132,13 +1132,15 @@ impl SuiClientInner for sui_rpc::Client {
 
     async fn get_token_transfer_next_seq_number(
         &self,
-        source_chain_id: u8,
+        _source_chain_id: u8,
     ) -> Result<u64, BridgeError> {
         let summary = self.get_bridge_summary().await?;
+        // The bridge's sequence_nums is keyed by message_type
+        const TOKEN_MESSAGE_TYPE: u8 = 0;
         let seq_num = summary
             .sequence_nums
             .iter()
-            .find(|(chain_id, _)| *chain_id == source_chain_id)
+            .find(|(msg_type, _)| *msg_type == TOKEN_MESSAGE_TYPE)
             .map(|(_, seq)| *seq)
             .unwrap_or(0);
         Ok(seq_num)

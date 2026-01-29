@@ -12,7 +12,7 @@
 
 use crate::{
     error::BridgeResult,
-    events::{EmittedSuiToEthTokenBridgeV1, SuiBridgeEvent},
+    events::{EmittedSuiToEthTokenBridgeV1, EmittedSuiToEthTokenBridgeV2, SuiBridgeEvent},
     metrics::BridgeMetrics,
     retry_with_max_elapsed_time,
     sui_client::{SuiClient, SuiClientInner},
@@ -336,6 +336,18 @@ where
                     eth_address: transfer.eth_address,
                     token_id: transfer.token_id,
                     amount_sui_adjusted: transfer.amount_adjusted,
+                }),
+            ),
+            BridgeAction::SuiToEthTokenTransferV2(transfer) => Ok(
+                SuiBridgeEvent::SuiToEthTokenBridgeV2(EmittedSuiToEthTokenBridgeV2 {
+                    nonce: transfer.nonce,
+                    sui_chain_id: transfer.sui_chain_id,
+                    eth_chain_id: transfer.eth_chain_id,
+                    sui_address: transfer.sui_address,
+                    eth_address: transfer.eth_address,
+                    token_id: transfer.token_id,
+                    amount_sui_adjusted: transfer.amount_adjusted,
+                    timestamp_ms: transfer.timestamp_ms,
                 }),
             ),
             _ => Err(crate::error::BridgeError::Generic(format!(
