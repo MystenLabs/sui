@@ -8,14 +8,13 @@ pub mod blocked;
 pub mod bloom;
 pub mod hash;
 
-/// Addresses to skip during bloom filter operations. These appear in most
+/// High-frequency identifiers excluded from bloom filters. These appear in most
 /// checkpoints, so including them would:
-/// - Cause queries to match nearly all blocks and checkpoints (not useful)
+/// - Cause queries to match nearly all blocks and checkpoints
 /// - Require fetching and probing more bloom filter rows at both levels
-const BLOOM_SKIP_ADDRESSES: &[ObjectID] = &[ObjectID::ZERO, SUI_CLOCK_OBJECT_ID];
+const BLOOM_SKIP_IDS: &[ObjectID] = &[ObjectID::ZERO, SUI_CLOCK_OBJECT_ID];
 
-/// Returns true if the given bytes represent an address that should be skipped
-/// for bloom filter operations (appears in most checkpoints).
+/// Returns true if the bytes should be excluded from bloom filter operations.
 pub fn should_skip_for_bloom(bytes: &[u8]) -> bool {
-    BLOOM_SKIP_ADDRESSES.iter().any(|id| id.as_ref() == bytes)
+    BLOOM_SKIP_IDS.iter().any(|id| id.as_ref() == bytes)
 }
