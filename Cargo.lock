@@ -2802,7 +2802,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "log",
@@ -16930,10 +16930,10 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "sui-config",
- "sui-json-rpc-types",
  "sui-move-build",
  "sui-package-alt",
  "sui-package-management",
+ "sui-rpc-api",
  "sui-sdk",
  "sui-test-transaction-builder",
  "sui-types",
@@ -16943,6 +16943,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml 0.7.4",
+ "tonic 0.14.2",
  "tracing",
  "ureq",
 ]
@@ -19155,18 +19156,18 @@ dependencies = [
 
 [[package]]
 name = "ureq"
-version = "2.9.1"
+version = "2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8cdd25c339e200129fe4de81451814e5228c9b771d57378817d6117cc2b3f97"
+checksum = "02d1a66277ed75f640d608235660df48c8e3c19f3b4edb6a263315626cc3c01d"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "flate2",
  "log",
  "once_cell",
- "rustls 0.21.12",
- "rustls-webpki 0.101.7",
+ "rustls 0.23.31",
+ "rustls-pki-types",
  "url",
- "webpki-roots 0.25.2",
+ "webpki-roots 0.26.3",
 ]
 
 [[package]]
@@ -19501,12 +19502,6 @@ checksum = "09aed61f5e8d2c18344b3faa33a4c837855fe56642757754775548fee21386c4"
 dependencies = [
  "rustls-pki-types",
 ]
-
-[[package]]
-name = "webpki-roots"
-version = "0.25.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14247bb57be4f377dfb94c72830b8ce8fc6beac03cf4bf7b9732eadd414123fc"
 
 [[package]]
 name = "webpki-roots"
