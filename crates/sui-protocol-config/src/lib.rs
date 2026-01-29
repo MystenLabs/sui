@@ -4521,6 +4521,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
                         cfg.feature_flags.enable_authenticated_event_streams = true;
+                        cfg.feature_flags
+                            .include_checkpoint_artifacts_digest_in_summary = true;
                     }
                     cfg.feature_flags.validate_zklogin_public_identifier = true;
                     cfg.feature_flags.fix_checkpoint_signature_mapping = true;

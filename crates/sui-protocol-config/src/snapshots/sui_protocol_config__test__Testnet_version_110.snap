@@ -124,6 +124,7 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
+  include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true
@@ -144,8 +145,8 @@ feature_flags:
   flexible_tx_context_positions: true
   disable_entry_point_signature_check: true
   restrict_hot_or_not_entry_functions: true
-  consensus_always_accept_system_transactions: true
   split_checkpoints_in_consensus_handler: true
+  consensus_always_accept_system_transactions: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
