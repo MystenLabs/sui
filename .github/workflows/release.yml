@@ -70,7 +70,7 @@ jobs:
           ref: ${{ env.sui_tag }}          
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -113,7 +113,7 @@ jobs:
 
       - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_existing_archive == '' }}
-        uses: taiki-e/install-action@7bf3bbf3104a2e9a77906ccbdf6d4aa6a87b0210 # pin@2.52.5
+        uses: taiki-e/install-action@88d897fbe3f79ed72a43e0dcbca36156ff03344e # pin@v2.67.14
         with:
           tool: cargo-hack
 
