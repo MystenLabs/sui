@@ -1,14 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeSet,
-    fmt::Debug,
-    sync::{
-        Arc,
-        atomic::{AtomicU32, Ordering},
-    },
-};
+use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use consensus_types::block::{BlockRef, Round};
@@ -22,7 +15,6 @@ use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
 use crate::{
-    BlockAPI as _,
     block::VerifiedBlock,
     commit::CertifiedCommits,
     context::Context,
@@ -83,9 +75,6 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     fn set_propagation_delay(&self, delay: Round) -> Result<(), CoreError>;
 
     fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError>;
-
-    /// Returns the highest round received for each authority by Core.
-    fn highest_received_rounds(&self) -> Vec<Round>;
 }
 
 pub(crate) struct CoreThreadHandle {
@@ -179,28 +168,14 @@ pub(crate) struct ChannelCoreThreadDispatcher {
     sender: WeakSender<CoreThreadCommand>,
     tx_propagation_delay: Arc<watch::Sender<Round>>,
     tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
-    highest_received_rounds: Arc<Vec<AtomicU32>>,
 }
 
 impl ChannelCoreThreadDispatcher {
     pub(crate) fn start(
         context: Arc<Context>,
-        dag_state: &RwLock<DagState>,
+        _dag_state: &RwLock<DagState>,
         core: Core,
     ) -> (Self, CoreThreadHandle) {
-        // Initialize highest received rounds.
-        let highest_received_rounds = {
-            let dag_state = dag_state.read();
-
-            context
-                .committee
-                .authorities()
-                .map(|(index, _)| {
-                    AtomicU32::new(dag_state.get_last_block_for_authority(index).round())
-                })
-                .collect()
-        };
-
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
         let (tx_propagation_delay, mut rx_propagation_delay) = watch::channel(0);
@@ -233,7 +208,6 @@ impl ChannelCoreThreadDispatcher {
             sender: sender.downgrade(),
             tx_propagation_delay: Arc::new(tx_propagation_delay),
             tx_last_known_proposed_round: Arc::new(tx_last_known_proposed_round),
-            highest_received_rounds: Arc::new(highest_received_rounds),
         };
         let handle = CoreThreadHandle {
             join_handle,
@@ -261,9 +235,6 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         &self,
         blocks: Vec<VerifiedBlock>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
-        for block in &blocks {
-            self.highest_received_rounds[block.author()].fetch_max(block.round(), Ordering::AcqRel);
-        }
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::AddBlocks(blocks, sender))
             .await;
@@ -288,12 +259,6 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         &self,
         commits: CertifiedCommits,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
-        for commit in commits.commits() {
-            for block in commit.blocks() {
-                self.highest_received_rounds[block.author()]
-                    .fetch_max(block.round(), Ordering::AcqRel);
-            }
-        }
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::AddCertifiedCommits(commits, sender))
             .await;
@@ -324,13 +289,6 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         self.tx_last_known_proposed_round
             .send(round)
             .map_err(|e| Shutdown(e.to_string()))
-    }
-
-    fn highest_received_rounds(&self) -> Vec<Round> {
-        self.highest_received_rounds
-            .iter()
-            .map(|round| round.load(Ordering::Relaxed))
-            .collect()
     }
 }
 
@@ -410,10 +368,6 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
         last_known_proposed_round.push(round);
         Ok(())
     }
-
-    fn highest_received_rounds(&self) -> Vec<Round> {
-        todo!()
-    }
 }
 
 #[cfg(test)]
@@ -431,7 +385,7 @@ mod test {
         core::CoreSignals,
         dag_state::DagState,
         leader_schedule::LeaderSchedule,
-        round_tracker::PeerRoundTracker,
+        round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
         transaction_certifier::TransactionCertifier,
@@ -475,7 +429,7 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let core = Core::new(
             context.clone(),
             leader_schedule,

@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Instant};
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use consensus_types::block::Round;
 use itertools::Itertools;
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
@@ -13,7 +14,7 @@ use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::{
-    CommitConsumerArgs,
+    BlockAPI as _, CommitConsumerArgs,
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_verifier::SignedBlockVerifier,
@@ -30,7 +31,7 @@ use crate::{
     network::{NetworkManager, tonic_network::TonicManager},
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
-    round_tracker::PeerRoundTracker,
+    round_tracker::RoundTracker,
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
@@ -258,7 +259,16 @@ where
         )
         .await;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let initial_received_rounds = dag_state
+            .read()
+            .get_last_cached_block_per_authority(Round::MAX)
+            .into_iter()
+            .map(|(block, _)| block.round())
+            .collect::<Vec<_>>();
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(
+            context.clone(),
+            initial_received_rounds,
+        )));
 
         // To avoid accidentally leaking the private key, the protocol key pair should only be
         // kept in Core.

@@ -45,7 +45,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     leader_schedule::LeaderSchedule,
-    round_tracker::PeerRoundTracker,
+    round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction::TransactionConsumer,
     transaction_certifier::TransactionCertifier,
@@ -112,7 +112,7 @@ pub(crate) struct Core {
     // from all authorities. It will use this information to then calculate the
     // quorum rounds periodically which is used across other components to make
     // decisions about block proposals.
-    round_tracker: Arc<RwLock<PeerRoundTracker>>,
+    round_tracker: Arc<RwLock<RoundTracker>>,
 }
 
 impl Core {
@@ -127,7 +127,7 @@ impl Core {
         block_signer: ProtocolKeyPair,
         dag_state: Arc<RwLock<DagState>>,
         sync_last_known_own_block: bool,
-        round_tracker: Arc<RwLock<PeerRoundTracker>>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
         let number_of_leaders = context
@@ -1447,7 +1447,7 @@ impl CoreTextFixture {
 
         let block_signer = signers.remove(own_index.value()).1;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let core = Core::new(
             context,
             leader_schedule,
@@ -1593,7 +1593,7 @@ mod test {
         transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1734,7 +1734,7 @@ mod test {
         transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1834,7 +1834,7 @@ mod test {
         )
         .await;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2084,7 +2084,7 @@ mod test {
         transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2251,7 +2251,7 @@ mod test {
         );
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2331,7 +2331,7 @@ mod test {
         )
         .await;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2689,7 +2689,7 @@ mod test {
         )
         .await;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2989,7 +2989,7 @@ mod test {
         )
         .await;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -3086,7 +3086,7 @@ mod test {
         )
         .await;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -3537,7 +3537,7 @@ mod test {
         )
         .await;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
