@@ -851,12 +851,12 @@ impl Function {
         self.file_format_version
     }
 
-    pub fn module_id(&self, interner: &IdentifierInterner) -> ModuleId {
+    pub fn module_id(&self, interner: &IdentifierInterner) -> PartialVMResult<ModuleId> {
         // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
         // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name
-            .module_id(interner)
-            .expect("Identifier interner error: module id not found")
+        self.name.module_id(interner).map_err(|e| {
+            e.append_message_with_separator('.', "Failed to get module id".to_string())
+        })
     }
 
     pub fn index(&self) -> FunctionDefinitionIndex {
@@ -875,16 +875,20 @@ impl Function {
         self.return_.len()
     }
 
-    pub fn name_str(&self, interner: &IdentifierInterner) -> String {
-        self.name(interner).to_string()
+    pub fn name_str(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
+        self.name(interner)
+            .map(|name| name.to_string())
+            .map_err(|e| {
+                e.append_message_with_separator('.', "Failed to get name string".to_string())
+            })
     }
 
-    pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
+    pub fn name(&self, interner: &IdentifierInterner) -> PartialVMResult<Identifier> {
         // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
         // should never happen in a well-formed module. This is as good a time to panic as any.
         self.name
             .member_name(interner)
-            .expect("Identifier interner error: function name not found")
+            .map_err(|e| e.append_message_with_separator('.', "Failed to get name".to_string()))
     }
 
     pub(crate) fn code(&self) -> &[Bytecode] {
@@ -899,20 +903,20 @@ impl Function {
         &self.type_parameters
     }
 
-    pub fn pretty_string(&self, interner: &IdentifierInterner) -> String {
+    pub fn pretty_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
         // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
         // should never happen in a well-formed module. This is as good a time to panic as any.
         self.name
             .to_string(interner)
-            .expect("Identifier interner error: function virtual name not found")
+            .map_err(|e| e.append_message_with_separator('.', "Failed to get name".to_string()))
     }
 
-    pub fn pretty_short_string(&self, interner: &IdentifierInterner) -> String {
+    pub fn pretty_short_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
         // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
         // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name
-            .to_short_string(interner)
-            .expect("Identifier interner error: function short name not found")
+        self.name.to_short_string(interner).map_err(|e| {
+            e.append_message_with_separator('.', "Failed to get short name".to_string())
+        })
     }
 
     pub fn is_native(&self) -> bool {
@@ -1022,12 +1026,14 @@ impl ModuleIdKey {
         &self.address
     }
 
-    pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
+    pub fn name(&self, interner: &IdentifierInterner) -> PartialVMResult<Identifier> {
         // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
         // should never happen in a well-formed module. This is as good a time to panic as any.
         interner
             .resolve_ident(&self.name, "module name")
-            .expect("Uninterned key")
+            .map_err(|e| {
+                e.append_message_with_separator('.', "Failed to get module name".to_string())
+            })
     }
 }
 
