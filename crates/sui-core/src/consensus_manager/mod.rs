@@ -318,10 +318,10 @@ impl ConsensusAddressUpdater for ConsensusManager {
             Ok(())
         } else {
             warn!(
-                "Consensus manager is not running, ignoring update of peer addresses for network public key {network_pubkey:?} and addresses {addresses:?}"
+                "Consensus authority node is not running, ignoring update of peer addresses for network public key {network_pubkey:?} and addresses {addresses:?}"
             );
             Err(SuiErrorKind::GenericAuthorityError {
-                error: "Consensus manager is not running".to_string(),
+                error: "Consensus authority node is not running".to_string(),
             }
             .into())
         }
