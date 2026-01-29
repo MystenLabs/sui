@@ -372,8 +372,7 @@ pub struct ExecutedTransaction {
     pub effects: TransactionEffects,
     pub clever_error: Option<proto::CleverError>,
     pub events: Option<TransactionEvents>,
-    #[allow(unused)]
-    changed_objects: Vec<proto::ChangedObject>,
+    pub changed_objects: Vec<proto::ChangedObject>,
     #[allow(unused)]
     unchanged_loaded_runtime_objects: Vec<proto::ObjectReference>,
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
