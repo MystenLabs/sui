@@ -105,6 +105,9 @@ pub(crate) struct CommitSyncer<C: NetworkClient> {
     // The commit index that is the max of highest local commit index and commit index inflight to Core.
     // Used to determine if fetched blocks can be sent to Core without gaps.
     synced_commit_index: CommitIndex,
+    // Whether the node was lagging behind the quorum in the previous scheduling check.
+    // Used to detect when the node catches up and reset propagation delay.
+    syncing_up: bool,
 }
 
 impl<C: NetworkClient> CommitSyncer<C> {
@@ -137,6 +140,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             highest_scheduled_index: None,
             highest_fetched_commit_index: 0,
             synced_commit_index,
+            syncing_up: false,
         }
     }
 
@@ -241,6 +245,25 @@ impl<C: NetworkClient> CommitSyncer<C> {
             // decrease either.
             self.highest_scheduled_index = Some(range_end);
         }
+
+        // Detect when the node catches up after syncing and reset propagation delay.
+        // A node is considered "syncing up" when it has pending/inflight fetches or its
+        // synced_commit_index is significantly behind the quorum_commit_index.
+        let batch_size = self.inner.context.parameters.commit_sync_batch_size;
+        let is_lagging = self.synced_commit_index + batch_size < quorum_commit_index
+            || !self.pending_fetches.is_empty()
+            || !self.inflight_fetches.is_empty();
+
+        if self.syncing_up && !is_lagging {
+            // Node was syncing and has now caught up. Reset propagation delay to allow
+            // the node to start proposing blocks again.
+            info!(
+                "Commit sync caught up: synced_commit_index={}, quorum_commit_index={}. Resetting propagation delay.",
+                self.synced_commit_index, quorum_commit_index,
+            );
+            let _ = self.inner.core_thread_dispatcher.set_propagation_delay(0);
+        }
+        self.syncing_up = is_lagging;
     }
 
     async fn handle_fetch_result(
