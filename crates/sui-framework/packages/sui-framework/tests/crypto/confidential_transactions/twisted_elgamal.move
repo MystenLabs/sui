@@ -161,3 +161,20 @@ public fun encrypted_amount_4_u32_zero<T>(pk: &Element<Point>): EncryptedAmount4
         l3: encrypt_zero(pk),
     }
 }
+
+public fun encrypted_amount_4_u32_from_4_u16<T>(
+    ea: EncryptedAmount4U16<T>,
+): EncryptedAmount4U32<T> {
+    let EncryptedAmount4U16<T> {
+        l0,
+        l1,
+        l2,
+        l3,
+    } = ea;
+    EncryptedAmount4U32<T> {
+        l0,
+        l1,
+        l2,
+        l3,
+    }
+}
