@@ -14,12 +14,15 @@ use consensus_core::{
 use core::panic;
 use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::{RegistryID, RegistryService};
+use mysten_network::Multiaddr;
 use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::{ConsensusConfig, NodeConfig};
+use sui_network::endpoint_manager::ConsensusAddressUpdater;
 use sui_protocol_config::ProtocolVersion;
+use sui_types::crypto::NetworkPublicKey;
 use sui_types::error::SuiResult;
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
 use sui_types::{
@@ -303,6 +306,13 @@ impl ConsensusManager {
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("{}", epoch));
         store_path
+    }
+}
+
+// Implementing the interface so we can update the consensus peer addresses when requested.
+impl ConsensusAddressUpdater for ConsensusManager {
+    fn update(&self, _network_pubkey: NetworkPublicKey, _addresses: Vec<Multiaddr>) {
+        todo!("Update the consensus peer addresses when requested.");
     }
 }
 

@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
+use anemo::types::{PeerAffinity, PeerInfo};
+use arc_swap::ArcSwapOption;
 use mysten_network::Multiaddr;
+use sui_types::crypto::NetworkPublicKey;
 use tap::TapFallible;
 use tracing::warn;
 
@@ -9,14 +14,30 @@ use crate::discovery;
 
 /// EndpointManager can be used to dynamically update the addresses of
 /// other nodes in the network.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct EndpointManager {
     discovery_handle: discovery::Handle,
+    consensus_address_updater: Arc<ArcSwapOption<Arc<dyn ConsensusAddressUpdater>>>,
+}
+
+pub trait ConsensusAddressUpdater: Send + Sync + 'static {
+    fn update(&self, network_pubkey: NetworkPublicKey, addresses: Vec<Multiaddr>);
 }
 
 impl EndpointManager {
     pub fn new(discovery_handle: discovery::Handle) -> Self {
-        Self { discovery_handle }
+        Self {
+            discovery_handle,
+            consensus_address_updater: Arc::new(ArcSwapOption::empty()),
+        }
+    }
+
+    pub fn set_consensus_address_updater(
+        &self,
+        consensus_address_updater: Arc<dyn ConsensusAddressUpdater>,
+    ) {
+        self.consensus_address_updater
+            .store(Some(Arc::new(consensus_address_updater)));
     }
 
     /// Updates the address(es) for the given endpoint from the specified source.
@@ -47,14 +68,28 @@ impl EndpointManager {
                 self.discovery_handle
                     .peer_address_change(peer_id, source, anemo_addresses);
             }
+            EndpointId::Consensus(network_pubkey) => {
+                if addresses.is_empty() {
+                    warn!(?network_pubkey, "No addresses provided for consensus peer");
+                    return;
+                }
+
+                if let Some(updater) = self.consensus_address_updater.load_full() {
+                    updater.update(network_pubkey, addresses);
+                } else {
+                    warn!(
+                        ?network_pubkey,
+                        "Consensus address updater not configured, ignoring update"
+                    );
+                }
+            }
         }
     }
 }
 
 pub enum EndpointId {
     P2p(anemo::PeerId),
-    // TODO: Implement support for updating consensus addresses via EndpointManager.
-    // Consensus(NetworkPublicKey),
+    Consensus(NetworkPublicKey),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

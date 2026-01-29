@@ -905,6 +905,9 @@ impl SuiNode {
             // Start the gRPC server
             components.validator_server_handle = components.validator_server_handle.start().await;
 
+            // Set the consensus address updater so that we can update the consensus peer addresses when requested.
+            endpoint_manager.set_consensus_address_updater(components.consensus_manager.clone());
+
             Some(components)
         } else {
             None
@@ -912,6 +915,7 @@ impl SuiNode {
 
         // setup shutdown channel
         let (shutdown_channel, _) = broadcast::channel::<Option<RunWithRange>>(1);
+
 
         let node = Self {
             config,
@@ -2027,6 +2031,9 @@ impl SuiNode {
 
                     components.validator_server_handle =
                         components.validator_server_handle.start().await;
+
+                    // Set the consensus address updater as the full node got promoted now to a validator.
+                    self.endpoint_manager.set_consensus_address_updater(components.consensus_manager.clone());
 
                     Some(components)
                 } else {
