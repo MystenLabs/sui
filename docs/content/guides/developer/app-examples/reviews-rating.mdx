@@ -305,12 +305,12 @@ The main sub-directories are:
 
 ### Connect button
 
-The Wallet Kit comes with a pre-built React.js component called `ConnectButton` that displays a button to connect and disconnect a wallet. The component handles connecting and disconnecting wallet logic.
+The dApp Kit comes with a pre-built React.js component called `ConnectButton` that displays a button to connect and disconnect a wallet. The component handles connecting and disconnecting wallet logic.
 
 Place the `ConnectButton` in the navigation bar for users to connect their wallets:
 
 ```ts title='src/app/components/navbar/Navbar.tsx'
-import { ConnectButton } from '@mysten/wallet-kit';
+import { ConnectButton } from '@mysten/dapp-kit-react';
 import { usePathname } from 'next/navigation';
 
 import { useAuthentication } from '@/app/hooks/useAuthentication';
@@ -386,68 +386,50 @@ export interface Service {
 
 ### Execute transaction hook
 
-In the frontend, you might need to execute a transaction block in multiple places, hence it's better to extract the transaction execution logic and reuse it everywhere. Let's examine the execute transaction hook.
+In the frontend, you might need to execute a transaction in multiple places, hence it's better to extract the transaction execution logic and reuse it everywhere. Let's examine the execute transaction hook.
 
 ```ts title='src/app/hooks/useSignAndExecuteTransaction.ts'
 import { Transaction } from '@mysten/sui/transactions';
-import { useWalletKit } from '@mysten/wallet-kit';
+import { useDAppKit } from '@mysten/dapp-kit-react';
 import { toast } from 'react-hot-toast';
 
-import { useSui } from './useSui';
-
 export const useSignAndExecuteTransaction = () => {
-	const { executeSignedTransaction } = useSui();
-	const { signTransaction } = useWalletKit();
+	const dAppKit = useDAppKit();
 	const handleSignAndExecuteTransaction = async (
 		tx: Transaction,
 		operation: String,
 		setIsLoading: any,
 	) => {
-		return signTransaction({
-			transaction: tx,
-		})
-			.then((signedTx: any) => {
-				return executeSignedTransaction({
-					signedTx,
-					requestType: 'WaitForLocalExecution',
-					options: {
-						showEffects: true,
-						showEvents: true,
-					},
-				})
-					.then((resp) => {
-						setIsLoading(false);
-						console.log(resp);
-						if (resp.effects?.status.status === 'success') {
-							console.log(`${operation} operation successful`);
-							toast.success(`${operation} operation successful`);
-							return;
-						} else {
-							console.log(`${operation} operation failed`);
-							toast.error(`${operation} operation failed.`);
-							return;
-						}
-					})
-					.catch((err) => {
-						setIsLoading(false);
-						console.log(`${operation} operation failed`);
-						console.log(`${operation} error : `, err);
-						toast.error(`Something went wrong, ${operation} operation failed.`);
-					});
-			})
-			.catch((err) => {
-				setIsLoading(false);
-				console.log(`signing goes wrong ${operation} error : `, err);
-				toast.error(`signing goes wrong, ${operation} operation failed.`);
+		try {
+			const resp = await dAppKit.signAndExecuteTransaction({
+				transaction: tx,
 			});
+			setIsLoading(false);
+			console.log(resp);
+
+			if (resp.$kind === 'Transaction') {
+				console.log(`${operation} operation successful`);
+				toast.success(`${operation} operation successful`);
+				return resp;
+			} else {
+				console.log(`${operation} operation failed`);
+				toast.error(`${operation} operation failed.`);
+				return resp;
+			}
+		} catch (err) {
+			setIsLoading(false);
+			console.log(`${operation} operation failed`);
+			console.log(`${operation} error : `, err);
+			toast.error(`Something went wrong, ${operation} operation failed.`);
+		}
 	};
 	return { handleSignAndExecuteTransaction };
 };
 ```
 
-A `Transaction` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
+A `Transaction` is the input, sign it with the current connected wallet account, execute the transaction, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
-Use the `useWalletKit()` hook from the Wallet Kit to retrieve the Sui client instance configured in `WalletKitProvider`. The `signTransaction()` function is another hook that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeSignedTransaction()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
+Use the `useDAppKit()` hook from the dApp Kit to access the Sui client and wallet functionality configured in `DAppKitProvider`. The `signAndExecuteTransaction()` function signs the transaction using the currently connected wallet and executes it in a single call. It displays the UI for users to review and sign their transactions with their selected wallet. Use `react-hot-toast` as another dependency to toast transaction status to users.
 
 ### Components and custom hooks for state management
 
@@ -455,7 +437,7 @@ Use the `useWalletKit()` hook from the Wallet Kit to retrieve the Sui client ins
   custom hook encapsulates the service, exposing all the required information (with fields such as `nameOfService`, `listOfReviews`, `listOfStars`) to display the reviews in a table.
   Multiple additional custom hooks, such as [useDashboardCreation](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useDashboardCreation.ts), and [useServiceReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useServiceReview.ts) are encapsulating their own piece of state and logic to make the code readable and maintainable.
 
-- Component for adding a new review: The [AddReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/components/review/AddReview.tsx) component is implemented to facilitate the creation of a new review. It is rendered by the [servicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/service/[id]/page.tsx) to collect a review entry from a `USER` and uses the `signAndExecuteTransaction` function of the [useWalletKit] hook to execute the transaction.
+- Component for adding a new review: The [AddReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/components/review/AddReview.tsx) component is implemented to facilitate the creation of a new review. It is rendered by the [servicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/service/[id]/page.tsx) to collect a review entry from a `USER` and uses the `signAndExecuteTransaction` function from the `useDAppKit` hook to execute the transaction.
 
 - Proof of experience generation: PoE is an NFT that is minted by `SERVICE OWNER` for customers after they dine at the restaurant; customers can then burn the PoE to write a high-rated review later. Minting an NFT is facilitated by the [ownedServicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/serviceOwner/ownedServices/page.tsx) component. This component is using the [useServicePoEGeneration](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useServicePoeGeneration.ts) custom hook.
 

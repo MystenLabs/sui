@@ -1,7 +1,17 @@
 ---
 title: Building PTBs
 description: Using the Sui TypeScript SDK, you can create programmable transaction blocks to perform multiple commands in a single transaction.
-keywords: [ ptbs, programmable transaction blocks, typescript SDK, how to use typescript SDK, typescript, transaction blocks, transactions as arguments, passing transactions ]
+keywords:
+  [
+    ptbs,
+    programmable transaction blocks,
+    typescript SDK,
+    how to use typescript SDK,
+    typescript,
+    transaction blocks,
+    transactions as arguments,
+    passing transactions,
+  ]
 ---
 
 This guide explores creating a [programmable transaction block (PTB)](/guides/developer/transactions/prog-txn-blocks.mdx) on Sui using the [TypeScript SDK](https://sdk.mystenlabs.com/typescript/install).
@@ -50,7 +60,7 @@ transfers.forEach((transfer, index) => {
 });
 ```
 
-After you have the transaction defined, you can directly execute it with a `SuiClient` and `KeyPair` using `client.signAndExecuteTransaction`.
+After you have the transaction defined, you can directly execute it with a Sui client and `KeyPair` using `client.signAndExecuteTransaction`.
 
 ```ts
 client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
@@ -65,7 +75,6 @@ There are 2 ways to define inputs:
 - For objects: The `tx.object(objectId)` function is used to construct an input that contains an object reference.
 
 - For pure values: The `tx.pure(type, value)` function is used to construct an input for a non-object input.
-
   - If value is a `Uint8Array`, then the value is assumed to be raw bytes and is used directly: `tx.pure(SomeUint8Array)`.
 
   - Otherwise, it's used to generate the BCS serialization layout for the value.
