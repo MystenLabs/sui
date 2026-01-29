@@ -16,18 +16,13 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_json::{ResolvedCallArg, SuiJsonValue, is_receiving_argument, resolve_move_function_args};
-use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SuiData, SuiObjectDataOptions, SuiObjectResponse, SuiRawData,
-    SuiTypeTag,
-};
-use sui_protocol_config::ProtocolConfig;
+use sui_json_rpc_types::{RPCTransactionRequestParams, SuiTypeTag};
 use sui_types::base_types::{
     FullObjectRef, ObjectID, ObjectInfo, ObjectRef, ObjectType, SuiAddress,
 };
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
-use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -45,11 +40,7 @@ pub trait DataReader {
         object_type: StructTag,
     ) -> Result<Vec<ObjectInfo>, anyhow::Error>;
 
-    async fn get_object_with_options(
-        &self,
-        object_id: ObjectID,
-        options: SuiObjectDataOptions,
-    ) -> Result<SuiObjectResponse, anyhow::Error>;
+    async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error>;
 
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error>;
 }
@@ -81,21 +72,10 @@ impl TransactionBuilder {
             let gas_objs = self.0.get_owned_objects(signer, GasCoin::type_()).await?;
 
             for obj in gas_objs {
-                let response = self
-                    .0
-                    .get_object_with_options(obj.object_id, SuiObjectDataOptions::new().with_bcs())
-                    .await?;
-                let obj = response.object()?;
-                let gas: GasCoin = bcs::from_bytes(
-                    &obj.bcs
-                        .as_ref()
-                        .ok_or_else(|| anyhow!("bcs field is unexpectedly empty"))?
-                        .try_as_move()
-                        .ok_or_else(|| anyhow!("Cannot parse move object to gas object"))?
-                        .bcs_bytes,
-                )?;
-                if !input_objects.contains(&obj.object_id) && gas.value() >= gas_budget {
-                    return Ok(obj.object_ref());
+                let obj = self.0.get_object(obj.object_id).await?;
+                let gas = GasCoin::try_from(&obj)?;
+                if !input_objects.contains(&obj.id()) && gas.value() >= gas_budget {
+                    return Ok(obj.compute_object_reference());
                 }
             }
             Err(anyhow!(
@@ -408,12 +388,7 @@ impl TransactionBuilder {
         view: &CompiledModule,
         arg_type: &SignatureToken,
     ) -> Result<ObjectArg, anyhow::Error> {
-        let response = self
-            .0
-            .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
-            .await?;
-
-        let obj: Object = response.into_object()?.try_into()?;
+        let obj = self.0.get_object(id).await?;
         let obj_ref = obj.compute_object_reference();
         let owner = obj.owner.clone();
         objects.insert(id, obj);
@@ -451,28 +426,16 @@ impl TransactionBuilder {
         type_args: &[TypeTag],
         json_args: Vec<SuiJsonValue>,
     ) -> Result<Vec<Argument>, anyhow::Error> {
-        let object = self
-            .0
-            .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
-            .await?
-            .into_object()?;
-        let Some(SuiRawData::Package(package)) = object.bcs else {
+        let object = self.0.get_object(package_id).await?;
+        let sui_types::object::Data::Package(package) = &object.data else {
             bail!(
                 "Bcs field in object [{}] is missing or not a package.",
                 package_id
             );
         };
-        let package: MovePackage = MovePackage::new(
-            package.id,
-            object.version,
-            package.module_map,
-            ProtocolConfig::get_for_min_version().max_move_package_size(),
-            package.type_origin_table,
-            package.linkage_table,
-        )?;
 
         let json_args_and_tokens = resolve_move_function_args(
-            &package,
+            package,
             module.clone(),
             function.clone(),
             type_args,
@@ -567,20 +530,13 @@ impl TransactionBuilder {
         upgrade_policy: u8,
         digest: Vec<u8>,
     ) -> Result<TransactionKind, anyhow::Error> {
-        let upgrade_capability = self
-            .0
-            .get_object_with_options(upgrade_capability, SuiObjectDataOptions::new().with_owner())
-            .await?
-            .into_object()?;
-        let capability_owner = upgrade_capability
-            .owner
-            .clone()
-            .ok_or_else(|| anyhow!("Unable to determine ownership of upgrade capability"))?;
+        let upgrade_capability = self.0.get_object(upgrade_capability).await?;
+        let capability_owner = upgrade_capability.owner().clone();
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
             let capability_arg = match capability_owner {
                 Owner::AddressOwner(_) => {
-                    ObjectArg::ImmOrOwnedObject(upgrade_capability.object_ref())
+                    ObjectArg::ImmOrOwnedObject(upgrade_capability.compute_object_reference())
                 }
                 Owner::Shared {
                     initial_shared_version,
@@ -589,7 +545,7 @@ impl TransactionBuilder {
                     start_version: initial_shared_version,
                     ..
                 } => ObjectArg::SharedObject {
-                    id: upgrade_capability.object_ref().0,
+                    id: upgrade_capability.compute_object_reference().0,
                     initial_shared_version,
                     mutability: SharedObjectMutability::Mutable,
                 },
@@ -644,22 +600,15 @@ impl TransactionBuilder {
         let gas = self
             .select_gas(sender, gas, gas_budget, vec![], gas_price)
             .await?;
-        let upgrade_cap = self
-            .0
-            .get_object_with_options(upgrade_capability, SuiObjectDataOptions::new().with_owner())
-            .await?
-            .into_object()?;
-        let cap_owner = upgrade_cap
-            .owner
-            .clone()
-            .ok_or_else(|| anyhow!("Unable to determine ownership of upgrade capability"))?;
+        let upgrade_cap = self.0.get_object(upgrade_capability).await?;
+        let cap_owner = upgrade_cap.owner().clone();
         TransactionData::new_upgrade(
             sender,
             gas,
             package_id,
             compiled_modules,
             dep_ids,
-            (upgrade_cap.object_ref(), cap_owner),
+            (upgrade_cap.compute_object_reference(), cap_owner),
             upgrade_policy,
             digest,
             gas_budget,
@@ -681,13 +630,8 @@ impl TransactionBuilder {
                 "Either split_amounts or split_count must be provided for split_coin transaction."
             );
         }
-        let coin = self
-            .0
-            .get_object_with_options(coin_object_id, SuiObjectDataOptions::bcs_lossless())
-            .await?
-            .into_object()?;
-        let coin_object_ref = coin.object_ref();
-        let coin: Object = coin.try_into()?;
+        let coin = self.0.get_object(coin_object_id).await?;
+        let coin_object_ref = coin.compute_object_reference();
         let type_args = vec![coin.get_move_template_type()?];
         let package = SUI_FRAMEWORK_PACKAGE_ID;
         let module = coin::PAY_MODULE_NAME.to_owned();
@@ -725,13 +669,8 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let coin = self
-            .0
-            .get_object_with_options(coin_object_id, SuiObjectDataOptions::bcs_lossless())
-            .await?
-            .into_object()?;
-        let coin_object_ref = coin.object_ref();
-        let coin: Object = coin.try_into()?;
+        let coin = self.0.get_object(coin_object_id).await?;
+        let coin_object_ref = coin.compute_object_reference();
         let type_args = vec![coin.get_move_template_type()?];
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
@@ -763,13 +702,8 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let coin = self
-            .0
-            .get_object_with_options(coin_object_id, SuiObjectDataOptions::bcs_lossless())
-            .await?
-            .into_object()?;
-        let coin_object_ref = coin.object_ref();
-        let coin: Object = coin.try_into()?;
+        let coin = self.0.get_object(coin_object_id).await?;
+        let coin_object_ref = coin.compute_object_reference();
         let type_args = vec![coin.get_move_template_type()?];
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
@@ -797,14 +731,9 @@ impl TransactionBuilder {
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
     ) -> Result<TransactionKind, anyhow::Error> {
-        let coin = self
-            .0
-            .get_object_with_options(primary_coin, SuiObjectDataOptions::bcs_lossless())
-            .await?
-            .into_object()?;
-        let primary_coin_ref = coin.object_ref();
+        let coin = self.0.get_object(primary_coin).await?;
+        let primary_coin_ref = coin.compute_object_reference();
         let coin_to_merge_ref = self.get_object_ref(coin_to_merge).await?;
-        let coin: Object = coin.try_into()?;
         let type_arguments = vec![coin.get_move_template_type()?];
         let package = SUI_FRAMEWORK_PACKAGE_ID;
         let module = coin::PAY_MODULE_NAME.to_owned();
@@ -831,14 +760,9 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let coin = self
-            .0
-            .get_object_with_options(primary_coin, SuiObjectDataOptions::bcs_lossless())
-            .await?
-            .into_object()?;
-        let primary_coin_ref = coin.object_ref();
+        let coin = self.0.get_object(primary_coin).await?;
+        let primary_coin_ref = coin.compute_object_reference();
         let coin_to_merge_ref = self.get_object_ref(coin_to_merge).await?;
-        let coin: Object = coin.try_into()?;
         let type_args = vec![coin.get_move_template_type()?];
         let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
@@ -1028,49 +952,29 @@ impl TransactionBuilder {
     }
 
     pub async fn get_full_object_ref(&self, object_id: ObjectID) -> anyhow::Result<FullObjectRef> {
-        let object_data = self
-            .0
-            .get_object_with_options(object_id, SuiObjectDataOptions::new().with_owner())
-            .await?
-            .into_object()?;
+        let object_data = self.0.get_object(object_id).await?;
 
-        let object_ref = object_data.object_ref();
-        let owner = object_data.owner.unwrap();
-
-        Ok(FullObjectRef::from_object_ref_and_owner(object_ref, &owner))
+        Ok(object_data.compute_full_object_reference())
     }
 
     async fn get_object_ref_and_type(
         &self,
         object_id: ObjectID,
     ) -> anyhow::Result<(ObjectRef, ObjectType)> {
-        let object = self
-            .0
-            .get_object_with_options(object_id, SuiObjectDataOptions::new().with_type())
-            .await?
-            .into_object()?;
+        let object = self.0.get_object(object_id).await?;
 
-        Ok((object.object_ref(), object.object_type()?))
+        Ok((object.compute_object_reference(), ObjectType::from(&object)))
     }
 
     pub async fn get_full_object_ref_and_type(
         &self,
         object_id: ObjectID,
     ) -> anyhow::Result<(FullObjectRef, ObjectType)> {
-        let object_data = self
-            .0
-            .get_object_with_options(
-                object_id,
-                SuiObjectDataOptions::new().with_owner().with_type(),
-            )
-            .await?
-            .into_object()?;
+        let object = self.0.get_object(object_id).await?;
 
-        let object_ref = object_data.object_ref();
-        let object_type = object_data.object_type()?;
-        let owner = object_data.owner.unwrap();
+        let object_type = ObjectType::from(&object);
 
-        let full_object_ref = FullObjectRef::from_object_ref_and_owner(object_ref, &owner);
+        let full_object_ref = object.compute_full_object_reference();
         Ok((full_object_ref, object_type))
     }
 }
