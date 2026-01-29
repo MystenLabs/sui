@@ -7,7 +7,6 @@ use futures::future::try_join_all;
 use futures::join;
 use indexmap::IndexMap;
 
-use crate::v2::error::Error;
 use crate::v2::meter::Meter;
 use crate::v2::parser::Chain;
 use crate::v2::parser::Literal;
@@ -25,6 +24,7 @@ mod value;
 mod visitor;
 mod writer;
 
+pub use crate::v2::error::Error;
 pub use crate::v2::error::FormatError;
 pub use crate::v2::interpreter::Interpreter;
 pub use crate::v2::meter::Limits;
@@ -180,9 +180,9 @@ impl<'s> Display<'s> {
     /// supports partial failures (if one of the field values fails to parse or evaluate).
     pub async fn display<S: Store>(
         &'s self,
-        interpreter: &'s Interpreter<S>,
         max_depth: usize,
         max_output_size: usize,
+        interpreter: &'s Interpreter<S>,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
         let writer = Arc::new(Writer::new(max_depth, max_output_size));
         let mut output = IndexMap::new();
@@ -365,7 +365,7 @@ mod tests {
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
         let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
         Display::parse(limits, fields)?
-            .display(&interpreter, max_depth, max_output_size)
+            .display(max_depth, max_output_size, &interpreter)
             .await
     }
 
