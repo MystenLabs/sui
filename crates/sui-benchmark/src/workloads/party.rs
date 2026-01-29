@@ -233,7 +233,8 @@ pub struct PartyWorkload {
 impl Workload<dyn Payload> for PartyWorkload {
     async fn init(
         &mut self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         let (first_gas, _) = self
@@ -245,14 +246,14 @@ impl Workload<dyn Payload> for PartyWorkload {
         path.push("src/workloads/data/party");
         let SystemState {
             reference_gas_price,
-            protocol_config: _,
+            ..
         } = system_state_observer.state.borrow().clone();
         let transaction =
             TestTransactionBuilder::new(first_gas.1, first_gas.0, reference_gas_price)
                 .publish_async(path)
                 .await
                 .build_and_sign(first_gas.2.as_ref());
-        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.unwrap();
         assert!(effects.is_ok(), "Failed to publish party package");
         let created = effects.created();
@@ -266,12 +267,13 @@ impl Workload<dyn Payload> for PartyWorkload {
 
     async fn make_test_payloads(
         &self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let SystemState {
             reference_gas_price,
-            protocol_config: _,
+            ..
         } = system_state_observer.state.borrow().clone();
 
         let state = Arc::new(Mutex::new(InMemoryWallet::new_empty()));
@@ -283,9 +285,10 @@ impl Workload<dyn Payload> for PartyWorkload {
                 .build_and_sign(keypair.as_ref());
             let state = state.clone();
             let system_state_observer = system_state_observer.clone();
-            let proxy = proxy.clone();
+            let execution_proxy = execution_proxy.clone();
             futures.push(async move {
-                let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+                let (_, execution_result) =
+                    execution_proxy.execute_transaction_block(transaction).await;
                 let effects = execution_result.unwrap();
                 let (
                     obj_ref,
@@ -328,9 +331,10 @@ impl Workload<dyn Payload> for PartyWorkload {
                 .build_and_sign(keypair.as_ref());
             let state = state.clone();
             let system_state_observer = system_state_observer.clone();
-            let proxy = proxy.clone();
+            let execution_proxy = execution_proxy.clone();
             futures.push(async move {
-                let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+                let (_, execution_result) =
+                    execution_proxy.execute_transaction_block(transaction).await;
                 let effects = execution_result.unwrap();
                 let (obj_ref, Owner::AddressOwner(owner)) = effects.created()[0] else {
                     panic!("create_fastpath should always create an AddressOwner object");

@@ -1,0 +1,289 @@
+---
+title: Programmable Transaction Blocks (PTBs)
+description: Programmable transaction blocks are a group of commands that complete a transaction on Sui.
+keywords: [ programmable transaction blocks, transaction blocks, program transaction blocks, PTB, PTBs, what are PTBs, what is PTB, transaction group, programmable group of transactions, program transaction block, block of transactions, group of transactions ]
+---
+
+Transactions on Sui are composed of groups of commands that execute on inputs to define the result of the transaction. Referred to as **programmable transaction blocks (PTBs)**, these groups of commands define all user transactions on Sui. PTBs allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction without publishing a new Move package. Designed with automation and transaction builders in mind, PTBs are a lightweight and flexible way of generating transactions. 
+
+However, more intricate programming patterns, such as loops, are not supported. In such cases, you must publish a new Move package.
+
+The individual transaction commands within a PTB execute in order. You can use the results from one transaction command in any subsequent transaction command within the PTB. The effects of each transaction command in the block, such as object modifications or transfers, are applied atomically at the end of the transaction. If one transaction command fails, the entire block fails and no effects from the commands are applied.
+
+A PTB can perform up to 1,024 unique operations in a single execution, whereas transactions on traditional blockchains would require 1,024 individual executions to accomplish the same result. This structure also promotes cheaper gas fees. The cost of facilitating individual transactions is always more than the cost of those same transactions blocked together in a PTB.
+
+## Transaction components
+
+There are two parts of a PTB that are relevant to execution semantics. Other transaction information, such as the transaction sender or the gas limit, might be referenced but are out of scope. The structure of a PTB is:
+
+```rust
+{
+    inputs: [Input],
+    commands: [Command],
+}
+```
+
+Looking closer at the two main components:
+
+- The `inputs` value is a vector of arguments, `[Input]`. These arguments are either objects or pure values that you can use in the commands. The objects are either owned by the sender or are shared or immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which you can construct purely from their bytes. For historical reasons, `Input` is `CallArg` in the Rust implementation.
+
+- The `commands` value is a vector of commands, `[Command]`. The possible commands are:
+
+- `tx.splitCoins(coin, amounts)`: Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent transactions.
+
+  - Example: `tx.splitCoins(tx.gas, [tx.pure.u64(100), tx.pure.u64(200)])`
+
+- `tx.mergeCoins(destinationCoin, sourceCoins)`: Merges the sourceCoins into the destinationCoin.
+
+  - Example: `tx.mergeCoins(tx.object(coin1), [tx.object(coin2), tx.object(coin3)])`
+
+- `tx.transferObjects(objects, address)`: Transfers a list of objects to the specified address.
+
+  - Example: `tx.transferObjects([tx.object(thing1), tx.object(thing2)], tx.pure.address(myAddress))`
+
+- `tx.moveCall({ target, arguments, typeArguments })`: Executes a Move call. Returns whatever the Sui Move call returns.
+
+  - Example: `tx.moveCall({ target: '0x2::devnet_nft::mint', arguments: [tx.pure.string(name), tx.pure.string(description), tx.pure.string(image)] })`
+- `tx.makeMoveVec({ type, elements })`: Constructs a vector of objects that can be passed into a moveCall. This is required as there's no other way to define a vector as an input.
+
+  - Example: `tx.makeMoveVec({ elements: [tx.object(id1), tx.object(id2)] })`
+
+- `tx.publish(modules, dependencies)`: Publishes a Move package. Returns the upgrade capability object.
+
+- `tx.upgrade(modules, dependencies, packageId: EXAMPLE_PACKAGE_ID, ticket)`: Upgrades an existing package. No `init` functions are called for upgraded modules.
+
+Learn more about each [PTB command](/references/ptb-commands.mdx).
+
+## Inputs and results
+
+Inputs are the values that are provided to the PTB, and results are the values that are produced by the PTB commands. The inputs are either objects or simple Move values, and the results are arbitrary Move values, including objects. Inputs and results form the data flow through a PTB's execution.
+
+They can be seen as populating an array of values. For inputs, there is a single array, but for results, there is an array for each individual transaction command, creating a 2D-array of result values. You can access these values by borrowing, mutably or immutably, by copying, if the type permits, or by moving, which takes the value out of the array without re-indexing.
+
+Learn more about [inputs and results](/concepts/transactions/inputs-and-results.mdx).
+
+## `Argument` structure and usage
+
+Commands take `Argument` values that specify which input or result to use. The runtime infers whether to pass the argument by reference or by value based on the command's expected type.
+
+The `Argument` enum has 4 variants:
+
+- **`Input(u16)`:** References an input by its index. For example, with inputs `[Object1, Object2, Pure1, Object3]`, use `Input(0)` for `Object1` and `Input(2)` for `Pure1`.
+
+- **`GasCoin`:** References the SUI coin used to pay for gas. This is separate from other inputs because it has special restrictions. It can only be taken by value through the `TransferObjects` command. To use a portion of the gas coin elsewhere, first split off a coin with [`SplitCoins`](/references/ptb-commands.mdx).
+
+- **`NestedResult(u16, u16)`:** References a result from a previous command. The first index specifies the command, the second specifies which result from that command. For example, if command 1 returns `[Value1, Value2]`, use `NestedResult(1, 0)` for `Value1` and `NestedResult(1, 1)` for `Value2`.
+
+- **`Result(u16)`:** Shorthand for `NestedResult(i, 0)`, but only valid when the command at index `i` returns exactly 1 result. Use `NestedResult` for commands that return 0 or multiple results.
+
+## Execution {#execution}
+
+For the execution of PTBs, the input vector is populated by the input objects or pure value bytes. The transaction commands are then executed in order, and the results are stored in the result vector. Finally, the effects of the transaction are applied atomically.
+
+### Start of execution
+
+At the beginning of execution, the PTB runtime takes the input objects and loads them into the input array. The objects are already verified by the network, checking rules like existence and valid ownership. The pure value bytes are also loaded into the array but not validated until usage.
+
+The most important thing to note at this stage is the effects on the gas coin. At the beginning of execution, the maximum gas budget (in terms of SUI) is withdrawn from the gas coin. Any unused gas is returned to the gas coin at the end of execution, even if the coin has changed owners.
+
+### Object consumption 
+
+All objects created or returned by Move commands must either be consumed (destroyed, transferred, or used by another command) or explicitly dropped if the type has the `drop` ability. 
+
+In a PTB, if you create an object through a Move command and do not destroy, transfer, or use it in a subsequent command, the transaction will fail with an error. 
+
+### Pre-execution validation
+
+When a transaction is signed, the network performs the following validations on specific commands:
+
+- [`SplitCoins`](/references/ptb-commands.mdx) and [`MergeCoins`](/references/ptb-commands.mdx): Verifies that the argument arrays (`AmountArgs` and `ToMergeArgs`) are non-empty.
+
+- [`MakeMoveVec`](/references/ptb-commands.mdx): Verifies that the type must be specified for an empty vector of `Args`.
+
+- [`Publish`](/references/ptb-commands.mdx): Verifies that the `ModuleBytes` are not empty.
+
+### Argument usage rules {#arguments}
+
+Each argument can be used by reference or by value. The usage is based on the type of the argument and the type signature of the command:
+
+- If the signature expects an `&mut T`, the runtime checks the argument has type `T` and it is then mutably borrowed.
+
+- If the signature expects an `&T`, the runtime checks the argument has type `T` and it is then immutably borrowed.
+
+- If the signature expects a `T`, the runtime verifies the argument has type `T`, then copies the value if `T: copy` or moves it otherwise. Objects are always moved because `sui::object::UID` does not have the `copy` ability.
+
+The transaction fails if an argument is used in any form after being moved. There is no way to restore an argument to its position (its input or result index) after it is moved.
+
+If an argument is copied but does not have the `drop` ability, then the last usage is inferred to be a move. As a result, if an argument has `copy` and does not have `drop`, the last usage must be by value. Otherwise, the transaction fails because a value without `drop` has not been used.
+
+#### Borrowing rules
+
+Borrowing follows additional rules to ensure safe reference usage:
+
+- **Mutable borrow:** No other borrows can be outstanding. An overlapping mutable borrow could create dangling references.
+
+- **Immutable borrow:** No mutable borrows can be outstanding. Multiple immutable borrows are allowed.
+
+- **Move:** No borrows can be outstanding. Moving a borrowed value invalidates existing references.
+
+- **Copy:** Allowed regardless of outstanding borrows.
+
+#### Special object handling
+
+Object inputs have the type `T` of the underlying object. The exception is `ObjectArg::Receiving` inputs, which have type `sui::transfer::Receiving<T>`. This wrapper indicates the object is owned by another object, not the sender. Call `sui::transfer::receive` with the parent object to unwrap it and prove ownership.
+
+Shared objects have restrictions on by value usage to ensure they remain shared or are deleted by the end of the transaction:
+
+- Read-only shared objects (marked as not `mutable`) cannot be used by value.
+
+- Shared objects cannot be transferred or frozen. These operations succeed during execution but cause the transaction to fail at the end.
+
+- Shared objects can be wrapped or converted to dynamic fields during execution, but must be re-shared or deleted before the transaction completes.
+
+#### Pure value type checking
+
+Pure values are not type checked until their usage. When checking if a pure value has type `T`, the system verifies whether `T` is a valid type for a pure value (see the list in the [Inputs section](/concepts/transactions/inputs-and-results.mdx)). If it is, the bytes are validated. You can use a pure value with multiple types as long as the bytes are valid for each type. For example, you can use a string as an ASCII string `std::ascii::String` and as a UTF8 string `std::string::String`. However, after you mutably borrow the pure value, the type becomes fixed, and all future usages must be with that type.
+
+### End of execution
+
+At the end of execution, the remaining values are checked and effects for the transaction are calculated.
+
+**For inputs:**
+
+- Remaining immutable or read only input objects are skipped (no modifications made).
+
+- Remaining mutable input objects are returned to their original owners (shared remain shared, owned remain owned).
+
+- Remaining pure input values are dropped (all permissible types have `copy` and `drop`).
+
+- Shared objects are only deleted or re-shared. Any other operation (wrap, transfer, freezing) results in an error.
+
+**For results:**
+
+- Remaining results with the `drop` ability are dropped.
+
+- If a value has `copy` but not `drop`, its last usage must have been by-value (treated as a move).
+
+- Otherwise, an error is given for unused values without `drop`.
+
+**For gas:**
+
+Any remaining SUI deducted from the gas coin at the beginning of execution is returned to the coin, even if the owner has changed. The maximum possible gas is deducted at the beginning of execution, and unused gas is returned at the end (all in SUI). Because the gas coin can only be taken by value with `TransferObjects`, it has not been wrapped or deleted.
+
+The total effects (created, mutated, and deleted objects) are then passed out of the execution layer and applied by the Sui network.
+
+## Execution example 
+
+By following each command's execution, you can see how inputs flow through commands, how results accumulate, and how the final transaction effects are determined.
+
+Suppose you want to buy 2 items from a marketplace costing `100 MIST`. You keep one item for yourself and send the other item plus the remaining coin to a friend at address `0x808`.
+
+```rust
+{
+  inputs: [
+    Pure(/* @0x808 BCS bytes */ ...),
+    Object(SharedObject { /* Marketplace shared object */ id: market_id, ... }),
+    Pure(/* 100u64 BCS bytes */ ...),
+  ]
+  commands: [
+    SplitCoins(GasCoin, [Input(2)]),
+    MoveCall("some_package", "some_marketplace", "buy_two", [], [Input(1), NestedResult(0, 0)]),
+    TransferObjects([GasCoin, NestedResult(1, 0)], Input(0)),
+    MoveCall("sui", "tx_context", "sender", [], []),
+    TransferObjects([NestedResult(1, 1)], NestedResult(3, 0)),
+  ]
+}
+```
+
+The inputs include the friend's address, the marketplace object, and the coin split value. The commands split off the coin, call the marketplace function, send the gas coin and one object, grab your address (through `sui::tx_context::sender`), and send the remaining object to yourself.
+
+**Command 0: `SplitCoins(GasCoin, [Input(2)])`**
+
+Accesses the gas coin by mutable reference and loads `Input(2)` as `100u64` (copied, not moved). Creates a new coin.
+
+| State | Value |
+| :---- | :---- |
+| Gas coin balance | `499,900 MIST` |
+| Result | `[Coin<SUI> { id: new_coin, value: 100 }]` |
+
+**Command 1: `MoveCall("some_package", "some_marketplace", "buy_two", ...)`**
+
+Calls `buy_two(marketplace: &mut Marketplace, coin: Coin<SUI>, ctx: &mut TxContext): (Item, Item)`. Uses `Input(1)` by mutable reference (marketplace) and `NestedResult(0, 0)` by value (coin is moved and consumed).
+
+| State | Value |
+| :---- | :---- |
+| `Results[0][0]` | moved |
+| Result | `[Item { id: id1 }, Item { id: id2 }]` |
+
+**Command 2: `TransferObjects([GasCoin, NestedResult(1, 0)], Input(0))`**
+
+Transfers the gas coin and first item to `0x808`. Both objects are taken by value (moved).
+
+| State | Value |
+| :---- | :---- |
+| Gas coin | moved |
+| `Results[1][0]` | moved |
+| Result | `[]` |
+
+**Command 3: `MoveCall("sui", "tx_context", "sender", [], [])`**
+
+Calls `sender(ctx: &TxContext): address`. Returns the sender's address.
+
+| State | Value |
+| :---- | :---- |
+| Result | `[sender_address]` |
+
+**Command 4: `TransferObjects([NestedResult(1, 1)], NestedResult(3, 0))`**
+
+Transfers the second item to the sender. The item is moved by value; the address is copied by value.
+
+| State | Value |
+| :---- | :---- |
+| `Results[1][1]` | moved |
+| Result | `[]` |
+
+#### Initial state
+
+```rust
+Gas Coin: Coin<SUI> { id: gas_coin, balance: 1_000_000u64 }
+Inputs: [Pure(@0x808), Marketplace { id: market_id }, Pure(100u64)]
+Results: []
+```
+
+After maximum gas budget of `500_000` is deducted:
+
+```rust
+Gas Coin: Coin<SUI> { id: gas_coin, balance: 500_000u64 }
+```
+
+#### Final state
+
+```rust
+Gas Coin: _ (moved)
+Inputs: [Pure(@0x808), Marketplace { id: market_id } (mutated), Pure(100u64)]
+Results: [
+  [_],
+  [_, _],
+  [],
+  [sender_address],
+  []
+]
+```
+
+#### End of execution checks
+
+- Input objects: Gas coin moved. Marketplace remains shared (mutated).
+
+- Results: All remaining values have `drop` ability (Pure inputs, sender's address). All other results moved.
+
+- Shared objects: Marketplace not moved, remains shared.
+
+**Transaction effects:**
+
+- Coin split from gas (`new_coin`) does not appear (created and deleted in same transaction).
+
+- Gas coin and `Item { id: id1 }` transferred to `0x808`. Remaining gas returned to gas coin despite owner change.
+
+- `Item { id: id2 }` transferred to sender.
+
+- Marketplace object returned as shared (mutated).

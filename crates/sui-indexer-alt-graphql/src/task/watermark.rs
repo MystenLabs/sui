@@ -1,34 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::{Context as _, anyhow, bail, ensure};
-use chrono::{DateTime, Utc};
-use diesel::{
-    QueryableByName,
-    sql_types::{BigInt, Text},
-};
+use anyhow::Context as _;
+use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::ensure;
+use chrono::DateTime;
+use chrono::Utc;
+use diesel::QueryableByName;
+use diesel::sql_types::BigInt;
+use diesel::sql_types::Text;
 use futures::future::OptionFuture;
 use sui_futures::service::Service;
-use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableReader,
-    consistent_reader::{self, ConsistentReader, proto::AvailableRangeResponse},
-    ledger_grpc_reader::LedgerGrpcReader,
-    pg_reader::PgReader,
-};
+use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
+use sui_indexer_alt_reader::consistent_reader::proto::AvailableRangeResponse;
+use sui_indexer_alt_reader::consistent_reader::{self};
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
-use tokio::{sync::RwLock, time};
-use tracing::{debug, warn};
+use tokio::sync::RwLock;
+use tokio::time;
+use tracing::debug;
+use tracing::warn;
 
-use crate::{
-    api::types::available_range::pipeline_unavailable, config::WatermarkConfig, error::RpcError,
-    metrics::RpcMetrics,
-};
+use crate::api::types::available_range::pipeline_unavailable;
+use crate::config::WatermarkConfig;
+use crate::error::RpcError;
+use crate::metrics::RpcMetrics;
 
 /// Background task responsible for tracking per-pipeline upper- and lower-bounds.
 ///

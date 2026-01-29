@@ -4,6 +4,7 @@
 #[cfg(msim)]
 mod test {
     use mysten_common::register_debug_fatal_handler;
+    use prost::Message;
     use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
@@ -17,6 +18,7 @@ mod test {
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
     use sui_benchmark::workloads::benchmark_move_base_dir;
+    use sui_benchmark::workloads::composite::CompositeWorkloadConfig;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
     use sui_benchmark::workloads::workload::ExpectedFailureType;
     use sui_benchmark::workloads::workload_configuration::{
@@ -43,14 +45,13 @@ mod test {
         Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
         ProtocolVersion,
     };
+    use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{SimConfig, configs::*};
-    use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
-    use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
@@ -96,7 +97,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(2, 3000, 1).await;
+        let test_cluster = build_test_cluster(2, 5_000, 1).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
@@ -174,6 +175,41 @@ mod test {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0, 1).await;
         test_simulated_load(test_cluster, 15).await;
+    }
+
+    /// Tests conflicting transfer workload which creates contention by submitting
+    /// conflicting transactions as soft bundles. The soft bundle ensures deterministic
+    /// ordering: first transaction succeeds, subsequent ones fail with ObjectLockConflict.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_conflicting_transfers() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 5000, 1).await;
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        // Use LocalValidatorAggregatorProxy for soft bundle support
+        simulated_load_config.remote_env = false;
+        // Enable conflicting transfer workload
+        simulated_load_config.conflicting_transfer_weight = 1;
+        simulated_load_config.num_contested_objects = 5;
+        // Disable other workloads to isolate testing
+        simulated_load_config.shared_counter_weight = 0;
+        simulated_load_config.transfer_object_weight = 1;
+        simulated_load_config.delegation_weight = 0;
+        simulated_load_config.batch_payment_weight = 0;
+        simulated_load_config.shared_deletion_weight = 0;
+        simulated_load_config.randomness_weight = 0;
+        simulated_load_config.slow_weight = 0;
+        info!("Simulated load config: {:?}", simulated_load_config);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            30,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false, // disable surfer to isolate the test
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -424,6 +460,7 @@ mod test {
                 "consensus-store-after-write",
                 "consensus-after-propose",
                 "consensus-after-leader-schedule-change",
+                "consensus-after-handle-commit",
             ],
             move || {
                 handle_failpoint(
@@ -553,6 +590,8 @@ mod test {
 
             // Always enable the randomized tx workload in this test.
             simulated_load_config.randomized_transaction_weight = 1;
+            // Disable concurrent transactions in congestion control test to avoid lock conflicts
+            simulated_load_config.randomized_transaction_concurrency = 1;
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
@@ -650,13 +689,16 @@ mod test {
         );
         test_simulated_load(test_cluster, 30).await;
 
-        let checkpoint_files = std::fs::read_dir(path)
+        let checkpoint_files: Vec<_> = std::fs::read_dir(path)
             .map(|entries| {
                 entries
                     .filter_map(Result::ok)
                     .filter(|entry| {
                         entry.path().is_file()
-                            && entry.path().extension() == Some(std::ffi::OsStr::new("chk"))
+                            && entry
+                                .path()
+                                .to_str()
+                                .is_some_and(|s| s.ends_with(".binpb.zst"))
                     })
                     .map(|entry| entry.path())
                     .collect()
@@ -664,9 +706,12 @@ mod test {
             .unwrap_or_else(|_| vec![]);
         assert!(checkpoint_files.len() > 0);
         let bytes = std::fs::read(checkpoint_files.first().unwrap()).unwrap();
-
-        let _checkpoint: CheckpointData =
-            Blob::from_bytes(&bytes).expect("failed to load checkpoint");
+        let decompressed = zstd::decode_all(&bytes[..]).expect("failed to decompress checkpoint");
+        let proto_checkpoint =
+            ProtoCheckpoint::decode(&decompressed[..]).expect("failed to decode checkpoint");
+        let _checkpoint: sui_types::full_checkpoint_content::Checkpoint = (&proto_checkpoint)
+            .try_into()
+            .expect("failed to convert checkpoint");
     }
 
     // Tests the correctness of large consensus commit transaction due to large number
@@ -1007,12 +1052,17 @@ mod test {
         shared_counter_hotness_factor: u32,
         randomness_weight: u32,
         randomized_transaction_weight: u32,
+        randomized_transaction_concurrency: u64,
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
         party_weight: u32,
+        conflicting_transfer_weight: u32,
+        num_contested_objects: u64,
+        composite_weight: u32,
+        composite_config: Option<CompositeWorkloadConfig>,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -1028,7 +1078,8 @@ mod test {
                 shared_deletion_weight: 1,
                 shared_counter_hotness_factor: 50,
                 randomness_weight: 1,
-                randomized_transaction_weight: 0,
+                randomized_transaction_weight: 1,
+                randomized_transaction_concurrency: 4,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
@@ -1038,6 +1089,29 @@ mod test {
                 },
                 // TODO: Set this to 1 once party object is enabled in mainnet protocol config.
                 party_weight: 0,
+                conflicting_transfer_weight: 0,
+                num_contested_objects: 2,
+                composite_weight: 1,
+                composite_config: Some(CompositeWorkloadConfig::balanced()),
+            }
+        }
+    }
+
+    impl SimulatedLoadConfig {
+        fn composite_only(
+            config: sui_benchmark::workloads::composite::CompositeWorkloadConfig,
+        ) -> Self {
+            Self {
+                composite_weight: 1,
+                composite_config: Some(config),
+                shared_counter_weight: 0,
+                randomness_weight: 0,
+                transfer_object_weight: 0,
+                delegation_weight: 0,
+                batch_payment_weight: 0,
+                shared_deletion_weight: 0,
+                slow_weight: 0,
+                ..Default::default()
             }
         }
     }
@@ -1082,26 +1156,38 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
-            Arc::new(
-                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url)
-                    .await
-                    .unwrap(),
-            )
+        // Create fullnode proxy for RPC reads
+        let fullnode_proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &registry)
+                .await
+                .unwrap(),
+        );
+        let fullnode_proxies = vec![fullnode_proxy.clone()];
+
+        // Create execution proxy - either fullnode or validator aggregator
+        let execution_proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
+            fullnode_proxy.clone()
         } else {
+            // Use a separate registry because FullNodeProxy already registered SafeClientMetrics
+            let validator_registry = prometheus::Registry::new();
             Arc::new(
                 LocalValidatorAggregatorProxy::from_genesis(
                     &genesis,
-                    &registry,
+                    &validator_registry,
                     &test_cluster.fullnode_handle.rpc_url,
                 )
                 .await,
             )
         };
 
-        let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
+        let bank = BenchmarkBank::new(
+            execution_proxy.clone(),
+            fullnode_proxies.clone(),
+            primary_coin,
+        );
         let system_state_observer = {
-            let mut system_state_observer = SystemStateObserver::new(proxy.clone());
+            let mut system_state_observer =
+                SystemStateObserver::new_from_test_cluster(&test_cluster);
             if let Ok(_) = system_state_observer.state.changed().await {
                 info!(
                     "Got the new state (reference gas price and/or protocol config) from system state object"
@@ -1145,6 +1231,8 @@ mod test {
             randomized_transaction: config.randomized_transaction_weight,
             slow: config.slow_weight,
             party: config.party_weight,
+            conflicting_transfer: config.conflicting_transfer_weight,
+            composite: config.composite_weight,
         };
 
         let workload_config = WorkloadConfig {
@@ -1158,9 +1246,12 @@ mod test {
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
             num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,
+            num_contested_objects: config.num_contested_objects,
+            randomized_transaction_concurrency: config.randomized_transaction_concurrency,
             target_qps,
             in_flight_ratio,
             duration,
+            composite_config: config.composite_config,
         };
 
         let workloads_builders = WorkloadConfiguration::create_workload_builders(
@@ -1199,7 +1290,8 @@ mod test {
             let show_progress = interval.is_unbounded();
             let (benchmark_stats, _) = driver
                 .run(
-                    vec![proxy],
+                    vec![execution_proxy],
+                    fullnode_proxies,
                     workloads,
                     system_state_observer,
                     &registry,
@@ -1283,10 +1375,15 @@ mod test {
 
         let test_cluster_for_handler = test_cluster.clone();
 
+        let mut config = SimulatedLoadConfig::default();
+        // composite workload is very strict about error checking and fails during
+        // this test.
+        config.composite_weight = 0;
+
         test_simulated_load_with_test_config(
             test_cluster.clone(),
             30,
-            SimulatedLoadConfig::default(),
+            config,
             None, // target_qps
             None, // num_workers
             Some({
@@ -1438,5 +1535,118 @@ mod test {
             .await;
 
         test_cluster.wait_for_epoch(None).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_composite_workload() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let _guard =
+            sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+                cfg.enable_address_balance_gas_payments_for_testing();
+                cfg
+            });
+        let test_cluster = build_test_cluster(4, 10000, 1).await;
+
+        let metrics = Arc::new(Mutex::new(
+            sui_benchmark::workloads::composite::CompositionMetrics::new(),
+        ));
+
+        use sui_benchmark::workloads::composite::*;
+        let composite_config = CompositeWorkloadConfig {
+            num_shared_counters: 2,
+            shared_counter_hotness: 0.95,
+            address_balance_amount: 1000,
+            address_balance_gas_probability: 0.2,
+            metrics: Some(metrics.clone()),
+            ..Default::default()
+        }
+        .with_probability(SharedCounterIncrement::FLAG, 0.2)
+        .with_probability(SharedCounterRead::FLAG, 0.1)
+        .with_probability(RandomnessRead::FLAG, 0.1)
+        .with_probability(AddressBalanceDeposit::FLAG, 0.1)
+        .with_probability(AddressBalanceWithdraw::FLAG, 0.1)
+        .with_probability(ObjectBalanceDeposit::FLAG, 0.1)
+        .with_probability(ObjectBalanceWithdraw::FLAG, 0.1)
+        .with_probability(TestCoinMint::FLAG, 0.1)
+        .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
+        .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
+        .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.2);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            60,
+            SimulatedLoadConfig::composite_only(composite_config),
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+
+        let metrics = metrics.lock().unwrap();
+
+        let metrics_sum = metrics.sum_all();
+
+        info!("metrics: {:#?}", metrics.sum_all());
+
+        // make sure the test did stuff
+        assert!(metrics_sum.signed_and_sent_count > 500);
+        assert!(metrics_sum.success_count > 200);
+        assert!(metrics_sum.permanent_failure_count > 100);
+        assert!(metrics_sum.cancellation_count > 100);
+        assert!(metrics_sum.insufficient_funds_count > 2);
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_composite_workload_shared_randomness() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 10000, 1).await;
+
+        let metrics = Arc::new(Mutex::new(
+            sui_benchmark::workloads::composite::CompositionMetrics::new(),
+        ));
+
+        use sui_benchmark::workloads::composite::*;
+        let composite_config = CompositeWorkloadConfig {
+            num_shared_counters: 1,
+            shared_counter_hotness: 1.0,
+            address_balance_amount: 0,
+            address_balance_gas_probability: 0.0,
+            metrics: Some(metrics.clone()),
+            ..Default::default()
+        }
+        .with_probability(SharedCounterIncrement::FLAG, 0.5)
+        .with_probability(RandomnessRead::FLAG, 0.5);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            60,
+            SimulatedLoadConfig::composite_only(composite_config),
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+
+        let metrics = metrics.lock().unwrap();
+
+        let mut shared_plus_randomness_txns = 0u64;
+        let mut shared_plus_randomness_cancellations = 0u64;
+
+        for (op_set, stats) in metrics.iter_stats() {
+            let has_shared_mutation = op_set.contains(SharedCounterIncrement::FLAG);
+            let has_randomness = op_set.contains(RandomnessRead::FLAG);
+
+            if has_shared_mutation && has_randomness {
+                shared_plus_randomness_txns +=
+                    stats.success_count + stats.abort_count + stats.cancellation_count;
+                shared_plus_randomness_cancellations += stats.cancellation_count;
+            }
+        }
+
+        assert!(shared_plus_randomness_txns > 0);
+        assert!(shared_plus_randomness_cancellations > 0);
     }
 }

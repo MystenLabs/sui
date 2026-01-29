@@ -1,20 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use tap::Pipe;
-use tonic::metadata::MetadataMap;
-
+use bytes::Bytes;
+use futures::stream::Stream;
+use futures::stream::TryStreamExt;
 use prost_types::FieldMask;
+use std::time::Duration;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::TryFromProtoError;
-use sui_rpc::proto::sui::rpc::v2 as proto;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_rpc::proto::sui::rpc::v2::{self as proto, GetServiceInfoRequest};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::digests::ChainIdentifier;
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::full_checkpoint_content::ObjectSet;
+use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+use tap::Pipe;
+use tonic::Status;
+use tonic::metadata::MetadataMap;
 
 pub use sui_rpc::client::HeadersInterceptor;
 pub use sui_rpc::client::ResponseExt;
@@ -22,7 +28,10 @@ pub use sui_rpc::client::ResponseExt;
 pub type Result<T, E = tonic::Status> = std::result::Result<T, E>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-use tonic::Status;
+pub struct Page<T> {
+    pub items: Vec<T>,
+    pub next_page_token: Option<Bytes>,
+}
 
 #[derive(Clone)]
 pub struct Client(sui_rpc::Client);
@@ -78,9 +87,9 @@ impl Client {
     pub async fn get_full_checkpoint(
         &mut self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<CheckpointData> {
+    ) -> Result<Checkpoint> {
         let request = proto::GetCheckpointRequest::by_sequence_number(sequence_number)
-            .with_read_mask(checkpoint_data_field_mask());
+            .with_read_mask(Checkpoint::proto_field_mask());
 
         let (metadata, response, _extentions) = self
             .0
@@ -94,7 +103,6 @@ impl Client {
             .checkpoint
             .ok_or_else(|| tonic::Status::not_found("no checkpoint returned"))?;
         sui_types::full_checkpoint_content::Checkpoint::try_from(&checkpoint)
-            .map(Into::into)
             .map_err(|e| status_from_error_with_metadata(e, metadata))
     }
 
@@ -136,7 +144,43 @@ impl Client {
     pub async fn execute_transaction(
         &mut self,
         transaction: &Transaction,
-    ) -> Result<TransactionExecutionResponse> {
+    ) -> Result<ExecutedTransaction> {
+        let request = Self::create_executed_transaction_request(transaction)?;
+
+        let (metadata, response, _extentions) = self
+            .0
+            .execution_client()
+            .execute_transaction(request)
+            .await?
+            .into_parts();
+
+        execute_transaction_response_try_from_proto(&response)
+            .map_err(|e| status_from_error_with_metadata(e, metadata))
+    }
+
+    pub async fn execute_transaction_and_wait_for_checkpoint(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<ExecutedTransaction> {
+        const WAIT_FOR_CHECKPOINT_TIMEOUT: Duration = Duration::from_secs(30);
+
+        let request = Self::create_executed_transaction_request(transaction)?;
+
+        let (metadata, response, _extentions) = self
+            .0
+            .clone()
+            .execute_transaction_and_wait_for_checkpoint(request, WAIT_FOR_CHECKPOINT_TIMEOUT)
+            .await
+            .map_err(|e| Status::from_error(e.into()))?
+            .into_parts();
+
+        execute_transaction_response_try_from_proto(&response)
+            .map_err(|e| status_from_error_with_metadata(e, metadata))
+    }
+
+    fn create_executed_transaction_request(
+        transaction: &Transaction,
+    ) -> Result<proto::ExecuteTransactionRequest> {
         let signatures = transaction
             .inner()
             .tx_signatures
@@ -157,46 +201,258 @@ impl Client {
             tx
         })
         .with_signatures(signatures)
-        .with_read_mask(FieldMask::from_paths([
-            "effects.bcs",
-            "events.bcs",
-            "balance_changes",
-            "objects.objects.bcs",
-        ]));
+        .with_read_mask(ExecutedTransaction::proto_read_mask());
 
-        let (metadata, response, _extentions) = self
+        Ok(request)
+    }
+
+    pub async fn get_transaction(
+        &mut self,
+        digest: &TransactionDigest,
+    ) -> Result<ExecutedTransaction> {
+        let request = proto::GetTransactionRequest::new(&(*digest).into())
+            .with_read_mask(ExecutedTransaction::proto_read_mask());
+
+        let (metadata, resp, _extentions) = self
             .0
-            .execution_client()
-            .execute_transaction(request)
+            .ledger_client()
+            .get_transaction(request)
             .await?
             .into_parts();
 
-        execute_transaction_response_try_from_proto(&response)
+        let transaction = resp
+            .transaction
+            .ok_or_else(|| tonic::Status::not_found("no transaction returned"))?;
+        executed_transaction_try_from_proto(&transaction)
             .map_err(|e| status_from_error_with_metadata(e, metadata))
+    }
+
+    pub async fn get_chain_identifier(&self) -> Result<ChainIdentifier> {
+        let response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_service_info(GetServiceInfoRequest::default())
+            .await?
+            .into_inner();
+        let chain_id = response
+            .chain_id()
+            .parse::<sui_sdk_types::Digest>()
+            .map_err(|e| TryFromProtoError::invalid("chain_id", e))
+            .map_err(|e| Status::from_error(e.into()))?;
+
+        Ok(ChainIdentifier::from(
+            sui_types::digests::CheckpointDigest::from(chain_id),
+        ))
+    }
+
+    pub async fn get_owned_objects(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<move_core_types::language_storage::StructTag>,
+        page_size: Option<u32>,
+        page_token: Option<Bytes>,
+    ) -> Result<Page<Object>> {
+        let mut request = proto::ListOwnedObjectsRequest::default()
+            .with_owner(owner.to_string())
+            .with_read_mask(FieldMask::from_paths(["bcs"]));
+        if let Some(object_type) = object_type {
+            request.set_object_type(object_type.to_canonical_string(true));
+        }
+
+        if let Some(page_size) = page_size {
+            request.set_page_size(page_size);
+        }
+
+        if let Some(page_token) = page_token {
+            request.set_page_token(page_token);
+        }
+
+        let (metadata, response, _extentions) = self
+            .0
+            .clone()
+            .state_client()
+            .list_owned_objects(request)
+            .await?
+            .into_parts();
+
+        let objects = response
+            .objects()
+            .iter()
+            .map(object_try_from_proto)
+            .collect::<Result<_, _>>()
+            .map_err(|e| status_from_error_with_metadata(e, metadata))?;
+
+        Ok(Page {
+            items: objects,
+            next_page_token: response.next_page_token,
+        })
+    }
+
+    pub fn list_owned_objects(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<move_core_types::language_storage::StructTag>,
+    ) -> impl Stream<Item = Result<Object>> + 'static {
+        let mut request = proto::ListOwnedObjectsRequest::default()
+            .with_owner(owner.to_string())
+            .with_read_mask(FieldMask::from_paths(["bcs"]));
+
+        if let Some(object_type) = object_type {
+            request.set_object_type(object_type.to_canonical_string(true));
+        }
+
+        self.0
+            .list_owned_objects(request)
+            .and_then(|object| async move {
+                object_try_from_proto(&object).map_err(|e| Status::from_error(e.into()))
+            })
+    }
+
+    pub async fn get_reference_gas_price(&self) -> Result<u64> {
+        let request = proto::GetEpochRequest::default()
+            .with_read_mask(FieldMask::from_paths(["epoch", "reference_gas_price"]));
+
+        let response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        Ok(response.epoch().reference_gas_price())
+    }
+
+    /// Wait for a transaction to be available in the ledger AND indexed (equivalent to WaitForLocalExecution)
+    pub async fn wait_for_transaction(
+        &self,
+        digest: &sui_types::digests::TransactionDigest,
+    ) -> Result<(), anyhow::Error> {
+        const WAIT_FOR_LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
+        const WAIT_FOR_LOCAL_EXECUTION_DELAY: Duration = Duration::from_millis(200);
+        const WAIT_FOR_LOCAL_EXECUTION_INTERVAL: Duration = Duration::from_millis(500);
+
+        let mut client = self.0.clone();
+        let mut client = client.ledger_client();
+
+        tokio::time::timeout(WAIT_FOR_LOCAL_EXECUTION_TIMEOUT, async {
+            // Apply a short delay to give the full node a chance to catch up.
+            tokio::time::sleep(WAIT_FOR_LOCAL_EXECUTION_DELAY).await;
+
+            let mut interval = tokio::time::interval(WAIT_FOR_LOCAL_EXECUTION_INTERVAL);
+            loop {
+                interval.tick().await;
+
+                let request = proto::GetTransactionRequest::default()
+                    .with_digest(digest.to_string())
+                    .with_read_mask(prost_types::FieldMask::from_paths(["digest", "checkpoint"]));
+
+                if let Ok(response) = client.get_transaction(request).await {
+                    let tx = response.into_inner().transaction;
+                    if let Some(executed_tx) = tx {
+                        // Check that transaction is indexed (checkpoint field is populated)
+                        if executed_tx.checkpoint.is_some() {
+                            break;
+                        }
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for transaction indexing: {}", digest))?;
+
+        Ok(())
     }
 }
 
-#[derive(Debug)]
-pub struct TransactionExecutionResponse {
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct ExecutedTransaction {
+    pub transaction: TransactionData,
     pub effects: TransactionEffects,
+    pub clever_error: Option<proto::CleverError>,
     pub events: Option<TransactionEvents>,
+    #[allow(unused)]
+    changed_objects: Vec<proto::ChangedObject>,
+    #[allow(unused)]
+    unchanged_loaded_runtime_objects: Vec<proto::ObjectReference>,
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
-    pub objects: ObjectSet,
+    pub checkpoint: Option<u64>,
+    #[allow(unused)]
+    #[serde(skip)]
+    timestamp: Option<prost_types::Timestamp>,
 }
 
-/// Field mask for checkpoint data requests.
-pub fn checkpoint_data_field_mask() -> FieldMask {
-    FieldMask::from_paths([
-        "sequence_number",
-        "summary.bcs",
-        "signature",
-        "contents.bcs",
-        "transactions.transaction.bcs",
-        "transactions.effects.bcs",
-        "transactions.effects.unchanged_loaded_runtime_objects",
-        "transactions.events.bcs",
-        "objects.objects.bcs",
-    ])
+impl ExecutedTransaction {
+    fn proto_read_mask() -> FieldMask {
+        use proto::ExecutedTransaction;
+        FieldMask::from_paths([
+            ExecutedTransaction::path_builder()
+                .transaction()
+                .bcs()
+                .finish(),
+            ExecutedTransaction::path_builder().effects().bcs().finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .status()
+                .error()
+                .abort()
+                .clever_error()
+                .finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .unchanged_loaded_runtime_objects()
+                .finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .changed_objects()
+                .finish(),
+            ExecutedTransaction::path_builder().events().bcs().finish(),
+            ExecutedTransaction::path_builder()
+                .balance_changes()
+                .finish(),
+            ExecutedTransaction::path_builder().checkpoint(),
+            ExecutedTransaction::path_builder().timestamp(),
+        ])
+    }
+
+    pub fn get_new_package_obj(&self) -> Option<sui_types::base_types::ObjectRef> {
+        use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+
+        self.changed_objects
+            .iter()
+            .find(|o| matches!(o.output_state(), OutputObjectState::PackageWrite))
+            .and_then(|o| {
+                let id = o.object_id().parse().ok()?;
+                let version = o.output_version().into();
+                let digest = o.output_digest().parse().ok()?;
+                Some((id, version, digest))
+            })
+    }
+
+    pub fn get_new_package_upgrade_cap(&self) -> Option<sui_types::base_types::ObjectRef> {
+        use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+        use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
+
+        const UPGRADE_CAP: &str = "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap";
+
+        self.changed_objects
+            .iter()
+            .find(|o| {
+                matches!(o.output_state(), OutputObjectState::ObjectWrite)
+                    && matches!(
+                        o.output_owner().kind(),
+                        OwnerKind::Address | OwnerKind::ConsensusAddress
+                    )
+                    && o.object_type() == UPGRADE_CAP
+            })
+            .and_then(|o| {
+                let id = o.object_id().parse().ok()?;
+                let version = o.output_version().into();
+                let digest = o.output_digest().parse().ok()?;
+                Some((id, version, digest))
+            })
+    }
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
@@ -238,23 +494,41 @@ fn object_try_from_proto(object: &proto::Object) -> Result<Object, TryFromProtoE
         .map_err(|e| TryFromProtoError::invalid("bcs", e))
 }
 
-/// Attempts to parse `TransactionExecutionResponse` from the fields in `TransactionExecutionResponse`
+/// Attempts to parse `ExecutedTransaction` from the fields in `proto::ExecuteTransactionResponse`
 #[allow(clippy::result_large_err)]
 fn execute_transaction_response_try_from_proto(
     response: &proto::ExecuteTransactionResponse,
-) -> Result<TransactionExecutionResponse, TryFromProtoError> {
+) -> Result<ExecutedTransaction, TryFromProtoError> {
     let executed_transaction = response
         .transaction
         .as_ref()
         .ok_or_else(|| TryFromProtoError::missing("transaction"))?;
 
+    executed_transaction_try_from_proto(executed_transaction)
+}
+
+#[allow(clippy::result_large_err)]
+fn executed_transaction_try_from_proto(
+    executed_transaction: &proto::ExecutedTransaction,
+) -> Result<ExecutedTransaction, TryFromProtoError> {
+    let transaction = executed_transaction
+        .transaction()
+        .bcs()
+        .deserialize()
+        .map_err(|e| TryFromProtoError::invalid("transaction.bcs", e))?;
+
     let effects = executed_transaction
-        .effects
-        .as_ref()
-        .and_then(|effects| effects.bcs.as_ref())
-        .ok_or_else(|| TryFromProtoError::missing("effects_bcs"))?
+        .effects()
+        .bcs()
         .deserialize()
         .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?;
+    let clever_error = executed_transaction
+        .effects()
+        .status()
+        .error()
+        .abort()
+        .clever_error_opt()
+        .cloned();
     let events = executed_transaction
         .events
         .as_ref()
@@ -269,16 +543,19 @@ fn execute_transaction_response_try_from_proto(
         .map(TryInto::try_into)
         .collect::<Result<_, _>>()?;
 
-    let objects = executed_transaction
-        .objects()
-        .try_into()
-        .map_err(|e| TryFromProtoError::invalid("objects.bcs", e))?;
-
-    TransactionExecutionResponse {
+    ExecutedTransaction {
+        transaction,
         effects,
+        clever_error,
         events,
         balance_changes,
-        objects,
+        checkpoint: executed_transaction.checkpoint,
+        changed_objects: executed_transaction.effects().changed_objects().to_owned(),
+        unchanged_loaded_runtime_objects: executed_transaction
+            .effects()
+            .unchanged_loaded_runtime_objects()
+            .to_owned(),
+        timestamp: executed_transaction.timestamp,
     }
     .pipe(Ok)
 }

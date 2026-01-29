@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses P0=0x0 P1=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses P0=0x0 P1=0x0 --simulator
 
 //# run-graphql
 {
@@ -18,6 +18,7 @@
 
 fragment S on MoveStruct {
   name
+  fullyQualifiedName
   abilities
   typeParameters {
     constraints
@@ -62,6 +63,7 @@ module P1::M {
 
 fragment S on MoveStruct {
   name
+  fullyQualifiedName
   abilities
   typeParameters {
     constraints
@@ -102,5 +104,6 @@ fragment S on MoveStructConnection {
   }
   nodes {
     name
+    fullyQualifiedName
   }
 }

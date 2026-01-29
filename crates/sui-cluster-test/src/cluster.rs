@@ -3,18 +3,10 @@
 
 use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
-use std::net::SocketAddr;
 use std::path::Path;
 use sui_config::Config;
-use sui_config::local_ip_utils::get_available_port;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
-use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
-use sui_graphql_rpc::test_infra::cluster::start_graphql_server_with_fn_rpc;
-use sui_indexer::test_utils::{
-    start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
-};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_pg_db::temp::TempDb;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -61,7 +53,6 @@ pub trait Cluster {
 
     fn fullnode_url(&self) -> &str;
     fn user_key(&self) -> AccountKeyPair;
-    fn indexer_url(&self) -> &Option<String>;
 
     /// Returns faucet url in a remote cluster.
     fn remote_faucet_url(&self) -> Option<&str>;
@@ -130,10 +121,6 @@ impl Cluster for RemoteRunningCluster {
         &self.fullnode_url
     }
 
-    fn indexer_url(&self) -> &Option<String> {
-        &None
-    }
-
     fn user_key(&self) -> AccountKeyPair {
         get_key_pair().1
     }
@@ -155,26 +142,16 @@ impl Cluster for RemoteRunningCluster {
 pub struct LocalNewCluster {
     test_cluster: TestCluster,
     fullnode_url: String,
-    indexer_url: Option<String>,
     faucet_key: AccountKeyPair,
     config_directory: tempfile::TempDir,
     #[allow(unused)]
     data_ingestion_path: tempfile::TempDir,
-    #[allow(unused)]
-    cancellation_tokens: Vec<tokio_util::sync::DropGuard>,
-    #[allow(unused)]
-    database: Option<TempDb>,
-    graphql_url: Option<String>,
 }
 
 impl LocalNewCluster {
     #[allow(unused)]
     pub fn swarm(&self) -> &Swarm {
         &self.test_cluster.swarm
-    }
-
-    pub fn graphql_url(&self) -> &Option<String> {
-        &self.graphql_url
     }
 }
 
@@ -223,86 +200,20 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
-        // TODO: with TestCluster supporting indexer backed rpc as well, we can remove the indexer related logic here.
-        let mut cancellation_tokens = vec![];
-        let (database, indexer_url, graphql_url) = if options.with_indexer_and_graphql {
-            let database = TempDb::new()?;
-            let pg_address = database.database().url().as_str().to_owned();
-            let indexer_jsonrpc_address = format!("127.0.0.1:{}", get_available_port("127.0.0.1"));
-            let graphql_address = format!("127.0.0.1:{}", get_available_port("127.0.0.1"));
-            let graphql_url = format!("http://{graphql_address}");
-
-            let (_, _, writer_token) = start_indexer_writer_for_testing(
-                pg_address.clone(),
-                None,
-                None,
-                Some(data_ingestion_path.path().to_path_buf()),
-                None, /* cancel */
-                None, /* start_checkpoint */
-                None, /* end_checkpoint */
-            )
-            .await;
-            cancellation_tokens.push(writer_token.drop_guard());
-
-            // Start indexer jsonrpc service
-            let (_, reader_token) = start_indexer_jsonrpc_for_testing(
-                pg_address.clone(),
-                fullnode_url.clone(),
-                indexer_jsonrpc_address.clone(),
-                None, /* cancel */
-            )
-            .await;
-            cancellation_tokens.push(reader_token.drop_guard());
-
-            // Start the graphql service
-            let graphql_address = graphql_address.parse::<SocketAddr>()?;
-            let graphql_connection_config = ConnectionConfig {
-                port: graphql_address.port(),
-                host: graphql_address.ip().to_string(),
-                db_url: pg_address,
-                ..Default::default()
-            };
-
-            start_graphql_server_with_fn_rpc(
-                graphql_connection_config.clone(),
-                Some(fullnode_url.clone()),
-                /* cancellation_token */ None,
-                ServiceConfig::test_defaults(),
-            )
-            .await;
-
-            (
-                Some(database),
-                Some(indexer_jsonrpc_address),
-                Some(graphql_url),
-            )
-        } else {
-            (None, None, None)
-        };
-
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-        // TODO: test connectivity before proceeding?
         Ok(Self {
             test_cluster,
             fullnode_url,
             faucet_key,
             config_directory: tempfile::tempdir()?,
             data_ingestion_path,
-            indexer_url,
-            cancellation_tokens,
-            database,
-            graphql_url,
         })
     }
 
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
-    }
-
-    fn indexer_url(&self) -> &Option<String> {
-        &self.indexer_url
     }
 
     fn user_key(&self) -> AccountKeyPair {
@@ -332,9 +243,6 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     }
     fn fullnode_url(&self) -> &str {
         (**self).fullnode_url()
-    }
-    fn indexer_url(&self) -> &Option<String> {
-        (**self).indexer_url()
     }
 
     fn user_key(&self) -> AccountKeyPair {

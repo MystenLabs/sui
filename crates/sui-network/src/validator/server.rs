@@ -294,7 +294,7 @@ mod test {
             metrics_called: Arc::new(Mutex::new(false)),
         };
 
-        let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+        let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/https".parse().unwrap();
         let config = Config::new();
         let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
 
@@ -370,7 +370,7 @@ mod test {
             metrics_called: Arc::new(Mutex::new(false)),
         };
 
-        let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+        let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/https".parse().unwrap();
         let config = Config::new();
         let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
 
@@ -455,19 +455,19 @@ mod test {
 
     #[tokio::test]
     async fn dns() {
-        let address: Multiaddr = "/dns/localhost/tcp/0/http".parse().unwrap();
+        let address: Multiaddr = "/dns/localhost/tcp/0/https".parse().unwrap();
         test_multiaddr(address).await;
     }
 
     #[tokio::test]
     async fn ip4() {
-        let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+        let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/https".parse().unwrap();
         test_multiaddr(address).await;
     }
 
     #[tokio::test]
     async fn ip6() {
-        let address: Multiaddr = "/ip6/::1/tcp/0/http".parse().unwrap();
+        let address: Multiaddr = "/ip6/::1/tcp/0/https".parse().unwrap();
         test_multiaddr(address).await;
     }
 }

@@ -51,6 +51,7 @@ MSIM_WATCHDOG_TIMEOUT_MS=60000 \
 scripts/simtest/cargo-simtest simtest \
   --color always \
   --test-threads "$NUM_CPUS" \
+  --package consensus-simtests \
   --package sui-core \
   --package sui-e2e-tests \
   --profile simtestnightly \

@@ -558,7 +558,6 @@ mod tests {
 
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
-    use sui_types::type_input::TypeInput;
     use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 
     #[tokio::test]
@@ -570,7 +569,7 @@ mod tests {
             .with_starting_objects(std::slice::from_ref(&shared_object))
             .build()
             .await;
-        let certs = vec![
+        let certs = [
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, true)], 3),
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, false)], 5),
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, true)], 9),
@@ -654,7 +653,7 @@ mod tests {
             .epoch_start_config()
             .randomness_obj_initial_shared_version()
             .unwrap();
-        let certs = vec![
+        let certs = [
             VerifiedExecutableTransaction::new_system(
                 VerifiedTransaction::new_randomness_state_update(
                     epoch_store.epoch(),
@@ -784,7 +783,7 @@ mod tests {
         //   tx3: shared object 1 assign version 4, lamport version = 5
         //   tx4: shared objects assign cancelled version, lamport version = 10 due to gas object version = 9
         //   tx5: shared objects assign cancelled version, lamport version = 12 due to gas object version = 11
-        let certs = vec![
+        let certs = [
             generate_shared_objs_tx_with_gas_version(
                 &[
                     (id1, init_shared_version_1, true),
@@ -940,13 +939,13 @@ mod tests {
             .with_starting_objects(std::slice::from_ref(&shared_object))
             .build()
             .await;
-        let certs = vec![
+        let certs = [
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, true)], 3),
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, false)], 5),
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, true)], 9),
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, true)], 11),
         ];
-        let effects = vec![
+        let effects = [
             TestEffectsBuilder::new(certs[0].data()).build(),
             TestEffectsBuilder::new(certs[1].data())
                 .with_shared_input_versions(BTreeMap::from([(id, SequenceNumber::from_u64(4))]))
@@ -1090,7 +1089,7 @@ mod tests {
                 ptb_builder
                     .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
                         200,
-                        TypeInput::from(GAS::type_tag()),
+                        GAS::type_tag(),
                     ))
                     .unwrap();
                 tx_builder.build()
@@ -1135,7 +1134,7 @@ mod tests {
                 ptb_builder
                     .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
                         200,
-                        TypeInput::from(GAS::type_tag()),
+                        GAS::type_tag(),
                     ))
                     .unwrap();
                 tx_builder.build()

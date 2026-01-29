@@ -3,12 +3,17 @@
 
 use std::sync::Arc;
 
-use prometheus::{
-    Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry,
-};
+use prometheus::Histogram;
+use prometheus::IntCounter;
+use prometheus::IntCounterVec;
+use prometheus::IntGauge;
+use prometheus::IntGaugeVec;
+use prometheus::Registry;
+use prometheus::register_histogram_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
+use prometheus::register_int_counter_with_registry;
+use prometheus::register_int_gauge_vec_with_registry;
+use prometheus::register_int_gauge_with_registry;
 
 /// Histogram buckets for the distribution of latency (time between receiving a request and sending
 /// a response).
@@ -44,8 +49,10 @@ pub struct RpcMetrics {
     pub query_latency: Histogram,
     pub queries_received: IntCounter,
     pub queries_succeeded: IntCounter,
-    pub queries_failed: IntCounterVec,
+    pub queries_failed: IntCounter,
+    pub query_errors: IntCounterVec,
     pub queries_cancelled: IntCounter,
+    pub queries_panicked: IntCounter,
     pub queries_in_flight: IntGauge,
 
     pub limits_validation_latency: Histogram,
@@ -146,9 +153,15 @@ impl RpcMetrics {
             )
             .unwrap(),
 
-            queries_failed: register_int_counter_vec_with_registry!(
+            queries_failed: register_int_counter_with_registry!(
                 "graphql_queries_failed",
-                "Number of read requests that have completed with at least one error",
+                "Number of read requests that have failed with an error",
+                registry,
+            ).unwrap(),
+
+            query_errors: register_int_counter_vec_with_registry!(
+                "graphql_query_errors",
+                "Count of graphql query failures by error code",
                 &["code"],
                 registry,
             )
@@ -157,6 +170,13 @@ impl RpcMetrics {
             queries_cancelled: register_int_counter_with_registry!(
                 "graphql_queries_cancelled",
                 "Number of read requests that were cancelled before completion",
+                registry,
+            )
+            .unwrap(),
+
+            queries_panicked: register_int_counter_with_registry!(
+                "graphql_queries_panicked",
+                "Number of read requests that panicked during processing",
                 registry,
             )
             .unwrap(),

@@ -10,7 +10,8 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_types::signature::GenericSignature;
-use sui_types::transaction::{Transaction, TransactionData};
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
 use tracing::instrument;
 
@@ -96,8 +97,8 @@ impl FullnodeClient {
         })
         .with_signatures(signatures)
         .with_read_mask(FieldMask::from_paths([
-            "effects.bcs",
-            "effects.lamport_version",
+            "effects",
+            "transaction",
             "events.bcs",
             "balance_changes",
             "objects.objects.bcs",
@@ -113,23 +114,36 @@ impl FullnodeClient {
 
     /// Simulate a transaction on the Sui network via gRPC.
     /// Note: Simulation does not require signatures since the transaction is not committed to the blockchain.
+    ///
+    /// - `checks_enabled`: If true, enables transaction validation checks during simulation. Defaults to true.
+    /// - `do_gas_selection`: If true, enables automatic gas coin selection and budget estimation. Defaults to false.
     #[instrument(skip(self, transaction), level = "debug")]
     pub async fn simulate_transaction(
         &self,
         transaction: proto::Transaction,
+        checks_enabled: bool,
+        do_gas_selection: bool,
     ) -> Result<proto::SimulateTransactionResponse, Error> {
-        // No signatures needed for simulation
-        let mut request = proto::SimulateTransactionRequest::default();
-        request.transaction = Some(transaction);
-        request.read_mask = Some(FieldMask::from_paths([
-            "transaction.effects.bcs",
-            "transaction.effects.lamport_version",
-            "transaction.events.bcs",
-            "transaction.balance_changes",
-            "transaction.objects.objects.bcs",
-            "transaction.transaction.bcs",
-            "command_outputs",
-        ]));
+        use proto::simulate_transaction_request::TransactionChecks;
+
+        let checks = if checks_enabled {
+            TransactionChecks::Enabled
+        } else {
+            TransactionChecks::Disabled
+        };
+
+        let request = proto::SimulateTransactionRequest::new(transaction)
+            .with_read_mask(FieldMask::from_paths([
+                "transaction.effects",
+                "transaction.transaction",
+                "transaction.events.bcs",
+                "transaction.balance_changes",
+                "transaction.objects.objects.bcs",
+                "transaction.transaction.bcs",
+                "command_outputs",
+            ]))
+            .with_checks(checks)
+            .with_do_gas_selection(do_gas_selection);
 
         self.request(
             "simulate_transaction",

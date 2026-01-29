@@ -12,7 +12,7 @@ Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 0,
-      "digest": "357p4BZ78NHsVBJaphx25niqgcSy13fpwDdXDaQNKZr9",
+      "digest": "9ZKWB9QuscTRoaHBeV9Zd9DFFQc2KhcGpRUyZhTSfveD",
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
@@ -24,7 +24,7 @@ Response: {
           {
             "cursor": "MA==",
             "node": {
-              "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+              "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
               "sender": null
             }
           }
@@ -86,13 +86,13 @@ task 9, line 49:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 10, lines 51-66:
+task 10, lines 51-75:
 //# run-graphql
 Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 1,
-      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
@@ -104,7 +104,7 @@ Response: {
           {
             "cursor": "MQ==",
             "node": {
-              "digest": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
+              "digest": "J6iVd9qP3eojDsLsxXwvkssRe3N7M1oUZNbscmNwvp4b",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -113,7 +113,7 @@ Response: {
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "y67xoUfKZCTcSd8jfjv6c5ijXCNBmgLmA2t5iqKW4xM",
+              "digest": "3pbP38TetVcFiXaFwPtQHAX86j3GycTsktavdPxKeb3h",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -122,7 +122,7 @@ Response: {
           {
             "cursor": "Mw==",
             "node": {
-              "digest": "5p4kXkBEgZCpj1XTmfzz6KRhWZ6DRjf5DcD9hTg4YUYy",
+              "digest": "6pLRkvz5aKhs4R3heMPNg6HFN17Ujw1CBwvc6fHy66BU",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -131,7 +131,7 @@ Response: {
           {
             "cursor": "NA==",
             "node": {
-              "digest": "HjDMuwdowb7MZH6FeKAusxr1o3cusmK9n4oVcioZLVrH",
+              "digest": "NkZ3De14nDiWinjmboEQyFqo4fgbG9NJ8t5BTv748nL",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -140,10 +140,72 @@ Response: {
           {
             "cursor": "NQ==",
             "node": {
-              "digest": "5PrgQrQuNzy4uVD4km6ybJ5pMKURTn3HjdtoA2c5NJBU",
+              "digest": "7haBSoW7wEi7TP2iaNiiiRHPo6bUXSLoJDf62TvLUKsv",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
+            }
+          }
+        ]
+      },
+      "allTransactions": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": false,
+          "startCursor": "MQ==",
+          "endCursor": "Ng=="
+        },
+        "edges": [
+          {
+            "cursor": "MQ==",
+            "node": {
+              "digest": "J6iVd9qP3eojDsLsxXwvkssRe3N7M1oUZNbscmNwvp4b",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "Mg==",
+            "node": {
+              "digest": "3pbP38TetVcFiXaFwPtQHAX86j3GycTsktavdPxKeb3h",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "Mw==",
+            "node": {
+              "digest": "6pLRkvz5aKhs4R3heMPNg6HFN17Ujw1CBwvc6fHy66BU",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "NA==",
+            "node": {
+              "digest": "NkZ3De14nDiWinjmboEQyFqo4fgbG9NJ8t5BTv748nL",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "NQ==",
+            "node": {
+              "digest": "7haBSoW7wEi7TP2iaNiiiRHPo6bUXSLoJDf62TvLUKsv",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "Ng==",
+            "node": {
+              "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
+              "sender": null
             }
           }
         ]
@@ -152,13 +214,13 @@ Response: {
   }
 }
 
-task 11, lines 68-83:
+task 11, lines 77-92:
 //# run-graphql --cursors 1
 Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 1,
-      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
@@ -182,13 +244,13 @@ Response: {
   }
 }
 
-task 12, lines 85-100:
+task 12, lines 94-109:
 //# run-graphql --cursors 1 5
 Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 1,
-      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
@@ -200,7 +262,7 @@ Response: {
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "y67xoUfKZCTcSd8jfjv6c5ijXCNBmgLmA2t5iqKW4xM",
+              "digest": "3pbP38TetVcFiXaFwPtQHAX86j3GycTsktavdPxKeb3h",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -209,7 +271,7 @@ Response: {
           {
             "cursor": "Mw==",
             "node": {
-              "digest": "5p4kXkBEgZCpj1XTmfzz6KRhWZ6DRjf5DcD9hTg4YUYy",
+              "digest": "6pLRkvz5aKhs4R3heMPNg6HFN17Ujw1CBwvc6fHy66BU",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -221,13 +283,13 @@ Response: {
   }
 }
 
-task 13, lines 102-117:
+task 13, lines 111-126:
 //# run-graphql --cursors 1 5
 Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 1,
-      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
@@ -239,7 +301,7 @@ Response: {
           {
             "cursor": "Mw==",
             "node": {
-              "digest": "5p4kXkBEgZCpj1XTmfzz6KRhWZ6DRjf5DcD9hTg4YUYy",
+              "digest": "6pLRkvz5aKhs4R3heMPNg6HFN17Ujw1CBwvc6fHy66BU",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -248,7 +310,7 @@ Response: {
           {
             "cursor": "NA==",
             "node": {
-              "digest": "HjDMuwdowb7MZH6FeKAusxr1o3cusmK9n4oVcioZLVrH",
+              "digest": "NkZ3De14nDiWinjmboEQyFqo4fgbG9NJ8t5BTv748nL",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -260,13 +322,13 @@ Response: {
   }
 }
 
-task 14, lines 119-134:
+task 14, lines 128-143:
 //# run-graphql --cursors 3
 Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 1,
-      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
@@ -278,7 +340,7 @@ Response: {
           {
             "cursor": "MQ==",
             "node": {
-              "digest": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
+              "digest": "J6iVd9qP3eojDsLsxXwvkssRe3N7M1oUZNbscmNwvp4b",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -287,7 +349,7 @@ Response: {
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "y67xoUfKZCTcSd8jfjv6c5ijXCNBmgLmA2t5iqKW4xM",
+              "digest": "3pbP38TetVcFiXaFwPtQHAX86j3GycTsktavdPxKeb3h",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -299,13 +361,13 @@ Response: {
   }
 }
 
-task 15, lines 136-151:
-//# run-graphql --cursors 5
+task 15, lines 145-160:
+//# run-graphql --cursors 6
 Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 1,
-      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
@@ -319,7 +381,7 @@ Response: {
   }
 }
 
-task 16, lines 153-168:
+task 16, lines 162-177:
 //# run-graphql
 Response: {
   "data": {

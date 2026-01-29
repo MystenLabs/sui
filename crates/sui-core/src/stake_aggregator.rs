@@ -113,6 +113,7 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
         self.total_votes >= self.committee.threshold::<STRENGTH>()
     }
 
+    #[cfg(test)]
     pub fn validator_sig_count(&self) -> usize {
         self.data.len()
     }
@@ -237,10 +238,6 @@ impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH> {
         }
     }
 
-    pub fn unique_key_count(&self) -> usize {
-        self.stake_maps.len()
-    }
-
     pub fn total_votes(&self) -> StakeUnit {
         let mut voted_authorities = HashSet::new();
         self.stake_maps.values().for_each(|(_, stake_aggregator)| {
@@ -252,6 +249,11 @@ impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH> {
             .iter()
             .map(|k| self.committee.weight(k))
             .sum()
+    }
+
+    #[cfg(test)]
+    pub fn unique_key_count(&self) -> usize {
+        self.stake_maps.len()
     }
 }
 

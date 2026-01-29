@@ -7,4 +7,4 @@ expression: "strands(\"{b'foo' | b'bar\\nbaz' | b'qux\\\\'quux' | b'quy\\\\\\\\q
 | x'7175782771757578'
 | x'7175795c71757a'
 | x'78797a7a79'
-}
+}@0

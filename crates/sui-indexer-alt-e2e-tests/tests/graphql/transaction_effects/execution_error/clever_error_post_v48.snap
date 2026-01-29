@@ -32,10 +32,10 @@ task 5, lines 37-65:
 Response: {
   "data": {
     "originalPackage": {
-      "address": "0x68349aa7d30708d4eebb096543f96673012cb82b3584a6671038bd30d32a83a6"
+      "address": "0x491b027e18cb7a511fbf349789ad0c8b08b8696285e47962033b0cd33cd10f0f"
     },
     "upgradedPackage": {
-      "address": "0xe31589945850a4ba7416dd0e300a3c7e2b36cd25f5e113895e8ea3cb772e209c"
+      "address": "0x875d46704de500c8953e182916922602b76000758d181a3781742e6b6e611ad6"
     },
     "cleverErrorPostV48": {
       "executionError": {
@@ -44,11 +44,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": "ENewError",
         "constant": "New error in v2",
-        "message": "Error in 1st command, from '0xe31589945850a4ba7416dd0e300a3c7e2b36cd25f5e113895e8ea3cb772e209c::clever_error_post_v48::test_new_error' (line 26), abort 'ENewError': New error in v2",
+        "message": "Error in 1st command, from '0x875d46704de500c8953e182916922602b76000758d181a3781742e6b6e611ad6::clever_error_post_v48::test_new_error' (line 26), abort 'ENewError': New error in v2",
         "module": {
           "name": "clever_error_post_v48",
           "package": {
-            "address": "0xe31589945850a4ba7416dd0e300a3c7e2b36cd25f5e113895e8ea3cb772e209c"
+            "address": "0x875d46704de500c8953e182916922602b76000758d181a3781742e6b6e611ad6"
           }
         },
         "function": {

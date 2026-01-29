@@ -5,7 +5,7 @@ use itertools::Itertools;
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_keys::keystore::AccountKeystore;
-use sui_light_client::mmr::apply_stream_updates;
+use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_light_client::proof::base::{Proof, ProofContents, ProofTarget, ProofVerifier};
 use sui_light_client::proof::committee::extract_new_committee_info;
 use sui_light_client::proof::ocs::{OCSInclusionProof, OCSProof, OCSTarget};
@@ -107,7 +107,7 @@ async fn emit_multiple_test_events(
     sender: SuiAddress,
     start_value: u64,
     count: u64,
-) -> sui_json_rpc_types::SuiTransactionBlockResponse {
+) -> sui_rpc_api::client::ExecutedTransaction {
     let rgp = test_cluster.get_reference_gas_price().await;
     let mut ptb = ProgrammableTransactionBuilder::new();
     let start = ptb.pure(start_value).unwrap();
@@ -141,7 +141,7 @@ async fn emit_large_test_event(
     sender: SuiAddress,
     value: u64,
     size: u64,
-) -> sui_json_rpc_types::SuiTransactionBlockResponse {
+) -> sui_rpc_api::client::ExecutedTransaction {
     let rgp = test_cluster.get_reference_gas_price().await;
     let mut ptb = ProgrammableTransactionBuilder::new();
     let val = ptb.pure(value).unwrap();
@@ -858,15 +858,15 @@ async fn authenticated_events_backfill_test() {
             cfg
         });
 
-    let rpc_config_without_indexing = sui_config::RpcConfig {
+    let rpc_config = sui_config::RpcConfig {
         authenticated_events_indexing: Some(false),
-        enable_indexing: Some(false),
+        enable_indexing: Some(true),
         ..Default::default()
     };
 
     let mut test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(rpc_config_without_indexing)
+        .with_rpc_config(rpc_config)
         .build()
         .await;
 

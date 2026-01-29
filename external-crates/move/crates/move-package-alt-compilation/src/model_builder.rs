@@ -9,7 +9,7 @@ use crate::{
 };
 use move_compiler::shared::{SaveFlag, SaveHook};
 use move_model_2::source_model;
-use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
+use move_package_alt::{MoveFlavor, RootPackage};
 use move_symbol_pool::Symbol;
 use std::io::Write;
 

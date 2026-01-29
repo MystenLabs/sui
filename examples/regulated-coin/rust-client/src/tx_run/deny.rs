@@ -16,7 +16,7 @@ use sui_sdk::types::coin::COIN_MODULE_NAME;
 use sui_sdk::types::crypto::{Signature, SuiKeyPair};
 use sui_sdk::types::object::Owner;
 use sui_sdk::types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_sdk::types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_sdk::types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_sdk::types::transaction::{Command, ObjectArg, Transaction, TransactionData};
 use sui_sdk::types::{
     TypeTag, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,

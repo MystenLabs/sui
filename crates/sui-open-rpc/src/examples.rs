@@ -57,11 +57,11 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::MoveObject;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::transaction::{CallArg, TransactionData};
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, parse_sui_struct_tag};
 
@@ -844,6 +844,7 @@ impl RpcExampleProvider {
             coin_object_count: 15,
             total_balance: 3000000000,
             locked_balance: HashMap::new(),
+            funds_in_address_balance: 42,
         };
         Examples::new(
             "suix_getAllBalances",
@@ -898,6 +899,7 @@ impl RpcExampleProvider {
             coin_object_count: 15,
             total_balance: 15,
             locked_balance: HashMap::new(),
+            funds_in_address_balance: 42,
         };
 
         Examples::new(

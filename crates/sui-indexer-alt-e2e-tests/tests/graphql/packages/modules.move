@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses P=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# publish --upgradeable --sender A
 module P::A { public fun f(): u64 { 42 } }
@@ -57,5 +57,6 @@ fragment M on MoveModuleConnection {
   }
   nodes {
     name
+    fullyQualifiedName
   }
 }

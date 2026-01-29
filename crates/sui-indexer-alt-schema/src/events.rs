@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::{ev_emit_mod, ev_struct_inst};
 use diesel::prelude::*;
 use sui_field_count::FieldCount;
+
+use crate::schema::ev_emit_mod;
+use crate::schema::ev_struct_inst;
 
 #[derive(Insertable, Debug, Clone, Eq, PartialEq, Ord, PartialOrd, FieldCount, Queryable)]
 #[diesel(table_name = ev_emit_mod)]

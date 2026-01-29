@@ -95,6 +95,7 @@ async fn test_consensus_manager() {
                 consensus_handler_initializer,
                 SuiTxValidator::new(
                     state.clone(),
+                    epoch_store.clone(),
                     Arc::new(CheckpointServiceNoop {}),
                     SuiTxValidatorMetrics::new(&Registry::new()),
                 ),

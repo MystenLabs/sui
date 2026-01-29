@@ -87,6 +87,7 @@ mod checked {
         package_store: &dyn BackingPackageStore,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
+        withdrawal_compatibility_inputs: Option<Vec<bool>>,
         pt: ProgrammableTransaction,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
@@ -99,6 +100,7 @@ mod checked {
                 package_store,
                 tx_context,
                 gas_charger,
+                withdrawal_compatibility_inputs,
                 pt,
                 trace_builder_opt,
             );

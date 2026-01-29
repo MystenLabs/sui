@@ -1,10 +1,10 @@
 ---
 title: Coin Flip
-description: Learn Sui through a coin flip dApp that covers the full end-to-end flow of building a Sui Move module and connecting it to a React Sui dApp.
-keywords: [ react app, react dApp, react example, verifiable random functions, vrfs, randomness, shared objects, one-time witness, assets, address-owned objects, events, storage rebates, mev attack protection, mev attacks, example app, example dApp ] 
+description: Learn Sui through a coin flip app that covers the full end-to-end flow of building a Sui Move module and connecting it to a React Sui app.
+keywords: [ react app, react app, react example, verifiable random functions, vrfs, randomness, shared objects, one-time witness, assets, address-owned objects, events, storage rebates, mev attack protection, mev attacks, example app, example app ] 
 ---
 
-This example walks you through building a Coin Flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This Coin Flip dApp utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
+This example walks you through building a Coin Flip app, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui app. This Coin Flip app utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
 
 The guide is split into two parts:
 
@@ -23,11 +23,11 @@ Source code locations for the smart contracts and frontend:
 
 ## What the guide teaches
 
-- **Shared objects:** The guide teaches you how to use [shared objects](/guides/developer/objects/object-ownership/shared), in this case to create a globally accessible `HouseData` object.
-- **One-time witnesses:** The guide teaches you how to use [one-time witnesses](concepts/sui-move-concepts.mdx#one-time-witness) to ensure only a single instance of the `HouseData` object ever exists.
+- **Shared objects:** The guide teaches you how to use [shared objects](/guides/developer/objects/object-ownership/shared.mdx), in this case to create a globally accessible `HouseData` object.
+- **One-time witnesses:** The guide teaches you how to use [one-time witnesses](concepts/sui-move-concepts.mdx) to ensure only a single instance of the `HouseData` object ever exists.
 - **Asserts:** The guide teaches you how to use [asserts](https://move-book.com/move-basics/assert-and-abort.html?highlight=asserts#assert) to abort functions due to certain conditions not being met.
 - **Address-owned objects:** The guide teaches you how to use [address-owned objects](/guides/developer/objects/object-ownership/address-owned) when necessary.
-- **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](../sui-101/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
+- **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](/guides/developer/accessing-data/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
 - **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics.mdx#storage-fund-rewards).
 - **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
 
@@ -677,11 +677,11 @@ In this case, the `PackageID` is `0x4120b39e5d94845aa539d4b830743a7433fd8511bdcf
 
 Well done. You have written and deployed the Move package. 🎉 
 
-To turn this into a complete dApp, you need to [create a frontend](#frontend).
+To turn this into a complete app, you need to [create a frontend](#frontend).
 
 ## Frontend {#frontend}
 
-In this final part of the dApp example, you build a frontend (UI) that allows end users to place bets and take profits, and lets the admin manage the house.
+In this final part of the app example, you build a frontend (UI) that allows end users to place bets and take profits, and lets the admin manage the house.
 
 :::info
 
@@ -705,8 +705,8 @@ To skip building the frontend and test out your newly deployed package, use the 
 :::tip Additional resources
 
 - [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui using TypeScript.
-- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
-- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui dApp.
+- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing an app in the Sui ecosystem with React.js.
+- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui app.
 
 :::
 
@@ -750,7 +750,7 @@ export const HOUSECAP_ID =
 
 ### Exploring the code
 
-The UI interacts with the [Single Player smart contract](guides/developer/app-examples/coin-flip.mdx#game-module) variant of the game. This section walks you through each step in the smart contract flow and the corresponding frontend code.
+The UI interacts with the [Single Player smart contract](guides/developer/app-examples/coin-flip.mdx) variant of the game. This section walks you through each step in the smart contract flow and the corresponding frontend code.
 
 :::info
 
@@ -825,7 +825,7 @@ function App() {
 export default App;
 ```
 
-Like other dApps, you need a "connect wallet" button to enable connecting users' wallets. dApp Kit contains a pre-made `ConnectButton` React component that you can reuse to help users onboard.
+Like other apps, you need a "connect wallet" button to enable connecting users' wallets. dApp Kit contains a pre-made `ConnectButton` React component that you can reuse to help users onboard.
 
 `useCurrentAccount()` is a React hook the dApp Kit also provides to query the current connected wallet; returning `null` if there isn't a wallet connection. Leverage this behavior to prevent a user from proceeding further if they haven't connected their wallet yet.
 
@@ -895,7 +895,7 @@ Okay, that's a good start to have an overview of the project. Time to move to in
   }}
 ```
 
-To use a [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) in Sui, create a `Transaction`. To initiate a Move call, you must know the global identifier of a public function in your smart contract. The global identifier usually takes the following form:
+To use a [programmable transaction block](/guides/developer/transactions/prog-txn-blocks.mdx) (PTB) in Sui, create a `Transaction`. To initiate a Move call, you must know the global identifier of a public function in your smart contract. The global identifier usually takes the following form:
 
 ```
 ${PACKAGE_ID}::${MODULE_NAME}::${FUNCTION_NAME}
@@ -1089,7 +1089,7 @@ One final step remains: settle the game. There are a couple of ways you can use 
 
 :::info
 
-Event subscriptions are deprecated. To learn future-safe methods to work with events, see [Using Events](../sui-101/using-events.mdx).
+Event subscriptions are deprecated. To learn future-safe methods to work with events, see [Using Events](/guides/developer/accessing-data/using-events.mdx).
 
 :::
 

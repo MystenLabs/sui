@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --simulator --num-custom-validator-accounts 2
+//# init --protocol-version 108 --accounts A --simulator --num-custom-validator-accounts 2
 
 //# run-graphql
 {
@@ -10,15 +10,21 @@
     validatorSet {
       activeValidators {
         nodes {
-          name
+          ...V
           # todo DVX-1697 populate reportRecords
           reportRecords {
             nodes {
-              name
+              ...V
             }
           }
         }
       }
     }
+  }
+}
+
+fragment V on Validator {
+  contents {
+    name: format(format: "{metadata.name}")
   }
 }

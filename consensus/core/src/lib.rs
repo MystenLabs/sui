@@ -39,6 +39,7 @@ mod transaction_certifier;
 mod universal_committer;
 
 /// Consensus test utilities.
+mod commit_test_fixture;
 #[cfg(test)]
 mod test_dag;
 mod test_dag_builder;
@@ -75,6 +76,11 @@ pub use test_dag_builder::DagBuilder;
 pub use transaction_certifier::TransactionCertifier;
 
 // Exported API for simtests.
+#[cfg(msim)]
+pub use block::Slot;
+pub use commit_test_fixture::{
+    CommitTestFixture, RandomDag, RandomDagConfig, RandomDagIterator, assert_commit_sequences_match,
+};
 #[cfg(msim)]
 pub use network::tonic_network::to_socket_addr;
 #[cfg(msim)]

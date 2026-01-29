@@ -1,0 +1,214 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E07006]: ambiguous usage of variable
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:33:9
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+33 │     if (test) x = p;
+   │         ^^^^
+   │         │
+   │         Ambiguous usage of variable 'test'
+   │         Try an explicit annotation, e.g. 'move test' or 'copy test'
+   │
+   = Ambiguous inference of 'move' or 'copy' for a borrowed variable's last usage: A 'move' would invalidate the borrowing reference, but a 'copy' might not be the expected implicit behavior since this the last direct usage of the variable.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local value is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'a' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'b' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'c' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'd' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │  
+11 │       let (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) = match (&e) {
+   │ ╭───────────────────────────────────────────────────────────────────────'
+12 │ │         E::BigVariant(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) => {
+13 │ │             (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)
+14 │ │         }
+15 │ │     };
+   │ ╰─────' It is still being borrowed by this reference
+   · │
+35 │       x
+   │       ^ Invalid return. Local variable 'e' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'e' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'f' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'g' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'h' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'i' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'j' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'k' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'l' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'm' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'n' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'o' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'p' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'test' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'x' is still being borrowed.
+
+error[E07004]: invalid return of locally borrowed state
+   ┌─ tests/move_2024/borrows/borrow_owned_enum.move:35:5
+   │
+17 │     x = &y;
+   │         -- It is still being borrowed by this reference
+   ·
+35 │     x
+   │     ^ Invalid return. Local variable 'y' is still being borrowed.

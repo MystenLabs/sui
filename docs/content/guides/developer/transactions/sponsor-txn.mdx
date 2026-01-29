@@ -1,0 +1,185 @@
+---
+title: Sponsored Transactions
+description: Sponsored transactions let you pay gas fees on behalf of another user, reducing onboarding friction for users who don't own SUI.
+keywords: [sponsored transactions, gas station, sponsor a transaction, pay gas for another address, GasData, user onboarding, gas fees]
+---
+
+A transaction on Sui requires a gas payment to execute. The payment is a list of `0x2::coin::Coin<0x2::sui::SUI>` objects.
+
+Sponsored transactions let you pay gas fees on behalf of another user. This reduces onboarding friction because users can execute transactions without owning SUI or understanding gas mechanics. As a sponsor, you provide the gas payment object for the transaction.
+
+## Roles
+
+A sponsored transaction involves three roles:
+
+- **User:** The entity that wants to execute a transaction.
+
+- **Gas station:** The service that provides gas payment objects for user transactions.
+
+- **Sponsor:** The entity that funds the gas station.
+
+The gas station and sponsor are often the same entity. For example, a Web3 gaming company might run its own gas station to offer free-to-play experiences during user acquisition. Alternatively, the company could use a third-party gas station service instead of maintaining its own.
+
+## Data structure
+
+The data structure of a sponsored transaction resembles the following:
+
+```rust
+pub struct SenderSignedTransaction {
+    pub intent_message: IntentMessage<TransactionData>,
+    /// A list of signatures signed by all transaction participants.
+    /// 1. non participant signature must not be present.
+    /// 2. signature order does not matter.
+    pub tx_signatures: Vec<GenericSignature>,
+}
+
+pub struct TransactionDataV1 {  // <-- A variant of `TransactionData`
+    pub kind: TransactionKind,  // <-- This is the actual transaction details
+    pub sender: SuiAddress,
+    pub gas_data: GasData,
+    pub expiration: TransactionExpiration,
+}
+
+pub struct GasData {
+    pub payment: Vec<ObjectRef>,
+    pub owner: SuiAddress,
+    pub price: u64,
+    pub budget: u64,
+}
+```
+
+A few details of note for the preceding code:
+
+- `sender` in `TransactionDataV1` (a variant of `TransactionData`) is the user address.
+
+- `gas_data` in `TransactionDataV1` is the gas payment.
+
+- `GasData` allows a list of gas objects, but the same address must own them, namely the `owner` in `GasData` (the sponsor). When `owner` is equal to `sender`, then it is a regular or non-sponsored transaction.
+
+- `tx_signatures` in `SenderSignedTransaction` is a list of signatures. For a sponsored transaction, the list needs to contain both signatures of the user and the sponsor in some order. The signatures are signed over the entire `TransactionData`, including `GasData`.
+
+To construct a correct sponsored transaction, you must first build a `TransactionData` object. If you are neither the user or the sponsor, you pass the transaction to both parties to sign. If you're the sponsor, you sign the transaction and then pass it and the signature to the other party (in the form of `SenderSignedTransaction`) for them to sign. In practice, the latter is the more common scenario. 
+
+## Create sponsored transactions using a `GasData` object
+
+To use a `GasData` object to sponsor the gas fees for a transaction, create a `GasData` object that covers the fees determined for the transaction. The user doesn't need to know how much the fee is or approve it.
+
+A sponsor transaction using a `GasData` object involves the following steps:
+
+1. The sponsor provides a `GasData` object to a user.
+
+1. The user constructs `TransactionData` and signs it to generate a `Signature`.
+
+1. The user sends the `TransactionData` and the `Signature` to the sponsor.
+
+1. The sponsor confirms the `TransactionData` and then signs it.
+
+1. The sponsor submits the dual-signed `TransactionData` to a full node to execute the transaction.
+
+### `GasLessTransactionData`
+
+`GasLessTransactionData` is `TransactionData` without `GasData`. It is not a `sui-core` data structure; it is only an interface between user and sponsor.
+
+The following example constructs a `GasLessTransactionData`  object:
+
+```rust
+pub struct GasLessTransactionData {
+    pub kind: TransactionKind,
+    sender: SuiAddress,
+    …
+}
+```
+
+### User proposed transaction
+
+You examine the transaction to verify it's within your approved applications before providing gas payment. 
+
+A user-proposed sponsored transaction involves the following steps:
+
+1. A user initializes a `GasLessTransactionData` transaction.
+
+1. The user sends `GasLessTransactionData` to the sponsor.
+
+1. The sponsor validates the transaction, constructs `TransactionData` with gas fees, and then signs `TransactionData`.
+
+1. The sponsor sends the signed `TransactionData` and the sponsor `Signature` back to the user.
+
+1. The user verifies and then signs `TransactionData` and sends the dual-signed transaction to Sui network through a full node or the sponsor.
+
+([swimlane link](https://swimlanes.io/d/wAcnOpA_h))
+
+![](https://static.swimlanes.io/b090340af36c8a4af6c36d4479a4d04f.png)
+
+### Sponsor proposed transaction
+
+You propose a transaction (such as a rewards claim or promotional offer) and the user decides whether to execute it. A sponsor proposed sponsored transaction involves the following steps:
+
+1. A sponsor constructs a `TransactionData` object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a `Signature` before sending it to a user. You can send unsigned `TransactionData` via email, SMS, or an application interface.
+
+1. The user checks the transaction and signs it to generate the second `Signature` for the transaction.
+
+1. The user submits the dual-signed transaction to a Sui full node or sponsor to execute it.
+
+You can use a sponsor proposed transaction as an advertiser, or to incentivize specific user actions without requiring the user to pay for gas fees.
+
+([swimlane link](https://swimlanes.io/#ZZE9T8QwDIb3/ApvLIWBsQMSEh8DEkI6mInb+O6itk4VOxInxH8nqe76AVki+X392G+iXnuq4fYGdmNgCRHeYhiDkIP3iCzYqg9syuGg2WmstWZMDYjG1Ora9YCK8G0gn2LoPLt6rb/kQjXLQuwo1rBL/t65SCKLdkD5dJlWwzNKwS4SfY0+YsFt2I9zuTI/047mEuj67pKthjmlHj13ki+CD6EIA56gIfCslFfRHN8zIOgyoQJkB2G/pyhZsefNLKDAiKeBWDczC7YG++d97EQ5264ExB8YNUUyZtpjbmyP1Hbb+cX7H7g0PqW+fw0uf5KkZvAKLmE/deU4K9Iv))
+
+![](https://static.swimlanes.io/d917884a263c494bb6127102d0f64840.png)
+
+### Wildcard gas payment
+
+You sponsor any valid transaction with few restrictions.
+
+- **Gasless wallets:** You agree to sponsor any valid transaction your users propose.
+
+- **Rewards or discounts:** You offer a wildcard gas payment that executes any transaction within the budget.
+
+([swimlane link](https://static.swimlanes.io/ee3962b3ac3cc5d34f317cecdde125b0.png))
+
+![](https://static.swimlanes.io/ee3962b3ac3cc5d34f317cecdde125b0.png)
+
+## Example API endpoints
+
+```rust
+// User-initiated: receive GaslessTransaction, return signed TransactionData
+pub fn request_gas_and_signature(gasless_tx: GaslessTransaction) -> Result<SenderSignedData, Error>;
+
+// Wildcard: return a GasData object for the user
+pub fn request_gas(/* requirements */) -> Result<GasData, Error>;
+
+// Submit a single-signed transaction, sponsor signs and executes
+pub fn submit_sole_signed_transaction(sole_signed_data: SenderSignedData) -> Result<(Transaction, CertifiedTransactionEffects), Error>;
+
+// Submit a dual-signed transaction for execution
+pub fn submit_dual_signed_transaction(dual_signed_data: SenderSignedData) -> Result<(Transaction, CertifiedTransactionEffects), Error>;
+```
+
+## Risk considerations
+
+Sponsored transactions involve multiple parties, which introduces additional risks.
+
+### Client equivocation
+
+Client equivocation occurs when multiple valid transactions that share at least one owned object (such as a gas coin) at the same version are submitted to the network simultaneously.
+
+When a transaction is submitted, validators lock the owned objects at their current versions. Each validator accepts only one transaction per object version and rejects the others. Because validators might receive competing transactions in different orders, they might accept different transactions. If no single transaction receives acceptance from at least two-thirds of validators, the owned objects remain locked until the end of the epoch.
+
+Client equivocation is rare and usually results from buggy client software. However, sponsored transactions introduce counterparty risks:
+
+- A malicious user could lock the gas station's gas coin by submitting a competing transaction that uses an owned object from the gas station's signed transaction.
+
+- A malicious gas station could similarly lock user-owned objects.
+
+To mitigate these risks:
+
+- Gas stations should monitor user behavior and flag anomalies.
+
+- Both users and sponsors should consider the reputation of their counterparty.
+
+- Both parties must sign the entire `TransactionData`, including `GasData`. This prevents a third party (such as a malicious full node) from intercepting partially signed data and causing equivocation.
+
+### Censorship
+
+If you submit a dual-signed transaction through the sponsor or gas station rather than directly to a full node, the sponsor might delay or withhold the transaction from the network.
+
+To avoid this risk, submit transactions directly to a full node.

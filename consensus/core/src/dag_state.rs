@@ -312,11 +312,18 @@ impl DagState {
         // Ensure we don't write multiple blocks per slot for our own index
         if block_ref.author == self.context.own_index {
             let existing_blocks = self.get_uncommitted_blocks_at_slot(block_ref.into());
-            assert!(
-                existing_blocks.is_empty(),
-                "Block Rejected! Attempted to add block {block:#?} to own slot where \
-                block(s) {existing_blocks:#?} already exists."
-            );
+            if !self
+                .context
+                .parameters
+                .internal
+                .skip_equivocation_validation
+            {
+                assert!(
+                    existing_blocks.is_empty(),
+                    "Block Rejected! Attempted to add block {block:#?} to own slot where \
+                    block(s) {existing_blocks:#?} already exists."
+                );
+            }
         }
         self.update_block_metadata(&block);
         self.blocks_to_write.push(block);
@@ -1396,7 +1403,7 @@ mod test {
             .collect();
 
         // Round 11 blocks.
-        let round_11 = vec![
+        let round_11 = [
             // This will connect to round 12.
             VerifiedBlock::new_for_test(
                 TestBlock::new(11, 0)
@@ -1448,7 +1455,7 @@ mod test {
             round_11[1].reference(),
             round_11[5].reference(),
         ];
-        let round_12 = vec![
+        let round_12 = [
             VerifiedBlock::new_for_test(
                 TestBlock::new(12, 0)
                     .set_timestamp_ms(1200)
@@ -1476,7 +1483,7 @@ mod test {
             round_12[2].reference(),
             round_11[2].reference(),
         ];
-        let round_13 = vec![
+        let round_13 = [
             VerifiedBlock::new_for_test(
                 TestBlock::new(12, 1)
                     .set_timestamp_ms(1300)

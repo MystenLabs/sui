@@ -20,6 +20,7 @@ sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-object-store.workspace = true
 sui-rpc.workspace = true
 sui-types.workspace = true
+sui-storage.workspace = true
 sui-indexer-alt-metrics.workspace = true
 prost.workspace = true
 serde.workspace = true

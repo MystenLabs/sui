@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_test_utils::certify_shared_obj_transaction_no_execution;
+use crate::authority::authority_test_utils::submit_to_consensus;
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::consensus_test_utils;
@@ -26,7 +26,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::effects::{InputConsensusObject, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::ConsensusTransaction;
-use sui_types::transaction::{CertifiedTransaction, VerifiedTransaction};
+use sui_types::transaction::VerifiedTransaction;
 use sui_types::transaction::{ObjectArg, SharedObjectMutability};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
@@ -306,24 +306,9 @@ async fn test_congestion_control_execution_cancellation() {
     .await
     .unwrap();
 
-    let verified_tx_2 = VerifiedTransaction::new_unchecked(congested_tx.clone());
-
-    let epoch_store_2 = authority_state_2.load_epoch_store_one_call_per_task();
-    let response = authority_state_2
-        .handle_transaction(&epoch_store_2, verified_tx_2.clone())
-        .await
-        .unwrap();
-    let vote = response.status.into_signed_for_testing();
-
-    let committee = authority_state.clone_committee_for_testing();
-    let cert = CertifiedTransaction::new(verified_tx_2.into_message(), vec![vote], &committee)
-        .unwrap()
-        .try_into_verified_for_testing(&committee, &Default::default())
-        .unwrap();
-
-    let consensus_transactions = vec![ConsensusTransaction::new_certificate_message(
+    let consensus_transactions = vec![ConsensusTransaction::new_user_transaction_message(
         &authority_state.name,
-        cert.clone().into(),
+        congested_tx.clone(),
     )];
     let commit = TestConsensusCommit::new(consensus_transactions, 1, 0, 0);
 
@@ -352,17 +337,23 @@ async fn test_congestion_control_execution_cancellation() {
     );
 
     // Now execute the cancelled transaction to get the effects
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+    let executable = VerifiedExecutableTransaction::new_from_consensus(
+        VerifiedTransaction::new_unchecked(congested_tx.clone()),
+        epoch_store.epoch(),
+    );
+
     // Find the assigned versions for our specific transaction
-    let cert_key = cert.key();
+    let tx_key = executable.key();
     let assigned_versions = assigned_tx_and_versions
         .into_map()
-        .get(&cert_key)
+        .get(&tx_key)
         .expect("Transaction should have assigned versions")
         .clone();
 
     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     let (effects, execution_error) = authority_state
-        .try_execute_for_test(&cert, execution_env)
+        .try_execute_executable_for_test(&executable, execution_env)
         .await;
 
     // Transaction should be cancelled with `shared_object_1` as the congested object.
@@ -385,13 +376,13 @@ async fn test_congestion_control_execution_cancellation() {
     );
 
     // Run the same transaction in `authority_state_2`, but using the above effects for the execution.
-    let (cert, _) = certify_shared_obj_transaction_no_execution(&authority_state_2, congested_tx)
+    let (executable, _) = submit_to_consensus(&authority_state_2, congested_tx)
         .await
         .unwrap();
     let assigned_versions = authority_state_2
         .epoch_store_for_testing()
         .acquire_shared_version_assignments_from_effects(
-            &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
+            &executable,
             effects,
             None,
             authority_state_2.get_object_cache_reader().as_ref(),
@@ -399,7 +390,7 @@ async fn test_congestion_control_execution_cancellation() {
         .unwrap();
     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     let (effects_2, execution_error) = authority_state_2
-        .try_execute_for_test(&cert, execution_env)
+        .try_execute_executable_for_test(&executable, execution_env)
         .await;
 
     // Should result in the same cancellation.

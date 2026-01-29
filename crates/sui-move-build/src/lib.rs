@@ -5,7 +5,6 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
     path::Path,
-    str::FromStr,
 };
 
 use fastcrypto::encoding::Base64;
@@ -26,12 +25,7 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
 };
-use move_package_alt::{
-    compatibility::{legacy_parser::LegacyPackageMetadata, parse_legacy_package_info},
-    flavor::MoveFlavor,
-    package::RootPackage,
-    schema::Environment,
-};
+use move_package_alt::{MoveFlavor, RootPackage, schema::Environment};
 use move_package_alt_compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_package_alt_compilation::{
     build_config::BuildConfig as MoveBuildConfig, build_plan::BuildPlan,
@@ -105,7 +99,6 @@ impl BuildConfig {
         let install_dir = mysten_common::tempdir().unwrap().keep();
         let config = MoveBuildConfig {
             default_flavor: Some(move_compiler::editions::Flavor::Sui),
-            lock_file: Some(install_dir.join("Move.lock")),
             install_dir: Some(install_dir),
             silence_warnings: true,
             lint_flag: move_package_alt_compilation::lint_flag::LintFlag::LEVEL_NONE,
@@ -186,12 +179,11 @@ impl BuildConfig {
     }
 
     pub async fn build_async(self, path: &Path) -> anyhow::Result<CompiledPackage> {
-        let mut root_pkg = RootPackage::<SuiFlavor>::load(
-            path.to_path_buf(),
-            self.environment.clone(),
-            self.config.mode_set(),
-        )
-        .await?;
+        let mut root_pkg = self
+            .config
+            .package_loader(path, &self.environment)
+            .load()
+            .await?;
 
         self.internal_build(&mut root_pkg)
     }
@@ -207,11 +199,10 @@ impl BuildConfig {
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: &Path) -> anyhow::Result<CompiledPackage> {
         // we need to block here to compile the package, which requires to fetch dependencies
-        let mut root_pkg = RootPackage::<SuiFlavor>::load_sync(
-            path.to_path_buf(),
-            self.environment.clone(),
-            self.config.mode_set(),
-        )?;
+        let mut root_pkg = self
+            .config
+            .package_loader(path, &self.environment)
+            .load_sync()?;
 
         self.internal_build(&mut root_pkg)
     }
@@ -633,20 +624,4 @@ impl PackageDependencies {
             conflicting: BTreeMap::new(),
         })
     }
-}
-
-pub fn parse_legacy_pkg_info(package_path: &Path) -> Result<LegacyPackageMetadata, anyhow::Error> {
-    parse_legacy_package_info(package_path)
-}
-
-pub fn published_at_property(package_path: &Path) -> Result<ObjectID, PublishedAtError> {
-    let parsed_manifest =
-        parse_legacy_package_info(package_path).expect("should read the manifest");
-
-    let Some(value) = parsed_manifest.published_at else {
-        return Err(PublishedAtError::NotPresent);
-    };
-
-    ObjectID::from_str(value.as_str())
-        .map_err(|_| PublishedAtError::Invalid(value.as_str().to_owned()))
 }

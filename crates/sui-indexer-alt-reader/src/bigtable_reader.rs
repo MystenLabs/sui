@@ -5,14 +5,18 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::time::Duration;
 
-use anyhow::{Context, bail};
+use anyhow::Context;
+use anyhow::bail;
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
-use sui_kvstore::{
-    BigTableClient, Checkpoint, KeyValueStoreReader, TransactionData, TransactionEventsData,
-};
+use sui_kvstore::BigTableClient;
+use sui_kvstore::Checkpoint;
+use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::TransactionData;
+use sui_kvstore::TransactionEventsData;
 use sui_types::digests::TransactionDigest;
-use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::warn;

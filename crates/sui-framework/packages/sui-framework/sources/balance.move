@@ -54,7 +54,7 @@ public fun create_supply<T: drop>(_: T): Supply<T> {
 
 /// Increase supply by `value` and create a new `Balance<T>` with this value.
 public fun increase_supply<T>(self: &mut Supply<T>, value: u64): Balance<T> {
-    assert!(value < (18446744073709551615u64 - self.value), EOverflow);
+    assert!(value <= (std::u64::max_value!() - self.value), EOverflow);
     self.value = self.value + value;
     Balance { value }
 }
@@ -112,6 +112,17 @@ public fun redeem_funds<T>(withdrawal: sui::funds_accumulator::Withdrawal<Balanc
 /// Create a `Withdrawal<Balance<T>>` from an object to withdraw funds from it.
 public fun withdraw_funds_from_object<T>(obj: &mut UID, value: u64): Withdrawal<Balance<T>> {
     sui::funds_accumulator::withdraw_from_object(obj, value as u256)
+}
+
+/// Read the value of the funds of type T owned by `address` as of the beginning of
+/// the current consensus commit. Can read either address-owned or object-owned balances.
+public fun settled_funds_value<T>(root: &sui::accumulator::AccumulatorRoot, address: address): u64 {
+    if (!root.u128_exists<Balance<T>>(address)) {
+        return 0
+    };
+    let val: u128 = root.u128_read<Balance<T>>(address);
+    let val = std::u128::min(std::u64::max_value!() as u128, val);
+    val as u64
 }
 
 // === SUI specific operations ===

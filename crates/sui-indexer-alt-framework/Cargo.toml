@@ -21,7 +21,9 @@ diesel_migrations.workspace = true
 futures.workspace = true
 pin-project-lite.workspace = true
 prometheus.workspace = true
-reqwest.workspace = true
+object_store.workspace = true
+serde_json.workspace = true
+rand.workspace = true
 scoped-futures.workspace = true
 serde.workspace = true
 tempfile.workspace = true
@@ -42,12 +44,13 @@ sui-sdk-types.workspace = true
 sui-rpc-api.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
+prost.workspace = true
 prost-types.workspace = true
+zstd.workspace = true
 
 sui-pg-db = { workspace = true, optional = true }
 
 [dev-dependencies]
-rand.workspace = true
 telemetry-subscribers.workspace = true
 wiremock.workspace = true
 sui-pg-db.workspace = true

@@ -2,10 +2,10 @@
 title: Distributed Counter
 description: An app that allows users to create counters that anyone can increment, but only the owner can reset.
 effort: small
-keywords: [ distributed counter, example dApp, example app, react app, react dApp, increment counter, shared objects, programmable transaction blocks ptbs ]
+keywords: [ distributed counter, example app, example app, react app, react app, increment counter, shared objects, programmable transaction blocks ptbs ]
 ---
 
-This example walks you through building a basic distributed counter app, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. The app allows users to create counters that anyone can increment, but only the owner can reset. 
+This example walks you through building a basic distributed counter app, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui app. The app allows users to create counters that anyone can increment, but only the owner can reset. 
 
 The guide is split into two parts:
 
@@ -177,7 +177,7 @@ Store the `PackageID` value you receive in your own response to [connect to your
 
 Well done. You have written and deployed the Move package. 🎉 
 
-To turn this into a complete dApp, you need to [create a frontend](#frontend).
+To turn this into a complete app, you need to [create a frontend](#frontend).
 
 
 ## Frontend {#frontend}
@@ -224,8 +224,8 @@ $ yarn create @mysten/dapp --template react-e2e-counter
 :::tip Additional resources
 
 - [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui using TypeScript.
-- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
-- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui dApp.
+- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing an app in the Sui ecosystem with React.js.
+- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui app.
 
 :::
 
@@ -404,7 +404,7 @@ Set up your `src/App.tsx` file so that you render the `CreateCounter` component 
           }}
         >
           <Box>
-            <Heading>dApp Starter Template</Heading>
+            <Heading>App Starter Template</Heading>
           </Box>
 
           <Box>

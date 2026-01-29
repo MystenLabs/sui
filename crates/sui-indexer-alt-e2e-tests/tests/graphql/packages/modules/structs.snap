@@ -6,7 +6,7 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-33:
+task 1, lines 6-34:
 //# run-graphql
 Response: {
   "data": {
@@ -14,6 +14,7 @@ Response: {
       "coin": {
         "struct": {
           "name": "Coin",
+          "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin",
           "abilities": [
             "STORE",
             "KEY"
@@ -67,6 +68,7 @@ Response: {
       "tx_context": {
         "struct": {
           "name": "TxContext",
+          "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext",
           "abilities": [
             "DROP"
           ],
@@ -126,23 +128,23 @@ Response: {
   }
 }
 
-task 2, lines 35-38:
+task 2, lines 36-39:
 //# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5213600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 40-45:
+task 3, lines 41-46:
 //# upgrade --package P0 --upgrade-capability 2,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6049600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 4, line 47:
+task 4, line 48:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 49-77:
+task 5, lines 50-79:
 //# run-graphql
 Response: {
   "data": {
@@ -155,6 +157,7 @@ Response: {
               "nodes": [
                 {
                   "name": "S",
+                  "fullyQualifiedName": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382::M::S",
                   "abilities": [
                     "COPY",
                     "DROP"
@@ -183,6 +186,7 @@ Response: {
               "nodes": [
                 {
                   "name": "S",
+                  "fullyQualifiedName": "0x56562b20e01282c87ceafc23bb04f80ef51e2b91121c3019eca7b00d8010b634::M::S",
                   "abilities": [
                     "COPY",
                     "DROP"
@@ -202,6 +206,7 @@ Response: {
                 },
                 {
                   "name": "T",
+                  "fullyQualifiedName": "0x56562b20e01282c87ceafc23bb04f80ef51e2b91121c3019eca7b00d8010b634::M::T",
                   "abilities": [],
                   "typeParameters": [
                     {
@@ -224,11 +229,11 @@ Response: {
                     {
                       "name": "s",
                       "type": {
-                        "repr": "0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6::M::S",
+                        "repr": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382::M::S",
                         "signature": {
                           "body": {
                             "datatype": {
-                              "package": "0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6",
+                              "package": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382",
                               "module": "M",
                               "type": "S",
                               "typeParameters": []
@@ -252,23 +257,24 @@ Response: {
                 },
                 {
                   "name": "V",
+                  "fullyQualifiedName": "0x56562b20e01282c87ceafc23bb04f80ef51e2b91121c3019eca7b00d8010b634::M::V",
                   "abilities": [],
                   "typeParameters": [],
                   "fields": [
                     {
                       "name": "t",
                       "type": {
-                        "repr": "0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6::M::T<0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6::M::S>",
+                        "repr": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382::M::T<0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382::M::S>",
                         "signature": {
                           "body": {
                             "datatype": {
-                              "package": "0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6",
+                              "package": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382",
                               "module": "M",
                               "type": "T",
                               "typeParameters": [
                                 {
                                   "datatype": {
-                                    "package": "0x76d80fe27d06a6665b97b75cfa75c8168e12079171197eea9d8f447abc4a0be6",
+                                    "package": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382",
                                     "module": "M",
                                     "type": "S",
                                     "typeParameters": []
@@ -291,7 +297,7 @@ Response: {
   }
 }
 
-task 6, lines 79-106:
+task 6, lines 81-109:
 //# run-graphql --cursors "Coin" "TreasuryCap"
 Response: {
   "data": {
@@ -304,25 +310,32 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Coin"
+              "name": "Coin",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin"
             },
             {
-              "name": "CoinMetadata"
+              "name": "CoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata"
             },
             {
-              "name": "CurrencyCreated"
+              "name": "CurrencyCreated",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CurrencyCreated"
             },
             {
-              "name": "DenyCap"
+              "name": "DenyCap",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCap"
             },
             {
-              "name": "DenyCapV2"
+              "name": "DenyCapV2",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2"
             },
             {
-              "name": "RegulatedCoinMetadata"
+              "name": "RegulatedCoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::RegulatedCoinMetadata"
             },
             {
-              "name": "TreasuryCap"
+              "name": "TreasuryCap",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::TreasuryCap"
             }
           ]
         },
@@ -333,13 +346,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Coin"
+              "name": "Coin",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin"
             },
             {
-              "name": "CoinMetadata"
+              "name": "CoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata"
             },
             {
-              "name": "CurrencyCreated"
+              "name": "CurrencyCreated",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CurrencyCreated"
             }
           ]
         },
@@ -350,13 +366,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "DenyCapV2"
+              "name": "DenyCapV2",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2"
             },
             {
-              "name": "RegulatedCoinMetadata"
+              "name": "RegulatedCoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::RegulatedCoinMetadata"
             },
             {
-              "name": "TreasuryCap"
+              "name": "TreasuryCap",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::TreasuryCap"
             }
           ]
         },
@@ -367,13 +386,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Coin"
+              "name": "Coin",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin"
             },
             {
-              "name": "CoinMetadata"
+              "name": "CoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata"
             },
             {
-              "name": "CurrencyCreated"
+              "name": "CurrencyCreated",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CurrencyCreated"
             }
           ]
         },
@@ -384,13 +406,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "DenyCapV2"
+              "name": "DenyCapV2",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2"
             },
             {
-              "name": "RegulatedCoinMetadata"
+              "name": "RegulatedCoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::RegulatedCoinMetadata"
             },
             {
-              "name": "TreasuryCap"
+              "name": "TreasuryCap",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::TreasuryCap"
             }
           ]
         },
@@ -401,13 +426,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "CoinMetadata"
+              "name": "CoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata"
             },
             {
-              "name": "CurrencyCreated"
+              "name": "CurrencyCreated",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CurrencyCreated"
             },
             {
-              "name": "DenyCap"
+              "name": "DenyCap",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCap"
             }
           ]
         },
@@ -418,13 +446,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "DenyCap"
+              "name": "DenyCap",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCap"
             },
             {
-              "name": "DenyCapV2"
+              "name": "DenyCapV2",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2"
             },
             {
-              "name": "RegulatedCoinMetadata"
+              "name": "RegulatedCoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::RegulatedCoinMetadata"
             }
           ]
         },
@@ -435,19 +466,24 @@ Response: {
           },
           "nodes": [
             {
-              "name": "CoinMetadata"
+              "name": "CoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata"
             },
             {
-              "name": "CurrencyCreated"
+              "name": "CurrencyCreated",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CurrencyCreated"
             },
             {
-              "name": "DenyCap"
+              "name": "DenyCap",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCap"
             },
             {
-              "name": "DenyCapV2"
+              "name": "DenyCapV2",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2"
             },
             {
-              "name": "RegulatedCoinMetadata"
+              "name": "RegulatedCoinMetadata",
+              "fullyQualifiedName": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::RegulatedCoinMetadata"
             }
           ]
         }

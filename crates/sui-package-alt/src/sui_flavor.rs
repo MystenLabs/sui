@@ -1,33 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use indexmap::IndexMap;
 use move_compiler::editions::Edition;
 use move_package_alt::{
-    dependency::{self, CombinedDependency, PinnedDependencyInfo},
-    errors::{FileHandle, PackageResult},
-    flavor::MoveFlavor,
-    git::GitCache,
+    MoveFlavor,
     schema::{
         EnvironmentID, EnvironmentName, GitSha, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestDependencyInfo, ManifestGitDependency, PackageName, ParsedManifest,
-        ReplacementDependency, SystemDepName,
+        PackageName, ParsedManifest, ReplacementDependency, SystemDepName,
     },
 };
+
 use serde::{Deserialize, Serialize};
-use sui_package_management::system_package_versions::{
-    SYSTEM_GIT_REPO, SystemPackagesVersion, latest_system_packages, system_packages_for_protocol,
-};
-use sui_sdk::types::{
-    base_types::ObjectID,
-    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
-    supported_protocol_versions::Chain,
-};
+use sui_package_management::system_package_versions::{SYSTEM_GIT_REPO, latest_system_packages};
+use sui_sdk::types::{base_types::ObjectID, is_system_package};
 
 use crate::{mainnet_environment, testnet_environment};
 
@@ -40,21 +28,13 @@ pub struct SuiFlavor;
 impl SuiFlavor {
     /// A map between system package names in the old style (capitalized) to the new naming style
     /// (lowercase).
-    fn system_deps_names_map() -> BTreeMap<String, SystemDepName> {
+    fn system_deps_by_name() -> BTreeMap<String, SystemDepName> {
         BTreeMap::from([
             ("Sui".into(), "sui".into()),
             ("SuiSystem".into(), "sui_system".into()),
             ("MoveStdlib".into(), "std".into()),
             ("Bridge".into(), "bridge".into()),
             ("DeepBook".into(), "deepbook".into()),
-        ])
-    }
-
-    /// The default dependencies are `sui` and `std`
-    fn default_system_dep_names() -> BTreeSet<PackageName> {
-        BTreeSet::from([
-            PackageName::new("sui").unwrap(),
-            PackageName::new("std").unwrap(),
         ])
     }
 }
@@ -92,9 +72,7 @@ impl MoveFlavor for SuiFlavor {
         IndexMap::from([(testnet.name, testnet.id), (mainnet.name, mainnet.id)])
     }
 
-    fn implicit_dependencies(
-        environment: &EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency> {
+    fn implicit_dependencies(_: &EnvironmentID) -> BTreeMap<PackageName, ReplacementDependency> {
         BTreeMap::from([
             (
                 PackageName::new("sui").expect("sui is a valid identifier"),
@@ -107,7 +85,7 @@ impl MoveFlavor for SuiFlavor {
         ])
     }
 
-    fn system_deps(environment: &EnvironmentID) -> BTreeMap<SystemDepName, LockfileDependencyInfo> {
+    fn system_deps(_: &EnvironmentID) -> BTreeMap<SystemDepName, LockfileDependencyInfo> {
         let mut deps = BTreeMap::new();
         let deps_to_skip = ["DeepBook".into()];
 
@@ -120,7 +98,7 @@ impl MoveFlavor for SuiFlavor {
             .iter()
             .filter(|package| !deps_to_skip.contains(&package.package_name));
 
-        let names = Self::system_deps_names_map();
+        let names = Self::system_deps_by_name();
         for package in pkgs {
             let repo = SYSTEM_GIT_REPO.to_string();
             let info = LockfileDependencyInfo::Git(LockfileGitDepInfo {
@@ -148,6 +126,10 @@ impl MoveFlavor for SuiFlavor {
         } else {
             Ok(())
         }
+    }
+
+    fn is_system_address(address: &move_package_alt::schema::OriginalID) -> bool {
+        is_system_package(address.0)
     }
 }
 
@@ -177,7 +159,7 @@ fn validate_modern_manifest_does_not_use_legacy_system_names(
             .collect::<Vec<_>>(),
     );
 
-    let legacy_names = SuiFlavor::system_deps_names_map();
+    let legacy_names = SuiFlavor::system_deps_by_name();
 
     for name in dep_names {
         if legacy_names.contains_key(&name) {

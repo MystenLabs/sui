@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use diesel_migrations::EmbeddedMigrations;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
@@ -9,10 +10,11 @@ use sui_pg_db::temp::TempDb;
 use tempfile::tempdir;
 use url::Url;
 
-use crate::{
-    Indexer, IndexerArgs,
-    ingestion::{ClientArgs, IngestionConfig, ingestion_client::IngestionClientArgs},
-};
+use crate::Indexer;
+use crate::IndexerArgs;
+use crate::ingestion::ClientArgs;
+use crate::ingestion::IngestionConfig;
+use crate::ingestion::ingestion_client::IngestionClientArgs;
 
 pub use sui_pg_db::*;
 
@@ -104,15 +106,17 @@ impl Indexer<Db> {
 
 #[cfg(test)]
 pub mod tests {
+    use std::sync::Arc;
 
     use async_trait::async_trait;
-    use std::sync::Arc;
-    use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Connection as _};
+    use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+    use sui_indexer_alt_framework_store_traits::Connection as _;
     use sui_types::full_checkpoint_content::Checkpoint;
 
-    use super::*;
+    use crate::ConcurrentConfig;
+    use crate::pipeline::Processor;
 
-    use crate::{ConcurrentConfig, pipeline::Processor};
+    use super::*;
 
     #[derive(FieldCount)]
     struct V {

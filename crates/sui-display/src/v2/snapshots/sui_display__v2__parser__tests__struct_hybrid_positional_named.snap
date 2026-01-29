@@ -1,5 +1,5 @@
 ---
 source: crates/sui-display/src/v2/parser.rs
-expression: "strands(r#\"{0x1::string::String(length: 42, value: 'foo', data: vector[1, 2, 3])}\"#)"
+expression: "strands(r#\"{0x1::string::String(length: 42u64, value: 'foo', data: vector[1u64, 2u64, 3u64])}\"#)"
 ---
-Error: Unexpected ':' at offset 27, expected one of ',', or ')'
+Error: Unexpected ':' at byte offset 27, expected one of ',', or ')'

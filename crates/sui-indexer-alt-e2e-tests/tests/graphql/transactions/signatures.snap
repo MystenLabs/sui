@@ -31,10 +31,10 @@ task 4, lines 16-24:
 Response: {
   "data": {
     "singleSig": {
-      "digest": "54hQH5EDiV52i4wDp5KgjbwGMBfQWZmc7Zh73u3vY1LK",
+      "digest": "3By9BmCacnTWHtGLCHwwNK8wcyvzVxLLdsG5o2LwvAbM",
       "signatures": [
         {
-          "signatureBytes": "ADxBVYxMQQJmf2f3SHzLbRePRNFYiVov7X9z58xQ7VviIE/OmN5JtJs3lpE4LMvOmT54xLfcGGvt99T/g/CeAwh/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
+          "signatureBytes": "AJ/67cH93lqFdEFjiit3AnDjt06BRqy5Zle4ndSxZ440NlZeYbYMOllJIgJGtabRF8oORifC4wec8DjDX1JlpwR/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
         }
       ]
     }
@@ -46,13 +46,13 @@ task 5, lines 26-34:
 Response: {
   "data": {
     "multiSig": {
-      "digest": "2WR8XNBnXp1sEnJZ5JDvdWhsLgWPLD2X3DRSPVNRqXgm",
+      "digest": "A9VtYXbQjrzPryPLNzjSWLq77XDqxzVVaxebsF6RjShu",
       "signatures": [
         {
-          "signatureBytes": "AJ5bHadta61dW8WGzqhlRV6KoTbWbWrF/AAOp4ijq0hvUpnXy+bYX0HW5n2pn5D2Y34/Eay7wTkAz7YLSNh8egRjShJ/h11TzB1kNRDs/tZZYOUuR7hLdy4MWvdZMWHaqw=="
+          "signatureBytes": "AJ3DamKPMnnmsnJlpOi6jDJubBl5doHqav47anfC2u7kib4jcM6U5xP4CHYL8T8Z/vhu3JpS9IjfXAvc0dwHrQZjShJ/h11TzB1kNRDs/tZZYOUuR7hLdy4MWvdZMWHaqw=="
         },
         {
-          "signatureBytes": "AAqtyIIHh7KtUbjbNyxlGtNh/6AL+bkdA/4wk13AyHI62g8bLnA3ekAdEdYrNQ2Pe9Mlhq85rvd/JByIZII6HAiea9+AYO7cFrl2UiI8mqgOfdypWEBHOeWh8bAaRfXLzA=="
+          "signatureBytes": "AMy/H6Ha8aebdDldFFM1qyg0D7kegpyh3n+zRkrYeUgmKGlwbfCbKW+grABdx9F/uC1TGKPW6GreqVgXrlIRdwiea9+AYO7cFrl2UiI8mqgOfdypWEBHOeWh8bAaRfXLzA=="
         }
       ]
     }

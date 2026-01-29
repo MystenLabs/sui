@@ -24,7 +24,6 @@ use std::{
     sync::{Arc, Mutex},
     vec,
 };
-use tempfile::tempdir;
 use vfs::{
     VfsPath,
     impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
@@ -44,7 +43,7 @@ use move_compiler::{
 };
 use move_ir_types::location::Loc;
 
-use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
+use move_package_alt::{MoveFlavor, RootPackage};
 use move_package_alt_compilation::{
     build_config::BuildConfig,
     build_plan::BuildPlan,
@@ -102,7 +101,7 @@ pub struct CompiledPkgInfo {
     /// Edition of the compiler
     pub edition: Option<Edition>,
     /// Compiler analysis info
-    pub compiler_analysis_info: Option<CompilerAnalysisInfo>,
+    pub compiler_analysis_info: CompilerAnalysisInfo,
     /// Compiler autocomplete info
     pub compiler_autocomplete_info: Option<CompilerAutocompleteInfo>,
     /// IDE diagnostics related to the package
@@ -132,7 +131,7 @@ pub struct CachedPkgInfo {
     /// Edition of the compiler used to build this package
     pub edition: Option<Edition>,
     /// Compiler analysis info (cached)
-    pub compiler_analysis_info: Option<CompilerAnalysisInfo>,
+    pub compiler_analysis_info: CompilerAnalysisInfo,
     /// IDE diagnostics related to the package
     pub lsp_diags: Arc<BTreeMap<PathBuf, Vec<Diagnostic>>>,
 }
@@ -187,7 +186,7 @@ struct MappedFilesData {
 struct CachingResult {
     pkg_deps: Option<AnalyzedPkgInfo>,
     edition: Option<Edition>,
-    compiler_analysis_info: Option<CompilerAnalysisInfo>,
+    compiler_analysis_info: CompilerAnalysisInfo,
 }
 
 impl CachedPackages {
@@ -277,7 +276,7 @@ impl CachingResult {
     pub fn new(
         pkg_deps: Option<AnalyzedPkgInfo>,
         edition: Option<Edition>,
-        compiler_analysis_info: Option<CompilerAnalysisInfo>,
+        compiler_analysis_info: CompilerAnalysisInfo,
     ) -> Self {
         Self {
             pkg_deps,
@@ -290,7 +289,7 @@ impl CachingResult {
         Self {
             pkg_deps: None,
             edition: None,
-            compiler_analysis_info: None,
+            compiler_analysis_info: CompilerAnalysisInfo::new(),
         }
     }
 }
@@ -306,13 +305,11 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     flavor: Option<Flavor>,
     cursor_file_opt: Option<&PathBuf>,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
-    let cached_deps_exist = has_precompiled_deps(pkg_path, packages_info.clone());
     let build_config = move_package_alt_compilation::build_config::BuildConfig {
         test_mode: true,
-        install_dir: Some(tempdir().unwrap().path().to_path_buf()),
         default_flavor: flavor,
         lint_flag: lint.into(),
-        force_lock_file: cached_deps_exist,
+        allow_dirty: true,
         ..Default::default()
     };
 
@@ -383,7 +380,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
             Some(Some(d)) => {
                 let mut hasher = Sha256::new();
                 d.dep_hashes.iter().for_each(|h| {
-                    hasher.update(h.0);
+                    hasher.update(h.to_bytes());
                 });
                 let deps_hash = hasher_to_hash_string(hasher);
                 if manifest_hash.is_some()
@@ -466,7 +463,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         dep_names,
                         mapped_files_data.dep_hashes.clone(),
                     );
-                    CachingResult::new(Some(analyzed_pkg_info), None, None)
+                    CachingResult::new(Some(analyzed_pkg_info), None, CompilerAnalysisInfo::new())
                 } else {
                     CachingResult::empty()
                 }
@@ -633,7 +630,9 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         (
             parsed_definitions,
             typed_modules,
-            compiler_analysis_info_opt,
+            // unwrap is safe as this is created at the same time
+            // as parsed_ast and typed_ast
+            compiler_analysis_info_opt.unwrap(),
         )
     } else if files_to_compile.is_empty() {
         // no compilation happened, so we get everything from the cache, and
@@ -655,12 +654,12 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
             files_to_compile.clone(),
         );
 
-        let merged_analysis_info = Some(merge_compiler_analysis_info(
-            caching_result.compiler_analysis_info.clone().unwrap(),
+        let merged_analysis_info = merge_compiler_analysis_info(
+            caching_result.compiler_analysis_info.clone(),
             compiler_analysis_info_opt.unwrap(),
             &file_paths,
             &files_to_compile,
-        ));
+        );
 
         (parsed_defs, typed_mods, merged_analysis_info)
     };
@@ -808,11 +807,6 @@ fn merge_diagnostics_for_file(
     }
 }
 
-fn has_precompiled_deps(pkg_path: &Path, pkg_dependencies: Arc<Mutex<CachedPackages>>) -> bool {
-    let pkg_deps = pkg_dependencies.lock().unwrap();
-    pkg_deps.pkg_info.contains_key(pkg_path)
-}
-
 fn compute_mapped_files<F: MoveFlavor>(
     root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
@@ -839,7 +833,7 @@ fn compute_mapped_files<F: MoveFlavor>(
             let _ = vfs_file.read_to_string(&mut contents);
             let fhash = FileHash::new(&contents);
             if is_dep {
-                hasher.update(fhash.0);
+                hasher.update(fhash.to_bytes());
                 dep_hashes.push(fhash);
                 dep_pkg_paths.insert(rpkg.id().clone().into(), rpkg.path().path().to_path_buf());
             }
@@ -980,6 +974,7 @@ fn merge_compiler_analysis_info(
     result.macro_info.retain(|loc, _| !is_modified(loc));
     result.expanded_lambdas.retain(|loc| !is_modified(loc));
     result.ellipsis_binders.retain(|loc| !is_modified(loc));
+    result.string_values.retain(|loc, _| !is_modified(loc));
 
     // Add new entries - no additional filtering needed
     // as incremental compilation produced these
@@ -987,6 +982,7 @@ fn merge_compiler_analysis_info(
     result.macro_info.extend(new_info.macro_info);
     result.expanded_lambdas.extend(new_info.expanded_lambdas);
     result.ellipsis_binders.extend(new_info.ellipsis_binders);
+    result.string_values.extend(new_info.string_values);
 
     result
 }
@@ -1059,7 +1055,55 @@ fn is_typed_mod_modified(
         debug_assert!(false);
         return false;
     };
-    modified_files.contains(mod_file_path)
+    if modified_files.contains(mod_file_path) {
+        return true;
+    }
+
+    // TODO: Module extensions are not fully supported yet. This check prevents a crash but
+    // doesn't provide full IDE support for extension members.
+    //
+    // When both the extended module and extension are in user space, extension members get
+    // inlined into the extended module during expansion. If only the extension file is modified,
+    // the extended module's definition location (checked above) appears unchanged. Without
+    // checking member locations, we'd use stale cached data with incorrect file hashes.
+    //
+    // This is NOT a problem when the extended module is a dependency (pre-compiled lib) because
+    // extensions cannot be applied to pre-compiled modules - they lack the expansion-level AST
+    // needed for inlining.
+    let is_member_modified = |loc: &Loc| -> bool {
+        let Some(member_file_path) = file_paths.get(&loc.file_hash()) else {
+            eprintln!(
+                "no file path for member in typed module {}",
+                mident.value.module
+            );
+            debug_assert!(false);
+            return false;
+        };
+        modified_files.contains(member_file_path)
+    };
+
+    for (name_loc, _, _) in &mdef.functions {
+        if is_member_modified(&name_loc) {
+            return true;
+        }
+    }
+    for (name_loc, _, _) in &mdef.structs {
+        if is_member_modified(&name_loc) {
+            return true;
+        }
+    }
+    for (name_loc, _, _) in &mdef.enums {
+        if is_member_modified(&name_loc) {
+            return true;
+        }
+    }
+    for (name_loc, _, _) in &mdef.constants {
+        if is_member_modified(&name_loc) {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Checks if any of the package modules's were modified.
@@ -1082,8 +1126,7 @@ fn load_root_pkg<F: MoveFlavor>(
     path: &Path,
 ) -> anyhow::Result<RootPackage<F>> {
     let env = find_env::<F>(path, build_config)?;
-    let mut root_pkg =
-        RootPackage::<F>::load_sync(path.to_path_buf(), env, build_config.mode_set())?;
+    let mut root_pkg = build_config.package_loader(path, &env).load_sync()?;
 
     root_pkg.save_lockfile_to_disk()?;
 

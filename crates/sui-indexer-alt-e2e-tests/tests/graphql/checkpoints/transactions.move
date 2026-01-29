@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --simulator
+//# init --protocol-version 108 --accounts A B --simulator
 
 //# run-graphql
 { # Fetch a checkpoint
@@ -15,7 +15,7 @@
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } } 
+      edges { cursor node { digest, sender { address } } }
     }
   }
 }
@@ -49,18 +49,27 @@
 //# create-checkpoint
 
 //# run-graphql
-{ # Fetch a checkpoint's transactions, should have sequence numbers 1,2,3,4,5
+{ # Fetch a checkpoint's transactions filtered by sentAddress, should have sequence numbers 1,2,3,4,5
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
     digest
-    transactions(first: 5) {
+    transactions(first: 5, filter: { sentAddress: "@{A}" }) {
       pageInfo {
         hasPreviousPage
         hasNextPage
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } } 
+      edges { cursor node { digest, sender { address } } }
+    }
+    allTransactions: transactions(first: 6) {
+      pageInfo {
+        hasPreviousPage
+        hasNextPage
+        startCursor
+        endCursor
+      }
+      edges { cursor node { digest, sender { address } } }
     }
   }
 }
@@ -94,7 +103,7 @@
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } } 
+      edges { cursor node { digest, sender { address } } }
     }
   }
 }
@@ -111,7 +120,7 @@
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } } 
+      edges { cursor node { digest, sender { address } } }
     }
   }
 }
@@ -128,12 +137,12 @@
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } } 
+      edges { cursor node { digest, sender { address } } }
     }
   }
 }
 
-//# run-graphql --cursors 5
+//# run-graphql --cursors 6
 { # Offset to a non-existent cursor
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
@@ -145,7 +154,7 @@
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } } 
+      edges { cursor node { digest, sender { address } } }
     }
   }
 }
@@ -162,7 +171,7 @@
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } } 
+      edges { cursor node { digest, sender { address } } }
     }
   }
 }

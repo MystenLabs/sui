@@ -22,7 +22,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::error::UserInputError;
+use sui_types::messages_grpc::{SubmitTxRequest, SubmitTxResponse, SubmitTxResult};
 use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::passkey_authenticator::{PasskeyAuthenticator, to_signing_message};
 use sui_types::{
@@ -43,9 +43,10 @@ use sui_types::{
     crypto::{SignatureScheme, ToFromBytes},
     error::SuiErrorKind,
 };
+use sui_types::{effects::TransactionEffectsAPI, error::UserInputError};
 use test_cluster::{TestCluster, TestClusterBuilder};
 use url::Url;
-async fn do_upgraded_multisig_test() -> SuiResult {
+async fn do_upgraded_multisig_test() -> SuiResult<SubmitTxResponse> {
     let test_cluster = TestClusterBuilder::new().build().await;
     let tx = make_upgraded_multisig_tx();
 
@@ -56,9 +57,11 @@ async fn do_upgraded_multisig_test() -> SuiResult {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
+        .submit_transaction(
+            SubmitTxRequest::new_transaction(tx),
+            Some(SocketAddr::new([127, 0, 0, 1].into(), 0)),
+        )
         .await
-        .map(|_| ())
 }
 
 async fn create_credential_and_sign_test_tx_with_passkey_multisig(
@@ -315,14 +318,30 @@ async fn test_upgraded_multisig_feature_allow() {
         config
     });
 
-    let res = do_upgraded_multisig_test().await;
-
-    // we didn't make a real transaction with a valid object, but we verify that we pass the
-    // feature gate.
-    assert!(matches!(
-        res.unwrap_err().as_inner(),
-        SuiErrorKind::UserInputError { .. }
-    ));
+    // When the feature is enabled, the transaction passes the feature gate check.
+    // The transaction is rejected for other reasons (dummy tx has no valid objects),
+    // but importantly NOT with Unsupported error.
+    let response = do_upgraded_multisig_test().await.unwrap();
+    assert_eq!(response.results.len(), 1);
+    match &response.results[0] {
+        SubmitTxResult::Rejected { error } => {
+            // Verify it's not an Unsupported error (which would mean feature gate failed)
+            assert!(
+                !matches!(
+                    error.as_inner(),
+                    SuiErrorKind::UserInputError {
+                        error: UserInputError::Unsupported(..)
+                    }
+                ),
+                "Transaction should pass feature gate, but got Unsupported error: {:?}",
+                error
+            );
+        }
+        other => panic!(
+            "Expected Rejected result (tx uses dummy objects), got {:?}",
+            other
+        ),
+    }
 }
 
 #[sim_test]
@@ -352,7 +371,7 @@ async fn test_multisig_e2e() {
         .transfer_sui(None, SuiAddress::ZERO)
         .build_and_sign_multisig(multisig_pk.clone(), &[&keys[0], &keys[1]], 0b011);
     let res = context.execute_transaction_must_succeed(tx1).await;
-    assert!(res.status_ok().unwrap());
+    assert!(res.effects.status().is_ok());
 
     // 2. sign with key 1 and 2 executes successfully.
     let gas = test_cluster
@@ -362,7 +381,7 @@ async fn test_multisig_e2e() {
         .transfer_sui(None, SuiAddress::ZERO)
         .build_and_sign_multisig(multisig_pk.clone(), &[&keys[1], &keys[2]], 0b110);
     let res = context.execute_transaction_must_succeed(tx2).await;
-    assert!(res.status_ok().unwrap());
+    assert!(res.effects.status().is_ok());
 
     // 3. signature 2 and 1 swapped fails to execute.
     let gas = test_cluster
@@ -637,11 +656,7 @@ async fn test_multisig_with_zklogin_scenerios() {
 
     let tx_7 = Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]);
     let res = context.execute_transaction_may_fail(tx_7).await;
-    assert!(
-        res.unwrap_err()
-            .to_string()
-            .contains("Invalid zklogin authenticator bytes")
-    );
+    assert!(res.unwrap_err().to_string().contains("invalid signature"));
 
     // assert positive case for all 4 participanting parties.
     // 1a. good ed25519 sig used in multisig executes successfully.

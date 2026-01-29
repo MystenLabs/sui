@@ -1,0 +1,82 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2), D: object(0,3)
+
+task 1, lines 8-48:
+//# publish
+created: object(1,0)
+mutated: object(0,4)
+gas summary: computation_cost: 1000000, storage_cost: 8846400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 50-53:
+//# programmable --sender A --inputs 1042 @B
+// Send some SUI from A to B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 55:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 57-59:
+//# programmable --sender A --inputs immshared(2764) @B 1042
+// Check that we can read the balance of B
+//> 0: test::balance_read::balance_check(Input(0), Input(1), Input(2));
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 61-67:
+//# programmable --sender A --inputs immshared(2764) @C 0
+// Check that C has a zero balance
+//> 0: test::balance_read::balance_check(Input(0), Input(1), Input(2));
+// Overflow D's balance (requires two transactions, since an individual transaction
+// will abort on overflow)
+//
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 68-69:
+//# programmable --sender A --inputs @A
+//> 0: test::balance_read::create_supply_holder();
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2363600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 70-71:
+//# programmable --sender A --inputs object(6,0) 0 @D
+//> 0: test::balance_read::send_max(Input(0), Input(1), Input(2));
+created: object(7,0)
+mutated: object(0,0), object(6,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 4202800,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
+
+task 8, lines 72-73:
+//# programmable --sender A --inputs object(6,0) 1 @D
+//> 0: test::balance_read::send_max(Input(0), Input(1), Input(2));
+created: object(8,0)
+mutated: object(0,0), object(6,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 4202800,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
+
+task 9, line 75:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 10, lines 77-79:
+//# programmable --sender A --inputs immshared(2764) @D 18446744073709551615
+// Check that D's balance is clamped to u64::MAX
+//> 0: test::balance_read::balance_check_fake(Input(0), Input(1), Input(2));
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

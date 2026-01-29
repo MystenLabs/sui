@@ -489,7 +489,12 @@ fn move_call<Mode: ExecutionMode>(
     let visibility = fdef.visibility;
     let is_entry = fdef.is_entry;
     // check rules around hot arguments and entry functions
-    if is_entry && matches!(visibility, Visibility::Private) && !Mode::allow_arbitrary_values() {
+    let is_non_public = if env.protocol_config.restrict_hot_or_not_entry_functions() {
+        !matches!(visibility, Visibility::Public)
+    } else {
+        matches!(visibility, Visibility::Private)
+    };
+    if is_entry && is_non_public && !Mode::allow_arbitrary_values() {
         let mut hot_argument: Option<u16> = None;
         for (idx, clique) in argument_cliques {
             if context.cliques.is_hot(*clique)? {

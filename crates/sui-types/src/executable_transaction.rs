@@ -76,6 +76,6 @@ impl VerifiedExecutableTransaction {
 
     pub fn new_for_testing(tx_data: TransactionData, keypair: &AccountKeyPair) -> Self {
         let tx = to_sender_signed_transaction(tx_data, keypair);
-        Self::new_from_quorum_execution(VerifiedTransaction::new_unchecked(tx), 0)
+        Self::new_from_consensus(VerifiedTransaction::new_unchecked(tx), 0)
     }
 }

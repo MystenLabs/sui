@@ -118,11 +118,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::abort_with_42' (instruction 1), abort code: 42",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::abort_with_42' (instruction 1), abort code: 42",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -140,11 +140,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::abort_with_255' (instruction 1), abort code: 255",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::abort_with_255' (instruction 1), abort code: 255",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -169,11 +169,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": "ECleverU8",
         "constant": "10",
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::abort_with_clever_u8' (line 36), abort 'ECleverU8': 10",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::abort_with_clever_u8' (line 36), abort 'ECleverU8': 10",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -191,11 +191,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": "ECleverU16",
         "constant": "20",
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::abort_with_clever_u16' (line 39), abort 'ECleverU16': 20",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::abort_with_clever_u16' (line 39), abort 'ECleverU16': 20",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -213,11 +213,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": "ECleverU64",
         "constant": "100",
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::abort_with_clever_u64' (line 42), abort 'ECleverU64': 100",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::abort_with_clever_u64' (line 42), abort 'ECleverU64': 100",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -235,11 +235,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": "ECleverAddress",
         "constant": "0x0000000000000000000000000000000000000000000000000000000000000042",
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::abort_with_clever_address' (line 45), abort 'ECleverAddress': 0x0000000000000000000000000000000000000000000000000000000000000042",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::abort_with_clever_address' (line 45), abort 'ECleverAddress': 0x0000000000000000000000000000000000000000000000000000000000000042",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -257,11 +257,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": "ECleverString",
         "constant": "This is a clever error message",
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::abort_with_clever_string' (line 48), abort 'ECleverString': This is a clever error message",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::abort_with_clever_string' (line 48), abort 'ECleverString': This is a clever error message",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -279,11 +279,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": "ECleverWithCode",
         "constant": "Error with explicit code",
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::abort_with_clever_code' (line 51), abort(code = 15) 'ECleverWithCode': Error with explicit code",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::abort_with_clever_code' (line 51), abort(code = 15) 'ECleverWithCode': Error with explicit code",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -301,11 +301,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": "ECleverRaw",
         "constant": "AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw==",
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::abort_with_clever_raw' (line 54), abort 'ECleverRaw': AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw==",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::abort_with_clever_raw' (line 54), abort 'ECleverRaw': AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw==",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -323,11 +323,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, from '0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::assert_failure' (line 57)",
+        "message": "Error in 1st command, from '0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::assert_failure' (line 57)",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -364,11 +364,11 @@ Response: {
         "instructionOffset": 2,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, Move Primitive Runtime Error. Location: bcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::arithmetic_underflow (function index 11) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
+        "message": "Error in 1st command, Move Primitive Runtime Error. Location: 5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::arithmetic_underflow (function index 11) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -386,11 +386,11 @@ Response: {
         "instructionOffset": 2,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, Move Primitive Runtime Error. Location: bcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::arithmetic_overflow (function index 12) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
+        "message": "Error in 1st command, Move Primitive Runtime Error. Location: 5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::arithmetic_overflow (function index 12) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -408,11 +408,11 @@ Response: {
         "instructionOffset": 2,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, Move Primitive Runtime Error. Location: bcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::division_by_zero (function index 13) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
+        "message": "Error in 1st command, Move Primitive Runtime Error. Location: 5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::division_by_zero (function index 13) at offset 2. Arithmetic error, stack overflow, max value depth, etc.",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {
@@ -430,11 +430,11 @@ Response: {
         "instructionOffset": 4,
         "identifier": null,
         "constant": null,
-        "message": "Error in 1st command, Move Primitive Runtime Error. Location: bcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035::execution_error_tests::vector_out_of_bounds (function index 14) at offset 4. Arithmetic error, stack overflow, max value depth, etc.",
+        "message": "Error in 1st command, Move Primitive Runtime Error. Location: 5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a::execution_error_tests::vector_out_of_bounds (function index 14) at offset 4. Arithmetic error, stack overflow, max value depth, etc.",
         "module": {
           "name": "execution_error_tests",
           "package": {
-            "address": "0xbcde1ca8503bc1a1bc686de6ac54ea250bbcb7a33a537b01defa8bfce4995035"
+            "address": "0x5e66eee26f6c016bd6c6d9352da68ae6e49e9f2f349fee3b259efa2542839e7a"
           }
         },
         "function": {

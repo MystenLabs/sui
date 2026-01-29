@@ -16,15 +16,15 @@ colored.workspace = true
 dirs-next.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["serde"] }
-once_cell.workspace = true
 packed_struct.workspace = true
 serde.workspace = true
 sha2.workspace = true
 vfs.workspace = true
 walkdir.workspace = true
 
-move-core-types.workspace = true
 move-binary-format.workspace = true
+move-core-types.workspace = true
+move-symbol-pool.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

@@ -4,7 +4,6 @@
 use rand::distributions::Distribution;
 use std::net::SocketAddr;
 use std::time::Duration;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
@@ -47,14 +46,13 @@ async fn party_object_deletion() {
     let effects = test_cluster
         .sign_and_execute_transaction(&transaction)
         .await
-        .effects
-        .unwrap();
+        .effects;
 
     assert_eq!(effects.deleted().len(), 1);
-    assert_eq!(effects.shared_objects().len(), 1);
+    assert_eq!(effects.input_consensus_objects().len(), 1);
 
     // assert the shared object was deleted
-    let deleted_obj_id = effects.deleted()[0].object_id;
+    let deleted_obj_id = effects.deleted()[0].0;
     assert_eq!(deleted_obj_id, object_id);
 }
 
@@ -106,18 +104,13 @@ async fn party_object_deletion_multiple_times() {
             .build();
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
-        test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-        txs.push(signed);
+        txs.push((signed, client_ip));
     }
 
     // Submit all the deletion transactions to the validators.
-    let validators = test_cluster.get_validator_pubkeys();
-    let submissions = txs.iter().map(|tx| async {
+    let submissions = txs.iter().map(|(tx, client_ip)| async {
         test_cluster
-            .submit_transaction_to_validators(tx.clone(), &validators)
+            .submit_and_execute(tx.clone(), Some(*client_ip))
             .await
             .unwrap();
         *tx.digest()
@@ -166,7 +159,6 @@ async fn party_object_deletion_multiple_times_cert_racing() {
     let gas_coins = accounts_and_gas[0].1.clone();
 
     // Make a bunch of transactions that all want to delete the party object.
-    let validators = test_cluster.get_validator_pubkeys();
     let mut digests = vec![];
     for coin_ref in gas_coins.into_iter() {
         let transaction = test_cluster
@@ -184,17 +176,13 @@ async fn party_object_deletion_multiple_times_cert_racing() {
         let signed = test_cluster.sign_transaction(&transaction).await;
 
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
-        test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
         info!(
             "Submitting transaction with digest: {:?}\n{:#?}",
             signed.digest(),
             signed.data().inner().intent_message().value
         );
         test_cluster
-            .submit_transaction_to_validators(signed.clone(), &validators)
+            .submit_and_execute(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         digests.push(*signed.digest());
@@ -243,19 +231,18 @@ async fn party_object_transfer() {
     let effects = test_cluster
         .sign_and_execute_transaction(&transaction)
         .await
-        .effects
-        .unwrap();
+        .effects;
 
-    assert_eq!(effects.shared_objects().len(), 1);
+    assert_eq!(effects.input_consensus_objects().len(), 1);
     let mutated_party = effects
         .mutated()
-        .iter()
-        .filter(|obj| matches!(obj.owner, Owner::ConsensusAddressOwner { .. }))
+        .into_iter()
+        .filter(|obj| matches!(obj.1, Owner::ConsensusAddressOwner { .. }))
         .collect::<Vec<_>>();
     assert_eq!(mutated_party.len(), 1);
-    let mutated_party = mutated_party[0];
+    let mutated_party = &mutated_party[0];
     assert_eq!(
-        mutated_party.owner,
+        mutated_party.1,
         Owner::ConsensusAddressOwner {
             start_version: object_initial_shared_version.next(),
             owner: SuiAddress::ZERO,
@@ -312,18 +299,13 @@ async fn party_object_transfer_multiple_times() {
             .build();
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
-        test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-        txs.push(signed);
+        txs.push((signed, client_ip));
     }
 
     // Submit all the transfer transactions to the validators.
-    let validators = test_cluster.get_validator_pubkeys();
-    let submissions = txs.iter().map(|tx| async {
+    let submissions = txs.iter().map(|(tx, client_ip)| async {
         test_cluster
-            .submit_transaction_to_validators(tx.clone(), &validators)
+            .submit_and_execute(tx.clone(), Some(*client_ip))
             .await
             .unwrap();
         *tx.digest()
@@ -432,24 +414,9 @@ async fn party_object_transfer_multi_certs() {
     let repeat_tx_b_digest = *repeat_tx_b.digest();
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
 
-    let _ = test_cluster
-        .create_certificate(xfer_tx.clone(), Some(client_ip))
-        .await
-        .unwrap();
-    let _ = test_cluster
-        .create_certificate(repeat_tx_a.clone(), Some(client_ip))
-        .await
-        .unwrap();
-    let _ = test_cluster
-        .create_certificate(repeat_tx_b.clone(), Some(client_ip))
-        .await
-        .unwrap();
-
-    let validators = test_cluster.get_validator_pubkeys();
-
     // transfer obj on all validators, await effects
     test_cluster
-        .submit_transaction_to_validators(xfer_tx, &validators)
+        .submit_and_execute(xfer_tx, Some(client_ip))
         .await
         .unwrap();
 
@@ -457,13 +424,13 @@ async fn party_object_transfer_multi_certs() {
     futures::join!(
         async {
             test_cluster
-                .submit_transaction_to_validators(repeat_tx_a, &validators)
+                .submit_and_execute(repeat_tx_a, Some(client_ip))
                 .await
                 .unwrap()
         },
         async {
             test_cluster
-                .submit_transaction_to_validators(repeat_tx_b, &validators)
+                .submit_and_execute(repeat_tx_b, Some(client_ip))
                 .await
                 .unwrap()
         }
@@ -539,13 +506,7 @@ async fn party_object_read() {
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-
-        let validators = test_cluster.get_validator_pubkeys();
-        test_cluster
-            .submit_transaction_to_validators(signed.clone(), &validators)
+            .submit_and_execute(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         all_digests.push(*signed.digest());
@@ -569,13 +530,12 @@ async fn party_object_read() {
     let signed_transfer = test_cluster.sign_transaction(&transfer_transaction).await;
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
     test_cluster
-        .create_certificate(signed_transfer.clone(), Some(client_ip))
+        .submit_and_execute(signed_transfer.clone(), Some(client_ip))
         .await
         .unwrap();
 
-    let validators = test_cluster.get_validator_pubkeys();
     let (transfer_effects, _) = test_cluster
-        .submit_transaction_to_validators(signed_transfer.clone(), &validators)
+        .submit_and_execute(signed_transfer.clone(), None)
         .await
         .unwrap();
     all_digests.push(*signed_transfer.digest());
@@ -607,13 +567,7 @@ async fn party_object_read() {
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-
-        let validators = test_cluster.get_validator_pubkeys();
-        test_cluster
-            .submit_transaction_to_validators(signed.clone(), &validators)
+            .submit_and_execute(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         all_digests.push(*signed.digest());
@@ -721,9 +675,7 @@ async fn party_object_grpc() {
         .build();
     test_cluster
         .sign_and_execute_transaction(&transaction)
-        .await
-        .effects
-        .unwrap();
+        .await;
 
     // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated
@@ -860,11 +812,7 @@ async fn party_coin_grpc() {
     let kind = sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
 
-    cluster
-        .sign_and_execute_transaction(&tx_data)
-        .await
-        .effects
-        .unwrap();
+    cluster.sign_and_execute_transaction(&tx_data).await;
 
     // run a list operation to make sure the party and non-party coins show up
     let resp = ledger_service_client
@@ -1040,9 +988,7 @@ async fn party_object_jsonrpc() {
         .build();
     test_cluster
         .sign_and_execute_transaction(&transaction)
-        .await
-        .effects
-        .unwrap();
+        .await;
 
     // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated

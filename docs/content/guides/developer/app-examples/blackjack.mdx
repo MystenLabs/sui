@@ -1,7 +1,7 @@
 ---
 title: Blackjack
 description: Learn Sui using an example implementation of the popular casino game Blackjack.
-keywords: [ public bls key, http requests, serverless functions, randomness, generate randomness, create game, game app, game dApp, example game ]
+keywords: [ public bls key, http requests, serverless functions, randomness, generate randomness, create game, game app, game app, example game ]
 ---
 
 The following documentation goes through an example implementation of the popular casino game Blackjack on Sui. This guide walks through its components, providing a detailed look at the module's functions, structures, constants, and their significance in the overall gameplay mechanism.
@@ -76,7 +76,7 @@ The backend code is split in the following sub directories:
 
 ### Need of usage of `waitForTransaction`
 
-An interesting aspect of developing a dApp on Sui, that is coupled to using a full node with/without a load balancer, and requires attention by the developer, is the occurrence of read-after-write and write-after-write cases.
+An interesting aspect of developing an app on Sui, that is coupled to using a full node with/without a load balancer, and requires attention by the developer, is the occurrence of read-after-write and write-after-write cases.
 
 #### Initial deal transaction
 
@@ -127,7 +127,7 @@ The main sub-directories are:
 
 - **State management:** In both games, state management is crucial. For Blackjack, this involves managing the player and dealer's hands and scores using React state hooks. In Coin Flip, the state is managed through Move structs like `HouseData`, which track the house's balance and other game-related details.
 
-- **Randomness and fair play:** Both games emphasize randomness for fairness. Both games use Sui's [on-chain randomness module](/guides/developer/advanced/randomness-onchain.mdx), ensuring verifiable and truly random outcomes for every game.
+- **Randomness and fair play:** Both games emphasize randomness for fairness. Both games use Sui's [on-chain randomness module](/guides/developer/on-chain-primitives/randomness-onchain.mdx), ensuring verifiable and truly random outcomes for every game.
 
 - **Smart contract interactions:** Each game involves smart contract interactions for game actions like placing bets, dealing cards (Blackjack), or making guesses (Coin Flip). These interactions are crucial for executing the game's logic on the blockchain.
 

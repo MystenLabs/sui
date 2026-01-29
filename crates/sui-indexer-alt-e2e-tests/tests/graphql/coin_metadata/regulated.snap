@@ -33,10 +33,10 @@ Response: {
       "denyCap": {
         "contents": {
           "type": {
-            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2<0x40024e8b584dc2d1b5e8b2800c7dc4286587845782f66097b7f79065569f215c::fake::FAKE>"
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2<0xdc6077b1b177f0e0ab88ae9096375847b3389cb2db36f093bfb692018bc176f7::fake::FAKE>"
           },
           "json": {
-            "id": "0x5f67cd758747f2deb003590ea5aa0e00fa6e73934a222f66ba8f11c98f9b8357",
+            "id": "0x296c28a25c9f2f9d21e82fd9b56f887ee59cbbc79cef622aa1767fb67c0f5391",
             "allow_global_pause": false
           }
         }

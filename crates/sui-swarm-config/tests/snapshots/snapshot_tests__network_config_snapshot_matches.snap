@@ -79,7 +79,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -96,7 +95,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -113,7 +111,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -164,7 +161,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -250,7 +246,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -267,7 +262,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -284,7 +278,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -335,7 +328,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -421,7 +413,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -438,7 +429,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -455,7 +445,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -506,7 +495,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -592,7 +580,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -609,7 +596,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -626,7 +612,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -677,7 +662,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -763,7 +747,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -780,7 +763,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -797,7 +779,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -848,7 +829,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -934,7 +914,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -951,7 +930,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -968,7 +946,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -1019,7 +996,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -1105,7 +1081,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -1122,7 +1097,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -1139,7 +1113,6 @@ validator_configs:
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - EveFrontier
         - Facebook
@@ -1190,7 +1163,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~

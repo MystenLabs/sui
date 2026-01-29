@@ -10,9 +10,6 @@ use sui::hash;
 const ENotSystemAddress: u64 = 0;
 const EInvalidSplitAmount: u64 = 1;
 
-use fun sui::accumulator_metadata::remove_accumulator_metadata as AccumulatorRoot.remove_metadata;
-use fun sui::accumulator_metadata::create_accumulator_metadata as AccumulatorRoot.create_metadata;
-
 // === Settlement storage types and entry points ===
 
 /// Called by settlement transactions to ensure that the settlement transaction has a unique
@@ -39,7 +36,7 @@ fun settle_u128<T>(
     owner: address,
     merge: u128,
     split: u128,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
     // Merge and split should be netted out prior to calling this function.
@@ -57,7 +54,6 @@ fun settle_u128<T>(
         if (is_zero) {
             let value = accumulator_root.remove_accumulator<T, U128>(name);
             destroy_u128(value);
-            accumulator_root.remove_metadata<T>(owner);
         }
     } else {
         // cannot split if the field does not yet exist
@@ -65,7 +61,6 @@ fun settle_u128<T>(
         let value = create_u128(merge);
 
         accumulator_root.add_accumulator(name, value);
-        accumulator_root.create_metadata<T>(owner, ctx);
     };
 }
 

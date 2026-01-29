@@ -19,7 +19,7 @@ pub struct TransactionOutputs {
     pub effects: TransactionEffects,
     pub events: TransactionEvents,
     pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
-    pub accumulator_events: Mutex<Vec<AccumulatorEvent>>,
+    pub accumulator_events: Mutex<Option<Vec<AccumulatorEvent>>>,
 
     pub markers: Vec<(FullObjectKey, MarkerValue)>,
     pub wrapped: Vec<ObjectKey>,
@@ -191,7 +191,7 @@ impl TransactionOutputs {
             effects,
             events,
             unchanged_loaded_runtime_objects,
-            accumulator_events: Mutex::new(accumulator_events),
+            accumulator_events: Mutex::new(Some(accumulator_events)),
             markers,
             wrapped,
             deleted,
@@ -203,7 +203,10 @@ impl TransactionOutputs {
     }
 
     pub fn take_accumulator_events(&self) -> Vec<AccumulatorEvent> {
-        std::mem::take(&mut *self.accumulator_events.lock())
+        self.accumulator_events
+            .lock()
+            .take()
+            .expect("take_accumulator_events called twice")
     }
 
     #[cfg(test)]
@@ -213,7 +216,7 @@ impl TransactionOutputs {
             effects,
             events: TransactionEvents { data: vec![] },
             unchanged_loaded_runtime_objects: vec![],
-            accumulator_events: Default::default(),
+            accumulator_events: Mutex::new(Some(vec![])),
             markers: vec![],
             wrapped: vec![],
             deleted: vec![],

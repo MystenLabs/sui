@@ -8,10 +8,10 @@ use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SuiAddress};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, TransactionData};
 use sui_types::{SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -76,7 +76,7 @@ async fn run_thread<F, Fut>(
             .wallet
             .execute_transaction_may_fail(tx)
             .await
-            .map(|r| r.effects.unwrap())
+            .map(|r| r.effects)
         else {
             // When epochs are short, it is possible that some transactions
             // keep getting sent at epoch boundaries and timeout eventually.
@@ -241,14 +241,13 @@ async fn create_test_env() -> TestEnv {
     let effects = test_cluster
         .sign_and_execute_transaction(&tx_data)
         .await
-        .effects
-        .unwrap();
+        .effects;
     let mut coin_id = None;
     let mut coin_type = None;
     let mut coin_owner = None;
     let mut deny_cap = None;
-    for created in effects.created() {
-        let object_id = created.reference.object_id;
+    for (reference, owner) in effects.created() {
+        let object_id = reference.0;
         let object = test_cluster
             .get_object_from_fullnode_store(&object_id)
             .await
@@ -258,7 +257,7 @@ async fn create_test_env() -> TestEnv {
         } else if object.is_coin() {
             coin_id = Some(object_id);
             coin_type = object.coin_type_maybe();
-            coin_owner = Some(created.owner.get_address_owner_address().unwrap());
+            coin_owner = Some(owner.get_address_owner_address().unwrap());
         } else if object.type_().unwrap().is_coin_deny_cap_v2() {
             deny_cap = Some(object_id);
         }

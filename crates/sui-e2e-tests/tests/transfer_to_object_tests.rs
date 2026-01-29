@@ -11,6 +11,7 @@ use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiErrorKind, UserInputError};
+use sui_types::messages_grpc::SubmitTxRequest;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -39,7 +40,10 @@ async fn receive_object_feature_deny() {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(txn, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
+        .submit_transaction(
+            SubmitTxRequest::new_transaction(txn),
+            Some(SocketAddr::new([127, 0, 0, 1].into(), 0)),
+        )
         .await
         .map(|_| ())
         .unwrap_err();
@@ -73,7 +77,7 @@ async fn receive_of_object_with_reconfiguration_receive_after_reconfig() {
     let (parent, child) = env.start().await;
     let (new_parent, new_child) = env.receive(parent, child).await.unwrap();
     env.test_cluster.trigger_reconfiguration().await;
-    assert!(env.receive(new_parent, new_child).await.is_ok());
+    env.receive(new_parent, new_child).await.unwrap();
 }
 
 #[sim_test]
@@ -82,7 +86,7 @@ async fn receive_of_object_with_reconfiguration_receive_of_old_child_after_recon
     let (parent, child) = env.start().await;
     let (new_parent, _) = env.receive(parent, child).await.unwrap();
     env.test_cluster.trigger_reconfiguration().await;
-    assert!(env.receive(new_parent, child).await.is_err());
+    env.receive(new_parent, child).await.unwrap_err();
 }
 
 #[sim_test]
@@ -91,7 +95,7 @@ async fn receive_of_object_with_reconfiguration_receive_of_old_parent_after_reco
     let (parent, child) = env.start().await;
     let (_, new_child) = env.receive(parent, child).await.unwrap();
     env.test_cluster.trigger_reconfiguration().await;
-    assert!(env.receive(parent, new_child).await.is_err());
+    env.receive(parent, new_child).await.unwrap_err();
 }
 
 #[sim_test]
@@ -100,7 +104,7 @@ async fn receive_of_object_with_reconfiguration_receive_of_old_parent_and_child_
     let (parent, child) = env.start().await;
     env.receive(parent, child).await.unwrap();
     env.test_cluster.trigger_reconfiguration().await;
-    assert!(env.receive(parent, child).await.is_err());
+    env.receive(parent, child).await.unwrap_err();
 }
 
 #[sim_test]
@@ -109,7 +113,7 @@ async fn receive_of_object_with_reconfiguration_receive_after_reconfig_with_inva
     let (parent, child) = env.start().await;
     let (new_parent, new_child) = env.receive(parent, child).await.unwrap();
     env.test_cluster.trigger_reconfiguration().await;
-    assert!(env.receive(new_child, new_parent).await.is_err());
+    env.receive(new_child, new_parent).await.unwrap_err();
 }
 
 #[sim_test]
@@ -118,7 +122,7 @@ async fn delete_of_object_with_reconfiguration_receive_of_old_parent_and_child_a
     let (parent, child) = env.start().await;
     env.delete(parent, child).await;
     env.test_cluster.trigger_reconfiguration().await;
-    assert!(env.receive(parent, child).await.is_err());
+    env.receive(parent, child).await.unwrap_err();
 }
 
 #[sim_test]
@@ -128,7 +132,7 @@ async fn delete_of_object_with_reconfiguration_receive_of_new_parent_and_old_chi
     let (parent, child) = env.start().await;
     let new_parent = env.delete(parent, child).await;
     env.test_cluster.trigger_reconfiguration().await;
-    assert!(env.receive(new_parent, child).await.is_err());
+    env.receive(new_parent, child).await.unwrap_err();
 }
 
 fn get_parent_and_child(created: Vec<(ObjectRef, Owner)>) -> (ObjectRef, ObjectRef) {

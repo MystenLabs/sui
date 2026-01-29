@@ -8,6 +8,7 @@ mod checked {
 
     use crate::execution_mode::{self, ExecutionMode};
     use crate::execution_value::SuiResolver;
+    use crate::gas_charger::PaymentMethod;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
@@ -73,7 +74,7 @@ mod checked {
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
-        is_gas_paid_from_address_balance,
+        WriteAccumulatorStorageCost, is_gas_paid_from_address_balance,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -137,18 +138,20 @@ mod checked {
         };
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
-        let address_balance_gas_payer =
-            if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
-                Some(gas_data.owner)
-            } else {
-                None
-            };
+
+        let payment_method = if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
+            PaymentMethod::Unmetered
+        } else if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
+            PaymentMethod::AddressBalance(gas_data.owner)
+        } else {
+            PaymentMethod::Coins(gas_data.payment)
+        };
+
         let mut gas_charger = GasCharger::new(
             transaction_digest,
-            gas_data.payment,
+            payment_method,
             gas_status,
             protocol_config,
-            address_balance_gas_payer,
         );
 
         let tx_ctx = TxContext::new_from_components(
@@ -304,6 +307,7 @@ mod checked {
             store.as_backing_package_store(),
             tx_context,
             &mut gas_charger,
+            None,
             pt,
             &mut None,
         )
@@ -380,7 +384,7 @@ mod checked {
                     }
 
                     if execution_result.is_ok() {
-                        let gas_check = check_written_objects_limit::<Mode>(
+                        let gas_check = check_written_objects_limit(
                             temporary_store,
                             gas_charger,
                             protocol_config,
@@ -541,7 +545,7 @@ mod checked {
     }
 
     #[instrument(name = "check_written_objects_limit", level = "debug", skip_all)]
-    fn check_written_objects_limit<Mode: ExecutionMode>(
+    fn check_written_objects_limit(
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -702,6 +706,7 @@ mod checked {
                     store.as_backing_package_store(),
                     tx_ctx,
                     gas_charger,
+                    None,
                     pt,
                     trace_builder_opt,
                 )
@@ -715,6 +720,7 @@ mod checked {
                     store.as_backing_package_store(),
                     tx_ctx,
                     gas_charger,
+                    None,
                     pt,
                     trace_builder_opt,
                 )?;
@@ -789,6 +795,13 @@ mod checked {
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             assert!(protocol_config.create_root_accumulator_object());
                             builder = setup_accumulator_root_create(builder);
+                        }
+                        EndOfEpochTransactionKind::WriteAccumulatorStorageCost(
+                            write_storage_cost,
+                        ) => {
+                            assert!(protocol_config.enable_accumulators());
+                            builder =
+                                setup_write_accumulator_storage_cost(builder, &write_storage_cost);
                         }
                         EndOfEpochTransactionKind::CoinRegistryCreate => {
                             assert!(protocol_config.enable_coin_registry());
@@ -1012,6 +1025,7 @@ mod checked {
             store.as_backing_package_store(),
             tx_ctx.clone(),
             gas_charger,
+            None,
             advance_epoch_pt,
             trace_builder_opt,
         );
@@ -1043,6 +1057,7 @@ mod checked {
                     store.as_backing_package_store(),
                     tx_ctx.clone(),
                     gas_charger,
+                    None,
                     advance_epoch_safe_mode_pt,
                     trace_builder_opt,
                 )
@@ -1121,6 +1136,7 @@ mod checked {
                     store.as_backing_package_store(),
                     tx_ctx.clone(),
                     gas_charger,
+                    None,
                     publish_pt,
                     trace_builder_opt,
                 )
@@ -1194,6 +1210,7 @@ mod checked {
             store.as_backing_package_store(),
             tx_ctx,
             gas_charger,
+            None,
             pt,
             trace_builder_opt,
         )
@@ -1341,6 +1358,7 @@ mod checked {
             store.as_backing_package_store(),
             tx_ctx,
             gas_charger,
+            None,
             pt,
             trace_builder_opt,
         )
@@ -1413,6 +1431,7 @@ mod checked {
             store.as_backing_package_store(),
             tx_ctx,
             gas_charger,
+            None,
             pt,
             trace_builder_opt,
         )
@@ -1492,6 +1511,22 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate accumulator_root_create transaction!");
+        builder
+    }
+
+    fn setup_write_accumulator_storage_cost(
+        mut builder: ProgrammableTransactionBuilder,
+        write_storage_cost: &WriteAccumulatorStorageCost,
+    ) -> ProgrammableTransactionBuilder {
+        let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+        let storage_cost_arg = builder.pure(write_storage_cost.storage_cost).unwrap();
+        builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("write_accumulator_storage_cost").to_owned(),
+            vec![],
+            vec![system_state, storage_cost_arg],
+        );
         builder
     }
 

@@ -3,13 +3,15 @@
 
 use std::path::PathBuf;
 
+use clap::Subcommand;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::postgres::DbArgs;
+use sui_indexer_alt_metrics::MetricsArgs;
+use url::Url;
+
 use crate::IndexerArgs;
 #[cfg(feature = "benchmark")]
 use crate::benchmark::BenchmarkArgs;
-use clap::Subcommand;
-use sui_indexer_alt_framework::{ingestion::ClientArgs, postgres::DbArgs};
-use sui_indexer_alt_metrics::MetricsArgs;
-use url::Url;
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {

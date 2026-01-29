@@ -107,7 +107,7 @@ use crate::authority::shared_object_version_manager::{
     AsTx, AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
 use crate::checkpoints::{
-    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint,
+    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint, PendingCheckpointV2,
 };
 use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -302,8 +302,11 @@ impl PartialOrd for ExecutionIndices {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithStats {
     pub index: ExecutionIndices,
-    // Hash is always 0 and kept for compatibility only.
-    pub hash: u64,
+    /// Height watermark assigned to this commit.
+    /// We use this to determine if a commit has been fully executed.
+    /// if an executed checkpoint's height is higher than commit
+    /// height, we've fully executed the commit.
+    pub height: u64,
     pub stats: ConsensusStats,
 }
 
@@ -537,8 +540,9 @@ pub struct AuthorityEpochTables {
     #[rename = "running_root_accumulators"]
     pub running_root_state_hash: DBMap<CheckpointSequenceNumber, GlobalStateHash>,
 
-    /// Record of the capabilities advertised by each authority.
+    #[cfg(tidehunter)] // tidehunter does not support table deletion yet
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
+    /// Record of the capabilities advertised by each authority.
     authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
     /// Contains a single key, which overrides the value of
@@ -560,8 +564,6 @@ pub struct AuthorityEpochTables {
 
     /// Transactions that are being deferred until some future time
     deferred_transactions_v2: DBMap<DeferralKey, Vec<TrustedExecutableTransaction>>,
-    deferred_transactions_with_aliases_v2:
-        DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
 
     // Tables for recording state for RandomnessManager.
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
@@ -592,6 +594,8 @@ pub struct AuthorityEpochTables {
     /// Execution time observations for congestion control.
     pub(crate) execution_time_observations:
         DBMap<(u64, AuthorityIndex), Vec<(ExecutionTimeObservationKey, Duration)>>,
+    deferred_transactions_with_aliases_v2:
+        DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -1100,6 +1104,7 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_passkey_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
             protocol_config.additional_multisig_checks(),
+            protocol_config.validate_zklogin_public_identifier(),
             protocol_config.address_aliases(),
         );
 
@@ -1133,41 +1138,39 @@ impl AuthorityPerEpochStore {
 
         let jwk_aggregator = Mutex::new(jwk_aggregator);
 
-        let consensus_output_cache = ConsensusOutputCache::new(&epoch_start_configuration, &tables);
+        let consensus_output_cache = ConsensusOutputCache::new(&tables);
 
         let execution_time_observations = tables
             .execution_time_observations
             .safe_iter()
             .collect::<Result<Vec<_>, _>>()?;
-        let execution_time_estimator =
-            if let PerObjectCongestionControlMode::ExecutionTimeEstimate(protocol_params) =
-                protocol_config.per_object_congestion_control_mode()
-            {
-                ExecutionTimeEstimator::new(
-                    committee.clone(),
-                    protocol_params,
-                    // Load observations stored at end of previous epoch.
-                    Self::get_stored_execution_time_observations(
-                        &protocol_config,
-                        committee.clone(),
-                        &*object_store,
-                        &metrics,
-                        protocol_params.default_none_duration_for_new_keys,
-                    )
-                    // Load observations stored during the current epoch.
-                    .chain(execution_time_observations.into_iter().flat_map(
-                        |((generation, source), observations)| {
-                            observations.into_iter().map(move |(key, duration)| {
-                                (source, Some(generation), key, duration)
-                            })
-                        },
-                    )),
-                )
-            } else {
-                fatal!(
-                    "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
-                );
-            };
+
+        let protocol_params = match protocol_config.per_object_congestion_control_mode() {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => params,
+            // Note: if this a validator, we will panic when constructing the ConsensusHandler.
+            _ => Default::default(),
+        };
+
+        let execution_time_estimator = ExecutionTimeEstimator::new(
+            committee.clone(),
+            protocol_params,
+            // Load observations stored at end of previous epoch.
+            Self::get_stored_execution_time_observations(
+                &protocol_config,
+                committee.clone(),
+                &*object_store,
+                &metrics,
+                protocol_params.default_none_duration_for_new_keys,
+            )
+            // Load observations stored during the current epoch.
+            .chain(execution_time_observations.into_iter().flat_map(
+                |((generation, source), observations)| {
+                    observations
+                        .into_iter()
+                        .map(move |(key, duration)| (source, Some(generation), key, duration))
+                },
+            )),
+        );
 
         let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
             Some(ConsensusTxStatusCache::new(protocol_config.gc_depth()))
@@ -2036,6 +2039,77 @@ impl AuthorityPerEpochStore {
         Ok(self.tables()?.transaction_cert_signatures.get(tx_digest)?)
     }
 
+    /// Gets owned object locks, checking quarantine first then falling back to DB.
+    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
+    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
+    pub fn get_owned_object_locks(
+        &self,
+        obj_refs: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        let tables = self.tables()?;
+        self.consensus_quarantine
+            .read()
+            .get_owned_object_locks(&tables, obj_refs)
+    }
+
+    /// Attempts to acquire owned object locks for a transaction post-consensus.
+    /// This is used when preconsensus locking is disabled.
+    ///
+    /// Checks whether the object versions are already locked by searching:
+    /// 1. The current commit
+    /// 2. Quarantine and cache (earlier consensus commits in this epoch)
+    /// 3. DB (cache miss)
+    ///
+    /// Returns the new locks to add on success, or error if a conflict exists.
+    pub fn try_acquire_owned_object_locks_post_consensus(
+        &self,
+        owned_object_refs: &[ObjectRef],
+        tx_digest: TransactionDigest,
+        current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
+    ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
+        if owned_object_refs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Check for intra-commit conflicts (transactions processed earlier in the same commit).
+        for obj_ref in owned_object_refs {
+            if let Some(locked_tx_digest) = current_commit_locks.get(obj_ref)
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+        }
+
+        // Check quarantine and epoch store for existing locks.
+        let existing_locks = self
+            .get_owned_object_locks(owned_object_refs)
+            .unwrap_or_default();
+
+        // Check for conflicts with existing locks (from earlier commits or crash recovery)
+        for (lock, obj_ref) in existing_locks.iter().zip(owned_object_refs) {
+            if let Some(locked_tx_digest) = lock
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+        }
+
+        // No conflicts, so the consumed owned object versions are valid (from preconsensus validation)
+        // and available (from the checks above). Return the new locks to add.
+        Ok(owned_object_refs
+            .iter()
+            .map(|obj_ref| (*obj_ref, tx_digest))
+            .collect())
+    }
+
     /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs
     /// to specific object versions.
     pub(crate) fn get_input_object_keys(
@@ -2086,20 +2160,10 @@ impl AuthorityPerEpochStore {
             self.consensus_quarantine.read().is_empty(),
             "get_last_consensus_stats should only be called at startup"
         );
-        match self.tables()?.get_last_consensus_stats()? {
-            Some(stats) => Ok(stats),
-            None => {
-                let indices = self
-                    .tables()?
-                    .get_last_consensus_index()
-                    .map(|x| x.unwrap_or_default())?;
-                Ok(ExecutionIndicesWithStats {
-                    index: indices,
-                    hash: 0, // unused
-                    stats: ConsensusStats::default(),
-                })
-            }
-        }
+        Ok(self
+            .tables()?
+            .get_last_consensus_stats()?
+            .unwrap_or_default())
     }
 
     pub fn get_accumulators_in_checkpoint_range(
@@ -2152,7 +2216,7 @@ impl AuthorityPerEpochStore {
         Ok(result)
     }
 
-    /// Called when transaction outputs are committed to disk
+    /// Called when transaction outputs are committed to disk.
     #[instrument(level = "trace", skip_all)]
     pub fn handle_finalized_checkpoint(
         &self,
@@ -2418,7 +2482,7 @@ impl AuthorityPerEpochStore {
             let mut keys = Vec::new();
             let mut txns = Vec::new();
 
-            let deferred_transactions = self.consensus_output_cache.deferred_transactions_v2.lock();
+            let deferred_transactions = self.consensus_output_cache.deferred_transactions.lock();
 
             for (key, transactions) in deferred_transactions.range(min..max) {
                 debug!(
@@ -2454,7 +2518,7 @@ impl AuthorityPerEpochStore {
         &self,
     ) -> Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)> {
         self.consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock()
             .iter()
             .map(|(key, txs)| (*key, txs.clone()))
@@ -2602,9 +2666,9 @@ impl AuthorityPerEpochStore {
             .contains(tx_digest)
     }
 
-    pub fn deferred_transactions_empty_v2(&self) -> bool {
+    pub fn deferred_transactions_empty(&self) -> bool {
         self.consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock()
             .is_empty()
     }
@@ -2867,28 +2931,6 @@ impl AuthorityPerEpochStore {
     }
 
     /// Record most recently advertised capabilities of all authorities
-    pub fn record_capabilities(&self, capabilities: &AuthorityCapabilitiesV1) -> SuiResult {
-        info!("received capabilities {:?}", capabilities);
-        let authority = &capabilities.authority;
-        let tables = self.tables()?;
-
-        // Read-compare-write pattern assumes we are only called from the consensus handler task.
-        if let Some(cap) = tables.authority_capabilities.get(authority)?
-            && cap.generation >= capabilities.generation
-        {
-            debug!(
-                "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
-                capabilities, cap
-            );
-            return Ok(());
-        }
-        tables
-            .authority_capabilities
-            .insert(authority, capabilities)?;
-        Ok(())
-    }
-
-    /// Record most recently advertised capabilities of all authorities
     pub fn record_capabilities_v2(&self, capabilities: &AuthorityCapabilitiesV2) -> SuiResult {
         info!("received capabilities v2 {:?}", capabilities);
         let authority = &capabilities.authority;
@@ -2908,16 +2950,6 @@ impl AuthorityPerEpochStore {
             .authority_capabilities_v2
             .insert(authority, capabilities)?;
         Ok(())
-    }
-
-    pub fn get_capabilities_v1(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
-        assert!(!self.protocol_config.authority_capabilities_v2());
-        Ok(self
-            .tables()?
-            .authority_capabilities
-            .safe_iter()
-            .map(|item| item.map(|(_, v)| v))
-            .collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn get_capabilities_v2(&self) -> SuiResult<Vec<AuthorityCapabilitiesV2>> {
@@ -3043,15 +3075,27 @@ impl AuthorityPerEpochStore {
     ) {
         let sigs: Vec<_> = txs
             .filter_map(|s| match s {
-                Schedulable::Transaction(tx) => Some((
-                    *tx.tx().digest(),
-                    tx.tx()
-                        .tx_signatures()
-                        .iter()
-                        .cloned()
-                        .zip(tx.aliases().iter().map(|(_, seq)| *seq))
-                        .collect(),
-                )),
+                Schedulable::Transaction(tx) => {
+                    let tx_signatures = tx.tx().tx_signatures();
+                    let sigs_with_versions: Vec<_> =
+                        if self.protocol_config().fix_checkpoint_signature_mapping() {
+                            tx.aliases()
+                                .iter()
+                                .map(|(sig_idx, seq)| {
+                                    let sig = tx_signatures[*sig_idx as usize].clone();
+                                    (sig, *seq)
+                                })
+                                .collect()
+                        } else {
+                            // Old behavior: zip all signatures with alias versions in order.
+                            tx_signatures
+                                .iter()
+                                .cloned()
+                                .zip(tx.aliases().iter().map(|(_, seq)| *seq))
+                                .collect()
+                        };
+                    Some((*tx.tx().digest(), sigs_with_versions))
+                }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
                 Schedulable::AccumulatorSettlement(_, _) => None,
                 Schedulable::ConsensusCommitPrologue(_, _, _) => None,
@@ -3469,11 +3513,50 @@ impl AuthorityPerEpochStore {
             .get_pending_checkpoints(last))
     }
 
-    pub fn pending_checkpoint_exists(&self, index: &CheckpointHeight) -> SuiResult<bool> {
+    fn pending_checkpoint_exists(&self, index: &CheckpointHeight) -> SuiResult<bool> {
         Ok(self
             .consensus_quarantine
             .read()
             .pending_checkpoint_exists(index))
+    }
+
+    pub(crate) fn write_pending_checkpoint_v2(
+        &self,
+        output: &mut ConsensusCommitOutput,
+        checkpoint: &PendingCheckpointV2,
+    ) -> SuiResult {
+        assert!(
+            !self.pending_checkpoint_exists_v2(&checkpoint.height())?,
+            "Duplicate pending checkpoint notification at height {:?}",
+            checkpoint.height()
+        );
+
+        debug!(
+            checkpoint_commit_height = checkpoint.height(),
+            "Pending checkpoint has {} roots",
+            checkpoint.num_roots(),
+        );
+
+        output.insert_pending_checkpoint_v2(checkpoint.clone());
+
+        Ok(())
+    }
+
+    pub fn get_pending_checkpoints_v2(
+        &self,
+        last: Option<CheckpointHeight>,
+    ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
+        Ok(self
+            .consensus_quarantine
+            .read()
+            .get_pending_checkpoints_v2(last))
+    }
+
+    fn pending_checkpoint_exists_v2(&self, index: &CheckpointHeight) -> SuiResult<bool> {
+        Ok(self
+            .consensus_quarantine
+            .read()
+            .pending_checkpoint_exists_v2(index))
     }
 
     pub fn process_constructed_checkpoint(
@@ -3534,6 +3617,12 @@ impl AuthorityPerEpochStore {
             return Ok(Some(summary.clone()));
         }
 
+        self.last_persisted_checkpoint_builder_summary()
+    }
+
+    pub fn last_persisted_checkpoint_builder_summary(
+        &self,
+    ) -> SuiResult<Option<BuilderCheckpointSummary>> {
         Ok(self
             .tables()?
             .builder_checkpoint_summary_v2

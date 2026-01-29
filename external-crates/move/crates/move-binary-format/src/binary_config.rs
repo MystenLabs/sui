@@ -50,8 +50,8 @@ impl TableConfig {
             // These can be any number
             enum_defs: u16::MAX,
             enum_def_instantiations: u16::MAX,
-            variant_handles: 1024,
-            variant_instantiation_handles: 1024,
+            variant_handles: u16::MAX,
+            variant_instantiation_handles: u16::MAX,
         }
     }
 }

@@ -15,7 +15,8 @@ use fastcrypto::encoding::{Base64, Encoding};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use sui::client_commands::{
-    GasDataArgs, PaymentArgs, PublishArgs, TestPublishArgs, TxProcessingArgs,
+    EphemeralArgs, GasDataArgs, PaymentArgs, PublishArgs, TestPublishArgs, TxProcessingArgs,
+    UpgradeArgs,
 };
 use sui::client_ptb::ptb::PTB;
 use sui::sui_commands::RpcArgs;
@@ -23,11 +24,12 @@ use sui_keys::key_identity::KeyIdentity;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
 use sui_types::transaction::{
-    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    CallArg, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData, TransactionDataAPI,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData, TransactionDataAPI, TransactionKind,
 };
 use tokio::time::sleep;
 
@@ -49,9 +51,8 @@ use sui_config::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiExecutionStatus, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTransactionBlockDataAPI,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiExecutionStatus, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -225,6 +226,7 @@ upgrade-capability = "{}""#,
         let mut build_config = BuildConfig::new_for_testing();
         build_config.config.environment = Some(environment.name.clone());
         build_config.environment = environment.clone();
+        build_config.config.install_dir = None;
         let compiled_package = build_config.build_async(&package_path).await.unwrap();
 
         let context = self.test_cluster.wallet_mut();
@@ -263,8 +265,9 @@ upgrade-capability = "{}""#,
         upgrade_capability: ObjectID,
     ) -> Result<ObjectID, anyhow::Error> {
         let mut build_config = BuildConfig::new_for_testing().config;
-        build_config.lock_file = Some(self.package_path(package_name).join("Move.lock"));
-        let resp = SuiClientCommands::Upgrade {
+        build_config.install_dir = None;
+
+        let resp = SuiClientCommands::Upgrade(UpgradeArgs {
             package_path: self.package_path(package_name),
             upgrade_capability: Some(upgrade_capability),
             build_config,
@@ -280,7 +283,7 @@ upgrade-capability = "{}""#,
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        }
+        })
         .execute(self.test_cluster.wallet_mut())
         .await?;
 
@@ -288,15 +291,15 @@ upgrade-capability = "{}""#,
             unreachable!("Invalid response");
         };
 
-        let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
-        assert!(effects.status.is_ok());
+        let effects = publish_response.effects;
+        assert!(effects.status().is_ok());
 
         let package_a_v1 = effects
             .created()
-            .iter()
-            .find(|refe| matches!(refe.owner, Owner::Immutable))
+            .into_iter()
+            .find(|refe| matches!(refe.1, Owner::Immutable))
             .unwrap();
-        Ok(package_a_v1.object_id())
+        Ok(package_a_v1.0.0)
     }
 
     async fn fetch_linkage_table(&self, pkg: ObjectID) -> BTreeMap<ObjectID, UpgradeInfo> {
@@ -317,8 +320,7 @@ async fn test_publish_package(
     pubfile: Option<PathBuf>,
 ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
-    let move_lock_path = package_path.clone().join("Move.lock");
-    build_config.lock_file = Some(move_lock_path.clone());
+    build_config.install_dir = None;
 
     let pubfile_path = pubfile.unwrap_or(package_path.join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
@@ -337,8 +339,11 @@ async fn test_publish_package(
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(pubfile_path),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(pubfile_path),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -347,21 +352,20 @@ async fn test_publish_package(
         unreachable!("Invalid response");
     };
 
-    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
-
-    assert!(effects.status.is_ok());
+    let effects = publish_response.effects;
+    assert!(effects.status().is_ok());
     let package_a = effects
         .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .into_iter()
+        .find(|refe| matches!(refe.1, Owner::Immutable))
         .unwrap();
     let cap = effects
         .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .into_iter()
+        .find(|refe| matches!(refe.1, Owner::AddressOwner(_)))
         .unwrap();
 
-    Ok((package_a.reference.object_id, cap.reference.object_id))
+    Ok((package_a.0.0, cap.0.0))
 }
 
 async fn publish_package(
@@ -372,8 +376,7 @@ async fn publish_package(
     with_unpublished_dependencies: bool,
 ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
-    let move_lock_path = package_path.clone().join("Move.lock");
-    build_config.lock_file = Some(move_lock_path.clone());
+    build_config.install_dir = None;
 
     let resp = SuiClientCommands::Publish(PublishArgs {
         package_path: package_path.clone(),
@@ -397,21 +400,20 @@ async fn publish_package(
         unreachable!("Invalid response");
     };
 
-    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
-
-    assert!(effects.status.is_ok());
+    let effects = publish_response.effects;
+    assert!(effects.status().is_ok());
     let package_a = effects
         .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .into_iter()
+        .find(|refe| matches!(refe.1, Owner::Immutable))
         .unwrap();
     let cap = effects
         .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .into_iter()
+        .find(|refe| matches!(refe.1, Owner::AddressOwner(_)))
         .unwrap();
 
-    Ok((package_a.reference.object_id, cap.reference.object_id))
+    Ok((package_a.0.0, cap.0.0))
 }
 
 // Recursively copy a directory and all its contents
@@ -646,8 +648,11 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -660,19 +665,18 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         unreachable!("Invalid response");
     };
 
-    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
-
-    assert!(effects.status.is_ok());
-    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    let effects = response.effects;
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.gas_object().0.0, gas_obj_id);
     let package = effects
         .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .into_iter()
+        .find(|refe| matches!(refe.1, Owner::Immutable))
         .unwrap();
-    let package_id_str = package.reference.object_id;
+    let package_id_str = package.0.0;
 
     let start_call_result = SuiClientCommands::Call {
-        package: package.reference.object_id,
+        package: package.0.0,
         module: "test_module".to_string(),
         function: "new_shared".to_string(),
         type_args: vec![],
@@ -689,10 +693,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
 
     let shared_id_str =
         if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
-            response.effects.unwrap().created().to_vec()[0]
-                .reference
-                .object_id
-                .to_string()
+            response.effects.created()[0].0.0.to_string()
         } else {
             unreachable!("Invalid response");
         };
@@ -948,36 +949,30 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
 
     let package = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert!(
-            response.status_ok().unwrap(),
+            response.effects.status().is_ok(),
             "Command failed: {:?}",
             response
         );
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            gas_obj_id
-        );
+        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
         response
             .effects
-            .unwrap()
             .created()
-            .iter()
-            .find(
-                |OwnedObjectRef {
-                     owner,
-                     reference: _,
-                 }| matches!(owner, Owner::Immutable),
-            )
+            .into_iter()
+            .find(|create| matches!(create.1, Owner::Immutable))
             .unwrap()
-            .reference
-            .object_id
+            .0
+            .0
     } else {
         unreachable!("Invalid response");
     };
@@ -1044,13 +1039,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Get the created object
     let created_obj: ObjectID = if let SuiClientCommandResult::TransactionBlock(resp) = resp {
-        resp.effects
-            .unwrap()
-            .created()
-            .first()
-            .unwrap()
-            .reference
-            .object_id
+        resp.effects.created().first().unwrap().0.0
     } else {
         panic!();
     };
@@ -1195,10 +1184,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await?;
 
     if let SuiClientCommandResult::TransactionBlock(txn_response) = result {
-        assert_eq!(
-            txn_response.transaction.unwrap().data.gas_data().price,
-            12345
-        );
+        assert_eq!(txn_response.transaction.gas_data().price, 12345);
     } else {
         panic!("Command failed with unexpected result.")
     };
@@ -1256,8 +1242,11 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1266,17 +1255,12 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     let obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            gas_obj_id
-        );
+        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
         response
             .effects
-            .as_ref()
-            .unwrap()
             .created()
-            .iter()
-            .map(|refe| refe.reference.object_id)
+            .into_iter()
+            .map(|refe| refe.0.0)
             .collect::<Vec<_>>()
     } else {
         unreachable!("Invalid response");
@@ -1318,7 +1302,8 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.install_dir = None;
 
     let (_tmp, pkg_path) =
         create_temp_dir_with_framework_packages("pkg_mgmt_modules_publish", Some(chain_id))?;
@@ -1345,10 +1330,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     // Get Package ID and version
     let (expect_original_id, expect_version, _) =
         if let SuiClientCommandResult::TransactionBlock(response) = resp {
-            assert_eq!(
-                response.effects.as_ref().unwrap().gas_object().object_id(),
-                gas_obj_id
-            );
+            assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
             response
                 .get_new_package_obj()
                 .ok_or_else(|| anyhow::anyhow!("No package object response"))?
@@ -1424,37 +1406,37 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            gas_obj_id
-        );
-        let x = response.effects.unwrap();
-        x.created().to_vec()
+        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        let x = response.effects;
+        x.created()
     } else {
         unreachable!("Invalid response");
     };
 
     // Check the objects
-    for OwnedObjectRef { reference, .. } in &owned_obj_ids {
-        get_parsed_object_assert_existence(reference.object_id, context).await;
+    for (reference, _) in &owned_obj_ids {
+        get_parsed_object_assert_existence(reference.0, context).await;
     }
 
     let package_id = owned_obj_ids
         .into_iter()
-        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .find(|(_, owner)| owner == &Owner::Immutable)
         .expect("Must find published package ID")
-        .reference;
+        .0;
 
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
-        package: package_id.object_id,
+        package: package_id.0,
         module: "sod".to_string(),
         function: "start".to_string(),
         type_args: vec![],
@@ -1470,15 +1452,13 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     .await?;
 
     let shared_id = if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
-        response.effects.unwrap().created().to_vec()[0]
-            .reference
-            .object_id
+        response.effects.created()[0].0.0
     } else {
         unreachable!("Invalid response");
     };
 
     let delete_result = SuiClientCommands::Call {
-        package: package_id.object_id,
+        package: package_id.0,
         module: "sod".to_string(),
         function: "delete".to_string(),
         type_args: vec![],
@@ -1494,7 +1474,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     .await?;
 
     if let SuiClientCommandResult::TransactionBlock(response) = delete_result {
-        assert!(response.effects.unwrap().into_status().is_ok());
+        assert!(response.effects.status().is_ok());
     } else {
         unreachable!("Invalid response");
     };
@@ -1548,37 +1528,37 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            gas_obj_id
-        );
-        let x = response.effects.unwrap();
-        x.created().to_vec()
+        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        let x = response.effects;
+        x.created()
     } else {
         unreachable!("Invalid response");
     };
 
     // Check the objects
-    for OwnedObjectRef { reference, .. } in &owned_obj_ids {
-        get_parsed_object_assert_existence(reference.object_id, context).await;
+    for (reference, _) in &owned_obj_ids {
+        get_parsed_object_assert_existence(reference.0, context).await;
     }
 
     let package_id = owned_obj_ids
         .into_iter()
-        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .find(|(_, owner)| owner == &Owner::Immutable)
         .expect("Must find published package ID")
-        .reference;
+        .0;
 
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
-        package: package_id.object_id,
+        package: package_id.0,
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
@@ -1595,37 +1575,32 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
 
     let (parent, child) =
         if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
-            let created = response.effects.unwrap().created().to_vec();
+            let created = response.effects.created();
             let owners: BTreeSet<ObjectID> = created
                 .iter()
-                .flat_map(|refe| {
-                    refe.owner
-                        .get_address_owner_address()
-                        .ok()
-                        .map(|x| x.into())
-                })
+                .flat_map(|refe| refe.1.get_address_owner_address().ok().map(|x| x.into()))
                 .collect();
             let child = created
                 .iter()
-                .find(|refe| !owners.contains(&refe.reference.object_id))
+                .find(|refe| !owners.contains(&refe.0.0))
                 .unwrap();
             let parent = created
                 .iter()
-                .find(|refe| owners.contains(&refe.reference.object_id))
+                .find(|refe| owners.contains(&refe.0.0))
                 .unwrap();
-            (parent.reference.clone(), child.reference.clone())
+            (parent.0, child.0)
         } else {
             unreachable!("Invalid response");
         };
 
     let receive_result = SuiClientCommands::Call {
-        package: package_id.object_id,
+        package: package_id.0,
         module: "tto".to_string(),
         function: "receiver".to_string(),
         type_args: vec![],
         args: vec![
-            SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
-            SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
+            SuiJsonValue::from_str(&parent.0.to_string()).unwrap(),
+            SuiJsonValue::from_str(&child.0.to_string()).unwrap(),
         ],
         payment: PaymentArgs::default(),
         gas_data: GasDataArgs {
@@ -1638,7 +1613,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     .await?;
 
     if let SuiClientCommandResult::TransactionBlock(response) = receive_result {
-        assert!(response.effects.unwrap().into_status().is_ok());
+        assert!(response.effects.status().is_ok());
     } else {
         unreachable!("Invalid response");
     };
@@ -1692,37 +1667,37 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            gas_obj_id
-        );
-        let x = response.effects.unwrap();
-        x.created().to_vec()
+        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        let x = response.effects;
+        x.created()
     } else {
         unreachable!("Invalid response");
     };
 
     // Check the objects
-    for OwnedObjectRef { reference, .. } in &owned_obj_ids {
-        get_parsed_object_assert_existence(reference.object_id, context).await;
+    for (reference, _) in &owned_obj_ids {
+        get_parsed_object_assert_existence(reference.0, context).await;
     }
 
     let package_id = owned_obj_ids
         .into_iter()
-        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .find(|(_, owner)| owner == &Owner::Immutable)
         .expect("Must find published package ID")
-        .reference;
+        .0;
 
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
-        package: package_id.object_id,
+        package: package_id.0,
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
@@ -1739,37 +1714,32 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
 
     let (parent, child) =
         if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
-            let created = response.effects.unwrap().created().to_vec();
+            let created = response.effects.created();
             let owners: BTreeSet<ObjectID> = created
                 .iter()
-                .flat_map(|refe| {
-                    refe.owner
-                        .get_address_owner_address()
-                        .ok()
-                        .map(|x| x.into())
-                })
+                .flat_map(|refe| refe.1.get_address_owner_address().ok().map(|x| x.into()))
                 .collect();
             let child = created
                 .iter()
-                .find(|refe| !owners.contains(&refe.reference.object_id))
+                .find(|refe| !owners.contains(&refe.0.0))
                 .unwrap();
             let parent = created
                 .iter()
-                .find(|refe| owners.contains(&refe.reference.object_id))
+                .find(|refe| owners.contains(&refe.0.0))
                 .unwrap();
-            (parent.reference.clone(), child.reference.clone())
+            (parent.0, child.0)
         } else {
             unreachable!("Invalid response");
         };
 
     let receive_result = SuiClientCommands::Call {
-        package: package_id.object_id,
+        package: package_id.0,
         module: "tto".to_string(),
         function: "invalid_call_immut_ref".to_string(),
         type_args: vec![],
         args: vec![
-            SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
-            SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
+            SuiJsonValue::from_str(&parent.0.to_string()).unwrap(),
+            SuiJsonValue::from_str(&child.0.to_string()).unwrap(),
         ],
         payment: PaymentArgs::default(),
         gas_data: GasDataArgs {
@@ -1782,7 +1752,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     .await?;
 
     if let SuiClientCommandResult::TransactionBlock(response) = receive_result {
-        assert!(response.effects.unwrap().into_status().is_ok());
+        assert!(response.effects.status().is_ok());
     } else {
         unreachable!("Invalid response");
     };
@@ -1836,37 +1806,37 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            gas_obj_id
-        );
-        let x = response.effects.unwrap();
-        x.created().to_vec()
+        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        let x = response.effects;
+        x.created()
     } else {
         unreachable!("Invalid response");
     };
 
     // Check the objects
-    for OwnedObjectRef { reference, .. } in &owned_obj_ids {
-        get_parsed_object_assert_existence(reference.object_id, context).await;
+    for (reference, _) in &owned_obj_ids {
+        get_parsed_object_assert_existence(reference.0, context).await;
     }
 
     let package_id = owned_obj_ids
         .into_iter()
-        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .find(|(_, owner)| owner == &Owner::Immutable)
         .expect("Must find published package ID")
-        .reference;
+        .0;
 
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
-        package: package_id.object_id,
+        package: package_id.0,
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
@@ -1883,37 +1853,32 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
 
     let (parent, child) =
         if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
-            let created = response.effects.unwrap().created().to_vec();
+            let created = response.effects.created();
             let owners: BTreeSet<ObjectID> = created
                 .iter()
-                .flat_map(|refe| {
-                    refe.owner
-                        .get_address_owner_address()
-                        .ok()
-                        .map(|x| x.into())
-                })
+                .flat_map(|refe| refe.1.get_address_owner_address().ok().map(|x| x.into()))
                 .collect();
             let child = created
                 .iter()
-                .find(|refe| !owners.contains(&refe.reference.object_id))
+                .find(|refe| !owners.contains(&refe.0.0))
                 .unwrap();
             let parent = created
                 .iter()
-                .find(|refe| owners.contains(&refe.reference.object_id))
+                .find(|refe| owners.contains(&refe.0.0))
                 .unwrap();
-            (parent.reference.clone(), child.reference.clone())
+            (parent.0, child.0)
         } else {
             unreachable!("Invalid response");
         };
 
     let receive_result = SuiClientCommands::Call {
-        package: package_id.object_id,
+        package: package_id.0,
         module: "tto".to_string(),
         function: "invalid_call_mut_ref".to_string(),
         type_args: vec![],
         args: vec![
-            SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
-            SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
+            SuiJsonValue::from_str(&parent.0.to_string()).unwrap(),
+            SuiJsonValue::from_str(&child.0.to_string()).unwrap(),
         ],
         payment: PaymentArgs::default(),
         gas_data: GasDataArgs {
@@ -1926,7 +1891,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     .await?;
 
     if let SuiClientCommandResult::TransactionBlock(response) = receive_result {
-        assert!(response.effects.unwrap().into_status().is_ok());
+        assert!(response.effects.status().is_ok());
     } else {
         unreachable!("Invalid response");
     };
@@ -1982,8 +1947,11 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds()
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1992,17 +1960,12 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds()
     resp.print(true);
 
     let obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            gas_obj_id
-        );
+        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
         response
             .effects
-            .as_ref()
-            .unwrap()
             .created()
-            .iter()
-            .map(|refe| refe.reference.object_id)
+            .into_iter()
+            .map(|refe| refe.0.0)
             .collect::<Vec<_>>()
     } else {
         unreachable!("Invalid response");
@@ -2063,8 +2026,11 @@ async fn test_package_publish_command_with_unpublished_dependency_fails()
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2075,56 +2041,6 @@ async fn test_package_publish_command_with_unpublished_dependency_fails()
         )
     "#]];
     expect.assert_debug_eq(&result);
-    Ok(())
-}
-
-#[sim_test]
-async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result<(), anyhow::Error>
-{
-    let with_unpublished_dependencies = true; // Value under test, incompatible with dependencies that specify non-zero address.
-
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-
-    let client = context.get_client().await?;
-    let object_refs = client
-        .read_api()
-        .get_owned_objects(address, None, None, None)
-        .await?
-        .data;
-
-    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
-
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("module_publish_with_unpublished_dependency_with_non_zero_address");
-    let build_config = BuildConfig::new_for_testing().config;
-    let result = SuiClientCommands::TestPublish(TestPublishArgs {
-        publish_args: PublishArgs {
-            package_path,
-            build_config,
-            skip_dependency_verification: false,
-            verify_deps: true,
-            with_unpublished_dependencies,
-            payment: PaymentArgs {
-                gas: vec![gas_obj_id],
-            },
-            gas_data: GasDataArgs {
-                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-                ..Default::default()
-            },
-            processing: TxProcessingArgs::default(),
-        },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
-    })
-    .execute(context)
-    .await;
-    let err = result.unwrap_err().to_string();
-
-    // errors due to tree shaking wanting to fetch the linkage table of this unpublished pkg
-    assert!(err.contains("Failed to fetch package UnpublishedNonZeroAddress"));
     Ok(())
 }
 
@@ -2175,8 +2091,11 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2225,8 +2144,11 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2234,7 +2156,7 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
     let expect = expect![[r#"
         Err(
             ModulePublishFailure {
-                error: "The `publish` subcommand should not be used with the `--test` flag\n\nCode in published packages must not depend on test code.\nIn order to fix this and publish the package without `--test`, remove any non-test dependencies on test-only code.\nYou can ensure all test-only dependencies have been removed by compiling the package normally with `sui move build`.",
+                error: "The `publish` or `upgrade` subcommand should not be used with the `--test` flag\n\nCode in published packages must not depend on test code.\nIn order to fix this and publish or upgrade the package without `--test`, remove any non-test dependencies on test-only code.\nYou can ensure all test-only dependencies have been removed by compiling the package normally with `sui move build`.",
             },
         )
     "#]];
@@ -2289,8 +2211,11 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2339,7 +2264,9 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let (_tmp, package_path) =
         create_temp_dir_with_framework_packages("dummy_modules_upgrade", Some(chain_id))?;
 
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.install_dir = None; // build in-place so that the publish info is recorded
+
     let resp = SuiClientCommands::Publish(PublishArgs {
         package_path: package_path.clone(),
         build_config: build_config.clone(),
@@ -2365,13 +2292,13 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         unreachable!("Invalid response");
     };
 
-    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
+    let effects = response.effects;
 
-    assert!(effects.status.is_ok());
-    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.gas_object().0.0, gas_obj_id);
 
     // Now run the upgrade
-    let resp = SuiClientCommands::Upgrade {
+    let resp = SuiClientCommands::Upgrade(UpgradeArgs {
         package_path,
         upgrade_capability: None,
         build_config,
@@ -2387,7 +2314,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
             ..Default::default()
         },
         processing: TxProcessingArgs::default(),
-    }
+    })
     .execute(context)
     .await?;
 
@@ -2396,15 +2323,15 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let SuiClientCommandResult::TransactionBlock(response) = resp else {
         unreachable!("Invalid upgrade response");
     };
-    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
+    let effects = response.effects;
 
-    assert!(effects.status.is_ok());
-    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.gas_object().0.0, gas_obj_id);
 
     let obj_ids = effects
         .created()
-        .iter()
-        .map(|refe| refe.reference.object_id)
+        .into_iter()
+        .map(|refe| refe.0.0)
         .collect::<Vec<_>>();
 
     // Check the objects
@@ -2445,7 +2372,9 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let (_tmp, package_path) =
         create_temp_dir_with_framework_packages("dummy_modules_upgrade", Some(chain_id))?;
 
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.install_dir = None;
+
     let resp = SuiClientCommands::Publish(PublishArgs {
         package_path: package_path.clone(),
         build_config: build_config.clone(),
@@ -2468,13 +2397,13 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         unreachable!("Invalid response");
     };
 
-    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+    let effects = &publish_response.effects;
 
-    assert!(effects.status.is_ok());
-    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.gas_object().0.0, gas_obj_id);
 
     // Now run the upgrade
-    let upgrade_response = SuiClientCommands::Upgrade {
+    let upgrade_response = SuiClientCommands::Upgrade(UpgradeArgs {
         package_path: package_path.to_path_buf(),
         upgrade_capability: None,
         build_config: build_config.clone(),
@@ -2490,7 +2419,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
             ..Default::default()
         },
         processing: TxProcessingArgs::default(),
-    }
+    })
     .execute(context)
     .await?;
 
@@ -2502,10 +2431,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     // Get Upgraded Package ID and version
     let (expect_upgrade_latest_id, expect_upgrade_version, _) =
         if let SuiClientCommandResult::TransactionBlock(response) = upgrade_response {
-            assert_eq!(
-                response.effects.as_ref().unwrap().gas_object().object_id(),
-                gas_obj_id
-            );
+            assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
             response
                 .get_new_package_obj()
                 .ok_or_else(|| anyhow::anyhow!("No package object response"))?
@@ -2580,33 +2506,14 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     // Get the mutated objects
     let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert!(
-            response.status_ok().unwrap(),
+            response.effects.status().is_ok(),
             "Command failed: {:?}",
             response
         );
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            gas_obj_id
-        );
+        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
         (
-            response
-                .effects
-                .as_ref()
-                .unwrap()
-                .mutated()
-                .first()
-                .unwrap()
-                .reference
-                .object_id,
-            response
-                .effects
-                .as_ref()
-                .unwrap()
-                .mutated()
-                .get(1)
-                .unwrap()
-                .reference
-                .object_id,
+            response.effects.mutated().first().unwrap().0.0,
+            response.effects.mutated().get(1).unwrap().0.0,
         )
     } else {
         panic!()
@@ -2691,24 +2598,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     // Get the mutated objects
     let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         (
-            response
-                .effects
-                .as_ref()
-                .unwrap()
-                .mutated()
-                .first()
-                .unwrap()
-                .reference
-                .object_id,
-            response
-                .effects
-                .as_ref()
-                .unwrap()
-                .mutated()
-                .get(1)
-                .unwrap()
-                .reference
-                .object_id,
+            response.effects.mutated().first().unwrap().0.0,
+            response.effects.mutated().get(1).unwrap().0.0,
         )
     } else {
         panic!()
@@ -3025,18 +2916,16 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
     let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
-        assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
-        assert_eq!(r.effects.as_ref().unwrap().gas_object().object_id(), gas);
+        assert!(r.effects.status().is_ok(), "Command failed: {:?}", r);
+        assert_eq!(r.effects.gas_object().0.0, gas);
         let object_id = r
             .effects
-            .as_ref()
-            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
             .unwrap()
-            .reference
-            .object_id;
+            .0
+            .0;
         get_parsed_object_assert_existence(object_id, context).await
     } else {
         panic!("Command failed")
@@ -3086,14 +2975,12 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         let object_id = r
             .effects
-            .as_ref()
-            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
             .unwrap()
-            .reference
-            .object_id;
+            .0
+            .0;
         get_parsed_object_assert_existence(object_id, context).await
     } else {
         panic!("Command failed")
@@ -3152,25 +3039,21 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
-        assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
-        assert_eq!(r.effects.as_ref().unwrap().gas_object().object_id(), gas);
+        assert!(r.effects.status().is_ok(), "Command failed: {:?}", r);
+        assert_eq!(r.effects.gas_object().0.0, gas);
         let updated_object_id = r
             .effects
-            .as_ref()
-            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
             .unwrap()
-            .reference
-            .object_id;
+            .0
+            .0;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-        let new_object_refs = r.effects.unwrap().created().to_vec();
+        let new_object_refs = r.effects.created();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
-            new_objects.push(
-                get_parsed_object_assert_existence(obj_ref.reference.object_id, context).await,
-            );
+            new_objects.push(get_parsed_object_assert_existence(obj_ref.0.0, context).await);
         }
         (updated_obj, new_objects)
     } else {
@@ -3223,24 +3106,20 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
-        assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
+        assert!(r.effects.status().is_ok(), "Command failed: {:?}", r);
         let updated_object_id = r
             .effects
-            .as_ref()
-            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
             .unwrap()
-            .reference
-            .object_id;
+            .0
+            .0;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-        let new_object_refs = r.effects.unwrap().created().to_vec();
+        let new_object_refs = r.effects.created();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
-            new_objects.push(
-                get_parsed_object_assert_existence(obj_ref.reference.object_id, context).await,
-            );
+            new_objects.push(get_parsed_object_assert_existence(obj_ref.0.0, context).await);
         }
         (updated_obj, new_objects)
     } else {
@@ -3296,24 +3175,20 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
-        assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
+        assert!(r.effects.status().is_ok(), "Command failed: {:?}", r);
         let updated_object_id = r
             .effects
-            .as_ref()
-            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
             .unwrap()
-            .reference
-            .object_id;
+            .0
+            .0;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-        let new_object_refs = r.effects.unwrap().created().to_vec();
+        let new_object_refs = r.effects.created();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
-            new_objects.push(
-                get_parsed_object_assert_existence(obj_ref.reference.object_id, context).await,
-            );
+            new_objects.push(get_parsed_object_assert_existence(obj_ref.0.0, context).await);
         }
         (updated_obj, new_objects)
     } else {
@@ -3566,6 +3441,7 @@ async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(deprecated)]
 async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
     let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
@@ -3960,12 +3836,9 @@ async fn test_pay() -> Result<(), anyhow::Error> {
     // we also check if the balances are right!
     if let SuiClientCommandResult::TransactionBlock(response) = pay {
         // check tx status
-        assert!(response.status_ok().unwrap());
+        assert!(response.effects.status().is_ok());
         // check gas coin used
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            object_id3
-        );
+        assert_eq!(response.effects.gas_object().0.0, object_id3);
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -3998,7 +3871,7 @@ async fn test_pay() -> Result<(), anyhow::Error> {
                 None,
             )
             .await?;
-        assert!(response.status_ok().unwrap());
+        assert!(response.effects.status().is_ok());
         assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
         assert_eq!(
@@ -4044,12 +3917,9 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
     // and if the gas object used was the first object in the input coins
     // we also check if the balances of each recipient are right!
     if let SuiClientCommandResult::TransactionBlock(response) = pay_sui {
-        assert!(response.status_ok().unwrap());
+        assert!(response.effects.status().is_ok());
         // check gas coin used
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            object_id1
-        );
+        assert_eq!(response.effects.gas_object().0.0, object_id1);
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -4082,7 +3952,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
                 None,
             )
             .await?;
-        assert!(response.status_ok().unwrap());
+        assert!(response.effects.status().is_ok());
         assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
         assert_eq!(
@@ -4134,13 +4004,10 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
                 None,
             )
             .await?;
-        assert!(response.status_ok().unwrap());
+        assert!(response.effects.status().is_ok());
         assert!(!objs_refs.has_next_page);
         assert_eq!(objs_refs.data.len(), 1);
-        assert_eq!(
-            response.effects.unwrap().gas_object().object_id(),
-            object_id1
-        );
+        assert_eq!(response.effects.gas_object().0.0, object_id1);
     } else {
         panic!("PayAllSui test failed");
     }
@@ -4189,11 +4056,8 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     // transfer command will transfer the object_id1 to address2, and use object_id2 as gas
     // we check if object1 is owned by address 2 and if the gas object used is object_id2
     if let SuiClientCommandResult::TransactionBlock(response) = transfer {
-        assert!(response.status_ok().unwrap());
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            object_id2
-        );
+        assert!(response.effects.status().is_ok());
+        assert_eq!(response.effects.gas_object().0.0, object_id2);
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -4243,11 +4107,8 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     // as gas, and we check if the recipient address received the object, and the expected balance
     // is correct
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
-        assert!(response.status_ok().unwrap());
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            object_id1
-        );
+        assert!(response.effects.status().is_ok());
+        assert_eq!(response.effects.gas_object().0.0, object_id1);
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -4284,11 +4145,8 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
-        assert!(response.status_ok().unwrap());
-        assert_eq!(
-            response.effects.as_ref().unwrap().gas_object().object_id(),
-            object_id1
-        );
+        assert!(response.effects.status().is_ok());
+        assert_eq!(response.effects.gas_object().0.0, object_id1);
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -4366,11 +4224,8 @@ async fn test_transfer_gas_smash() -> Result<(), anyhow::Error> {
         panic!("Transfer test failed");
     };
 
-    assert!(response.status_ok().unwrap());
-    assert_eq!(
-        response.effects.as_ref().unwrap().gas_object().object_id(),
-        object_id0
-    );
+    assert!(response.effects.status().is_ok());
+    assert_eq!(response.effects.gas_object().0.0, object_id0);
     let objs_refs = client
         .read_api()
         .get_owned_objects(
@@ -4418,7 +4273,7 @@ async fn test_transfer_sponsored() -> Result<(), anyhow::Error> {
         panic!("Failed to set-up test")
     };
 
-    assert_eq!(response.status_ok(), Some(true));
+    assert!(response.effects.status().is_ok());
 
     // A1 sends 01 back to A0, but sponsored by A0.
     let transfer_back = SuiClientCommands::Transfer {
@@ -4439,13 +4294,11 @@ async fn test_transfer_sponsored() -> Result<(), anyhow::Error> {
         panic!("Failed to run sponsored transfer")
     };
 
-    let Some(tx) = &response.transaction else {
-        panic!("TransactionBlock response should contain a transaction");
-    };
+    let tx = &response.transaction;
 
-    assert_eq!(response.status_ok(), Some(true));
-    assert_eq!(tx.data.gas_data().owner, a0);
-    assert_eq!(tx.data.sender(), &a1);
+    assert!(response.effects.status().is_ok());
+    assert_eq!(tx.gas_data().owner, a0);
+    assert_eq!(tx.sender(), a1);
 
     Ok(())
 }
@@ -4490,12 +4343,10 @@ async fn test_transfer_serialized_data() -> Result<(), anyhow::Error> {
         panic!("Expected TransactionBlock result");
     };
 
-    let Some(effects) = &response.effects else {
-        panic!("TransactionBlock response should contain effects");
-    };
+    let effects = &response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().object_id(), o[1]);
+    assert_eq!(effects.gas_object().0.0, o[1]);
 
     let a1_objs = client
         .read_api()
@@ -4553,12 +4404,10 @@ async fn test_transfer_serialized_kind() -> Result<(), anyhow::Error> {
         panic!("Expected TransactionBlock result");
     };
 
-    let Some(effects) = &response.effects else {
-        panic!("TransactionBlock response should contain effects");
-    };
+    let effects = &response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().object_id(), o[1]);
+    assert_eq!(effects.gas_object().0.0, o[1]);
 
     let a1_objs = client
         .read_api()
@@ -4598,18 +4447,10 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
     .await
     .unwrap();
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui_cmd {
-        assert!(response.status_ok().unwrap());
-        let gas_used = response.effects.as_ref().unwrap().gas_object().object_id();
+        assert!(response.effects.status().is_ok());
+        let gas_used = response.effects.gas_object().0.0;
         assert_eq!(gas_used, object_id1);
-        assert!(
-            response
-                .effects
-                .as_ref()
-                .unwrap()
-                .gas_cost_summary()
-                .gas_used()
-                <= gas_estimate.unwrap()
-        );
+        assert!(response.effects.gas_cost_summary().gas_used() <= gas_estimate.unwrap());
     } else {
         panic!("TransferSui test failed");
     }
@@ -4659,14 +4500,12 @@ async fn test_custom_sender() -> Result<(), anyhow::Error> {
         panic!("Expected TransactionBlock result");
     };
 
-    assert_eq!(response.transaction.unwrap().data.sender(), &custom_sender);
+    assert_eq!(response.transaction.sender(), custom_sender);
 
-    let Some(effects) = &response.effects else {
-        panic!("TransactionBlock response should contain effects");
-    };
+    let effects = &response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().object_id(), o[1]);
+    assert_eq!(effects.gas_object().0.0, o[1]);
 
     let a1_objs = client
         .read_api()
@@ -4771,8 +4610,11 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -4784,14 +4626,14 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
         unreachable!("Invalid response");
     };
 
-    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
+    let effects = response.effects;
 
-    assert!(effects.status.is_ok());
-    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.gas_object().0.0, gas_obj_id);
     let package = effects
         .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .into_iter()
+        .find(|refe| matches!(refe.1, Owner::Immutable))
         .unwrap();
 
     let elide_transaction_digest = |s: String| -> String {
@@ -4804,7 +4646,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 
     // Normal abort
     let non_clever_abort = SuiClientCommands::Call {
-        package: package.reference.object_id,
+        package: package.0.0,
         module: "clever_errors".to_string(),
         function: "aborter".to_string(),
         type_args: vec![],
@@ -4822,7 +4664,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 
     // Line-only abort
     let line_only_abort = SuiClientCommands::Call {
-        package: package.reference.object_id,
+        package: package.0.0,
         module: "clever_errors".to_string(),
         function: "aborter_line_no".to_string(),
         type_args: vec![],
@@ -4840,7 +4682,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 
     // Full clever error with utf-8 string
     let clever_error_utf8 = SuiClientCommands::Call {
-        package: package.reference.object_id,
+        package: package.0.0,
         module: "clever_errors".to_string(),
         function: "clever_aborter".to_string(),
         type_args: vec![],
@@ -4858,7 +4700,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 
     // Full clever error with non-utf-8 string
     let clever_error_non_utf8 = SuiClientCommands::Call {
-        package: package.reference.object_id,
+        package: package.0.0,
         module: "clever_errors".to_string(),
         function: "clever_aborter_not_a_string".to_string(),
         type_args: vec![],
@@ -5335,11 +5177,8 @@ async fn test_party_transfer() -> Result<(), anyhow::Error> {
         panic!("PartyTransfer test failed");
     };
 
-    assert!(response.status_ok().unwrap());
-    assert_eq!(
-        response.effects.as_ref().unwrap().gas_object().object_id(),
-        object_id2
-    );
+    assert!(response.effects.status().is_ok());
+    assert_eq!(response.effects.gas_object().0.0, object_id2);
 
     let object_read = client
         .read_api()
@@ -5438,13 +5277,13 @@ fn update_toml_with_localnet_chain_id(package_path: &Path, chain_id: String) -> 
 }
 
 #[tokio::test]
+#[allow(deprecated)] // cargo_bin is deprecated but cargo_bin_cmd! doesn't work with assert_cmd
 async fn test_move_build_dump_bytecode_as_base64() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let client_config_path = context.config.path();
-    let client = context.get_client().await?;
     // we need to cache the chain id as it does not get automatically cached in TestClusterBuilder
-    let chain_id = context.cache_chain_id(&client).await?;
+    let chain_id = context.cache_chain_id().await?;
 
     // Create temp directory with the test package and update the Move.toml with localnet chain id
     let (temp_dir, pkg_path) =
@@ -5480,13 +5319,13 @@ async fn test_move_build_dump_bytecode_as_base64() -> Result<(), anyhow::Error> 
 }
 
 #[tokio::test]
+#[allow(deprecated)] // cargo_bin is deprecated but cargo_bin_cmd! doesn't work with assert_cmd
 async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Result<(), anyhow::Error>
 {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let client_config_path = context.config.path();
-    let client = context.get_client().await?;
-    let chain_id = context.cache_chain_id(&client).await?;
+    let chain_id = context.cache_chain_id().await?;
 
     // Create temp directory with the test package
     let (temp_dir, pkg_path) = create_temp_dir_with_framework_packages(
@@ -5552,5 +5391,97 @@ async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Resu
     );
 
     temp_dir.close()?;
+    Ok(())
+}
+
+#[sim_test]
+async fn test_publish_sender_flag_respected_in_serialized_transaction() -> Result<(), anyhow::Error>
+{
+    // This test verifies that when using --serialize-unsigned-transaction with --sender,
+    // the sender address is correctly used as the UpgradeCap recipient in the PTB.
+    // Previously, the sender was inferred from gas objects BEFORE checking the --sender flag,
+    // causing the UpgradeCap to be transferred to the wrong address.
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let active_address = test_cluster.get_address_0();
+    // Use a different address from the cluster that has gas
+    let specified_sender = test_cluster.get_address_1();
+    let context = &mut test_cluster.wallet;
+
+    // Verify we're using two different addresses
+    assert_ne!(
+        active_address, specified_sender,
+        "Test requires two different addresses"
+    );
+
+    let client = context.get_client().await?;
+    let chain_id = client.read_api().get_chain_identifier().await?;
+
+    // Setup package
+    let (_tmp, package_path) =
+        create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
+
+    let build_config = BuildConfig::new_for_testing().config;
+
+    // Call publish with serialize_unsigned_transaction and a specified sender
+    // The active address is address_0, but we specify address_1 as sender
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs::default(),
+            gas_data: GasDataArgs::default(),
+            processing: TxProcessingArgs {
+                serialize_unsigned_transaction: true,
+                sender: Some(specified_sender), // Use --sender flag with address_1
+                ..Default::default()
+            },
+        },
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
+    })
+    .execute(context)
+    .await?;
+
+    // Extract the transaction data
+    let SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) = resp else {
+        panic!("Expected SerializedUnsignedTransaction result");
+    };
+
+    // Verify the transaction sender is the specified sender
+    assert_eq!(
+        tx_data.sender(),
+        specified_sender,
+        "Transaction sender should be the specified sender ({}), not the active address ({})",
+        specified_sender,
+        active_address
+    );
+
+    // Verify the PTB's first input (UpgradeCap recipient) is the specified sender
+    let TransactionKind::ProgrammableTransaction(pt) = tx_data.kind() else {
+        panic!("Expected ProgrammableTransaction kind");
+    };
+
+    // The first input in a publish transaction is the address that receives the UpgradeCap
+    let first_input = &pt.inputs[0];
+    let CallArg::Pure(addr_bytes) = first_input else {
+        panic!("Expected first input to be Pure (address)");
+    };
+
+    // Decode the address from BCS bytes
+    let recipient: SuiAddress =
+        bcs::from_bytes(addr_bytes).expect("Failed to decode address from PTB input");
+
+    assert_eq!(
+        recipient, specified_sender,
+        "UpgradeCap recipient in PTB should be the specified sender ({}), not active address ({})",
+        specified_sender, active_address
+    );
+
     Ok(())
 }

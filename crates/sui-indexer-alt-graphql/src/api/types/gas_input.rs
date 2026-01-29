@@ -1,17 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::Connection, *};
-use sui_types::{base_types::SuiAddress, transaction::GasData};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use sui_types::base_types::SuiAddress;
+use sui_types::transaction::GasData;
 
-use crate::{
-    api::scalars::{big_int::BigInt, cursor::JsonCursor},
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{address::Address, object::Object};
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::types::address::Address;
+use crate::api::types::object::Object;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 #[derive(Clone)]
 pub(crate) struct GasInput {
@@ -56,20 +59,24 @@ impl GasInput {
         after: Option<CGasPayment>,
         last: Option<u64>,
         before: Option<CGasPayment>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
-        // Return empty connection for system transactions.
-        if self.native.owner == SuiAddress::ZERO {
-            return Ok(Some(Connection::new(false, false)));
-        }
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
+        Some(
+            async {
+                // Return empty connection for system transactions.
+                if self.native.owner == SuiAddress::ZERO {
+                    return Ok(Connection::new(false, false));
+                }
 
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("GasInput", "gasPayment");
-        let page = Page::from_params(limits, first, after, last, before)?;
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("GasInput", "gasPayment");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.native.payment.len(), |i| {
-            let (id, version, digest) = self.native.payment[i];
-            Ok(Object::with_ref(&self.scope, id.into(), version, digest))
-        })
-        .map(Some)
+                page.paginate_indices(self.native.payment.len(), |i| {
+                    let (id, version, digest) = self.native.payment[i];
+                    Ok(Object::with_ref(&self.scope, id.into(), version, digest))
+                })
+            }
+            .await,
+        )
     }
 }

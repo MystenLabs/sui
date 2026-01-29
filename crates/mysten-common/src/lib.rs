@@ -4,6 +4,7 @@
 use once_cell::sync::Lazy;
 use tracing::warn;
 
+pub mod assert_reachable;
 pub mod backoff;
 pub mod decay_moving_average;
 pub mod logging;
@@ -13,6 +14,11 @@ pub mod random_util;
 pub mod sync;
 
 pub use random_util::tempdir;
+
+#[inline(always)]
+pub fn in_integration_test() -> bool {
+    in_antithesis() || cfg!(msim)
+}
 
 #[inline(always)]
 pub fn in_antithesis() -> bool {

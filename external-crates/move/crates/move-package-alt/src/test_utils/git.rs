@@ -107,7 +107,7 @@ impl RepoProject {
 
     /// Builds a new project using `build` (starting from an empty directory), then commits it to
     /// the repository and updates the `main` branch. Returns the created commit
-    pub async fn commit<F>(&self, build: F) -> Commit
+    pub async fn commit<F>(&self, build: F) -> Commit<'_>
     where
         F: FnOnce(TestPackageGraph) -> TestPackageGraph,
     {

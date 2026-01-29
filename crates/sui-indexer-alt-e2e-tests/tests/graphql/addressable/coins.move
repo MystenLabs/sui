@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --addresses T=0x0 --accounts A B --simulator
+//# init --protocol-version 108 --addresses T=0x0 --accounts A B --simulator
 
 //# publish --sender A
 #[allow(deprecated_usage)]
@@ -93,8 +93,23 @@ module T::test {
       nodes { ...B }
     }
   }
+}
 
-  # Account B queries
+fragment O on MoveObject {
+  address
+  contents {
+    type { repr }
+    json
+  }
+}
+
+fragment B on Balance {
+  coinType { repr }
+  totalBalance
+}
+
+//# run-graphql
+{ # Account B queries
   accountB: address(address: "@{B}") {
     # All objects for B
     allObjects: objects {

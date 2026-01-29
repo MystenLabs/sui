@@ -10,7 +10,6 @@ use diesel::{AsExpression, FromSqlRow, Identifiable, Insertable, Queryable, Sele
 use std::str::FromStr;
 use strum_macros::{AsRefStr, EnumString};
 use sui_field_count::FieldCount;
-use sui_indexer_builder::{LIVE_TASK_TARGET_CHECKPOINT, Task};
 
 use crate::schema::{
     governance_actions, progress_store, sui_error_transactions, sui_progress_store, token_transfer,
@@ -24,19 +23,6 @@ pub struct ProgressStore {
     pub checkpoint: i64,
     pub target_checkpoint: i64,
     pub timestamp: Option<PgTimestamp>,
-}
-
-impl From<ProgressStore> for Task {
-    fn from(value: ProgressStore) -> Self {
-        Self {
-            task_name: value.task_name,
-            start_checkpoint: value.checkpoint as u64,
-            target_checkpoint: value.target_checkpoint as u64,
-            // Ok to unwrap, timestamp is defaulted to now() in database
-            timestamp: value.timestamp.expect("Timestamp not set").0 as u64,
-            is_live_task: value.target_checkpoint == LIVE_TASK_TARGET_CHECKPOINT,
-        }
-    }
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]

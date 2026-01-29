@@ -4,4 +4,4 @@ expression: "strands(r#\"{true | false}\"#)"
 ---
 { true
 | false
-}
+}@0
