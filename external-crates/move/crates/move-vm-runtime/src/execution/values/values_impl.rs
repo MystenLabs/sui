@@ -2251,16 +2251,29 @@ impl GlobalValueImpl {
         }
     }
 
-    fn into_value(self) -> Option<Value> {
-        match self {
+    fn into_value(self) -> PartialVMResult<Option<Value>> {
+        Ok(match self {
             Self::Empty => None,
-            Self::Filled(container) => {
-                let struct_ @ Value::Struct(_) = container.take() else {
-                    unreachable!()
-                };
-                Some(struct_)
-            }
-        }
+            Self::Filled(container) => match container.take() {
+                struct_ @ Value::Struct(_) => Some(struct_),
+                other @ (Value::Invalid
+                | Value::U8(_)
+                | Value::U16(_)
+                | Value::U32(_)
+                | Value::U64(_)
+                | Value::U128(_)
+                | Value::U256(_)
+                | Value::Bool(_)
+                | Value::Address(_)
+                | Value::Vec(_)
+                | Value::PrimVec(_)
+                | Value::Variant(_)
+                | Value::Reference(_)) => {
+                    return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                        .with_message(format!("global value is not a struct: {:#?}", other)));
+                }
+            },
+        })
     }
 }
 
@@ -2289,7 +2302,7 @@ impl GlobalValue {
         self.0.exists()
     }
 
-    pub fn into_value(self) -> Option<Value> {
+    pub fn into_value(self) -> PartialVMResult<Option<Value>> {
         self.0.into_value()
     }
 }
