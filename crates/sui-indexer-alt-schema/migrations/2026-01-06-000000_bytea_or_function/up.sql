@@ -1,6 +1,6 @@
 -- Function to perform bitwise OR on two bytea values.
 -- Used for merging bloom filters when upserting partial blocks.
-CREATE OR REPLACE FUNCTION bytea_or(a bytea, b bytea)
+CREATE OR REPLACE FUNCTION function_bytea_or(a bytea, b bytea)
 RETURNS bytea AS $$
 DECLARE
     result bytea;
@@ -10,7 +10,7 @@ BEGIN
     IF b IS NULL THEN RETURN a; END IF;
 
     IF length(a) <> length(b) THEN
-        RAISE EXCEPTION 'bytea_or: arguments must have equal length (% vs %)', length(a), length(b);
+        RAISE EXCEPTION 'function_bytea_or: arguments must have equal length (% vs %)', length(a), length(b);
     END IF;
 
     result := a;

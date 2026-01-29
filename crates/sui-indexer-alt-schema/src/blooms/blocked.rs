@@ -30,7 +30,7 @@
 //!   └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
 //!            ▲
 //!            │
-//!       hash(key) selects block, then sets bits within that block
+//!       hash(key, seed) selects block, then subsequent hash(key, seed1) sets bits within that block
 //! ```
 //!
 
@@ -44,6 +44,13 @@ pub struct BlockedBloomProbe {
     pub bit_masks: Vec<usize>,
 }
 
+/// A generic blocked bloom filter.
+///
+/// # Type Parameters
+///
+/// - `BYTES`: Number of bytes per block.
+/// - `BLOCKS`: Number of blocks in the filter.
+/// - `HASHES`: Number of hash functions applied per element inserted. Each hash sets one bit within the selected block.
 #[derive(Clone)]
 pub struct BlockedBloomFilter<const BYTES: usize, const BLOCKS: usize, const HASHES: u32> {
     blocks: Box<[[u8; BYTES]]>,
@@ -72,7 +79,7 @@ impl<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>
         }
     }
 
-    /// The block index and block's bloom filter for filters with bits set.
+    /// Consumes the filter to return non-empty block indexes and corresponding data.
     pub fn into_sparse_blocks(self) -> impl Iterator<Item = (usize, [u8; BYTES])> {
         self.blocks
             .into_iter()
@@ -80,7 +87,7 @@ impl<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>
             .filter(|(_, block)| block.iter().any(|&b| b != 0))
     }
 
-    /// Hashes a value to the block index and bit positions to set/check.
+    /// Compute the block index and bit positions within the block for a value.
     /// Uses separate hashers for block selection and bit indexes to prevent correlated patterns.
     pub fn hash(value: &[u8], seed: u128) -> (usize, impl Iterator<Item = usize>) {
         let bits_per_block = BYTES * 8;

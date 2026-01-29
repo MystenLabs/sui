@@ -1,11 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use diesel::define_sql_function;
 use diesel::prelude::*;
+use diesel::sql_types::Binary;
 use sui_field_count::FieldCount;
 
 use crate::blooms::blocked::BlockedBloomFilter;
 use crate::schema::cp_bloom_blocks;
+
+define_sql_function! {
+    /// Performs bitwise OR on two bytea values. Used for merging bloom filters.
+    fn function_bytea_or(a: Binary, b: Binary) -> Binary;
+}
 
 /// Number of checkpoints per checkpoint block.
 pub const CP_BLOCK_SIZE: u64 = 1000;

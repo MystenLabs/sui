@@ -18,7 +18,7 @@ use sui_indexer_alt_schema::cp_bloom_blocks::BLOOM_BLOCK_BYTES;
 use sui_indexer_alt_schema::cp_bloom_blocks::CpBlockedBloomFilter;
 use sui_indexer_alt_schema::cp_bloom_blocks::StoredCpBloomBlock;
 use sui_indexer_alt_schema::cp_bloom_blocks::cp_block_index;
-use sui_indexer_alt_schema::cp_blooms::bytea_or;
+use sui_indexer_alt_schema::cp_bloom_blocks::function_bytea_or;
 use sui_indexer_alt_schema::schema::cp_bloom_blocks;
 use sui_types::full_checkpoint_content::Checkpoint;
 
@@ -31,6 +31,12 @@ use crate::handlers::cp_blooms::insert_tx_addresses;
 /// - Block 0: checkpoints 0-999
 /// - Block 1: checkpoints 1000-1999
 /// - etc.
+///
+/// Checkpoints are processed concurrently and are batched by cp_block_index for commit.
+/// A batch typically contains only a subset of the checkpoints that belong to a block
+/// (batches are flushed on timer or when batch.len() >= MIN_EAGER_ROWS).
+/// On conflict, we OR the incoming bits into the existing bloom filter so that partial
+/// writes accumulate correctly across multiple commits.
 pub(crate) struct CpBloomBlocks;
 
 /// Bloom filter blocks from a single checkpoint.
@@ -135,7 +141,7 @@ impl Handler for CpBloomBlocks {
                 cp_bloom_blocks::bloom_block_index,
             ))
             .do_update()
-            .set(cp_bloom_blocks::bloom_filter.eq(bytea_or(
+            .set(cp_bloom_blocks::bloom_filter.eq(function_bytea_or(
                 cp_bloom_blocks::bloom_filter,
                 excluded(cp_bloom_blocks::bloom_filter),
             )))
@@ -357,12 +363,12 @@ mod tests {
         }
     }
 
-    /// Verify no false negatives after SQL ON CONFLICT merge with bytea_or.
+    /// Verify no false negatives after SQL ON CONFLICT merge with function_bytea_or.
     ///
     /// This test specifically triggers the database-level merge by:
     /// 1. Committing batch 1 to DB (INSERT)
-    /// 2. Committing batch 2 to DB (ON CONFLICT DO UPDATE with bytea_or)
-    /// 3. Verifying keys from batch 1 survive the bytea_or merge
+    /// 2. Committing batch 2 to DB (ON CONFLICT DO UPDATE with function_bytea_or)
+    /// 3. Verifying keys from batch 1 survive the function_bytea_or merge
     #[tokio::test]
     async fn test_no_false_negatives_after_sql_merge() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
@@ -405,7 +411,7 @@ mod tests {
             );
         }
 
-        // Commit batch 2 - this triggers ON CONFLICT DO UPDATE with bytea_or
+        // Commit batch 2 - this triggers ON CONFLICT DO UPDATE with function_bytea_or
         // because some bloom_block_indices will overlap with batch 1
         let refs2: Vec<&[u8]> = batch2_keys.iter().map(|k| k.as_slice()).collect();
         commit_blooms(vec![make_checkpoint_bloom(2, &refs2)], &mut conn).await;
@@ -413,7 +419,7 @@ mod tests {
         // Load merged bloom blocks
         let blocks_after = get_bloom_blocks(&mut conn, 0).await;
 
-        // Check ALL keys from batch 1 survive the bytea_or merge
+        // Check ALL keys from batch 1 survive the function_bytea_or merge
         for (i, key) in batch1_keys.iter().enumerate() {
             let (block_idx, _) = CpBlockedBloomFilter::hash(key, seed);
 
@@ -424,7 +430,7 @@ mod tests {
 
             assert!(
                 block_contains_key(&block.bloom_filter, key, seed),
-                "Batch1 key {} should survive bytea_or merge (false negative!)",
+                "Batch1 key {} should survive function_bytea_or merge (false negative!)",
                 i
             );
         }
