@@ -4,6 +4,7 @@
 use crate::data_store::PackageStore;
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use std::{
+    borrow::Borrow,
     collections::{BTreeMap, btree_map::Entry},
     sync::Arc,
 };
@@ -39,6 +40,30 @@ impl ResolutionTable {
             resolution_table: BTreeMap::new(),
             all_versions_resolution_table: BTreeMap::new(),
         }
+    }
+
+    /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
+    /// Since this linkage analysis should only be used for types, all packages are resolved
+    /// "upwards" (i.e., later versions of the package are preferred).
+    pub fn add_type_linkages_to_table<I>(
+        &mut self,
+        ids: I,
+        store: &dyn PackageStore,
+    ) -> Result<(), ExecutionError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<ObjectID>,
+    {
+        for id in ids {
+            let pkg = get_package(id.borrow(), store)?;
+            let transitive_deps = pkg.linkage_table().values().copied().map(ObjectID::from);
+            let package_id = pkg.version_id().into();
+            add_and_unify(&package_id, store, self, VersionConstraint::at_least)?;
+            for object_id in transitive_deps {
+                add_and_unify(&object_id, store, self, VersionConstraint::at_least)?;
+            }
+        }
+        Ok(())
     }
 }
 

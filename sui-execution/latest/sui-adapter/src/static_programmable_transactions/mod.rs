@@ -20,8 +20,12 @@ use move_vm_runtime::runtime::MoveRuntime;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::TxContext, error::ExecutionError, execution::ResultWithTimings,
-    metrics::LimitsMetrics, storage::BackingPackageStore, transaction::ProgrammableTransaction,
+    base_types::TxContext,
+    error::{ExecutionError, ExecutionErrorKind},
+    execution::ResultWithTimings,
+    metrics::LimitsMetrics,
+    storage::BackingPackageStore,
+    transaction::ProgrammableTransaction,
 };
 
 pub mod env;
@@ -48,6 +52,20 @@ pub fn execute<Mode: ExecutionMode>(
     let package_store = CachedPackageStore::new(vm, TransactionPackageStore::new(package_store));
     let linkage_analysis =
         LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
+    let ptb_type_linkage = linkage_analysis
+        .compute_input_type_resolution_linkage(&txn, &package_store, state_view)
+        .map_err(|e| (e, vec![]))?;
+    let resolution_vm = vm
+        .make_vm(
+            &package_store.package_store,
+            ptb_type_linkage.linkage_context(),
+        )
+        .map_err(|e| {
+            (
+                ExecutionError::new_with_source(ExecutionErrorKind::InvalidLinkage, e),
+                vec![],
+            )
+        })?;
 
     let mut env = Env::new(
         protocol_config,
@@ -55,6 +73,7 @@ pub fn execute<Mode: ExecutionMode>(
         state_view,
         &package_store,
         &linkage_analysis,
+        &resolution_vm,
     );
     let mut translation_meter =
         translation_meter::TranslationMeter::new(protocol_config, gas_charger);
