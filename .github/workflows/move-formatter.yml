@@ -22,7 +22,7 @@ jobs:
       run:
         working-directory: external-crates/move/tooling/tree-sitter
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - name: Install tree-sitter-cli
         run: cargo install tree-sitter-cli
       - run: ./run-tests.sh
@@ -42,7 +42,7 @@ jobs:
       run:
         working-directory: ${{ matrix.working-directory }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - name: Use Node.js
         uses: actions/setup-node@v4
       - run: npm install --no-warnings @mysten/prettier-plugin-move@${{ env.FORMATTER_VERSION }}

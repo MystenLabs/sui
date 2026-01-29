@@ -45,7 +45,7 @@ jobs:
       - name: Install Rust
         run: rustup update stable
         
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
             ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
@@ -95,7 +95,7 @@ jobs:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
     - name: Checkout sui repo
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v3.0.3
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       with:
         ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
     
