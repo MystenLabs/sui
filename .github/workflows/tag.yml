@@ -27,7 +27,6 @@ on:
 
 permissions:
   contents: write
-  workflows: write
 
 env:
   SUI_COMMIT: "${{ github.event.client_payload.sui_commit || inputs.sui_commit }}"
@@ -40,7 +39,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       with:
         fetch-depth: 1
         ref: ${{ env.SUI_COMMIT }}
