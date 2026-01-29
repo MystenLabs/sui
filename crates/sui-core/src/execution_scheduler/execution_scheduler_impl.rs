@@ -12,7 +12,7 @@ use crate::{
         ExecutingGuard, PendingCertificateStats,
         funds_withdraw_scheduler::{
             FundsSettlement, ScheduleStatus, TxFundsWithdraw, WithdrawReservations,
-            naive_scheduler::NaiveObjectFundsWithdrawScheduler, scheduler::FundsWithdrawScheduler,
+            scheduler::FundsWithdrawScheduler,
         },
     },
 };
