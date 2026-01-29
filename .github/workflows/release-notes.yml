@@ -35,7 +35,7 @@ jobs:
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
       isReleaseNotesScript: ${{ steps.diff.outputs.isReleaseNotesScript }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Detect Changes
@@ -48,7 +48,7 @@ jobs:
     if: needs.diff.outputs.isReleaseNotesScript == 'true'
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # pin@v5.0.0
@@ -67,7 +67,7 @@ jobs:
     if: needs.diff.outputs.isReleaseNotesEligible == 'true' && github.event.pull_request.number != ''
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # pin@v5.0.0

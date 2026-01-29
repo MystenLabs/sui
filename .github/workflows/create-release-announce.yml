@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout sui main branch
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # pin@v4.1.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           fetch-depth: 0
           ref: main
@@ -60,7 +60,7 @@ jobs:
           echo "previous_release_branch=${previous_release_branch}" >> $GITHUB_ENV
 
       - name: Checkout release branch
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           fetch-depth: 0
           ref: ${{ inputs.sui_commit }}
@@ -117,7 +117,7 @@ jobs:
             https://api.github.com/repos/MystenLabs/sui/commits/${{ env.CURRENT_BRANCH }} | jq .sha | tr -d '"')" >> $GITHUB_ENV
 
       - name: Checkout main
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           fetch-depth: 0
           ref: main
