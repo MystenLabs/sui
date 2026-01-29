@@ -3442,8 +3442,8 @@ pub fn update_publication(
     chain_id: &str,
     command: LockCommand,
     response: &SuiTransactionBlockResponse,
-    _build_config: &MoveBuildConfig,
-    publication: Option<&mut Publication<SuiFlavor>>,
+    build_config: &MoveBuildConfig,
+    existing_publication: Option<Publication<SuiFlavor>>,
 ) -> Result<Publication<SuiFlavor>, anyhow::Error> {
     // Get the published package ID and version from the response
     let (published_id, version, _) = response.get_new_package_obj().ok_or_else(|| {
@@ -3462,7 +3462,13 @@ pub fn update_publication(
                 chain_id: chain_id.to_string(),
                 metadata: sui_package_alt::PublishedMetadata {
                     toolchain_version: Some(env!("CARGO_PKG_VERSION").into()),
-                    build_config: Some(sui_package_alt::BuildParams::default()),
+                    build_config: Some(BuildParams {
+                        flavor: "sui".to_string(),
+                        edition: build_config
+                            .default_edition
+                            .unwrap_or(move_compiler::editions::Edition::E2024)
+                            .to_string(),
+                    }),
                     upgrade_capability: Some(upgrade_cap),
                 },
                 addresses: PublishAddresses {
@@ -3473,16 +3479,21 @@ pub fn update_publication(
             })
         }
         LockCommand::Upgrade => {
-            let publication =
-                publication.expect("for upgrade there should already exist publication info");
+            let mut publication =
+                existing_publication.expect("for upgrade there should already exist publication info");
             publication.addresses.published_at = PublishedID(*published_id);
             publication.version = version.value();
-            // TODO: fix build config data
-            publication.metadata.build_config = Some(BuildParams::default());
+            
+            publication.metadata.build_config = Some(BuildParams {
+                flavor: "sui".to_string(),
+                edition: build_config
+                    .default_edition
+                    .unwrap_or(move_compiler::editions::Edition::E2024)
+                    .to_string(),
+            });
             publication.metadata.toolchain_version = Some(env!("CARGO_PKG_VERSION").into());
-            // TODO: fix this, we should return a mut publication instead of creating a new one in
-            // the Publish case
-            Ok(publication.clone())
+            
+            Ok(publication)
         }
     }
 }
@@ -3720,7 +3731,7 @@ async fn upgrade_command(
         LockCommand::Upgrade,
         response,
         &build_config,
-        root_pkg.publication().cloned().as_mut(),
+        root_pkg.publication().cloned(),
     )?;
     root_pkg.write_publish_data(publish_data)?;
 
