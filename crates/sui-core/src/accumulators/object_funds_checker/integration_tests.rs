@@ -233,6 +233,8 @@ async fn test_object_withdraw_multiple_withdraws() {
 
     assert_eq!(env.get_latest_balance(GAS::type_tag()), 1000 - 300 * 3);
 
+    all_effects.clear();
+
     // Withdraw from the same object account 3 times, each 40.
     // The first 2 withdraws should be sufficient, the last one should be insufficient.
     // This test exercises the case where we have to track unsettled balance withdraws from the same consensus commit.
