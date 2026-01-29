@@ -4,20 +4,17 @@ description: Details on how to use Nautilus with the reproducible build template
 keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
 ---
 
-[Nautilus](/guides/developer/nautilus/index.mdx) is a reproducible build template and reference implementation for secure and verifiable off-chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
+[Nautilus](/guides/developer/nautilus/index.mdx) is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
 
 The [Nautilus repo](https://github.com/MystenLabs/nautilus) provides scaffolding such as reproducible builds, signature formatting, and HTTPS traffic forwarding. This allows you to focus on implementing the off-chain computation logic inside the enclave.
 
-The template also provides an on-chain template that includes the minimal smart contract code required to register a Nautilus instance and its public key. 
+An on-chain template includes the minimal smart contract code required to register a Nautilus instance and its public key. 
 
 :::important
-Nautilus is NOT just about running code in a TEE. The key value proposition is **on-chain verification** of computation integrity:
+Nautilus is NOT just about running code in privacy-preserving manner in a TEE. Part of the overall value proposition is **on-chain verification** of computation integrity:
 
-1. PCRs (enclave measurements) are registered on-chain
-2. Enclave attestation is verified on-chain before trusting the public key
-3. Every computation result must be signature-verified on-chain
-
-Without on-chain verification, you're just running a centralized backend in AWS.
+1. PCRs (enclave measurements) must be registered and verified on-chain
+2. Every computation result could optionally be verified on-chain
 :::
 
 ## Developer workflow 
