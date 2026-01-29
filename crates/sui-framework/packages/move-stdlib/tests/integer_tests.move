@@ -7,15 +7,17 @@ module std::integer_tests;
 
 use std::unit_test::assert_eq;
 
+/// Iterate over the cases and apply the function to the case and its predecessor
+/// and successor. Predecessor is the value - 1, with min being 0, and successor
+/// is the value + 1, with max being the max value.
 public(package) macro fun cases($max: _, $cases: vector<_>, $f: |_, _, _|) {
-    let mut cases = $cases;
+    let cases = $cases;
     let max_pred = $max - 1;
-    while (!cases.is_empty()) {
-        let case = cases.pop_back();
+    cases.destroy!(|case| {
         let case_pred = case.max(1) - 1;
         let case_succ = case.min(max_pred) + 1;
         $f(case_pred, case, case_succ);
-    }
+    });
 }
 
 public(package) macro fun test_bitwise_not($max: _, $cases: vector<_>) {
@@ -102,6 +104,58 @@ public(package) macro fun test_divide_and_round_up($max: _, $cases: vector<_>) {
         check_div_round!(case_succ, case);
         check_div_round!(case, case_succ);
     })
+}
+
+public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
+    let x = $x;
+    let y = $y;
+    let z = $z;
+    let max = $max;
+
+    if (z == 0) return; // Tested separately.
+
+    if (z == 1) {
+        assert_eq!(x.mul_div(y, z), x * y);
+        assert_eq!(x.mul_div_ceil(y, z), x * y);
+    };
+
+    if (x == 0 || y == 0) {
+        assert_eq!(x.mul_div(y, z), 0);
+        assert_eq!(y.mul_div(x, z), 0);
+        assert_eq!(x.mul_div_ceil(y, z), 0);
+        assert_eq!(y.mul_div_ceil(x, z), 0);
+        return
+    };
+
+    if (x <= max / y) {
+        assert_eq!(x.mul_div(y, z), (x * y) / z);
+        assert_eq!(y.mul_div(x, z), (y * x) / z);
+        // Test mul_div_ceil based on whether there's actually a remainder
+        let product = x * y;
+        if (product % z == 0) {
+            assert_eq!(x.mul_div_ceil(y, z), x.mul_div(y, z));
+        } else {
+            // When there's a remainder, mul_div_ceil should be mul_div + 1
+            assert_eq!(x.mul_div_ceil(y, z), x.mul_div(y, z) + 1);
+        };
+    };
+
+    if (x <= max / y && x * y < z) {
+        assert_eq!(x.mul_div(y, z), 0);
+        // x * y > 0 (since we returned early if x == 0 || y == 0), so ceiling is 1
+        assert_eq!(x.mul_div_ceil(y, z), 1);
+    };
+}
+
+public(package) macro fun test_mul_div($max: _, $cases: vector<_>) {
+    let max = $max;
+    let cases = $cases;
+    assert_eq!(max.mul_div(max, max.max(1)), max);
+    cases!(max, cases, |case_pred, case, case_succ| {
+        assert_eq!(case.mul_div(case, case.max(1)), case); // avoid division by 0
+        check_mul_div!(max, case_pred, case, case_succ);
+    });
+    check_mul_div!(max, max, max, max);
 }
 
 public(package) macro fun slow_pow($base: _, $exp: u8): _ {
