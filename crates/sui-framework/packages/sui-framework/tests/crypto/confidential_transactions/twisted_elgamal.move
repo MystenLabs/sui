@@ -55,6 +55,14 @@ public fun add(e1: &Encryption, e2: &Encryption): Encryption {
     }
 }
 
+public fun shift_left(e: &Encryption, bits: u8): Encryption {
+    let factor = ristretto255::scalar_from_u64(1 << bits);
+    Encryption {
+        ciphertext: ristretto255::point_mul(&factor, &e.ciphertext),
+        decryption_handle: ristretto255::point_mul(&factor, &e.decryption_handle),
+    }
+}
+
 public fun add_assign(a: &mut EncryptedAmount4U32, b: &EncryptedAmount4U16) {
     a.l0 = add(&a.l0, &b.l0);
     a.l1 = add(&a.l1, &b.l1);
@@ -127,6 +135,25 @@ public fun encrypted_amount_4_u16_zero(pk: &Element<Point>): EncryptedAmount4U16
         l2: encrypt_zero(pk),
         l3: encrypt_zero(pk),
     }
+}
+
+public fun verify_value_proof(
+    amount: u64,
+    ea: &EncryptedAmount4U16,
+    pk: &Element<Point>,
+    proof: &sui::nizk::NIZK,
+): bool {
+    let encryption = ea
+        .l0
+        .add(
+            &ea.l1.shift_left(16).add(&ea.l2.shift_left(32)).add(&ea.l3.shift_left(48)),
+        );
+    proof.verify(
+        &b"sui-twisted-elgamal-amount-proof",
+        &ristretto255::point_mul(&ristretto255::scalar_from_u64(amount), &h()),
+        pk,
+        &encryption.decryption_handle,
+    )
 }
 
 // Encrypted u64 amount.

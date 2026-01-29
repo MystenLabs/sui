@@ -30,6 +30,7 @@ use sui::vec_map::VecMap;
 const EAccountAlreadyRegistered: u64 = 0;
 const EInvalidInput: u64 = 1;
 
+const U16_MAX: u16 = 65535;
 const MAX_PENDING_BALANCES: u64 = 1000;
 
 // Singleton, per conf token (TBD: init)
@@ -50,6 +51,14 @@ public fun new_token<T>(pool: Balance<T>, ctx: &mut TxContext): ConfidentialToke
     }
 }
 
+public fun freeze_deposits<T>(ct: &mut ConfidentialToken<T>, ctx: &mut TxContext) {
+    ct.accounts[&ctx.sender()].active = false;
+}
+
+public fun unfreeze_deposits<T>(ct: &mut ConfidentialToken<T>, ctx: &mut TxContext) {
+    ct.accounts[&ctx.sender()].active = true;
+}
+
 // public -> private
 public fun wrap<T>(
     ct: &mut ConfidentialToken<T>,
@@ -65,12 +74,12 @@ public fun wrap<T>(
 // private -> public
 public fun unwrap<T>(
     ct: &mut ConfidentialToken<T>,
-    eamount: BoundedEncryptedAmount<T>,
+    encrypted_amount: BoundedEncryptedAmount<T>,
     amount: u64,
     _proof: &vector<u8>, // Sigma proof of the encrypted msg (DDH tuple for enc - H^{eamount})
     ctx: &mut TxContext,
 ): Coin<T> {
-    let BoundedEncryptedAmount { pk: _, amount: _ } = eamount;
+    let BoundedEncryptedAmount { pk: _, amount: _ } = encrypted_amount;
 
     // TODO: Verify proof
 
@@ -172,7 +181,7 @@ public struct PendingDeposits<phantom T> has store {
 
 /// Add an encrypted amount to the pending deposits. The amount is expected to be well-formed (i.e., each limb is an u16 encryption).
 fun add_deposit<T>(self: &mut PendingDeposits<T>, amount: EncryptedAmount4U16) {
-    if (self.pending_balances.is_empty() || self.num_of_deposits == 65535) {
+    if (self.pending_balances.is_empty() || self.num_of_deposits == U16_MAX) {
         // This is O(n), but we don't expect n to be very large
         self.pending_balances.insert(encrypted_amount_4_u32_from_4_u16(amount), 0);
         self.num_of_deposits = 1;
@@ -183,10 +192,11 @@ fun add_deposit<T>(self: &mut PendingDeposits<T>, amount: EncryptedAmount4U16) {
 }
 
 // TODO: For segregated pending balances, we need to choose which pending balance to merge.
+// Aborts if there are no pending balances.
 fun take_deposit<T>(self: &mut PendingDeposits<T>): EncryptedAmount4U32 {
     let deposit = self.pending_balances.pop_back();
     if (self.pending_balances.is_empty()) {
-        // We took the last pending balance
+        // We took the last pending balance, the one currently being used for deposits, so we need to reset
         self.num_of_deposits = 0;
     };
     deposit
