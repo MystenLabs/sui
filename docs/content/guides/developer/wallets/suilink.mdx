@@ -75,27 +75,27 @@ If you are building an application on Sui, you can integrate SuiLink to verify c
 To retrieve a user's SuiLink connections, use the following dApp Kit SDK query:
 
 ```typescript
-const ethSolSuiLinks = suiClient.getOwnedObjects({
-  owner: suiAddress,
-  filter: {
-    Package: SUILINK_PACKAGE_ID_ETH_SOL,
-  },
-  options: {
-    showContent: true,
-    showType: true,
-  },
+const SuiLink = bcs.struct('SuiLink', {
+  id: bcs.struct('UID', { id: bcs.Address }),
+  network_address: bcs.String,
+  timestamp_ms: bcs.U64,
 });
 
-const suiSuiLinks = suiClient.getOwnedObjects({
-  owner: suiAddress,
-  filter: {
-    Package: SUILINK_PACKAGE_ID_SUI,
-  },
-  options: {
-    showContent: true,
-    showType: true,
-  },
-});
+const ethSolSuiLinks = response.objects?.filter(obj => 
+  obj.type?.includes(SUILINK_PACKAGE_ID_ETH_SOL)
+) || [];
+
+const suiSuiLinks = response.objects?.filter(obj => 
+  obj.type?.includes(SUILINK_PACKAGE_ID_SUI)
+) || [];
+
+const parsedEthSolObjects = ethSolSuiLinks
+  .filter(obj => !(obj instanceof Error))
+  .map(obj => SuiLink.parse(obj.content));
+
+const parsedSuiObjects = suiSuiLinks
+  .filter(obj => !(obj instanceof Error))
+  .map(obj => SuiLink.parse(obj.content));
 ```
 
 This returns all SuiLink NFTs owned by the specified Sui address. Each NFT contains information about the linked wallet.
@@ -131,8 +131,8 @@ The NFT type indicates which blockchain network the wallet is linked to:
 
 After retrieving a user's SuiLink objects, you can verify their ownership of specific assets on the linked blockchain:
 
-1. Extract the `network_address` from the SuiLink NFT
-2. Use the appropriate blockchain API to query assets at that address
+1. Extract the `network_address` from the SuiLink NFT.
+2. Use the appropriate blockchain API to query assets at that address. The examples use [Alchemy](https://www.alchemy.com/) for Ethereum, and [Metaplex](https://www.metaplex.com/) for Solana.
 3. Verify the presence of the required asset
 4. Attribute benefits to the user through their Sui wallet
 
@@ -142,7 +142,7 @@ After retrieving a user's SuiLink objects, you can verify their ownership of spe
 
 ```typescript
 // Get the user's SuiLink objects
-const suilinks = await suiClient.getOwnedObjects({
+const suilinks = await client.core.getOwnedObjects({
   owner: userSuiAddress,
   filter: { Package: SUILINK_PACKAGE_ID_ETH_SOL },
   options: { showContent: true, showType: true },
@@ -150,15 +150,25 @@ const suilinks = await suiClient.getOwnedObjects({
 
 // Extract linked Ethereum addresses
 const ethereumAddresses = suilinks.data
-  .filter(obj => obj.type.includes('ethereum::Ethereum'))
-  .map(obj => obj.fields.network_address);
+  .filter(obj => {
+    const type = obj.data?.content?.type || '';
+    return type.includes('ethereum::Ethereum');
+  })
+  .map(obj => obj.data?.content?.fields?.network_address)
+  .filter(Boolean);
 
-// Query Ethereum blockchain for assets at these addresses
+// Initialize Alchemy
+const alchemy = new Alchemy({
+  apiKey: alchemyApiKey,
+  network: Network.ETH_MAINNET,
+});
+
+// Query Ethereum blockchain for assets
 for (const ethAddress of ethereumAddresses) {
-  const assets = await fetchEthereumAssets(ethAddress); // Use Alchemy or similar
-  
-  if (assets.includes(requiredNFT)) {
-    // Grant benefit to user through their Sui wallet
+  const assets = await alchemy.nft.getNftsForOwner(ethAddress);
+    
+  if (assets.ownedNfts.some(nft => nft.contract.address === requiredNFT)) {
+    // Grant benefit to user
     grantBenefit(userSuiAddress);
   }
 }
@@ -170,7 +180,7 @@ for (const ethAddress of ethereumAddresses) {
 
 ```typescript
 // Get the user's SuiLink objects
-const suilinks = await suiClient.getOwnedObjects({
+const suilinks = await client.core.getOwnedObjects({
   owner: userSuiAddress,
   filter: { Package: SUILINK_PACKAGE_ID_ETH_SOL },
   options: { showContent: true, showType: true },
@@ -179,21 +189,21 @@ const suilinks = await suiClient.getOwnedObjects({
 // Extract linked Solana addresses
 const solanaAddresses = suilinks.data
   .filter(obj => {
-    const type = (obj.data?.content as any)?.type || '';
+    const type = obj.data?.content?.type || '';
     return type.includes('solana::Solana');
-})
-  .map(obj => {
-    const fields = (obj.data?.content as any)?.fields;
-    return fields?.network_address;
-});
+  })
+  .map(obj => obj.data?.content?.fields?.network_address)
+  .filter(Boolean);
 
-// Query Solana blockchain for assets at these addresses
+// Query Solana blockchain
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+const metaplex = Metaplex.make(connection);
+
 for (const solanaAddress of solanaAddresses) {
   const publicKey = new PublicKey(solanaAddress);
   const assets = await metaplex.nfts().findAllByOwner({ owner: publicKey });
     
   if (assets.some(nft => nft.mintAddress.toString() === requiredNFT)) {
-    // Grant benefit to user through their Sui wallet
     grantBenefit(userSuiAddress);
   }
 }
@@ -204,33 +214,30 @@ for (const solanaAddress of solanaAddresses) {
 <TabItem label="Sui" value="suiverify">
 
 ```typescript
-// Get the user's SuiLink objects
-const suilinks = await suiClient.getOwnedObjects({
+// Get the user's SuiLink objects (Sui-to-Sui)
+const suilinks = await client.core.getOwnedObjects({
   owner: userSuiAddress,
   filter: { Package: SUILINK_PACKAGE_ID_SUI },
   options: { showContent: true, showType: true },
 });
 
 // Extract linked Sui addresses
-const suiAddresses = suilinks.data
+const linkedSuiAddresses = suilinks.data
   .filter(obj => {
-    const type = (obj.data?.content as any)?.type || '';
+    const type = obj.data?.content?.type || '';
     return type.includes('sui::Sui');
-})
-  .map(obj => {
-    const fields = (obj.data?.content as any)?.fields;
-    return fields?.network_address;
-});
+  })
+  .map(obj => obj.data?.content?.fields?.network_address)
+  .filter(Boolean);
 
-// Query Sui blockchain for assets at these addresses
-for (const linkedSuiAddress of suiAddresses) {
-  const assets = await suiClient.getOwnedObjects({
+// Query Sui blockchain for assets in linked wallets
+for (const linkedSuiAddress of linkedSuiAddresses) {
+  const assets = await client.core.getOwnedObjects({
     owner: linkedSuiAddress,
     options: { showContent: true, showType: true },
   });
     
   if (assets.data.some(obj => obj.data?.objectId === requiredNFT)) {
-    // Grant benefit to user through their Sui wallet
     grantBenefit(userSuiAddress);
   }
 }
@@ -240,28 +247,8 @@ for (const linkedSuiAddress of suiAddresses) {
 
 </Tabs>
 
-## SuiPlay0X1 integration
-
-The [Playtron companion wallet app](https://wallet.playtron.one/) uses SuiLink to enable linking wallets that could contain soulbound assets in their other Sui mnemonic or zkLogin wallets, or their Solana or Ethereum wallets. This offers an improved user experience as users won’t need to transfer over all of their assets to their Playtron wallet to get the benefits these assets attribute to them.
-
-:::info
-
-You can prove ownership of another wallet or asset and link it to your Playtron wallet (thereby allowing the game to read those assets), but you can't transact with these assets. For operations that require transactions to occur from the Playtron wallet, assets need to be transferred.
-
-:::
-
-### Read-only versus transactional access
-
-When using SuiLink with the Playtron wallet:
-
-- **Read access**: Games can verify ownership of assets in linked wallets without requiring transfers.
-- **Transactional access**: Users must transfer assets from linked wallets to their Playtron wallet to use them in transactions.
-
 ## Related links
 
 - [SuiLink](https://www.suilink.io/): SuiLink main product page
-- [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub
 - [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): React components and hooks for building Sui dApps
-- [SuiPlay0X1 Discord](https://discord.gg/suiplay): Community discussions and announcements
-- [Companion web application](https://wallet.playtron.one): Link the Playtron wallet to other wallets using SuiLink
 - [Wallet Integration Options](/guides/suiplay0x1/wallet-integration): Comprehensive guide on wallet strategies for SuiPlay0X1
