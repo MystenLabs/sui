@@ -23,14 +23,14 @@ use sui_config::{ConsensusConfig, NodeConfig};
 use sui_network::endpoint_manager::ConsensusAddressUpdater;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::crypto::NetworkPublicKey;
-use sui_types::error::SuiResult;
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
 use tokio::sync::{Mutex, broadcast};
 use tokio::time::{sleep, timeout};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[cfg(test)]
 #[path = "../unit_tests/consensus_manager_tests.rs"]
@@ -311,8 +311,20 @@ impl ConsensusManager {
 
 // Implementing the interface so we can update the consensus peer addresses when requested.
 impl ConsensusAddressUpdater for ConsensusManager {
-    fn update(&self, _network_pubkey: NetworkPublicKey, _addresses: Vec<Multiaddr>) {
-        todo!("Update the consensus peer addresses when requested.");
+    fn update(&self, network_pubkey: NetworkPublicKey, addresses: Vec<Multiaddr>) -> SuiResult<()> {
+        if let Some(authority) = self.authority.load_full() {
+            let network_pubkey = consensus_config::NetworkPublicKey::new(network_pubkey);
+            authority.0.update_peer_address(network_pubkey, addresses);
+            Ok(())
+        } else {
+            warn!(
+                "Consensus manager is not running, ignoring update of peer addresses for network public key {network_pubkey:?} and addresses {addresses:?}"
+            );
+            Err(SuiErrorKind::GenericAuthorityError {
+                error: "Consensus manager is not running".to_string(),
+            }
+            .into())
+        }
     }
 }
 

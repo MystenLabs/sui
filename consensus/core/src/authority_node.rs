@@ -3,10 +3,13 @@
 
 use std::{sync::Arc, time::Instant};
 
-use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use consensus_config::{
+    AuthorityIndex, Committee, NetworkKeyPair, NetworkPublicKey, Parameters, ProtocolKeyPair,
+};
 use consensus_types::block::Round;
 use itertools::Itertools;
 use mysten_metrics::spawn_logged_monitored_task;
+use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
@@ -90,6 +93,12 @@ impl ConsensusAuthority {
     pub async fn stop(self) {
         match self {
             Self::WithTonic(authority) => authority.stop().await,
+        }
+    }
+
+    pub fn update_peer_address(&self, network_pubkey: NetworkPublicKey, addresses: Vec<Multiaddr>) {
+        match self {
+            Self::WithTonic(authority) => authority.update_peer_address(network_pubkey, addresses),
         }
     }
 
@@ -413,6 +422,14 @@ where
 
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
+    }
+
+    pub(crate) fn update_peer_address(
+        &self,
+        _network_pubkey: NetworkPublicKey,
+        _addresses: Vec<Multiaddr>,
+    ) {
+        todo!("Update the peer addresses for the consensus authority");
     }
 }
 
