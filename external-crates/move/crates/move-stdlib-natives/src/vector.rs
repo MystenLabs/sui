@@ -123,8 +123,7 @@ pub fn native_push_back(
             include_vector_size: false,
             fine_grained_value_size: false,
         })?;
-        let cost = gas_params.legacy_per_abstract_memory_unit
-            * std::cmp::max(size, 1.into());
+        let cost = gas_params.legacy_per_abstract_memory_unit * std::cmp::max(size, 1.into());
         native_charge_gas_early_exit!(context, cost);
     }
 

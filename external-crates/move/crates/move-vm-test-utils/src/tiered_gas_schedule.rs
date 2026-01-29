@@ -459,11 +459,9 @@ impl<'b> GasMeter for GasStatus<'b> {
             .unwrap_or(0) as u64;
         // Calculate the number of bytes that are getting pushed onto the stack.
         let size_increase = match ret_vals {
-            Some(mut ret_vals) => {
-                ret_vals.try_fold(AbstractMemorySize::zero(), |acc, elem| {
-                    Ok(acc + abstract_memory_size(elem)?)
-                })?
-            }
+            Some(mut ret_vals) => ret_vals.try_fold(AbstractMemorySize::zero(), |acc, elem| {
+                Ok(acc + abstract_memory_size(elem)?)
+            })?,
             None => AbstractMemorySize::zero(),
         };
         // Charge for the stack operations. We don't count this as an "instruction" since we

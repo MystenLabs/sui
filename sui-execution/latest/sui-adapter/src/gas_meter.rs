@@ -92,11 +92,10 @@ impl GasMeter for SuiGasMeter<'_> {
             .unwrap_or(0) as u64;
         // Calculate the number of bytes that are getting pushed onto the stack.
         let size_increase = match ret_vals {
-            Some(mut ret_vals) => {
-                ret_vals.try_fold(AbstractMemorySize::zero(), |acc, elem| -> PartialVMResult<_> {
-                    Ok(acc + abstract_memory_size(self.0, elem)?)
-                })?
-            }
+            Some(mut ret_vals) => ret_vals.try_fold(
+                AbstractMemorySize::zero(),
+                |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(self.0, elem)?) },
+            )?,
             None => AbstractMemorySize::zero(),
         };
         self.0.record_native_call();
@@ -128,9 +127,10 @@ impl GasMeter for SuiGasMeter<'_> {
         // charge for them.
         let pops = args.len() as u64;
         // Calculate the size decrease of the stack from the above pops.
-        let stack_reduction_size = args.try_fold(AbstractMemorySize::new(pops), |acc, elem| -> PartialVMResult<_> {
-            Ok(acc + abstract_memory_size(self.0, elem)?)
-        })?;
+        let stack_reduction_size = args.try_fold(
+            AbstractMemorySize::new(pops),
+            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(self.0, elem)?) },
+        )?;
         // Track that this is going to be popping from the operand stack. We also increment the
         // instruction count as we need to account for the `Call` bytecode that initiated this
         // native call.
@@ -148,9 +148,10 @@ impl GasMeter for SuiGasMeter<'_> {
         let pops = args.len() as u64;
         // Size stays the same -- we're just moving it from the operand stack to the locals. But
         // the size on the operand stack is reduced by sum_{args} arg.size().
-        let stack_reduction_size = args.try_fold(AbstractMemorySize::new(0), |acc, elem| -> PartialVMResult<_> {
-            Ok(acc + abstract_memory_size(self.0, elem)?)
-        })?;
+        let stack_reduction_size = args.try_fold(
+            AbstractMemorySize::new(0),
+            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(self.0, elem)?) },
+        )?;
         self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
     }
 
@@ -165,9 +166,10 @@ impl GasMeter for SuiGasMeter<'_> {
         // We have to perform this many pops from the operand stack for this function call.
         let pops = args.len() as u64;
         // Calculate the size reduction on the operand stack.
-        let stack_reduction_size = args.try_fold(AbstractMemorySize::new(0), |acc, elem| -> PartialVMResult<_> {
-            Ok(acc + abstract_memory_size(self.0, elem)?)
-        })?;
+        let stack_reduction_size = args.try_fold(
+            AbstractMemorySize::new(0),
+            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(self.0, elem)?) },
+        )?;
         // Charge for the pops, no pushes, and account for the stack size decrease. Also track the
         // `CallGeneric` instruction we must have encountered for this.
         self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
@@ -267,7 +269,8 @@ impl GasMeter for SuiGasMeter<'_> {
         };
         let incr_size = abstract_memory_size(self.0, new_val)?;
         let decr_size = abstract_memory_size(self.0, old_val)?;
-        self.0.charge(1, pushes, pops, incr_size.into(), decr_size.into())
+        self.0
+            .charge(1, pushes, pops, incr_size.into(), decr_size.into())
     }
 
     fn charge_eq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
@@ -380,7 +383,10 @@ impl GasMeter for SuiGasMeter<'_> {
     }
 }
 
-fn abstract_memory_size(status: &GasStatus, val: impl ValueView) -> PartialVMResult<AbstractMemorySize> {
+fn abstract_memory_size(
+    status: &GasStatus,
+    val: impl ValueView,
+) -> PartialVMResult<AbstractMemorySize> {
     let config = size_config_for_gas_model_version(status.gas_model_version, false);
     val.abstract_memory_size(&config)
 }

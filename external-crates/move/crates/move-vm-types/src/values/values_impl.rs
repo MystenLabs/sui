@@ -3853,7 +3853,12 @@ impl Container {
         Ok(())
     }
 
-    fn visit_indexed(&self, visitor: &mut impl ValueVisitor, depth: usize, idx: usize) -> PartialVMResult<()> {
+    fn visit_indexed(
+        &self,
+        visitor: &mut impl ValueVisitor,
+        depth: usize,
+        idx: usize,
+    ) -> PartialVMResult<()> {
         use Container::*;
 
         match self {

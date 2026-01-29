@@ -415,11 +415,13 @@ pub fn remove_child_object(
         }
         // The Move value had to be created. The value isn't a reference so traverse_references
         // doesn't matter
-        CacheInfo::CachedObject | CacheInfo::Loaded(_) => child.abstract_memory_size(&SizeConfig {
-            include_vector_size: true,
-            traverse_references: false,
-            fine_grained_value_size: true,
-        })?,
+        CacheInfo::CachedObject | CacheInfo::Loaded(_) => {
+            child.abstract_memory_size(&SizeConfig {
+                include_vector_size: true,
+                traverse_references: false,
+                fine_grained_value_size: true,
+            })?
+        }
     };
     native_charge_gas_early_exit!(
         context,

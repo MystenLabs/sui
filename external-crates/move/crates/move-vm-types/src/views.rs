@@ -92,7 +92,11 @@ pub trait ValueView {
                 Ok(())
             }
 
-            fn visit_u256(&mut self, _depth: usize, _val: move_core_types::u256::U256) -> PartialVMResult<()> {
+            fn visit_u256(
+                &mut self,
+                _depth: usize,
+                _val: move_core_types::u256::U256,
+            ) -> PartialVMResult<()> {
                 self.accumulated_size += if self.config.fine_grained_value_size {
                     U256_SIZE
                 } else {
@@ -110,7 +114,11 @@ pub trait ValueView {
                 Ok(())
             }
 
-            fn visit_address(&mut self, _depth: usize, _val: AccountAddress) -> PartialVMResult<()> {
+            fn visit_address(
+                &mut self,
+                _depth: usize,
+                _val: AccountAddress,
+            ) -> PartialVMResult<()> {
                 self.accumulated_size += AbstractMemorySize::new(AccountAddress::LENGTH as u64);
                 Ok(())
             }
@@ -170,7 +178,11 @@ pub trait ValueView {
                 Ok(())
             }
 
-            fn visit_vec_u256(&mut self, _depth: usize, vals: &[move_core_types::u256::U256]) -> PartialVMResult<()> {
+            fn visit_vec_u256(
+                &mut self,
+                _depth: usize,
+                vals: &[move_core_types::u256::U256],
+            ) -> PartialVMResult<()> {
                 if self.config.include_vector_size {
                     self.accumulated_size += LEGACY_STRUCT_SIZE;
                 }
@@ -186,7 +198,11 @@ pub trait ValueView {
                 Ok(())
             }
 
-            fn visit_vec_address(&mut self, _depth: usize, vals: &[AccountAddress]) -> PartialVMResult<()> {
+            fn visit_vec_address(
+                &mut self,
+                _depth: usize,
+                vals: &[AccountAddress],
+            ) -> PartialVMResult<()> {
                 if self.config.include_vector_size {
                     self.accumulated_size += LEGACY_STRUCT_SIZE;
                 }
@@ -217,7 +233,8 @@ pub trait ValueVisitor {
     fn visit_u32(&mut self, depth: usize, val: u32) -> PartialVMResult<()>;
     fn visit_u64(&mut self, depth: usize, val: u64) -> PartialVMResult<()>;
     fn visit_u128(&mut self, depth: usize, val: u128) -> PartialVMResult<()>;
-    fn visit_u256(&mut self, depth: usize, val: move_core_types::u256::U256) -> PartialVMResult<()>;
+    fn visit_u256(&mut self, depth: usize, val: move_core_types::u256::U256)
+    -> PartialVMResult<()>;
     fn visit_bool(&mut self, depth: usize, val: bool) -> PartialVMResult<()>;
     fn visit_address(&mut self, depth: usize, val: AccountAddress) -> PartialVMResult<()>;
 
@@ -267,7 +284,11 @@ pub trait ValueVisitor {
         Ok(())
     }
 
-    fn visit_vec_u256(&mut self, depth: usize, vals: &[move_core_types::u256::U256]) -> PartialVMResult<()> {
+    fn visit_vec_u256(
+        &mut self,
+        depth: usize,
+        vals: &[move_core_types::u256::U256],
+    ) -> PartialVMResult<()> {
         self.visit_vec(depth, vals.len())?;
         for val in vals {
             self.visit_u256(depth + 1, *val)?;
