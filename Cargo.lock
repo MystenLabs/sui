@@ -14954,6 +14954,7 @@ dependencies = [
  "shared-crypto",
  "sui-config",
  "sui-keys",
+ "sui-rpc-api",
  "sui-sdk",
  "test-cluster",
  "thiserror 1.0.69",
