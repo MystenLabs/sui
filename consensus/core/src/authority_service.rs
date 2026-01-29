@@ -962,6 +962,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -969,10 +970,10 @@ mod tests {
             commit_vote_monitor.clone(),
             block_verifier.clone(),
             transaction_certifier.clone(),
+            round_tracker.clone(),
             dag_state.clone(),
             false,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -1080,6 +1081,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1087,10 +1089,10 @@ mod tests {
             commit_vote_monitor.clone(),
             block_verifier.clone(),
             transaction_certifier.clone(),
+            round_tracker.clone(),
             dag_state.clone(),
             false,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -1247,6 +1249,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1254,10 +1257,10 @@ mod tests {
             commit_vote_monitor.clone(),
             block_verifier.clone(),
             transaction_certifier.clone(),
+            round_tracker.clone(),
             dag_state.clone(),
             true,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
