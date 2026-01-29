@@ -3,7 +3,7 @@ title: Nautilus
 description: Run secure, off-chain logic in trusted execution environments (TEEs), and verify it on-chain to trigger safe smart contract workflows.
 ---
 
-Nautilus is a reproducible build template and reference implementation for secure and verifiable off-chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
+Nautilus is a verifiable off-chain compute layer Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
 
 Nautilus supports hybrid decentralized applications that require private data handling, complex computations, or integration with external (Web2) systems. The framework ensures computations are tamper-resistant, isolated, and cryptographically verifiable.
 
@@ -12,13 +12,10 @@ It currently supports self-managed [AWS Nitro Enclave TEEs](https://aws.amazon.c
 ## Features
 
 :::important
-Nautilus is NOT just about running code in a TEE. The key value proposition is **on-chain verification** of computation integrity:
+Nautilus is NOT just about running code in privacy-preserving manner in a TEE. Part of the overall value proposition is **on-chain verification** of computation integrity:
 
-1. PCRs (enclave measurements) are registered on-chain
-2. Enclave attestation is verified on-chain before trusting the public key
-3. Every computation result must be signature-verified on-chain
-
-Without on-chain verification, you're just running a centralized backend in AWS.
+1. PCRs (enclave measurements) must be registered and verified on-chain
+2. Every computation result could optionally be verified on-chain
 :::
 
 A Nautilus application consists of 2 components:
