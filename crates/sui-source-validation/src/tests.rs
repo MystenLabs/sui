@@ -964,7 +964,7 @@ pub async fn upgrade_package_with_wallet(
     digest: Vec<u8>,
 ) -> (ObjectRef, TransactionDigest) {
     let sender = context.get_addresses()[0];
-    let client = context.get_client().await.unwrap();
+    let client = context.grpc_client().unwrap();
     let gas_price = context.get_reference_gas_price().await.unwrap();
     let transaction = {
         let data = client

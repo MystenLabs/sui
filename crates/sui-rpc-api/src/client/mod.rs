@@ -408,6 +408,10 @@ impl Client {
 
         Ok(response.epoch_mut().system_state.take().unwrap_or_default())
     }
+
+    pub fn transaction_builder(&self) -> sui_transaction_builder::TransactionBuilder {
+        sui_transaction_builder::TransactionBuilder::new(std::sync::Arc::new(self.clone()) as _)
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -607,4 +611,30 @@ fn status_from_error_with_metadata<T: Into<BoxError>>(err: T, metadata: Metadata
     let mut status = Status::from_error(err.into());
     *status.metadata_mut() = metadata;
     status
+}
+
+#[async_trait::async_trait]
+impl sui_transaction_builder::DataReader for Client {
+    async fn get_owned_objects(
+        &self,
+        address: SuiAddress,
+        object_type: move_core_types::language_storage::StructTag,
+    ) -> Result<Vec<sui_types::base_types::ObjectInfo>, anyhow::Error> {
+        self.list_owned_objects(address, Some(object_type))
+            .map_ok(|o| sui_types::base_types::ObjectInfo::from_object(&o))
+            .try_collect()
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
+        let mut client = self.clone();
+        Self::get_object(&mut client, object_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
+        self.get_reference_gas_price().await.map_err(Into::into)
+    }
 }
