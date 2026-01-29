@@ -42,6 +42,7 @@ use crate::api::types::gas_input::GasInput;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::lookups::TxBoundsCursor;
 use crate::api::types::scan;
+use crate::api::types::scan::cursor::ScanCursor;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionKindInput;
 use crate::api::types::transaction_effects::EffectsContents;
@@ -394,6 +395,16 @@ impl TransactionContents {
             scope: self.scope.clone(),
             contents: Some(Arc::new(transaction)),
         })
+    }
+}
+
+impl ScanCursor for TransactionCursor {
+    fn cp_sequence_number(&self) -> u64 {
+        self.cp_sequence_number
+    }
+
+    fn tx_sequence_number(&self) -> u64 {
+        self.tx_sequence_number
     }
 }
 

@@ -3367,6 +3367,10 @@ type Query {
 	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	"""
+	Scan events using bloom filters, supporting multiple filters (ANDed).
+	"""
+	eventsScan(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
+	"""
 	Fetch addresses by their keys.
 	
 	Returns a list of addresses that is guaranteed to be the same length as `keys`. If an address in `keys` is fetched by name and the name does not resolve to an address, its corresponding entry in the result will be `null`.

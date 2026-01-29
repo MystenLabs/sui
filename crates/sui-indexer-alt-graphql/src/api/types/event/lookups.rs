@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::iter::Rev;
 use std::ops::Range;
 
 use anyhow::Context as _;
 use async_graphql::Context;
-use itertools::Either;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
 use sui_types::digests::TransactionDigest;
@@ -15,7 +13,7 @@ use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::EventCursor;
 use crate::api::types::event::filter::EventFilter;
-use crate::api::types::event::filter::tx_ev_bounds;
+use crate::api::types::scan::directional_iter;
 use crate::api::types::transaction::tx_digests;
 use crate::error::RpcError;
 use crate::pagination::Page;
@@ -71,11 +69,7 @@ fn tx_events_paginated<'e>(
         let (tx_sequence_number, transaction_digest, contents) = events?;
         let events = contents.events()?;
 
-        let bounds: Either<Range<usize>, Rev<Range<usize>>> = if page.is_from_front() {
-            Either::Left(tx_ev_bounds(page, tx_sequence_number, events.len()))
-        } else {
-            Either::Right(tx_ev_bounds(page, tx_sequence_number, events.len()).rev())
-        };
+        let bounds = directional_iter(page, tx_ev_bounds(page, tx_sequence_number, events.len()));
 
         for ev_sequence_number in bounds {
             let event_cursor = EventCursor {
@@ -109,4 +103,27 @@ fn tx_events_paginated<'e>(
     }
 
     Ok(results)
+}
+
+/// The event indices (sequence_number) in a transaction's events array that are within the cursor bounds, inclusively.
+/// Event transaction numbers are always returned in ascending order.
+fn tx_ev_bounds(page: &Page<CEvent>, tx_sequence_number: u64, event_count: usize) -> Range<usize> {
+    // Find start index from 'after' cursor, defaults to 0
+    let ev_lo = page
+        .after()
+        .filter(|c| c.tx_sequence_number == tx_sequence_number)
+        .map(|c| c.ev_sequence_number as usize)
+        .unwrap_or(0)
+        .min(event_count);
+
+    // Find exclusive end index from 'before' cursor, default to event_count
+    let ev_hi = page
+        .before()
+        .filter(|c| c.tx_sequence_number == tx_sequence_number)
+        .map(|c| (c.ev_sequence_number as usize).saturating_add(1))
+        .unwrap_or(event_count)
+        .max(ev_lo)
+        .min(event_count);
+
+    ev_lo..ev_hi
 }
