@@ -35,16 +35,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
-      with:
-        fetch-depth: 1
-        ref: ${{ env.SUI_COMMIT }}
-        token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
-
-    - name: Create and push tag
+    - name: Create or update tag via GitHub API
+      env:
+        GH_TOKEN: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
       run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git tag -f "${{ env.TAG_NAME }}" "${{ env.SUI_COMMIT }}"
-        git push origin -f "${{ env.TAG_NAME }}"
+        # Check if tag already exists
+        if gh api repos/${{ github.repository }}/git/refs/tags/${{ env.TAG_NAME }} --silent 2>/dev/null; then
+          echo "Tag exists, updating..."
+          gh api -X PATCH repos/${{ github.repository }}/git/refs/tags/${{ env.TAG_NAME }} \
+            -f sha="${{ env.SUI_COMMIT }}" \
+            -F force=true
+        else
+          echo "Creating new tag..."
+          gh api repos/${{ github.repository }}/git/refs \
+            -f ref="refs/tags/${{ env.TAG_NAME }}" \
+            -f sha="${{ env.SUI_COMMIT }}"
+        fi
+
+        echo "✅ Tag ${{ env.TAG_NAME }} now points to ${{ env.SUI_COMMIT }}"
