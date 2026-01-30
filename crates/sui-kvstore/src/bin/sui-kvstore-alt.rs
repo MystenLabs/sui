@@ -61,7 +61,7 @@ struct Args {
     #[arg(long, value_parser = parse_max_mutations)]
     max_mutations: Option<usize>,
 
-    /// Enable writing legacy data: watermark [0] row, epoch DEFAULT_COLUMN, and transaction tx column
+    /// Enable writing legacy data: watermark \[0\] row, epoch DEFAULT_COLUMN, and transaction tx column
     #[arg(long)]
     write_legacy_data: bool,
 
