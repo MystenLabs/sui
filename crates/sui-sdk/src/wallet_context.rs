@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::SuiClient;
 use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use anyhow::{anyhow, ensure};
 use futures::future;
@@ -9,7 +8,6 @@ use futures::stream::TryStreamExt;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use sui_config::{Config, PersistedConfig};
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::{AccountKeystore, Keystore};
@@ -23,13 +21,11 @@ use std::sync::OnceLock;
 use sui_rpc_api::Client;
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
-use tokio::sync::RwLock;
 use tracing::info;
 
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     request_timeout: Option<std::time::Duration>,
-    client: Arc<RwLock<Option<SuiClient>>>,
     grpc: OnceLock<Client>,
     max_concurrent_requests: Option<u64>,
     env_override: Option<String>,
@@ -48,7 +44,6 @@ impl WalletContext {
         let context = Self {
             config,
             request_timeout: None,
-            client: Default::default(),
             grpc: OnceLock::new(),
             max_concurrent_requests: None,
             env_override: None,
@@ -67,7 +62,6 @@ impl WalletContext {
         Self {
             config,
             request_timeout: None,
-            client: Arc::new(Default::default()),
             grpc: OnceLock::new(),
             max_concurrent_requests: None,
             env_override: None,
@@ -120,22 +114,6 @@ impl WalletContext {
         } else {
             self.active_address()
         }
-    }
-
-    pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
-        let read = self.client.read().await;
-
-        Ok(if let Some(client) = read.as_ref() {
-            client.clone()
-        } else {
-            drop(read);
-            let client = self
-                .get_active_env()?
-                .create_rpc_client(self.request_timeout, self.max_concurrent_requests)
-                .await?;
-
-            self.client.write().await.insert(client).clone()
-        })
     }
 
     pub fn grpc_client(&self) -> Result<Client, anyhow::Error> {
