@@ -1,7 +1,8 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 817
 ---
-processed 24 tasks
+processed 25 tasks
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
@@ -364,7 +365,67 @@ Response: {
   }
 }
 
-task 20, lines 129-159:
+task 20, lines 129-162:
+//# run-graphql
+Response: {
+  "data": {
+    "scanFnAndObj": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjoyfQ==",
+        "endCursor": "eyJ0IjowLCJjIjoyfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjoyfQ==",
+          "node": {
+            "digest": "GxzHztdrcHGeWdCNt4DwE5WdeyZ4dDpjpmv8TuqE1K7B",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanFnAndAddr": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjo0fQ==",
+        "endCursor": "eyJ0IjowLCJjIjoxMDUwOH0=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjo0fQ==",
+          "node": {
+            "digest": "iNKPq8CmUWRDTYnEvAggeizPXCXqFUvi8BWhMnSz2ao",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoxMDUwOH0=",
+          "node": {
+            "digest": "6BtSF6K4ePk4qXZJx8NFREr51iJr2jaBz8Ln2K3P3byC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 10508
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 21, lines 164-194:
 //# run-graphql
 Response: {
   "data": {
@@ -567,7 +628,7 @@ Response: {
   }
 }
 
-task 21, lines 161-196:
+task 22, lines 196-231:
 //# run-graphql
 Response: {
   "data": {
@@ -601,7 +662,7 @@ Response: {
   }
 }
 
-task 22, lines 198-221:
+task 23, lines 233-256:
 //# run-graphql --cursors {"t":0,"c":0} {"t":1,"c":1} {"t":0,"c":4} {"t":2,"c":5} {"t":0,"c":10508}
 Response: {
   "data": {
@@ -1092,7 +1153,7 @@ Response: {
   }
 }
 
-task 23, lines 223-235:
+task 24, lines 258-270:
 //# run-graphql
 Response: {
   "data": {

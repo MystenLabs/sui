@@ -5,6 +5,7 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use diesel::QueryableByName;
 use diesel::sql_types::BigInt;
+use diesel::sql_types::Integer;
 use itertools::Itertools;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_schema::blooms::blocked::BlockedBloomProbe;
@@ -35,9 +36,9 @@ struct CpResult {
 /// then a finer filter over those ranges for checkpoint matches using cp_blooms.
 pub(super) async fn candidate_cps(
     ctx: &Context<'_>,
-    filter_values: &[Vec<u8>],
+    filter_values: &[[u8; 32]],
     cp_lo: u64,
-    cp_hi: u64,
+    cp_hi_inclusive: u64,
     page: &Page<SCTransaction>,
 ) -> Result<Vec<u64>, RpcError> {
     let pg_reader: &PgReader = ctx.data()?;
@@ -47,12 +48,12 @@ pub(super) async fn candidate_cps(
         .context("Failed to connect to database for bloom filter scan")?;
 
     let cp_block_lo = cp_block_index(cp_lo);
-    let cp_block_hi = cp_block_index(cp_hi);
+    let cp_block_hi = cp_block_index(cp_hi_inclusive);
 
     // Block index and probe for each block in the range. Seeds vary per block, so we must
     // construct probes for each block.
     let block_probes = (cp_block_lo..=cp_block_hi).flat_map(|id| {
-        CpBlockedBloomFilter::probe(filter_values, id as u128)
+        CpBlockedBloomFilter::probe(id as u128, filter_values)
             .into_iter()
             .map(move |probe| (id, probe))
     });
@@ -61,40 +62,72 @@ pub(super) async fn candidate_cps(
     let cp_bloom_condition = cp_bloom_condition_fragment(&CpBloomFilter::probe(filter_values));
 
     let fpr_adjusted_limit = (page.limit_with_overhead() as f64 * OVERFETCH_MULTIPLIER) as i64;
-    let query = query!(
-        r#"
-        -- Inline table of probes: which bloom blocks to check and what bits must be set
-        WITH condition_data(cp_block_index, bloom_idx, byte_pos, bit_masks) AS (VALUES {})
 
-        -- Find a page of checkpoint blocks where all probes matched.
-        , blocked_matches AS (
+    // Inline table of probes: which bloom blocks to check and what bits must be set.
+    let condition_data = query!(
+        "condition_data(cp_block_index, bloom_idx, byte_pos, bit_masks) AS (VALUES {})",
+        cp_bloom_blocks_condition,
+    );
+
+    // Find a page of checkpoint blocks where all probes matched.
+    //
+    // Uses double NOT EXISTS to express universal quantification:
+    //   "keep cp_block_index where no probe lacks a matching bloom block."
+    //
+    // Inner NOT EXISTS: true when a single probe has no bloom block with
+    //   matching bits — i.e. the probe is unsatisfied.
+    // Outer NOT EXISTS: true when no probe is unsatisfied — i.e. all
+    //   probes passed for this cp_block_index.
+    //
+    // This avoids LEFT JOIN (which caused NULL + STRICT function issues
+    // at scale) and GROUP BY/HAVING COUNT aggregation.
+    let blocked_matches = query!(
+        r#"blocked_matches AS (
             SELECT
-                bb.cp_block_index,
-                bb.cp_block_index * {BigInt} as cp_lo,
-                bb.cp_block_index * {BigInt} + {BigInt} - 1 as cp_hi
-            FROM cp_bloom_blocks bb
-            JOIN condition_data c ON bb.cp_block_index = c.cp_block_index
-                                AND bb.bloom_block_index = c.bloom_idx
-            WHERE bloom_contains(bb.bloom_filter, c.byte_pos, c.bit_masks)
-            GROUP BY bb.cp_block_index
-            HAVING COUNT(*) = (SELECT COUNT(*) FROM condition_data c2 WHERE c2.cp_block_index = bb.cp_block_index)
-             -- ^ Only keep blocks where ALL probes matched
+                cd.cp_block_index,
+                cd.cp_block_index * {BigInt} as cp_lo,
+                cd.cp_block_index * {BigInt} + {BigInt} - 1 as cp_hi
+            FROM (SELECT DISTINCT cp_block_index FROM condition_data) cd
+            WHERE NOT EXISTS (
+                SELECT 1 FROM condition_data c
+                WHERE c.cp_block_index = cd.cp_block_index
+                  AND NOT EXISTS (
+                      SELECT 1 FROM cp_bloom_blocks bb
+                      WHERE bb.cp_block_index = c.cp_block_index
+                        AND bb.bloom_block_index = c.bloom_idx
+                        AND bloom_contains(bb.bloom_filter, c.byte_pos, c.bit_masks)
+                  )
+            )
             ORDER BY cp_lo {}
             LIMIT {BigInt}
-            -- ^ Limit number of matching blocks to a page of results
-        )
+        )"#,
+        CP_BLOCK_SIZE as i64,
+        CP_BLOCK_SIZE as i64,
+        CP_BLOCK_SIZE as i64,
+        page.order_by_direction(),
+        fpr_adjusted_limit,
+    );
 
-        -- Expand matched blocks into individual checkpoint sequences
-        , candidate_cps AS (
+    // Expand matched blocks into individual checkpoint sequences.
+    let candidate_cps = query!(
+        r#"candidate_cps AS (
             SELECT DISTINCT gs.cp AS cp_sequence_number
             FROM blocked_matches bm
             CROSS JOIN LATERAL generate_series(
                 GREATEST(bm.cp_lo, {BigInt}),
                 LEAST(bm.cp_hi, {BigInt})
             ) AS gs(cp)
-        )
+        )"#,
+        cp_lo as i64,
+        cp_hi_inclusive as i64,
+    );
 
-        -- Check each candidate checkpoint's bloom filter
+    // Check each candidate checkpoint's bloom filter.
+    let query = query!(
+        r#"
+        WITH {}
+        , {}
+        , {}
         SELECT cb.cp_sequence_number::BIGINT
         FROM cp_blooms cb
         JOIN candidate_cps cc ON cb.cp_sequence_number = cc.cp_sequence_number
@@ -102,17 +135,12 @@ pub(super) async fn candidate_cps(
         ORDER BY cb.cp_sequence_number {}
         LIMIT {BigInt}
         "#,
-        cp_bloom_blocks_condition,
-        CP_BLOCK_SIZE as i64,
-        CP_BLOCK_SIZE as i64,
-        CP_BLOCK_SIZE as i64,
-        page.order_by_direction(),
-        fpr_adjusted_limit,
-        cp_lo as i64,
-        cp_hi as i64,
+        condition_data,
+        blocked_matches,
+        candidate_cps,
         cp_bloom_condition,
         page.order_by_direction(),
-        fpr_adjusted_limit
+        fpr_adjusted_limit,
     );
 
     let results: Vec<CpResult> = conn
@@ -159,10 +187,11 @@ fn cp_bloom_condition_fragment(probe: &BloomProbe) -> Query<'static> {
         return query!("TRUE");
     }
 
-    let condition = format!(
-        "bloom_contains(cb.bloom_filter, ARRAY[{}]::INT[], ARRAY[{}]::INT[])",
-        probe.byte_offsets.iter().join(","),
-        probe.bit_masks.iter().join(",")
-    );
-    query!("{}", Query::new(condition))
+    let byte_offsets: Vec<i32> = probe.byte_offsets.iter().map(|&o| o as i32).collect();
+    let bit_masks: Vec<i32> = probe.bit_masks.iter().map(|&m| m as i32).collect();
+    query!(
+        "bloom_contains(cb.bloom_filter, {Array<Integer>}, {Array<Integer>})",
+        byte_offsets,
+        bit_masks,
+    )
 }

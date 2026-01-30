@@ -1415,23 +1415,8 @@ Query.transactions (filter: affectedObject)
 Query.transactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
-Query.transactionsScan
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Query.transactionsScan (filter: function)
-  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
-
-Query.transactionsScan (filter: kind)
-  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
-
-Query.transactionsScan (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Query.transactionsScan (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
-
-Query.transactionsScan (filter: sentAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+Query.scanTransactions
+  => {"cp_bloom_blocks", "cp_blooms"}
 
 Query.type
   => {}

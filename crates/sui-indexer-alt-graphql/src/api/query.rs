@@ -60,7 +60,6 @@ use crate::api::types::transaction::SCTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
-use crate::api::types::transaction::filter::TransactionScanFilterValidator as TSFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::zklogin;
 use crate::api::types::zklogin::ZkLoginIntentScope;
@@ -718,15 +717,19 @@ impl Query {
             .map(Some)
     }
 
-    /// The transactions that exist in the network, with support for multiple filters (AND).
-    async fn transactions_scan(
+    /// Scan for transactions matching a combination of filters (AND semantics).
+    ///
+    /// Unlike `transactions`, which supports a single filter backed by indexed lookups,
+    /// `scanTransactions` supports combining filters (e.g. `affectedAddress` AND `function`)
+    /// but requires a checkpoint range bounded by `ServiceConfig.maxScanLimit`.
+    async fn scan_transactions(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<SCTransaction>,
         last: Option<u64>,
         before: Option<SCTransaction>,
-        #[graphql(validator(custom = "TSFValidator"))] filter: Option<TransactionFilter>,
+        filter: Option<TransactionFilter>,
     ) -> Result<Option<Connection<String, Transaction>>, RpcError<ScanError>> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;

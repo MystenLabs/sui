@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::blooms::hash::DoubleHasher;
 use crate::blooms::hash::set_bit;
 
@@ -72,15 +74,15 @@ impl<const BYTES: usize, const HASHES: u32, const SEED: u128> BloomFilter<BYTES,
     }
 
     /// Byte offsets and bit masks of values, used for SQL membership checks.
+    /// Probes sharing the same byte offset are grouped by ORing their bit masks together.
     pub fn probe(values: impl IntoIterator<Item = impl AsRef<[u8]>>) -> BloomProbe {
-        let mut byte_offsets = Vec::new();
-        let mut bit_masks = Vec::new();
+        let mut by_offset: BTreeMap<usize, u8> = BTreeMap::new();
         for value in values {
             for b in Self::hash(value.as_ref()) {
-                byte_offsets.push(b / 8);
-                bit_masks.push(1u8 << (b % 8));
+                *by_offset.entry(b / 8).or_default() |= 1u8 << (b % 8);
             }
         }
+        let (byte_offsets, bit_masks) = by_offset.into_iter().unzip();
         BloomProbe {
             byte_offsets,
             bit_masks,

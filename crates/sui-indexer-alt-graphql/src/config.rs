@@ -158,7 +158,7 @@ pub struct Limits {
     /// Maximum number of "rich" queries that can be performed in a single request. Rich queries are
     /// queries that require dedicated requests to the backing store.
     pub max_rich_queries: usize,
-    /// Maximum number of checkpoints that can be scanned in a single transactionsScan query.
+    /// Maximum number of checkpoints that can be scanned in a single scanning pagination query.
     pub max_scan_limit: u64,
 }
 
@@ -549,8 +549,8 @@ impl Default for Limits {
             max_display_output_size: 1024 * 1024,
             max_disassembled_module_size: 1024 * 1024,
             max_rich_queries: 21,
-            // ~7 epochs worth of checkpoints (at 4 checkpoints/second, 24 hours/epoch)
-            max_scan_limit: 2_400_000,
+            // ~8.7 epochs worth of checkpoints (at 4 checkpoints/second, 24 hours/epoch)
+            max_scan_limit: 3_000_000,
         }
     }
 }
