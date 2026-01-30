@@ -39,20 +39,37 @@ jobs:
 
     steps:
     - name: Create or update tag via GitHub API
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # Check if tag already exists
-        if gh api repos/${{ github.repository }}/git/refs/tags/${{ env.TAG_NAME }} --silent 2>/dev/null; then
-          echo "Tag exists, updating..."
-          gh api -X PATCH repos/${{ github.repository }}/git/refs/tags/${{ env.TAG_NAME }} \
-            -f sha="${{ env.SUI_COMMIT }}" \
-            -F force=true
-        else
-          echo "Creating new tag..."
-          gh api repos/${{ github.repository }}/git/refs \
-            -f ref="refs/tags/${{ env.TAG_NAME }}" \
-            -f sha="${{ env.SUI_COMMIT }}"
-        fi
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # pin@v7.0.1
+      with:
+        script: |
+          const tag = process.env.TAG_NAME;
+          const sha = process.env.SUI_COMMIT;
 
-        echo "Tag ${{ env.TAG_NAME }} now points to ${{ env.SUI_COMMIT }}"
+          console.log(`Creating/updating tag ${tag} to point to ${sha}`);
+
+          try {
+            // Try to update existing tag
+            await github.rest.git.updateRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `tags/${tag}`,
+              sha: sha,
+              force: true
+            });
+            console.log(`Updated existing tag ${tag}`);
+          } catch (e) {
+            if (e.status === 404) {
+              // Tag doesn't exist, create it
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/tags/${tag}`,
+                sha: sha
+              });
+              console.log(`Created new tag ${tag}`);
+            } else {
+              throw e;
+            }
+          }
+
+          console.log(`Tag ${tag} now points to ${sha}`);
