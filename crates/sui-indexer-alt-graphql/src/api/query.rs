@@ -67,6 +67,8 @@ use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
 use crate::task::chain_identifier::ChainIdentifier;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 
 #[derive(Default)]
 pub struct Query {
@@ -183,10 +185,10 @@ impl Query {
         .transpose()
     }
 
-    /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
+    /// The network's genesis checkpoint digest (uniquely identifies the network), Base58-encoded.
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
         let chain_id: &ChainIdentifier = ctx.data()?;
-        Ok(chain_id.wait().await.to_string())
+        Ok(Base58::encode(chain_id.wait().await.as_bytes()))
     }
 
     /// Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
