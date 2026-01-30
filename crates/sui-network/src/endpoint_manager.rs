@@ -58,6 +58,7 @@ pub enum EndpointId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// NOTE: AddressSources are prioritized in order of the enum variants below.
 pub enum AddressSource {
     Admin,
     Committee,
