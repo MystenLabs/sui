@@ -5,19 +5,26 @@
 
 use anyhow::{Context, Result};
 use bytes::Bytes;
+use sui_types::balance_change::BalanceChange;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
 
 use crate::{TransactionData, TransactionEventsData};
 
 pub mod col {
-    pub const TX: &str = "tx";
     pub const EFFECTS: &str = "ef";
     pub const EVENTS: &str = "ev";
     pub const TIMESTAMP: &str = "ts";
     pub const CHECKPOINT_NUMBER: &str = "cn";
+    pub const DATA: &str = "td";
+    pub const SIGNATURES: &str = "sg";
+    pub const BALANCE_CHANGES: &str = "bc";
+    pub const UNCHANGED_LOADED: &str = "ul";
+    /// Deprecated: Full Transaction (data+sigs combined). Use DATA+SIGNATURES instead.
+    pub const TX: &str = "tx";
 }
 
 pub const NAME: &str = "transactions";
@@ -26,14 +33,20 @@ pub fn encode_key(digest: &TransactionDigest) -> Vec<u8> {
     digest.inner().to_vec()
 }
 
+/// Encode all transaction columns.
+/// Writes 9 columns: TX (deprecated but kept for backwards compat), EFFECTS, EVENTS,
+/// TIMESTAMP, CHECKPOINT_NUMBER, DATA, SIGNATURES, BALANCE_CHANGES, UNCHANGED_LOADED.
 pub fn encode(
     transaction: &Transaction,
     effects: &TransactionEffects,
     events: &Option<TransactionEvents>,
     checkpoint_number: CheckpointSequenceNumber,
     timestamp_ms: u64,
-) -> Result<[(&'static str, Bytes); 5]> {
+    balance_changes: &[BalanceChange],
+    unchanged_loaded_runtime_objects: &[ObjectKey],
+) -> Result<[(&'static str, Bytes); 9]> {
     Ok([
+        // Deprecated: full transaction (use DATA+SIGNATURES)
         (col::TX, Bytes::from(bcs::to_bytes(transaction)?)),
         (col::EFFECTS, Bytes::from(bcs::to_bytes(effects)?)),
         (col::EVENTS, Bytes::from(bcs::to_bytes(events)?)),
@@ -41,6 +54,22 @@ pub fn encode(
         (
             col::CHECKPOINT_NUMBER,
             Bytes::from(bcs::to_bytes(&checkpoint_number)?),
+        ),
+        (
+            col::DATA,
+            Bytes::from(bcs::to_bytes(&transaction.data().intent_message().value)?),
+        ),
+        (
+            col::SIGNATURES,
+            Bytes::from(bcs::to_bytes(transaction.data().tx_signatures())?),
+        ),
+        (
+            col::BALANCE_CHANGES,
+            Bytes::from(bcs::to_bytes(balance_changes)?),
+        ),
+        (
+            col::UNCHANGED_LOADED,
+            Bytes::from(bcs::to_bytes(unchanged_loaded_runtime_objects)?),
         ),
     ])
 }
@@ -69,6 +98,8 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
         events: events.context("events field is missing")?,
         timestamp,
         checkpoint_number,
+        balance_changes: Vec::new(),
+        unchanged_loaded_runtime_objects: Vec::new(),
     })
 }
 

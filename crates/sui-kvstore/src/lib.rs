@@ -8,8 +8,11 @@ pub use crate::handlers::BIGTABLE_MAX_MUTATIONS;
 pub use crate::handlers::BigTableHandler;
 pub use crate::handlers::CheckpointsByDigestPipeline;
 pub use crate::handlers::CheckpointsPipeline;
+pub use crate::handlers::EpochEndPipeline;
 pub use crate::handlers::EpochLegacyBatch;
 pub use crate::handlers::EpochLegacyPipeline;
+pub use crate::handlers::EpochStartPipeline;
+pub use crate::handlers::ObjectTypesPipeline;
 pub use crate::handlers::ObjectsPipeline;
 pub use crate::handlers::PrevEpochUpdate;
 pub use crate::handlers::TransactionsPipeline;
@@ -19,11 +22,14 @@ pub use crate::handlers::set_max_mutations;
 /// - Pipeline registration in `BigTableIndexer::new()`
 /// - Per-pipeline watermark queries in `get_latest_checkpoint()`
 /// - Legacy watermark tracker expected count
-pub const ALL_PIPELINE_NAMES: [&str; 5] = [
+pub const ALL_PIPELINE_NAMES: [&str; 8] = [
     <BigTableHandler<CheckpointsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME,
     <BigTableHandler<CheckpointsByDigestPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME,
     <BigTableHandler<TransactionsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME,
     <BigTableHandler<ObjectsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME,
+    <BigTableHandler<ObjectTypesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME,
+    <BigTableHandler<EpochStartPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME,
+    <BigTableHandler<EpochEndPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME,
     <EpochLegacyPipeline as sui_indexer_alt_framework::pipeline::Processor>::NAME,
 ];
 
@@ -37,6 +43,7 @@ use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::EpochId;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
@@ -75,6 +82,8 @@ pub struct TransactionData {
     pub events: Option<TransactionEvents>,
     pub checkpoint_number: CheckpointSequenceNumber,
     pub timestamp: u64,
+    pub balance_changes: Vec<BalanceChange>,
+    pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
 }
 
 /// Partial transaction and events for when we only need transaction content for events
@@ -82,6 +91,37 @@ pub struct TransactionData {
 pub struct TransactionEventsData {
     pub events: Vec<Event>,
     pub timestamp_ms: u64,
+}
+
+/// Data written at epoch start (before transactions are processed)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EpochStartData {
+    pub epoch: u64,
+    pub protocol_version: Option<u64>,
+    pub start_timestamp_ms: Option<u64>,
+    pub start_checkpoint: Option<u64>,
+    pub reference_gas_price: Option<u64>,
+    pub system_state: Option<sui_types::sui_system_state::SuiSystemState>,
+}
+
+impl From<&EpochInfo> for EpochStartData {
+    fn from(info: &EpochInfo) -> Self {
+        Self {
+            epoch: info.epoch,
+            protocol_version: info.protocol_version,
+            start_timestamp_ms: info.start_timestamp_ms,
+            start_checkpoint: info.start_checkpoint,
+            reference_gas_price: info.reference_gas_price,
+            system_state: info.system_state.clone(),
+        }
+    }
+}
+
+/// Data written at epoch end (after the last transaction of the epoch)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EpochEndData {
+    pub end_timestamp_ms: Option<u64>,
+    pub end_checkpoint: Option<u64>,
 }
 
 /// Serializable watermark for per-pipeline tracking in BigTable.
@@ -153,6 +193,15 @@ impl BigTableIndexer {
             .await?;
         indexer
             .concurrent_pipeline(BigTableHandler::new(ObjectsPipeline), config.clone())
+            .await?;
+        indexer
+            .concurrent_pipeline(BigTableHandler::new(ObjectTypesPipeline), config.clone())
+            .await?;
+        indexer
+            .concurrent_pipeline(BigTableHandler::new(EpochStartPipeline), config.clone())
+            .await?;
+        indexer
+            .concurrent_pipeline(BigTableHandler::new(EpochEndPipeline), config.clone())
             .await?;
         indexer
             .concurrent_pipeline(EpochLegacyPipeline, config)

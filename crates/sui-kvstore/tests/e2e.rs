@@ -25,13 +25,11 @@ use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
-use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
-use sui_kvstore::EpochLegacyPipeline;
 use sui_kvstore::KeyValueStoreReader;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
@@ -57,6 +55,7 @@ const INSTANCE_ID: &str = "bigtable_test_instance";
 
 const TABLES: &[&str] = &[
     sui_kvstore::tables::objects::NAME,
+    sui_kvstore::tables::object_types::NAME,
     sui_kvstore::tables::transactions::NAME,
     sui_kvstore::tables::checkpoints::NAME,
     sui_kvstore::tables::checkpoints_by_digest::NAME,
