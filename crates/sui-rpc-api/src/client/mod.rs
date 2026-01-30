@@ -470,6 +470,23 @@ impl Client {
         Ok(response.epoch_mut().system_state.take().unwrap_or_default())
     }
 
+    pub async fn get_coin_info(
+        &self,
+        coin_type: &move_core_types::language_storage::StructTag,
+    ) -> Result<proto::GetCoinInfoResponse> {
+        let resp = self
+            .0
+            .clone()
+            .state_client()
+            .get_coin_info(
+                proto::GetCoinInfoRequest::default()
+                    .with_coin_type(coin_type.to_canonical_string(true)),
+            )
+            .await?
+            .into_inner();
+        Ok(resp)
+    }
+
     pub fn transaction_builder(&self) -> sui_transaction_builder::TransactionBuilder {
         sui_transaction_builder::TransactionBuilder::new(std::sync::Arc::new(self.clone()) as _)
     }
