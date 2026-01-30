@@ -31,7 +31,7 @@ jobs:
 
       - name: Restore cached Sui binary
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # pin@v5.0.3
         with:
           path: .cache/sui/${{ steps.release.outputs.tag }}/sui
           key: sui-${{ runner.os }}-${{ steps.release.outputs.tag }}
