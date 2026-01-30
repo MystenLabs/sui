@@ -701,6 +701,15 @@ impl SuiNode {
 
         let endpoint_manager = EndpointManager::new(discovery_handle.clone());
 
+        // Inject configured peer address overrides.
+        for peer in &config.p2p_config.peer_address_overrides {
+            endpoint_manager.update_endpoint(
+                EndpointId::P2p(peer.peer_id),
+                AddressSource::Config,
+                peer.addresses.clone(),
+            );
+        }
+
         // Send initial peer addresses to the p2p network.
         update_peer_addresses(&config, &endpoint_manager, epoch_store.epoch_start_state());
 
