@@ -24,11 +24,24 @@ The most significant risk in margin trading is **liquidation** - the forced clos
 
 When you borrow funds to trade, you must maintain a minimum [risk ratio](./contract-information/risk-ratio.mdx) (the ratio of your total assets to total debts). If your position's risk ratio falls to or below the **Liquidation Risk Ratio**, anyone can liquidate your position.
 
+:::caution Warning Zone: Risk Ratio 1.1 - 1.2
+When your risk ratio falls between 1.1 and 1.2, you are in the **warning zone**. At this level, even minor price movements can push you into liquidation. Monitor your position carefully and consider adding collateral or reducing your position size.
+:::
+
+### Partial liquidation
+
+Liquidation in DeepBook Margin is **partial**, not total. The protocol only liquidates enough of your position to restore your risk ratio to the **Target Liquidation Risk Ratio** (typically 1.25 for SUI/USDC).
+
 During liquidation:
-1. A liquidator repays part of your debt
-2. They receive your collateral plus a liquidation reward (typically 2%)
+1. A liquidator repays a portion of your debt (not all of it)
+2. They receive collateral plus a liquidation reward (typically 2%)
 3. The margin pool also takes a fee (typically 3%)
-4. You lose a portion of your collateral and may be left with a smaller position
+4. Your position is restored to the target risk ratio of 1.25
+5. You keep the remaining position, but with less equity
+
+This means if you're liquidated at a 1.1 risk ratio, you won't lose your entire position. The liquidator repays just enough debt to bring your ratio back to 1.25, leaving you with a smaller but healthier position.
+
+**However**, if your position is severely underwater (assets barely cover debt plus rewards), a **full liquidation** may occur where all debt is repaid and the lending pool may incur bad debt.
 
 ### Example: Getting liquidated on SUI/USDC
 
@@ -36,37 +49,40 @@ Let's walk through a concrete example using the SUI/USDC trading pair, which has
 
 **Opening position:**
 - You deposit **100 USDC** as collateral
-- You borrow **400 USDC** worth of SUI (at a SUI price of $4.00, you receive 100 SUI)
-- Your position: 100 USDC collateral + 100 SUI (worth $400)
-- Total assets = $500, Total debt = $400
-- **Starting risk ratio = 500 / 400 = 1.25** (5x leverage)
+- You borrow **400 USDC** worth of SUI at a SUI price of 1.50 USDC, receiving approximately 267 SUI
+- Your position: 100 USDC collateral + 267 SUI worth 400 USDC
+- Total assets: 500 USDC
+- Total debt: 400 USDC
+- **Starting risk ratio: 500 / 400 = 1.25** (5x leverage)
 
 **The path to liquidation:**
 
-| SUI Price | SUI Value | Total Assets | Risk Ratio | Status |
-|-----------|-----------|--------------|------------|--------|
-| $4.00 | $400 | $500 | 1.25 | Safe (at min borrow ratio) |
-| $3.80 | $380 | $480 | 1.20 | Warning zone |
-| $3.60 | $360 | $460 | 1.15 | Danger zone |
-| $3.40 | $340 | $440 | 1.10 | **Liquidatable** |
-| $3.20 | $320 | $420 | 1.05 | Underwater |
+| SUI Price (USDC) | SUI Value (USDC) | Total Assets (USDC) | Risk Ratio | Status |
+|------------------|------------------|---------------------|------------|--------|
+| 1.50 | 400 | 500 | 1.25 | Safe (at min borrow ratio) |
+| 1.425 | 380 | 480 | 1.20 | Warning zone |
+| 1.35 | 360 | 460 | 1.15 | Danger zone |
+| 1.275 | 340 | 440 | 1.10 | **Liquidatable** |
+| 1.20 | 320 | 420 | 1.05 | Underwater |
 
-**What happens at $3.40 SUI:**
+**What happens at 1.275 USDC per SUI:**
 - Your risk ratio hits 1.1 (the liquidation threshold)
 - Your position can now be liquidated by anyone
-- A 15% price drop from your entry ($4.00 to $3.40) triggers liquidation
-- After liquidation rewards (5% total), you lose approximately **$22** of your original $100 collateral
-- Your remaining position is restored to a 1.25 risk ratio, but with significantly less equity
+- A liquidator partially liquidates your position, repaying enough debt to restore your risk ratio to 1.25
+- You pay liquidation rewards (5% total: 2% to liquidator, 3% to pool)
+- You lose approximately **22 USDC** of your original 100 USDC collateral
+- Your remaining position has a 1.25 risk ratio, but with significantly less equity and smaller size
 
 **Key insight:** With 5x leverage, a mere **15% adverse price movement** can trigger liquidation. Without leverage, you'd simply be down 15% on paper.
 
-### Liquidation is immediate and irreversible
+### Liquidation is immediate
 
 Unlike traditional margin calls that give you time to add collateral, DeFi liquidations happen instantly:
 - There's no warning phone call
 - There's no grace period to deposit more funds
 - Once your ratio hits the threshold, any liquidator can execute immediately
 - You cannot cancel or prevent it once it's triggered
+- While partial liquidation preserves some of your position, the equity loss from fees is permanent
 
 ## Interest rate risk
 
@@ -95,9 +111,9 @@ Imagine you open a leveraged position expecting to pay ~12% APR (at 80% utilizat
 3. **Your rate jumps to 37% APR** - more than 3x what you expected
 4. **Day 7:** Utilization hits 89%, your rate is now ~57% APR
 
-On a $400 borrow:
-- At 12% APR: ~$0.13/day in interest
-- At 57% APR: ~$0.62/day in interest
+On a 400 USDC borrow:
+- At 12% APR: ~0.13 USDC/day in interest
+- At 57% APR: ~0.62 USDC/day in interest
 
 Over a month, this difference compounds significantly and can erode your position's equity even if prices don't move against you.
 
@@ -115,32 +131,43 @@ Interest accrues to your debt, which means:
 
 ## Price volatility risk
 
-Cryptocurrency prices are highly volatile. Leverage amplifies this volatility on your equity.
+Cryptocurrency prices are highly volatile. Leverage amplifies this volatility on your equity, whether you're long or short.
 
 ### Leverage multiplies losses (and gains)
 
-| Leverage | 10% Price Drop | 20% Price Drop | 30% Price Drop |
-|----------|----------------|----------------|----------------|
+| Leverage | 10% Adverse Move | 20% Adverse Move | 30% Adverse Move |
+|----------|------------------|------------------|------------------|
 | 1x (no leverage) | -10% equity | -20% equity | -30% equity |
 | 2x | -20% equity | -40% equity | -60% equity |
 | 3x | -30% equity | -60% equity | -90% equity |
-| 5x | -50% equity | -100% equity | Liquidated |
+| 5x | -50% equity | Liquidated | Liquidated |
 
-With 5x leverage on SUI/USDC:
-- A 10% SUI price drop = 50% loss on your equity
-- A 20% SUI price drop = 100% loss (complete wipeout before liquidation fees)
+An "adverse move" means:
+- **Long positions**: Price moves down (you borrowed USDC to buy SUI, and SUI drops)
+- **Short positions**: Price moves up (you borrowed SUI to sell for USDC, and SUI rises)
+
+With 5x leverage:
+- A 10% adverse price movement = 50% loss on your equity
+- A 15-20% adverse price movement = liquidation territory
 
 ### Volatility can happen fast
 
-Crypto markets can move 10-20% in hours. Flash crashes, exchange outages, or major news events can trigger rapid price movements that liquidate leveraged positions before you can react.
+Crypto markets can move 10-20% in hours. Flash crashes, short squeezes, exchange outages, or major news events can trigger rapid price movements that liquidate leveraged positions before you can react.
 
 ## Oracle risk
 
-DeepBook Margin uses Pyth price oracles to value your assets and debts. Oracle-related risks include:
+DeepBook Margin uses Pyth price oracles to value your assets and debts. While the protocol includes several protections, some oracle-related risks remain:
 
-- **Price delays:** Oracle prices may lag behind real market prices during volatile periods
-- **Price manipulation:** Although Pyth is designed to be manipulation-resistant, extreme market conditions could affect price accuracy
-- **Oracle downtime:** If the oracle fails to update, positions may be liquidated at stale prices
+- **Price delays:** Oracle prices may lag behind real market prices during extremely volatile periods. The protocol mitigates this by rejecting prices older than 60 seconds, but brief delays within this window can still occur.
+- **Price manipulation:** Although Pyth is designed to be manipulation-resistant and DeepBook validates prices against confidence intervals and EWMA (exponentially weighted moving average) prices, extreme market conditions could still affect price accuracy.
+
+### Oracle protections
+
+DeepBook Margin implements multiple safeguards against oracle issues:
+
+- **Staleness protection:** Prices older than 60 seconds are automatically rejected, preventing liquidations based on stale data
+- **Confidence interval checks:** The protocol validates that Pyth price confidence intervals are within acceptable bounds
+- **EWMA price verification:** Spot prices are validated against EWMA prices to detect and reject anomalous price spikes
 
 ## Risk mitigation strategies
 
