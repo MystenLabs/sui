@@ -53,7 +53,6 @@ use tokio::time::interval;
 use url::Url;
 
 const INSTANCE_ID: &str = "bigtable_test_instance";
-
 const TABLES: &[&str] = &[
     sui_kvstore::tables::objects::NAME,
     sui_kvstore::tables::object_types::NAME,
@@ -382,17 +381,12 @@ impl TestHarness {
             let mut interval = interval(Duration::from_millis(100));
             loop {
                 interval.tick().await;
-                let cp_ok = self
-                    .client
-                    .get_latest_checkpoint()
-                    .await
-                    .is_ok_and(|cp| cp > checkpoint);
-                let epoch_ok = self
-                    .client
-                    .get_latest_epoch()
-                    .await
-                    .is_ok_and(|e| e.is_some_and(|e| e.epoch.is_some_and(|ep| ep >= epoch)));
-                if cp_ok && epoch_ok {
+                let ok = self.client.get_watermark().await.is_ok_and(|wm| {
+                    wm.is_some_and(|wm| {
+                        wm.checkpoint_hi_inclusive >= checkpoint && wm.epoch_hi_inclusive >= epoch
+                    })
+                });
+                if ok {
                     break;
                 }
             }
