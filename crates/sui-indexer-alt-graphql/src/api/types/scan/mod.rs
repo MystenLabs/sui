@@ -42,9 +42,18 @@ pub(crate) async fn transactions(
     };
 
     let filter_values = filter.bloom_probe_values();
-    let candidate_cps = bloom::candidate_cps(ctx, &filter_values, cp_lo, cp_hi, page)
-        .await
-        .map_err(upcast)?;
+    let candidate_cps = if filter_values.is_empty() {
+        let iter: Box<dyn Iterator<Item = u64>> = if page.is_from_front() {
+            Box::new(cp_lo..=cp_hi)
+        } else {
+            Box::new((cp_lo..=cp_hi).rev())
+        };
+        iter.take(page.limit_with_overhead()).collect()
+    } else {
+        bloom::candidate_cps(ctx, &filter_values, cp_lo, cp_hi, page)
+            .await
+            .map_err(upcast)?
+    };
 
     if candidate_cps.is_empty() {
         return Ok(Connection::new(false, false));

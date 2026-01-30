@@ -152,6 +152,8 @@ pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
         "tx_calls" => feature_unavailable("filtering transactions by function calls"),
         "tx_digests" => feature_unavailable("querying transactions"),
         "tx_kinds" => feature_unavailable("filtering transactions by kind"),
+        "cp_blooms" => feature_unavailable("scanning queries by transactions and events"),
+        "cp_bloom_blocks" => feature_unavailable("scanning queries by transactions and events"),
         _ => anyhow!("unrecognized pipeline name: {}", pipeline).into(),
     }
 }
@@ -374,7 +376,7 @@ collect_pipelines! {
     Query.[objectVersions] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
     };
-    Query.[transactions, transactionsScan] |pipelines, filters| {
+    Query.[transactions] |pipelines, filters| {
         pipelines.insert("cp_sequence_numbers".to_string());
         pipelines.insert("tx_digests".to_string());
         if filters.contains("affectedAddress") {
@@ -388,6 +390,10 @@ collect_pipelines! {
         } else if filters.contains("kind") {
             pipelines.insert("tx_kinds".to_string());
         }
+    };
+    Query.[scanTransactions] |pipelines, _filters| {
+        pipelines.insert("cp_blooms".to_string());
+        pipelines.insert("cp_bloom_blocks".to_string());
     };
 
     TransactionEffects.[balanceChanges] |pipelines, _filters| {

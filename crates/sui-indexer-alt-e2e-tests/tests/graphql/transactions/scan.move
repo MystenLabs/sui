@@ -64,9 +64,9 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionsA: transactionsScan(filter: { affectedAddress: "@{A}"}) { ...TX }
-  transactionsB: transactionsScan(filter: { affectedAddress: "@{B}"}) { ...TX }
-  transactionsC: transactionsScan(filter: { affectedAddress: "@{C}"}) { ...TX }
+  transactionsA: scanTransactions(filter: { affectedAddress: "@{A}"}) { ...TX }
+  transactionsB: scanTransactions(filter: { affectedAddress: "@{B}"}) { ...TX }
+  transactionsC: scanTransactions(filter: { affectedAddress: "@{C}"}) { ...TX }
 }
 
 fragment TX on TransactionConnection {
@@ -92,15 +92,15 @@ fragment TX on TransactionConnection {
 //# run-graphql
 # Test multi-filter queries (affectedAddress + affectedObject)
 {
-  transactionsAWithObj: transactionsScan(filter: {
+  transactionsAWithObj: scanTransactions(filter: {
     affectedAddress: "@{A}",
     affectedObject: "@{obj_4_0}"
   }) { ...TX }
-  transactionsBSentToA: transactionsScan(filter: {
+  transactionsBSentToA: scanTransactions(filter: {
     affectedAddress: "@{A}",
     sentAddress: "@{B}"
   }) { ...TX }
-  transactionsCSentToA: transactionsScan(filter: {
+  transactionsCSentToA: scanTransactions(filter: {
     affectedAddress: "@{A}",
     sentAddress: "@{C}"
   }) { ...TX }
@@ -127,12 +127,47 @@ fragment TX on TransactionConnection {
 }
 
 //# run-graphql
+# Multi-filter scan with function + affectedObject/affectedAddress.
+# Filter values hash to different bloom block indexes; verifies the blocked bloom
+# query correctly requires ALL probes to match (not just some).
+{
+  scanFnAndObj: scanTransactions(filter: {
+    function: "@{Test}",
+    affectedObject: "@{obj_4_0}"
+  }) { ...TX }
+  scanFnAndAddr: scanTransactions(filter: {
+    function: "@{Test}",
+    affectedAddress: "@{C}"
+  }) { ...TX }
+}
+
+fragment TX on TransactionConnection {
+  pageInfo {
+    startCursor
+    endCursor
+    hasPreviousPage
+    hasNextPage
+  }
+  edges {
+    cursor
+    node {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
 # Test queries with function filter (package ID)
 {
-  transactionsWithPackage: transactionsScan(filter: {
+  transactionsWithPackage: scanTransactions(filter: {
     function: "@{Test}"
   }) { ...TX }
-  transactionsAWithPackage: transactionsScan(filter: {
+  transactionsAWithPackage: scanTransactions(filter: {
     affectedAddress: "@{A}",
     function: "@{Test}"
   }) { ...TX }
@@ -161,15 +196,15 @@ fragment TX on TransactionConnection {
 //# run-graphql
 # Test queries that should return empty results
 {
-  emptyNonExistent: transactionsScan(filter: {
+  emptyNonExistent: scanTransactions(filter: {
     affectedAddress: "0x0000000000000000000000000000000000000000000000000000000000000001"
   }) { ...TX }
-  emptyConflicting: transactionsScan(filter: {
+  emptyConflicting: scanTransactions(filter: {
     sentAddress: "@{A}",
     affectedAddress: "@{C}",
     beforeCheckpoint: 5
   }) { ...TX }
-  emptyBeyondData: transactionsScan(filter: {
+  emptyBeyondData: scanTransactions(filter: {
     affectedAddress: "@{A}",
     afterCheckpoint: 50000
   }) { ...TX }
@@ -197,22 +232,22 @@ fragment TX on TransactionConnection {
 
 //# run-graphql --cursors {"t":0,"c":0} {"t":1,"c":1} {"t":0,"c":4} {"t":2,"c":5} {"t":0,"c":10508}
 { 
-  first2: transactionsScan(first: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
-  last2: transactionsScan(last: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
+  first2: scanTransactions(first: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
+  last2: scanTransactions(last: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  afterCp0: transactionsScan(first: 10, after: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
-  afterCp1: transactionsScan(first: 10, after: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  afterCp0: scanTransactions(first: 10, after: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  afterCp1: scanTransactions(first: 10, after: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  afterCp5Tx2: transactionsScan(first: 10, after: "@{cursor_3}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  afterCp5Tx2: scanTransactions(first: 10, after: "@{cursor_3}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  beforeCp4: transactionsScan(last: 10, before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  beforeCp4: scanTransactions(last: 10, before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  betweenCp1AndCp4First: transactionsScan(first: 10, after: "@{cursor_1}", before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
-  betweenCp1AndCp4Last: transactionsScan(last: 10, after: "@{cursor_1}", before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  betweenCp1AndCp4First: scanTransactions(first: 10, after: "@{cursor_1}", before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  betweenCp1AndCp4Last: scanTransactions(last: 10, after: "@{cursor_1}", before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  betweenFirstAndLast: transactionsScan(first: 50, after: "@{cursor_0}", before: "@{cursor_4}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  betweenFirstAndLast: scanTransactions(first: 50, after: "@{cursor_0}", before: "@{cursor_4}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  invalidOrder: transactionsScan(first: 10, after: "@{cursor_2}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  invalidOrder: scanTransactions(first: 10, after: "@{cursor_2}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
 }
 
 fragment TX on TransactionConnection {
@@ -222,7 +257,7 @@ fragment TX on TransactionConnection {
 
 //# run-graphql
 {
-  scanAcrossBlocks: transactionsScan(filter: {
+  scanAcrossBlocks: scanTransactions(filter: {
     affectedAddress: "@{A}",
     afterCheckpoint: 0,
     beforeCheckpoint: 10510
