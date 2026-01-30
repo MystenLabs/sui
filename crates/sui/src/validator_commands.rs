@@ -924,13 +924,10 @@ async fn construct_unsigned_0x5_txn(
     call_args: Vec<CallArg>,
     gas_budget: u64,
 ) -> anyhow::Result<TransactionData> {
-    let sui_client = context.get_client().await?;
+    let sui_client = context.grpc_client()?;
     let mut args = vec![CallArg::SUI_SYSTEM_MUT];
     args.extend(call_args);
-    let rgp = sui_client
-        .governance_api()
-        .get_reference_gas_price()
-        .await?;
+    let rgp = sui_client.get_reference_gas_price().await?;
 
     let gas_obj_ref = get_gas_obj_ref(sender, &sui_client, gas_budget).await?;
     TransactionData::new_move_call(
