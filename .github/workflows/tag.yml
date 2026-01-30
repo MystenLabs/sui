@@ -27,7 +27,6 @@ on:
 
 permissions:
   contents: write
-  workflows: write
 
 env:
   SUI_COMMIT: "${{ github.event.client_payload.sui_commit || inputs.sui_commit }}"
@@ -43,6 +42,7 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       with:
         fetch-depth: 0
+        token: ${{ secrets.SUI_CREATE_RELEASE }}
 
     - name: Create or update tag
       run: |
