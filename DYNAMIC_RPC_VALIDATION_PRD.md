@@ -54,3 +54,7 @@ The system addresses the need to quickly ship new validation checks for raw mess
 - 3.4.1. File changes during reload operation
 - 3.4.2. File deleted while validator is using it
 - 3.4.3. Concurrent access issues during reload
+
+## 4. Demo application.
+
+### 4.1. Build an validation target that simply parses the requests, and returns true if parsing succeeds.

@@ -139,7 +139,10 @@ pub struct DynamicValidatorMetrics {
 
 impl DynamicValidatorMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
-        use prometheus::{register_histogram_vec_with_registry, register_int_counter_vec_with_registry, register_int_counter_with_registry};
+        use prometheus::{
+            register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+            register_int_counter_with_registry,
+        };
 
         Self {
             validation_success: register_int_counter_vec_with_registry!(
@@ -147,47 +150,55 @@ impl DynamicValidatorMetrics {
                 "Number of successful validations",
                 &["rpc_type"],
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
             validation_rejected: register_int_counter_vec_with_registry!(
                 "dynamic_validator_rejected",
                 "Number of rejected validations",
                 &["rpc_type"],
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
             validation_errors: register_int_counter_vec_with_registry!(
                 "dynamic_validator_errors",
                 "Number of validation errors",
                 &["rpc_type", "error_type"],
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
             load_attempts: register_int_counter_with_registry!(
                 "dynamic_validator_load_attempts",
                 "Number of library load attempts",
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
             load_success: register_int_counter_with_registry!(
                 "dynamic_validator_load_success",
                 "Number of successful library loads",
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
             load_failures: register_int_counter_vec_with_registry!(
                 "dynamic_validator_load_failures",
                 "Number of library load failures",
                 &["failure_type"],
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
             fast_path_skips: register_int_counter_with_registry!(
                 "dynamic_validator_fast_path_skips",
                 "Number of times fast path was used",
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
             validation_latency: register_histogram_vec_with_registry!(
                 "dynamic_validator_latency",
                 "Validation latency in seconds",
                 &["rpc_type"],
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
         }
     }
 
@@ -265,9 +276,7 @@ impl DynamicRpcValidator {
                 let file_modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
                 let state = self.state.read();
                 match &*state {
-                    ValidatorState::Loaded(lib) => {
-                        file_modified > lib.loaded_at
-                    }
+                    ValidatorState::Loaded(lib) => file_modified > lib.loaded_at,
                     ValidatorState::Unloaded | ValidatorState::FastPath => true,
                 }
             }
@@ -285,7 +294,10 @@ impl DynamicRpcValidator {
 
         match self.load_library_internal(path) {
             LoadResult::Loaded(library) => {
-                info!("Successfully loaded dynamic validator library from {:?}", path);
+                info!(
+                    "Successfully loaded dynamic validator library from {:?}",
+                    path
+                );
                 *self.state.write() = ValidatorState::Loaded(library);
                 self.metrics.load_success.inc();
             }
@@ -306,14 +318,23 @@ impl DynamicRpcValidator {
         // Check if file exists
         if !path.exists() {
             debug!("Dynamic validator library file does not exist: {:?}", path);
-            self.metrics.load_failures.with_label_values(&["file_not_found"]).inc();
+            self.metrics
+                .load_failures
+                .with_label_values(&["file_not_found"])
+                .inc();
             return LoadResult::Failed;
         }
 
         // Check if file is readable
         if let Err(e) = std::fs::metadata(path) {
-            warn!("Cannot read dynamic validator library file metadata: {:?}: {}", path, e);
-            self.metrics.load_failures.with_label_values(&["file_not_readable"]).inc();
+            warn!(
+                "Cannot read dynamic validator library file metadata: {:?}: {}",
+                path, e
+            );
+            self.metrics
+                .load_failures
+                .with_label_values(&["file_not_readable"])
+                .inc();
             return LoadResult::Failed;
         }
 
@@ -321,8 +342,14 @@ impl DynamicRpcValidator {
         let library = match unsafe { Library::new(path) } {
             Ok(lib) => Arc::new(lib),
             Err(e) => {
-                warn!("Failed to load dynamic validator library: {:?}: {}", path, e);
-                self.metrics.load_failures.with_label_values(&["load_failed"]).inc();
+                warn!(
+                    "Failed to load dynamic validator library: {:?}: {}",
+                    path, e
+                );
+                self.metrics
+                    .load_failures
+                    .with_label_values(&["load_failed"])
+                    .inc();
                 return LoadResult::Failed;
             }
         };
@@ -362,12 +389,16 @@ impl DynamicRpcValidator {
                     Ok(symbol) => {
                         // SAFETY: We transmute the lifetime to 'static because we're holding
                         // a reference to the library itself, ensuring the symbol remains valid
-                        let static_symbol: Symbol<'static, ValidationFn> = std::mem::transmute(symbol);
+                        let static_symbol: Symbol<'static, ValidationFn> =
+                            std::mem::transmute(symbol);
                         Some(static_symbol)
                     }
                     Err(e) => {
-                        debug!("Function {} not found in dynamic validator library: {}",
-                               String::from_utf8_lossy(name), e);
+                        debug!(
+                            "Function {} not found in dynamic validator library: {}",
+                            String::from_utf8_lossy(name),
+                            e
+                        );
                         None
                     }
                 }
@@ -396,7 +427,10 @@ impl DynamicRpcValidator {
             && validator_lib.validator_health.is_none()
         {
             warn!("No validation functions found in dynamic validator library");
-            self.metrics.load_failures.with_label_values(&["no_functions"]).inc();
+            self.metrics
+                .load_failures
+                .with_label_values(&["no_functions"])
+                .inc();
             return LoadResult::Failed;
         }
 
@@ -434,7 +468,11 @@ impl DynamicRpcValidator {
         message_bytes: &[u8],
         library: &ValidatorLibrary,
     ) -> bool {
-        let _timer = self.metrics.validation_latency.with_label_values(&[rpc_method.as_str()]).start_timer();
+        let _timer = self
+            .metrics
+            .validation_latency
+            .with_label_values(&[rpc_method.as_str()])
+            .start_timer();
 
         // Get the appropriate validation function
         let validate_fn = match rpc_method {
@@ -464,16 +502,28 @@ impl DynamicRpcValidator {
         match result {
             Ok(accepted) => {
                 if accepted {
-                    self.metrics.validation_success.with_label_values(&[rpc_method.as_str()]).inc();
+                    self.metrics
+                        .validation_success
+                        .with_label_values(&[rpc_method.as_str()])
+                        .inc();
                 } else {
-                    self.metrics.validation_rejected.with_label_values(&[rpc_method.as_str()]).inc();
+                    self.metrics
+                        .validation_rejected
+                        .with_label_values(&[rpc_method.as_str()])
+                        .inc();
                 }
                 accepted
             }
             Err(_) => {
                 // Validation function panicked, accept the message by default
-                error!("Validation function panicked for RPC method: {:?}", rpc_method);
-                self.metrics.validation_errors.with_label_values(&[rpc_method.as_str(), "panic"]).inc();
+                error!(
+                    "Validation function panicked for RPC method: {:?}",
+                    rpc_method
+                );
+                self.metrics
+                    .validation_errors
+                    .with_label_values(&[rpc_method.as_str(), "panic"])
+                    .inc();
                 true
             }
         }
@@ -516,7 +566,13 @@ mod tests {
         assert!(validator.validate(RpcMethod::SubmitTransaction, b"test"));
 
         // Should have recorded a load failure
-        assert_eq!(metrics.load_failures.with_label_values(&["file_not_found"]).get(), 1);
+        assert_eq!(
+            metrics
+                .load_failures
+                .with_label_values(&["file_not_found"])
+                .get(),
+            1
+        );
     }
 
     #[test]
@@ -535,11 +591,8 @@ mod tests {
         }
 
         let metrics = Arc::new(DynamicValidatorMetrics::new_for_tests());
-        let validator = DynamicRpcValidator::new(
-            Some(lib_path),
-            Duration::from_secs(60),
-            metrics.clone(),
-        );
+        let validator =
+            DynamicRpcValidator::new(Some(lib_path), Duration::from_secs(60), metrics.clone());
 
         // Should accept all messages when library cannot be loaded
         assert!(validator.validate(RpcMethod::SubmitTransaction, b"test"));
@@ -552,21 +605,25 @@ mod tests {
 
         // Create a file with invalid content
         let mut file = std::fs::File::create(&lib_path).unwrap();
-        file.write_all(b"This is not a valid shared library").unwrap();
+        file.write_all(b"This is not a valid shared library")
+            .unwrap();
         drop(file);
 
         let metrics = Arc::new(DynamicValidatorMetrics::new_for_tests());
-        let validator = DynamicRpcValidator::new(
-            Some(lib_path),
-            Duration::from_secs(60),
-            metrics.clone(),
-        );
+        let validator =
+            DynamicRpcValidator::new(Some(lib_path), Duration::from_secs(60), metrics.clone());
 
         // Should accept all messages when library cannot be loaded
         assert!(validator.validate(RpcMethod::SubmitTransaction, b"test"));
 
         // Should have recorded a load failure
-        assert_eq!(metrics.load_failures.with_label_values(&["load_failed"]).get(), 1);
+        assert_eq!(
+            metrics
+                .load_failures
+                .with_label_values(&["load_failed"])
+                .get(),
+            1
+        );
     }
 
     #[test]
@@ -613,11 +670,8 @@ mod tests {
 
         let metrics = Arc::new(DynamicValidatorMetrics::new_for_tests());
         let check_interval = Duration::from_millis(100);
-        let validator = DynamicRpcValidator::new(
-            Some(lib_path.clone()),
-            check_interval,
-            metrics.clone(),
-        );
+        let validator =
+            DynamicRpcValidator::new(Some(lib_path.clone()), check_interval, metrics.clone());
 
         // First validation should trigger a load attempt
         validator.validate(RpcMethod::SubmitTransaction, b"test");
@@ -698,7 +752,9 @@ mod tests {
             let handle = thread::spawn(move || {
                 let message = format!("test message {}", i);
                 for _ in 0..100 {
-                    assert!(validator_clone.validate(RpcMethod::SubmitTransaction, message.as_bytes()));
+                    assert!(
+                        validator_clone.validate(RpcMethod::SubmitTransaction, message.as_bytes())
+                    );
                 }
             });
             handles.push(handle);

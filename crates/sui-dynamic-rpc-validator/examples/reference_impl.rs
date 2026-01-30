@@ -31,16 +31,17 @@ pub extern "C" fn should_validate() -> u8 {
 /// # Safety
 /// The caller must ensure that `message_ptr` points to valid memory of length `message_len`
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn validate_submit_transaction(message_ptr: *const u8, message_len: usize) -> u8 {
+pub unsafe extern "C" fn validate_submit_transaction(
+    message_ptr: *const u8,
+    message_len: usize,
+) -> u8 {
     if message_ptr.is_null() {
         return 0; // Reject null messages
     }
 
     // SAFETY: The caller guarantees that message_ptr points to valid memory
     // of length message_len
-    let _message_bytes = unsafe {
-        std::slice::from_raw_parts(message_ptr, message_len)
-    };
+    let _message_bytes = unsafe { std::slice::from_raw_parts(message_ptr, message_len) };
 
     // Example validation logic:
     // - Check message is not empty
@@ -59,7 +60,10 @@ pub unsafe extern "C" fn validate_submit_transaction(message_ptr: *const u8, mes
 /// # Safety
 /// The caller must ensure that `message_ptr` points to valid memory of length `message_len`
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn validate_wait_for_effects(message_ptr: *const u8, message_len: usize) -> u8 {
+pub unsafe extern "C" fn validate_wait_for_effects(
+    message_ptr: *const u8,
+    message_len: usize,
+) -> u8 {
     if message_ptr.is_null() || message_len == 0 {
         return 0;
     }
@@ -83,7 +87,10 @@ pub unsafe extern "C" fn validate_object_info(message_ptr: *const u8, message_le
 /// # Safety
 /// The caller must ensure that `message_ptr` points to valid memory of length `message_len`
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn validate_transaction_info(message_ptr: *const u8, message_len: usize) -> u8 {
+pub unsafe extern "C" fn validate_transaction_info(
+    message_ptr: *const u8,
+    message_len: usize,
+) -> u8 {
     if message_ptr.is_null() || message_len == 0 {
         return 0;
     }
@@ -119,7 +126,10 @@ pub unsafe extern "C" fn validate_system_state(message_ptr: *const u8, message_l
 /// # Safety
 /// The caller must ensure that `message_ptr` points to valid memory of length `message_len`
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn validate_validator_health(message_ptr: *const u8, message_len: usize) -> u8 {
+pub unsafe extern "C" fn validate_validator_health(
+    message_ptr: *const u8,
+    message_len: usize,
+) -> u8 {
     if message_ptr.is_null() || message_len == 0 {
         return 0;
     }
