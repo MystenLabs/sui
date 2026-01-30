@@ -46,18 +46,17 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::{
-    Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiExecutionStatus,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
-};
+use sui_json_rpc_types::Coin;
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{BuildConfig, CompiledPackage, PackageDependencies};
 use sui_package_management::LockCommand;
-use sui_rpc_api::{Client, client::ExecutedTransaction};
+use sui_rpc_api::{
+    Client,
+    client::{ExecutedTransaction, SimulateTransactionResponse},
+};
 use sui_sdk::{
     SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
-    SuiClient,
     sui_client_config::{SuiClientConfig, SuiEnv},
     sui_sdk_types::bcs::ToBcs,
     wallet_context::WalletContext,
@@ -80,7 +79,6 @@ use sui_types::{
     parse_sui_type_tag,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     signature::GenericSignature,
-    sui_serde,
     transaction::{
         InputObjectKind, ObjectArg, SenderSignedData, SharedObjectMutability, Transaction,
         TransactionData, TransactionDataAPI, TransactionKind,
@@ -1771,7 +1769,7 @@ impl SuiClientCommands {
                 SuiClientCommandResult::NoOutput
             }
         };
-        Ok(ret.prerender_clever_errors(context).await)
+        Ok(ret)
     }
 
     pub fn switch_env(config: &mut SuiClientConfig, env: &str) -> Result<(), anyhow::Error> {
@@ -2410,41 +2408,6 @@ impl SuiClientCommandResult {
             _ => None,
         }
     }
-
-    pub async fn prerender_clever_errors(mut self, context: &mut WalletContext) -> Self {
-        match &mut self {
-            SuiClientCommandResult::DryRun(DryRunTransactionBlockResponse { effects, .. }) => {
-                let client = context.grpc_client().expect("Cannot connect to RPC");
-                prerender_clever_errors(effects, &client).await
-            }
-
-            SuiClientCommandResult::TransactionBlock(_)
-            | SuiClientCommandResult::ActiveAddress(_)
-            | SuiClientCommandResult::ActiveEnv(_)
-            | SuiClientCommandResult::Addresses(_)
-            | SuiClientCommandResult::Balance(_, _)
-            | SuiClientCommandResult::ComputeTransactionDigest(_)
-            | SuiClientCommandResult::ChainIdentifier(_)
-            | SuiClientCommandResult::DynamicFieldQuery(_)
-            | SuiClientCommandResult::DevInspect(_)
-            | SuiClientCommandResult::Envs(_, _)
-            | SuiClientCommandResult::Gas(_)
-            | SuiClientCommandResult::NewAddress(_)
-            | SuiClientCommandResult::NewEnv(_)
-            | SuiClientCommandResult::NoOutput
-            | SuiClientCommandResult::Object(_)
-            | SuiClientCommandResult::Objects(_)
-            | SuiClientCommandResult::RemoveAddress(_)
-            | SuiClientCommandResult::RawObject(_)
-            | SuiClientCommandResult::SerializedSignedTransaction(_)
-            | SuiClientCommandResult::SerializedUnsignedTransaction(_)
-            | SuiClientCommandResult::Switch(_)
-            | SuiClientCommandResult::SyncClientState
-            | SuiClientCommandResult::VerifyBytecodeMeter { .. }
-            | SuiClientCommandResult::VerifySource => (),
-        }
-        self
-    }
 }
 
 #[derive(Serialize)]
@@ -2560,8 +2523,8 @@ pub enum SuiClientCommandResult {
     ChainIdentifier(String),
     ComputeTransactionDigest(TransactionData),
     DynamicFieldQuery(proto::ListDynamicFieldsResponse),
-    DryRun(DryRunTransactionBlockResponse),
-    DevInspect(DevInspectResults),
+    DryRun(SimulateTransactionResponse),
+    DevInspect(SimulateTransactionResponse),
     Envs(Vec<SuiEnv>, Option<String>),
     Gas(Vec<GasCoin>),
     NewAddress(NewAddressOutput),
@@ -2804,7 +2767,7 @@ pub async fn execute_dry_run(
     gas_payment: Vec<ObjectRef>,
     sponsor: Option<SuiAddress>,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let gas_budget = match gas_budget {
         Some(gas_budget) => gas_budget,
         None => max_gas_budget(&client).await?,
@@ -2819,15 +2782,11 @@ pub async fn execute_dry_run(
     );
     debug!("Executing dry run");
     let response = client
-        .read_api()
-        .dry_run_transaction_block(tx_data)
+        .simulate_transaction(&tx_data, true)
         .await
         .context("Dry run failed")?;
     debug!("Finished executing dry run");
-    let resp = SuiClientCommandResult::DryRun(response)
-        .prerender_clever_errors(context)
-        .await;
-    Ok(resp)
+    Ok(SuiClientCommandResult::DryRun(response))
 }
 
 /// Call a dry run with the transaction data to estimate the gas budget.
@@ -2848,13 +2807,12 @@ pub async fn estimate_gas_budget(
     gas_payment: Vec<ObjectRef>,
     sponsor: Option<SuiAddress>,
 ) -> Result<u64, anyhow::Error> {
-    let client = context.get_client().await?;
     let dry_run =
         execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await;
     if let Ok(SuiClientCommandResult::DryRun(dry_run)) = dry_run {
-        let rgp = client.read_api().get_reference_gas_price().await?;
+        let rgp = context.get_reference_gas_price().await?;
         Ok(estimate_gas_budget_from_gas_cost(
-            dry_run.effects.gas_cost_summary(),
+            dry_run.transaction.effects.gas_cost_summary(),
             rgp,
         ))
     } else {
@@ -2877,15 +2835,21 @@ pub fn estimate_gas_budget_from_gas_cost(
 }
 
 /// Queries the protocol config for the maximum gas allowed in a transaction.
-pub async fn max_gas_budget(client: &SuiClient) -> Result<u64, anyhow::Error> {
-    let cfg = client.read_api().get_protocol_config(None).await?;
-    Ok(match cfg.attributes.get("max_tx_gas") {
-        Some(Some(sui_json_rpc_types::SuiProtocolConfigValue::U64(y))) => *y,
-        _ => bail!(
-            "Could not automatically find the maximum gas allowed in a transaction from the \
+pub async fn max_gas_budget(client: &Client) -> Result<u64, anyhow::Error> {
+    let cfg = client.get_protocol_config(None).await?;
+    Ok(
+        match cfg
+            .attributes()
+            .get("max_tx_gas")
+            .and_then(|s| s.parse::<u64>().ok())
+        {
+            Some(y) => y,
+            _ => bail!(
+                "Could not automatically find the maximum gas allowed in a transaction from the \
             protocol config. Please provide a gas budget with the --gas-budget flag."
-        ),
-    })
+            ),
+        },
+    )
 }
 
 /// Dry run, execute, or serialize a transaction.
@@ -3084,39 +3048,22 @@ async fn execute_dev_inspect(
     gas_sponsor: Option<SuiAddress>,
     skip_checks: Option<bool>,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
-    let client = context.get_client().await?;
-    let gas_budget = gas_budget.map(sui_serde::BigInt::from);
+    let client = context.grpc_client()?;
 
-    let dev_inspect_args = DevInspectArgs {
-        gas_sponsor,
-        gas_budget,
-        gas_objects: (!gas_objects.is_empty()).then_some(gas_objects),
-        skip_checks,
-        show_raw_txn_data_and_effects: None,
-    };
-    let dev_inspect_result = client
-        .read_api()
-        .dev_inspect_transaction_block(
-            signer,
-            tx_kind,
-            Some(sui_serde::BigInt::from(gas_price)),
-            None,
-            Some(dev_inspect_args),
-        )
+    let max_gas_budget = max_gas_budget(&client).await?;
+    let tx = TransactionData::new_with_gas_coins_allow_sponsor(
+        tx_kind,
+        signer,
+        gas_objects,
+        gas_budget.unwrap_or(max_gas_budget),
+        gas_price,
+        gas_sponsor.unwrap_or(signer),
+    );
+
+    let result = client
+        .simulate_transaction(&tx, !skip_checks.unwrap_or(false))
         .await?;
-    Ok(SuiClientCommandResult::DevInspect(dev_inspect_result))
-}
-
-pub(crate) async fn prerender_clever_errors(
-    effects: &mut SuiTransactionBlockEffects,
-    client: &Client,
-) {
-    let SuiTransactionBlockEffects::V1(effects) = effects;
-    if let SuiExecutionStatus::Failure { error } = &mut effects.status
-        && let Some(rendered) = render_clever_error_opt(error, client).await
-    {
-        *error = rendered;
-    }
+    Ok(SuiClientCommandResult::DevInspect(result))
 }
 
 /// Warn the user if the CLI falls behind more than 2 protocol versions.
