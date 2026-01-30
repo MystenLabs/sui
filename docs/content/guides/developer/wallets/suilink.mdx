@@ -81,7 +81,7 @@ const SUILINK_PACKAGE_ID_ETH_SOL = '0xf857fa9df5811e6df2a0240a1029d365db24b50268
 const SUILINK_PACKAGE_ID_SUI = '0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5';
 
 const SuiLink = bcs.struct('SuiLink', {
-  id: bcs.struct('UID', { id: bcs.Address }),
+  id: bcs.Address,
   network_address: bcs.String,
   timestamp_ms: bcs.U64,
 });
