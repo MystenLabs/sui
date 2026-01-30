@@ -32,7 +32,9 @@ use reqwest::StatusCode;
 use move_binary_format::CompiledModule;
 use move_bytecode_verifier_meter::Scope;
 use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
+    account_address::AccountAddress,
+    identifier::Identifier,
+    language_storage::{StructTag, TypeTag},
 };
 use move_package_alt::{PackageLoader, schema::ModeName};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
@@ -45,8 +47,8 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiCoinMetadata,
-    SuiExecutionStatus, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiExecutionStatus,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
@@ -61,8 +63,9 @@ use sui_sdk::{
     wallet_context::WalletContext,
 };
 use sui_types::{
-    SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
+    coin::{COIN_MODULE_NAME, COIN_STRUCT_NAME},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
@@ -828,35 +831,40 @@ impl SuiClientCommands {
                 with_coins,
             } => {
                 let address = context.get_identity_address(address)?;
-                let client = context.get_client().await?;
                 let _ = context.cache_chain_id().await?;
 
-                let mut objects: Vec<Coin> = Vec::new();
-                let mut cursor = None;
-                loop {
-                    let response = match coin_type {
-                        Some(ref coin_type) => {
-                            client
-                                .coin_read_api()
-                                .get_coins(address, Some(coin_type.clone()), cursor, None)
-                                .await?
-                        }
-                        None => {
-                            client
-                                .coin_read_api()
-                                .get_all_coins(address, cursor, None)
-                                .await?
-                        }
-                    };
-
-                    objects.extend(response.data);
-
-                    if response.has_next_page {
-                        cursor = response.next_cursor;
-                    } else {
-                        break;
+                let client = context.grpc_client()?;
+                let coin_type = if let Some(ty) = coin_type {
+                    let ty = ty.parse::<TypeTag>()?;
+                    sui_types::coin::Coin::type_(ty)
+                } else {
+                    StructTag {
+                        address: SUI_FRAMEWORK_ADDRESS,
+                        name: COIN_STRUCT_NAME.to_owned(),
+                        module: COIN_MODULE_NAME.to_owned(),
+                        type_params: vec![],
                     }
-                }
+                };
+
+                let objects: Vec<Coin> = client
+                    .list_owned_objects(address, Some(coin_type))
+                    .try_filter_map(|o| async move {
+                        let Ok(Some((coin_type, balance))) =
+                            sui_types::coin::Coin::extract_balance_if_coin(&o)
+                        else {
+                            return Ok(None);
+                        };
+                        Ok(Some(Coin {
+                            coin_type: coin_type.to_canonical_string(true),
+                            coin_object_id: o.id(),
+                            version: o.version(),
+                            digest: o.digest(),
+                            balance,
+                            previous_transaction: o.previous_transaction,
+                        }))
+                    })
+                    .try_collect()
+                    .await?;
 
                 fn canonicalize_type(type_: &str) -> Result<String, anyhow::Error> {
                     Ok(TypeTag::from_str(type_)
@@ -868,16 +876,8 @@ impl SuiClientCommands {
                 for c in objects {
                     let coins = match coins_by_type.entry(canonicalize_type(&c.coin_type)?) {
                         Entry::Vacant(entry) => {
-                            let metadata = client
-                                .coin_read_api()
-                                .get_coin_metadata(c.coin_type.clone())
-                                .await
-                                .with_context(|| {
-                                    format!(
-                                        "Cannot fetch the coin metadata for coin {}",
-                                        c.coin_type
-                                    )
-                                })?;
+                            let ty = StructTag::from_str(&c.coin_type)?;
+                            let metadata = client.get_coin_info(&ty).await.ok();
 
                             &mut entry.insert((metadata, vec![])).1
                         }
@@ -938,9 +938,8 @@ impl SuiClientCommands {
             SuiClientCommands::TestPublish(args) => {
                 verify_no_test_mode(&args.publish_args.build_config)?;
 
-                let client = context.get_client().await?;
-                let read_api = client.read_api();
-                let chain_id = read_api.get_chain_identifier().await?;
+                let client = context.grpc_client()?;
+                let chain_id = client.get_chain_identifier().await?.to_string();
                 let active_env = context.get_active_env()?;
                 let alias = active_env.alias.clone();
 
@@ -1103,7 +1102,7 @@ impl SuiClientCommands {
                     .map(|arg| arg.into())
                     .collect::<Vec<_>>();
 
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
 
                 let tx_kind = client
@@ -1139,7 +1138,7 @@ impl SuiClientCommands {
             } => {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = context.get_identity_address(Some(to))?;
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
 
                 let tx_kind = client
@@ -1172,7 +1171,7 @@ impl SuiClientCommands {
             } => {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = context.get_identity_address(Some(to))?;
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
 
                 let tx_kind = client
@@ -1225,7 +1224,7 @@ impl SuiClientCommands {
                     .collect::<Result<Vec<SuiAddress>, anyhow::Error>>()
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
                 let tx_kind = client
                     .transaction_builder()
@@ -1282,7 +1281,7 @@ impl SuiClientCommands {
                     .collect::<Result<Vec<SuiAddress>, anyhow::Error>>()
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
 
                 let tx_kind = client
@@ -1317,7 +1316,7 @@ impl SuiClientCommands {
                 );
                 let recipient = context.get_identity_address(Some(recipient))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
 
                 let tx_kind = client.transaction_builder().pay_all_sui_tx_kind(recipient);
@@ -1468,7 +1467,7 @@ impl SuiClientCommands {
                 gas_data,
                 processing,
             } => {
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
                 let signer = context.get_object_owner(&primary_coin).await?;
 
@@ -1537,7 +1536,7 @@ impl SuiClientCommands {
                     bail!("Failed to parse --tx-bytes as TransactionKind");
                 };
 
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let sender = processing
                     .sender
                     .unwrap_or(context.infer_sender(&payment.gas).await?);
@@ -1709,7 +1708,7 @@ impl SuiClientCommands {
             } => {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = context.get_identity_address(Some(to))?;
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
                 let transaction_builder = client.transaction_builder();
 
@@ -2557,7 +2556,7 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Addresses(AddressesOutput),
-    Balance(Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>, bool),
+    Balance(Vec<(Option<proto::GetCoinInfoResponse>, Vec<Coin>)>, bool),
     ChainIdentifier(String),
     ComputeTransactionDigest(TransactionData),
     DynamicFieldQuery(proto::ListDynamicFieldsResponse),
@@ -2664,7 +2663,7 @@ pub async fn request_tokens_from_faucet(
 }
 
 fn pretty_print_balance(
-    coins_by_type: &Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>,
+    coins_by_type: &Vec<(Option<proto::GetCoinInfoResponse>, Vec<Coin>)>,
     builder: &mut TableBuilder,
     with_coins: bool,
 ) {
@@ -2676,9 +2675,9 @@ fn pretty_print_balance(
     for (metadata, coins) in coins_by_type {
         let (name, symbol, coin_decimals) = if let Some(metadata) = metadata {
             (
-                metadata.name.as_str(),
-                metadata.symbol.as_str(),
-                metadata.decimals,
+                metadata.metadata().name(),
+                metadata.metadata().symbol(),
+                metadata.metadata().decimals() as u8,
             )
         } else {
             ("unknown", "unknown_symbol", 9)
