@@ -38,7 +38,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
-    round_tracker::PeerRoundTracker,
+    round_tracker::RoundTracker,
 };
 use crate::{
     authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher,
@@ -242,7 +242,7 @@ pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThread
     network_client: Arc<C>,
     block_verifier: Arc<V>,
     transaction_certifier: TransactionCertifier,
-    round_tracker: Arc<RwLock<PeerRoundTracker>>,
+    round_tracker: Arc<RwLock<RoundTracker>>,
     inflight_blocks_map: Arc<InflightBlocksMap>,
     commands_sender: Sender<Command>,
 }
@@ -255,7 +255,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         block_verifier: Arc<V>,
         transaction_certifier: TransactionCertifier,
-        round_tracker: Arc<RwLock<PeerRoundTracker>>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
         sync_last_known_own_block: bool,
     ) -> Arc<SynchronizerHandle> {
@@ -456,7 +456,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         dag_state: Arc<RwLock<DagState>>,
         mut receiver: Receiver<BlocksGuard>,
         commands_sender: Sender<Command>,
-        round_tracker: Arc<RwLock<PeerRoundTracker>>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
     ) {
         const MAX_RETRIES: u32 = 3;
         let peer_hostname = &context.committee.authority(peer_index).hostname;
@@ -521,7 +521,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         context: Arc<Context>,
         commands_sender: Sender<Command>,
-        round_tracker: Arc<RwLock<PeerRoundTracker>>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
         sync_method: &str,
     ) -> ConsensusResult<()> {
         if serialized_blocks.is_empty() {
@@ -1214,7 +1214,7 @@ mod tests {
     };
     use crate::{
         authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
-        round_tracker::PeerRoundTracker, transaction_certifier::TransactionCertifier,
+        round_tracker::RoundTracker, transaction_certifier::TransactionCertifier,
     };
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
@@ -1450,7 +1450,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let handle = Synchronizer::start(
             network_client.clone(),
@@ -1509,7 +1509,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let handle = Synchronizer::start(
             network_client.clone(),
@@ -1579,7 +1579,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // Create some test blocks
         let expected_blocks = (0..10)
@@ -1661,7 +1661,7 @@ mod tests {
             blocks_sender,
         );
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // AND stub some missing blocks. The highest accepted round is 0. Create blocks that are above the sync threshold.
         let sync_missing_block_round_threshold = context.parameters.commit_sync_batch_size;
@@ -1795,7 +1795,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let our_index = AuthorityIndex::new_for_test(0);
 
         // Create some test blocks
@@ -1921,7 +1921,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let (commands_sender, _commands_receiver) =
             monitored_mpsc::channel("consensus_synchronizer_commands", 1000);
 

@@ -60,7 +60,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
-    round_tracker::PeerRoundTracker,
+    round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
 };
@@ -116,7 +116,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
         block_verifier: Arc<dyn BlockVerifier>,
         transaction_certifier: TransactionCertifier,
-        round_tracker: Arc<RwLock<PeerRoundTracker>>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
         network_client: Arc<C>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
@@ -693,7 +693,17 @@ impl<C: NetworkClient> CommitSyncer<C> {
             }
         }
 
-        // 11. Update round tracker from the fetched blocks. For fetched blocks,
+        // 11. Record commit votes from the fetched blocks.
+        for commit in &certified_commits {
+            for block in commit.blocks() {
+                inner.commit_vote_monitor.observe_block(block);
+            }
+        }
+        for block in &vote_blocks {
+            inner.commit_vote_monitor.observe_block(block);
+        }
+
+        // 12. Update round tracker from the fetched blocks. For fetched blocks,
         // excluded_ancestors are not available so we use an empty vector.
         {
             let mut tracker = inner.round_tracker.write();
@@ -756,7 +766,7 @@ struct Inner<C: NetworkClient> {
     commit_consumer_monitor: Arc<CommitConsumerMonitor>,
     block_verifier: Arc<dyn BlockVerifier>,
     transaction_certifier: TransactionCertifier,
-    round_tracker: Arc<RwLock<PeerRoundTracker>>,
+    round_tracker: Arc<RwLock<RoundTracker>>,
     network_client: Arc<C>,
     dag_state: Arc<RwLock<DagState>>,
 }
@@ -873,7 +883,7 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{BlockStream, NetworkClient},
-        round_tracker::PeerRoundTracker,
+        round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         transaction_certifier::TransactionCertifier,
     };
@@ -971,7 +981,7 @@ mod tests {
         );
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let mut commit_syncer = CommitSyncer::new(
             context,
             core_thread_dispatcher,
