@@ -61,5 +61,6 @@ pub enum EndpointId {
 // NOTE: AddressSources are prioritized in order of the enum variants below.
 pub enum AddressSource {
     Admin,
+    Config,
     Committee,
 }
