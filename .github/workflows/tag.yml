@@ -38,21 +38,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Create or update tag via GitHub API
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # Check if tag already exists
-        if gh api repos/${{ github.repository }}/git/refs/tags/${{ env.TAG_NAME }} --silent 2>/dev/null; then
-          echo "Tag exists, updating..."
-          gh api -X PATCH repos/${{ github.repository }}/git/refs/tags/${{ env.TAG_NAME }} \
-            -f sha="${{ env.SUI_COMMIT }}" \
-            -F force=true
-        else
-          echo "Creating new tag..."
-          gh api repos/${{ github.repository }}/git/refs \
-            -f ref="refs/tags/${{ env.TAG_NAME }}" \
-            -f sha="${{ env.SUI_COMMIT }}"
-        fi
+    - name: Checkout repository
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.SUI_CREATE_RELEASE }}
 
-        echo "Tag ${{ env.TAG_NAME }} now points to ${{ env.SUI_COMMIT }}"
+    - name: Create or update tag
+      run: |
+        echo "Creating/updating tag $TAG_NAME to point to $SUI_COMMIT"
+        git tag -f "$TAG_NAME" "$SUI_COMMIT"
+        git push origin "$TAG_NAME" --force
+        echo "Tag $TAG_NAME now points to $SUI_COMMIT"
