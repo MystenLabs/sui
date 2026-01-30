@@ -42,8 +42,9 @@ jobs:
       run: |
         set -euo pipefail
 
-        # Reject reserved branch names that could cause confusion
-        if [[ "$TAG_NAME" =~ ^(main|master|HEAD|develop|release)$ ]]; then
+        # Reject reserved branch names that could cause confusion (case-insensitive)
+        TAG_NAME_LOWER="${TAG_NAME,,}"
+        if [[ "$TAG_NAME_LOWER" =~ ^(main|master|head|develop|release)$ ]]; then
           echo "Error: '$TAG_NAME' is a reserved name, cannot use as tag"
           exit 1
         fi
