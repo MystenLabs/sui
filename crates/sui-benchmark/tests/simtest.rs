@@ -227,7 +227,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_rolling_restarts_all_validators() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 170_000, 1).await;
+        let test_cluster = build_test_cluster(4, 0, 1).await;
 
         let validators = test_cluster.get_validator_pubkeys();
         let test_cluster_clone = test_cluster.clone();
@@ -243,8 +243,13 @@ mod test {
             }
         });
         test_simulated_load(test_cluster.clone(), 170).await;
-        restarter_task.await.unwrap();
-        test_cluster.wait_for_epoch_all_nodes(1).await;
+
+        tokio::time::timeout(Duration::from_secs(20), restarter_task)
+            .await
+            .expect("Restarter task timed out")
+            .unwrap();
+
+        test_cluster.trigger_reconfiguration().await;
     }
 
     #[sim_test(config = "test_config()")]
