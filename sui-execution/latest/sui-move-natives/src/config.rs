@@ -98,7 +98,7 @@ pub fn read_setting_impl(
         current_epoch,
     )?;
 
-    let size = abstract_size(object_runtime.protocol_config, &read_value_opt);
+    let size = abstract_size(object_runtime.protocol_config, &read_value_opt)?;
 
     native_charge_gas_early_exit!(
         context,
