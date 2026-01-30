@@ -27,6 +27,7 @@ on:
 
 permissions:
   contents: write
+  workflows: write
 
 env:
   SUI_COMMIT: "${{ github.event.client_payload.sui_commit || inputs.sui_commit }}"
