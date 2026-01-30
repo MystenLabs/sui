@@ -38,14 +38,69 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Validate inputs
+      run: |
+        set -euo pipefail
+
+        # Reject reserved branch names that could cause confusion
+        if [[ "$TAG_NAME" =~ ^(main|master|HEAD|develop|release)$ ]]; then
+          echo "Error: '$TAG_NAME' is a reserved name, cannot use as tag"
+          exit 1
+        fi
+
+        # Ensure tag name is not empty
+        if [[ -z "$TAG_NAME" ]]; then
+          echo "Error: TAG_NAME cannot be empty"
+          exit 1
+        fi
+
+        # Validate SHA format (40 hex characters, case-insensitive)
+        if [[ ! "$SUI_COMMIT" =~ ^[a-fA-F0-9]{40}$ ]]; then
+          echo "Error: SUI_COMMIT must be a valid 40-character SHA, got: '$SUI_COMMIT'"
+          exit 1
+        fi
+
+        echo "Inputs validated: TAG_NAME='$TAG_NAME', SUI_COMMIT='$SUI_COMMIT'"
+
     - name: Checkout repository
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       with:
         fetch-depth: 0
         token: ${{ secrets.SUI_CREATE_RELEASE }}
 
+    - name: Safety checks
+      run: |
+        set -euo pipefail
+
+        # Verify commit exists in the repository
+        if ! git cat-file -e "$SUI_COMMIT^{commit}" 2>/dev/null; then
+          echo "Error: Commit $SUI_COMMIT does not exist in the repository"
+          exit 1
+        fi
+
+        # Check if we're overwriting an existing tag
+        if git rev-parse "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+          OLD_SHA=$(git rev-parse "refs/tags/$TAG_NAME")
+          echo "Warning: Tag '$TAG_NAME' already exists, pointing to $OLD_SHA"
+          echo "Will update to point to $SUI_COMMIT"
+        else
+          echo "Creating new tag '$TAG_NAME'"
+        fi
+
+        # Verify commit is reachable from main or a releases branch
+        if ! git branch -r --contains "$SUI_COMMIT" 2>/dev/null | grep -qE 'origin/(main$|releases/)'; then
+          echo "Error: Commit $SUI_COMMIT is not on main or a releases/ branch"
+          echo "Reachable from branches:"
+          git branch -r --contains "$SUI_COMMIT" 2>/dev/null || echo "  (none)"
+          exit 1
+        fi
+
+        echo "Safety checks passed"
+
     - name: Create or update tag
       run: |
+        set -euo pipefail
+
         echo "Creating/updating tag $TAG_NAME to point to $SUI_COMMIT"
         git tag -f "$TAG_NAME" "$SUI_COMMIT"
         git push origin "$TAG_NAME" --force
