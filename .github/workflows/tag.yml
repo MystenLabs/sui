@@ -38,38 +38,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Create or update tag via GitHub API
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # pin@v7.0.1
+    - name: Checkout repository
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       with:
-        script: |
-          const tag = process.env.TAG_NAME;
-          const sha = process.env.SUI_COMMIT;
+        fetch-depth: 0
 
-          console.log(`Creating/updating tag ${tag} to point to ${sha}`);
-
-          try {
-            // Try to update existing tag
-            await github.rest.git.updateRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `tags/${tag}`,
-              sha: sha,
-              force: true
-            });
-            console.log(`Updated existing tag ${tag}`);
-          } catch (e) {
-            if (e.status === 404) {
-              // Tag doesn't exist, create it
-              await github.rest.git.createRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: `refs/tags/${tag}`,
-                sha: sha
-              });
-              console.log(`Created new tag ${tag}`);
-            } else {
-              throw e;
-            }
-          }
-
-          console.log(`Tag ${tag} now points to ${sha}`);
+    - name: Create or update tag
+      run: |
+        echo "Creating/updating tag $TAG_NAME to point to $SUI_COMMIT"
+        git tag -f "$TAG_NAME" "$SUI_COMMIT"
+        git push origin "$TAG_NAME" --force
+        echo "Tag $TAG_NAME now points to $SUI_COMMIT"
