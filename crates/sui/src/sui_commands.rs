@@ -628,9 +628,8 @@ impl SuiCommand {
                         .await?;
 
                         if !build.no_tree_shaking {
-                            let client = context.get_client().await?;
-                            pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg)
-                                .await?;
+                            let client = context.grpc_client()?;
+                            pkg_tree_shake(client, with_unpublished_deps, &mut pkg).await?;
                         }
 
                         println!(

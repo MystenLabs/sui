@@ -23,7 +23,8 @@ use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use sui_keys::keystore::AccountKeystore;
-use sui_sdk::{apis::ReadApi, wallet_context::WalletContext};
+use sui_rpc_api::Client;
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
@@ -128,7 +129,7 @@ impl PTB {
             return Ok(());
         }
 
-        let client = context.get_client().await?;
+        let mut client = context.grpc_client()?;
 
         let mut starting_addresses: BTreeMap<String, AddressData> = context
             .config
@@ -148,11 +149,11 @@ impl PTB {
             names: program_metadata.mvr_names.into_keys().collect(),
         };
         if mvr_resolver.should_resolve() {
-            let resolved = mvr_resolver.resolve_names(client.read_api()).await?;
+            let resolved = mvr_resolver.resolve_names(&client).await?;
             let mut mvr_data: BTreeMap<String, AddressData> = BTreeMap::new();
             for (name, package_id) in resolved.resolution {
                 let span = mvr_names.get(&name).unwrap_or(&Span { start: 0, end: 0 });
-                let pkg = resolve_package(client.read_api(), package_id.package_id, *span).await?;
+                let pkg = resolve_package(&mut client, package_id.package_id, *span).await?;
                 let type_origin_id_map = pkg.type_origin_map();
                 mvr_data.insert(name, AddressData::MovePackage((pkg, type_origin_id_map)));
             }
@@ -161,7 +162,7 @@ impl PTB {
         }
 
         let (res, warnings) =
-            Self::build_ptb(program, starting_addresses, client.read_api(), context).await;
+            Self::build_ptb(program, starting_addresses, client.clone(), context).await;
 
         // Render warnings
         if !warnings.is_empty() {
@@ -289,7 +290,7 @@ impl PTB {
     pub async fn build_ptb(
         program: Program,
         starting_addresses: BTreeMap<String, AddressData>,
-        reader: &ReadApi,
+        reader: Client,
         wallet: &WalletContext,
     ) -> (
         Result<ProgrammableTransaction, Vec<PTBError>>,

@@ -30,8 +30,8 @@ use move_core_types::{
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
-use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
-use sui_sdk::{apis::ReadApi, wallet_context::WalletContext};
+use sui_rpc_api::Client;
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     base_types::{ObjectID, TxContext, TxContextKind, is_primitive_type_tag},
@@ -122,12 +122,13 @@ impl<'a> Resolver<'a> for ToObject {
         obj_id: ObjectID,
     ) -> PTBResult<Tx::Argument> {
         // Get the object from the reader to get metadata about the object.
-        let obj = builder.get_object(obj_id, loc).await?;
-        let owner = obj
-            .owner
-            .clone()
-            .ok_or_else(|| err!(loc, "Unable to get owner info for object {obj_id}"))?;
-        let object_ref = obj.object_ref();
+        let obj = builder
+            .reader
+            .get_object(obj_id)
+            .await
+            .map_err(|e| err!(loc, "Unable to get owner info for object {obj_id}: {e}"))?;
+        let owner = obj.owner().clone();
+        let object_ref = obj.compute_object_reference();
         // Depending on the ownership of the object, we resolve it to different types of object
         // arguments for the transaction.
         let obj_arg = match owner {
@@ -233,7 +234,7 @@ pub struct PTBBuilder<'a> {
     /// transaction arguments.
     resolved_arguments: BTreeMap<String, Tx::Argument>,
     /// Read API for reading objects from chain. Needed for object resolution.
-    reader: &'a ReadApi,
+    reader: Client,
     /// Wallet used to find the active environment for the publish command
     wallet: &'a WalletContext,
     /// The last command that we have added. This is used to support assignment commands.
@@ -289,7 +290,7 @@ impl ArgWithHistory {
 impl<'a> PTBBuilder<'a> {
     pub fn new(
         starting_env: BTreeMap<String, AddressData>,
-        reader: &'a ReadApi,
+        reader: Client,
         wallet: &'a WalletContext,
     ) -> Self {
         Self {
@@ -431,7 +432,7 @@ impl<'a> PTBBuilder<'a> {
         package_id: ObjectID,
         loc: Span,
     ) -> PTBResult<MovePackage> {
-        resolve_package(self.reader, package_id, loc).await
+        resolve_package(&mut self.reader, package_id, loc).await
     }
 
     /// Resolves the argument to the move call based on the type information of the function being
@@ -754,21 +755,6 @@ impl<'a> PTBBuilder<'a> {
         }
     }
 
-    /// Fetch the `SuiObjectData` for an object ID -- this is used for object resolution.
-    async fn get_object(&self, object_id: ObjectID, obj_loc: Span) -> PTBResult<SuiObjectData> {
-        let res = self
-            .reader
-            .get_object_with_options(
-                object_id,
-                SuiObjectDataOptions::new().with_type().with_owner(),
-            )
-            .await
-            .map_err(|e| err!(obj_loc, "{e}"))?
-            .into_object()
-            .map_err(|e| err!(obj_loc, "{e}"))?;
-        Ok(res)
-    }
-
     /// Create a "did you mean" message for an identifier with the context of our different binding
     /// environments.
     fn did_you_mean_identifier(&self, ident: &str) -> Option<String> {
@@ -938,7 +924,7 @@ impl<'a> PTBBuilder<'a> {
                         .map_err(|e| err!(pkg_loc, "Cannot compile package: {e}"))?;
 
                 let compiled_package = compile_package(
-                    self.reader,
+                    self.reader.clone(),
                     &root_pkg,
                     build_config,
                     package_path,
@@ -996,7 +982,7 @@ impl<'a> PTBBuilder<'a> {
                     .await?;
 
                 let (upgrade_policy, compiled_package) = upgrade_package(
-                    self.reader,
+                    self.reader.clone(),
                     &root_pkg,
                     build_config.clone(),
                     package_path,
@@ -1260,33 +1246,22 @@ fn try_resolve_parsed_address(
 
 /// Try to resolve an ObjectID to a MovePackage
 pub async fn resolve_package(
-    reader: &ReadApi,
+    reader: &mut Client,
     package_id: ObjectID,
     loc: Span,
 ) -> Result<MovePackage, PTBError> {
     let object = reader
-        .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
+        .get_object(package_id)
         .await
-        .map_err(|e| err!(loc, "{e}"))?
-        .into_object()
-        .map_err(|e| err!(loc, "{e}"))?;
+        .map_err(|e| err!(loc, "{}", e.message()))?;
 
-    let Some(SuiRawData::Package(package)) = object.bcs else {
-        error!(
+    let package = object.data.try_as_package().ok_or_else(|| {
+        err!(
             loc,
-            "BCS field in object '{}' is missing or not a package.", package_id
-        );
-    };
+            "BCS field in object '{}' is missing or not a package.",
+            package_id
+        )
+    })?;
 
-    MovePackage::new(
-        package.id,
-        package.version,
-        package.module_map,
-        // This package came from on-chain and the tool runs locally, so don't worry about
-        // trying to enforce the package size limit.
-        u64::MAX,
-        package.type_origin_table,
-        package.linkage_table,
-    )
-    .map_err(|e| err!(loc, "{e}"))
+    Ok(package.clone())
 }

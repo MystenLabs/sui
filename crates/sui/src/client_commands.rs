@@ -45,19 +45,18 @@ use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiCoinMetadata,
-    SuiData, SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiParsedData, SuiProtocolConfigValue, SuiRawData,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiParsedData, SuiRawData, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{BuildConfig, CompiledPackage, PackageDependencies};
 use sui_package_management::LockCommand;
-use sui_rpc_api::client::ExecutedTransaction;
+use sui_rpc_api::{Client, client::ExecutedTransaction};
 use sui_sdk::{
     SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
     SuiClient,
-    apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
 };
@@ -982,9 +981,8 @@ impl SuiClientCommands {
                 package_path,
                 build_config,
             } => {
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
-                let read_api = client.read_api();
                 let protocol_version =
                     protocol_version.map_or(ProtocolVersion::MAX, ProtocolVersion::new);
                 let protocol_config =
@@ -1013,7 +1011,7 @@ impl SuiClientCommands {
                     (_, package_path) => {
                         let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
                         let package =
-                            compile_package_simple(read_api, build_config, &package_path, None)
+                            compile_package_simple(client, build_config, &package_path, None)
                                 .await?;
                         let name = package
                             .package
@@ -1465,7 +1463,7 @@ impl SuiClientCommands {
                     _ => { /*no_op*/ }
                 }
 
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
                 let signer = context.get_object_owner(&coin_id).await?;
 
@@ -1849,7 +1847,7 @@ fn check_dep_verification_flags(
 }
 
 async fn compile_package_simple(
-    _read_api: &ReadApi,
+    _client: Client,
     _build_config: MoveBuildConfig,
     _package_path: &Path,
     _chain_id: Option<String>,
@@ -1870,7 +1868,7 @@ async fn compile_package_simple(
 }
 
 pub(crate) async fn upgrade_package(
-    read_api: &ReadApi,
+    mut client: Client,
     root_pkg: &RootPackage<SuiFlavor>,
     build_config: MoveBuildConfig,
     package_path: &Path,
@@ -1879,7 +1877,7 @@ pub(crate) async fn upgrade_package(
     _skip_dependency_verification: bool,
 ) -> Result<(u8, CompiledPackage), anyhow::Error> {
     let compiled_package = compile_package(
-        read_api,
+        client.clone(),
         root_pkg,
         build_config.clone(),
         package_path,
@@ -1887,25 +1885,15 @@ pub(crate) async fn upgrade_package(
     )
     .await?;
 
-    let resp = read_api
-        .get_object_with_options(
-            upgrade_capability,
-            SuiObjectDataOptions::default().with_bcs().with_owner(),
-        )
-        .await?;
+    let object = client.get_object(upgrade_capability).await?;
 
-    let Some(data) = resp.data else {
-        return Err(anyhow!(
-            "Could not find upgrade capability at {upgrade_capability}"
-        ));
-    };
-
-    let upgrade_cap: UpgradeCap = data
-        .bcs
-        .ok_or_else(|| anyhow!("Fetch upgrade capability object but no data was returned"))?
-        .try_as_move()
-        .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
-        .deserialize()?;
+    let upgrade_cap: UpgradeCap = bcs::from_bytes(
+        object
+            .data
+            .try_as_move()
+            .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
+            .contents(),
+    )?;
     // We keep the existing policy -- no fancy policies or changing the upgrade
     // policy at the moment. To change the policy you can call a Move function in the
     // `package` module to change this policy.
@@ -1915,7 +1903,7 @@ pub(crate) async fn upgrade_package(
 }
 
 pub(crate) async fn compile_package(
-    read_api: &ReadApi,
+    client: Client,
     root_pkg: &RootPackage<SuiFlavor>,
     mut build_config: MoveBuildConfig,
     package_path: &Path,
@@ -1923,7 +1911,7 @@ pub(crate) async fn compile_package(
 ) -> Result<CompiledPackage, anyhow::Error> {
     let dependency_ids = check_for_unpublished_deps(root_pkg, with_unpublished_deps)?;
 
-    let chain_id = read_api.get_chain_identifier().await?;
+    let chain_id = client.get_chain_identifier().await?;
     debug!("Current client has {chain_id} as chain identifier");
 
     debug!("Loaded package from {:?}", package_path.display());
@@ -1957,9 +1945,9 @@ pub(crate) async fn compile_package(
         .into());
     }
 
-    compatibility_checks(read_api, &compiled_package).await?;
+    compatibility_checks(client.clone(), &compiled_package).await?;
 
-    pkg_tree_shake(read_api, with_unpublished_deps, &mut compiled_package).await?;
+    pkg_tree_shake(client, with_unpublished_deps, &mut compiled_package).await?;
 
     // TODO: pluck back in
     // if with_unpublished_dependencies {
@@ -1995,18 +1983,19 @@ pub(crate) fn check_for_unpublished_deps(
 }
 
 async fn compatibility_checks(
-    read_api: &ReadApi,
+    client: Client,
     compiled_package: &CompiledPackage,
 ) -> Result<(), anyhow::Error> {
-    let protocol_config = read_api.get_protocol_config(None).await?;
+    let protocol_config = client.get_protocol_config(None).await?;
 
     // Check that the package's Move version is compatible with the chain's
-    if let Some(Some(SuiProtocolConfigValue::U32(min_version))) = protocol_config
-        .attributes
+    if let Some(min_version) = protocol_config
+        .attributes()
         .get("min_move_binary_format_version")
+        .and_then(|s| s.parse::<u32>().ok())
     {
         for module in compiled_package.get_modules_and_deps() {
-            if module.version() < *min_version {
+            if module.version() < min_version {
                 return Err(SuiErrorKind::ModulePublishFailure {
                     error: format!(
                         "Module {} has a version {} that is \
@@ -2021,11 +2010,13 @@ async fn compatibility_checks(
     }
 
     // Check that the package's Move version is compatible with the chain's
-    if let Some(Some(SuiProtocolConfigValue::U32(max_version))) =
-        protocol_config.attributes.get("move_binary_format_version")
+    if let Some(max_version) = protocol_config
+        .attributes()
+        .get("move_binary_format_version")
+        .and_then(|s| s.parse::<u32>().ok())
     {
         for module in compiled_package.get_modules_and_deps() {
-            if module.version() > *max_version {
+            if module.version() > max_version {
                 let help_msg = if module.version() == 7 {
                     "This is because you used enums in your Move package but tried to publish it to \
                 a chain that does not yet support enums in Move."
@@ -2481,8 +2472,8 @@ impl SuiClientCommandResult {
     pub async fn prerender_clever_errors(mut self, context: &mut WalletContext) -> Self {
         match &mut self {
             SuiClientCommandResult::DryRun(DryRunTransactionBlockResponse { effects, .. }) => {
-                let client = context.get_client().await.expect("Cannot connect to RPC");
-                prerender_clever_errors(effects, client.read_api()).await
+                let client = context.grpc_client().expect("Cannot connect to RPC");
+                prerender_clever_errors(effects, &client).await
             }
 
             SuiClientCommandResult::TransactionBlock(_)
@@ -3009,7 +3000,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         context.get_reference_gas_price().await?
     };
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
 
     let signer = sender.unwrap_or(signer);
 
@@ -3143,7 +3134,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
                     format!("{error:?}")
                 };
 
-                let error = render_clever_error_opt(&description, client.read_api())
+                let error = render_clever_error_opt(&description, &client)
                     .await
                     .unwrap_or(description);
 
@@ -3192,20 +3183,20 @@ async fn execute_dev_inspect(
 
 pub(crate) async fn prerender_clever_errors(
     effects: &mut SuiTransactionBlockEffects,
-    read_api: &ReadApi,
+    client: &Client,
 ) {
     let SuiTransactionBlockEffects::V1(effects) = effects;
     if let SuiExecutionStatus::Failure { error } = &mut effects.status
-        && let Some(rendered) = render_clever_error_opt(error, read_api).await
+        && let Some(rendered) = render_clever_error_opt(error, client).await
     {
         *error = rendered;
     }
 }
 
 /// Warn the user if the CLI falls behind more than 2 protocol versions.
-async fn check_protocol_version_and_warn(read_api: &ReadApi) -> Result<(), anyhow::Error> {
-    let protocol_cfg = read_api.get_protocol_config(None).await?;
-    let on_chain_protocol_version = protocol_cfg.protocol_version.as_u64();
+async fn check_protocol_version_and_warn(client: &Client) -> Result<(), anyhow::Error> {
+    let protocol_cfg = client.get_protocol_config(None).await?;
+    let on_chain_protocol_version = protocol_cfg.protocol_version();
     let cli_protocol_version = ProtocolVersion::MAX.as_u64();
     if (cli_protocol_version + 2) < on_chain_protocol_version {
         eprintln!(
@@ -3226,19 +3217,9 @@ async fn check_protocol_version_and_warn(read_api: &ReadApi) -> Result<(), anyho
     Ok(())
 }
 
-/// Try to convert this object into a package.
-fn to_package(o: SuiObjectResponse) -> anyhow::Result<MovePackage> {
-    let id = o.object_id()?;
-    let Some(SuiRawData::Package(p)) = o.into_object()?.bcs else {
-        bail!("Object {id} not a package");
-    };
-
-    Ok(p.to_move_package(u64::MAX /* safe as this pkg comes from the network */)?)
-}
-
 /// Fetch move packages
 async fn fetch_move_packages(
-    read_api: &ReadApi,
+    mut client: Client,
     immediate_dep_packages: &BTreeMap<Symbol, ObjectID>,
 ) -> Result<Vec<MovePackage>, anyhow::Error> {
     let package_ids: Vec<_> = immediate_dep_packages.values().cloned().collect(); // a map from id to pkg name for finding package names for error reporting.
@@ -3247,21 +3228,29 @@ async fn fetch_move_packages(
         .map(|(name, id)| (id, name))
         .collect();
 
-    let objects = read_api
-        .multi_get_object_with_options(package_ids, SuiObjectDataOptions::bcs_lossless())
-        .await?;
-
-    let mut packages = Vec::with_capacity(objects.len());
-    for o in objects {
-        let id = o.object_id()?;
-        packages.push(to_package(o).with_context(|| {
-            format!(
-                "Failed to fetch package {}",
+    let mut packages = Vec::with_capacity(package_ids.len());
+    for id in package_ids {
+        let o = client
+            .get_object(id)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e.message()))
+            .with_context(|| {
+                format!(
+                    "Failed to fetch package {}",
+                    pkg_id_to_name
+                        .get(&id)
+                        .map_or("of unknown name", |x| x.as_str())
+                )
+            })?;
+        let package = o.data.try_as_package().cloned().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Failed to fetch package {}, found object instead of package",
                 pkg_id_to_name
                     .get(&id)
                     .map_or("of unknown name", |x| x.as_str())
             )
-        })?);
+        })?;
+        packages.push(package);
     }
 
     Ok(packages)
@@ -3269,10 +3258,10 @@ async fn fetch_move_packages(
 
 // Fetch the original ids of all the transitive dependencies of the immediate package dependencies
 async fn trans_deps_original_ids(
-    read_api: &ReadApi,
+    client: Client,
     immediate_dep_packages: &BTreeMap<Symbol, ObjectID>,
 ) -> Result<BTreeSet<ObjectID>, anyhow::Error> {
-    let pkgs = fetch_move_packages(read_api, immediate_dep_packages).await?;
+    let pkgs = fetch_move_packages(client, immediate_dep_packages).await?;
     let linkage_table = pkgs
         .iter()
         .flat_map(|pkg| pkg.linkage_table().keys())
@@ -3287,7 +3276,7 @@ async fn trans_deps_original_ids(
 /// dependencies for all these immediate package dependencies. For packages that are not referenced
 /// in the source code, they will be filtered out from the list of dependencies.
 pub(crate) async fn pkg_tree_shake(
-    read_api: &ReadApi,
+    client: Client,
     with_unpublished_deps: bool,
     compiled_package: &mut CompiledPackage,
 ) -> Result<(), anyhow::Error> {
@@ -3367,7 +3356,7 @@ pub(crate) async fn pkg_tree_shake(
 
     info!("Pkg name to orig id {:#?}", pkg_name_to_orig_id);
 
-    let trans_deps_orig_ids = trans_deps_original_ids(read_api, &immediate_dep_packages).await?;
+    let trans_deps_orig_ids = trans_deps_original_ids(client, &immediate_dep_packages).await?;
 
     info!("Trans deps orig ids {:?}", trans_deps_orig_ids);
 
@@ -3485,11 +3474,10 @@ async fn publish_command(
     let sender = processing
         .sender
         .unwrap_or(context.infer_sender(&payment.gas).await?);
-    let client = context.get_client().await?;
-    let read_api = client.read_api();
-    let chain_id = read_api.get_chain_identifier().await?;
+    let client = context.grpc_client()?;
+    let chain_id = client.get_chain_identifier().await?;
 
-    check_protocol_version_and_warn(read_api).await?;
+    check_protocol_version_and_warn(&client).await?;
     let package_path =
         package_path
             .canonicalize()
@@ -3498,7 +3486,7 @@ async fn publish_command(
             })?;
 
     let compiled_package = compile_package(
-        read_api,
+        client.clone(),
         root_package,
         build_config.clone(),
         &package_path,
@@ -3539,7 +3527,7 @@ async fn publish_command(
     };
 
     let publish_data = update_publication(
-        &chain_id,
+        &chain_id.to_string(),
         LockCommand::Publish,
         response,
         &build_config,
@@ -3571,14 +3559,13 @@ async fn upgrade_command(
     let sender = processing
         .sender
         .unwrap_or(context.infer_sender(&payment.gas).await?);
-    let client = context.get_client().await?;
-    let read_api = client.read_api();
-    let chain_id = read_api.get_chain_identifier().await?;
+    let client = context.grpc_client()?;
+    let chain_id = client.get_chain_identifier().await?.to_string();
 
     // For upgrade, we want to force the root package to have `0x0` as its address
     build_config.root_as_zero = true;
 
-    check_protocol_version_and_warn(read_api).await?;
+    check_protocol_version_and_warn(&client).await?;
     let package_path =
         package_path
             .canonicalize()
@@ -3617,7 +3604,7 @@ async fn upgrade_command(
     // is how do we migrate? During migration we might want to try to find the upgrade
     // cap?
     let upgrade_result = upgrade_package(
-        read_api,
+        client.clone(),
         &root_pkg,
         build_config.clone(),
         &package_path,
@@ -3637,21 +3624,17 @@ async fn upgrade_command(
     let dep_ids = compiled_package.get_published_dependencies_ids();
 
     if !skip_verify_compatibility {
-        let protocol_version = read_api.get_protocol_config(None).await?.protocol_version;
+        let protocol_version = client.get_protocol_config(None).await?.protocol_version();
 
-        let chain_id = read_api.get_chain_identifier().await.ok();
         let protocol_config = ProtocolConfig::get_for_version(
-            protocol_version,
-            match chain_id
-                .as_ref()
-                .and_then(ChainIdentifier::from_chain_short_id)
-            {
+            protocol_version.into(),
+            match ChainIdentifier::from_chain_short_id(&chain_id) {
                 Some(chain_id) => chain_id.chain(),
                 None => Chain::Unknown,
             },
         );
         check_compatibility(
-            read_api,
+            client.clone(),
             package_id,
             compiled_package,
             package_path.clone(),
