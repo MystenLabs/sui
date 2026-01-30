@@ -18,7 +18,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     str::FromStr,
 };
-use sui_network::endpoint_manager::EndpointId;
+use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_types::{
     base_types::AuthorityName,
     crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
@@ -592,17 +592,11 @@ async fn update_endpoint(
             }
         }
     }
-    if parsed_addresses.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            "At least one address must be provided".to_string(),
-        );
-    }
-
-    state
-        .node
-        .endpoint_manager()
-        .update_endpoint(endpoint_id, parsed_addresses.clone());
+    state.node.endpoint_manager().update_endpoint(
+        endpoint_id,
+        AddressSource::Admin,
+        parsed_addresses.clone(),
+    );
 
     (
         StatusCode::OK,
