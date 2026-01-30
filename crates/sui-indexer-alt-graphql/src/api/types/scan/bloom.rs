@@ -71,16 +71,11 @@ pub(super) async fn candidate_cps(
 
     // Find a page of checkpoint blocks where all probes matched.
     //
-    // Uses double NOT EXISTS to express universal quantification:
-    //   "keep cp_block_index where no probe lacks a matching bloom block."
-    //
+    // Uses two NOT EXISTS to express:
+    //   "keep cp_block_index where every probe has a matching bloom block."
+    // Outer NOT EXISTS: true when all probes passed for this cp_block_index.
     // Inner NOT EXISTS: true when a single probe has no bloom block with
-    //   matching bits — i.e. the probe is unsatisfied.
-    // Outer NOT EXISTS: true when no probe is unsatisfied — i.e. all
-    //   probes passed for this cp_block_index.
-    //
-    // This avoids LEFT JOIN (which caused NULL + STRICT function issues
-    // at scale) and GROUP BY/HAVING COUNT aggregation.
+    //   matching bits
     let blocked_matches = query!(
         r#"blocked_matches AS (
             SELECT

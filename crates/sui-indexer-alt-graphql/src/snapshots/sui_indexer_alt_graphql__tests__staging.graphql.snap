@@ -3489,8 +3489,11 @@ type Query {
 	"""
 	protocolConfigs(version: UInt53): ProtocolConfigs
 	"""
-	The transactions that exist in the network, scanning over bloom filters with support for
-	multiple filters (AND).
+	Scan for transactions matching a combination of filters (AND semantics).
+	
+	Unlike `transactions`, which supports a single filter backed by indexed lookups,
+	`scanTransactions` supports combining filters (e.g. `affectedAddress` AND `function`)
+	but requires a checkpoint range bounded by `ServiceConfig.maxScanLimit`.
 	"""
 	scanTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
