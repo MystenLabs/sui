@@ -172,47 +172,42 @@ impl KvLoader {
         }
     }
 
-    pub async fn load_many_checkpoints_transactions(
+    pub async fn load_many_checkpoints(
         &self,
         sequence_numbers: Vec<u64>,
-    ) -> Result<HashMap<CheckpointKey, Vec<TransactionDigest>>, Error> {
+    ) -> Result<
+        HashMap<
+            CheckpointKey,
+            (
+                CheckpointSummary,
+                CheckpointContents,
+                AuthorityQuorumSignInfo<true>,
+            ),
+        >,
+        Error,
+    > {
         let keys: Vec<CheckpointKey> = sequence_numbers.iter().map(|s| CheckpointKey(*s)).collect();
         match self {
-            Self::Bigtable(loader) => loader
-                .load_many(keys)
-                .await?
-                .into_iter()
-                .map(|(key, (_, contents, _))| {
-                    let digests: Vec<TransactionDigest> =
-                        contents.iter().map(|d| d.transaction).collect();
-
-                    Ok((key, digests))
-                })
-                .collect(),
+            Self::Bigtable(loader) => Ok(loader.load_many(keys).await?),
             Self::Pg(loader) => loader
                 .load_many(keys)
                 .await?
                 .into_iter()
                 .map(|(key, stored)| {
+                    let summary: CheckpointSummary = bcs::from_bytes(&stored.checkpoint_summary)
+                        .context("Failed to deserialize checkpoint summary")?;
+
                     let contents: CheckpointContents = bcs::from_bytes(&stored.checkpoint_contents)
                         .context("Failed to deserialize checkpoint contents")?;
-                    let digests: Vec<TransactionDigest> =
-                        contents.iter().map(|d| d.transaction).collect();
 
-                    Ok((key, digests))
+                    let signature: AuthorityQuorumSignInfo<true> =
+                        bcs::from_bytes(&stored.validator_signatures)
+                            .context("Failed to deserialize validator signatures")?;
+
+                    Ok((key, (summary, contents, signature)))
                 })
                 .collect(),
-            Self::LedgerGrpc(loader) => loader
-                .load_many(keys)
-                .await?
-                .into_iter()
-                .map(|(key, (_, contents, _))| {
-                    let digests: Vec<TransactionDigest> =
-                        contents.iter().map(|d| d.transaction).collect();
-
-                    Ok((key, digests))
-                })
-                .collect(),
+            Self::LedgerGrpc(loader) => Ok(loader.load_many(keys).await?),
         }
     }
 

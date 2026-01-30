@@ -230,6 +230,19 @@ fragment TX on TransactionConnection {
   }
 }
 
+//# run-graphql
+{
+  noFilter: scanTransactions(first: 5, filter: {
+    afterCheckpoint: 0,
+    beforeCheckpoint: 6
+  }) { ...TX }
+}
+
+fragment TX on TransactionConnection {
+  pageInfo { startCursor endCursor hasPreviousPage hasNextPage }
+  edges { cursor node { digest effects { checkpoint { sequenceNumber } } } }
+}
+
 //# run-graphql --cursors {"t":0,"c":0} {"t":1,"c":1} {"t":0,"c":4} {"t":2,"c":5} {"t":0,"c":10508}
 { 
   first2: scanTransactions(first: 2, filter: { affectedAddress: "@{A}" }) { ...TX }

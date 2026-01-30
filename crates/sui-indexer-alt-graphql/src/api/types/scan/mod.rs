@@ -43,12 +43,12 @@ pub(crate) async fn transactions(
 
     let filter_values = filter.bloom_probe_values();
     let candidate_cps = if filter_values.is_empty() {
-        let iter: Box<dyn Iterator<Item = u64>> = if page.is_from_front() {
-            Box::new(cp_lo..=cp_hi)
+        let limit = page.limit_with_overhead();
+        if page.is_from_front() {
+            (cp_lo..=cp_hi).take(limit).collect()
         } else {
-            Box::new((cp_lo..=cp_hi).rev())
-        };
-        iter.take(page.limit_with_overhead()).collect()
+            (cp_lo..=cp_hi).rev().take(limit).collect()
+        }
     } else {
         bloom::candidate_cps(ctx, &filter_values, cp_lo, cp_hi, page)
             .await

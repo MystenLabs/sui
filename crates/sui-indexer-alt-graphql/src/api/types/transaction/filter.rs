@@ -6,7 +6,6 @@ use async_graphql::Enum;
 use async_graphql::InputObject;
 use async_graphql::InputValueError;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
-use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::transaction::TransactionDataAPI as _;
 
 use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
@@ -75,7 +74,6 @@ impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
         Ok(())
     }
 }
-
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
@@ -194,9 +192,9 @@ impl TransactionFilter {
 
         if let Some(affected_object) = &self.affected_object {
             let has_match = effects
-                .object_changes()
+                .all_changed_objects()
                 .iter()
-                .any(|obj_change| SuiAddress::from(obj_change.id) == *affected_object);
+                .any(|((object_id, _, _), _, _)| SuiAddress::from(*object_id) == *affected_object);
             if !has_match {
                 return false;
             }
