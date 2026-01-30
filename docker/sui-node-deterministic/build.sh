@@ -7,7 +7,7 @@ set -e
 
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-OCI_OUTPUT="$REPO_ROOT/build/oci"
+OCI_OUTPUT="$REPO_ROOT/build/sui-node"
 DOCKERFILE="$DIR/Dockerfile"
 GIT_REVISION="$(git describe --always --abbrev=12 --dirty --exclude '*')"
 BUILD_DATE="$(date -u +'%Y-%m-%d')"
@@ -34,10 +34,13 @@ echo
 export DOCKER_BUILDKIT=1
 export SOURCE_DATE_EPOCH=1
 
+rm -rf $OCI_OUTPUT || :
 docker build -f "$DOCKERFILE" "$REPO_ROOT" \
 	--build-arg GIT_REVISION="$GIT_REVISION" \
 	--build-arg BUILD_DATE="$BUILD_DATE" \
 	--build-arg PROFILE="$PROFILE" \
 	--platform "$PLATFORM" \
-	--output type=oci,rewrite-timestamp=true,force-compression=true,tar=false,dest=$OCI_OUTPUT/sui-node,name=sui-node \
+	--tag "sui-node:local" \
+	--output type=local,dest=$OCI_OUTPUT/local \
+	--output type=oci,rewrite-timestamp=true,tar=false,dest=$OCI_OUTPUT/oci,name=sui-node \
 	"$@"
