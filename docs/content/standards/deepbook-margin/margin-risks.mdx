@@ -24,22 +24,22 @@ The most significant risk in margin trading is **liquidation** - the forced clos
 
 When you borrow funds to trade, you must maintain a minimum [risk ratio](./contract-information/risk-ratio.mdx) (the ratio of your total assets to total debts). If your position's risk ratio falls to or below the **Liquidation Risk Ratio**, anyone can liquidate your position.
 
-:::caution Warning Zone: Risk Ratio 1.1 - 1.2
-When your risk ratio falls between 1.1 and 1.2, you are in the **warning zone**. At this level, even minor price movements can push you into liquidation. Monitor your position carefully and consider adding collateral or reducing your position size.
+:::caution Warning Zone
+For SUI/USDC (5x leverage), when your risk ratio falls between 1.1 and 1.2, you are in the **warning zone**. For WAL/USDC and DEEP/USDC (3x leverage), the warning zone is between 1.2 and 1.3. At these levels, even minor price movements can push you into liquidation. Monitor your position carefully and consider adding collateral or reducing your position size.
 :::
 
 ### Partial liquidation
 
-Liquidation in DeepBook Margin is **partial**, not total. The protocol only liquidates enough of your position to restore your risk ratio to the **Target Liquidation Risk Ratio** (typically 1.25 for SUI/USDC).
+Liquidation in DeepBook Margin is **partial**, not total. The protocol only liquidates enough of your position to restore your risk ratio to the **Target Liquidation Risk Ratio** (1.25 for SUI/USDC, 1.5 for WAL/USDC and DEEP/USDC).
 
 During liquidation:
 1. A liquidator repays a portion of your debt (not all of it)
 2. They receive collateral plus a liquidation reward (typically 2%)
 3. The margin pool also takes a fee (typically 3%)
-4. Your position is restored to the target risk ratio of 1.25
+4. Your position is restored to the target risk ratio
 5. You keep the remaining position, but with less equity
 
-This means if you're liquidated at a 1.1 risk ratio, you won't lose your entire position. The liquidator repays just enough debt to bring your ratio back to 1.25, leaving you with a smaller but healthier position.
+This means if you're liquidated, you won't lose your entire position. The liquidator repays just enough debt to bring your ratio back to the target, leaving you with a smaller but healthier position.
 
 **However**, if your position is severely underwater (assets barely cover debt plus rewards), a **full liquidation** may occur where all debt is repaid and the lending pool may incur bad debt.
 
@@ -66,11 +66,10 @@ Let's walk through a concrete example using the SUI/USDC trading pair, which has
 | 1.20 | 320 | 420 | 1.05 | Underwater |
 
 **What happens at 1.275 USDC per SUI:**
-- Your risk ratio hits 1.1 (the liquidation threshold)
+- Your risk ratio hits 1.1 (the liquidation threshold for SUI/USDC)
 - Your position can now be liquidated by anyone
 - A liquidator partially liquidates your position, repaying enough debt to restore your risk ratio to 1.25
 - You pay liquidation rewards (5% total: 2% to liquidator, 3% to pool)
-- You lose approximately **22 USDC** of your original 100 USDC collateral
 - Your remaining position has a 1.25 risk ratio, but with significantly less equity and smaller size
 
 **Key insight:** With 5x leverage, a mere **15% adverse price movement** can trigger liquidation. Without leverage, you'd simply be down 15% on paper.
@@ -78,7 +77,6 @@ Let's walk through a concrete example using the SUI/USDC trading pair, which has
 ### Liquidation is immediate
 
 Unlike traditional margin calls that give you time to add collateral, DeFi liquidations happen instantly:
-- There's no warning phone call
 - There's no grace period to deposit more funds
 - Once your ratio hits the threshold, any liquidator can execute immediately
 - You cannot cancel or prevent it once it's triggered
@@ -158,14 +156,14 @@ Crypto markets can move 10-20% in hours. Flash crashes, short squeezes, exchange
 
 DeepBook Margin uses Pyth price oracles to value your assets and debts. While the protocol includes several protections, some oracle-related risks remain:
 
-- **Price delays:** Oracle prices may lag behind real market prices during extremely volatile periods. The protocol mitigates this by rejecting prices older than 60 seconds, but brief delays within this window can still occur.
+- **Price delays:** Oracle prices may lag behind real market prices during extremely volatile periods. The protocol mitigates this by rejecting prices older than around 60 seconds, but brief delays within this window can still occur.
 - **Price manipulation:** Although Pyth is designed to be manipulation-resistant and DeepBook validates prices against confidence intervals and EWMA (exponentially weighted moving average) prices, extreme market conditions could still affect price accuracy.
 
 ### Oracle protections
 
 DeepBook Margin implements multiple safeguards against oracle issues:
 
-- **Staleness protection:** Prices older than 60 seconds are automatically rejected, preventing liquidations based on stale data
+- **Staleness protection:** Prices older than around 60 seconds are automatically rejected, preventing liquidations based on stale data
 - **Confidence interval checks:** The protocol validates that Pyth price confidence intervals are within acceptable bounds
 - **EWMA price verification:** Spot prices are validated against EWMA prices to detect and reject anomalous price spikes
 
