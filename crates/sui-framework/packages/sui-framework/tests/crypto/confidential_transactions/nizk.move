@@ -9,8 +9,22 @@ public struct NIZK has drop {
     z: Element<Scalar>,
 }
 
+#[test_only]
 public fun new(a: Element<Point>, b: Element<Point>, z: Element<Scalar>): NIZK {
     NIZK { a, b, z }
+}
+
+public fun from_bytes(bytes: vector<u8>): NIZK {
+    let mut bcs = sui::bcs::new(bytes);
+    let a = ristretto255::point_from_bytes(&peel_tuple_u8(&mut bcs, 32));
+    let b = ristretto255::point_from_bytes(&peel_tuple_u8(&mut bcs, 32));
+    let z = ristretto255::scalar_from_bytes(&peel_tuple_u8(&mut bcs, 32));
+    NIZK { a, b, z }
+}
+
+// TODO: If fixed length vectors are ever supported, we should use that instead.
+fun peel_tuple_u8(bcs: &mut sui::bcs::BCS, length: u64): vector<u8> {
+    vector::tabulate!(length, |_| bcs.peel_u8())
 }
 
 fun challenge(
@@ -33,8 +47,6 @@ fun challenge(
     bytes.append(*x_h.bytes());
     bytes.append(*a.bytes());
     bytes.append(*b.bytes());
-
-    std::debug::print(&bytes);
 
     ristretto255::hash_to_scalar(&sui::hash::sha3_512(&bytes))
 }

@@ -49,8 +49,6 @@ public fun scalar_one(): Element<Scalar> {
 }
 
 public fun scalar_add(e1: &Element<Scalar>, e2: &Element<Scalar>): Element<Scalar> {
-    std::debug::print(e1);
-    std::debug::print(e2);
     group_ops::add(SCALAR_TYPE, e1, e2)
 }
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension};
-use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
+use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256, Sha3_512};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -101,6 +101,7 @@ pub struct HashBlake2b256CostParams {
     /// Cost per block of `data`, where a block is 128 bytes
     pub hash_blake2b256_data_cost_per_block: InternalGas,
 }
+
 /***************************************************************************************************
  * native fun blake2b256
  * Implementation of the Move native function `hash::blake2b256(data: &vector<u8>): vector<u8>`
@@ -124,6 +125,38 @@ pub fn blake2b256(
     );
 
     hash::<Blake2b256, 32>(
+        context,
+        ty_args,
+        args,
+        hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_byte,
+        hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_block,
+        BLAKE_2B256_BLOCK_SIZE,
+    )
+}
+
+/***************************************************************************************************
+ * native fun blake2b256
+ * Implementation of the Move native function `hash::sha3_512(data: &vector<u8>): vector<u8>`
+ *   gas cost: hash_blake2b256_cost_base                               | base cost for function call and fixed opers
+ *              + hash_blake2b256_data_cost_per_byte * msg.len()       | cost depends on length of message
+ *              + hash_blake2b256_data_cost_per_block * num_blocks     | cost depends on number of blocks in message
+ **************************************************************************************************/
+pub fn sha3_512(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {    
+    // TODO: Add the correct cost params
+    let hash_blake2b256_cost_params = get_extension!(context, NativesCostTable)?
+        .hash_blake2b256_cost_params
+        .clone();
+    // Charge the base cost for this oper
+    native_charge_gas_early_exit!(
+        context,
+        hash_blake2b256_cost_params.hash_blake2b256_cost_base
+    );
+
+    hash::<Sha3_512, 64>(
         context,
         ty_args,
         args,

@@ -6,6 +6,7 @@ use sui::balance::Balance;
 use sui::coin::{Self, Coin};
 use sui::config;
 use sui::group_ops::Element;
+use sui::nizk::from_bytes;
 use sui::ristretto255::{Self, Point, Scalar};
 use sui::twisted_elgamal::{
     g,
@@ -23,7 +24,8 @@ use sui::twisted_elgamal::{
     add,
     encrypt_trivial,
     encrypt_zero,
-    encrypted_amount_4_u32_from_4_u16
+    encrypted_amount_4_u32_from_4_u16,
+    verify_value_proof
 };
 use sui::vec_map::VecMap;
 
@@ -74,15 +76,15 @@ public fun wrap<T>(
 // private -> public
 public fun unwrap<T>(
     ct: &mut ConfidentialToken<T>,
-    encrypted_amount: BoundedEncryptedAmount<T>,
+    ea: BoundedEncryptedAmount<T>,
     amount: u64,
-    _proof: &vector<u8>, // Sigma proof of the encrypted msg (DDH tuple for enc - H^{eamount})
+    proof: vector<u8>, // Sigma proof of the encrypted msg (DDH tuple for enc - H^{eamount})
     ctx: &mut TxContext,
 ): Coin<T> {
-    let BoundedEncryptedAmount { pk: _, amount: _ } = encrypted_amount;
-
-    // TODO: Verify proof
-
+    let account = &mut ct.accounts[&ctx.sender()];
+    let BoundedEncryptedAmount { pk, amount: ea } = ea;
+    assert!(account.pk == &pk, EInvalidInput);
+    assert!(verify_value_proof(amount, &ea, &pk, proof));
     sui::coin::take(&mut ct.pool, amount, ctx)
 }
 
@@ -287,7 +289,7 @@ fun test_flow() {
     );
     assert!(confidential_token.pool.value() == 100);
 
-    /// Add the newly minted coins to the balance of account 1
+    // Add the newly minted coins to the balance of account 1
     confidential_token.add_to_balance(
         wrapped,
         vector[encrypt_trivial(100, &pk_1), encrypt_zero(&pk_1)],
@@ -339,11 +341,13 @@ fun test_flow() {
         &vector::empty(), // TODO
         scenario.ctx(),
     );
+
     let unwrapped = unwrap(
         &mut confidential_token,
         taken,
         50,
-        &vector::empty(),
+        // Proof generated in fastcrypto
+        x"9ed4828b102660f6f788a5fcb390229fad5e9642f33f947c649f3e99437eee48faf9a28df164fdcc460d827d48d8a5d98d9327c6f2eda486d975a02685efb01889c6352af6c11b33913c6ae8a5cbc1ddf8e33a1bbde17fa67a6bd72abb4e1d04",
         scenario.ctx(),
     );
 

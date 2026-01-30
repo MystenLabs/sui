@@ -2,6 +2,7 @@ module sui::twisted_elgamal;
 
 use sui::group_ops::Element;
 use sui::ristretto255::{Self, Point, Scalar};
+use std::string::from_ascii;
 
 const H_BYTES: vector<u8> = x"34ce1477c14558178089500a39c864e0f607b3c1f41ab398400e4a9de6d2c446";
 
@@ -150,8 +151,9 @@ public fun verify_value_proof(
     amount: u64,
     ea: &EncryptedAmount4U16,
     pk: &Element<Point>,
-    proof: &sui::nizk::NIZK,
+    proof: vector<u8>,
 ): bool {
+    let proof = sui::nizk::from_bytes(proof);
     let encryption = encrypted_amount_4_u16_to_encryption(ea);
     proof.verify(
         &b"",
@@ -166,6 +168,7 @@ public fun verify_value_proof(
 
 #[test]
 fun test_value_proof() {
+    // Test vector from fastcrypto
     let sk = ristretto255::scalar_from_bytes(
         &x"ee6b6b93ae724ae3aafee361c94ea83c3b0d29f86de5e94b6e648d79ab0fa705",
     );
