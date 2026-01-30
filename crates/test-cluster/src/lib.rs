@@ -1114,6 +1114,32 @@ impl TestClusterBuilder {
         self
     }
 
+    /// Set a callback to provide validator library paths during tests.
+    /// The callback receives validator information and returns an optional path
+    /// to a shared object file for that validator to load.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let cluster = TestClusterBuilder::new()
+    ///     .with_validator_library_callback(Arc::new(|info| {
+    ///         // Load library only for validator 0
+    ///         if info.index == 0 {
+    ///             Some(PathBuf::from("/path/to/validator.so"))
+    ///         } else {
+    ///             None
+    ///         }
+    ///     }))
+    ///     .build()
+    ///     .await;
+    /// ```
+    pub fn with_validator_library_callback(
+        self,
+        callback: sui_config::dynamic_rpc_validator_config::ValidatorLibraryCallback,
+    ) -> Self {
+        sui_config::dynamic_rpc_validator_config::set_test_validator_library_callback(callback);
+        self
+    }
+
     pub fn with_execution_time_observer_config(
         mut self,
         config: sui_config::node::ExecutionTimeObserverConfig,

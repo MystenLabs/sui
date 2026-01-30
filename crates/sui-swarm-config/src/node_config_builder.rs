@@ -49,6 +49,8 @@ pub struct ValidatorConfigBuilder {
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     chain_override: Option<Chain>,
     state_sync_config: Option<StateSyncConfig>,
+    dynamic_rpc_validator_config:
+        Option<sui_config::dynamic_rpc_validator_config::DynamicRpcValidatorConfig>,
 }
 
 impl ValidatorConfigBuilder {
@@ -146,6 +148,14 @@ impl ValidatorConfigBuilder {
         self
     }
 
+    pub fn with_dynamic_rpc_validator_config(
+        mut self,
+        config: sui_config::dynamic_rpc_validator_config::DynamicRpcValidatorConfig,
+    ) -> Self {
+        self.dynamic_rpc_validator_config = Some(config);
+        self
+    }
+
     pub fn build(
         self,
         validator: ValidatorGenesisConfig,
@@ -239,7 +249,7 @@ impl ValidatorConfigBuilder {
             name_service_reverse_registry_id: None,
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
-            dynamic_rpc_validator_config: Default::default(),
+            dynamic_rpc_validator_config: self.dynamic_rpc_validator_config.unwrap_or_default(),
             state_debug_dump_config: Default::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),

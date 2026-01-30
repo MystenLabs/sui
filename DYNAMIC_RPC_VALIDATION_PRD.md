@@ -58,3 +58,27 @@ The system addresses the need to quickly ship new validation checks for raw mess
 ## 4. Demo application.
 
 ### 4.1. Build an validation target that simply parses the requests, and returns true if parsing succeeds.
+
+## 5. Test Infrastructure
+
+### 5.1. TestClusterBuilder Hooks
+- 5.1.1. Add hooks to `TestClusterBuilder` to allow specifying validator shared objects during tests
+- 5.1.2. The hook should be a callback registered with the test cluster
+- 5.1.3. Callback is invoked with validator information (e.g., validator index, public key, network address)
+- 5.1.4. Callback returns either:
+  - A path to a shared object file for that validator to load, OR
+  - `None` to indicate no validation library should be loaded
+
+### 5.2. Test vs Production Configuration
+- 5.2.1. Use `in_test_configuration()` to determine whether running in test mode
+- 5.2.2. In production: check config file in local filesystem for shared object path
+- 5.2.3. In tests: invoke the registered callback to determine shared object path
+
+### 5.3. E2E Test Requirements
+- 5.3.1. Create a new test in `sui-e2e-tests` that exercises shared object loading and validation
+- 5.3.2. Build a test validator shared library that rejects transactions if sender address ends in zero
+- 5.3.3. Test case 1: Single validator loads the rejecting library
+  - Verify transactions can still succeed (other validators accept)
+- 5.3.4. Test case 2: All validators load the rejecting library
+  - Verify transactions from senders ending in zero are rejected
+  - Verify transactions from other senders still succeed
