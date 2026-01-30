@@ -137,23 +137,72 @@ public fun encrypted_amount_4_u16_zero(pk: &Element<Point>): EncryptedAmount4U16
     }
 }
 
+fun encrypted_amount_4_u16_to_encryption(ea: &EncryptedAmount4U16): Encryption {
+    ea
+        .l0
+        .add(
+            &ea.l1.shift_left(16).add(&ea.l2.shift_left(32)).add(&ea.l3.shift_left(48)),
+        )
+}
+
+/// Verify a NIZK proof that the encrypted amount equals the given value.
 public fun verify_value_proof(
     amount: u64,
     ea: &EncryptedAmount4U16,
     pk: &Element<Point>,
     proof: &sui::nizk::NIZK,
 ): bool {
-    let encryption = ea
-        .l0
-        .add(
-            &ea.l1.shift_left(16).add(&ea.l2.shift_left(32)).add(&ea.l3.shift_left(48)),
-        );
+    let encryption = encrypted_amount_4_u16_to_encryption(ea);
     proof.verify(
-        &b"sui-twisted-elgamal-amount-proof",
-        &ristretto255::point_mul(&ristretto255::scalar_from_u64(amount), &h()),
+        &b"",
+        &ristretto255::point_sub(
+            &encryption.ciphertext,
+            &ristretto255::point_mul(&ristretto255::scalar_from_u64(amount), &h()),
+        ),
         pk,
         &encryption.decryption_handle,
     )
+}
+
+#[test]
+fun test_value_proof() {
+    let sk = ristretto255::scalar_from_bytes(
+        &x"ee6b6b93ae724ae3aafee361c94ea83c3b0d29f86de5e94b6e648d79ab0fa705",
+    );
+    let pk = ristretto255::point_mul(&sk, &ristretto255::generator());
+
+    let amount = 1234u32;
+    let amount_as_scalar = ristretto255::scalar_from_u64(amount as u64);
+    let c = ristretto255::point_from_bytes(
+        &x"128ede6d07554b171b0964a351fce7b925a47356bac064de626a582c1b7df559",
+    );
+    let d = ristretto255::point_from_bytes(
+        &x"28f6b0c7d009fe315cd24e3b6331514704bbdd1a0fbf4d25828061f40b401174",
+    );
+    let r = ristretto255::scalar_from_bytes(
+        &x"4fbe89c8a246bdcc034cd9acc8f7736e7925add952d81ac45affbb4e1d1bff01",
+    );
+
+    let a = ristretto255::point_from_bytes(
+        &x"e89da20d4e3369ef83a70dc1ca145f1bc0868e4b641656f08327bc0ca4ebfa19",
+    );
+    let b = ristretto255::point_from_bytes(
+        &x"2ef862bb8e0a11e7912168dbce9513a756bc960f518a8fc1da7c8429a84ad067",
+    );
+    let z = ristretto255::scalar_from_bytes(
+        &x"dc62c53a7b7c297f1849ce43d34a617722d5222397df3dcb9fcbb878ae8a9204",
+    );
+
+    let proof = sui::nizk::new(a, b, z);
+
+    assert!(
+        proof.verify(
+            &x"",
+            &ristretto255::point_sub(&c, &ristretto255::point_mul(&amount_as_scalar, &h())),
+            &pk,
+            &d,
+        ),
+    );
 }
 
 // Encrypted u64 amount.

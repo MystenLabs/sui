@@ -10,6 +10,9 @@ use sui::ristretto255;
 fun test_ristretto255_arithmetic() {
     let x = ristretto255::scalar_from_u64(3);
     let y = ristretto255::point_mul(&x, &ristretto255::generator());
-    let z = ristretto255::point_add(&ristretto255::generator(), &ristretto255::point_add(&ristretto255::generator(), &ristretto255::generator()));
+    let z = ristretto255::point_add(
+        &ristretto255::generator(),
+        &ristretto255::point_add(&ristretto255::generator(), &ristretto255::generator()),
+    );
     assert!(y == z);
 }
