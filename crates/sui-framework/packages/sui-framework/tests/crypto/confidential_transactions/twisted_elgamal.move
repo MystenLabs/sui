@@ -189,6 +189,11 @@ public fun verify_sum_proof(
     let a_encryption = encrypted_amount_2_u32_unverified_to_encryption(a);
     let b_encryption = encrypted_amount_4_u32_to_encryption(b);
     let zero_encryption = sub(&add(&a_encryption, &b_encryption), &sum_encryption);
+
+    std::debug::print(&sum_encryption);
+    std::debug::print(&a_encryption);
+    std::debug::print(&b_encryption);
+
     proof.verify(
         &b"",
         &zero_encryption.ciphertext,
@@ -213,10 +218,6 @@ fun test_value_proof() {
     let d = ristretto255::point_from_bytes(
         &x"28f6b0c7d009fe315cd24e3b6331514704bbdd1a0fbf4d25828061f40b401174",
     );
-    let _r = ristretto255::scalar_from_bytes(
-        &x"4fbe89c8a246bdcc034cd9acc8f7736e7925add952d81ac45affbb4e1d1bff01",
-    );
-
     let a = ristretto255::point_from_bytes(
         &x"e89da20d4e3369ef83a70dc1ca145f1bc0868e4b641656f08327bc0ca4ebfa19",
     );

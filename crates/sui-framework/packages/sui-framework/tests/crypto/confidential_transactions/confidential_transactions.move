@@ -4,7 +4,7 @@ module sui::confidential_transactions;
 use sui::balance::Balance;
 use sui::coin::{Self, Coin};
 use sui::group_ops::Element;
-use sui::ristretto255::{Self, Point, Scalar};
+use sui::ristretto255::{Self, Point};
 use sui::twisted_elgamal::{
     g,
     add_assign,
@@ -119,7 +119,7 @@ public fun add_to_balance<T>(
     ct: &mut ConfidentialToken<T>,
     amount: BoundedEncryptedAmount<T>,
     new_balance: vector<Encryption>, // expected to be EncryptedAmount2U32Unverified
-    _proof: &vector<u8>,
+    proof: vector<u8>,
     ctx: &mut TxContext,
 ) {
     let new_balance = encrypted_amount_2_u32_unverified(new_balance);
@@ -127,12 +127,19 @@ public fun add_to_balance<T>(
 
     let BoundedEncryptedAmount {
         pk,
-        amount: _amount,
+        amount: deposit,
     } = amount;
 
     assert!(account.pk == &pk, EInvalidInput);
-
-    // TODO: compute the sum and check proof that the new balance is the same as the old one (though we don't use range proofs so it might be larger than 32bit)
+    assert!(
+        verify_sum_proof(
+            &new_balance,
+            &account.balance,
+            &encrypted_amount_4_u32_from_4_u16(deposit),
+            &account.pk,
+            proof,
+        ),
+    );
 
     account.balance = new_balance;
 }
@@ -141,16 +148,19 @@ public fun add_to_balance<T>(
 /// The taken amount is expected to be well-formed (i.e., each limb is an u16 encryption), and should be encrypted under taken_amount_pk.
 public fun take_from_balance<T>(
     ct: &mut ConfidentialToken<T>,
-    new_balance: vector<Encryption>, // expected to be EncryptedAmount2U32Unverified,
-    taken_amount: vector<Encryption>, // expected to be EncryptedAmount4U16,
+    new_balance: vector<Encryption>,
+    taken_amount: vector<Encryption>,
     taken_amount_pk: Element<Point>,
-    _proof: &vector<u8>, // Proof that (1) current_balance = new_balance + taken_balance (sigma protocol), (2) new_balance is u32 or full new_balance is u64 (not negative), (3) taken_balance is u16 (batch range proofs)
+    _proof: &vector<u8>,
     ctx: &mut TxContext,
 ): BoundedEncryptedAmount<T> {
     let new_balance = encrypted_amount_2_u32_unverified(new_balance);
     let taken_amount = encrypted_amount_4_u16(taken_amount);
 
-    // TODO: check proofs
+    // TODO: check proofs that
+    // (1) current_balance = new_balance + taken_balance (sigma protocol),
+    // (2) new_balance is u32 or full new_balance is u64 (not negative),
+    // (3) taken_balance is u16 (batch range proofs)
 
     ct.accounts[&ctx.sender()].balance = new_balance;
 
@@ -245,7 +255,7 @@ public struct CONFIDENTIAL_TRANSACTIONS has drop {}
 
 #[test]
 fun test_flow() {
-    use sui::coin::{Self};
+    use sui::coin;
 
     // Setup addresses
     let addr1 = @0xA;
@@ -288,10 +298,11 @@ fun test_flow() {
     assert!(confidential_token.pool.value() == 100);
 
     // Add the newly minted coins to the balance of account 1
+    let new_balance = vector[encrypt_trivial(100, &pk_1), encrypt_zero(&pk_1)];
     confidential_token.add_to_balance(
         wrapped,
-        vector[encrypt_trivial(100, &pk_1), encrypt_zero(&pk_1)],
-        &vector::empty(), // TODO
+        new_balance,
+        x"002b72d4814f160298c2df462b71ad3ecda58b3819663be75c70b44c2ef8f33cfeed1c05a4091ad1c24bf5683d0d60fbc7a2aa86258aee3c65d35da00ed18b7f165610ee8e101f561e89ce0225900a7f9ea89a2e57c2c419d0105a6e6d3afa0b",
         scenario.ctx(),
     );
 
