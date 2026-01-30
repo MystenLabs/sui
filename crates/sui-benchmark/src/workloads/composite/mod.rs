@@ -25,12 +25,12 @@ use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
 use operations::{InitRequirement, Operation, OperationResources, ResourceRequest};
-use sui_protocol_config::ProtocolConfig;
 use rand::Rng;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::TypeTag;
@@ -437,19 +437,30 @@ impl CompositePayload {
     }
 
     fn sample_operations(&self) -> Vec<Box<dyn Operation>> {
-        let mut ops = self.config.sample_operations();
-        let protocol_config = self.system_state_observer.state.borrow().protocol_config.clone();
-        if address_balance_disabled(protocol_config.as_ref()) {
-            ops.retain(|op| {
-                !op.resource_requests().iter().any(|r| {
-                    matches!(
-                        r,
-                        ResourceRequest::AddressBalance | ResourceRequest::ObjectBalance
-                    )
-                })
-            });
+        let protocol_config = self
+            .system_state_observer
+            .state
+            .borrow()
+            .protocol_config
+            .clone();
+        let filter_address_balance = address_balance_disabled(protocol_config.as_ref());
+
+        loop {
+            let mut ops = self.config.sample_operations();
+            if filter_address_balance {
+                ops.retain(|op| {
+                    !op.resource_requests().iter().any(|r| {
+                        matches!(
+                            r,
+                            ResourceRequest::AddressBalance | ResourceRequest::ObjectBalance
+                        )
+                    })
+                });
+            }
+            if !ops.is_empty() {
+                return ops;
+            }
         }
-        ops
     }
 
     fn generate_transaction(
@@ -510,7 +521,8 @@ impl Payload for CompositePayload {
         let system_state = self.system_state_observer.state.borrow().clone();
         let rgp = system_state.reference_gas_price;
         let current_epoch = system_state.epoch;
-        let address_balance_gas_disabled = address_balance_disabled(system_state.protocol_config.as_ref());
+        let address_balance_gas_disabled =
+            address_balance_disabled(system_state.protocol_config.as_ref());
 
         let (current_batch_gas, sender, keypair) = {
             let gas = self.gas.lock().unwrap();
