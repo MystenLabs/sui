@@ -30,16 +30,15 @@ fn test_load_reference_validator() {
 
     if !full_path.exists() {
         println!("Reference validator not found at: {:?}", full_path);
-        println!("Build it with: cargo build --example reference_validator --release -p sui-dynamic-rpc-validator");
+        println!(
+            "Build it with: cargo build --example reference_validator --release -p sui-dynamic-rpc-validator"
+        );
         return;
     }
 
     let metrics = Arc::new(DynamicValidatorMetrics::new(&prometheus::Registry::new()));
-    let validator = DynamicRpcValidator::new(
-        Some(full_path),
-        Duration::from_secs(60),
-        metrics.clone(),
-    );
+    let validator =
+        DynamicRpcValidator::new(Some(full_path), Duration::from_secs(60), metrics.clone());
 
     // Test validation with the reference implementation
     assert!(validator.validate(RpcMethod::SubmitTransaction, b"test message"));
@@ -47,5 +46,11 @@ fn test_load_reference_validator() {
 
     // Check metrics
     assert_eq!(metrics.load_success.get(), 1);
-    assert!(metrics.validation_success.with_label_values(&["submit_transaction"]).get() > 0);
+    assert!(
+        metrics
+            .validation_success
+            .with_label_values(&["submit_transaction"])
+            .get()
+            > 0
+    );
 }

@@ -14833,10 +14833,13 @@ dependencies = [
 name = "sui-dynamic-rpc-validator"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "libloading 0.8.6",
  "mysten-metrics",
  "parking_lot 0.12.3",
  "prometheus",
+ "prost 0.14.1",
+ "sui-types",
  "tempfile",
  "tracing",
 ]
