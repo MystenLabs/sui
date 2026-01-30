@@ -21,10 +21,19 @@ pub(super) async fn load_transactions(
 ) -> Result<(DigestsByCheckpoint, TransactionsByDigest), RpcError> {
     let kv_loader: &KvLoader = ctx.data()?;
 
-    let digests = kv_loader
-        .load_many_checkpoints_transactions(candidate_cps.to_vec())
+    let checkpoints = kv_loader
+        .load_many_checkpoints(candidate_cps.to_vec())
         .await
         .context("Failed to load checkpoint transactions")?;
+
+    let digests: DigestsByCheckpoint = checkpoints
+        .into_iter()
+        .map(|(key, (_, contents, _))| {
+            let tx_digests: Vec<TransactionDigest> =
+                contents.iter().map(|d| d.transaction).collect();
+            (key, tx_digests)
+        })
+        .collect();
 
     let tx_digests_to_load: Vec<_> = digests.values().flatten().copied().collect();
     let native_transactions = kv_loader

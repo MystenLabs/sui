@@ -356,5 +356,4 @@ mod tests {
             non_zero_blocks.len()
         );
     }
-
 }

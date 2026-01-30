@@ -549,7 +549,7 @@ impl Default for Limits {
             max_display_output_size: 1024 * 1024,
             max_disassembled_module_size: 1024 * 1024,
             max_rich_queries: 21,
-            // ~8.7 epochs worth of checkpoints (at 4 checkpoints/second, 24 hours/epoch)
+            // ~1 week worth of checkpoints
             max_scan_limit: 3_000_000,
         }
     }

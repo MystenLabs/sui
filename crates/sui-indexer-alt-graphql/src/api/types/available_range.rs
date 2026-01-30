@@ -140,6 +140,8 @@ impl AvailableRangeKey {
 pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
     match pipeline {
         "consistent" => feature_unavailable("consistent queries across objects and balances"),
+        "cp_blooms" => feature_unavailable("scanning queries on transactions and events"),
+        "cp_bloom_blocks" => feature_unavailable("scanning queries on transactions and events"),
         "cp_sequence_numbers" => feature_unavailable("querying checkpoints"),
         "ev_emit_mod" => feature_unavailable("querying events by emitting module"),
         "ev_struct_inst" => feature_unavailable("querying events by type"),
@@ -152,8 +154,6 @@ pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
         "tx_calls" => feature_unavailable("filtering transactions by function calls"),
         "tx_digests" => feature_unavailable("querying transactions"),
         "tx_kinds" => feature_unavailable("filtering transactions by kind"),
-        "cp_blooms" => feature_unavailable("scanning queries by transactions and events"),
-        "cp_bloom_blocks" => feature_unavailable("scanning queries by transactions and events"),
         _ => anyhow!("unrecognized pipeline name: {}", pipeline).into(),
     }
 }
