@@ -26,6 +26,12 @@ name = "parsing_validator"
 path = "examples/parsing_validator.rs"
 crate-type = ["cdylib"]
 
+[[example]]
+# Test validator that rejects transactions if sender ends in zero
+name = "reject_zero_sender"
+path = "examples/reject_zero_sender.rs"
+crate-type = ["cdylib"]
+
 [dependencies]
 libloading = "0.8"
 parking_lot.workspace = true

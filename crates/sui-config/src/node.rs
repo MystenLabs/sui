@@ -143,7 +143,8 @@ pub struct NodeConfig {
     pub certificate_deny_config: CertificateDenyConfig,
 
     #[serde(default)]
-    pub dynamic_rpc_validator_config: crate::dynamic_rpc_validator_config::DynamicRpcValidatorConfig,
+    pub dynamic_rpc_validator_config:
+        crate::dynamic_rpc_validator_config::DynamicRpcValidatorConfig,
 
     #[serde(default)]
     pub state_debug_dump_config: StateDebugDumpConfig,
