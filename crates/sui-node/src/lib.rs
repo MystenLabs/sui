@@ -1561,7 +1561,6 @@ impl SuiNode {
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
             config.policy_config.clone().map(|p| p.client_id_source),
-            dynamic_validator,
         );
 
         let mut server_conf = mysten_network::config::Config::new();
@@ -1571,7 +1570,8 @@ impl SuiNode {
         server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
         server_conf.load_shed = config.grpc_load_shed;
         let mut server_builder =
-            ServerBuilder::from_config(&server_conf, GrpcMetrics::new(prometheus_registry));
+            ServerBuilder::from_config(&server_conf, GrpcMetrics::new(prometheus_registry))
+                .with_dynamic_validator(dynamic_validator);
 
         server_builder = server_builder.add_service(ValidatorServer::new(validator_service));
 
