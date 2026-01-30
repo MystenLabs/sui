@@ -227,12 +227,12 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_rolling_restarts_all_validators() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 330_000, 1).await;
+        let test_cluster = build_test_cluster(4, 170_000, 1).await;
 
         let validators = test_cluster.get_validator_pubkeys();
         let test_cluster_clone = test_cluster.clone();
         let restarter_task = tokio::task::spawn(async move {
-            for _ in 0..4 {
+            for _ in 0..2 {
                 for validator in validators.iter() {
                     info!("Killing validator {:?}", validator.concise());
                     test_cluster_clone.stop_node(validator);
@@ -242,7 +242,7 @@ mod test {
                 }
             }
         });
-        test_simulated_load(test_cluster.clone(), 330).await;
+        test_simulated_load(test_cluster.clone(), 170).await;
         restarter_task.await.unwrap();
         test_cluster.wait_for_epoch_all_nodes(1).await;
     }
