@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write as IoWrite;
 use std::net::SocketAddr;
-use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
+use std::{fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use std::env;
 #[cfg(not(msim))]
@@ -12,6 +12,7 @@ use std::str::FromStr;
 
 use expect_test::expect;
 use fastcrypto::encoding::{Base64, Encoding};
+use futures::TryStreamExt;
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use sui::client_commands::{
@@ -66,7 +67,6 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
-use sui_types::error::SuiObjectResponseError;
 use sui_types::move_package::{MovePackage, UpgradeInfo};
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -2526,12 +2526,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj1 = if let SuiClientCommandResult::Object(resp) = resp {
-        if let Some(obj) = resp.data {
-            obj
-        } else {
-            panic!()
-        }
+    let mut_obj1 = if let SuiClientCommandResult::Object(object) = dbg!(resp) {
+        object
     } else {
         panic!();
     };
@@ -2542,24 +2538,20 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj2 = if let SuiClientCommandResult::Object(resp2) = resp2 {
-        if let Some(obj) = resp2.data {
-            obj
-        } else {
-            panic!()
-        }
+    let mut_obj2 = if let SuiClientCommandResult::Object(object) = resp2 {
+        object
     } else {
         panic!();
     };
 
-    let (gas, obj) = if mut_obj1.owner.clone().unwrap().get_owner_address().unwrap() == address {
+    let (gas, obj) = if mut_obj1.owner.clone().get_owner_address().unwrap() == address {
         (mut_obj1, mut_obj2)
     } else {
         (mut_obj2, mut_obj1)
     };
 
-    assert_eq!(gas.owner.unwrap().get_owner_address().unwrap(), address);
-    assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), recipient);
+    assert_eq!(gas.owner.get_owner_address().unwrap(), address);
+    assert_eq!(obj.owner.get_owner_address().unwrap(), recipient);
 
     let object_refs = client
         .read_api()
@@ -2608,20 +2600,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[test]
-// Test for issue https://github.com/MystenLabs/sui/issues/1078
-fn test_bug_1078() {
-    let read = SuiClientCommandResult::Object(SuiObjectResponse::new_with_error(
-        SuiObjectResponseError::NotExists {
-            object_id: ObjectID::random(),
-        },
-    ));
-    let mut writer = String::new();
-    // fmt ObjectRead should not fail.
-    write!(writer, "{}", read).unwrap();
-    write!(writer, "{:?}", read).unwrap();
-}
-
 #[sim_test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await;
@@ -2643,22 +2621,10 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     };
 
     // Check that we indeed fetched for addr1
-    let client = context.get_client().await?;
-    let mut actual_objs = client
-        .read_api()
-        .get_owned_objects(
-            addr1,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::full_content(),
-            )),
-            None,
-            None,
-        )
-        .await
-        .unwrap()
-        .data;
-    cmd_objs.sort();
-    actual_objs.sort();
+    let client = context.grpc_client()?;
+    let mut actual_objs: Vec<_> = client.list_owned_objects(addr1, None).try_collect().await?;
+    cmd_objs.sort_by_key(|o| o.id());
+    actual_objs.sort_by_key(|o| o.id());
     assert_eq!(cmd_objs, actual_objs);
 
     // Switch the address

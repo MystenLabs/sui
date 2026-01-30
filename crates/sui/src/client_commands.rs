@@ -8,6 +8,7 @@ use crate::{
     upgrade_compatibility::check_compatibility,
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
+use futures::TryStreamExt;
 use std::{
     collections::{BTreeMap, BTreeSet, btree_map::Entry},
     fmt::{Debug, Display, Formatter, Write},
@@ -45,9 +46,7 @@ use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Coin, DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiCoinMetadata,
-    SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiParsedData, SuiRawData, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI,
+    SuiExecutionStatus, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
@@ -58,6 +57,7 @@ use sui_sdk::{
     SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
     SuiClient,
     sui_client_config::{SuiClientConfig, SuiEnv},
+    sui_sdk_types::bcs::ToBcs,
     wallet_context::WalletContext,
 };
 use sui_types::{
@@ -73,7 +73,7 @@ use sui_types::{
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
     move_package::{MovePackage, UpgradeCap},
-    object::Owner,
+    object::{Object, Owner},
     parse_sui_type_tag,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     signature::GenericSignature,
@@ -1066,20 +1066,12 @@ impl SuiClientCommands {
 
             SuiClientCommands::Object { id, bcs } => {
                 // Fetch the object ref
-                let client = context.get_client().await?;
                 let _ = context.cache_chain_id().await?;
+                let object = context.grpc_client()?.get_object(id).await?;
                 if !bcs {
-                    let object_read = client
-                        .read_api()
-                        .get_object_with_options(id, SuiObjectDataOptions::full_content())
-                        .await?;
-                    SuiClientCommandResult::Object(object_read)
+                    SuiClientCommandResult::Object(object)
                 } else {
-                    let raw_object_read = client
-                        .read_api()
-                        .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
-                        .await?;
-                    SuiClientCommandResult::RawObject(raw_object_read)
+                    SuiClientCommandResult::RawObject(object)
                 }
             }
 
@@ -1347,30 +1339,12 @@ impl SuiClientCommands {
 
             SuiClientCommands::Objects { address } => {
                 let address = context.get_identity_address(address)?;
-                let client = context.get_client().await?;
+                let client = context.grpc_client()?;
                 let _ = context.cache_chain_id().await?;
-                let mut objects: Vec<SuiObjectResponse> = Vec::new();
-                let mut cursor = None;
-                loop {
-                    let response = client
-                        .read_api()
-                        .get_owned_objects(
-                            address,
-                            Some(SuiObjectResponseQuery::new_with_options(
-                                SuiObjectDataOptions::full_content(),
-                            )),
-                            cursor,
-                            None,
-                        )
-                        .await?;
-                    objects.extend(response.data);
-
-                    if response.has_next_page {
-                        cursor = response.next_cursor;
-                    } else {
-                        break;
-                    }
-                }
+                let objects = client
+                    .list_owned_objects(address, None)
+                    .try_collect()
+                    .await?;
                 SuiClientCommandResult::Objects(objects)
             }
 
@@ -2182,30 +2156,22 @@ impl Display for SuiClientCommandResult {
 
                 write!(f, "{}", table)?
             }
-            SuiClientCommandResult::Object(object_read) => match object_read.object() {
-                Ok(obj) => {
-                    let object = ObjectOutput::from(obj);
-                    let json_obj = json!(&object);
+            SuiClientCommandResult::Object(object) => {
+                let object = ObjectOutput::from(object);
+                let json_obj = json!(&object);
+                let mut table = json_to_table(&json_obj);
+                table.with(TableStyle::rounded().horizontals([]));
+                writeln!(f, "{}", table)?;
+            }
+            SuiClientCommandResult::Objects(objects) => {
+                if objects.is_empty() {
+                    writeln!(f, "This address has no owned objects.")?
+                } else {
+                    let objects = ObjectsOutput::from_vec(objects);
+                    let json_obj = json!(objects);
                     let mut table = json_to_table(&json_obj);
                     table.with(TableStyle::rounded().horizontals([]));
                     writeln!(f, "{}", table)?
-                }
-                Err(e) => writeln!(f, "Internal error, cannot read the object: {e}")?,
-            },
-            SuiClientCommandResult::Objects(object_refs) => {
-                if object_refs.is_empty() {
-                    writeln!(f, "This address has no owned objects.")?
-                } else {
-                    let objects = ObjectsOutput::from_vec(object_refs.to_vec());
-                    match objects {
-                        Ok(objs) => {
-                            let json_obj = json!(objs);
-                            let mut table = json_to_table(&json_obj);
-                            table.with(TableStyle::rounded().horizontals([]));
-                            writeln!(f, "{}", table)?
-                        }
-                        Err(e) => write!(f, "Internal error: {e}")?,
-                    }
                 }
             }
             SuiClientCommandResult::TransactionBlock(response) => {
@@ -2215,27 +2181,10 @@ impl Display for SuiClientCommandResult {
                     serde_json::to_string_pretty(&response).unwrap()
                 )?;
             }
-            SuiClientCommandResult::RawObject(raw_object_read) => {
-                let raw_object = match raw_object_read.object() {
-                    Ok(v) => match &v.bcs {
-                        Some(SuiRawData::MoveObject(o)) => {
-                            format!("{:?}\nNumber of bytes: {}", o.bcs_bytes, o.bcs_bytes.len())
-                        }
-                        Some(SuiRawData::Package(p)) => {
-                            let mut temp = String::new();
-                            let mut bcs_bytes = 0usize;
-                            for m in &p.module_map {
-                                temp.push_str(&format!("{:?}\n", m));
-                                bcs_bytes += m.1.len()
-                            }
-                            format!("{}Number of bytes: {}", temp, bcs_bytes)
-                        }
-                        None => "Bcs field is None".to_string().red().to_string(),
-                    },
-                    Err(err) => format!("{err}").red().to_string(),
-                };
-                writeln!(writer, "{}", raw_object)?;
-            }
+            SuiClientCommandResult::RawObject(o) => match o.to_bcs_base64() {
+                Ok(b64) => writeln!(writer, "{b64}")?,
+                Err(e) => writeln!(writer, "{e}")?,
+            },
             SuiClientCommandResult::ComputeTransactionDigest(tx_data) => {
                 writeln!(writer, "{}", tx_data.digest())?;
             }
@@ -2416,14 +2365,8 @@ impl Debug for SuiClientCommandResult {
                     .collect::<Vec<_>>();
                 Ok(serde_json::to_string_pretty(&gas_coins)?)
             }
-            SuiClientCommandResult::Object(object_read) => {
-                let object = object_read.object()?;
-                Ok(serde_json::to_string_pretty(&object)?)
-            }
-            SuiClientCommandResult::RawObject(raw_object_read) => {
-                let raw_object = raw_object_read.object()?;
-                Ok(serde_json::to_string_pretty(&raw_object)?)
-            }
+            SuiClientCommandResult::Object(object) => Ok(serde_json::to_string_pretty(&object)?),
+            SuiClientCommandResult::RawObject(object) => Ok(serde_json::to_string_pretty(&object)?),
             _ => Ok(serde_json::to_string_pretty(self)?),
         });
         write!(f, "{}", s)
@@ -2438,7 +2381,7 @@ fn unwrap_err_to_string<T: Display, F: FnOnce() -> Result<T, anyhow::Error>>(fun
 }
 
 impl SuiClientCommandResult {
-    pub fn objects_response(&self) -> Option<Vec<SuiObjectResponse>> {
+    pub fn objects_response(&self) -> Option<Vec<Object>> {
         use SuiClientCommandResult::*;
         match self {
             Object(o) | RawObject(o) => Some(vec![o.clone()]),
@@ -2534,31 +2477,29 @@ pub struct ObjectOutput {
     pub version: SequenceNumber,
     pub digest: String,
     pub obj_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner: Option<Owner>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prev_tx: Option<TransactionDigest>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub storage_rebate: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<SuiParsedData>,
+    pub owner: Owner,
+    pub prev_tx: TransactionDigest,
+    pub storage_rebate: u64,
+    pub content: sui_types::object::Data,
 }
 
-impl From<&SuiObjectData> for ObjectOutput {
-    fn from(obj: &SuiObjectData) -> Self {
-        let obj_type = match obj.type_.as_ref() {
-            Some(x) => x.to_string(),
-            None => "unknown".to_string(),
+impl From<&Object> for ObjectOutput {
+    fn from(obj: &Object) -> Self {
+        let obj_type = if let Some(struct_tag) = obj.struct_tag() {
+            struct_tag.to_canonical_string(true)
+        } else {
+            "package".to_string()
         };
+
         Self {
-            object_id: obj.object_id,
-            version: obj.version,
-            digest: obj.digest.to_string(),
+            object_id: obj.id(),
+            version: obj.version(),
+            digest: obj.digest().base58_encode(),
             obj_type,
-            owner: obj.owner.clone(),
+            owner: obj.owner().clone(),
             prev_tx: obj.previous_transaction,
             storage_rebate: obj.storage_rebate,
-            content: obj.content.clone(),
+            content: obj.data.clone(),
         }
     }
 }
@@ -2591,35 +2532,21 @@ pub struct ObjectsOutput {
 }
 
 impl ObjectsOutput {
-    fn from(obj: SuiObjectResponse) -> Result<Self, anyhow::Error> {
-        let obj = obj.into_object()?;
-        // this replicates the object type display as in the sui explorer
-        let object_type = match obj.type_ {
-            Some(sui_types::base_types::ObjectType::Struct(x)) => {
-                let address = x.address().to_string();
-                // check if the address has length of 64 characters
-                // otherwise, keep it as it is
-                let address = if address.len() == 64 {
-                    format!("0x{}..{}", &address[..4], &address[address.len() - 4..])
-                } else {
-                    address
-                };
-                format!("{}::{}::{}", address, x.module(), x.name(),)
-            }
-            Some(sui_types::base_types::ObjectType::Package) => "Package".to_string(),
-            None => "unknown".to_string(),
-        };
-        Ok(Self {
-            object_id: obj.object_id,
-            version: obj.version,
-            digest: Base64::encode(obj.digest),
-            object_type,
-        })
+    fn from(obj: &Object) -> Self {
+        Self {
+            object_id: obj.id(),
+            version: obj.version(),
+            digest: obj.digest().base58_encode(),
+            object_type: if let Some(struct_tag) = obj.struct_tag() {
+                struct_tag.to_canonical_string(true)
+            } else {
+                "package".to_string()
+            },
+        }
     }
-    fn from_vec(objs: Vec<SuiObjectResponse>) -> Result<Vec<Self>, anyhow::Error> {
-        objs.into_iter()
-            .map(ObjectsOutput::from)
-            .collect::<Result<Vec<_>, _>>()
+
+    fn from_vec(objs: &[Object]) -> Vec<Self> {
+        objs.iter().map(ObjectsOutput::from).collect()
     }
 }
 
@@ -2641,9 +2568,9 @@ pub enum SuiClientCommandResult {
     NewAddress(NewAddressOutput),
     NewEnv(SuiEnv),
     NoOutput,
-    Object(SuiObjectResponse),
-    Objects(Vec<SuiObjectResponse>),
-    RawObject(SuiObjectResponse),
+    Object(Object),
+    Objects(Vec<Object>),
+    RawObject(Object),
     RemoveAddress(RemoveAddressOutput),
     SerializedSignedTransaction(SenderSignedData),
     SerializedUnsignedTransaction(TransactionData),
