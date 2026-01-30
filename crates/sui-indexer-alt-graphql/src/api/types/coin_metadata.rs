@@ -178,18 +178,15 @@ impl CoinMetadata {
 
     /// Number of decimal places the coin uses.
     pub(crate) async fn decimals(&self, ctx: &Context<'_>) -> Option<Result<u8, RpcError>> {
-        async {
-            let Some(contents) = self.metadata_contents(ctx).await? else {
-                return Ok(None);
-            };
-
-            Ok(Some(match &contents.native {
-                NativeContents::Metadata(metadata) => metadata.decimals,
-                NativeContents::Registry(currency) => currency.decimals,
-            }))
-        }
-        .await
-        .transpose()
+        let contents = self
+            .metadata_contents(ctx)
+            .await
+            .map(Option::as_ref)
+            .transpose()?;
+        Some(contents.map(|c| match &c.native {
+            NativeContents::Metadata(metadata) => metadata.decimals,
+            NativeContents::Registry(currency) => currency.decimals,
+        }))
     }
 
     /// The domain explicitly configured as the default Name Service name for this address.
@@ -202,18 +199,15 @@ impl CoinMetadata {
 
     /// Description of the coin.
     pub(crate) async fn description(&self, ctx: &Context<'_>) -> Option<Result<&str, RpcError>> {
-        async {
-            let Some(contents) = self.metadata_contents(ctx).await? else {
-                return Ok(None);
-            };
-
-            Ok(Some(match &contents.native {
-                NativeContents::Metadata(metadata) => metadata.description.as_str(),
-                NativeContents::Registry(currency) => currency.description.as_str(),
-            }))
-        }
-        .await
-        .transpose()
+        let contents = self
+            .metadata_contents(ctx)
+            .await
+            .map(Option::as_ref)
+            .transpose()?;
+        Some(contents.map(|c| match &c.native {
+            NativeContents::Metadata(metadata) => metadata.description.as_str(),
+            NativeContents::Registry(currency) => currency.description.as_str(),
+        }))
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -267,18 +261,17 @@ impl CoinMetadata {
 
     /// URL for the coin logo.
     pub(crate) async fn icon_url(&self, ctx: &Context<'_>) -> Option<Result<&str, RpcError>> {
-        async {
-            let Some(contents) = self.metadata_contents(ctx).await? else {
-                return Ok(None);
-            };
-
-            Ok(match &contents.native {
+        let contents = self
+            .metadata_contents(ctx)
+            .await
+            .map(Option::as_ref)
+            .transpose()?;
+        contents
+            .map(|c| match &c.native {
                 NativeContents::Metadata(metadata) => metadata.icon_url.as_deref(),
-                NativeContents::Registry(currency) => Some(&currency.icon_url),
+                NativeContents::Registry(currency) => Some(currency.icon_url.as_str()),
             })
-        }
-        .await
-        .transpose()
+            .transpose()
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -324,18 +317,15 @@ impl CoinMetadata {
 
     /// Name for the coin.
     pub(crate) async fn name(&self, ctx: &Context<'_>) -> Option<Result<&str, RpcError>> {
-        async {
-            let Some(contents) = self.metadata_contents(ctx).await? else {
-                return Ok(None);
-            };
-
-            Ok(Some(match &contents.native {
-                NativeContents::Metadata(metadata) => metadata.name.as_str(),
-                NativeContents::Registry(currency) => currency.name.as_str(),
-            }))
-        }
-        .await
-        .transpose()
+        let contents = self
+            .metadata_contents(ctx)
+            .await
+            .map(Option::as_ref)
+            .transpose()?;
+        Some(contents.map(|c| match &c.native {
+            NativeContents::Metadata(metadata) => metadata.name.as_str(),
+            NativeContents::Registry(currency) => currency.name.as_str(),
+        }))
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -630,18 +620,15 @@ impl CoinMetadata {
 
     /// Symbol for the coin.
     pub(crate) async fn symbol(&self, ctx: &Context<'_>) -> Option<Result<&str, RpcError>> {
-        async {
-            let Some(contents) = self.metadata_contents(ctx).await? else {
-                return Ok(None);
-            };
-
-            Ok(Some(match &contents.native {
-                NativeContents::Metadata(metadata) => metadata.symbol.as_str(),
-                NativeContents::Registry(currency) => currency.symbol.as_str(),
-            }))
-        }
-        .await
-        .transpose()
+        let contents = self
+            .metadata_contents(ctx)
+            .await
+            .map(Option::as_ref)
+            .transpose()?;
+        Some(contents.map(|c| match &c.native {
+            NativeContents::Metadata(metadata) => metadata.symbol.as_str(),
+            NativeContents::Registry(currency) => currency.symbol.as_str(),
+        }))
     }
 }
 

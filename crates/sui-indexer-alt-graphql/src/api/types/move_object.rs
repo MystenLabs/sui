@@ -201,22 +201,16 @@ impl MoveObject {
 
     /// The structured representation of the object's contents.
     pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Option<Result<MoveValue, RpcError>> {
-        async {
-            let Some(native) = self.native(ctx).await?.as_ref() else {
-                return Ok(None);
-            };
-
+        let native = self.native(ctx).await.map(Option::as_ref).transpose()?;
+        Some(native.map(|n| {
             let scope = self
                 .super_
                 .super_
                 .scope
-                .with_root_version(native.version().value());
-
-            let type_ = MoveType::from_native(native.type_().clone().into(), scope);
-            Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
-        }
-        .await
-        .transpose()
+                .with_root_version(n.version().value());
+            let type_ = MoveType::from_native(n.type_().clone().into(), scope);
+            MoveValue::new(type_, n.contents().to_owned())
+        }))
     }
 
     /// The domain explicitly configured as the default Name Service name for this address.
