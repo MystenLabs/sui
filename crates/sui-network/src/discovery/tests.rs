@@ -904,8 +904,6 @@ async fn test_address_source_clear_all() -> Result<()> {
     let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
 
-    let state_1 = event_loop_1.state.clone();
-
     tokio::spawn(event_loop_1.start());
     tokio::spawn(event_loop_2.start());
 
