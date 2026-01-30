@@ -53,6 +53,10 @@ impl ScalarType for SuiAddress {
 }
 
 impl SuiAddress {
+    pub fn into_bytes(self) -> [u8; SUI_ADDRESS_LENGTH] {
+        self.0
+    }
+
     pub fn into_vec(self) -> Vec<u8> {
         self.0.to_vec()
     }

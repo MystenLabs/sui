@@ -49,7 +49,7 @@ async fn test_scan_limit_exceeded() {
     // Query that would scan all 20 checkpoints (exceeds limit of 10)
     let query = r#"
         query($addr: SuiAddress!) {
-            transactionsScan(filter: { affectedAddress: $addr }) {
+            scanTransactions(filter: { affectedAddress: $addr }) {
                 edges { node { digest } }
             }
         }

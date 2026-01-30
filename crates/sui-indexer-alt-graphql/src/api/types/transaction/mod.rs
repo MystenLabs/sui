@@ -327,7 +327,7 @@ impl Transaction {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
-            field: Some("transactions".to_string()),
+            field: Some("scanTransactions".to_string()),
             filters: Some(filter.active_filters()),
         };
         let reader_lo = available_range_key.reader_lo(watermarks).map_err(upcast)?;

@@ -9,6 +9,8 @@ use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionC
 use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::transaction::TransactionDataAPI as _;
 
+use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
+
 use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::uint53::UInt53;
@@ -74,25 +76,6 @@ impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
     }
 }
 
-/// Validator for transactionsScan - requires at least one filter for bloom filter scanning.
-pub(crate) struct TransactionScanFilterValidator;
-
-impl CustomValidator<TransactionFilter> for TransactionScanFilterValidator {
-    fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
-        let has_bloom_filter = filter.function.is_some()
-            || filter.affected_address.is_some()
-            || filter.affected_object.is_some()
-            || filter.sent_address.is_some();
-
-        if !has_bloom_filter {
-            return Err(InputValueError::custom(
-                "transactionsScan requires at least one of: function, affectedAddress, affectedObject, or sentAddress",
-            ));
-        }
-
-        Ok(())
-    }
-}
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
@@ -157,40 +140,34 @@ impl TransactionFilter {
     }
 
     /// Values to probe in bloom filters.
-    pub(crate) fn bloom_probe_values(&self) -> Vec<Vec<u8>> {
-        let mut values = Vec::new();
-        if let Some(function) = &self.function {
-            let pkg = function.package().into_vec();
-            values.push(pkg);
-        }
-        if let Some(affected_address) = &self.affected_address {
-            let addr = affected_address.into_vec();
-            values.push(addr);
-        }
-        if let Some(affected_object) = &self.affected_object {
-            let obj = affected_object.into_vec();
-            values.push(obj);
-        }
-        if let Some(sent_address) = &self.sent_address {
-            let sent = sent_address.into_vec();
-            values.push(sent);
-        }
-        values
+    pub(crate) fn bloom_probe_values(&self) -> Vec<[u8; 32]> {
+        [
+            self.function.as_ref().map(|f| f.package().into_bytes()),
+            self.affected_address.map(|a| a.into_bytes()),
+            self.affected_object.map(|o| o.into_bytes()),
+            self.sent_address.map(|s| s.into_bytes()),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|v| !should_skip_for_bloom(v))
+        .collect()
     }
 }
 
 impl TransactionFilter {
     pub(crate) fn matches(&self, transaction: &NativeTransactionContents) -> bool {
-        let data = transaction.data().ok();
-        let effects = transaction.effects().ok();
+        let Ok(data) = transaction.data() else {
+            return false;
+        };
+        let Ok(effects) = transaction.effects() else {
+            return false;
+        };
 
         if let Some(function) = &self.function {
-            let has_match = data.as_ref().is_some_and(|d| {
-                d.move_calls().into_iter().any(|(_, p, m, f)| {
-                    SuiAddress::from(*p) == function.package()
-                        && function.module().is_none_or(|module| m == module)
-                        && function.name().is_none_or(|name| f == name)
-                })
+            let has_match = data.move_calls().into_iter().any(|(_, p, m, f)| {
+                SuiAddress::from(*p) == function.package()
+                    && function.module().is_none_or(|module| m == module)
+                    && function.name().is_none_or(|name| f == name)
             });
             if !has_match {
                 return false;
@@ -198,51 +175,42 @@ impl TransactionFilter {
         }
 
         if let Some(sent_address) = &self.sent_address
-            && data
-                .as_ref()
-                .is_none_or(|d| SuiAddress::from(d.sender()) != *sent_address)
+            && SuiAddress::from(data.sender()) != *sent_address
         {
             return false;
         }
 
         if let Some(affected_address) = &self.affected_address {
-            let in_changed_objects = effects.as_ref().is_some_and(|e| {
-                e.all_changed_objects().iter().any(|(_, owner, _)| {
-                    owner
-                        .get_address_owner_address()
-                        .is_ok_and(|addr| SuiAddress::from(addr) == *affected_address)
-                })
+            let in_changed_objects = effects.all_changed_objects().iter().any(|(_, owner, _)| {
+                owner
+                    .get_address_owner_address()
+                    .is_ok_and(|addr| SuiAddress::from(addr) == *affected_address)
             });
-            let is_sender = data
-                .as_ref()
-                .is_some_and(|d| SuiAddress::from(d.sender()) == *affected_address);
+            let is_sender = SuiAddress::from(data.sender()) == *affected_address;
             if !in_changed_objects && !is_sender {
                 return false;
             }
         }
 
         if let Some(affected_object) = &self.affected_object {
-            let has_match = effects.as_ref().is_some_and(|e| {
-                e.object_changes()
-                    .iter()
-                    .any(|obj_change| SuiAddress::from(obj_change.id) == *affected_object)
-            });
+            let has_match = effects
+                .object_changes()
+                .iter()
+                .any(|obj_change| SuiAddress::from(obj_change.id) == *affected_object);
             if !has_match {
                 return false;
             }
         }
 
         if let Some(kind) = &self.kind {
-            let matches_kind = data.as_ref().is_some_and(|d| {
-                let is_programmable = matches!(
-                    d.kind(),
-                    sui_types::transaction::TransactionKind::ProgrammableTransaction(_)
-                );
-                match kind {
-                    TransactionKindInput::ProgrammableTx => is_programmable,
-                    TransactionKindInput::SystemTx => !is_programmable,
-                }
-            });
+            let is_programmable = matches!(
+                data.kind(),
+                sui_types::transaction::TransactionKind::ProgrammableTransaction(_)
+            );
+            let matches_kind = match kind {
+                TransactionKindInput::ProgrammableTx => is_programmable,
+                TransactionKindInput::SystemTx => !is_programmable,
+            };
             if !matches_kind {
                 return false;
             }
@@ -263,5 +231,50 @@ impl CheckpointBounds for TransactionFilter {
 
     fn before_checkpoint(&self) -> Option<UInt53> {
         self.before_checkpoint
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn test_bloom_probe_values_skips_zero_address() {
+        let zero = SuiAddress::from_str("0x0").unwrap();
+        let filter = TransactionFilter {
+            sent_address: Some(zero),
+            ..Default::default()
+        };
+        assert!(filter.bloom_probe_values().is_empty());
+    }
+
+    #[test]
+    fn test_bloom_probe_values_skips_clock_address() {
+        let clock = SuiAddress::from_str("0x6").unwrap();
+        let filter = TransactionFilter {
+            affected_object: Some(clock),
+            ..Default::default()
+        };
+        assert!(filter.bloom_probe_values().is_empty());
+    }
+
+    #[test]
+    fn test_bloom_probe_values_keeps_normal_address() {
+        let addr = SuiAddress::from_str("0x42").unwrap();
+        let filter = TransactionFilter {
+            sent_address: Some(addr),
+            ..Default::default()
+        };
+        let values = filter.bloom_probe_values();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0], addr.into_bytes());
+    }
+
+    #[test]
+    fn test_bloom_probe_values_empty_filter() {
+        let filter = TransactionFilter::default();
+        assert!(filter.bloom_probe_values().is_empty());
     }
 }
