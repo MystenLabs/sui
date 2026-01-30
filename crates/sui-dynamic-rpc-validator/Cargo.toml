@@ -20,6 +20,12 @@ name = "reference_validator"
 path = "examples/reference_impl.rs"
 crate-type = ["cdylib"]
 
+[[example]]
+# Parsing validator that validates messages by attempting to parse them
+name = "parsing_validator"
+path = "examples/parsing_validator.rs"
+crate-type = ["cdylib"]
+
 [dependencies]
 libloading = "0.8"
 parking_lot.workspace = true
@@ -27,7 +33,16 @@ prometheus.workspace = true
 tracing.workspace = true
 mysten-metrics.workspace = true
 
+# Dependencies for parsing validator example
+bcs.workspace = true
+prost.workspace = true
+sui-types = { workspace = true, optional = true }
+
 [dev-dependencies]
 tempfile.workspace = true
+
+[features]
+# Enable parsing validator functionality (requires sui-types)
+parsing = ["sui-types"]
 
 [build-dependencies]

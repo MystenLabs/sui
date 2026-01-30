@@ -16,22 +16,41 @@ The library provides:
 - `DynamicRpcValidator` - Loader and manager for validation libraries
 - `DynamicValidatorMetrics` - Prometheus metrics for monitoring
 
-### Reference Implementation
+### Example Implementations
 
-A reference validator implementation is included as an example that can be compiled to a shared object.
+Two example validators are provided:
 
-## Building the Reference Implementation
+1. **Reference Validator** (`reference_validator`) - A simple validator that accepts all non-empty messages. Use this as a starting point for custom validators.
 
-To build the reference validator as a shared object:
+2. **Parsing Validator** (`parsing_validator`) - A validator that accepts messages only if they can be successfully parsed. This demonstrates how to implement validation logic that checks message structure:
+   - Uses **Protobuf (prost)** decoding for `SubmitTransaction`, `WaitForEffects`, and `ValidatorHealth` requests
+   - Uses **BCS** decoding for `ObjectInfo`, `TransactionInfo`, `Checkpoint`, and `SystemState` requests
+   - For `SubmitTransaction`, also validates that inner transaction bytes can be BCS-decoded
+
+## Building the Examples
+
+### Reference Validator
+
+A simple validator that accepts all non-empty messages:
 
 ```bash
 cargo build --example reference_validator --release -p sui-dynamic-rpc-validator
 ```
 
-The resulting shared object will be located at:
-- Linux: `target/release/examples/libreference_validator.so`
-- macOS: `target/release/examples/libreference_validator.dylib`
-- Windows: `target/release/examples/reference_validator.dll`
+### Parsing Validator
+
+A validator that accepts messages only if they can be successfully parsed according to their expected format (protobuf or BCS):
+
+```bash
+cargo build --example parsing_validator --release -p sui-dynamic-rpc-validator --features parsing
+```
+
+The resulting shared objects will be located at:
+- Linux: `target/release/examples/lib<name>.so`
+- macOS: `target/release/examples/lib<name>.dylib`
+- Windows: `target/release/examples/<name>.dll`
+
+Where `<name>` is either `reference_validator` or `parsing_validator`.
 
 ## Creating Custom Validators
 
