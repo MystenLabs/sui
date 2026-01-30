@@ -81,6 +81,27 @@ Unlike traditional margin calls that give you time to add collateral, DeFi liqui
 - You cannot cancel or prevent it once it's triggered
 - While partial liquidation preserves some of your position, the equity loss from fees is permanent
 
+### Leverage multiplies losses (and gains)
+
+Cryptocurrency prices are highly volatile. Leverage amplifies this volatility on your equity, whether you're long or short.
+
+| Leverage | 10% Adverse Move | 20% Adverse Move | 30% Adverse Move |
+|----------|------------------|------------------|------------------|
+| 1x (no leverage) | -10% equity | -20% equity | -30% equity |
+| 2x | -20% equity | -40% equity | -60% equity |
+| 3x | -30% equity | -60% equity | -90% equity |
+| 5x | -50% equity | Liquidated | Liquidated |
+
+An "adverse move" means:
+- **Long positions**: Price moves down (you borrowed USDC to buy SUI, and SUI drops)
+- **Short positions**: Price moves up (you borrowed SUI to sell for USDC, and SUI rises)
+
+With 5x leverage:
+- A 10% adverse price movement = 50% loss on your equity
+- A 15-20% adverse price movement = liquidation territory
+
+Crypto markets can move 10-20% in hours. Flash crashes, short squeezes, exchange outages, or major news events can trigger rapid price movements that liquidate leveraged positions before you can react.
+
 ## Interest rate risk
 
 When you borrow funds, you pay interest that accrues continuously. This interest is **variable** and can change significantly based on pool utilization.
@@ -125,31 +146,6 @@ Interest accrues to your debt, which means:
 - After 30 days, approximately 3% is added to your debt
 - Risk ratio drops from 1.25 to ~1.21
 - You're now closer to liquidation without any price movement
-
-## Price volatility risk
-
-Cryptocurrency prices are highly volatile. Leverage amplifies this volatility on your equity, whether you're long or short.
-
-### Leverage multiplies losses (and gains)
-
-| Leverage | 10% Adverse Move | 20% Adverse Move | 30% Adverse Move |
-|----------|------------------|------------------|------------------|
-| 1x (no leverage) | -10% equity | -20% equity | -30% equity |
-| 2x | -20% equity | -40% equity | -60% equity |
-| 3x | -30% equity | -60% equity | -90% equity |
-| 5x | -50% equity | Liquidated | Liquidated |
-
-An "adverse move" means:
-- **Long positions**: Price moves down (you borrowed USDC to buy SUI, and SUI drops)
-- **Short positions**: Price moves up (you borrowed SUI to sell for USDC, and SUI rises)
-
-With 5x leverage:
-- A 10% adverse price movement = 50% loss on your equity
-- A 15-20% adverse price movement = liquidation territory
-
-### Volatility can happen fast
-
-Crypto markets can move 10-20% in hours. Flash crashes, short squeezes, exchange outages, or major news events can trigger rapid price movements that liquidate leveraged positions before you can react.
 
 ## Oracle risk
 
@@ -208,9 +204,8 @@ If you're new to margin trading:
 
 | Risk | What Can Happen | How to Mitigate |
 |------|-----------------|-----------------|
-| Liquidation | Position forcibly closed, lose collateral + fees | Use less leverage, set stop losses, monitor positions |
+| Liquidation | Price volatility causes position to be forcibly closed, lose collateral + fees | Use less leverage, set stop losses, monitor positions |
 | Interest rates | Borrowing costs spike unexpectedly | Check utilization, factor in rate variability |
-| Price volatility | Rapid losses amplified by leverage | Lower leverage, stop losses, position sizing |
 | Oracle risk | Prices may not reflect true market | Understand oracle mechanics, avoid extreme leverage |
 
 ## Related links
