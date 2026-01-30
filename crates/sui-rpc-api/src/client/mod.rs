@@ -364,6 +364,54 @@ impl Client {
 
         Ok(())
     }
+
+    pub async fn get_protocol_config(&self, epoch: Option<u64>) -> Result<proto::ProtocolConfig> {
+        let mut request = proto::GetEpochRequest::default();
+        if let Some(epoch) = epoch {
+            request.set_epoch(epoch);
+        }
+        request.set_read_mask(FieldMask::from_paths([
+            proto::Epoch::path_builder().epoch(),
+            proto::Epoch::path_builder().protocol_config().finish(),
+        ]));
+        let mut response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        Ok(response
+            .epoch_mut()
+            .protocol_config
+            .take()
+            .unwrap_or_default())
+    }
+
+    pub async fn get_system_state(&self, epoch: Option<u64>) -> Result<Box<proto::SystemState>> {
+        let mut request = proto::GetEpochRequest::default();
+        if let Some(epoch) = epoch {
+            request.set_epoch(epoch);
+        }
+        request.set_read_mask(FieldMask::from_paths([
+            proto::Epoch::path_builder().epoch(),
+            proto::Epoch::path_builder().system_state().finish(),
+        ]));
+        let mut response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        Ok(response.epoch_mut().system_state.take().unwrap_or_default())
+    }
+
+    pub fn transaction_builder(&self) -> sui_transaction_builder::TransactionBuilder {
+        sui_transaction_builder::TransactionBuilder::new(std::sync::Arc::new(self.clone()) as _)
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -372,8 +420,7 @@ pub struct ExecutedTransaction {
     pub effects: TransactionEffects,
     pub clever_error: Option<proto::CleverError>,
     pub events: Option<TransactionEvents>,
-    #[allow(unused)]
-    changed_objects: Vec<proto::ChangedObject>,
+    pub changed_objects: Vec<proto::ChangedObject>,
     #[allow(unused)]
     unchanged_loaded_runtime_objects: Vec<proto::ObjectReference>,
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
@@ -564,4 +611,30 @@ fn status_from_error_with_metadata<T: Into<BoxError>>(err: T, metadata: Metadata
     let mut status = Status::from_error(err.into());
     *status.metadata_mut() = metadata;
     status
+}
+
+#[async_trait::async_trait]
+impl sui_transaction_builder::DataReader for Client {
+    async fn get_owned_objects(
+        &self,
+        address: SuiAddress,
+        object_type: move_core_types::language_storage::StructTag,
+    ) -> Result<Vec<sui_types::base_types::ObjectInfo>, anyhow::Error> {
+        self.list_owned_objects(address, Some(object_type))
+            .map_ok(|o| sui_types::base_types::ObjectInfo::from_object(&o))
+            .try_collect()
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
+        let mut client = self.clone();
+        Self::get_object(&mut client, object_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
+        self.get_reference_gas_price().await.map_err(Into::into)
+    }
 }

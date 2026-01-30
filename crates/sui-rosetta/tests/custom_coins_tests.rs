@@ -324,7 +324,6 @@ async fn test_custom_coin_without_symbol() {
     const COIN1_BALANCE: u64 = 100_000_000_000_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
-    let _client = test_cluster.wallet.get_client().await.unwrap();
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 

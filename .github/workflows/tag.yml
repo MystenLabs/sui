@@ -38,17 +38,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-      with:
-        fetch-depth: 1
-        ref: ${{ env.SUI_COMMIT }}
-
-    - name: Tag
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git tag -f "${{ env.TAG_NAME }}" "${{ env.SUI_COMMIT }}"
-        git push origin -f "${{ env.TAG_NAME }}"
+    - name: Create or update tag via GitHub API
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Check if tag already exists
+        if gh api repos/${{ github.repository }}/git/refs/tags/${{ env.TAG_NAME }} --silent 2>/dev/null; then
+          echo "Tag exists, updating..."
+          gh api -X PATCH repos/${{ github.repository }}/git/refs/tags/${{ env.TAG_NAME }} \
+            -f sha="${{ env.SUI_COMMIT }}" \
+            -F force=true
+        else
+          echo "Creating new tag..."
+          gh api repos/${{ github.repository }}/git/refs \
+            -f ref="refs/tags/${{ env.TAG_NAME }}" \
+            -f sha="${{ env.SUI_COMMIT }}"
+        fi
+
+        echo "Tag ${{ env.TAG_NAME }} now points to ${{ env.SUI_COMMIT }}"

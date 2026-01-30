@@ -18,7 +18,7 @@ jobs:
 
     steps:
     - name: Checkout sui repo main branch
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       with:
         fetch-depth: 0
         ref: main
@@ -57,12 +57,12 @@ jobs:
 
     steps:
     - name: Checkout sui repo main branch
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       with:
         ref: main
 
     - name: Setup Python
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # pin@v5.6.0
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin@v6.2.0
       with:
         python-version: 3.10.10
 
@@ -88,7 +88,7 @@ jobs:
         } >> "$GITHUB_OUTPUT"
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
+      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -110,16 +110,17 @@ jobs:
         echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
 
     - name: Post to a Slack channel
-      uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
       with:
-        channel-id: '#ext-mysten-release-notes'
-        slack-message: |
-          <@U03LRLPR1QX> and <@U097GDYSX24>, please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
-          *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>
-          *Release Notes:*
-          ${{ steps.read-notes.outputs.release_notes }}
+        method: chat.postMessage
+        token: ${{ secrets.SLACK_BOT_TOKEN }}
+        payload: |
+          channel: "#ext-mysten-release-notes"
+          text: |
+            <@U03LRLPR1QX> and <@U097GDYSX24>, please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
+            *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>
+            *Release Notes:*
+            ${{ steps.read-notes.outputs.release_notes }}
 
   tag:
     name: Adding git tag to processed commit

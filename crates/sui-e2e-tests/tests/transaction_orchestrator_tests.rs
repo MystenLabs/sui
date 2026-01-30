@@ -386,15 +386,15 @@ async fn execute_transaction_v3_staking_transaction() -> Result<(), anyhow::Erro
     let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let validator_address = context
-        .get_client()
+        .grpc_client()?
+        .get_system_state(None)
         .await?
-        .governance_api()
-        .get_latest_sui_system_state()
-        .await?
-        .active_validators
+        .validators()
+        .active_validators()
         .first()
         .unwrap()
-        .sui_address;
+        .address()
+        .parse()?;
     let transaction = make_staking_transaction(context, validator_address).await;
 
     let request = ExecuteTransactionRequestV3 {
