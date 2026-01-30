@@ -4,7 +4,7 @@
 use crate::ValidatorProxy;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::EpochId,
     sui_system_state::{SuiSystemState, SuiSystemStateTrait},
@@ -37,6 +37,7 @@ impl SystemStateObserver {
             protocol_config: None,
             epoch: 0,
         });
+        let chain = proxy.get_chain_identifier().chain();
         tokio::task::spawn(async move {
             loop {
                 interval.tick().await;
@@ -44,7 +45,7 @@ impl SystemStateObserver {
                     Ok(result) => {
                         let p = ProtocolConfig::get_for_version(
                             ProtocolVersion::new(result.protocol_version),
-                            Chain::Unknown,
+                            chain,
                         );
                         if tx
                             .send(SystemState {
@@ -70,16 +71,17 @@ impl SystemStateObserver {
     }
 
     pub fn new_from_test_cluster(test_cluster: &TestCluster) -> Self {
-        fn convert_system_state(system_state: SuiSystemState) -> SystemState {
+        let chain = test_cluster.get_chain_identifier().chain();
+        let convert_system_state = move |system_state: SuiSystemState| -> SystemState {
             SystemState {
                 reference_gas_price: system_state.reference_gas_price(),
                 protocol_config: Some(ProtocolConfig::get_for_version(
                     ProtocolVersion::new(system_state.protocol_version()),
-                    Chain::Unknown,
+                    chain,
                 )),
                 epoch: system_state.epoch(),
             }
-        }
+        };
 
         let initial_system_state = convert_system_state(test_cluster.get_sui_system_state());
         let (tx, rx) = watch::channel(initial_system_state.clone());

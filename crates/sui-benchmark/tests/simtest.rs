@@ -1574,6 +1574,8 @@ mod test {
         .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
         .with_probability(AddressBalanceOverdraw::FLAG, 0.2);
 
+        let chain = test_cluster.get_chain_identifier().chain();
+
         test_simulated_load_with_test_config(
             test_cluster,
             60,
@@ -1596,7 +1598,16 @@ mod test {
         assert!(metrics_sum.success_count > 200);
         assert!(metrics_sum.permanent_failure_count > 100);
         assert!(metrics_sum.cancellation_count > 100);
-        assert!(metrics_sum.insufficient_funds_count > 2);
+        // insufficient_funds_count requires AddressBalanceOverdraw operations, which are
+        // only available when address balance is enabled. When running with a chain override
+        // to mainnet or testnet (via SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE), address balance is
+        // disabled by default and these operations will be filtered out by the workload.
+        // Note: We check the chain rather than ProtocolConfig because apply_overrides_for_testing
+        // would make the config show address_balance enabled, but the simulated nodes don't see
+        // this override.
+        if !matches!(chain, sui_protocol_config::Chain::Mainnet | sui_protocol_config::Chain::Testnet) {
+            assert!(metrics_sum.insufficient_funds_count > 2);
+        }
     }
 
     #[sim_test(config = "test_config()")]
