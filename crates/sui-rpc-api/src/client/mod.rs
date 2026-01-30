@@ -141,6 +141,38 @@ impl Client {
         object_try_from_proto(&object).map_err(|e| status_from_error_with_metadata(e, metadata))
     }
 
+    pub async fn batch_get_objects(&self, ids: &[ObjectID]) -> Result<Vec<Object>> {
+        let request = proto::BatchGetObjectsRequest::default()
+            .with_requests(
+                ids.iter()
+                    .map(|id| proto::GetObjectRequest::new(&(*id).into()))
+                    .collect(),
+            )
+            .with_read_mask(FieldMask::from_paths(["bcs"]));
+
+        let (metadata, response, _extentions) = self
+            .0
+            .clone()
+            .ledger_client()
+            .batch_get_objects(request)
+            .await?
+            .into_parts();
+
+        let objects = response
+            .objects
+            .into_iter()
+            .map(|o| o.to_result())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| Status::not_found(e.message))?;
+
+        let objects = objects
+            .iter()
+            .map(object_try_from_proto)
+            .collect::<Result<_, _>>()
+            .map_err(|e| status_from_error_with_metadata(e, metadata))?;
+        Ok(objects)
+    }
+
     pub async fn execute_transaction(
         &mut self,
         transaction: &Transaction,
