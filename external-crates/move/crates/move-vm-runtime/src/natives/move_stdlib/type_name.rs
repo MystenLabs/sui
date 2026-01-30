@@ -6,6 +6,7 @@ use crate::{
     jit::execution::ast::Type,
     native_charge_gas_early_exit,
     natives::functions::{NativeContext, NativeFunction, NativeResult},
+    shared::SafeIndex,
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
@@ -54,9 +55,9 @@ fn native_get(
     native_charge_gas_early_exit!(context, gas_params.base);
 
     let type_tag = if use_original_id {
-        context.type_to_runtime_type_tag(&ty_args[0])
+        context.type_to_runtime_type_tag(ty_args.safe_get(0)?)
     } else {
-        context.type_to_type_tag(&ty_args[0])
+        context.type_to_type_tag(ty_args.safe_get(0)?)
     }?;
 
     let type_name = type_tag.to_canonical_string(/* with_prefix */ false);
@@ -93,9 +94,9 @@ fn native_id(
     native_charge_gas_early_exit!(context, gas_params.base);
 
     let type_tag = if use_original_id {
-        context.type_to_runtime_type_tag(&ty_args[0])
+        context.type_to_runtime_type_tag(ty_args.safe_get(0)?)
     } else {
-        context.type_to_type_tag(&ty_args[0])
+        context.type_to_type_tag(ty_args.safe_get(0)?)
     }?;
     Ok(match type_tag {
         TypeTag::Bool

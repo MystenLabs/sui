@@ -24,6 +24,7 @@ use crate::{
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     partial_vm_error,
     shared::{
+        SafeIndex as _,
         gas::{GasMeter, SimpleInstruction},
         vm_pointer::VMPointer,
     },
@@ -146,7 +147,7 @@ fn step(
             instructions.len()
         )));
     }
-    let instruction = &instructions[pc];
+    let instruction = &partial_error_to_error(state, run_context, instructions.safe_get(pc))?;
     fail_point!("move_vm::interpreter_loop", |_| {
         Err(state.set_location(partial_vm_error!(
             VERIFIER_INVARIANT_VIOLATION,
@@ -408,7 +409,7 @@ fn op_step_impl(
             let reference = state.pop_operand_as::<VariantRef>()?;
             gas_meter.charge_variant_switch(&reference)?;
             let tag = reference.get_tag()?;
-            state.call_stack.current_frame.pc = jump_table_ptr[tag as usize];
+            state.call_stack.current_frame.pc = *jump_table_ptr.safe_get(tag as usize)?;
         }
         // -- OTHER OPCODES ----------------------
         Bytecode::Pop => {

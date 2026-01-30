@@ -14,6 +14,7 @@ use crate::{
     jit::execution::ast::{Function, InternedDisplay, Type},
     partial_vm_error,
     shared::{
+        SafeIndex as _,
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         views::TypeView,
         vm_pointer::VMPointer,
@@ -221,7 +222,7 @@ impl MachineState {
                 debug_writeln!(buf)?;
             }
             debug_write!(buf, "          > [{}] ", pc,)?;
-            let _ = &code[pc]
+            code.safe_get(pc)?
                 .fmt(&mut *buf, &vtables.interner)
                 .map_err(fmt_err)?;
             debug_writeln!(buf)?;
@@ -356,7 +357,7 @@ impl ValueStack {
                 "Failed to get last n arguments on the argument stack"
             ));
         }
-        Ok(self.value[(self.value.len() - n)..].iter())
+        Ok(self.value.safe_get((self.value.len() - n)..)?.iter())
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -496,7 +497,12 @@ impl std::fmt::Display for MachineState {
         if pc < code.len() {
             let interner = &self.interner;
 
-            for (i, bytecode) in code[..pc].iter().enumerate() {
+            for (i, bytecode) in code
+                .safe_get(..pc)
+                .map_err(|_| std::fmt::Error)?
+                .iter()
+                .enumerate()
+            {
                 // prefix "i> " then the formatted instruction
                 write!(f, "{}> ", i)?;
                 bytecode.fmt(f, interner)?;
@@ -504,7 +510,9 @@ impl std::fmt::Display for MachineState {
             }
 
             write!(f, "{}* ", pc)?;
-            let _ = &code[pc].fmt(f, interner)?;
+            code.safe_get(pc)
+                .map_err(|_| std::fmt::Error)?
+                .fmt(f, interner)?;
             writeln!(f)?;
         }
 

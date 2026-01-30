@@ -194,7 +194,17 @@ impl StackFrame {
                 ndx
             ));
         }
-        let _ = self.slice[ndx].replace(x);
+        let _ = self
+            .slice
+            .get_mut(ndx)
+            .ok_or_else(|| {
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Local index out of bounds: {}",
+                    ndx
+                )
+            })?
+            .replace(x);
         Ok(())
     }
 

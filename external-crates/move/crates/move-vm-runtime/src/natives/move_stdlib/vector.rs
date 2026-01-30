@@ -11,7 +11,10 @@ use crate::{
         make_module_natives,
     },
     partial_vm_error, pop_arg,
-    shared::views::{SizeConfig, ValueView},
+    shared::{
+        SafeIndex,
+        views::{SizeConfig, ValueView},
+    },
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -86,7 +89,7 @@ pub fn native_length(
     native_charge_gas_early_exit!(context, gas_params.base);
 
     let r = pop_arg!(args, VectorRef);
-    NativeResult::map_partial_vm_result_one(context.gas_used(), r.len(&ty_args[0]))
+    NativeResult::map_partial_vm_result_one(context.gas_used(), r.len(ty_args.safe_get(0)?))
 }
 
 pub fn make_native_length(gas_params: LengthGasParameters) -> NativeFunction {
@@ -142,7 +145,7 @@ pub fn native_push_back(
         context.gas_used(),
         r.push_back(
             e,
-            &ty_args[0],
+            ty_args.safe_get(0)?,
             context.runtime_limits_config().vector_len_max,
         ),
     )
@@ -181,7 +184,7 @@ pub fn native_borrow(
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_one(
         context.gas_used(),
-        r.borrow_elem(idx, &ty_args[0])
+        r.borrow_elem(idx, ty_args.safe_get(0)?)
             .map_err(native_error_to_abort),
     )
 }
@@ -218,7 +221,7 @@ pub fn native_pop_back(
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_one(
         context.gas_used(),
-        r.pop(&ty_args[0]).map_err(native_error_to_abort),
+        r.pop(ty_args.safe_get(0)?).map_err(native_error_to_abort),
     )
 }
 
@@ -255,7 +258,8 @@ pub fn native_destroy_empty(
     let v = pop_arg!(args, Vector);
     NativeResult::map_partial_vm_result_empty(
         context.gas_used(),
-        v.destroy_empty(&ty_args[0]).map_err(native_error_to_abort),
+        v.destroy_empty(ty_args.safe_get(0)?)
+            .map_err(native_error_to_abort),
     )
 }
 
@@ -290,7 +294,7 @@ pub fn native_swap(
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_empty(
         context.gas_used(),
-        r.swap(idx1, idx2, &ty_args[0])
+        r.swap(idx1, idx2, ty_args.safe_get(0)?)
             .map_err(native_error_to_abort),
     )
 }

@@ -1,7 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, hash::Hash};
+use move_binary_format::errors::PartialVMResult;
+use std::{collections::HashMap, hash::Hash, slice::SliceIndex};
 
 pub mod binary_cache;
 pub mod constants;
@@ -54,4 +55,38 @@ pub fn unique_map<Key: Hash + Eq, Value>(
         }
     }
     Ok(map)
+}
+
+/// A trait for safe indexing into collections that returns a PartialVMResult as long as the
+/// collection implements [`AsRef<[T]>`].
+/// This is useful for avoiding panics on out-of-bounds access, and instead returning a proper
+/// error.
+pub trait SafeIndex<T> {
+    /// Get the element at the given [`index`], or return an [`UNKNOWN_INVARIANT_VIOLATION`] error if the
+    /// index is out of bounds.
+    fn safe_get<'a, I>(&'a self, index: I) -> PartialVMResult<&'a I::Output>
+    where
+        I: SliceIndex<[T]>,
+        T: 'a;
+}
+
+impl<T, C> SafeIndex<T> for C
+where
+    C: AsRef<[T]>,
+{
+    fn safe_get<'a, I>(&'a self, index: I) -> PartialVMResult<&'a I::Output>
+    where
+        I: SliceIndex<[T]>,
+        T: 'a,
+    {
+        let slice = self.as_ref();
+        let len = slice.len();
+        slice.get(index).ok_or_else(|| {
+            crate::partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Index out of bounds for collection of length {}",
+                len
+            )
+        })
+    }
 }

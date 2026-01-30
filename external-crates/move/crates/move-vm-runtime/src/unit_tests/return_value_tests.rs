@@ -140,8 +140,9 @@ fn return_signer_ref() {
         panic!("Expected reference return");
     };
     let inner_val = inner.borrow();
-    let ret_move_val =
-        inner_val.as_move_value(&move_core_types::runtime_value::MoveTypeLayout::Signer);
+    let ret_move_val = inner_val
+        .as_move_value(&move_core_types::runtime_value::MoveTypeLayout::Signer)
+        .unwrap();
     let expected = MoveValue::Signer(TEST_ADDR);
     assert_eq!(ret_move_val, expected);
 }

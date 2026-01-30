@@ -5,6 +5,8 @@ use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use move_binary_format::errors::PartialVMResult;
 
+use crate::shared::SafeIndex;
+
 // A simple cache that offers both a HashMap and a Vector lookup.
 // Values are forced into a `Arc` so they can be used from multiple thread.
 // Access to this cache is always under a `RwLock`.
@@ -40,7 +42,7 @@ where
         // writes.
         self.id_map.insert(key, idx);
         self.binaries.push(Arc::new(binary));
-        Ok(&self.binaries[idx])
+        self.binaries.safe_get(idx)
     }
 
     pub fn get_with_idx(&self, key: &K) -> Option<(usize, &Arc<V>)> {

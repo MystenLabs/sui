@@ -9,10 +9,8 @@
 //! soon.
 
 #![deny(unsafe_code)]
-
-// #[macro_use]
-// mod tracing;
-// mod tracing2;
+#![deny(clippy::indexing_slicing)]
+#![cfg_attr(test, allow(clippy::indexing_slicing))]
 
 mod jit;
 pub mod shared;
@@ -26,10 +24,3 @@ pub mod validation;
 
 #[cfg(test)]
 mod unit_tests;
-
-// #[macro_use]
-// mod tracing;
-
-// Only include debugging functionality in debug or tracing builds
-// #[cfg(any(debug_assertions, feature = "tracing"))]
-// mod debug;

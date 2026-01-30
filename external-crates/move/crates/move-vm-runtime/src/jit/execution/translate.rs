@@ -16,6 +16,7 @@ use crate::{
     natives::functions::NativeFunctions,
     partial_vm_error,
     shared::{
+        SafeIndex as _,
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
         vm_pointer::VMPointer,
@@ -168,7 +169,7 @@ impl FunctionContext<'_, '_> {
                     expects one and only one signature token"
             ));
         };
-        let ty = VMPointer::from_ref(&tys.to_ref()[0]);
+        let ty = VMPointer::from_ref(tys.to_ref().safe_get(0)?);
         Ok(ty)
     }
 }
@@ -417,7 +418,7 @@ fn module(
 
     let constants = constants(context, cmodule)?;
 
-    let variant_handles = variant_handles(cmodule, &enums);
+    let variant_handles = variant_handles(cmodule, &enums)?;
     let variant_instantiations = variant_instantiations(context, cmodule, &enum_instantiations)?;
 
     // Function loading is effectful; they all go into the arena.
@@ -781,29 +782,36 @@ fn field_handles(
     module: &CompiledModule,
     structs: &[StructDef],
 ) -> PartialVMResult<ArenaVec<FieldHandle>> {
-    let field_handles = module.field_handles().iter().map(|f_handle| {
-        let def_idx = f_handle.owner;
-        let owner = structs[def_idx.0 as usize].def_vtable_key.clone();
-        let offset = f_handle.field as usize;
-        FieldHandle { offset, owner }
-    });
+    let field_handles = module
+        .field_handles()
+        .iter()
+        .map(|f_handle| {
+            let def_idx = f_handle.owner;
+            let owner = structs.safe_get(def_idx.0 as usize)?.def_vtable_key.clone();
+            let offset = f_handle.field as usize;
+            Ok(FieldHandle { offset, owner })
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
     context.arena_vec(field_handles.into_iter())
 }
 
 /// [SAFETY] This assumes the elements in `enums` are stable and will not move.
 /// NB: This returns a vector of pointers, as we do not need to store these -- they are already
 /// fixed in the arena under the EnumDefs provided.
-fn variant_handles(module: &CompiledModule, enums: &[EnumDef]) -> Vec<VMPointer<VariantDef>> {
+fn variant_handles(
+    module: &CompiledModule,
+    enums: &[EnumDef],
+) -> PartialVMResult<Vec<VMPointer<VariantDef>>> {
     module
         .variant_handles()
         .iter()
         .map(|variant_handle| {
             let FF::VariantHandle { enum_def, variant } = variant_handle;
-            let enum_ = &enums[enum_def.0 as usize];
-            let variant_ = &enum_.variants[*variant as usize];
-            VMPointer::from_ref(variant_)
+            let enum_ = enums.safe_get(enum_def.0 as usize)?;
+            let variant_ = enum_.variants.safe_get(*variant as usize)?;
+            Ok(VMPointer::from_ref(variant_))
         })
-        .collect::<Vec<_>>()
+        .collect::<PartialVMResult<Vec<_>>>()
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -821,10 +829,12 @@ fn struct_instantiations(
         .iter()
         .map(|struct_inst| {
             let def = struct_inst.def.0 as usize;
-            let struct_def = &structs[def];
+            let struct_def = &structs.safe_get(def)?;
             let field_count = struct_def.fields.len() as u16;
             let instantiation_idx = struct_inst.type_parameters;
-            let type_params = signatures[instantiation_idx.0 as usize].ptr_clone();
+            let type_params = signatures
+                .safe_get(instantiation_idx.0 as usize)?
+                .ptr_clone();
 
             Ok(StructInstantiation {
                 field_count,
@@ -847,11 +857,13 @@ fn enum_instantiations(
         .iter()
         .map(|enum_inst| {
             let def = enum_inst.def.0 as usize;
-            let enum_def = &enums[def];
+            let enum_def = enums.safe_get(def)?;
             let variant_count_map =
                 context.arena_vec(enum_def.variants.iter().map(|v| v.fields.len() as u16))?;
             let instantiation_idx = enum_inst.type_parameters;
-            let type_params = signatures[instantiation_idx.0 as usize].ptr_clone();
+            let type_params = signatures
+                .safe_get(instantiation_idx.0 as usize)?
+                .ptr_clone();
 
             let def_vtable_key = enum_def.def_vtable_key.clone();
             let enum_def = VMPointer::from_ref(enum_def);
@@ -879,7 +891,9 @@ fn function_instantiations(
         .iter()
         .map(|fun_inst| {
             let handle = call(package_context, module, fun_inst.handle)?;
-            let instantiation = signatures[fun_inst.type_parameters.0 as usize].ptr_clone();
+            let instantiation = signatures
+                .safe_get(fun_inst.type_parameters.0 as usize)?
+                .ptr_clone();
 
             Ok(FunctionInstantiation {
                 handle,
@@ -895,13 +909,17 @@ fn field_instantiations(
     module: &CompiledModule,
     field_handles: &[FieldHandle],
 ) -> PartialVMResult<ArenaVec<FieldInstantiation>> {
-    let field_instantiations = module.field_instantiations().iter().map(|f_inst| {
-        let fh_idx = f_inst.handle;
-        let owner = field_handles[fh_idx.0 as usize].owner.clone();
-        let offset = field_handles[fh_idx.0 as usize].offset;
+    let field_instantiations = module
+        .field_instantiations()
+        .iter()
+        .map(|f_inst| {
+            let fh_idx = f_inst.handle;
+            let owner = field_handles.safe_get(fh_idx.0 as usize)?.owner.clone();
+            let offset = field_handles.safe_get(fh_idx.0 as usize)?.offset;
 
-        FieldInstantiation { offset, owner }
-    });
+            Ok(FieldInstantiation { offset, owner })
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
     context.arena_vec(field_instantiations.into_iter())
 }
 
@@ -911,12 +929,17 @@ fn variant_instantiations(
     module: &CompiledModule,
     enum_instantiations: &[EnumInstantiation],
 ) -> PartialVMResult<ArenaVec<VariantInstantiation>> {
-    let variant_insts = module.variant_instantiation_handles().iter().map(|v_inst| {
-        let FF::VariantInstantiationHandle { enum_def, variant } = v_inst;
-        let enum_inst = VMPointer::from_ref(&enum_instantiations[enum_def.0 as usize]);
-        let variant = VMPointer::from_ref(&enum_inst.enum_def.variants[*variant as usize]);
-        VariantInstantiation { enum_inst, variant }
-    });
+    let variant_insts = module
+        .variant_instantiation_handles()
+        .iter()
+        .map(|v_inst| {
+            let FF::VariantInstantiationHandle { enum_def, variant } = v_inst;
+            let enum_inst = VMPointer::from_ref(enum_instantiations.safe_get(enum_def.0 as usize)?);
+            let variant =
+                VMPointer::from_ref(enum_inst.enum_def.variants.safe_get(*variant as usize)?);
+            Ok(VariantInstantiation { enum_inst, variant })
+        })
+        .collect::<PartialVMResult<Vec<_>>>()?;
     context.arena_vec(variant_insts.into_iter())
 }
 
@@ -1376,7 +1399,10 @@ fn bytecode(
 
         // For now, generic calls retain an index so we can look up their signature as well.
         input::Bytecode::CallGeneric(ndx) => {
-            let generic_ptr = &context.definitions.function_instantiations[ndx.0 as usize];
+            let generic_ptr = &context
+                .definitions
+                .function_instantiations
+                .safe_get(ndx.0 as usize)?;
             Bytecode::CallGeneric(generic_ptr.ptr_clone())
         }
 
@@ -1395,7 +1421,7 @@ fn bytecode(
         input::Bytecode::LdU8(n) => Bytecode::LdU8(n),
 
         input::Bytecode::LdConst(ndx) => {
-            let const_ptr = &context.definitions.constants[ndx.0 as usize];
+            let const_ptr = &context.definitions.constants.safe_get(ndx.0 as usize)?;
             Bytecode::LdConst(const_ptr.ptr_clone())
         }
         input::Bytecode::LdTrue => Bytecode::LdTrue,
@@ -1412,39 +1438,51 @@ fn bytecode(
 
         // Structs and Fields
         input::Bytecode::Pack(ndx) => {
-            let struct_ptr = &context.definitions.structs[ndx.0 as usize];
+            let struct_ptr = &context.definitions.structs.safe_get(ndx.0 as usize)?;
             Bytecode::Pack(struct_ptr.ptr_clone())
         }
         input::Bytecode::Unpack(ndx) => {
-            let struct_ptr = &context.definitions.structs[ndx.0 as usize];
+            let struct_ptr = &context.definitions.structs.safe_get(ndx.0 as usize)?;
             Bytecode::Unpack(struct_ptr.ptr_clone())
         }
 
         input::Bytecode::PackGeneric(ndx) => {
-            let struct_inst_ptr = &context.definitions.struct_instantiations[ndx.0 as usize];
+            let struct_inst_ptr = &context
+                .definitions
+                .struct_instantiations
+                .safe_get(ndx.0 as usize)?;
             Bytecode::PackGeneric(struct_inst_ptr.ptr_clone())
         }
         input::Bytecode::UnpackGeneric(ndx) => {
-            let struct_inst_ptr = &context.definitions.struct_instantiations[ndx.0 as usize];
+            let struct_inst_ptr = &context
+                .definitions
+                .struct_instantiations
+                .safe_get(ndx.0 as usize)?;
             Bytecode::UnpackGeneric(struct_inst_ptr.ptr_clone())
         }
 
         input::Bytecode::MutBorrowField(ndx) => {
-            let field_ptr = &context.definitions.field_handles[ndx.0 as usize];
+            let field_ptr = &context.definitions.field_handles.safe_get(ndx.0 as usize)?;
             Bytecode::MutBorrowField(field_ptr.ptr_clone())
         }
 
         input::Bytecode::ImmBorrowField(ndx) => {
-            let field_ptr = &context.definitions.field_handles[ndx.0 as usize];
+            let field_ptr = &context.definitions.field_handles.safe_get(ndx.0 as usize)?;
             Bytecode::ImmBorrowField(field_ptr.ptr_clone())
         }
 
         input::Bytecode::MutBorrowFieldGeneric(ndx) => {
-            let field_inst_ptr = &context.definitions.field_instantiations[ndx.0 as usize];
+            let field_inst_ptr = &context
+                .definitions
+                .field_instantiations
+                .safe_get(ndx.0 as usize)?;
             Bytecode::MutBorrowFieldGeneric(field_inst_ptr.ptr_clone())
         }
         input::Bytecode::ImmBorrowFieldGeneric(ndx) => {
-            let field_inst_ptr = &context.definitions.field_instantiations[ndx.0 as usize];
+            let field_inst_ptr = &context
+                .definitions
+                .field_instantiations
+                .safe_get(ndx.0 as usize)?;
             Bytecode::ImmBorrowFieldGeneric(field_inst_ptr.ptr_clone())
         }
 
@@ -1514,42 +1552,54 @@ fn bytecode(
 
         // Enums and Variants
         input::Bytecode::PackVariant(ndx) => {
-            let variant_ptr = &context.definitions.variants[ndx.0 as usize];
+            let variant_ptr = &context.definitions.variants.safe_get(ndx.0 as usize)?;
             Bytecode::PackVariant(variant_ptr.ptr_clone())
         }
         input::Bytecode::UnpackVariant(ndx) => {
-            let variant_ptr = &context.definitions.variants[ndx.0 as usize];
+            let variant_ptr = &context.definitions.variants.safe_get(ndx.0 as usize)?;
             Bytecode::UnpackVariant(variant_ptr.ptr_clone())
         }
 
         input::Bytecode::PackVariantGeneric(ndx) => {
-            let variant_inst_ptr = &context.definitions.variant_instantiations[ndx.0 as usize];
+            let variant_inst_ptr = &context
+                .definitions
+                .variant_instantiations
+                .safe_get(ndx.0 as usize)?;
             Bytecode::PackVariantGeneric(variant_inst_ptr.ptr_clone())
         }
         input::Bytecode::UnpackVariantGeneric(ndx) => {
-            let variant_inst_ptr = &context.definitions.variant_instantiations[ndx.0 as usize];
+            let variant_inst_ptr = &context
+                .definitions
+                .variant_instantiations
+                .safe_get(ndx.0 as usize)?;
             Bytecode::UnpackVariantGeneric(variant_inst_ptr.ptr_clone())
         }
 
         input::Bytecode::UnpackVariantImmRef(ndx) => {
-            let variant_ptr = &context.definitions.variants[ndx.0 as usize];
+            let variant_ptr = &context.definitions.variants.safe_get(ndx.0 as usize)?;
             Bytecode::UnpackVariantImmRef(variant_ptr.ptr_clone())
         }
         input::Bytecode::UnpackVariantMutRef(ndx) => {
-            let variant_ptr = &context.definitions.variants[ndx.0 as usize];
+            let variant_ptr = &context.definitions.variants.safe_get(ndx.0 as usize)?;
             Bytecode::UnpackVariantMutRef(variant_ptr.ptr_clone())
         }
 
         input::Bytecode::UnpackVariantGenericImmRef(ndx) => {
-            let variant_inst_ptr = &context.definitions.variant_instantiations[ndx.0 as usize];
+            let variant_inst_ptr = &context
+                .definitions
+                .variant_instantiations
+                .safe_get(ndx.0 as usize)?;
             Bytecode::UnpackVariantGenericImmRef(variant_inst_ptr.ptr_clone())
         }
         input::Bytecode::UnpackVariantGenericMutRef(ndx) => {
-            let variant_inst_ptr = &context.definitions.variant_instantiations[ndx.0 as usize];
+            let variant_inst_ptr = &context
+                .definitions
+                .variant_instantiations
+                .safe_get(ndx.0 as usize)?;
             Bytecode::UnpackVariantGenericMutRef(variant_inst_ptr.ptr_clone())
         }
         input::Bytecode::VariantSwitch(ndx) => {
-            let jump_table = &jump_tables[ndx.0 as usize];
+            let jump_table = &jump_tables.safe_get(ndx.0 as usize)?;
             Bytecode::VariantSwitch(jump_table.ptr_clone())
         }
     };

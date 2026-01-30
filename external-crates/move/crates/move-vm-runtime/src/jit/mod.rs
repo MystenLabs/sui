@@ -23,9 +23,9 @@ pub fn translate_package(
     loaded_package: verification::ast::Package,
 ) -> PartialVMResult<Package> {
     let opt_package = if vm_config.optimize_bytecode {
-        optimize(loaded_package)
+        optimize(loaded_package)?
     } else {
-        to_optimized_form(loaded_package)
+        to_optimized_form(loaded_package)?
     };
     execution::translate::package(natives, interner, opt_package)
 }
