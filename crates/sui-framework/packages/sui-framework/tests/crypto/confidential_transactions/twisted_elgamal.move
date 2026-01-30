@@ -1,22 +1,28 @@
 module sui::twisted_elgamal;
 
 use sui::group_ops::Element;
-use sui::ristretto255::{Self, Point, Scalar};
-use std::string::from_ascii;
-
-const H_BYTES: vector<u8> = x"34ce1477c14558178089500a39c864e0f607b3c1f41ab398400e4a9de6d2c446";
+use sui::ristretto255::{Self, Point};
 
 public fun g(): Element<Point> {
     ristretto255::generator()
 }
 
 public fun h(): Element<Point> {
-    ristretto255::point_from_bytes(&H_BYTES)
+    ristretto255::point_from_bytes(
+        &x"34ce1477c14558178089500a39c864e0f607b3c1f41ab398400e4a9de6d2c446",
+    )
 }
 
 public struct Encryption has copy, drop, store {
     ciphertext: Element<Point>,
     decryption_handle: Element<Point>,
+}
+
+public(package) fun new(ciphertext: Element<Point>, decryption_handle: Element<Point>): Encryption {
+    Encryption {
+        ciphertext,
+        decryption_handle,
+    }
 }
 
 /// Create a new Twisted ElGamal encryption:
@@ -49,14 +55,21 @@ public fun encrypt_trivial(amount: u16, pk: &Element<Point>): Encryption {
 }
 
 /// Add two Twisted ElGamal encryptions. The result is an encryption of the sum of the plaintexts in the scalar field, so beware of overflow.
-public fun add(e1: &Encryption, e2: &Encryption): Encryption {
+fun add(e1: &Encryption, e2: &Encryption): Encryption {
     Encryption {
         ciphertext: ristretto255::point_add(&e1.ciphertext, &e2.ciphertext),
         decryption_handle: ristretto255::point_add(&e1.decryption_handle, &e2.decryption_handle),
     }
 }
 
-public fun shift_left(e: &Encryption, bits: u8): Encryption {
+fun sub(e1: &Encryption, e2: &Encryption): Encryption {
+    Encryption {
+        ciphertext: ristretto255::point_sub(&e1.ciphertext, &e2.ciphertext),
+        decryption_handle: ristretto255::point_sub(&e1.decryption_handle, &e2.decryption_handle),
+    }
+}
+
+fun shift_left(e: &Encryption, bits: u8): Encryption {
     let factor = ristretto255::scalar_from_u64(1 << bits);
     Encryption {
         ciphertext: ristretto255::point_mul(&factor, &e.ciphertext),
@@ -69,6 +82,12 @@ public fun add_assign(a: &mut EncryptedAmount4U32, b: &EncryptedAmount4U16) {
     a.l1 = add(&a.l1, &b.l1);
     a.l2 = add(&a.l2, &b.l2);
     a.l3 = add(&a.l3, &b.l3);
+}
+
+fun encrypted_amount_2_u32_unverified_to_encryption(
+    self: &EncryptedAmount2U32Unverified,
+): Encryption {
+    self.l0.add(&self.l1.shift_left(32))
 }
 
 // Encrypted u64 amount.
@@ -129,15 +148,6 @@ public fun encrypted_amount_4_u16_from_value(value: u64, pk: &Element<Point>): E
     }
 }
 
-public fun encrypted_amount_4_u16_zero(pk: &Element<Point>): EncryptedAmount4U16 {
-    EncryptedAmount4U16 {
-        l0: encrypt_zero(pk),
-        l1: encrypt_zero(pk),
-        l2: encrypt_zero(pk),
-        l3: encrypt_zero(pk),
-    }
-}
-
 fun encrypted_amount_4_u16_to_encryption(ea: &EncryptedAmount4U16): Encryption {
     ea
         .l0
@@ -166,6 +176,27 @@ public fun verify_value_proof(
     )
 }
 
+/// Verify a NIZK proof that sum = a + b
+public fun verify_sum_proof(
+    sum: &EncryptedAmount2U32Unverified,
+    a: &EncryptedAmount2U32Unverified,
+    b: &EncryptedAmount4U32,
+    pk: &Element<Point>,
+    proof: vector<u8>,
+): bool {
+    let proof = sui::nizk::from_bytes(proof);
+    let sum_encryption = encrypted_amount_2_u32_unverified_to_encryption(sum);
+    let a_encryption = encrypted_amount_2_u32_unverified_to_encryption(a);
+    let b_encryption = encrypted_amount_4_u32_to_encryption(b);
+    let zero_encryption = sub(&add(&a_encryption, &b_encryption), &sum_encryption);
+    proof.verify(
+        &b"",
+        &zero_encryption.ciphertext,
+        pk,
+        &zero_encryption.decryption_handle,
+    )
+}
+
 #[test]
 fun test_value_proof() {
     // Test vector from fastcrypto
@@ -182,7 +213,7 @@ fun test_value_proof() {
     let d = ristretto255::point_from_bytes(
         &x"28f6b0c7d009fe315cd24e3b6331514704bbdd1a0fbf4d25828061f40b401174",
     );
-    let r = ristretto255::scalar_from_bytes(
+    let _r = ristretto255::scalar_from_bytes(
         &x"4fbe89c8a246bdcc034cd9acc8f7736e7925add952d81ac45affbb4e1d1bff01",
     );
 
@@ -251,4 +282,8 @@ public fun encrypted_amount_4_u32_from_4_u16(ea: EncryptedAmount4U16): Encrypted
         l2,
         l3,
     }
+}
+
+public fun encrypted_amount_4_u32_to_encryption(eq: &EncryptedAmount4U32): Encryption {
+    eq.l0.add(&eq.l1.shift_left(16).add(&eq.l2.shift_left(32)).add(&eq.l3.shift_left(48)))
 }

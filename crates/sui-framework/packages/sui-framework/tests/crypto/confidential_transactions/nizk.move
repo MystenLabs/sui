@@ -35,12 +35,9 @@ fun challenge(
     a: &Element<Point>,
     b: &Element<Point>,
 ): Element<Scalar> {
-    // TODO: Align with fastcrypto
     let mut bytes: vector<u8> = vector::empty();
-    bytes.append(x"00000000"); // length of dst - todo: make variable
+    bytes.append(x"00000000"); // length of dst as BE - todo: make variable
     bytes.append(*dst);
-
-    // TODO: In fastcrypto, these are added as a tuple and bcs encoded. Ensure that this is the same here:
     bytes.append(*ristretto255::generator().bytes());
     bytes.append(*h.bytes());
     bytes.append(*x_g.bytes());
@@ -53,7 +50,7 @@ fun challenge(
 
 public fun verify(
     proof: &NIZK,
-    dst: &vector<u8>, // sui-
+    dst: &vector<u8>,
     h: &Element<Point>,
     x_g: &Element<Point>,
     x_h: &Element<Point>,

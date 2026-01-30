@@ -1,31 +1,26 @@
 #[allow(implicit_const_copy), test_only]
 module sui::confidential_transactions;
 
-use std::unit_test::assert_eq;
 use sui::balance::Balance;
 use sui::coin::{Self, Coin};
-use sui::config;
 use sui::group_ops::Element;
-use sui::nizk::from_bytes;
 use sui::ristretto255::{Self, Point, Scalar};
 use sui::twisted_elgamal::{
     g,
-    h,
     add_assign,
     encrypted_amount_2_u_32_zero,
     encrypted_amount_4_u16_from_value,
-    encrypted_amount_4_u32_zero,
     Encryption,
     EncryptedAmount2U32Unverified,
     EncryptedAmount4U16,
     EncryptedAmount4U32,
     encrypted_amount_4_u16,
     encrypted_amount_2_u32_unverified,
-    add,
     encrypt_trivial,
     encrypt_zero,
     encrypted_amount_4_u32_from_4_u16,
-    verify_value_proof
+    verify_value_proof,
+    verify_sum_proof
 };
 use sui::vec_map::VecMap;
 
@@ -104,16 +99,16 @@ public fun transfer<T>(
 /// Merge a pending deposit into the main balance. This is FIFO, so the first pending deposit is merged.
 public fun merge_pending_deposit<T>(
     ct: &mut ConfidentialToken<T>,
-    new_balance: vector<Encryption>, // expected to be EncryptedAmount2U32Unverified,
-    _proof: &vector<u8>, // Proof that the new balance is old balance + pending deposit (sigma protocol)
+    new_balance: vector<Encryption>,
+    proof: vector<u8>,
     ctx: &mut TxContext,
 ) {
     let new_balance = encrypted_amount_2_u32_unverified(new_balance);
     let account = &mut ct.accounts[&ctx.sender()];
-    let _deposit = account.pending_deposits.take_deposit();
+    let deposit = account.pending_deposits.take_deposit();
 
-    // TODO: check proof
-    // TODO: can this be merged with add_to_balance?
+    // Verify that new_balance = old_balance + deposit
+    assert!(verify_sum_proof(&new_balance, &account.balance, &deposit, &account.pk, proof));
 
     account.balance = new_balance;
 }
@@ -124,7 +119,7 @@ public fun add_to_balance<T>(
     ct: &mut ConfidentialToken<T>,
     amount: BoundedEncryptedAmount<T>,
     new_balance: vector<Encryption>, // expected to be EncryptedAmount2U32Unverified
-    _proof: &vector<u8>, // Sigma protocol that the new balance is the same as the old one (though we don't use range proofs so it might be larger than 32bit)
+    _proof: &vector<u8>,
     ctx: &mut TxContext,
 ) {
     let new_balance = encrypted_amount_2_u32_unverified(new_balance);
@@ -137,7 +132,7 @@ public fun add_to_balance<T>(
 
     assert!(account.pk == &pk, EInvalidInput);
 
-    // TODO: compute the sum and check proof
+    // TODO: compute the sum and check proof that the new balance is the same as the old one (though we don't use range proofs so it might be larger than 32bit)
 
     account.balance = new_balance;
 }
@@ -184,6 +179,9 @@ public struct PendingDeposits<phantom T> has store {
 /// Add an encrypted amount to the pending deposits. The amount is expected to be well-formed (i.e., each limb is an u16 encryption).
 fun add_deposit<T>(self: &mut PendingDeposits<T>, amount: EncryptedAmount4U16) {
     if (self.pending_balances.is_empty() || self.num_of_deposits == U16_MAX) {
+        // If we have enough pending balances, abort
+        assert!(self.pending_balances.length() < MAX_PENDING_BALANCES);
+
         // This is O(n), but we don't expect n to be very large
         self.pending_balances.insert(encrypted_amount_4_u32_from_4_u16(amount), 0);
         self.num_of_deposits = 1;
@@ -247,7 +245,7 @@ public struct CONFIDENTIAL_TRANSACTIONS has drop {}
 
 #[test]
 fun test_flow() {
-    use sui::coin;
+    use sui::coin::{Self};
 
     // Setup addresses
     let addr1 = @0xA;
@@ -301,10 +299,10 @@ fun test_flow() {
     let taken = confidential_token.take_from_balance(
         vector[encrypt_zero(&pk_1), encrypt_zero(&pk_1)],
         vector[
-            encrypt_trivial(50, &pk_1),
-            encrypt_trivial(0, &pk_1),
-            encrypt_trivial(0, &pk_1),
-            encrypt_trivial(0, &pk_1),
+            encrypt_trivial(50, &pk_2),
+            encrypt_trivial(0, &pk_2),
+            encrypt_trivial(0, &pk_2),
+            encrypt_trivial(0, &pk_2),
         ],
         pk_2,
         &vector::empty(), // TODO
@@ -324,9 +322,11 @@ fun test_flow() {
 
     // Account 2 merges the pending deposit into its balance, merges and unwraps
     scenario.next_tx(addr2);
+    let new_balance = vector[encrypt_trivial(50, &pk_2), encrypt_zero(&pk_2)];
     confidential_token.merge_pending_deposit(
-        vector[encrypt_trivial(50, &pk_2), encrypt_zero(&pk_2)],
-        &vector::empty(), // TODO
+        new_balance,
+        // Proof generated in fastcrypto
+        x"94c23f676ffd26d996be23ca8a34d15b4ae45660c8a4f9f16dc3975023a444415ea6e591ee90950b31bfb39f5601eec1e294ebde6713c9d351dfc39e148715353e6b237b5cc782de8c21fc7f35402765247635412eff733e45d0d1bb027ad301",
         scenario.ctx(),
     );
     let taken = confidential_token.take_from_balance(
