@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
-use move_binary_format::errors::PartialVMError;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::runtime_value::MoveTypeLayout;
 use move_core_types::u256::U256;
@@ -214,7 +214,7 @@ impl VMValueCast<Value> for VMValue {
 }
 
 impl ValueView for Value {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.0.visit(visitor)
     }
 }

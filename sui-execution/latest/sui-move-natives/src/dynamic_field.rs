@@ -116,7 +116,7 @@ pub fn hash_type_and_key(
     let k_value_size = u64::from(abstract_size(
         get_extension!(context, ObjectRuntime)?.protocol_config,
         &k,
-    ));
+    )?);
     native_charge_gas_early_exit!(
         context,
         dynamic_field_hash_type_and_key_cost_params
@@ -327,7 +327,7 @@ pub fn borrow_child_object(
             child_ref.abstract_memory_size(&SizeConfig {
                 include_vector_size: true,
                 traverse_references: true,
-            })
+            })?
         }
     };
 
@@ -407,10 +407,12 @@ pub fn remove_child_object(
         }
         // The Move value had to be created. The value isn't a reference so traverse_references
         // doesn't matter
-        CacheInfo::CachedObject | CacheInfo::Loaded(_) => child.abstract_memory_size(&SizeConfig {
-            include_vector_size: true,
-            traverse_references: false,
-        }),
+        CacheInfo::CachedObject | CacheInfo::Loaded(_) => {
+            child.abstract_memory_size(&SizeConfig {
+                include_vector_size: true,
+                traverse_references: false,
+            })?
+        }
     };
     native_charge_gas_early_exit!(
         context,

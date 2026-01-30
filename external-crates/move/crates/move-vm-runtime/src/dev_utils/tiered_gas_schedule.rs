@@ -7,14 +7,13 @@
 //! It is important to note that the cost schedule defined in this file does not track hashing
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     gas_algebra::{
         AbstractMemorySize, GasQuantity, InternalGas, InternalGasUnit, NumArgs, NumBytes, ToUnit,
         ToUnitFractional,
     },
     language_storage::ModuleId,
-    vm_status::StatusCode,
 };
 
 use crate::{
@@ -445,7 +444,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     }
 
     fn charge_pop(&mut self, popped_val: impl ValueView) -> PartialVMResult<()> {
-        self.charge(1, 0, 1, 0, abstract_memory_size(popped_val).into())
+        self.charge(1, 0, 1, 0, abstract_memory_size(popped_val)?.into())
     }
 
     fn charge_native_function(
@@ -461,11 +460,12 @@ impl<'b> GasMeter for GasStatus<'b> {
             .unwrap_or(0) as u64;
         // Calculate the number of bytes that are getting pushed onto the stack.
         let size_increase = ret_vals
-            .map(|ret_vals| {
-                ret_vals.fold(AbstractMemorySize::zero(), |acc, elem| {
-                    acc + abstract_memory_size(elem)
+            .map(|mut ret_vals| {
+                ret_vals.try_fold(AbstractMemorySize::zero(), |acc, elem| {
+                    Ok::<_, PartialVMError>(acc + abstract_memory_size(elem)?)
                 })
             })
+            .transpose()?
             .unwrap_or_else(AbstractMemorySize::zero);
         // Charge for the stack operations. We don't count this as an "instruction" since we
         // already accounted for the `Call` instruction in the
@@ -485,15 +485,15 @@ impl<'b> GasMeter for GasStatus<'b> {
     fn charge_native_function_before_execution(
         &mut self,
         _ty_args: impl ExactSizeIterator<Item = impl TypeView>,
-        args: impl ExactSizeIterator<Item = impl ValueView>,
+        mut args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         // Determine the number of pops that are going to be needed for this function call, and
         // charge for them.
         let pops = args.len() as u64;
         // Calculate the size decrease of the stack from the above pops.
-        let stack_reduction_size = args.fold(AbstractMemorySize::new(pops), |acc, elem| {
-            acc + abstract_memory_size(elem)
-        });
+        let stack_reduction_size = args.try_fold(AbstractMemorySize::new(pops), |acc, elem| {
+            Ok::<_, PartialVMError>(acc + abstract_memory_size(elem)?)
+        })?;
         // Track that this is going to be popping from the operand stack. We also increment the
         // instruction count as we need to account for the `Call` bytecode that initiated this
         // native call.
@@ -504,16 +504,16 @@ impl<'b> GasMeter for GasStatus<'b> {
         &mut self,
         _module_id: &ModuleId,
         _func_name: &str,
-        args: impl ExactSizeIterator<Item = impl ValueView>,
+        mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
         // We will have to perform this many pops for the call.
         let pops = args.len() as u64;
         // Size stays the same -- we're just moving it from the operand stack to the locals. But
         // the size on the operand stack is reduced by sum_{args} arg.size().
-        let stack_reduction_size = args.fold(AbstractMemorySize::new(0), |acc, elem| {
-            acc + abstract_memory_size(elem)
-        });
+        let stack_reduction_size = args.try_fold(AbstractMemorySize::new(0), |acc, elem| {
+            Ok::<_, PartialVMError>(acc + abstract_memory_size(elem)?)
+        })?;
         self.charge(1, 0, pops, 0, stack_reduction_size.into())
     }
 
@@ -522,15 +522,15 @@ impl<'b> GasMeter for GasStatus<'b> {
         _module_id: &ModuleId,
         _func_name: &str,
         _ty_args: impl ExactSizeIterator<Item = impl TypeView>,
-        args: impl ExactSizeIterator<Item = impl ValueView>,
+        mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
         // We have to perform this many pops from the operand stack for this function call.
         let pops = args.len() as u64;
         // Calculate the size reduction on the operand stack.
-        let stack_reduction_size = args.fold(AbstractMemorySize::new(0), |acc, elem| {
-            acc + abstract_memory_size(elem)
-        });
+        let stack_reduction_size = args.try_fold(AbstractMemorySize::new(0), |acc, elem| {
+            Ok::<_, PartialVMError>(acc + abstract_memory_size(elem)?)
+        })?;
         // Charge for the pops, no pushes, and account for the stack size decrease. Also track the
         // `CallGeneric` instruction we must have encountered for this.
         self.charge(1, 0, pops, 0, stack_reduction_size.into())
@@ -551,21 +551,21 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_copy_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
         // Charge for the copy of the local onto the stack.
-        self.charge(1, 1, 0, abstract_memory_size(val).into(), 0)
+        self.charge(1, 1, 0, abstract_memory_size(val)?.into(), 0)
     }
 
     fn charge_move_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
         // Charge for the move of the local on to the stack. Note that we charge here since we
         // aren't tracking the local size (at least not yet). If we were, this should be a net-zero
         // operation in terms of memory usage.
-        self.charge(1, 1, 0, abstract_memory_size(val).into(), 0)
+        self.charge(1, 1, 0, abstract_memory_size(val)?.into(), 0)
     }
 
     fn charge_store_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
         // Charge for the storing of the value on the stack into a local. Note here that if we were
         // also accounting for the size of the locals that this would be a net-zero operation in
         // terms of memory.
-        self.charge(1, 0, 1, 0, abstract_memory_size(val).into())
+        self.charge(1, 0, 1, 0, abstract_memory_size(val)?.into())
     }
 
     fn charge_pack(
@@ -591,7 +591,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     }
 
     fn charge_variant_switch(&mut self, val: impl ValueView) -> PartialVMResult<()> {
-        self.charge(1, 0, 1, 0, abstract_memory_size(val).into())
+        self.charge(1, 0, 1, 0, abstract_memory_size(val)?.into())
     }
 
     fn charge_read_ref(&mut self, ref_val: impl ValueView) -> PartialVMResult<()> {
@@ -602,7 +602,7 @@ impl<'b> GasMeter for GasStatus<'b> {
             1,
             1,
             1,
-            abstract_memory_size(ref_val).into(),
+            abstract_memory_size(ref_val)?.into(),
             REFERENCE_SIZE.into(),
         )
     }
@@ -619,14 +619,14 @@ impl<'b> GasMeter for GasStatus<'b> {
             1,
             1,
             2,
-            abstract_memory_size(new_val).into(),
-            abstract_memory_size(old_val).into(),
+            abstract_memory_size(new_val)?.into(),
+            abstract_memory_size(old_val)?.into(),
         )
     }
 
     fn charge_eq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
         let size_reduction =
-            abstract_memory_size_with_traversal(lhs) + abstract_memory_size_with_traversal(rhs);
+            abstract_memory_size_with_traversal(lhs)? + abstract_memory_size_with_traversal(rhs)?;
         self.charge(
             1,
             1,
@@ -638,7 +638,7 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_neq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
         let size_reduction =
-            abstract_memory_size_with_traversal(lhs) + abstract_memory_size_with_traversal(rhs);
+            abstract_memory_size_with_traversal(lhs)? + abstract_memory_size_with_traversal(rhs)?;
         self.charge(
             1,
             1,
@@ -783,14 +783,14 @@ pub fn initial_cost_schedule() -> CostTable {
     }
 }
 
-fn abstract_memory_size(v: impl ValueView) -> AbstractMemorySize {
+fn abstract_memory_size(v: impl ValueView) -> PartialVMResult<AbstractMemorySize> {
     v.abstract_memory_size(&SizeConfig {
         include_vector_size: true,
         traverse_references: false,
     })
 }
 
-fn abstract_memory_size_with_traversal(v: impl ValueView) -> AbstractMemorySize {
+fn abstract_memory_size_with_traversal(v: impl ValueView) -> PartialVMResult<AbstractMemorySize> {
     v.abstract_memory_size(&SizeConfig {
         include_vector_size: true,
         traverse_references: true,
