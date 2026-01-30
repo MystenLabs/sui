@@ -33,6 +33,8 @@ pub const ALL_PIPELINE_NAMES: [&str; 8] = [
     <EpochLegacyPipeline as sui_indexer_alt_framework::pipeline::Processor>::NAME,
 ];
 
+use std::sync::OnceLock;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use prometheus::Registry;
@@ -63,6 +65,20 @@ use sui_types::transaction::Transaction;
 mod bigtable;
 mod handlers;
 pub mod tables;
+
+static WRITE_LEGACY_DATA: OnceLock<bool> = OnceLock::new();
+
+/// Set whether to write legacy data (legacy watermark row, epoch DEFAULT_COLUMN, tx column).
+/// Must be called before creating any pipelines. Panics if called more than once.
+pub fn set_write_legacy_data(value: bool) {
+    WRITE_LEGACY_DATA
+        .set(value)
+        .expect("write_legacy_data already set");
+}
+
+pub fn write_legacy_data() -> bool {
+    *WRITE_LEGACY_DATA.get_or_init(|| false)
+}
 
 pub struct BigTableIndexer {
     pub indexer: Indexer<BigTableStore>,
@@ -203,9 +219,12 @@ impl BigTableIndexer {
         indexer
             .concurrent_pipeline(BigTableHandler::new(EpochEndPipeline), config.clone())
             .await?;
-        indexer
-            .concurrent_pipeline(EpochLegacyPipeline, config)
-            .await?;
+
+        if write_legacy_data() {
+            indexer
+                .concurrent_pipeline(EpochLegacyPipeline, config)
+                .await?;
+        }
 
         Ok(Self { indexer })
     }

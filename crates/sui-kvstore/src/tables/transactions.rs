@@ -12,6 +12,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
 
+use crate::write_legacy_data;
 use crate::{TransactionData, TransactionEventsData};
 
 pub mod col {
@@ -34,8 +35,8 @@ pub fn encode_key(digest: &TransactionDigest) -> Vec<u8> {
 }
 
 /// Encode all transaction columns.
-/// Writes 9 columns: TX (deprecated but kept for backwards compat), EFFECTS, EVENTS,
-/// TIMESTAMP, CHECKPOINT_NUMBER, DATA, SIGNATURES, BALANCE_CHANGES, UNCHANGED_LOADED.
+/// Writes 8 columns by default (or 9 when `write_legacy_data()` is enabled, which adds
+/// the deprecated TX column).
 pub fn encode(
     transaction: &Transaction,
     effects: &TransactionEffects,
@@ -44,10 +45,14 @@ pub fn encode(
     timestamp_ms: u64,
     balance_changes: &[BalanceChange],
     unchanged_loaded_runtime_objects: &[ObjectKey],
-) -> Result<[(&'static str, Bytes); 9]> {
-    Ok([
-        // Deprecated: full transaction (use DATA+SIGNATURES)
-        (col::TX, Bytes::from(bcs::to_bytes(transaction)?)),
+) -> Result<Vec<(&'static str, Bytes)>> {
+    let mut cols = Vec::with_capacity(if write_legacy_data() { 9 } else { 8 });
+
+    if write_legacy_data() {
+        cols.push((col::TX, Bytes::from(bcs::to_bytes(transaction)?)));
+    }
+
+    cols.extend([
         (col::EFFECTS, Bytes::from(bcs::to_bytes(effects)?)),
         (col::EVENTS, Bytes::from(bcs::to_bytes(events)?)),
         (col::TIMESTAMP, Bytes::from(bcs::to_bytes(&timestamp_ms)?)),
@@ -71,7 +76,9 @@ pub fn encode(
             col::UNCHANGED_LOADED,
             Bytes::from(bcs::to_bytes(unchanged_loaded_runtime_objects)?),
         ),
-    ])
+    ]);
+
+    Ok(cols)
 }
 
 pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {

@@ -31,6 +31,7 @@ use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::set_write_legacy_data;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
@@ -280,6 +281,7 @@ struct TestHarness {
 impl TestHarness {
     async fn new() -> Result<Self> {
         require_bigtable_emulator();
+        set_write_legacy_data(true);
 
         let emulator_future = async {
             let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)

@@ -25,6 +25,7 @@ use crate::Watermark;
 use crate::bigtable::client::BigTableClient;
 use crate::bigtable::legacy_watermark::LegacyWatermarkTracker;
 use crate::tables;
+use crate::write_legacy_data;
 
 /// A Store implementation backed by BigTable.
 #[derive(Clone)]
@@ -45,10 +46,14 @@ pub struct BigTableConnection<'a> {
 impl BigTableStore {
     pub fn new(client: BigTableClient) -> Self {
         // TODO(migration): Remove legacy_tracker once GraphQL reads per-pipeline watermarks.
-        let legacy_tracker = Arc::new(Mutex::new(LegacyWatermarkTracker::new()));
+        let legacy_watermark_tracker = if write_legacy_data() {
+            Some(Arc::new(Mutex::new(LegacyWatermarkTracker::new())))
+        } else {
+            None
+        };
         Self {
             client,
-            legacy_watermark_tracker: Some(legacy_tracker),
+            legacy_watermark_tracker,
         }
     }
 }

@@ -16,6 +16,7 @@ use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::set_max_mutations;
+use sui_kvstore::set_write_legacy_data;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
 
@@ -60,6 +61,10 @@ struct Args {
     #[arg(long, value_parser = parse_max_mutations)]
     max_mutations: Option<usize>,
 
+    /// Enable writing legacy data: watermark [0] row, epoch DEFAULT_COLUMN, and transaction tx column
+    #[arg(long)]
+    write_legacy_data: bool,
+
     #[command(flatten)]
     metrics_args: MetricsArgs,
 
@@ -83,6 +88,7 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     let is_bounded = args.indexer_args.last_checkpoint.is_some();
+    set_write_legacy_data(args.write_legacy_data);
     if let Some(v) = args.max_mutations {
         set_max_mutations(v);
     }
