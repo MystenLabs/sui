@@ -36,13 +36,27 @@ While executing the skill, never make functional changes to the code.  Only add 
 If at any point the reproduction command stops failing, or fails in a different way, this indicates that functional changes have been made. The test is deterministic and cannot
 be affected by emitting logs, doing expensive computations, etc.
 
+## Log File Management
+
+Log files should be named consistently using the experiment number: `experiment_N.log` (e.g., `experiment_1.log`, `experiment_2.log`, etc.).
+- Never delete log files during the debugging session - the user will clean them up when debugging is complete.
+- Do not commit log files to git - they are too large.
+
+## Commit Strategy
+
+After each experiment:
+1. Commit only the logging changes (code modifications) with a message indicating the experiment number: `CLAUDE: experiment N logging`
+2. Make a separate commit for NOTEBOOK.md updates with a message like `CLAUDE: experiment N observations`
+
+This keeps the debugging history clean and allows easy navigation between experiments. Do not include log files in any commits.
+
 Execute the following steps:
 
 ### 1. Ask the user for a description of the failure and any additional useful context.
 
 ### 2. Run the test.
 Run the test as given in the commandline. If `RUST_LOG=...` is missing, add `RUST_LOG=sui=debug,info`. if `--no-capture` is missing, add it.
-Redirect the test output to a file. Do not run the test in the background or use a timeout. It may run for a long time, but it will finish.
+Redirect the test output to a file named `experiment_N.log` where N is the iteration number. Do not run the test in the background or use a timeout. It may run for a long time, but it will finish.
 
 ### 3. Examine the output and make observations.
 Use grep and other tools to examine the output log (which will be very large). Summarize your observations to NOTEBOOK.md.
@@ -57,8 +71,12 @@ An "experiment" consists of adding logging statments to the code which can confi
 Summarize the experiment to NOTEBOOK.md
 
 ### 6. Run and evaluate the experiment
-after adding logs to the code, run the reproduction command again. Determine whether the hypothesis was confirmed or refuted by the observations.
-Record the results of the experiment to NOTEBOOK.md.
+After adding logs to the code (N is the iteration number):
+1. Commit the logging changes with message `debug: experiment N logging` (do not include log files)
+2. Run the reproduction command, redirecting output to `experiment_N.log`
+3. Determine whether the hypothesis was confirmed or refuted by the observations
+4. Record the results of the experiment to NOTEBOOK.md
+5. Commit the NOTEBOOK.md updates with message `debug: experiment N observations`
 
 ### 7. Decide whether we have found the root cause
 if a hypothesis has been confirmed, determine if it is the root cause.  If so, the debugging is complete. Summarize the results to the user.
