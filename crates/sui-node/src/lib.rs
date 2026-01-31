@@ -14,7 +14,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::future::BoxFuture;
-use mysten_common::debug_fatal;
+use mysten_common::{debug_fatal, in_test_configuration};
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -68,6 +68,19 @@ use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{Instrument, error_span, info};
 use tracing::{debug, error, warn};
+
+// Logs at debug level in test configuration, info level otherwise.
+// JWK logs cause significant volume in tests, but are insignificant in prod,
+// so we keep them at info
+macro_rules! jwk_log {
+    ($($arg:tt)+) => {
+        if in_test_configuration() {
+            debug!($($arg)+);
+        } else {
+            info!($($arg)+);
+        }
+    };
+}
 
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
@@ -393,7 +406,7 @@ impl SuiNode {
                     // just best-effort to reduce unneeded submissions.
                     let mut seen = HashSet::new();
                     loop {
-                        info!("fetching JWK for provider {:?}", p);
+                        jwk_log!("fetching JWK for provider {:?}", p);
                         metrics.jwk_requests.with_label_values(&[&provider_str]).inc();
                         match Self::fetch_jwks(authority, &p).await {
                             Err(e) => {
@@ -426,7 +439,7 @@ impl SuiNode {
                                 }
 
                                 for (id, jwk) in keys.into_iter() {
-                                    info!("Submitting JWK to consensus: {:?}", id);
+                                    jwk_log!("Submitting JWK to consensus: {:?}", id);
 
                                     let txn = ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
                                     consensus_adapter.submit(txn, None, &epoch_store, None, None)

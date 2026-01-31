@@ -1454,7 +1454,7 @@ impl CheckpointBuilder {
             .get_pending_checkpoints_v2(last_height)
             .expect("unexpected epoch store error")
         {
-            info!(checkpoint_commit_height = height, "Making checkpoint");
+            debug!(checkpoint_commit_height = height, "Making checkpoint");
 
             let seq = self.make_checkpoint_v2(pending).await?;
 
@@ -2237,7 +2237,7 @@ impl CheckpointBuilder {
         let mut last_checkpoint =
             Self::load_last_built_checkpoint_summary(&self.epoch_store, &self.store)?;
         let last_checkpoint_seq = last_checkpoint.as_ref().map(|(seq, _)| *seq);
-        info!(
+        debug!(
             checkpoint_commit_height = details.checkpoint_height,
             next_checkpoint_seq = last_checkpoint_seq.unwrap_or_default() + 1,
             checkpoint_timestamp = details.timestamp_ms,
