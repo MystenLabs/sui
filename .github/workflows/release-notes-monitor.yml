@@ -105,22 +105,29 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
 
-    - name: Get PR author
+    - name: Get PR author and title
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        export author=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".user.login")
-        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
+        # Fetch PR info (author and title) in one API call
+        pr_info=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }})
+        author=$(echo "$pr_info" | jq -r ".user.login")
+        pr_title=$(echo "$pr_info" | jq -r ".title")
+
+        # Fetch employees.json once and reuse
+        employees=$(aws s3 cp s3://mysten-employees-dir/employees.json -)
+        slack_id=$(echo "$employees" | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
 
         # if we don't have the slack id or the author is not part of Mysten org, get the reviewer instead
         if [ -z "$slack_id" ]; then
-          export reviewer=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}/reviews --jq ".[0].user.login")
-          export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${reviewer}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
+          reviewer=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}/reviews --jq ".[0].user.login")
+          slack_id=$(echo "$employees" | jq --arg AUTHOR "${reviewer}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
         fi
 
-        # Store both slack_id and author for fallback display
+        # Store slack_id, author, and title for use in Slack message
         echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
         echo "author=${author}" >> $GITHUB_ENV
+        echo "pr_title=${pr_title}" >> $GITHUB_ENV
 
     - name: Post to a Slack channel
       uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
@@ -131,7 +138,7 @@ jobs:
           channel: "#ext-mysten-release-notes"
           text: |
             ${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS || '' }}${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS && ', please' || 'Please' }} review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
-            *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by ${{ env.slack_id && format('<@{0}>', env.slack_id) || format('`{0}` (external contributor)', env.author) }}
+            *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|#${{ matrix.pr }}: ${{ env.pr_title }}> by ${{ env.slack_id && format('<@{0}>', env.slack_id) || format('`{0}` (external contributor)', env.author) }}
             *Release Notes:*
             ${{ steps.read-notes.outputs.release_notes }}
 

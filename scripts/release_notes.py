@@ -559,8 +559,9 @@ def do_list_prs(from_, to):
 
             seen_prs.add(number)
 
-            # Check if PR has checked release notes
-            if re.search(r"^\s*-\s*\[x\]\s*", body, re.MULTILINE | re.IGNORECASE):
+            # Check if PR has checked release notes using parse_notes for consistency
+            notes = parse_notes(body)
+            if any(note.checked for note in notes.values()):
                 prs_with_notes.append(number)
 
     print(json.dumps(prs_with_notes))
