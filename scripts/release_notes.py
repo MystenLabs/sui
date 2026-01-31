@@ -13,19 +13,19 @@ import subprocess
 import sys
 from typing import NamedTuple
 
-RE_NUM = re.compile("[0-9_]+")
+RE_VERSION_NUMBER = re.compile("[0-9_]+")
 
-RE_HEADING = re.compile(
+RE_RELEASE_NOTES_HEADING = re.compile(
     r"#+ Release notes(.*)",
     re.DOTALL | re.IGNORECASE,
 )
 
-RE_CHECK = re.compile(
+RE_CHECKBOX = re.compile(
     r"^\s*-\s*\[.\]",
     re.MULTILINE,
 )
 
-RE_NOTE = re.compile(
+RE_RELEASE_NOTE_LINE = re.compile(
     r"^\s*-\s*\[( |x)?\]\s*([^:]+):",
     re.MULTILINE | re.IGNORECASE,
 )
@@ -204,7 +204,7 @@ def parse_notes(notes):
     if not notes:
         return result
 
-    match = RE_HEADING.search(notes)
+    match = RE_RELEASE_NOTES_HEADING.search(notes)
     if not match:
         return result
 
@@ -213,7 +213,7 @@ def parse_notes(notes):
 
     while True:
         # Find the next possible release note
-        match = RE_NOTE.search(notes, start)
+        match = RE_RELEASE_NOTE_LINE.search(notes, start)
         if not match:
             break
 
@@ -222,7 +222,7 @@ def parse_notes(notes):
         begin = match.end()
 
         # Find the end of the note, or the end of the commit
-        match = RE_CHECK.search(notes, begin)
+        match = RE_CHECKBOX.search(notes, begin)
         end = match.start() if match else len(notes)
 
         result[impacted] = Note(
@@ -347,9 +347,9 @@ def fetch_release_notes_for_commits(commits):
             seen.add(number)
 
             notes = parse_notes(body)
-            for impacted, note in notes.items():
+            for impact_area, note in notes.items():
                 if note.checked:
-                    results[impacted].append((number, note.note))
+                    results[impact_area].append((number, note.note))
 
     return results
 
@@ -368,7 +368,7 @@ def extract_protocol_version(commit):
         if not assign:
             continue
 
-        match = RE_NUM.search(assign)
+        match = RE_VERSION_NUMBER.search(assign)
         if not match:
             continue
 
@@ -401,46 +401,46 @@ def do_check(pr):
     MIN_NOTE_LENGTH = 10
 
     # Build case-insensitive lookup for known impact areas
-    note_order_lower = {area.lower(): area for area in NOTE_ORDER}
+    impact_areas_lowercase = {area.lower(): area for area in NOTE_ORDER}
 
     notes = extract_notes_for_pr(pr)
     issues = []
     warnings = []
 
-    for impacted, note in notes.items():
+    for impact_area, note in notes.items():
         # Check for case-insensitive match first
-        if impacted not in NOTE_ORDER:
-            lower_impacted = impacted.lower()
-            if lower_impacted in note_order_lower:
+        if impact_area not in NOTE_ORDER:
+            lower_impact_area = impact_area.lower()
+            if lower_impact_area in impact_areas_lowercase:
                 # Case mismatch - suggest the correct case
-                correct_case = note_order_lower[lower_impacted]
+                correct_case = impact_areas_lowercase[lower_impact_area]
                 issues.append(
-                    f" - Impact area '{impacted}' has incorrect case. "
+                    f" - Impact area '{impact_area}' has incorrect case. "
                     f"Use '{correct_case}' instead."
                 )
             else:
                 # Check for typos by finding close matches
-                close_matches = get_close_matches(impacted, NOTE_ORDER, n=1, cutoff=0.6)
+                close_matches = get_close_matches(impact_area, NOTE_ORDER, n=1, cutoff=0.6)
                 if close_matches:
                     issues.append(
-                        f" - Found unfamiliar impact area '{impacted}'. "
+                        f" - Found unfamiliar impact area '{impact_area}'. "
                         f"Did you mean '{close_matches[0]}'?"
                     )
                 else:
-                    issues.append(f" - Found unfamiliar impact area '{impacted}'.")
+                    issues.append(f" - Found unfamiliar impact area '{impact_area}'.")
 
         if note.checked and not note.note:
-            issues.append(f" - '{impacted}' is checked but has no release note.")
+            issues.append(f" - '{impact_area}' is checked but has no release note.")
 
         if not note.checked and note.note:
             issues.append(
-                f" - '{impacted}' has a release note but is not checked: {note.note}"
+                f" - '{impact_area}' has a release note but is not checked: {note.note}"
             )
 
         # Warn about very short notes that may not be meaningful
         if note.checked and note.note and len(note.note) < MIN_NOTE_LENGTH:
             warnings.append(
-                f" - '{impacted}' has a very short release note ({len(note.note)} chars). "
+                f" - '{impact_area}' has a very short release note ({len(note.note)} chars). "
                 f"Consider adding more detail."
             )
 
@@ -571,9 +571,9 @@ def do_get_notes(pr):
     notes = extract_notes_for_pr(pr)
 
     output_lines = []
-    for impacted, note in notes.items():
+    for impact_area, note in notes.items():
         if note.checked and note.note:
-            output_lines.append(f"{impacted}: {note.note}")
+            output_lines.append(f"{impact_area}: {note.note}")
 
     print("\n".join(output_lines))
 
@@ -611,14 +611,14 @@ def do_generate(from_, to):
     results = fetch_release_notes_for_commits(commits.split("\n"))
 
     # Print the impact areas we know about first
-    for impacted in NOTE_ORDER:
-        notes = results.pop(impacted, None)
+    for impact_area in NOTE_ORDER:
+        notes = results.pop(impact_area, None)
         if not notes:
             continue
 
-        print(f"## {impacted}")
+        print(f"## {impact_area}")
 
-        if impacted == "Protocol":
+        if impact_area == "Protocol":
             print(f"#### Sui Protocol Version in this release: `{protocol_version}`")
         print()
 
@@ -627,8 +627,8 @@ def do_generate(from_, to):
             print()
 
     # Print any remaining impact areas
-    for impacted, notes in results.items():
-        print(f"## {impacted}\n")
+    for impact_area, notes in results.items():
+        print(f"## {impact_area}\n")
         for pr, note in reversed(notes):
             print_changelog(pr, note)
             print()

@@ -425,8 +425,8 @@ class TestDoCheckProtocolVersion(unittest.TestCase):
         do_check("123")
 
 
-class TestDoCheckEdgeCases(unittest.TestCase):
-    """Tests for do_check edge cases: case sensitivity, whitespace, missing args."""
+class TestDoCheckInputValidation(unittest.TestCase):
+    """Tests for do_check input validation: missing PR, empty PR, case mismatch."""
 
     def test_fails_when_pr_is_none(self):
         """Should fail with error when PR number is not provided."""
@@ -548,8 +548,8 @@ Check each box that your changes affect.
         self.assertEqual(notes["CLI"].note, "New CLI command")
 
 
-class TestDoCheckImprovements(unittest.TestCase):
-    """Tests for do_check improvements: typo detection and short note warnings."""
+class TestDoCheckUserFeedback(unittest.TestCase):
+    """Tests for do_check user feedback: typo suggestions, warnings, success messages."""
 
     @patch("release_notes.pr_bumps_protocol_version")
     @patch("release_notes.extract_notes_for_pr")
