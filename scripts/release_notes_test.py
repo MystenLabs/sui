@@ -4,6 +4,7 @@
 
 """Unit tests for release_notes.py"""
 
+import subprocess
 import unittest
 from unittest.mock import patch, MagicMock
 from io import StringIO
@@ -282,6 +283,146 @@ Some PR description.
 
         self.assertTrue(notes["JSON-RPC"].checked)
         self.assertEqual(notes["JSON-RPC"].note, "New RPC method added")
+
+
+class TestPrBumpsProtocolVersion(unittest.TestCase):
+    """Tests for pr_bumps_protocol_version function."""
+
+    @patch("release_notes.GH_CLI_PATH", "/usr/bin/gh")
+    @patch("release_notes.subprocess.check_output")
+    def test_detects_protocol_version_bump(self, mock_check_output):
+        """Test detection when MAX_PROTOCOL_VERSION is modified."""
+        mock_check_output.return_value = """
+diff --git a/crates/sui-protocol-config/src/lib.rs b/crates/sui-protocol-config/src/lib.rs
+--- a/crates/sui-protocol-config/src/lib.rs
++++ b/crates/sui-protocol-config/src/lib.rs
+@@ -25,7 +25,7 @@
+ const MIN_PROTOCOL_VERSION: u64 = 1;
+-const MAX_PROTOCOL_VERSION: u64 = 109;
++const MAX_PROTOCOL_VERSION: u64 = 110;
+"""
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertTrue(pr_bumps_protocol_version("123"))
+
+    @patch("release_notes.GH_CLI_PATH", "/usr/bin/gh")
+    @patch("release_notes.subprocess.check_output")
+    def test_no_bump_when_file_not_changed(self, mock_check_output):
+        """Test returns False when protocol config file not in diff."""
+        mock_check_output.return_value = """
+diff --git a/crates/sui-core/src/lib.rs b/crates/sui-core/src/lib.rs
+--- a/crates/sui-core/src/lib.rs
++++ b/crates/sui-core/src/lib.rs
+@@ -1,3 +1,4 @@
++// Some comment
+"""
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertFalse(pr_bumps_protocol_version("123"))
+
+    @patch("release_notes.GH_CLI_PATH", "/usr/bin/gh")
+    @patch("release_notes.subprocess.check_output")
+    def test_no_bump_when_other_line_changed(self, mock_check_output):
+        """Test returns False when lib.rs changed but not MAX_PROTOCOL_VERSION."""
+        mock_check_output.return_value = """
+diff --git a/crates/sui-protocol-config/src/lib.rs b/crates/sui-protocol-config/src/lib.rs
+--- a/crates/sui-protocol-config/src/lib.rs
++++ b/crates/sui-protocol-config/src/lib.rs
+@@ -100,6 +100,7 @@
++    some_new_config: true,
+"""
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertFalse(pr_bumps_protocol_version("123"))
+
+    @patch("release_notes.GH_CLI_PATH", "/usr/bin/gh")
+    @patch("release_notes.subprocess.check_output")
+    def test_handles_gh_cli_failure(self, mock_check_output):
+        """Test returns False when gh CLI fails."""
+        mock_check_output.side_effect = subprocess.CalledProcessError(1, "gh")
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertFalse(pr_bumps_protocol_version("123"))
+
+    @patch("release_notes.GH_CLI_PATH", None)
+    def test_returns_false_when_no_gh_cli(self):
+        """Test returns False when gh CLI is not available."""
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertFalse(pr_bumps_protocol_version("123"))
+
+
+class TestDoCheckProtocolVersion(unittest.TestCase):
+    """Tests for do_check with protocol version validation."""
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_fails_when_protocol_bump_without_note(self, mock_extract, mock_bumps):
+        """Should fail when MAX_PROTOCOL_VERSION bumped but no Protocol note."""
+        mock_bumps.return_value = True
+        mock_extract.return_value = {
+            "CLI": Note(checked=True, note="Some CLI change"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()):
+                do_check("123")
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_fails_when_protocol_bump_with_unchecked_note(self, mock_extract, mock_bumps):
+        """Should fail when Protocol note exists but is not checked."""
+        mock_bumps.return_value = True
+        mock_extract.return_value = {
+            "Protocol": Note(checked=False, note="Protocol change"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()):
+                do_check("123")
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_fails_when_protocol_bump_with_empty_note(self, mock_extract, mock_bumps):
+        """Should fail when Protocol is checked but note is empty."""
+        mock_bumps.return_value = True
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note=""),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()):
+                do_check("123")
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_passes_when_protocol_bump_with_valid_note(self, mock_extract, mock_bumps):
+        """Should pass when Protocol bump has proper release note."""
+        mock_bumps.return_value = True
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note="Bump protocol version for feature X"),
+        }
+        from release_notes import do_check
+
+        # Should not raise SystemExit
+        do_check("123")
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_passes_when_no_protocol_bump(self, mock_extract, mock_bumps):
+        """Should pass validation when no protocol version bump."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {}
+        from release_notes import do_check
+
+        # Should not raise SystemExit
+        do_check("123")
 
 
 if __name__ == "__main__":

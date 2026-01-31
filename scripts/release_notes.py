@@ -29,6 +29,9 @@ RE_NOTE = re.compile(
     re.MULTILINE | re.IGNORECASE,
 )
 
+# Path to the protocol config file that contains MAX_PROTOCOL_VERSION.
+PROTOCOL_CONFIG_PATH = "crates/sui-protocol-config/src/lib.rs"
+
 # Only commits that affect changes in these directories will be
 # considered when generating release notes.
 INTERESTING_DIRECTORIES = [
@@ -384,6 +387,9 @@ def do_check(pr):
     every note is attached to a checked checkbox, and every impact
     area is known.
 
+    Additionally, if the PR bumps MAX_PROTOCOL_VERSION, it must have a
+    checked 'Protocol' release note with content.
+
     """
 
     notes = extract_notes_for_pr(pr)
@@ -400,6 +406,16 @@ def do_check(pr):
                 f" - '{impacted}' has a release note but is not checked: {note.note}"
             )
 
+    # Check if the PR bumps MAX_PROTOCOL_VERSION and requires a Protocol release note
+    if pr_bumps_protocol_version(pr):
+        protocol_note = notes.get("Protocol")
+        if not protocol_note:
+            issues.append(" - PR bumps MAX_PROTOCOL_VERSION but has no 'Protocol' release note.")
+        elif not protocol_note.checked:
+            issues.append(" - PR bumps MAX_PROTOCOL_VERSION but 'Protocol' checkbox is not checked.")
+        elif not protocol_note.note:
+            issues.append(" - PR bumps MAX_PROTOCOL_VERSION but 'Protocol' release note is empty.")
+
     if not issues:
         return
 
@@ -415,6 +431,34 @@ def pr_has_release_notes(pr):
     data = gql(PR_BODY_QUERY, variables)
     body = data.get("data", {}).get("repository", {}).get("pullRequest", {}).get("body") or ""
     return bool(re.search(r"^\s*-\s*\[x\]\s*", body, re.MULTILINE | re.IGNORECASE))
+
+
+def pr_bumps_protocol_version(pr):
+    """Check if a PR modifies MAX_PROTOCOL_VERSION.
+
+    Uses `gh pr diff` to get the PR diff and checks if the protocol config
+    file has changes to the MAX_PROTOCOL_VERSION constant.
+    """
+    if not GH_CLI_PATH:
+        return False
+
+    try:
+        diff = subprocess.check_output(
+            [GH_CLI_PATH, "pr", "diff", str(pr), "--repo", "MystenLabs/sui"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        return False
+
+    in_protocol_config = False
+    for line in diff.splitlines():
+        if line.startswith("diff --git"):
+            in_protocol_config = PROTOCOL_CONFIG_PATH in line
+        elif in_protocol_config and line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
+            if "MAX_PROTOCOL_VERSION" in line:
+                return True
+    return False
 
 
 def do_list_prs(from_, to):
