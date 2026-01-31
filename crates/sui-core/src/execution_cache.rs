@@ -555,13 +555,16 @@ pub trait TransactionCacheRead: Send + Sync {
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffects>> {
         async move {
-            let digests = self
+            let effects_digests = self
                 .notify_read_executed_effects_digests(task_name, digests)
                 .await;
             // once digests are available, effects must be present as well
-            self.multi_get_effects(&digests)
+            self.multi_get_effects(&effects_digests)
                 .into_iter()
-                .map(|e| e.unwrap_or_else(|| fatal!("digests must exist")))
+                .zip(digests)
+                .map(|(e, digest)| {
+                    e.unwrap_or_else(|| fatal!("digest for transaction {:?} must exist", digest))
+                })
                 .collect()
         }
         .boxed()
