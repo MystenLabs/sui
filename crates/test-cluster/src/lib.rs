@@ -623,6 +623,18 @@ impl TestCluster {
         Ok(res.pop().unwrap())
     }
 
+    /// Execute an already-signed transaction via direct validator submission, bypassing the fullnode.
+    pub async fn execute_transaction_directly(
+        &self,
+        tx: &Transaction,
+    ) -> SuiResult<(TransactionDigest, TransactionEffects)> {
+        let mut res = self
+            .execute_signed_txns_in_soft_bundle(std::slice::from_ref(tx))
+            .await?;
+        assert_eq!(res.len(), 1);
+        Ok(res.pop().unwrap())
+    }
+
     /// Sign and execute multiple transactions in a soft bundle.
     /// Soft bundles allow submitting multiple transactions together with best-effort
     /// ordering if they use the same gas price. Transactions in a soft bundle can be
