@@ -1128,7 +1128,7 @@ async fn execute_add_validator_transactions(
 }
 
 async fn try_request_add_validator(
-    test_cluster: &mut TestCluster,
+    test_cluster: &TestCluster,
     new_validator: &ValidatorGenesisConfig,
 ) -> Result<(TransactionEffects, TransactionEvents), anyhow::Error> {
     let address = (&new_validator.account_key_pair.public()).into();
@@ -1144,7 +1144,33 @@ async fn try_request_add_validator(
         .call_request_add_validator()
         .build_and_sign(&new_validator.account_key_pair);
 
-    test_cluster
-        .execute_transaction_return_raw_effects(tx)
+    // Retry for up to 20 seconds with 5 second timeout per attempt. New validators
+    // may join consensus late and need time to catch up before their transactions
+    // can be sequenced.
+    let start = std::time::Instant::now();
+    let retry_timeout = std::time::Duration::from_secs(20);
+    let attempt_timeout = std::time::Duration::from_secs(5);
+    loop {
+        match tokio::time::timeout(
+            attempt_timeout,
+            test_cluster.execute_transaction_directly(&tx),
+        )
         .await
+        {
+            Ok(Ok((_digest, effects))) => {
+                return Ok((effects, TransactionEvents::default()));
+            }
+            Ok(Err(e)) => {
+                if start.elapsed() >= retry_timeout {
+                    return Err(e.into());
+                }
+            }
+            Err(_timeout) => {
+                if start.elapsed() >= retry_timeout {
+                    return Err(anyhow::anyhow!("Timeout waiting for transaction effects"));
+                }
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
 }
