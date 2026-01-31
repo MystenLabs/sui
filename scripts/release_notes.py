@@ -218,7 +218,7 @@ def parse_notes(notes):
             break
 
         checked = match.group(1)
-        impacted = match.group(2)
+        impacted = match.group(2).strip()  # Strip whitespace from impact area
         begin = match.end()
 
         # Find the end of the note, or the end of the commit
@@ -393,24 +393,41 @@ def do_check(pr):
     checked 'Protocol' release note with content.
 
     """
+    if not pr:
+        print("Error: PR number is required.", file=sys.stderr)
+        sys.exit(1)
+
     # Minimum note length to be considered meaningful
     MIN_NOTE_LENGTH = 10
+
+    # Build case-insensitive lookup for known impact areas
+    note_order_lower = {area.lower(): area for area in NOTE_ORDER}
 
     notes = extract_notes_for_pr(pr)
     issues = []
     warnings = []
 
     for impacted, note in notes.items():
+        # Check for case-insensitive match first
         if impacted not in NOTE_ORDER:
-            # Check for typos by finding close matches
-            close_matches = get_close_matches(impacted, NOTE_ORDER, n=1, cutoff=0.6)
-            if close_matches:
+            lower_impacted = impacted.lower()
+            if lower_impacted in note_order_lower:
+                # Case mismatch - suggest the correct case
+                correct_case = note_order_lower[lower_impacted]
                 issues.append(
-                    f" - Found unfamiliar impact area '{impacted}'. "
-                    f"Did you mean '{close_matches[0]}'?"
+                    f" - Impact area '{impacted}' has incorrect case. "
+                    f"Use '{correct_case}' instead."
                 )
             else:
-                issues.append(f" - Found unfamiliar impact area '{impacted}'.")
+                # Check for typos by finding close matches
+                close_matches = get_close_matches(impacted, NOTE_ORDER, n=1, cutoff=0.6)
+                if close_matches:
+                    issues.append(
+                        f" - Found unfamiliar impact area '{impacted}'. "
+                        f"Did you mean '{close_matches[0]}'?"
+                    )
+                else:
+                    issues.append(f" - Found unfamiliar impact area '{impacted}'.")
 
         if note.checked and not note.note:
             issues.append(f" - '{impacted}' is checked but has no release note.")

@@ -425,6 +425,113 @@ class TestDoCheckProtocolVersion(unittest.TestCase):
         do_check("123")
 
 
+class TestDoCheckEdgeCases(unittest.TestCase):
+    """Tests for do_check edge cases: case sensitivity, whitespace, missing args."""
+
+    def test_fails_when_pr_is_none(self):
+        """Should fail with error when PR number is not provided."""
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stderr", new=StringIO()):
+                do_check(None)
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_fails_when_pr_is_empty_string(self):
+        """Should fail with error when PR number is empty string."""
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stderr", new=StringIO()):
+                do_check("")
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_detects_case_mismatch(self, mock_extract, mock_bumps):
+        """Should detect case mismatch and suggest correct case."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "protocol": Note(checked=True, note="This is a valid release note"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                do_check("123")
+                output = mock_stdout.getvalue()
+                self.assertIn("incorrect case", output)
+                self.assertIn("Protocol", output)
+        self.assertEqual(cm.exception.code, 1)
+
+
+class TestParseNotesWhitespace(unittest.TestCase):
+    """Tests for whitespace handling in parse_notes."""
+
+    def test_strips_whitespace_from_impact_area(self):
+        """Should strip whitespace from impact area names."""
+        body = """
+### Release notes
+- [x]  Protocol : Note with extra spaces around impact area
+"""
+        notes = parse_notes(body)
+        # The key should be "Protocol" not " Protocol " or "Protocol "
+        self.assertIn("Protocol", notes)
+        self.assertEqual(len(notes), 1)
+
+    def test_parses_exact_pr_template_format(self):
+        """Should correctly parse the exact format from PULL_REQUEST_TEMPLATE.md."""
+        # This mirrors the exact format from .github/PULL_REQUEST_TEMPLATE.md
+        body = """## Description
+
+Some description here.
+
+## Test plan
+
+Some test plan.
+
+---
+
+## Release notes
+
+Check each box that your changes affect.
+
+- [x] Protocol: Added new protocol feature
+- [ ] Nodes (Validators and Full nodes):
+- [ ] gRPC:
+- [x] JSON-RPC: New RPC method
+- [ ] GraphQL:
+- [x] CLI: New CLI command
+- [ ] Rust SDK:
+- [ ] Indexing Framework:
+"""
+        notes = parse_notes(body)
+
+        # Should have 8 entries (all items from template)
+        self.assertEqual(len(notes), 8)
+
+        # Check that all known impact areas are parsed correctly
+        self.assertIn("Protocol", notes)
+        self.assertIn("Nodes (Validators and Full nodes)", notes)
+        self.assertIn("gRPC", notes)
+        self.assertIn("JSON-RPC", notes)
+        self.assertIn("GraphQL", notes)
+        self.assertIn("CLI", notes)
+        self.assertIn("Rust SDK", notes)
+        self.assertIn("Indexing Framework", notes)
+
+        # Verify checked status
+        self.assertTrue(notes["Protocol"].checked)
+        self.assertFalse(notes["Nodes (Validators and Full nodes)"].checked)
+        self.assertTrue(notes["JSON-RPC"].checked)
+        self.assertTrue(notes["CLI"].checked)
+
+        # Verify note content
+        self.assertEqual(notes["Protocol"].note, "Added new protocol feature")
+        self.assertEqual(notes["JSON-RPC"].note, "New RPC method")
+        self.assertEqual(notes["CLI"].note, "New CLI command")
+
+
 class TestDoCheckImprovements(unittest.TestCase):
     """Tests for do_check improvements: typo detection and short note warnings."""
 
