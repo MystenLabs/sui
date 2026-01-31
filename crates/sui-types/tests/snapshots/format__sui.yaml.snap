@@ -1,4 +1,7 @@
 ---
+source: crates/sui-types/tests/format.rs
+expression: registry
+---
 AccountAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -1397,23 +1400,6 @@ TypeTag:
       U32: UNIT
     10:
       U256: UNIT
-TypedStoreError:
-  ENUM:
-    0:
-      RocksDBError:
-        NEWTYPE: STR
-    1:
-      SerializationError:
-        NEWTYPE: STR
-    2:
-      UnregisteredColumn:
-        NEWTYPE: STR
-    3:
-      CrossDBBatch: UNIT
-    4:
-      MetricsReporting: UNIT
-    5:
-      RetryableTransactionError: UNIT
 UnchangedConsensusKind:
   ENUM:
     0:
@@ -1475,4 +1461,3 @@ ZkLoginPublicIdentifier:
         TYPENAME: SenderSignedData
     - auth_signature:
         TYPENAME: EmptySignInfo
-
