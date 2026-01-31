@@ -118,6 +118,22 @@ impl Graph {
             .map(|(node_id, _)| *node_id);
 
         for latch_node in latch_nodes {
+            // Handle true self-loops: when there's an actual edge from node_start to itself
+            // in the CFG, all_simple_paths would hang indefinitely. We detect this by checking
+            // if latch_node == node_start AND there's an actual edge in the CFG.
+            if latch_node == node_start {
+                let has_self_loop_edge = self
+                    .cfg
+                    .neighbors_directed(node_start, petgraph::Direction::Outgoing)
+                    .any(|n| n == node_start);
+                if has_self_loop_edge {
+                    // True self-loop: skip all_simple_paths which would hang, but still
+                    // add the head node to loop_nodes so the loop body isn't empty
+                    loop_nodes.insert(node_start);
+                    continue;
+                }
+                // Fake self-loop from latch updates: let all_simple_paths run normally
+            }
             let paths = petgraph::algo::all_simple_paths::<Vec<_>, _, RandomState>(
                 &self.cfg, node_start, latch_node, 0, None,
             )
