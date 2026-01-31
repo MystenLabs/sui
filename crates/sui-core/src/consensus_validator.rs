@@ -115,10 +115,16 @@ impl SuiTxValidator {
                     .into());
                 }
 
+                ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
+                    return Err(SuiErrorKind::UnexpectedMessage(
+                        "RandomnessStateUpdate is no longer supported".to_string(),
+                    )
+                    .into());
+                }
+
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
-                | ConsensusTransactionKind::CapabilityNotificationV2(_)
-                | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
+                | ConsensusTransactionKind::CapabilityNotificationV2(_) => {}
 
                 ConsensusTransactionKind::UserTransaction(_) => {
                     if epoch_store.protocol_config().address_aliases()
