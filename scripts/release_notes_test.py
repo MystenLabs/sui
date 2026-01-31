@@ -479,6 +479,22 @@ class TestParseNotesWhitespace(unittest.TestCase):
         self.assertIn("Protocol", notes)
         self.assertEqual(len(notes), 1)
 
+    def test_handles_space_after_colon_variations(self):
+        """Should handle notes with or without space after the colon."""
+        body = """
+### Release notes
+- [x] Protocol: Note with space after colon
+- [x] CLI:Note without space after colon
+- [x] GraphQL:  Note with two spaces after colon
+"""
+        notes = parse_notes(body)
+
+        self.assertEqual(len(notes), 3)
+        # All should have properly trimmed notes
+        self.assertEqual(notes["Protocol"].note, "Note with space after colon")
+        self.assertEqual(notes["CLI"].note, "Note without space after colon")
+        self.assertEqual(notes["GraphQL"].note, "Note with two spaces after colon")
+
     def test_parses_exact_pr_template_format(self):
         """Should correctly parse the exact format from PULL_REQUEST_TEMPLATE.md."""
         # This mirrors the exact format from .github/PULL_REQUEST_TEMPLATE.md
