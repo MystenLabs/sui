@@ -35,7 +35,6 @@ use move_binary_format::binary_config::BinaryConfig;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
 use mysten_common::{assert_reachable, fatal};
-use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
     Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
@@ -98,7 +97,6 @@ use tokio::sync::watch::error::RecvError;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::trace;
 use tracing::{debug, error, info, instrument, warn};
 
 use self::authority_store::ExecutionLockWriteGuard;
@@ -265,7 +263,6 @@ pub mod backpressure;
 pub struct AuthorityMetrics {
     tx_orders: IntCounter,
     total_certs: IntCounter,
-    total_cert_attempts: IntCounter,
     total_effects: IntCounter,
     // TODO: this tracks consensus object tx, not just shared. Consider renaming.
     pub shared_obj_tx: IntCounter,
@@ -277,10 +274,6 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 
     authority_state_handle_vote_transaction_latency: Histogram,
-
-    execute_certificate_latency_single_writer: Histogram,
-    execute_certificate_latency_shared_object: Histogram,
-    await_transaction_latency: Histogram,
 
     internal_execution_latency: Histogram,
     execution_load_input_objects_latency: Histogram,
@@ -402,20 +395,6 @@ pub const WAIT_FOR_FASTPATH_INPUT_TIMEOUT: Duration = Duration::from_secs(2);
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
-        let execute_certificate_latency = register_histogram_vec_with_registry!(
-            "authority_state_execute_certificate_latency",
-            "Latency of executing certificates, including waiting for inputs",
-            &["tx_type"],
-            LATENCY_SEC_BUCKETS.to_vec(),
-            registry,
-        )
-        .unwrap();
-
-        let execute_certificate_latency_single_writer =
-            execute_certificate_latency.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
-        let execute_certificate_latency_shared_object =
-            execute_certificate_latency.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
-
         Self {
             tx_orders: register_int_counter_with_registry!(
                 "total_transaction_orders",
@@ -426,12 +405,6 @@ impl AuthorityMetrics {
             total_certs: register_int_counter_with_registry!(
                 "total_transaction_certificates",
                 "Total number of transaction certificates handled",
-                registry,
-            )
-            .unwrap(),
-            total_cert_attempts: register_int_counter_with_registry!(
-                "total_handle_certificate_attempts",
-                "Number of calls to handle_certificate",
                 registry,
             )
             .unwrap(),
@@ -487,15 +460,6 @@ impl AuthorityMetrics {
             authority_state_handle_vote_transaction_latency: register_histogram_with_registry!(
                 "authority_state_handle_vote_transaction_latency",
                 "Latency of voting on transactions without signing",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            execute_certificate_latency_single_writer,
-            execute_certificate_latency_shared_object,
-            await_transaction_latency: register_histogram_with_registry!(
-                "await_transaction_latency",
-                "Latency of awaiting user transaction execution, including waiting for inputs",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -1400,75 +1364,41 @@ impl AuthorityState {
         })
     }
 
-    /// Wait for a certificate to be executed.
-    /// For consensus transactions, it needs to be sequenced by the consensus.
-    /// For owned object transactions, this function will enqueue the transaction for execution.
-    // TODO: The next 3 functions are very similar. We should refactor them.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn wait_for_certificate_execution(
-        &self,
-        certificate: &VerifiedCertificate,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<TransactionEffects> {
-        self.wait_for_transaction_execution(
-            &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
-            epoch_store,
-        )
-        .await
-    }
-
     /// Wait for a transaction to be executed.
     /// For consensus transactions, it needs to be sequenced by the consensus.
     /// For owned object transactions, this function will enqueue the transaction for execution.
+    ///
+    /// Only use this in tests.
     #[instrument(level = "trace", skip_all)]
-    pub async fn wait_for_transaction_execution(
+    pub async fn wait_for_transaction_execution_for_testing(
         &self,
         transaction: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<TransactionEffects> {
-        let _metrics_guard = if transaction.is_consensus_tx() {
-            self.metrics
-                .execute_certificate_latency_shared_object
-                .start_timer()
-        } else {
-            self.metrics
-                .execute_certificate_latency_single_writer
-                .start_timer()
-        };
-        trace!("execute_transaction");
+    ) -> TransactionEffects {
+        if !transaction.is_consensus_tx()
+            && !epoch_store.protocol_config().disable_preconsensus_locking()
+        {
+            // Shared object transactions need to be sequenced by the consensus before enqueueing
+            // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
+            //
+            // For owned object transactions, they can be enqueued for execution immediately
+            // ONLY when disable_preconsensus_locking is false (QD/original fastpath mode).
+            // When disable_preconsensus_locking is true (MFP mode), all transactions including
+            // owned object transactions must go through consensus before enqueuing for execution.
+            self.execution_scheduler.enqueue(
+                vec![(
+                    Schedulable::Transaction(transaction.clone()),
+                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                )],
+                epoch_store,
+            );
+        }
 
-        self.metrics.total_cert_attempts.inc();
-
-        // tx could be reverted when epoch ends, so we must be careful not to return a result
-        // here after the epoch ends.
-        epoch_store
-            .within_alive_epoch(self.notify_read_effects(
-                "AuthorityState::wait_for_transaction_execution",
-                *transaction.digest(),
-            ))
-            .await
-            .map_err(|_| SuiErrorKind::EpochEnded(epoch_store.epoch()).into())
-            .and_then(|r| r)
-    }
-
-    /// Awaits the effects of executing a user transaction.
-    ///
-    /// Relies on consensus to enqueue the transaction for execution.
-    pub async fn await_transaction_effects(
-        &self,
-        digest: TransactionDigest,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<TransactionEffects> {
-        let _metrics_guard = self.metrics.await_transaction_latency.start_timer();
-        debug!("await_transaction");
-
-        epoch_store
-            .within_alive_epoch(
-                self.notify_read_effects("AuthorityState::await_transaction_effects", digest),
-            )
-            .await
-            .map_err(|_| SuiErrorKind::EpochEnded(epoch_store.epoch()).into())
-            .and_then(|r| r)
+        self.notify_read_effects_for_testing(
+            "AuthorityState::wait_for_transaction_execution_for_testing",
+            *transaction.digest(),
+        )
+        .await
     }
 
     /// Internal logic to execute a certificate.
@@ -1735,17 +1665,20 @@ impl AuthorityState {
         (signed_effects, execution_error_opt)
     }
 
-    pub async fn notify_read_effects(
+    /// Wait until the effects of the given transaction are available and return them.
+    /// Panics if the effects are not found.
+    ///
+    /// Only use this in tests where effects are expected to exist.
+    pub async fn notify_read_effects_for_testing(
         &self,
         task_name: &'static str,
         digest: TransactionDigest,
-    ) -> SuiResult<TransactionEffects> {
-        Ok(self
-            .get_transaction_cache_reader()
+    ) -> TransactionEffects {
+        self.get_transaction_cache_reader()
             .notify_read_executed_effects(task_name, &[digest])
             .await
             .pop()
-            .expect("must return correct number of effects"))
+            .expect("must return correct number of effects")
     }
 
     fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
