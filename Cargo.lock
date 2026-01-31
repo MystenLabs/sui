@@ -7177,9 +7177,9 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.43.2"
+version = "1.46.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46fdb647ebde000f43b5b53f773c30cf9b0cb4300453208713fa38b2c70935a0"
+checksum = "38c91d64f9ad425e80200a50a0e8b8a641680b44e33ce832efe5b8bc65161b07"
 dependencies = [
  "console 0.15.4",
  "once_cell",
@@ -7187,6 +7187,7 @@ dependencies = [
  "pest_derive",
  "serde",
  "similar",
+ "tempfile",
 ]
 
 [[package]]
@@ -16197,10 +16198,9 @@ version = "1.66.0"
 dependencies = [
  "anyhow",
  "bcs",
- "clap",
  "fastcrypto",
+ "insta",
  "move-core-types",
- "pretty_assertions",
  "rand 0.8.5",
  "schemars 0.8.21",
  "serde",
@@ -16211,7 +16211,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-types",
- "tokio",
  "versions",
 ]
 

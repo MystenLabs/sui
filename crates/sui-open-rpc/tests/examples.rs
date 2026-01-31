@@ -84,6 +84,7 @@ pub struct RpcExampleProvider {
 }
 
 impl RpcExampleProvider {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             rng: StdRng::from_seed([0; 32]),
