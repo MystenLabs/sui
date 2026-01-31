@@ -425,5 +425,75 @@ class TestDoCheckProtocolVersion(unittest.TestCase):
         do_check("123")
 
 
+class TestDoCheckImprovements(unittest.TestCase):
+    """Tests for do_check improvements: typo detection and short note warnings."""
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_suggests_correction_for_typo(self, mock_extract, mock_bumps):
+        """Should suggest correction when impact area has a typo."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "Protocal": Note(checked=True, note="This is a valid release note"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                do_check("123")
+                output = mock_stdout.getvalue()
+                self.assertIn("Did you mean 'Protocol'", output)
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_warns_about_short_notes(self, mock_extract, mock_bumps):
+        """Should warn when a release note is very short."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note="Short"),
+        }
+        from release_notes import do_check
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout:
+            # Should not raise SystemExit (warnings are non-fatal)
+            do_check("123")
+            output = mock_stdout.getvalue()
+            self.assertIn("very short release note", output)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_prints_success_message(self, mock_extract, mock_bumps):
+        """Should print success message when check passes."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note="This is a proper release note with enough detail"),
+        }
+        from release_notes import do_check
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout:
+            do_check("123")
+            output = mock_stdout.getvalue()
+            self.assertIn("check passed", output)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_no_suggestion_for_completely_unknown_area(self, mock_extract, mock_bumps):
+        """Should not suggest correction for completely unknown impact areas."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "SomethingCompletelyDifferent": Note(checked=True, note="This is a valid release note"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                do_check("123")
+                output = mock_stdout.getvalue()
+                self.assertIn("unfamiliar impact area", output)
+                self.assertNotIn("Did you mean", output)
+        self.assertEqual(cm.exception.code, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

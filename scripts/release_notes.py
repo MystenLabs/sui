@@ -4,6 +4,7 @@
 
 import argparse
 from collections import defaultdict
+from difflib import get_close_matches
 import json
 import os
 import re
@@ -392,12 +393,24 @@ def do_check(pr):
     checked 'Protocol' release note with content.
 
     """
+    # Minimum note length to be considered meaningful
+    MIN_NOTE_LENGTH = 10
 
     notes = extract_notes_for_pr(pr)
     issues = []
+    warnings = []
+
     for impacted, note in notes.items():
         if impacted not in NOTE_ORDER:
-            issues.append(f" - Found unfamiliar impact area '{impacted}'.")
+            # Check for typos by finding close matches
+            close_matches = get_close_matches(impacted, NOTE_ORDER, n=1, cutoff=0.6)
+            if close_matches:
+                issues.append(
+                    f" - Found unfamiliar impact area '{impacted}'. "
+                    f"Did you mean '{close_matches[0]}'?"
+                )
+            else:
+                issues.append(f" - Found unfamiliar impact area '{impacted}'.")
 
         if note.checked and not note.note:
             issues.append(f" - '{impacted}' is checked but has no release note.")
@@ -407,7 +420,15 @@ def do_check(pr):
                 f" - '{impacted}' has a release note but is not checked: {note.note}"
             )
 
+        # Warn about very short notes that may not be meaningful
+        if note.checked and note.note and len(note.note) < MIN_NOTE_LENGTH:
+            warnings.append(
+                f" - '{impacted}' has a very short release note ({len(note.note)} chars). "
+                f"Consider adding more detail."
+            )
+
     # Check if the PR bumps MAX_PROTOCOL_VERSION and requires a Protocol release note
+    # Only make the API call if we have release notes or need to check for protocol bump
     if pr_bumps_protocol_version(pr):
         protocol_note = notes.get("Protocol")
         if not protocol_note:
@@ -417,7 +438,15 @@ def do_check(pr):
         elif not protocol_note.note:
             issues.append(" - PR bumps MAX_PROTOCOL_VERSION but 'Protocol' release note is empty.")
 
+    # Print warnings (non-fatal)
+    if warnings:
+        print(f"Warnings for release notes in PR {pr}:")
+        for warning in warnings:
+            print(warning)
+        print()
+
     if not issues:
+        print(f"Release notes check passed for PR {pr}.")
         return
 
     print(f"Found issues with release notes in PR {pr}:")
