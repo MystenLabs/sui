@@ -513,7 +513,12 @@ def do_list_prs(from_, to):
 
     Outputs JSON with PR numbers that have checked release notes,
     suitable for use in CI workflows.
+
+    Safety cap: limits to MAX_PRS_PER_RUN to prevent spam if tracking fails.
     """
+    # Safety cap to prevent spam if commit tracking gets out of sync
+    MAX_PRS_PER_RUN = 20
+
     root = git("rev-parse", "--show-toplevel")
     os.chdir(root)
 
@@ -564,17 +569,29 @@ def do_list_prs(from_, to):
             if any(note.checked for note in notes.values()):
                 prs_with_notes.append(number)
 
+    # Safety cap: if we found too many PRs, something might be wrong with tracking
+    if len(prs_with_notes) > MAX_PRS_PER_RUN:
+        print(
+            f"Warning: Found {len(prs_with_notes)} PRs with release notes, "
+            f"capping at {MAX_PRS_PER_RUN} to prevent spam.",
+            file=sys.stderr,
+        )
+        prs_with_notes = prs_with_notes[:MAX_PRS_PER_RUN]
+
     print(json.dumps(prs_with_notes))
 
 
 def do_get_notes(pr):
-    """Get formatted release notes for a specific PR."""
+    """Get formatted release notes for a specific PR.
+
+    Outputs notes as bullet points for better Slack formatting.
+    """
     notes = extract_notes_for_pr(pr)
 
     output_lines = []
     for impact_area, note in notes.items():
         if note.checked and note.note:
-            output_lines.append(f"{impact_area}: {note.note}")
+            output_lines.append(f"• *{impact_area}:* {note.note}")
 
     print("\n".join(output_lines))
 

@@ -42,10 +42,12 @@ jobs:
         # Use repo variable to track last processed commit instead of tags
         export last_processed_commit="${{ vars.RELEASE_NOTES_LAST_COMMIT }}"
 
-        # If no last processed commit, use the most recent release notes tag as fallback
+        # If no last processed commit, default to only checking last 50 commits for safety
+        # This prevents processing entire history if variable is missing/deleted
         if [ -z "$last_processed_commit" ]; then
-          last_processed_commit=$(git tag -l 'sui_v*_rel_notes' --sort=-version:refname | head -n1 || true)
-          echo "No RELEASE_NOTES_LAST_COMMIT variable found, falling back to tag: $last_processed_commit"
+          last_processed_commit=$(git rev-parse HEAD~50 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          echo "Warning: RELEASE_NOTES_LAST_COMMIT variable not set, defaulting to last 50 commits"
+          echo "Starting from: $last_processed_commit"
         fi
 
         # Use the release_notes.py script to get the list of PRs with release notes
@@ -114,6 +116,9 @@ jobs:
         author=$(echo "$pr_info" | jq -r ".user.login")
         pr_title=$(echo "$pr_info" | jq -r ".title")
 
+        # Escape special characters for Slack mrkdwn format (& < > must be escaped)
+        pr_title=$(echo "$pr_title" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+
         # Fetch employees.json once and reuse
         employees=$(aws s3 cp s3://mysten-employees-dir/employees.json -)
         slack_id=$(echo "$employees" | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
@@ -153,7 +158,16 @@ jobs:
         # Requires a PAT with repo scope to update repository variables
         GH_TOKEN: ${{ secrets.SUI_CREATE_RELEASE }}
       run: |
-        gh variable set RELEASE_NOTES_LAST_COMMIT \
-          --repo MystenLabs/sui \
-          --body "${{ needs.get-list-of-prs.outputs.new_commit_hash }}"
-        echo "Updated RELEASE_NOTES_LAST_COMMIT to ${{ needs.get-list-of-prs.outputs.new_commit_hash }}"
+        # Retry up to 3 times to ensure variable is updated
+        for attempt in 1 2 3; do
+          if gh variable set RELEASE_NOTES_LAST_COMMIT \
+              --repo MystenLabs/sui \
+              --body "${{ needs.get-list-of-prs.outputs.new_commit_hash }}"; then
+            echo "Updated RELEASE_NOTES_LAST_COMMIT to ${{ needs.get-list-of-prs.outputs.new_commit_hash }}"
+            exit 0
+          fi
+          echo "Attempt $attempt failed, retrying in 5 seconds..."
+          sleep 5
+        done
+        echo "ERROR: Failed to update RELEASE_NOTES_LAST_COMMIT after 3 attempts"
+        exit 1

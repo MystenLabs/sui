@@ -186,11 +186,11 @@ class TestPrHasReleaseNotes(unittest.TestCase):
 
 
 class TestDoGetNotes(unittest.TestCase):
-    """Tests for do_get_notes function."""
+    """Tests for do_get_notes function (used by release-notes-monitor workflow)."""
 
     @patch("release_notes.extract_notes_for_pr")
     def test_do_get_notes_output(self, mock_extract):
-        """Test that do_get_notes outputs correctly formatted notes."""
+        """Test that do_get_notes outputs correctly formatted notes as bullet points."""
         from release_notes import do_get_notes
 
         mock_extract.return_value = {
@@ -203,9 +203,46 @@ class TestDoGetNotes(unittest.TestCase):
             do_get_notes("123")
             output = mock_stdout.getvalue()
 
-        self.assertIn("Protocol: Protocol note", output)
-        self.assertIn("GraphQL: GraphQL note", output)
+        self.assertIn("• *Protocol:* Protocol note", output)
+        self.assertIn("• *GraphQL:* GraphQL note", output)
         self.assertNotIn("CLI:", output)
+
+    @patch("release_notes.extract_notes_for_pr")
+    def test_outputs_only_checked_notes_with_content(self, mock_extract):
+        """Should only output notes that are checked and have content."""
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note="Protocol change"),
+            "CLI": Note(checked=False, note="Unchecked CLI note"),
+            "GraphQL": Note(checked=True, note=""),  # Checked but empty
+            "JSON-RPC": Note(checked=True, note="RPC change"),
+        }
+        from release_notes import do_get_notes
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout:
+            do_get_notes("123")
+            output = mock_stdout.getvalue()
+
+        # Should include Protocol and JSON-RPC (checked with content) as bullet points
+        self.assertIn("• *Protocol:* Protocol change", output)
+        self.assertIn("• *JSON-RPC:* RPC change", output)
+        # Should NOT include CLI (unchecked) or GraphQL (empty)
+        self.assertNotIn("CLI:", output)
+        self.assertNotIn("GraphQL:", output)
+
+    @patch("release_notes.extract_notes_for_pr")
+    def test_outputs_empty_when_no_checked_notes(self, mock_extract):
+        """Should output nothing when no notes are checked."""
+        mock_extract.return_value = {
+            "Protocol": Note(checked=False, note="Some note"),
+            "CLI": Note(checked=False, note="Another note"),
+        }
+        from release_notes import do_get_notes
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout:
+            do_get_notes("123")
+            output = mock_stdout.getvalue()
+
+        self.assertEqual(output.strip(), "")
 
 
 class TestExtractNotesForPr(unittest.TestCase):
@@ -616,47 +653,6 @@ class TestDoCheckUserFeedback(unittest.TestCase):
                 self.assertIn("unfamiliar impact area", output)
                 self.assertNotIn("Did you mean", output)
         self.assertEqual(cm.exception.code, 1)
-
-
-class TestDoGetNotes(unittest.TestCase):
-    """Tests for do_get_notes function (used by release-notes-monitor workflow)."""
-
-    @patch("release_notes.extract_notes_for_pr")
-    def test_outputs_only_checked_notes_with_content(self, mock_extract):
-        """Should only output notes that are checked and have content."""
-        mock_extract.return_value = {
-            "Protocol": Note(checked=True, note="Protocol change"),
-            "CLI": Note(checked=False, note="Unchecked CLI note"),
-            "GraphQL": Note(checked=True, note=""),  # Checked but empty
-            "JSON-RPC": Note(checked=True, note="RPC change"),
-        }
-        from release_notes import do_get_notes
-
-        with patch("sys.stdout", new=StringIO()) as mock_stdout:
-            do_get_notes("123")
-            output = mock_stdout.getvalue()
-
-        # Should include Protocol and JSON-RPC (checked with content)
-        self.assertIn("Protocol: Protocol change", output)
-        self.assertIn("JSON-RPC: RPC change", output)
-        # Should NOT include CLI (unchecked) or GraphQL (empty)
-        self.assertNotIn("CLI:", output)
-        self.assertNotIn("GraphQL:", output)
-
-    @patch("release_notes.extract_notes_for_pr")
-    def test_outputs_empty_when_no_checked_notes(self, mock_extract):
-        """Should output nothing when no notes are checked."""
-        mock_extract.return_value = {
-            "Protocol": Note(checked=False, note="Some note"),
-            "CLI": Note(checked=False, note="Another note"),
-        }
-        from release_notes import do_get_notes
-
-        with patch("sys.stdout", new=StringIO()) as mock_stdout:
-            do_get_notes("123")
-            output = mock_stdout.getvalue()
-
-        self.assertEqual(output.strip(), "")
 
 
 class TestDoListPrsLogic(unittest.TestCase):
