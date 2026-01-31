@@ -12,7 +12,6 @@ use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use itertools::Itertools;
-use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::bridge::Bridge;
 
@@ -549,21 +548,44 @@ pub trait TransactionCacheRead: Send + Sync {
     /// ExecutionLockReadGuard would also prevent reconfig from happening while waiting,
     /// but this is very dangerous, as it could prevent reconfiguration from ever
     /// occurring!
+    ///
+    /// This function panics if any of the requested effects are not found. Use this in
+    /// critical paths where effects are expected to exist (e.g., checkpoint building,
+    /// consensus commit processing). For non-critical paths where effects may have been
+    /// pruned (e.g., serving historical data to clients), use `notify_read_executed_effects_may_fail`.
     fn notify_read_executed_effects<'a>(
         &'a self,
         task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffects>> {
         async move {
+            self.notify_read_executed_effects_may_fail(task_name, digests)
+                .await
+                .unwrap_or_else(|e| panic!("effects must exist: {e}"))
+        }
+        .boxed()
+    }
+
+    /// Returns an error if any of the requested effects have been pruned from the database.
+    /// Use this in non-critical paths where effects may not exist (e.g., serving historical
+    /// data that may have been pruned). For critical paths where effects must exist,
+    /// use `notify_read_executed_effects`.
+    fn notify_read_executed_effects_may_fail<'a>(
+        &'a self,
+        task_name: &'static str,
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffects>>> {
+        async move {
             let effects_digests = self
                 .notify_read_executed_effects_digests(task_name, digests)
                 .await;
-            // once digests are available, effects must be present as well
             self.multi_get_effects(&effects_digests)
                 .into_iter()
                 .zip(digests)
                 .map(|(e, digest)| {
-                    e.unwrap_or_else(|| fatal!("digest for transaction {:?} must exist", digest))
+                    e.ok_or_else(|| {
+                        SuiError::from(SuiErrorKind::TransactionEffectsNotFound { digest: *digest })
+                    })
                 })
                 .collect()
         }

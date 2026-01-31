@@ -553,7 +553,7 @@ where
         let mut local_effects_future = self
             .validator_state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(
+            .notify_read_executed_effects_may_fail(
                 "TransactionOrchestrator::notify_read_execute_transaction_with_effects_waiting",
                 &digests,
             )
@@ -567,10 +567,12 @@ where
                 biased;
 
                 // Local effects might be available
-                all_effects = &mut local_effects_future => {
+                all_effects_result = &mut local_effects_future => {
                     debug!(
                         "Effects became available while execution was running"
                     );
+                    let all_effects = all_effects_result
+                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
                     if all_effects.len() != 1 {
                         break Err(TransactionSubmissionError::TransactionDriverInternalError(SuiErrorKind::Unknown(format!("Unexpected number of effects found: {}", all_effects.len())).into()));
                     }
