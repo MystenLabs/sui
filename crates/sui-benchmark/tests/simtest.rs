@@ -574,7 +574,7 @@ mod test {
             config
         });
 
-        let test_cluster = build_test_cluster(4, 5000, 2).await;
+        let test_cluster = build_test_cluster(4, 30000, 2).await;
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
             let mut rng = thread_rng();
