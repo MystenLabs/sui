@@ -82,3 +82,11 @@ After adding logs to the code (N is the iteration number):
 if a hypothesis has been confirmed, determine if it is the root cause.  If so, the debugging is complete. Summarize the results to the user.
 
 Otherwise, if the hypothesis is refuted, or if it is not a root cause, return to step 3, and form a new hypothesis consistent with previous hypotheses.  Repeat all steps until we find the root cause.
+
+## Cleanup Before PR
+
+When creating a PR for the fix:
+1. **Remove all debugging commits** - The debug commits (logging changes, NOTEBOOK.md updates) should NOT be included in the PR. Use `git rebase` to remove them.
+2. **Delete NOTEBOOK.md** - This file is for debugging only.
+3. **Delete log files** - Remove all `experiment_N.log` files.
+4. The PR should contain ONLY the actual fix, with a clean commit history.
