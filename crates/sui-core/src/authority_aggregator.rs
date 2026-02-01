@@ -359,6 +359,7 @@ pub struct AuthorityAggregatorBuilder<'a> {
     reference_gas_price: Option<u64>,
     committee_store: Option<Arc<CommitteeStore>>,
     registry: Option<&'a Registry>,
+    safe_client_metrics_base: Option<SafeClientMetricsBase>,
     timeouts_config: Option<TimeoutConfig>,
 }
 
@@ -402,6 +403,14 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
 
     pub fn with_timeouts_config(mut self, timeouts_config: TimeoutConfig) -> Self {
         self.timeouts_config = Some(timeouts_config);
+        self
+    }
+
+    pub fn with_safe_client_metrics_base(
+        mut self,
+        safe_client_metrics_base: SafeClientMetricsBase,
+    ) -> Self {
+        self.safe_client_metrics_base = Some(safe_client_metrics_base);
         self
     }
 
@@ -483,7 +492,9 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         let reference_gas_price = self.get_reference_gas_price();
         let registry = Registry::new();
         let registry = self.registry.unwrap_or(&registry);
-        let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
+        let safe_client_metrics_base = self
+            .safe_client_metrics_base
+            .unwrap_or_else(|| SafeClientMetricsBase::new(registry));
 
         let committee_store = self
             .committee_store
