@@ -4,7 +4,7 @@
 use crate::bank::BenchmarkBank;
 use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
-use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
+use crate::{BenchmarkProxyMetrics, FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
 use anyhow::{Context, Result, anyhow, bail};
 use prometheus::Registry;
 use rand::seq::SliceRandom;
@@ -53,12 +53,15 @@ impl BenchmarkSetup {
             bail!("fullnode RPC url is required");
         }
 
+        // Create metrics to share across all proxies
+        let metrics = BenchmarkProxyMetrics::new(registry);
+
         // Always create fullnode proxies for RPC reads
         let mut fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = vec![];
         for fullnode_rpc_url in fullnode_rpc_urls.iter() {
             info!("Creating FullNodeProxy: {:?}", fullnode_rpc_url);
             fullnode_proxies.push(Arc::new(
-                FullNodeProxy::from_url(fullnode_rpc_url, registry).await?,
+                FullNodeProxy::from_url(fullnode_rpc_url, &metrics).await?,
             ));
         }
 
@@ -77,8 +80,8 @@ impl BenchmarkSetup {
                 vec![Arc::new(
                     LocalValidatorAggregatorProxy::from_genesis(
                         genesis,
-                        registry,
                         reconfig_fullnode_rpc_url,
+                        &metrics,
                     )
                     .await,
                 )]

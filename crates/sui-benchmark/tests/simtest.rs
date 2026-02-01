@@ -14,6 +14,7 @@ mod test {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
+    use sui_benchmark::BenchmarkProxyMetrics;
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
@@ -1156,9 +1157,11 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
+        let metrics = BenchmarkProxyMetrics::new(&registry);
+
         // Create fullnode proxy for RPC reads
         let fullnode_proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &registry)
+            FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &metrics)
                 .await
                 .unwrap(),
         );
@@ -1168,13 +1171,11 @@ mod test {
         let execution_proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
             fullnode_proxy.clone()
         } else {
-            // Use a separate registry because FullNodeProxy already registered SafeClientMetrics
-            let validator_registry = prometheus::Registry::new();
             Arc::new(
                 LocalValidatorAggregatorProxy::from_genesis(
                     &genesis,
-                    &validator_registry,
                     &test_cluster.fullnode_handle.rpc_url,
+                    &metrics,
                 )
                 .await,
             )
