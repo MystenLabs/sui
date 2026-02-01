@@ -12,7 +12,7 @@ use std::io::Read;
 use std::{fs, io::Write};
 use sui_config::genesis::Genesis;
 use sui_data_ingestion_core::end_of_epoch_data;
-use sui_sdk::SuiClientBuilder;
+use sui_rpc_api::Client;
 use sui_types::{
     crypto::AuthorityQuorumSignInfo, message_envelope::Envelope,
     messages_checkpoint::CheckpointSummary,
@@ -193,15 +193,10 @@ async fn sync_checkpoint_list_to_latest_using_graphql(
     let mut last_epoch = summary.epoch();
 
     // Download the very latest checkpoint
-    let client = SuiClientBuilder::default()
-        .build(config.full_node_url.as_str())
-        .await
-        .expect("Cannot connect to full node");
+    let mut client =
+        Client::new(config.full_node_url.as_str()).expect("Cannot connect to full node");
 
-    let latest_seq = client
-        .read_api()
-        .get_latest_checkpoint_sequence_number()
-        .await?;
+    let latest_seq = client.get_latest_checkpoint().await?.sequence_number;
     let latest = object_store.download_checkpoint_summary(latest_seq).await?;
 
     // Sequentially record all the missing end of epoch checkpoints numbers
