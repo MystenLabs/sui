@@ -136,11 +136,15 @@ impl std::fmt::Debug for Storage {
 pub struct Database {
     storage: Storage,
     metric_conf: MetricConf,
+    registry_id: Option<mysten_metrics::RegistryID>,
 }
 
 impl Drop for Database {
     fn drop(&mut self) {
         DBMetrics::get().decrement_num_active_dbs(&self.metric_conf.db_name);
+        if let Some(registry_id) = self.registry_id {
+            DBMetrics::get().registry_service.remove(registry_id);
+        }
     }
 }
 
@@ -169,6 +173,20 @@ impl Database {
         Self {
             storage,
             metric_conf,
+            registry_id: None,
+        }
+    }
+
+    pub fn new_with_registry_id(
+        storage: Storage,
+        metric_conf: MetricConf,
+        registry_id: mysten_metrics::RegistryID,
+    ) -> Self {
+        DBMetrics::get().increment_num_active_dbs(&metric_conf.db_name);
+        Self {
+            storage,
+            metric_conf,
+            registry_id: Some(registry_id),
         }
     }
 
