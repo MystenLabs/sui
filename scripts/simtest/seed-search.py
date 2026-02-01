@@ -287,6 +287,22 @@ if __name__ == "__main__":
         safe_print(f"run: `$ ls -ltr target/simulator/deps/ | tail` to find recent test binaries");
         sys.exit(1)
 
+    # Verify that the test filter matches at least one test
+    list_cmd = [binary, "--list", args.testname]
+    if args.exact:
+        list_cmd.insert(2, "--exact")
+    try:
+        result = subprocess.run(list_cmd, capture_output=True, text=True)
+        # --list output shows tests as "test_name: test" lines
+        test_lines = [line for line in result.stdout.strip().split('\n') if line.endswith(': test')]
+        if not test_lines:
+            safe_print(f"Error: No tests match filter '{args.testname}'")
+            safe_print(f"Run: `{binary} --list` to see available tests")
+            sys.exit(1)
+        safe_print(f"Found {len(test_lines)} test(s) matching filter")
+    except Exception as e:
+        safe_print(f"Warning: Could not verify test filter: {e}")
+
     # Create temp directory for reachable assertion logs
     reach_log_dir = None
     if not args.no_reachability:
