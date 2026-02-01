@@ -1571,6 +1571,24 @@ impl From<crate::committee::Committee> for ValidatorCommittee {
     }
 }
 
+impl TryFrom<&ValidatorCommittee> for crate::committee::Committee {
+    type Error = TryFromProtoError;
+
+    fn try_from(s: &ValidatorCommittee) -> Result<Self, Self::Error> {
+        let members = s
+            .members()
+            .iter()
+            .map(|member| {
+                let public_key =
+                    crate::crypto::AuthorityPublicKeyBytes::from_bytes(member.public_key())
+                        .map_err(|e| TryFromProtoError::invalid("public_key", e))?;
+                Ok((public_key, member.weight()))
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(Self::new(s.epoch(), members))
+    }
+}
+
 //
 // ZkLoginAuthenticator
 //
