@@ -7,4 +7,4 @@ pub(crate) mod mock_funds_read;
 
 pub use address_funds::FundsSettlement;
 pub(crate) use address_funds::scheduler;
-pub(crate) use address_funds::{ScheduleStatus, TxFundsWithdraw};
+pub(crate) use address_funds::{ScheduleStatus, TxFundsWithdraw, WithdrawReservations};

@@ -48,35 +48,21 @@ impl MockFundsRead {
         inner.cur_version
     }
 
-    pub(crate) fn settle_funds_changes(
+    pub(crate) async fn settle_funds_changes(
         &self,
         funds_changes: BTreeMap<AccumulatorObjId, i128>,
         next_accumulator_version: SequenceNumber,
     ) {
-        let mut inner = self.inner.write();
-        inner.settle_funds_changes(funds_changes, next_accumulator_version);
-    }
-}
-
-impl MockFundsReadInner {
-    fn settle_funds_changes(
-        &mut self,
-        funds_changes: BTreeMap<AccumulatorObjId, i128>,
-        next_accumulator_version: SequenceNumber,
-    ) {
-        use tracing::debug;
-
-        debug!(
+        tracing::debug!(
             ?next_accumulator_version,
-            "Updating funds states in MockFundsRead: {:?}", funds_changes,
+            "Updating funds states in MockFundsRead: {:?}",
+            funds_changes,
         );
-        let new_accumulator_version = self.cur_version.next();
+        let cur_version = self.cur_version();
+        let new_accumulator_version = cur_version.next();
         assert_eq!(new_accumulator_version, next_accumulator_version);
-        self.cur_version = new_accumulator_version;
         for (account_id, balance_change) in funds_changes {
-            let balance = self
-                .get_account_amount(&account_id, self.cur_version)
-                .unwrap_or_default();
+            let balance = self.inner.read().get_latest_account_amount(&account_id).0;
             let new_balance = balance as i128 + balance_change;
             assert!(new_balance >= 0);
             let new_entry = if new_balance == 0 {
@@ -84,25 +70,24 @@ impl MockFundsReadInner {
             } else {
                 Some(new_balance as u128)
             };
-            self.amounts
+            self.inner
+                .write()
+                .amounts
                 .entry(account_id)
                 .or_default()
                 .insert(new_accumulator_version, new_entry);
+            // Mimic the async nature of on-chain settlements, where individual account
+            // objects are written individually.
+            tokio::task::yield_now().await;
         }
+        // Mimic the fact that the accumulator object is updated last after all account objects are updated.
+        tokio::task::yield_now().await;
+        self.inner.write().cur_version = new_accumulator_version;
+        tokio::task::yield_now().await;
     }
+}
 
-    fn get_account_amount(
-        &self,
-        account_id: &AccumulatorObjId,
-        accumulator_version: SequenceNumber,
-    ) -> Option<u128> {
-        let account_amounts = self.amounts.get(account_id)?;
-        account_amounts
-            .range(..=accumulator_version)
-            .last()
-            .and_then(|(_, amount)| *amount)
-    }
-
+impl MockFundsReadInner {
     fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber) {
         let account_amounts = self.amounts.get(account_id);
         match account_amounts {
