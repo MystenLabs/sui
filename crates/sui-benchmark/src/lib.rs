@@ -11,7 +11,6 @@ use anyhow::bail;
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use mysten_common::{fatal, random::get_rng};
-use prometheus::Registry;
 use rand::{Rng, seq::IteratorRandom};
 use sui_config::genesis::Genesis;
 use sui_core::{
@@ -70,6 +69,26 @@ use tracing::{debug, info, instrument, warn};
 use crate::drivers::bench_driver::ClientType;
 
 pub mod bank;
+
+/// Shared metrics for benchmark proxies that use TransactionDriver.
+/// Creating these metrics multiple times with the same registry would cause
+/// duplicate metric registration panics, so they must be shared.
+#[derive(Clone)]
+pub struct BenchmarkProxyMetrics {
+    pub safe_client_metrics_base: SafeClientMetricsBase,
+    pub transaction_driver_metrics: Arc<TransactionDriverMetrics>,
+    pub client_metrics: Arc<ValidatorClientMetrics>,
+}
+
+impl BenchmarkProxyMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            safe_client_metrics_base: SafeClientMetricsBase::new(registry),
+            transaction_driver_metrics: Arc::new(TransactionDriverMetrics::new(registry)),
+            client_metrics: Arc::new(ValidatorClientMetrics::new(registry)),
+        }
+    }
+}
 pub mod benchmark_setup;
 pub mod drivers;
 pub mod fullnode_reconfig_observer;
@@ -362,34 +381,33 @@ pub struct LocalValidatorAggregatorProxy {
 impl LocalValidatorAggregatorProxy {
     pub async fn from_genesis(
         genesis: &Genesis,
-        registry: &Registry,
         reconfig_fullnode_rpc_url: &str,
+        metrics: &BenchmarkProxyMetrics,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
-            .with_registry(registry)
+            .with_safe_client_metrics_base(metrics.safe_client_metrics_base.clone())
             .build_network_clients();
         let committee = genesis.committee();
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
         Self::new_impl(
             aggregator,
-            registry,
             reconfig_fullnode_rpc_url,
             clients,
             committee,
             chain_identifier,
+            metrics,
         )
         .await
     }
 
     async fn new_impl(
         aggregator: AuthorityAggregator<NetworkAuthorityClient>,
-        registry: &Registry,
         reconfig_fullnode_rpc_url: &str,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
         chain_identifier: ChainIdentifier,
+        metrics: &BenchmarkProxyMetrics,
     ) -> Self {
-        let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
         let (aggregator, reconfig_observer): (
             Arc<_>,
             Arc<dyn ReconfigObserver<NetworkAuthorityClient> + Sync + Send>,
@@ -410,15 +428,13 @@ impl LocalValidatorAggregatorProxy {
             (Arc::new(aggregator), reconfig_observer)
         };
 
-        let client_metrics = Arc::new(ValidatorClientMetrics::new(registry));
-
         // For benchmark, pass None to use default validator client monitor config
         let td = TransactionDriver::new(
             aggregator,
             reconfig_observer,
-            transaction_driver_metrics,
+            metrics.transaction_driver_metrics.clone(),
             None,
-            client_metrics,
+            metrics.client_metrics.clone(),
         );
         Self {
             td,
@@ -741,7 +757,10 @@ pub struct FullNodeProxy {
 }
 
 impl FullNodeProxy {
-    pub async fn from_url(http_url: &str, registry: &Registry) -> Result<Self, anyhow::Error> {
+    pub async fn from_url(
+        http_url: &str,
+        metrics: &BenchmarkProxyMetrics,
+    ) -> Result<Self, anyhow::Error> {
         let http_url = if http_url.starts_with("http://") || http_url.starts_with("https://") {
             http_url.to_string()
         } else {
@@ -782,29 +801,30 @@ impl FullNodeProxy {
             .await?;
         let new_committee = sui_system_state.get_sui_committee_for_benchmarking();
         let committee_store = Arc::new(CommitteeStore::new_for_testing(new_committee.committee()));
-        let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
 
         let aggregator = AuthorityAggregator::new_from_committee(
             new_committee,
             Arc::new(sui_system_state.get_committee_authority_names_to_hostnames()),
             sui_system_state.reference_gas_price,
             &committee_store,
-            safe_client_metrics_base.clone(),
+            metrics.safe_client_metrics_base.clone(),
         );
 
-        let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
         let reconfig_observer = Arc::new(
-            FullNodeReconfigObserver::new(&http_url, committee_store, safe_client_metrics_base)
-                .await,
+            FullNodeReconfigObserver::new(
+                &http_url,
+                committee_store,
+                metrics.safe_client_metrics_base.clone(),
+            )
+            .await,
         );
 
-        let client_metrics = Arc::new(ValidatorClientMetrics::new(registry));
         let td = TransactionDriver::new(
             Arc::new(aggregator),
             reconfig_observer,
-            transaction_driver_metrics,
+            metrics.transaction_driver_metrics.clone(),
             None,
-            client_metrics,
+            metrics.client_metrics.clone(),
         );
 
         Ok(Self {
