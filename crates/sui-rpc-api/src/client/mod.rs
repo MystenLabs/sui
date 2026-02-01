@@ -503,6 +503,44 @@ impl Client {
         Ok(response.epoch_mut().system_state.take().unwrap_or_default())
     }
 
+    pub async fn get_system_state_summary(
+        &self,
+        epoch: Option<u64>,
+    ) -> Result<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary> {
+        let system_state = self.get_system_state(epoch).await?;
+        system_state
+            .as_ref()
+            .try_into()
+            .map_err(|e: TryFromProtoError| tonic::Status::from_error(e.into()))
+    }
+
+    pub async fn get_committee(
+        &self,
+        epoch: Option<u64>,
+    ) -> Result<sui_types::committee::Committee> {
+        let mut request = proto::GetEpochRequest::default();
+        if let Some(epoch) = epoch {
+            request.set_epoch(epoch);
+        }
+        request.set_read_mask(FieldMask::from_paths([
+            proto::Epoch::path_builder().epoch(),
+            proto::Epoch::path_builder().committee().finish(),
+        ]));
+        let response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        response
+            .epoch()
+            .committee()
+            .try_into()
+            .map_err(|e: TryFromProtoError| tonic::Status::from_error(e.into()))
+    }
+
     pub async fn get_coin_info(
         &self,
         coin_type: &move_core_types::language_storage::StructTag,
