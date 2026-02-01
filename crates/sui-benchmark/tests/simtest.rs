@@ -1566,7 +1566,7 @@ mod test {
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::FLAG, 0.2)
+        .with_probability(SharedCounterIncrement::FLAG, 0.1)
         .with_probability(SharedCounterRead::FLAG, 0.1)
         .with_probability(RandomnessRead::FLAG, 0.1)
         .with_probability(AddressBalanceDeposit::FLAG, 0.1)
