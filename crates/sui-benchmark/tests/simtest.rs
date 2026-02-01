@@ -1577,7 +1577,7 @@ mod test {
         .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
         .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
         .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
-        .with_probability(AddressBalanceOverdraw::FLAG, 0.2);
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.3);
 
         test_simulated_load_with_test_config(
             test_cluster,
