@@ -21,8 +21,7 @@ use sui_core::execution_cache::build_execution_cache_from_env;
 use sui_data_ingestion_core::{CheckpointReader, create_remote_store_client, end_of_epoch_data};
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
-use sui_sdk::SuiClient;
-use sui_sdk::SuiClientBuilder;
+use sui_rpc_api::Client;
 use sui_storage::object_store::http::HttpDownloaderBuilder;
 use sui_storage::object_store::util::MANIFEST_FILENAME;
 use sui_storage::object_store::util::Manifest;
@@ -124,15 +123,14 @@ pub enum SnapshotVerifyMode {
 
 // This functions requires at least one of genesis or fullnode_rpc to be `Some`.
 async fn make_clients(
-    sui_client: &Arc<SuiClient>,
+    sui_client: &Client,
 ) -> Result<BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>> {
     let mut net_config = default_mysten_network_config();
     net_config.connect_timeout = Some(Duration::from_secs(5));
     let mut authority_clients = BTreeMap::new();
 
     let active_validators = sui_client
-        .governance_api()
-        .get_latest_sui_system_state()
+        .get_system_state_summary(None)
         .await?
         .active_validators;
 
@@ -406,7 +404,7 @@ pub async fn get_transaction_block(
     show_input_tx: bool,
     fullnode_rpc: String,
 ) -> Result<String> {
-    let sui_client = Arc::new(SuiClientBuilder::default().build(fullnode_rpc).await?);
+    let sui_client = Client::new(fullnode_rpc)?;
     let clients = make_clients(&sui_client).await?;
     let timer = Instant::now();
     let responses = join_all(clients.iter().map(|(name, (address, client))| async {

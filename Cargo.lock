@@ -17204,7 +17204,7 @@ dependencies = [
  "sui-package-dump",
  "sui-protocol-config",
  "sui-replay",
- "sui-sdk",
+ "sui-rpc-api",
  "sui-snapshot",
  "sui-storage",
  "sui-tls",
