@@ -962,6 +962,175 @@ impl From<crate::sui_system_state::sui_system_state_inner_v1::ValidatorV1> for V
     }
 }
 
+impl TryFrom<&SystemState>
+    for crate::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
+{
+    type Error = TryFromProtoError;
+
+    fn try_from(s: &SystemState) -> Result<Self, Self::Error> {
+        Ok(Self {
+            epoch: s.epoch(),
+            protocol_version: s.protocol_version(),
+            system_state_version: s.version(),
+            storage_fund_total_object_storage_rebates: s
+                .storage_fund()
+                .total_object_storage_rebates(),
+            storage_fund_non_refundable_balance: s.storage_fund().non_refundable_balance(),
+            reference_gas_price: s.reference_gas_price(),
+            safe_mode: s.safe_mode(),
+            safe_mode_storage_rewards: s.safe_mode_storage_rewards(),
+            safe_mode_computation_rewards: s.safe_mode_computation_rewards(),
+            safe_mode_storage_rebates: s.safe_mode_storage_rebates(),
+            safe_mode_non_refundable_storage_fee: s.safe_mode_non_refundable_storage_fee(),
+            epoch_start_timestamp_ms: s.epoch_start_timestamp_ms(),
+            epoch_duration_ms: s.parameters().epoch_duration_ms(),
+            stake_subsidy_start_epoch: s.parameters().stake_subsidy_start_epoch(),
+            max_validator_count: s.parameters().max_validator_count(),
+            min_validator_joining_stake: s.parameters().min_validator_joining_stake(),
+            validator_low_stake_threshold: s.parameters().validator_low_stake_threshold(),
+            validator_very_low_stake_threshold: s.parameters().validator_very_low_stake_threshold(),
+            validator_low_stake_grace_period: s.parameters().validator_low_stake_grace_period(),
+            stake_subsidy_balance: s.stake_subsidy().balance(),
+            stake_subsidy_distribution_counter: s.stake_subsidy().distribution_counter(),
+            stake_subsidy_current_distribution_amount: s
+                .stake_subsidy()
+                .current_distribution_amount(),
+            stake_subsidy_period_length: s.stake_subsidy().stake_subsidy_period_length(),
+            stake_subsidy_decrease_rate: s.stake_subsidy().stake_subsidy_decrease_rate() as u16,
+            total_stake: s.validators().total_stake(),
+            active_validators: s
+                .validators()
+                .active_validators()
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+            pending_active_validators_id: s
+                .validators()
+                .pending_active_validators()
+                .id()
+                .parse()
+                .map_err(|e| {
+                TryFromProtoError::invalid("pending_active_validators_id", e)
+            })?,
+            pending_active_validators_size: s.validators().pending_active_validators().size(),
+            pending_removals: s.validators().pending_removals().to_vec(),
+            staking_pool_mappings_id: s
+                .validators()
+                .staking_pool_mappings()
+                .id()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid("staking_pool_mappings_id", e))?,
+            staking_pool_mappings_size: s.validators().staking_pool_mappings().size(),
+            inactive_pools_id: s
+                .validators()
+                .inactive_validators()
+                .id()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid("inactive_pools_id", e))?,
+            inactive_pools_size: s.validators().inactive_validators().size(),
+            validator_candidates_id: s
+                .validators()
+                .validator_candidates()
+                .id()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid("validator_candidates", e))?,
+            validator_candidates_size: s.validators().validator_candidates().size(),
+            at_risk_validators: s
+                .validators()
+                .at_risk_validators()
+                .iter()
+                .map(|(address, epoch)| {
+                    address
+                        .parse()
+                        .map(|address| (address, *epoch))
+                        .map_err(|e| TryFromProtoError::invalid("at_risk_validators", e))
+                })
+                .collect::<Result<_, _>>()?,
+            validator_report_records: s
+                .validator_report_records()
+                .iter()
+                .map(|record| {
+                    let reported = record.reported().parse()?;
+                    let reporters = record
+                        .reporters()
+                        .iter()
+                        .map(|address| address.parse())
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok((reported, reporters))
+                })
+                .collect::<Result<_, anyhow::Error>>()
+                .map_err(|e| TryFromProtoError::invalid("validator_report_records", e))?,
+        })
+    }
+}
+
+impl TryFrom<&Validator>
+    for crate::sui_system_state::sui_system_state_summary::SuiValidatorSummary
+{
+    type Error = TryFromProtoError;
+
+    fn try_from(v: &Validator) -> Result<Self, Self::Error> {
+        Ok(Self {
+            sui_address: v
+                .address()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid("address", e))?,
+            protocol_pubkey_bytes: v.protocol_public_key().into(),
+            network_pubkey_bytes: v.network_public_key().into(),
+            worker_pubkey_bytes: v.worker_public_key().into(),
+            proof_of_possession_bytes: v.proof_of_possession().into(),
+            name: v.name().into(),
+            description: v.description().into(),
+            image_url: v.image_url().into(),
+            project_url: v.project_url().into(),
+            net_address: v.network_address().into(),
+            p2p_address: v.p2p_address().into(),
+            primary_address: v.primary_address().into(),
+            worker_address: v.worker_address().into(),
+            next_epoch_protocol_pubkey_bytes: v
+                .next_epoch_protocol_public_key_opt()
+                .map(Into::into),
+            next_epoch_proof_of_possession: v.next_epoch_proof_of_possession_opt().map(Into::into),
+            next_epoch_network_pubkey_bytes: v.next_epoch_network_public_key_opt().map(Into::into),
+            next_epoch_worker_pubkey_bytes: v.next_epoch_worker_public_key_opt().map(Into::into),
+            next_epoch_net_address: v.next_epoch_network_address_opt().map(Into::into),
+            next_epoch_p2p_address: v.next_epoch_p2p_address_opt().map(Into::into),
+            next_epoch_primary_address: v.next_epoch_primary_address_opt().map(Into::into),
+            next_epoch_worker_address: v.next_epoch_worker_address_opt().map(Into::into),
+            voting_power: v.voting_power(),
+            operation_cap_id: v
+                .operation_cap_id()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid("operation_cap_id", e))?,
+            gas_price: v.gas_price(),
+            commission_rate: v.commission_rate(),
+            next_epoch_stake: v.next_epoch_stake(),
+            next_epoch_gas_price: v.next_epoch_gas_price(),
+            next_epoch_commission_rate: v.next_epoch_commission_rate(),
+            staking_pool_id: v
+                .staking_pool()
+                .id()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid("staking_pool_id", e))?,
+            staking_pool_activation_epoch: v.staking_pool().activation_epoch_opt(),
+            staking_pool_deactivation_epoch: v.staking_pool().deactivation_epoch_opt(),
+            staking_pool_sui_balance: v.staking_pool().sui_balance(),
+            rewards_pool: v.staking_pool().rewards_pool(),
+            pool_token_balance: v.staking_pool().pool_token_balance(),
+            pending_stake: v.staking_pool().pending_stake(),
+            pending_total_sui_withdraw: v.staking_pool().pending_total_sui_withdraw(),
+            pending_pool_token_withdraw: v.staking_pool().pending_pool_token_withdraw(),
+            exchange_rates_id: v
+                .staking_pool()
+                .exchange_rates()
+                .id()
+                .parse()
+                .map_err(|e| TryFromProtoError::invalid("exchange_rates_id", e))?,
+            exchange_rates_size: v.staking_pool().exchange_rates().size(),
+        })
+    }
+}
+
 //
 // ExecutionStatus
 //
