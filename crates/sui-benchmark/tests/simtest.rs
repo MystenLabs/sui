@@ -1541,27 +1541,32 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let _guard =
-            sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-                cfg.enable_address_balance_gas_payments_for_testing();
-                cfg
-            });
         let test_cluster = build_test_cluster(4, 10000, 1).await;
+
+        let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
+            sui_protocol_config::ProtocolVersion::max(),
+            test_cluster.get_chain_identifier().chain(),
+        );
+        let address_balance_enabled = protocol_config.enable_address_balance_gas_payments();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
         ));
 
         use sui_benchmark::workloads::composite::*;
+        // When address balance is disabled, increase conflicting transaction probability
+        // to compensate for fewer permanent failures from filtered-out operations.
+        let conflicting_transaction_probability = if address_balance_enabled { 0.1 } else { 0.3 };
         let composite_config = CompositeWorkloadConfig {
             num_shared_counters: 2,
             shared_counter_hotness: 0.95,
             address_balance_amount: 1000,
             address_balance_gas_probability: 0.2,
+            conflicting_transaction_probability,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::FLAG, 0.2)
+        .with_probability(SharedCounterIncrement::FLAG, 0.1)
         .with_probability(SharedCounterRead::FLAG, 0.1)
         .with_probability(RandomnessRead::FLAG, 0.1)
         .with_probability(AddressBalanceDeposit::FLAG, 0.1)
@@ -1572,7 +1577,7 @@ mod test {
         .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
         .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
         .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
-        .with_probability(AddressBalanceOverdraw::FLAG, 0.2);
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.3);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1591,12 +1596,19 @@ mod test {
 
         info!("metrics: {:#?}", metrics.sum_all());
 
-        // make sure the test did stuff
+        // make sure the test did stuff. When address balance is disabled, fewer operation
+        // types are available which may reduce throughput, so we use lower thresholds.
         assert!(metrics_sum.signed_and_sent_count > 500);
-        assert!(metrics_sum.success_count > 200);
-        assert!(metrics_sum.permanent_failure_count > 100);
+        if address_balance_enabled {
+            assert!(metrics_sum.success_count > 200);
+            assert!(metrics_sum.permanent_failure_count > 100);
+            // insufficient_funds_count requires AddressBalanceOverdraw operations
+            assert!(metrics_sum.insufficient_funds_count > 2);
+        } else {
+            assert!(metrics_sum.success_count > 150);
+            assert!(metrics_sum.permanent_failure_count > 50);
+        }
         assert!(metrics_sum.cancellation_count > 100);
-        assert!(metrics_sum.insufficient_funds_count > 2);
     }
 
     #[sim_test(config = "test_config()")]

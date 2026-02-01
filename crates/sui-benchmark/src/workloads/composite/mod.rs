@@ -30,6 +30,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::TypeTag;
@@ -44,6 +45,12 @@ use tracing::{debug, info, trace};
 use super::MultiGas;
 
 const MAX_BATCH_SIZE: usize = 4;
+
+fn address_balance_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
+    protocol_config
+        .map(|cfg| !cfg.enable_address_balance_gas_payments())
+        .unwrap_or(false)
+}
 
 macro_rules! update_gas {
     ($gas:expr, $effects:expr) => {{
@@ -430,7 +437,30 @@ impl CompositePayload {
     }
 
     fn sample_operations(&self) -> Vec<Box<dyn Operation>> {
-        self.config.sample_operations()
+        let protocol_config = self
+            .system_state_observer
+            .state
+            .borrow()
+            .protocol_config
+            .clone();
+        let filter_address_balance = address_balance_disabled(protocol_config.as_ref());
+
+        loop {
+            let mut ops = self.config.sample_operations();
+            if filter_address_balance {
+                ops.retain(|op| {
+                    !op.resource_requests().iter().any(|r| {
+                        matches!(
+                            r,
+                            ResourceRequest::AddressBalance | ResourceRequest::ObjectBalance
+                        )
+                    })
+                });
+            }
+            if !ops.is_empty() {
+                return ops;
+            }
+        }
     }
 
     fn generate_transaction(
@@ -491,6 +521,8 @@ impl Payload for CompositePayload {
         let system_state = self.system_state_observer.state.borrow().clone();
         let rgp = system_state.reference_gas_price;
         let current_epoch = system_state.epoch;
+        let address_balance_gas_disabled =
+            address_balance_disabled(system_state.protocol_config.as_ref());
 
         let (current_batch_gas, sender, keypair) = {
             let gas = self.gas.lock().unwrap();
@@ -513,7 +545,9 @@ impl Payload for CompositePayload {
         let mut rng = get_rng();
 
         for (i, gas) in current_batch_gas.iter().take(batch_size).enumerate() {
-            let builder = if rng.gen_bool(self.config.address_balance_gas_probability as f64) {
+            let builder = if !address_balance_gas_disabled
+                && rng.gen_bool(self.config.address_balance_gas_probability as f64)
+            {
                 let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
                 TestTransactionBuilder::new_with_address_balance_gas(
                     sender,
