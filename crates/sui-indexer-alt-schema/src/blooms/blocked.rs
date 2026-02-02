@@ -36,14 +36,14 @@
 
 use std::collections::BTreeMap;
 
+use crate::blooms::bloom::BloomProbe;
 use crate::blooms::hash::DoubleHasher;
 use crate::blooms::hash::set_bit;
 
 /// Probe for checking membership in a blocked bloom filter.
 pub struct BlockedBloomProbe {
     pub block_idx: usize,
-    pub byte_offsets: Vec<usize>,
-    pub bit_masks: Vec<u8>,
+    pub probe: BloomProbe,
 }
 
 /// A generic blocked bloom filter.
@@ -103,10 +103,9 @@ impl<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>
         (block_idx, bit_iter)
     }
 
-    /// Probes for membership checks, returning block index, byte offsets and bit masks.
+    /// Probes for membership checks, returning block index and (byte_offset, bit_mask) pairs.
     ///
-    /// Used for SQL `bloom_contains` checks: for each (byte_offset, bit_mask) pair,
-    /// verifies `(bloom_filter[byte_offset] & bit_mask) == bit_mask`.
+    /// For each pair, verifies `(bloom_filter[byte_offset] & bit_mask) != 0`.
     /// Probes sharing the same byte offset within a block are grouped by ORing their bit masks.
     pub fn probe(
         seed: u128,
@@ -122,13 +121,11 @@ impl<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>
         }
         by_block
             .into_iter()
-            .map(|(block_idx, by_offset)| {
-                let (byte_offsets, bit_masks) = by_offset.into_iter().unzip();
-                BlockedBloomProbe {
-                    block_idx,
-                    byte_offsets,
-                    bit_masks,
-                }
+            .map(|(block_idx, by_offset)| BlockedBloomProbe {
+                block_idx,
+                probe: BloomProbe {
+                    bit_probes: by_offset.into_iter().collect(),
+                },
             })
             .collect()
     }
