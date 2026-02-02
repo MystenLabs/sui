@@ -25,7 +25,6 @@ use rustls::pki_types::ServerName;
 use rustls::pki_types::UnixTime;
 use rustls::pki_types::pem::PemObject;
 use tokio_postgres_rustls::MakeRustlsConnect;
-use tracing::debug;
 use tracing::error;
 use tracing::info;
 use webpki_roots::TLS_SERVER_ROOTS;
@@ -149,10 +148,10 @@ pub(crate) async fn establish_tls_connection(
                 error!(pid, "Database connection terminated with error: {e}");
             }
             Ok(Ok(())) => {
-                debug!(pid, "Database connection terminated without error");
+                info!(pid, "Database connection terminated without error");
             }
             Err(e) => {
-                debug!(pid, "Database connection task failed: {e}");
+                info!(pid, "Database connection task failed: {e}");
             }
         }
     });

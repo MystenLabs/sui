@@ -26,7 +26,13 @@ use std::{
 use tracing::metadata::LevelFilter;
 use tracing::{Level, error, info};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{EnvFilter, Layer, Registry, filter, fmt, layer::SubscriberExt, reload};
+use tracing_error::ErrorLayer;
+use tracing_subscriber::{
+    EnvFilter, Layer, Registry, filter,
+    fmt::{self, format::Pretty},
+    layer::SubscriberExt,
+    reload,
+};
 
 use crate::file_exporter::{CachedOpenFile, FileExporter};
 
@@ -66,6 +72,8 @@ pub struct TelemetryConfig {
     pub trace_target: Option<Vec<String>>,
     /// Print unadorned logs from the target on standard error if this is a tty
     pub user_info_target: Vec<String>,
+    // Add error layer to capture trace spans. Defaults to false if not set.
+    pub enable_error_layer: Option<bool>,
 }
 
 #[must_use]
@@ -258,6 +266,7 @@ impl TelemetryConfig {
             sample_rate: 1.0,
             trace_target: None,
             user_info_target: Vec::new(),
+            enable_error_layer: None,
         }
     }
 
@@ -307,6 +316,11 @@ impl TelemetryConfig {
         self
     }
 
+    pub fn with_enable_error_layer(mut self, enable_error_layer: bool) -> Self {
+        self.enable_error_layer = Some(enable_error_layer);
+        self
+    }
+
     pub fn with_env(mut self) -> Self {
         if env::var("CRASH_ON_PANIC").is_ok() {
             self.crash_on_panic = true
@@ -335,6 +349,14 @@ impl TelemetryConfig {
 
         if let Ok(sample_rate) = env::var("SAMPLE_RATE") {
             self.sample_rate = sample_rate.parse().expect("Cannot parse SAMPLE_RATE");
+        }
+
+        if let Ok(enable_error_layer) = env::var("ENABLE_ERROR_LAYER") {
+            self.enable_error_layer = Some(
+                enable_error_layer
+                    .parse()
+                    .expect("Cannot parse ENABLE_ERROR_LAYER"),
+            );
         }
 
         self
@@ -497,6 +519,10 @@ impl TelemetryConfig {
 
                 layers.push(fmt_layer);
             }
+        }
+
+        if config.enable_error_layer.is_some_and(|b| b) {
+            layers.push(ErrorLayer::new(Pretty::default()).boxed())
         }
 
         let subscriber = tracing_subscriber::registry().with(layers);

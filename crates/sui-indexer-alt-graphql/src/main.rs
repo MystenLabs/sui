@@ -9,7 +9,7 @@ use sui_indexer_alt_graphql::args::Args;
 use sui_indexer_alt_graphql::args::Command;
 use sui_indexer_alt_graphql::config::IndexerConfig;
 use sui_indexer_alt_graphql::config::RpcLayer;
-use sui_indexer_alt_graphql::start_rpc;
+use sui_indexer_alt_graphql::{start_rpc, telemetry_config_for_graphql};
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_metrics::uptime;
 use tokio::fs;
@@ -32,9 +32,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Enable tracing, configured by environment variables.
-    let _guard = telemetry_subscribers::TelemetryConfig::new()
-        .with_env()
-        .init();
+    let _guard = telemetry_config_for_graphql().with_env().init();
 
     rustls::crypto::ring::default_provider()
         .install_default()

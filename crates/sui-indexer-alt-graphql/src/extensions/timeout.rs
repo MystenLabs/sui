@@ -17,7 +17,8 @@ use async_graphql::extensions::NextExecute;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::parser::types::ExecutableDocument;
 use async_graphql::parser::types::OperationType;
-use tokio::time::timeout;
+use timeout_tracing::CaptureSpanTrace;
+use timeout_tracing::timeout;
 
 use crate::error::request_timeout;
 
@@ -87,11 +88,11 @@ impl Extension for TimeoutExt {
             self.config.query
         };
 
-        timeout(limit, next.run(ctx, operation_name))
+        timeout(limit, CaptureSpanTrace, next.run(ctx, operation_name))
             .await
-            .unwrap_or_else(|_| {
+            .unwrap_or_else(|e| {
                 let kind = if is_mutation { "Mutation" } else { "Query" };
-                Response::from_errors(vec![ServerError::from(request_timeout(kind, limit))])
+                Response::from_errors(vec![ServerError::from(request_timeout(kind, limit, e))])
             })
     }
 }
@@ -103,8 +104,10 @@ mod tests {
     use async_graphql::Object;
     use async_graphql::Schema;
     use async_graphql::Value;
+    use async_graphql::extensions::Tracing;
 
     use crate::error::code;
+    use crate::telemetry_config_for_graphql;
 
     use super::*;
 
@@ -155,6 +158,9 @@ mod tests {
     /// The request takes longer than the timeout to handle, so it should fail.
     #[tokio::test]
     async fn test_query_timeout_fail() {
+        // Enable tracing, configured by environment variables.
+        let _guard = telemetry_config_for_graphql().with_env().init();
+
         let zero = Duration::from_millis(0);
         let delay = Duration::from_millis(200);
         let response = Schema::build(Root(delay * 2), EmptyMutation, EmptySubscription)
@@ -162,6 +168,7 @@ mod tests {
                 query: delay,
                 mutation: zero,
             }))
+            .extension(Tracing)
             .finish()
             .execute("query { op }")
             .await;
@@ -170,10 +177,17 @@ mod tests {
 
         let error = &response.errors[0];
         assert!(error.message.contains("Query"));
+        let extensions = error.extensions.as_ref().unwrap();
         assert_eq!(
-            error.extensions.as_ref().unwrap().get("code"),
+            extensions.get("code"),
             Some(&Value::String(code::REQUEST_TIMEOUT.into()))
-        )
+        );
+        let Some(Value::String(chain)) = extensions.get("chain") else {
+            panic!("no chain extensions")
+        };
+        assert!(chain.contains("timeout elapsed at"));
+        assert!(chain.contains("0: async_graphql::graphql::field"));
+        assert!(chain.contains("with path: op, parent_type: Root, return_type: Boolean!"));
     }
 
     /// Like [test_query_timeout_fail], but for a mutation.
