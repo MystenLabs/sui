@@ -12,14 +12,15 @@ use super::{
     ObserverNetworkService,
     tonic_gen::observer_consensus_service_server::ObserverConsensusService,
     tonic_network::{
-        BlockStreamRequest, BlockStreamResponse, FetchBlocksRequest, FetchBlocksResponse,
-        FetchCommitsRequest, FetchCommitsResponse,
+        BlockStreamRequest, BlockStreamResponse, CommitStreamRequest, CommitStreamResponse,
+        FetchBlocksRequest, FetchBlocksResponse, FetchCommitsRequest, FetchCommitsResponse,
     },
 };
 use crate::context::Context;
 
 /// Proxies Observer Tonic requests to ObserverNetworkService.
 /// Extracts peer NodeId from TLS certificates and delegates to the service layer.
+#[allow(dead_code)]
 pub(crate) struct ObserverServiceProxy<S: ObserverNetworkService> {
     context: Arc<Context>,
     service: Arc<S>,
@@ -47,6 +48,23 @@ impl<S: ObserverNetworkService> ObserverConsensusService for ObserverServiceProx
         // 4. Map blocks to BlockStreamResponse with highest_commit_index
         Err(tonic::Status::unimplemented(
             "stream_blocks not yet implemented for observers",
+        ))
+    }
+
+    type StreamCommitsStream =
+        Pin<Box<dyn Stream<Item = Result<CommitStreamResponse, tonic::Status>> + Send>>;
+
+    async fn stream_commits(
+        &self,
+        _request: Request<Streaming<CommitStreamRequest>>,
+    ) -> Result<Response<Self::StreamCommitsStream>, tonic::Status> {
+        // TODO: Implement stream_commits for observer nodes
+        // 1. Extract peer public key from TLS certificate
+        // 2. Handle bidirectional streaming with flow control (Start/Stop commands)
+        // 3. Delegate to ObserverNetworkService::handle_stream_commits
+        // 4. Map commits to CommitStreamResponse with highest_commit_index
+        Err(tonic::Status::unimplemented(
+            "stream_commits not yet implemented for observers",
         ))
     }
 

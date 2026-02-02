@@ -1016,7 +1016,7 @@ fn peer_info_from_certs(
 /// If allowlist is empty, all observers are allowed.
 fn observer_peer_info_from_certs(
     peer_certificates: &sui_http::PeerCertificates,
-    allowlist: &Vec<NetworkPublicKey>,
+    allowlist: &[NetworkPublicKey],
 ) -> Option<ObserverPeerInfo> {
     let certs = peer_certificates.peer_certs();
 
@@ -1059,7 +1059,7 @@ fn observer_peer_info_from_certs(
 /// Parses the observer allowlist from hex-encoded strings to NetworkPublicKey objects.
 /// Returns an empty Vec if the allowlist is empty (meaning all observers are allowed).
 /// Logs errors for any invalid keys and skips them.
-fn parse_observer_allowlist(allowlist_strings: &Vec<String>) -> Vec<NetworkPublicKey> {
+fn parse_observer_allowlist(allowlist_strings: &[String]) -> Vec<NetworkPublicKey> {
     if allowlist_strings.is_empty() {
         return Vec::new();
     }
@@ -1180,6 +1180,7 @@ struct PeerInfo {
 
 /// Information about an observer peer connection.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub(crate) struct ObserverPeerInfo {
     pub(crate) public_key: NetworkPublicKey,
 }
@@ -1364,6 +1365,59 @@ pub(crate) struct BlockStreamResponse {
     // The publisher's highest commit index
     #[prost(uint64, tag = "2")]
     pub(crate) highest_commit_index: u64,
+}
+
+// Observer commit streaming messages
+#[derive(Clone, prost::Message)]
+pub(crate) struct CommitStreamRequest {
+    #[prost(oneof = "commit_stream_request::Command", tags = "1, 2")]
+    pub(crate) command: Option<commit_stream_request::Command>,
+}
+
+pub(crate) mod commit_stream_request {
+    #[derive(Clone, PartialEq, prost::Oneof)]
+    pub(crate) enum Command {
+        #[prost(message, tag = "1")]
+        Start(super::StartCommitStream),
+        #[prost(message, tag = "2")]
+        Stop(super::StopCommitStream),
+    }
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub(crate) struct StartCommitStream {
+    // The Observer's highest (local) commit index
+    #[prost(uint32, tag = "1")]
+    pub(crate) highest_commit_index: u32,
+    // The desired commits batch size
+    #[prost(uint32, tag = "2")]
+    pub(crate) batch_size: u32,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub(crate) struct StopCommitStream {}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct CommitStreamResponse {
+    // The batched commits
+    #[prost(message, repeated, tag = "1")]
+    pub(crate) commits: Vec<Commit>,
+    // The current highest commit publisher index
+    #[prost(uint32, tag = "2")]
+    pub(crate) highest_commit_index: u32,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct Commit {
+    // The serialised committed sub dag
+    #[prost(bytes = "bytes", tag = "1")]
+    pub(crate) commit: Bytes,
+    // The blocks that certify the committed sub dag
+    #[prost(bytes = "bytes", repeated, tag = "2")]
+    pub(crate) certifier_blocks: Vec<Bytes>,
+    // The committed sub dag's blocks
+    #[prost(bytes = "bytes", repeated, tag = "3")]
+    pub(crate) committed_blocks: Vec<Bytes>,
 }
 
 pub(crate) fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {
