@@ -705,6 +705,26 @@ Just a description, no release notes section.
         has_checked = any(note.checked for note in notes.values())
         self.assertFalse(has_checked)
 
+    def test_parse_notes_ignores_checkboxes_outside_release_notes(self):
+        """parse_notes should ignore checkboxes in other sections like Test plan."""
+        from release_notes import parse_notes
+
+        # This mimics PRs like #25207 that have checkboxes in Test plan
+        # but no Release notes section
+        body = """## Summary
+- Fixed a flaky test
+
+## Test plan
+- [x] Ran the test multiple times to verify stability
+- [x] Verified it passes consistently
+"""
+        notes = parse_notes(body)
+
+        # Should return empty since there's no Release notes section
+        self.assertEqual(notes, {})
+        has_checked = any(note.checked for note in notes.values())
+        self.assertFalse(has_checked)
+
 
 if __name__ == "__main__":
     unittest.main()
