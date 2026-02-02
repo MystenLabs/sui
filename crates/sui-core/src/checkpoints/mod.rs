@@ -3891,9 +3891,11 @@ mod tests {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.disable_accumulators_for_testing();
         protocol_config.set_split_checkpoints_in_consensus_handler_for_testing(false);
         protocol_config.set_min_checkpoint_interval_ms_for_testing(100);
+        // This test mocks effects but not transaction storage. Settlement transactions
+        // require both to work, so disable accumulators for this test.
+        protocol_config.disable_accumulators_for_testing();
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
             .build()
@@ -4004,7 +4006,12 @@ mod tests {
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
         let (certified_output, mut certified_result) =
             mpsc::channel::<CertifiedCheckpointSummary>(10);
-        let store = Arc::new(store);
+
+        // Create a mock effects store that returns test effects for known transactions
+        // and generates mock effects for unknown transactions (like settlements).
+        let mock_store = Arc::new(MockEffectsStore {
+            test_effects: store,
+        });
 
         let ckpt_dir = tempfile::tempdir().unwrap();
         let checkpoint_store =
@@ -4019,7 +4026,7 @@ mod tests {
             state.clone(),
             checkpoint_store,
             epoch_store.clone(),
-            store,
+            mock_store,
             Arc::downgrade(&global_state_hasher),
             Box::new(output),
             Box::new(certified_output),
@@ -4125,50 +4132,55 @@ mod tests {
         assert_eq!(c2sc.sequence_number, 1);
     }
 
-    impl TransactionCacheRead for HashMap<TransactionDigest, TransactionEffects> {
+    /// A mock effects store for testing that returns pre-defined effects for test transactions.
+    struct MockEffectsStore {
+        test_effects: HashMap<TransactionDigest, TransactionEffects>,
+    }
+
+    impl TransactionCacheRead for MockEffectsStore {
         fn notify_read_executed_effects(
             &self,
-            _: &str,
+            _task_name: &str,
             digests: &[TransactionDigest],
         ) -> BoxFuture<'_, Vec<TransactionEffects>> {
-            std::future::ready(
-                digests
-                    .iter()
-                    .map(|d| self.get(d).expect("effects not found").clone())
-                    .collect(),
-            )
-            .boxed()
+            let results: Vec<_> = digests
+                .iter()
+                .map(|d| {
+                    self.test_effects
+                        .get(d)
+                        .cloned()
+                        .unwrap_or_else(|| panic!("Missing test effects for {d}"))
+                })
+                .collect();
+            std::future::ready(results).boxed()
         }
 
         fn notify_read_executed_effects_digests(
             &self,
-            _: &str,
+            _task_name: &str,
             digests: &[TransactionDigest],
         ) -> BoxFuture<'_, Vec<TransactionEffectsDigest>> {
-            std::future::ready(
-                digests
-                    .iter()
-                    .map(|d| {
-                        self.get(d)
-                            .map(|fx| fx.digest())
-                            .expect("effects not found")
-                    })
-                    .collect(),
-            )
-            .boxed()
+            let results: Vec<_> = digests
+                .iter()
+                .map(|d| {
+                    self.test_effects
+                        .get(d)
+                        .map(|fx| fx.digest())
+                        .unwrap_or_else(|| panic!("Missing test effects for {d}"))
+                })
+                .collect();
+            std::future::ready(results).boxed()
         }
 
         fn multi_get_executed_effects(
             &self,
             digests: &[TransactionDigest],
         ) -> Vec<Option<TransactionEffects>> {
-            digests.iter().map(|d| self.get(d).cloned()).collect()
+            digests
+                .iter()
+                .map(|d| self.test_effects.get(d).cloned())
+                .collect()
         }
-
-        // Unimplemented methods - its unfortunate to have this big blob of useless code, but it wasn't
-        // worth it to keep EffectsNotifyRead around just for these tests, as it caused a ton of
-        // complication in non-test code. (e.g. had to implement EFfectsNotifyRead for all
-        // ExecutionCacheRead implementors).
 
         fn multi_get_transaction_blocks(
             &self,
@@ -4179,9 +4191,12 @@ mod tests {
 
         fn multi_get_executed_effects_digests(
             &self,
-            _: &[TransactionDigest],
+            digests: &[TransactionDigest],
         ) -> Vec<Option<TransactionEffectsDigest>> {
-            unimplemented!()
+            digests
+                .iter()
+                .map(|d| self.test_effects.get(d).map(|fx| fx.digest()))
+                .collect()
         }
 
         fn multi_get_effects(
@@ -4210,18 +4225,18 @@ mod tests {
         }
 
         fn take_accumulator_events(&self, _: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
-            unimplemented!()
+            None
         }
 
         fn get_unchanged_loaded_runtime_objects(
             &self,
             _digest: &TransactionDigest,
         ) -> Option<Vec<sui_types::storage::ObjectKey>> {
-            unimplemented!()
+            None
         }
 
         fn transaction_executed_in_last_epoch(&self, _: &TransactionDigest, _: EpochId) -> bool {
-            unimplemented!()
+            false
         }
     }
 
@@ -4251,11 +4266,12 @@ mod tests {
     }
 
     fn p(i: u64, t: Vec<u8>, timestamp_ms: u64) -> PendingCheckpoint {
+        let roots: Vec<TransactionKey> = t
+            .into_iter()
+            .map(|t| TransactionKey::Digest(d(t)))
+            .collect();
         PendingCheckpoint {
-            roots: t
-                .into_iter()
-                .map(|t| TransactionKey::Digest(d(t)))
-                .collect(),
+            roots,
             details: PendingCheckpointInfo {
                 timestamp_ms,
                 last_of_epoch: false,
