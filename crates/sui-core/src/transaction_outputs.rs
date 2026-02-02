@@ -9,7 +9,7 @@ use sui_types::base_types::{FullObjectID, ObjectRef};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
-use sui_types::storage::{FullObjectKey, InputKey, MarkerValue, ObjectKey};
+use sui_types::storage::{FullObjectKey, MarkerValue, ObjectKey};
 use sui_types::transaction::{TransactionData, TransactionDataAPI, VerifiedTransaction};
 
 /// TransactionOutputs
@@ -27,10 +27,6 @@ pub struct TransactionOutputs {
     pub locks_to_delete: Vec<ObjectRef>,
     pub new_locks_to_init: Vec<ObjectRef>,
     pub written: WrittenObjects,
-
-    // Temporarily needed to notify TxManager about the availability of objects.
-    // TODO: Remove this once we ship the new ExecutionScheduler.
-    pub output_keys: Vec<InputKey>,
 }
 
 impl TransactionOutputs {
@@ -41,8 +37,6 @@ impl TransactionOutputs {
         inner_temporary_store: InnerTemporaryStore,
         unchanged_loaded_runtime_objects: Vec<ObjectKey>,
     ) -> TransactionOutputs {
-        let output_keys = inner_temporary_store.get_output_keys(&effects);
-
         let InnerTemporaryStore {
             input_objects,
             stream_ended_consensus_objects,
@@ -198,7 +192,6 @@ impl TransactionOutputs {
             locks_to_delete,
             new_locks_to_init,
             written,
-            output_keys,
         }
     }
 
@@ -223,7 +216,6 @@ impl TransactionOutputs {
             locks_to_delete: vec![],
             new_locks_to_init: vec![],
             written: WrittenObjects::new(),
-            output_keys: vec![],
         }
     }
 }
@@ -241,7 +233,7 @@ pub fn unchanged_loaded_runtime_objects(
         .collect();
 
     // Remove any object that is referenced in the changed objects effects set since it would be
-    // redundent to include it again.
+    // redundant to include it again.
     for change in effects.object_changes() {
         unchanged_loaded_runtime_objects.remove(&change.id);
     }
