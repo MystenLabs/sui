@@ -11,7 +11,6 @@ use prometheus::{
 
 // Fields for network-agnostic metrics can be added here
 pub(crate) struct NetworkMetrics {
-    pub(crate) network_type: IntGaugeVec,
     pub(crate) inbound: Arc<NetworkRouteMetrics>,
     pub(crate) outbound: Arc<NetworkRouteMetrics>,
     #[cfg_attr(msim, allow(dead_code))]
@@ -21,13 +20,6 @@ pub(crate) struct NetworkMetrics {
 impl NetworkMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         Self {
-            network_type: register_int_gauge_vec_with_registry!(
-                "network_type",
-                "Type of the network used: anemo or tonic",
-                &["type"],
-                registry
-            )
-            .unwrap(),
             inbound: Arc::new(NetworkRouteMetrics::new("", "inbound", registry)),
             outbound: Arc::new(NetworkRouteMetrics::new("", "outbound", registry)),
             tcp_connection_metrics: Arc::new(TcpConnectionMetrics::new(registry)),

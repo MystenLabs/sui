@@ -32,7 +32,9 @@ use crate::{
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{BlockStream, ExtendedSerializedBlock, NetworkService},
+    network::{
+        BlockStream, ExtendedSerializedBlock, NetworkService, NodeId, ObserverNetworkService,
+    },
     round_tracker::PeerRoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
@@ -624,6 +626,43 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             highest_accepted_rounds[self.context.own_index];
 
         Ok((highest_received_rounds, highest_accepted_rounds))
+    }
+}
+
+#[async_trait]
+impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
+    async fn handle_stream_blocks(
+        &self,
+        _peer: NodeId,
+        _request_stream: Pin<Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>>,
+    ) -> ConsensusResult<crate::network::ObserverBlockStream> {
+        // TODO: Implement observer block streaming
+        // 1. Parse BlockStreamRequest stream (Start/Stop commands for flow control)
+        // 2. Stream blocks to observer based on their highest rounds from Start command
+        // 3. Include highest_commit_index in ObserverBlockStreamItem for each block
+        todo!("Observer block streaming not yet implemented")
+    }
+
+    async fn handle_fetch_blocks(
+        &self,
+        _peer: NodeId,
+        _block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        // TODO: Implement observer fetch blocks
+        // Similar to validator fetch_blocks but without highest_accepted_rounds parameter
+        // Observers fetch specific blocks they need for synchronization
+        todo!("Observer fetch blocks not yet implemented")
+    }
+
+    async fn handle_fetch_commits(
+        &self,
+        _peer: NodeId,
+        _commit_range: CommitRange,
+    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+        // TODO: Implement observer fetch commits
+        // Similar to validator fetch_commits
+        // Observers need commits to stay synchronized with consensus
+        todo!("Observer fetch commits not yet implemented")
     }
 }
 

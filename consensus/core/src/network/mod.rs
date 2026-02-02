@@ -20,7 +20,7 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use futures::Stream;
 
@@ -31,15 +31,26 @@ use crate::{
     error::ConsensusResult,
 };
 
+/// Identifies an observer node by its network public key.
+pub(crate) type NodeId = NetworkPublicKey;
+
 // Tonic generated RPC stubs.
 mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/consensus.ObserverConsensusService.rs"
+    ));
 }
 
 pub(crate) mod metrics;
 mod metrics_layer;
 #[cfg(all(test, not(msim)))]
 mod network_tests;
+#[cfg(not(msim))]
+pub(crate) mod observer_network;
+#[cfg(msim)]
+pub mod observer_network;
 #[cfg(test)]
 pub(crate) mod test_network;
 #[cfg(not(msim))]
@@ -169,6 +180,81 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
         &self,
         peer: AuthorityIndex,
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
+}
+
+/// A stream item for observer block streaming that includes both the block and highest commit index.
+pub(crate) struct ObserverBlockStreamItem {
+    pub(crate) block: Bytes,
+    pub(crate) highest_commit_index: u64,
+}
+
+/// Observer block stream type.
+pub(crate) type ObserverBlockStream =
+    Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send>>;
+
+/// Observer network service for handling requests from observer nodes.
+/// Unlike NetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
+/// to identify peers since observers are not part of the committee.
+#[async_trait]
+pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
+    /// Handles the bidirectional block streaming request from an observer peer.
+    /// Returns a stream of blocks with the highest commit index for each block.
+    /// The input stream contains BlockStreamRequest items with Start/Stop commands for flow control.
+    async fn handle_stream_blocks(
+        &self,
+        peer: NodeId,
+        request_stream: Pin<Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>>,
+    ) -> ConsensusResult<ObserverBlockStream>;
+
+    /// Handles the request to fetch blocks by references from an observer peer.
+    /// Returns serialized blocks.
+    async fn handle_fetch_blocks(
+        &self,
+        peer: NodeId,
+        block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<Vec<Bytes>>;
+
+    /// Handles the request to fetch commits by index range from an observer peer.
+    /// Returns serialized commits and certifier blocks.
+    async fn handle_fetch_commits(
+        &self,
+        peer: NodeId,
+        commit_range: CommitRange,
+    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
+}
+
+/// Observer network client for communicating with validators' observer ports or other observers.
+/// Unlike NetworkClient which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
+/// to identify peers since observers are not part of the committee.
+#[async_trait]
+pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
+    /// Initiates bidirectional block streaming with a peer (validator or observer).
+    /// Returns a stream of blocks with the highest commit index.
+    /// The request_stream contains BlockStreamRequest items with Start/Stop commands for flow control.
+    async fn stream_blocks(
+        &self,
+        peer: NodeId,
+        request_stream: Pin<Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>>,
+        timeout: Duration,
+    ) -> ConsensusResult<ObserverBlockStream>;
+
+    /// Fetches serialized blocks by references from a peer.
+    async fn fetch_blocks(
+        &self,
+        peer: NodeId,
+        block_refs: Vec<BlockRef>,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>>;
+
+    /// Fetches serialized commits in the commit range from a peer.
+    /// Returns a tuple of both the serialized commits, and serialized blocks that contain
+    /// votes certifying the last commit.
+    async fn fetch_commits(
+        &self,
+        peer: NodeId,
+        commit_range: CommitRange,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.
