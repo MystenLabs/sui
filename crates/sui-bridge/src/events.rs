@@ -484,6 +484,10 @@ macro_rules! declare_events {
             pub fn try_from_event(event: &Event) -> BridgeResult<Option<SuiBridgeEvent>> {
                 init_all_struct_tags(); // Ensure all tags are initialized
 
+                if event.type_.address != BRIDGE_PACKAGE_ID.into() {
+                    return Ok(None);
+                }
+
                 // Unwrap safe: we inited above
                 $(
                     if &event.type_ == $variant.get().unwrap() {

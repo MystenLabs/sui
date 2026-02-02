@@ -8,7 +8,7 @@ use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::eth_syncer::EthSyncer;
 use crate::events::init_all_struct_tags;
 use crate::metrics::BridgeMetrics;
-use crate::monitor::BridgeMonitor;
+use crate::monitor::{self, BridgeMonitor};
 use crate::orchestrator::BridgeOrchestrator;
 use crate::server::handler::BridgeRequestHandler;
 use crate::server::{BridgeNodePublicMetadata, run_server};
@@ -315,13 +315,6 @@ async fn start_client_components(
 
     let (bridge_pause_tx, bridge_pause_rx) = tokio::sync::watch::channel(is_bridge_paused);
 
-    let (sui_monitor_tx, sui_monitor_rx) = mysten_metrics::metered_channel::channel(
-        10000,
-        &mysten_metrics::get_metrics()
-            .unwrap()
-            .channel_inflight
-            .with_label_values(&["sui_monitor_queue"]),
-    );
     let (eth_monitor_tx, eth_monitor_rx) = mysten_metrics::metered_channel::channel(
         10000,
         &mysten_metrics::get_metrics()
@@ -344,6 +337,17 @@ async fn start_client_components(
     )
     .await;
 
+    let (sui_monitor_tx, sui_monitor_rx) = mysten_metrics::metered_channel::channel(
+        10000,
+        &mysten_metrics::get_metrics()
+            .unwrap()
+            .channel_inflight
+            .with_label_values(&["sui_monitor_queue"]),
+    );
+    tokio::spawn(monitor::subscribe_bridge_events(
+        sui_client.grpc_client().clone(),
+        sui_monitor_tx,
+    ));
     let monitor = BridgeMonitor::new(
         sui_client.clone(),
         sui_monitor_rx,
@@ -355,23 +359,11 @@ async fn start_client_components(
     );
     all_handles.push(spawn_logged_monitored_task!(monitor.run()));
 
-    // Create a dummy channel for the sui_events_rx that the orchestrator expects
-    // This channel will never receive any events since we have migrated to the gRPC based event syncer
-    let (_sui_events_tx, sui_events_rx) = mysten_metrics::metered_channel::channel(
-        1,
-        &mysten_metrics::get_metrics()
-            .unwrap()
-            .channel_inflight
-            .with_label_values(&["sui_events_queue_dummy"]),
-    );
-
     let orchestrator = BridgeOrchestrator::new(
         sui_client,
-        sui_events_rx,
         sui_grpc_events_rx,
         eth_events_rx,
         store.clone(),
-        sui_monitor_tx,
         eth_monitor_tx,
         metrics,
     );
@@ -577,92 +569,6 @@ mod tests {
             vec![(eth_contracts[0], 200), (eth_contracts[1], 200)]
                 .into_iter()
                 .collect::<HashMap<_, _>>()
-        );
-    }
-
-    #[tokio::test]
-    async fn test_get_sui_modules_to_watch() {
-        telemetry_subscribers::init_for_testing();
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        let store = BridgeOrchestratorTables::new(temp_dir.path());
-        let bridge_module = BRIDGE_MODULE_NAME.to_owned();
-        let committee_module = BRIDGE_COMMITTEE_MODULE_NAME.to_owned();
-        let treasury_module = BRIDGE_TREASURY_MODULE_NAME.to_owned();
-        let limiter_module = BRIDGE_LIMITER_MODULE_NAME.to_owned();
-        // No override, no stored watermark, use None
-        let sui_modules_to_watch = get_sui_modules_to_watch(&store, None);
-        assert_eq!(
-            sui_modules_to_watch,
-            vec![
-                (bridge_module.clone(), None),
-                (committee_module.clone(), None),
-                (treasury_module.clone(), None),
-                (limiter_module.clone(), None)
-            ]
-            .into_iter()
-            .collect::<HashMap<_, _>>()
-        );
-
-        // no stored watermark, use override
-        let override_cursor = EventID {
-            tx_digest: TransactionDigest::random(),
-            event_seq: 42,
-        };
-        let sui_modules_to_watch = get_sui_modules_to_watch(&store, Some(override_cursor));
-        assert_eq!(
-            sui_modules_to_watch,
-            vec![
-                (bridge_module.clone(), Some(override_cursor)),
-                (committee_module.clone(), Some(override_cursor)),
-                (treasury_module.clone(), Some(override_cursor)),
-                (limiter_module.clone(), Some(override_cursor))
-            ]
-            .into_iter()
-            .collect::<HashMap<_, _>>()
-        );
-
-        // No override, found stored watermark for `bridge` module, use stored watermark for `bridge`
-        // and None for `committee`
-        let stored_cursor = EventID {
-            tx_digest: TransactionDigest::random(),
-            event_seq: 100,
-        };
-        store
-            .update_sui_event_cursor(bridge_module.clone(), stored_cursor)
-            .unwrap();
-        let sui_modules_to_watch = get_sui_modules_to_watch(&store, None);
-        assert_eq!(
-            sui_modules_to_watch,
-            vec![
-                (bridge_module.clone(), Some(stored_cursor)),
-                (committee_module.clone(), None),
-                (treasury_module.clone(), None),
-                (limiter_module.clone(), None)
-            ]
-            .into_iter()
-            .collect::<HashMap<_, _>>()
-        );
-
-        // found stored watermark, use override
-        let stored_cursor = EventID {
-            tx_digest: TransactionDigest::random(),
-            event_seq: 100,
-        };
-        store
-            .update_sui_event_cursor(committee_module.clone(), stored_cursor)
-            .unwrap();
-        let sui_modules_to_watch = get_sui_modules_to_watch(&store, Some(override_cursor));
-        assert_eq!(
-            sui_modules_to_watch,
-            vec![
-                (bridge_module.clone(), Some(override_cursor)),
-                (committee_module.clone(), Some(override_cursor)),
-                (treasury_module.clone(), Some(override_cursor)),
-                (limiter_module.clone(), Some(override_cursor))
-            ]
-            .into_iter()
-            .collect::<HashMap<_, _>>()
         );
     }
 
