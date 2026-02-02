@@ -7,6 +7,7 @@ mod bad_storage_tests;
 mod basic_block_tests;
 mod binary_format_version;
 mod compatibility_tests;
+mod eval_tests;
 mod exec_func_effects_tests;
 mod function_arg_tests;
 mod instantiation_tests;
