@@ -2835,11 +2835,7 @@ async fn test_authority_persist() {
         authority_key: AuthorityKeyPair,
         store: Arc<AuthorityStore>,
     ) -> Arc<AuthorityState> {
-        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        // TODO(address-balances): This test fails with accumulators enabled, because something
-        // (likely the scheduler) retains a reference to the database, keeping it alive after the
-        // `drop(authority)`.
-        protocol_config.disable_accumulators_for_testing();
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         TestAuthorityBuilder::new()
             .with_genesis_and_keypair(genesis, &authority_key)
             .with_protocol_config(protocol_config)
