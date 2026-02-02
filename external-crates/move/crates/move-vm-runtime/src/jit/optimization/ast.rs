@@ -21,12 +21,12 @@ use std::collections::BTreeMap;
 
 /// An optimized package
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Package {
     pub(crate) original_id: OriginalId,
     pub(crate) version_id: VersionId,
     pub(crate) modules: BTreeMap<ModuleId, Module>,
     pub(crate) type_origin_table: IndexMap<IntraPackageName, DefiningTypeId>,
+    #[allow(unused)]
     pub(crate) linkage_table: BTreeMap<OriginalId, VersionId>,
 }
 
@@ -52,8 +52,8 @@ pub(crate) type Label = u16;
 
 /// Optimized Function Code
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Code {
+    #[allow(unused)]
     pub(crate) jump_tables: Vec<VariantJumpTable>,
     pub(crate) code: BTreeMap<Label, Vec<Bytecode>>,
 }
@@ -238,8 +238,8 @@ impl ::std::fmt::Debug for Bytecode {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-#[allow(dead_code)]
 impl Bytecode {
+    #[allow(dead_code)]
     pub fn branch_target(&self, tables: &[VariantJumpTable]) -> Option<Vec<Label>> {
         match self {
             Bytecode::BrTrue(target) | Bytecode::BrFalse(target) | Bytecode::Branch(target) => {
@@ -328,6 +328,7 @@ impl Bytecode {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_unconditional_branch(&self) -> bool {
         match self {
             Bytecode::Branch(_) | Bytecode::Abort | Bytecode::Ret => true,

@@ -65,11 +65,12 @@ struct FunctionContext<'pkg_ctxt, 'natives> {
     definitions: Definitions,
 }
 
-#[allow(dead_code)]
 struct Definitions {
     structs: Vec<VMPointer<StructDef>>,
     struct_instantiations: Vec<VMPointer<StructInstantiation>>,
+    #[allow(unused)]
     enums: Vec<VMPointer<EnumDef>>,
+    #[allow(unused)]
     enum_instantiations: Vec<VMPointer<EnumInstantiation>>,
     variants: Vec<VMPointer<VariantDef>>,
     variant_instantiations: Vec<VMPointer<VariantInstantiation>>,

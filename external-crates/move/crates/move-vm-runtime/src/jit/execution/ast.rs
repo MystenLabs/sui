@@ -137,7 +137,6 @@ pub struct Constant {
 // #[derive(Debug)]
 // https://github.com/rust-lang/rust/issues/70263
 pub struct Function {
-    #[allow(unused)]
     pub file_format_version: u32,
     pub is_entry: bool,
     pub visibility: Visibility,
@@ -204,7 +203,6 @@ pub struct EnumDef {
     pub def_vtable_key: VirtualTableKey,
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
-    #[allow(unused)]
     pub variant_count: u16,
     pub variants: ArenaVec<VariantDef>,
 }
@@ -248,7 +246,6 @@ pub struct FieldHandle {
 #[derive(Debug)]
 pub struct FieldInstantiation {
     pub offset: usize,
-    #[allow(unused)]
     pub owner: VirtualTableKey,
 }
 
@@ -846,7 +843,6 @@ impl Function {
         &self.name
     }
 
-    #[allow(unused)]
     pub fn file_format_version(&self) -> u32 {
         self.file_format_version
     }
@@ -1076,7 +1072,6 @@ impl DatatypeDescriptor {
 }
 
 impl Type {
-    #[allow(deprecated)]
     const LEGACY_BASE_MEMORY_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
 
     /// Returns the abstract memory size the data structure occupies.

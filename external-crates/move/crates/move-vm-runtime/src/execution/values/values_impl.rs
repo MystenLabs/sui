@@ -2,9 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// THIS IS TO SUPRESS CI ERRORS -- DO NOT MERGE IT
-#![allow(deprecated)]
-
 use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
@@ -842,7 +839,6 @@ impl Reference {
 }
 
 impl StructRef {
-    #[allow(dead_code)]
     pub fn read_ref(self) -> PartialVMResult<Value> {
         Ok(self.0.borrow().copy_value())
     }
@@ -2445,7 +2441,6 @@ impl fmt::Display for ConstantContainer {
     }
 }
 
-#[allow(dead_code)]
 pub mod debug {
     use crate::execution::interpreter::locals::StackFrame;
 

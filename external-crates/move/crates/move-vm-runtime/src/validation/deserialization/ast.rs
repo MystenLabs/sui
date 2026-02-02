@@ -12,9 +12,7 @@ pub(crate) struct Package {
     pub(crate) original_id: OriginalId,
     pub(crate) version_id: VersionId,
     pub(crate) modules: BTreeMap<ModuleId, CompiledModule>,
-    #[allow(dead_code)]
     pub(crate) type_origin_table: IndexMap<IntraPackageName, DefiningTypeId>,
-    #[allow(dead_code)]
     pub(crate) linkage_table: BTreeMap<OriginalId, VersionId>,
     pub(crate) version: u64,
 }
