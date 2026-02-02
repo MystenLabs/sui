@@ -12,6 +12,7 @@ async fn test_dry_run_publish_with_mocked_coin() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await;
 
     let address = cluster.get_address_0();
+    #[allow(deprecated)]
     let client = cluster.sui_client().clone();
 
     // Publish test coin package

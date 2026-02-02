@@ -93,7 +93,7 @@ async fn test_verify_signature_zklogin() {
         .await;
     test_cluster.wait_for_epoch(Some(1)).await;
     test_cluster.wait_for_authenticator_state_update().await;
-    let client = test_cluster.sui_client();
+    let client = test_cluster.grpc_client();
     let res = verify_personal_message_signature(
         signature.clone(),
         message,
@@ -107,7 +107,7 @@ async fn test_verify_signature_zklogin() {
         signature,
         "wrong msg".as_bytes(),
         user_address,
-        Some(client.clone()),
+        Some(client),
     )
     .await;
     assert!(res.is_err());

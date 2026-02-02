@@ -219,7 +219,7 @@ mod tests {
     async fn test_local_faucet_execute_txn() {
         // Setup test cluster
         let cluster = TestClusterBuilder::new().build().await;
-        let client = cluster.sui_client().clone();
+        let client = cluster.grpc_client();
 
         let config = FaucetConfig::default();
         let local_faucet = LocalFaucet::new(cluster.wallet, config).await.unwrap();
@@ -231,22 +231,20 @@ mod tests {
         assert!(tx.is_ok());
 
         let coins = client
-            .coin_read_api()
-            .get_coins(recipient, None, None, None)
+            .get_owned_objects(recipient, None, None, None)
             .await
             .unwrap();
 
-        assert_eq!(coins.data.len(), local_faucet.num_coins);
+        assert_eq!(coins.items.len(), local_faucet.num_coins);
 
         let tx = local_faucet.local_request_execute_tx(recipient).await;
         assert!(tx.is_ok());
         let coins = client
-            .coin_read_api()
-            .get_coins(recipient, None, None, None)
+            .get_owned_objects(recipient, None, None, None)
             .await
             .unwrap();
 
-        assert_eq!(coins.data.len(), 2 * local_faucet.num_coins);
+        assert_eq!(coins.items.len(), 2 * local_faucet.num_coins);
     }
 
     #[tokio::test]

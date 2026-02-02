@@ -4,7 +4,6 @@
 use std::collections::BTreeMap;
 
 use crate::{TestCluster, TestClusterBuilder};
-use sui_json_rpc_api::CoinReadApiClient;
 use sui_keys::keystore::AccountKeystore;
 use sui_protocol_config::{OverrideGuard, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
@@ -256,13 +255,13 @@ impl TestEnv {
             }
         });
 
-        let client = self.cluster.fullnode_handle.rpc_client.clone();
+        let client = self.cluster.grpc_client();
         tokio::task::spawn(async move {
             let rpc_balance = client
-                .get_balance(owner, Some(coin_type.to_canonical_string(true)))
+                .get_balance(owner, &coin_type.to_canonical_string(true).parse().unwrap())
                 .await
                 .unwrap();
-            assert_eq!(db_balance, rpc_balance.funds_in_address_balance as u64);
+            assert_eq!(db_balance, rpc_balance.address_balance());
         });
 
         db_balance

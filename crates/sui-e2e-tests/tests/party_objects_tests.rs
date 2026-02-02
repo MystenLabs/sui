@@ -940,6 +940,7 @@ async fn party_object_jsonrpc() {
     let object_id = object.0;
     let object_initial_shared_version = object.1;
 
+    #[allow(deprecated)]
     let client = test_cluster.sui_client();
 
     let object = client
