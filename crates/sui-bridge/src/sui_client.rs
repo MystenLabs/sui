@@ -1250,7 +1250,7 @@ impl SuiClientInner for SuiClientInternal {
         &self,
         gas_object_id: ObjectID,
     ) -> (GasCoin, ObjectRef, Owner) {
-        self.jsonrpc_client
+        self.grpc_client
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await
     }
