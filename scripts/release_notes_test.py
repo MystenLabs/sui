@@ -4,6 +4,7 @@
 
 """Unit tests for release_notes.py"""
 
+import subprocess
 import unittest
 from unittest.mock import patch, MagicMock
 from io import StringIO
@@ -185,11 +186,11 @@ class TestPrHasReleaseNotes(unittest.TestCase):
 
 
 class TestDoGetNotes(unittest.TestCase):
-    """Tests for do_get_notes function."""
+    """Tests for do_get_notes function (used by release-notes-monitor workflow)."""
 
     @patch("release_notes.extract_notes_for_pr")
     def test_do_get_notes_output(self, mock_extract):
-        """Test that do_get_notes outputs correctly formatted notes."""
+        """Test that do_get_notes outputs correctly formatted notes as bullet points."""
         from release_notes import do_get_notes
 
         mock_extract.return_value = {
@@ -202,9 +203,46 @@ class TestDoGetNotes(unittest.TestCase):
             do_get_notes("123")
             output = mock_stdout.getvalue()
 
-        self.assertIn("Protocol: Protocol note", output)
-        self.assertIn("GraphQL: GraphQL note", output)
+        self.assertIn("• *Protocol:* Protocol note", output)
+        self.assertIn("• *GraphQL:* GraphQL note", output)
         self.assertNotIn("CLI:", output)
+
+    @patch("release_notes.extract_notes_for_pr")
+    def test_outputs_only_checked_notes_with_content(self, mock_extract):
+        """Should only output notes that are checked and have content."""
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note="Protocol change"),
+            "CLI": Note(checked=False, note="Unchecked CLI note"),
+            "GraphQL": Note(checked=True, note=""),  # Checked but empty
+            "JSON-RPC": Note(checked=True, note="RPC change"),
+        }
+        from release_notes import do_get_notes
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout:
+            do_get_notes("123")
+            output = mock_stdout.getvalue()
+
+        # Should include Protocol and JSON-RPC (checked with content) as bullet points
+        self.assertIn("• *Protocol:* Protocol change", output)
+        self.assertIn("• *JSON-RPC:* RPC change", output)
+        # Should NOT include CLI (unchecked) or GraphQL (empty)
+        self.assertNotIn("CLI:", output)
+        self.assertNotIn("GraphQL:", output)
+
+    @patch("release_notes.extract_notes_for_pr")
+    def test_outputs_empty_when_no_checked_notes(self, mock_extract):
+        """Should output nothing when no notes are checked."""
+        mock_extract.return_value = {
+            "Protocol": Note(checked=False, note="Some note"),
+            "CLI": Note(checked=False, note="Another note"),
+        }
+        from release_notes import do_get_notes
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout:
+            do_get_notes("123")
+            output = mock_stdout.getvalue()
+
+        self.assertEqual(output.strip(), "")
 
 
 class TestExtractNotesForPr(unittest.TestCase):
@@ -282,6 +320,426 @@ Some PR description.
 
         self.assertTrue(notes["JSON-RPC"].checked)
         self.assertEqual(notes["JSON-RPC"].note, "New RPC method added")
+
+
+class TestPrBumpsProtocolVersion(unittest.TestCase):
+    """Tests for pr_bumps_protocol_version function."""
+
+    @patch("release_notes.GH_CLI_PATH", "/usr/bin/gh")
+    @patch("release_notes.subprocess.check_output")
+    def test_detects_protocol_version_bump(self, mock_check_output):
+        """Test detection when MAX_PROTOCOL_VERSION is modified."""
+        mock_check_output.return_value = """
+diff --git a/crates/sui-protocol-config/src/lib.rs b/crates/sui-protocol-config/src/lib.rs
+--- a/crates/sui-protocol-config/src/lib.rs
++++ b/crates/sui-protocol-config/src/lib.rs
+@@ -25,7 +25,7 @@
+ const MIN_PROTOCOL_VERSION: u64 = 1;
+-const MAX_PROTOCOL_VERSION: u64 = 109;
++const MAX_PROTOCOL_VERSION: u64 = 110;
+"""
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertTrue(pr_bumps_protocol_version("123"))
+
+    @patch("release_notes.GH_CLI_PATH", "/usr/bin/gh")
+    @patch("release_notes.subprocess.check_output")
+    def test_no_bump_when_file_not_changed(self, mock_check_output):
+        """Test returns False when protocol config file not in diff."""
+        mock_check_output.return_value = """
+diff --git a/crates/sui-core/src/lib.rs b/crates/sui-core/src/lib.rs
+--- a/crates/sui-core/src/lib.rs
++++ b/crates/sui-core/src/lib.rs
+@@ -1,3 +1,4 @@
++// Some comment
+"""
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertFalse(pr_bumps_protocol_version("123"))
+
+    @patch("release_notes.GH_CLI_PATH", "/usr/bin/gh")
+    @patch("release_notes.subprocess.check_output")
+    def test_no_bump_when_other_line_changed(self, mock_check_output):
+        """Test returns False when lib.rs changed but not MAX_PROTOCOL_VERSION."""
+        mock_check_output.return_value = """
+diff --git a/crates/sui-protocol-config/src/lib.rs b/crates/sui-protocol-config/src/lib.rs
+--- a/crates/sui-protocol-config/src/lib.rs
++++ b/crates/sui-protocol-config/src/lib.rs
+@@ -100,6 +100,7 @@
++    some_new_config: true,
+"""
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertFalse(pr_bumps_protocol_version("123"))
+
+    @patch("release_notes.GH_CLI_PATH", "/usr/bin/gh")
+    @patch("release_notes.subprocess.check_output")
+    def test_handles_gh_cli_failure(self, mock_check_output):
+        """Test returns False when gh CLI fails."""
+        mock_check_output.side_effect = subprocess.CalledProcessError(1, "gh")
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertFalse(pr_bumps_protocol_version("123"))
+
+    @patch("release_notes.GH_CLI_PATH", None)
+    def test_returns_false_when_no_gh_cli(self):
+        """Test returns False when gh CLI is not available."""
+        from release_notes import pr_bumps_protocol_version
+
+        self.assertFalse(pr_bumps_protocol_version("123"))
+
+
+class TestDoCheckProtocolVersion(unittest.TestCase):
+    """Tests for do_check with protocol version validation."""
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_fails_when_protocol_bump_without_note(self, mock_extract, mock_bumps):
+        """Should fail when MAX_PROTOCOL_VERSION bumped but no Protocol note."""
+        mock_bumps.return_value = True
+        mock_extract.return_value = {
+            "CLI": Note(checked=True, note="Some CLI change"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()):
+                do_check("123")
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_fails_when_protocol_bump_with_unchecked_note(self, mock_extract, mock_bumps):
+        """Should fail when Protocol note exists but is not checked."""
+        mock_bumps.return_value = True
+        mock_extract.return_value = {
+            "Protocol": Note(checked=False, note="Protocol change"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()):
+                do_check("123")
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_fails_when_protocol_bump_with_empty_note(self, mock_extract, mock_bumps):
+        """Should fail when Protocol is checked but note is empty."""
+        mock_bumps.return_value = True
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note=""),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()):
+                do_check("123")
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_passes_when_protocol_bump_with_valid_note(self, mock_extract, mock_bumps):
+        """Should pass when Protocol bump has proper release note."""
+        mock_bumps.return_value = True
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note="Bump protocol version for feature X"),
+        }
+        from release_notes import do_check
+
+        # Should not raise SystemExit
+        do_check("123")
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_passes_when_no_protocol_bump(self, mock_extract, mock_bumps):
+        """Should pass validation when no protocol version bump."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {}
+        from release_notes import do_check
+
+        # Should not raise SystemExit
+        do_check("123")
+
+
+class TestDoCheckInputValidation(unittest.TestCase):
+    """Tests for do_check input validation: missing PR, empty PR, case mismatch."""
+
+    def test_fails_when_pr_is_none(self):
+        """Should fail with error when PR number is not provided."""
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stderr", new=StringIO()):
+                do_check(None)
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_fails_when_pr_is_empty_string(self):
+        """Should fail with error when PR number is empty string."""
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stderr", new=StringIO()):
+                do_check("")
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_detects_case_mismatch(self, mock_extract, mock_bumps):
+        """Should detect case mismatch and suggest correct case."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "protocol": Note(checked=True, note="This is a valid release note"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                do_check("123")
+                output = mock_stdout.getvalue()
+                self.assertIn("incorrect case", output)
+                self.assertIn("Protocol", output)
+        self.assertEqual(cm.exception.code, 1)
+
+
+class TestParseNotesWhitespace(unittest.TestCase):
+    """Tests for whitespace handling in parse_notes."""
+
+    def test_strips_whitespace_from_impact_area(self):
+        """Should strip whitespace from impact area names."""
+        body = """
+### Release notes
+- [x]  Protocol : Note with extra spaces around impact area
+"""
+        notes = parse_notes(body)
+        # The key should be "Protocol" not " Protocol " or "Protocol "
+        self.assertIn("Protocol", notes)
+        self.assertEqual(len(notes), 1)
+
+    def test_handles_space_after_colon_variations(self):
+        """Should handle notes with or without space after the colon."""
+        body = """
+### Release notes
+- [x] Protocol: Note with space after colon
+- [x] CLI:Note without space after colon
+- [x] GraphQL:  Note with two spaces after colon
+"""
+        notes = parse_notes(body)
+
+        self.assertEqual(len(notes), 3)
+        # All should have properly trimmed notes
+        self.assertEqual(notes["Protocol"].note, "Note with space after colon")
+        self.assertEqual(notes["CLI"].note, "Note without space after colon")
+        self.assertEqual(notes["GraphQL"].note, "Note with two spaces after colon")
+
+    def test_parses_exact_pr_template_format(self):
+        """Should correctly parse the exact format from PULL_REQUEST_TEMPLATE.md."""
+        # This mirrors the exact format from .github/PULL_REQUEST_TEMPLATE.md
+        body = """## Description
+
+Some description here.
+
+## Test plan
+
+Some test plan.
+
+---
+
+## Release notes
+
+Check each box that your changes affect.
+
+- [x] Protocol: Added new protocol feature
+- [ ] Nodes (Validators and Full nodes):
+- [ ] gRPC:
+- [x] JSON-RPC: New RPC method
+- [ ] GraphQL:
+- [x] CLI: New CLI command
+- [ ] Rust SDK:
+- [ ] Indexing Framework:
+"""
+        notes = parse_notes(body)
+
+        # Should have 8 entries (all items from template)
+        self.assertEqual(len(notes), 8)
+
+        # Check that all known impact areas are parsed correctly
+        self.assertIn("Protocol", notes)
+        self.assertIn("Nodes (Validators and Full nodes)", notes)
+        self.assertIn("gRPC", notes)
+        self.assertIn("JSON-RPC", notes)
+        self.assertIn("GraphQL", notes)
+        self.assertIn("CLI", notes)
+        self.assertIn("Rust SDK", notes)
+        self.assertIn("Indexing Framework", notes)
+
+        # Verify checked status
+        self.assertTrue(notes["Protocol"].checked)
+        self.assertFalse(notes["Nodes (Validators and Full nodes)"].checked)
+        self.assertTrue(notes["JSON-RPC"].checked)
+        self.assertTrue(notes["CLI"].checked)
+
+        # Verify note content
+        self.assertEqual(notes["Protocol"].note, "Added new protocol feature")
+        self.assertEqual(notes["JSON-RPC"].note, "New RPC method")
+        self.assertEqual(notes["CLI"].note, "New CLI command")
+
+
+class TestDoCheckUserFeedback(unittest.TestCase):
+    """Tests for do_check user feedback: typo suggestions, warnings, success messages."""
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_suggests_correction_for_typo(self, mock_extract, mock_bumps):
+        """Should suggest correction when impact area has a typo."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "Protocal": Note(checked=True, note="This is a valid release note"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                do_check("123")
+                output = mock_stdout.getvalue()
+                self.assertIn("Did you mean 'Protocol'", output)
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_warns_about_short_notes(self, mock_extract, mock_bumps):
+        """Should warn when a release note is very short."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note="Short"),
+        }
+        from release_notes import do_check
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout:
+            # Should not raise SystemExit (warnings are non-fatal)
+            do_check("123")
+            output = mock_stdout.getvalue()
+            self.assertIn("very short release note", output)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_prints_success_message(self, mock_extract, mock_bumps):
+        """Should print success message when check passes."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "Protocol": Note(checked=True, note="This is a proper release note with enough detail"),
+        }
+        from release_notes import do_check
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout:
+            do_check("123")
+            output = mock_stdout.getvalue()
+            self.assertIn("check passed", output)
+
+    @patch("release_notes.pr_bumps_protocol_version")
+    @patch("release_notes.extract_notes_for_pr")
+    def test_no_suggestion_for_completely_unknown_area(self, mock_extract, mock_bumps):
+        """Should not suggest correction for completely unknown impact areas."""
+        mock_bumps.return_value = False
+        mock_extract.return_value = {
+            "SomethingCompletelyDifferent": Note(checked=True, note="This is a valid release note"),
+        }
+        from release_notes import do_check
+
+        with self.assertRaises(SystemExit) as cm:
+            with patch("sys.stdout", new=StringIO()) as mock_stdout:
+                do_check("123")
+                output = mock_stdout.getvalue()
+                self.assertIn("unfamiliar impact area", output)
+                self.assertNotIn("Did you mean", output)
+        self.assertEqual(cm.exception.code, 1)
+
+
+class TestDoListPrsLogic(unittest.TestCase):
+    """Tests for the PR filtering logic used by do_list_prs."""
+
+    def test_parse_notes_detects_checked_notes(self):
+        """parse_notes should correctly identify checked release notes."""
+        from release_notes import parse_notes
+
+        body = """## Description
+Some description.
+
+## Release notes
+- [x] Protocol: Added new feature
+- [ ] CLI: Not checked
+- [X] GraphQL: Also checked (uppercase X)
+"""
+        notes = parse_notes(body)
+
+        # Check that we can use the same logic as do_list_prs
+        has_checked = any(note.checked for note in notes.values())
+        self.assertTrue(has_checked)
+        self.assertTrue(notes["Protocol"].checked)
+        self.assertFalse(notes["CLI"].checked)
+        self.assertTrue(notes["GraphQL"].checked)
+
+    def test_parse_notes_returns_false_when_all_unchecked(self):
+        """parse_notes should return no checked notes when all are unchecked."""
+        from release_notes import parse_notes
+
+        body = """## Release notes
+- [ ] Protocol:
+- [ ] CLI:
+"""
+        notes = parse_notes(body)
+
+        has_checked = any(note.checked for note in notes.values())
+        self.assertFalse(has_checked)
+
+    def test_parse_notes_handles_missing_release_notes_section(self):
+        """parse_notes should handle PRs without release notes section."""
+        from release_notes import parse_notes
+
+        body = """## Description
+Just a description, no release notes section.
+"""
+        notes = parse_notes(body)
+
+        self.assertEqual(notes, {})
+        has_checked = any(note.checked for note in notes.values())
+        self.assertFalse(has_checked)
+
+    def test_parse_notes_ignores_checkboxes_outside_release_notes(self):
+        """parse_notes should ignore checkboxes in other sections like Test plan."""
+        from release_notes import parse_notes
+
+        # This mimics PRs like #25207 that have checkboxes in Test plan
+        # but no Release notes section
+        body = """## Summary
+- Fixed a flaky test
+
+## Test plan
+- [x] Ran the test multiple times to verify stability
+- [x] Verified it passes consistently
+"""
+        notes = parse_notes(body)
+
+        # Should return empty since there's no Release notes section
+        self.assertEqual(notes, {})
+        has_checked = any(note.checked for note in notes.values())
+        self.assertFalse(has_checked)
+
+    def test_parse_notes_handles_empty_checkbox_brackets(self):
+        """parse_notes should handle empty checkbox brackets [] without crashing."""
+        from release_notes import parse_notes
+
+        body = """## Release notes
+- [] Protocol: Empty brackets (no space)
+- [ ] CLI: Normal unchecked with space
+- [x] GraphQL: Checked
+"""
+        notes = parse_notes(body)
+
+        # Empty brackets should be treated as unchecked
+        self.assertFalse(notes["Protocol"].checked)
+        self.assertFalse(notes["CLI"].checked)
+        self.assertTrue(notes["GraphQL"].checked)
 
 
 if __name__ == "__main__":
