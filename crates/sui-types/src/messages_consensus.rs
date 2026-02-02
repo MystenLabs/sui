@@ -21,6 +21,7 @@ use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
+use mysten_common::debug_fatal;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -253,6 +254,8 @@ pub enum ConsensusTransactionKey {
     ExecutionTimeObservation(AuthorityName, u64 /* generation */),
     // V2: dedup by authority + sequence + digest
     CheckpointSignatureV2(AuthorityName, CheckpointSequenceNumber, CheckpointDigest),
+    // Deprecated.
+    RandomnessStateUpdate,
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -298,6 +301,9 @@ impl Debug for ConsensusTransactionKey {
                     "ExecutionTimeObservation({:?}, {generation:?})",
                     name.concise()
                 )
+            }
+            Self::RandomnessStateUpdate => {
+                write!(f, "RandomnessStateUpdate")
             }
         }
     }
@@ -747,9 +753,10 @@ impl ConsensusTransaction {
                 )))
             }
             ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
-                unreachable!(
+                debug_fatal!(
                     "there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External"
-                )
+                );
+                ConsensusTransactionKey::RandomnessStateUpdate
             }
             ConsensusTransactionKind::RandomnessDkgMessage(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgMessage(*authority)
