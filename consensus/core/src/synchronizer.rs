@@ -37,7 +37,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::NetworkClient,
+    network::{ObserverNetworkClient, SynchronizerClient, ValidatorNetworkClient},
     round_tracker::RoundTracker,
 };
 use crate::{
@@ -230,7 +230,12 @@ impl SynchronizerHandle {
 /// Additionally to the above, the synchronizer can synchronize and fetch the last own proposed block
 /// from the network peers as best effort approach to recover node from amnesia and avoid making the
 /// node equivocate.
-pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
+pub(crate) struct Synchronizer<
+    V: BlockVerifier,
+    D: CoreThreadDispatcher,
+    VC: ValidatorNetworkClient,
+    OC: ObserverNetworkClient,
+> {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
     fetch_block_senders: BTreeMap<AuthorityIndex, Sender<BlocksGuard>>,
@@ -239,7 +244,7 @@ pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThread
     dag_state: Arc<RwLock<DagState>>,
     fetch_blocks_scheduler_task: JoinSet<()>,
     fetch_own_last_block_task: JoinSet<()>,
-    network_client: Arc<C>,
+    network_client: Arc<SynchronizerClient<VC, OC>>,
     block_verifier: Arc<V>,
     transaction_certifier: TransactionCertifier,
     round_tracker: Arc<RwLock<RoundTracker>>,
@@ -247,9 +252,15 @@ pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThread
     commands_sender: Sender<Command>,
 }
 
-impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C, V, D> {
+impl<V, D, VC, OC> Synchronizer<V, D, VC, OC>
+where
+    V: BlockVerifier,
+    D: CoreThreadDispatcher,
+    VC: ValidatorNetworkClient,
+    OC: ObserverNetworkClient,
+{
     pub(crate) fn start(
-        network_client: Arc<C>,
+        network_client: Arc<SynchronizerClient<VC, OC>>,
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
@@ -447,7 +458,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
     async fn fetch_blocks_from_authority(
         peer_index: AuthorityIndex,
-        network_client: Arc<C>,
+        network_client: Arc<SynchronizerClient<VC, OC>>,
         block_verifier: Arc<V>,
         transaction_certifier: TransactionCertifier,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
@@ -692,7 +703,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
     }
 
     async fn fetch_blocks_request(
-        network_client: Arc<C>,
+        network_client: Arc<SynchronizerClient<VC, OC>>,
         peer: AuthorityIndex,
         blocks_guard: BlocksGuard,
         highest_rounds: Vec<Round>,
@@ -710,7 +721,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let resp = timeout(
             request_timeout,
             network_client.fetch_blocks(
-                peer,
+                crate::network::PeerId::Authority(peer),
                 blocks_guard
                     .block_refs
                     .clone()
@@ -1000,7 +1011,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
     async fn fetch_blocks_from_authorities(
         context: Arc<Context>,
         inflight_blocks: Arc<InflightBlocksMap>,
-        network_client: Arc<C>,
+        network_client: Arc<SynchronizerClient<VC, OC>>,
         missing_blocks: BTreeSet<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, AuthorityIndex)> {
@@ -1200,13 +1211,12 @@ mod tests {
         CommitDigest, CommitIndex,
         block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
-        commit::CommitRange,
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::CoreThreadDispatcher,
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
-        network::{BlockStream, NetworkClient},
+        network::{BlockStream, ObserverNetworkClient, SynchronizerClient, ValidatorNetworkClient},
         storage::mem_store::MemStore,
         synchronizer::{
             FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT, InflightBlocksMap, Synchronizer,
@@ -1264,23 +1274,14 @@ mod tests {
     }
 
     #[async_trait]
-    impl NetworkClient for MockNetworkClient {
-        async fn send_block(
-            &self,
-            _peer: AuthorityIndex,
-            _serialized_block: &VerifiedBlock,
-            _timeout: Duration,
-        ) -> ConsensusResult<()> {
-            unimplemented!("Unimplemented")
-        }
-
+    impl ValidatorNetworkClient for MockNetworkClient {
         async fn subscribe_blocks(
             &self,
             _peer: AuthorityIndex,
             _last_received: Round,
             _timeout: Duration,
         ) -> ConsensusResult<BlockStream> {
-            unimplemented!("Unimplemented")
+            unimplemented!("subscribe_blocks not implemented in mock")
         }
 
         async fn fetch_blocks(
@@ -1317,10 +1318,10 @@ mod tests {
         async fn fetch_commits(
             &self,
             _peer: AuthorityIndex,
-            _commit_range: CommitRange,
+            _commit_range: crate::commit::CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
-            unimplemented!("Unimplemented")
+            unimplemented!("fetch_commits not implemented in mock")
         }
 
         async fn fetch_latest_blocks(
@@ -1359,7 +1360,47 @@ mod tests {
             _peer: AuthorityIndex,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
-            unimplemented!("Unimplemented")
+            unimplemented!("get_latest_rounds not implemented in mock")
+        }
+
+        #[cfg(test)]
+        async fn send_block(
+            &self,
+            _peer: AuthorityIndex,
+            _block: &VerifiedBlock,
+            _timeout: Duration,
+        ) -> ConsensusResult<()> {
+            unimplemented!("send_block not implemented in mock")
+        }
+    }
+
+    #[async_trait]
+    impl ObserverNetworkClient for MockNetworkClient {
+        async fn stream_blocks(
+            &self,
+            _peer: crate::network::NodeId,
+            _request_stream: crate::network::BlockRequestStream,
+            _timeout: Duration,
+        ) -> ConsensusResult<crate::network::ObserverBlockStream> {
+            unimplemented!("stream_blocks not implemented in mock")
+        }
+
+        async fn fetch_blocks(
+            &self,
+            _peer: crate::network::NodeId,
+            _block_refs: Vec<BlockRef>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Observer fetch_blocks not implemented in mock")
+        }
+
+        async fn fetch_commits(
+            &self,
+            _peer: crate::network::NodeId,
+            _commit_range: crate::commit::CommitRange,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Observer fetch_commits not implemented in mock")
         }
     }
 
@@ -1439,7 +1480,11 @@ mod tests {
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let network_client = Arc::new(MockNetworkClient::default());
+        let mock_client = Arc::new(MockNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1453,7 +1498,7 @@ mod tests {
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let handle = Synchronizer::start(
-            network_client.clone(),
+            network_client,
             context,
             core_dispatcher.clone(),
             commit_vote_monitor,
@@ -1475,7 +1520,7 @@ mod tests {
 
         // AND stub the fetch_blocks request from peer 1
         let peer = AuthorityIndex::new_for_test(1);
-        network_client
+        mock_client
             .stub_fetch_blocks(expected_blocks.clone(), peer, None)
             .await;
 
@@ -1498,7 +1543,11 @@ mod tests {
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
-        let network_client = Arc::new(MockNetworkClient::default());
+        let mock_client = Arc::new(MockNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1512,7 +1561,7 @@ mod tests {
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let handle = Synchronizer::start(
-            network_client.clone(),
+            network_client,
             context,
             core_dispatcher.clone(),
             commit_vote_monitor,
@@ -1534,7 +1583,7 @@ mod tests {
         while let Some(block) = iter.next() {
             // stub the fetch_blocks request from peer 1 and give some high response latency so requests
             // can start blocking the peer task.
-            network_client
+            mock_client
                 .stub_fetch_blocks(
                     vec![block.clone()],
                     peer,
@@ -1568,7 +1617,7 @@ mod tests {
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
-        let network_client = Arc::new(MockNetworkClient::default());
+        let mock_client = Arc::new(MockNetworkClient::default());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1598,14 +1647,14 @@ mod tests {
         // AND stub the requests for authority 1 & 2
         // Make the first authority timeout, so the second will be called. "We" are authority = 0, so
         // we are skipped anyways.
-        network_client
+        mock_client
             .stub_fetch_blocks(
                 expected_blocks.clone(),
                 AuthorityIndex::new_for_test(1),
                 Some(FETCH_REQUEST_TIMEOUT),
             )
             .await;
-        network_client
+        mock_client
             .stub_fetch_blocks(
                 expected_blocks.clone(),
                 AuthorityIndex::new_for_test(2),
@@ -1614,8 +1663,12 @@ mod tests {
             .await;
 
         // WHEN start the synchronizer and wait for a couple of seconds
+        let network_client = Arc::new(SynchronizerClient::new(
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
         let _handle = Synchronizer::start(
-            network_client.clone(),
+            network_client,
             context,
             core_dispatcher.clone(),
             commit_vote_monitor,
@@ -1649,7 +1702,7 @@ mod tests {
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
-        let network_client = Arc::new(MockNetworkClient::default());
+        let mock_client = Arc::new(MockNetworkClient::default());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1685,14 +1738,14 @@ mod tests {
             .take(context.parameters.max_blocks_per_sync)
             .cloned()
             .collect::<Vec<_>>();
-        network_client
+        mock_client
             .stub_fetch_blocks(
                 expected_blocks.clone(),
                 AuthorityIndex::new_for_test(1),
                 Some(FETCH_REQUEST_TIMEOUT),
             )
             .await;
-        network_client
+        mock_client
             .stub_fetch_blocks(
                 expected_blocks.clone(),
                 AuthorityIndex::new_for_test(2),
@@ -1721,8 +1774,12 @@ mod tests {
         }
 
         // WHEN start the synchronizer and wait for a couple of seconds where normally the synchronizer should have kicked in.
+        let network_client = Arc::new(SynchronizerClient::new(
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
         let _handle = Synchronizer::start(
-            network_client.clone(),
+            network_client,
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
@@ -1783,7 +1840,7 @@ mod tests {
         }));
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
-        let network_client = Arc::new(MockNetworkClient::default());
+        let mock_client = Arc::new(MockNetworkClient::default());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
@@ -1806,7 +1863,7 @@ mod tests {
         // Now set different latest blocks for the peers
         // For peer 1 we give the block of round 10 (highest)
         let block_1 = expected_blocks.pop().unwrap();
-        network_client
+        mock_client
             .stub_fetch_latest_blocks(
                 vec![block_1.clone()],
                 AuthorityIndex::new_for_test(1),
@@ -1814,7 +1871,7 @@ mod tests {
                 None,
             )
             .await;
-        network_client
+        mock_client
             .stub_fetch_latest_blocks(
                 vec![block_1],
                 AuthorityIndex::new_for_test(1),
@@ -1825,7 +1882,7 @@ mod tests {
 
         // For peer 2 we give the block of round 9
         let block_2 = expected_blocks.pop().unwrap();
-        network_client
+        mock_client
             .stub_fetch_latest_blocks(
                 vec![block_2.clone()],
                 AuthorityIndex::new_for_test(2),
@@ -1833,7 +1890,7 @@ mod tests {
                 Some(Duration::from_secs(10)),
             )
             .await;
-        network_client
+        mock_client
             .stub_fetch_latest_blocks(
                 vec![block_2],
                 AuthorityIndex::new_for_test(2),
@@ -1843,7 +1900,7 @@ mod tests {
             .await;
 
         // For peer 3 we don't give any block - and it should return an empty vector
-        network_client
+        mock_client
             .stub_fetch_latest_blocks(
                 vec![],
                 AuthorityIndex::new_for_test(3),
@@ -1851,7 +1908,7 @@ mod tests {
                 Some(Duration::from_secs(10)),
             )
             .await;
-        network_client
+        mock_client
             .stub_fetch_latest_blocks(
                 vec![],
                 AuthorityIndex::new_for_test(3),
@@ -1861,8 +1918,12 @@ mod tests {
             .await;
 
         // WHEN start the synchronizer and wait for a couple of seconds
+        let network_client = Arc::new(SynchronizerClient::new(
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
         let handle = Synchronizer::start(
-            network_client.clone(),
+            network_client,
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor,
@@ -1883,7 +1944,7 @@ mod tests {
         );
 
         // Ensure that all the requests have been called
-        assert_eq!(network_client.fetch_latest_blocks_pending_calls().await, 0);
+        assert_eq!(mock_client.fetch_latest_blocks_pending_calls().await, 0);
 
         // And we got one retry
         assert_eq!(
@@ -1963,9 +2024,10 @@ mod tests {
 
         // Create a Synchronizer
         let result = Synchronizer::<
-            MockNetworkClient,
             NoopBlockVerifier,
             MockCoreThreadDispatcher,
+            MockNetworkClient,
+            MockNetworkClient,
         >::process_fetched_blocks(
             expected_serialized_blocks,
             peer_index,
