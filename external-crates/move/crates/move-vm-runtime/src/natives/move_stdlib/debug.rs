@@ -191,11 +191,12 @@ mod testing {
         execution::values::{VMValueCast, Value},
         jit::execution::ast::Type,
         natives::functions::NativeContext,
+        partial_vm_error,
     };
     use move_binary_format::errors::{PartialVMError, PartialVMResult};
     use move_core_types::{
         account_address::AccountAddress, annotated_value as A, language_storage::TypeTag,
-        runtime_value as R, vm_status::StatusCode,
+        runtime_value as R,
     };
     use std::{fmt, fmt::Write};
 
@@ -210,13 +211,14 @@ mod testing {
     const STRUCT_END: &str = "}";
 
     fn fmt_error_to_partial_vm_error(e: fmt::Error) -> PartialVMError {
-        PartialVMError::new(StatusCode::UNKNOWN_STATUS)
-            .with_message("write! macro failed with: ".to_string() + e.to_string().as_str())
+        partial_vm_error!(UNKNOWN_STATUS, "write! macro failed with: {}", e)
     }
 
     fn to_vec_u8_type_err<E>(_e: E) -> PartialVMError {
-        PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-            .with_message("Could not convert Vec<MoveValue> to Vec<u8>: ".to_string())
+        partial_vm_error!(
+            INTERNAL_TYPE_ERROR,
+            "Could not convert Vec<MoveValue> to Vec<u8>: "
+        )
     }
 
     fn get_annotated_struct_layout(
@@ -231,20 +233,20 @@ mod testing {
             A::MoveTypeLayout::Enum(annotated_enum_layout) => {
                 Ok(A::MoveDatatypeLayout::Enum(annotated_enum_layout))
             }
-            _ => Err(
-                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR).with_message(
-                    "Could not convert Type to fully-annotated MoveTypeLayout via NativeContext"
-                        .to_string(),
-                ),
-            ),
+            _ => Err(partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "Could not convert Type to fully-annotated MoveTypeLayout via NativeContext"
+            )),
         }
     }
 
     fn get_vector_inner_type(ty: &Type) -> PartialVMResult<&Type> {
         match ty {
             Type::Vector(ty) => Ok(ty),
-            _ => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                .with_message("Could not get the inner Type of a vector's Type".to_string())),
+            _ => Err(partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "Could not get the inner Type of a vector's Type"
+            )),
         }
     }
 
@@ -264,17 +266,17 @@ mod testing {
                 .map_err(to_vec_u8_type_err)?;
 
                 let str = String::from_utf8(buf).map_err(|e| {
-                    PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR).with_message(
-                        "Could not parse UTF8 bytes: ".to_string() + e.to_string().as_str(),
-                    )
+                    partial_vm_error!(INTERNAL_TYPE_ERROR, "Could not parse UTF8 bytes: {}", e)
                 })?;
 
                 // We need to escape displayed double quotes " as \" and, as a result, also escape
                 // displayed \ as \\.
                 Ok(str.replace('\\', "\\\\").replace('"', "\\\""))
             }
-            _ => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                .with_message("Expected a MoveValue::Vector of u8's".to_string())),
+            _ => Err(partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "Expected a MoveValue::Vector of u8's"
+            )),
         }
     }
 
@@ -389,16 +391,20 @@ mod testing {
                 let move_struct = match val.as_move_value(&ty_layout) {
                     R::MoveValue::Struct(s) => s,
                     _ => {
-                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                            .with_message("Expected MoveValue::MoveStruct".to_string()));
+                        return Err(partial_vm_error!(
+                            INTERNAL_TYPE_ERROR,
+                            "Expected MoveValue::MoveStruct"
+                        ));
                     }
                 };
 
                 let A::MoveDatatypeLayout::Struct(annotated_struct_layout) =
                     get_annotated_struct_layout(context, &ty)?
                 else {
-                    return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                        .with_message("Expected MoveDatatypeLayout::Struct".to_string()));
+                    return Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "Expected MoveDatatypeLayout::Struct"
+                    ));
                 };
                 let decorated_struct = move_struct.decorate(&annotated_struct_layout);
 
@@ -416,16 +422,20 @@ mod testing {
                 let move_struct = match val.as_move_value(&ty_layout) {
                     R::MoveValue::Variant(v) => v,
                     _ => {
-                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                            .with_message("Expected MoveValue::MoveStruct".to_string()));
+                        return Err(partial_vm_error!(
+                            INTERNAL_TYPE_ERROR,
+                            "Expected MoveValue::MoveStruct"
+                        ));
                     }
                 };
 
                 let A::MoveDatatypeLayout::Enum(annotated_enum_layout) =
                     get_annotated_struct_layout(context, &ty)?
                 else {
-                    return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                        .with_message("Expected MoveDatatypeLayout::Enum".to_string()));
+                    return Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "Expected MoveDatatypeLayout::Enum"
+                    ));
                 };
                 let decorated_struct = move_struct.decorate(&annotated_enum_layout);
 
@@ -559,40 +569,36 @@ mod testing {
                 // Check if struct is an std::string::String
                 if !canonicalize && type_.is_std_string(move_std_addr) {
                     if fields.len() != 1 {
-                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                            .with_message(
-                                "Expected std::string::String struct to have just one field"
-                                    .to_string(),
-                            ));
+                        return Err(partial_vm_error!(
+                            INTERNAL_TYPE_ERROR,
+                            "Expected std::string::String struct to have just one field"
+                        ));
                     }
 
                     let (id, val) = fields.pop().unwrap();
                     if id.into_string() != "bytes" {
-                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                            .with_message(
-                                "Expected std::string::String struct to have a `bytes` field"
-                                    .to_string(),
-                            ));
+                        return Err(partial_vm_error!(
+                            INTERNAL_TYPE_ERROR,
+                            "Expected std::string::String struct to have a `bytes` field"
+                        ));
                     }
 
                     let str = move_value_as_escaped_string(val)?;
                     write!(out, "\"{}\"", str).map_err(fmt_error_to_partial_vm_error)?
                 } else if !canonicalize && type_.is_ascii_string(move_std_addr) {
                     if fields.len() != 1 {
-                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                            .with_message(
-                                "Expected std::ascii::String struct to have just one field"
-                                    .to_string(),
-                            ));
+                        return Err(partial_vm_error!(
+                            INTERNAL_TYPE_ERROR,
+                            "Expected std::ascii::String struct to have just one field"
+                        ));
                     }
 
                     let (id, val) = fields.pop().unwrap();
                     if id.into_string() != "bytes" {
-                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                            .with_message(
-                                "Expected std::ascii::String struct to have a `bytes` field"
-                                    .to_string(),
-                            ));
+                        return Err(partial_vm_error!(
+                            INTERNAL_TYPE_ERROR,
+                            "Expected std::ascii::String struct to have a `bytes` field"
+                        ));
                     }
 
                     let str = move_value_as_escaped_string(val)?;

@@ -3,10 +3,12 @@
 
 #![allow(unsafe_code)]
 
-use crate::execution::values::{MemBox, values_impl::Value};
+use crate::{
+    execution::values::{MemBox, values_impl::Value},
+    partial_vm_error,
+};
 
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::vm_status::StatusCode;
+use move_binary_format::errors::PartialVMResult;
 
 use std::collections::HashMap;
 
@@ -78,17 +80,18 @@ impl BaseHeap {
     /// Moves a location out of memory
     pub fn take_loc(&mut self, ndx: BaseHeapId) -> PartialVMResult<Value> {
         if self.is_invalid(ndx)? {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Cannot move from an invalid memory location".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Cannot move from an invalid memory location"
+            ));
         }
 
         let Some(value_box) = self.values.get_mut(&ndx) else {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Invalid index: {}", ndx)),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Invalid index: {}",
+                ndx
+            ));
         };
         Ok(value_box.replace(Value::invalid()))
     }
@@ -98,8 +101,11 @@ impl BaseHeap {
         self.values
             .get(&ndx)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Heap index invalid: {}", ndx))
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Heap index invalid: {}",
+                    ndx
+                )
             })
             .map(|value| value.as_ref_value())
     }
@@ -110,8 +116,7 @@ impl BaseHeap {
             .get(&ndx)
             .map(|value| matches!(&*value.borrow(), &Value::Invalid))
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Invalid index: {}", ndx))
+                partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "Invalid index: {}", ndx)
             })
     }
 }
@@ -183,8 +188,11 @@ impl StackFrame {
     /// Stores the value at the location
     pub fn store_loc(&mut self, ndx: usize, x: Value) -> PartialVMResult<()> {
         if ndx >= self.slice.len() {
-            return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                .with_message(format!("Local index out of bounds: {}", ndx)));
+            return Err(partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "Local index out of bounds: {}",
+                ndx
+            ));
         }
         let _ = self.slice[ndx].replace(x);
         Ok(())
@@ -195,13 +203,15 @@ impl StackFrame {
         self.slice
             .get(ndx)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("Local index out of bounds: {}", ndx))
+                partial_vm_error!(INTERNAL_TYPE_ERROR, "Local index out of bounds: {}", ndx)
             })
             .and_then(|value| {
                 if matches!(&*value.borrow(), &Value::Invalid) {
-                    Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                        .with_message(format!("Local index {} is unset", ndx)))
+                    Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "Local index {} is unset",
+                        ndx
+                    ))
                 } else {
                     Ok(value)
                 }
@@ -213,13 +223,15 @@ impl StackFrame {
         self.slice
             .get_mut(ndx)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("Local index out of bounds: {}", ndx))
+                partial_vm_error!(INTERNAL_TYPE_ERROR, "Local index out of bounds: {}", ndx)
             })
             .and_then(|value| {
                 if matches!(&*value.borrow(), &Value::Invalid) {
-                    Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                        .with_message(format!("Local index {} is unset", ndx)))
+                    Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "Local index {} is unset",
+                        ndx
+                    ))
                 } else {
                     Ok(value)
                 }

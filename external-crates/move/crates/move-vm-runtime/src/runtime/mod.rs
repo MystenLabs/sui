@@ -7,6 +7,7 @@ use crate::{
     execution::{dispatch_tables::VMDispatchTables, vm::MoveVM},
     jit,
     natives::{extensions::NativeExtensions, functions::NativeFunctions},
+    partial_vm_error,
     runtime::telemetry::{MoveRuntimeTelemetry, TelemetryContext},
     shared::{
         gas::GasMeter,
@@ -17,11 +18,8 @@ use crate::{
     validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
 
-use move_binary_format::errors::{Location, PartialVMError, VMResult};
-use move_core_types::{
-    resolver::{ModuleResolver, SerializedPackage},
-    vm_status::StatusCode,
-};
+use move_binary_format::errors::{Location, VMResult};
+use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -144,18 +142,14 @@ impl MoveRuntime {
                 // never have precomputed type depths, as those are computed on-demand.
                 if !virtual_tables.type_depths.is_empty() {
                     return Err(
-                        PartialVMError::new(
-                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("VMDispatchTables has precomputed type depths".to_string())
+                        partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "VMDispatchTables has precomputed type depths")
                         .finish(Location::Undefined)
                     );
                 }
 
                 if link_context != *virtual_tables.link_context {
                     return Err(
-                        PartialVMError::new(
-                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Cached VMDispatchTables linkage did not match hashed linkage".to_string())
+                        partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "Cached VMDispatchTables linkage did not match hashed linkage")
                         .finish(Location::Undefined)
                     );
                 }

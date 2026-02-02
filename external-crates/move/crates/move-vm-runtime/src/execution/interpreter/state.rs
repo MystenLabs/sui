@@ -12,6 +12,7 @@ use crate::{
         values::values_impl::{self as values, VMValueCast, Value},
     },
     jit::execution::ast::{Function, InternedDisplay, Type},
+    partial_vm_error,
     shared::{
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         views::TypeView,
@@ -19,15 +20,14 @@ use crate::{
     },
 };
 use move_binary_format::errors::*;
-use move_core_types::{language_storage::TypeTag, vm_status::StatusCode};
+use move_core_types::language_storage::TypeTag;
 
 use std::{fmt::Write, sync::Arc};
 
 macro_rules! debug_write {
     ($($toks: tt)*) => {
         write!($($toks)*).map_err(|_|
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("failed to write to buffer".to_string())
+            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "failed to write to buffer")
         )
     };
 }
@@ -35,8 +35,7 @@ macro_rules! debug_write {
 macro_rules! debug_writeln {
     ($($toks: tt)*) => {
         writeln!($($toks)*).map_err(|_|
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("failed to write to buffer".to_string())
+            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "failed to write to buffer")
         )
     };
 }
@@ -319,7 +318,7 @@ impl ValueStack {
             self.value.push(value);
             Ok(())
         } else {
-            Err(PartialVMError::new(StatusCode::EXECUTION_STACK_OVERFLOW))
+            Err(partial_vm_error!(EXECUTION_STACK_OVERFLOW))
         }
     }
 
@@ -327,7 +326,7 @@ impl ValueStack {
     fn pop(&mut self) -> PartialVMResult<Value> {
         self.value
             .pop()
-            .ok_or_else(|| PartialVMError::new(StatusCode::EMPTY_VALUE_STACK))
+            .ok_or_else(|| partial_vm_error!(EMPTY_VALUE_STACK))
     }
 
     /// Pop a `Value` of a given type off the stack. Abort if the value is not of the given
@@ -345,15 +344,17 @@ impl ValueStack {
             .value
             .len()
             .checked_sub(n as usize)
-            .ok_or_else(|| PartialVMError::new(StatusCode::EMPTY_VALUE_STACK))?;
+            .ok_or_else(|| partial_vm_error!(EMPTY_VALUE_STACK))?;
         let args = self.value.split_off(remaining_stack_size);
         Ok(args)
     }
 
     fn last_n(&self, n: usize) -> PartialVMResult<impl ExactSizeIterator<Item = &Value>> {
         if self.value.len() < n {
-            return Err(PartialVMError::new(StatusCode::EMPTY_VALUE_STACK)
-                .with_message("Failed to get last n arguments on the argument stack".to_string()));
+            return Err(partial_vm_error!(
+                EMPTY_VALUE_STACK,
+                "Failed to get last n arguments on the argument stack"
+            ));
         }
         Ok(self.value[(self.value.len() - n)..].iter())
     }
@@ -416,7 +417,7 @@ impl CallStack {
             self.frames.push(prev_frame);
             Ok(())
         } else {
-            let err = PartialVMError::new(StatusCode::CALL_STACK_OVERFLOW);
+            let err = partial_vm_error!(CALL_STACK_OVERFLOW);
             let err = set_err_info!(interner, new_frame, err);
             Err(err)
         }
@@ -427,7 +428,7 @@ impl CallStack {
     #[inline]
     fn pop_frame(&mut self, interner: &IdentifierInterner) -> VMResult<()> {
         let Some(return_frame) = self.frames.pop() else {
-            let err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
+            let err = partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR);
             let err = set_err_info!(interner, self.current_frame, err);
             return Err(err);
         };
@@ -521,6 +522,8 @@ impl std::fmt::Display for MachineState {
 // -------------------------------------------------------------------------------------------------
 
 fn fmt_err(_input: std::fmt::Error) -> PartialVMError {
-    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-        .with_message("failed to write to buffer".to_string())
+    partial_vm_error!(
+        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        "failed to write to buffer"
+    )
 }

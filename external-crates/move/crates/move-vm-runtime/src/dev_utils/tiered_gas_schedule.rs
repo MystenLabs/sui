@@ -7,7 +7,7 @@
 //! It is important to note that the cost schedule defined in this file does not track hashing
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
     gas_algebra::{
         AbstractMemorySize, GasQuantity, InternalGas, InternalGasUnit, NumArgs, NumBytes, ToUnit,
@@ -17,10 +17,13 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 
-use crate::jit::execution::ast::Type;
-use crate::shared::{
-    gas::{GasMeter, SimpleInstruction},
-    views::{SizeConfig, TypeView, ValueView},
+use crate::{
+    jit::execution::ast::Type,
+    partial_vm_error,
+    shared::{
+        gas::{GasMeter, SimpleInstruction},
+        views::{SizeConfig, TypeView, ValueView},
+    },
 };
 
 use serde::{Deserialize, Serialize};
@@ -243,7 +246,7 @@ impl<'a> GasStatus<'a> {
     pub fn push_stack(&mut self, pushes: u64) -> PartialVMResult<()> {
         match self.stack_height_current.checked_add(pushes) {
             // We should never hit this.
-            None => return Err(PartialVMError::new(StatusCode::ARITHMETIC_OVERFLOW)),
+            None => return Err(partial_vm_error!(ARITHMETIC_OVERFLOW)),
             Some(new_height) => {
                 if new_height > self.stack_height_high_water_mark {
                     self.stack_height_high_water_mark = new_height;
@@ -270,7 +273,7 @@ impl<'a> GasStatus<'a> {
 
     pub fn increase_instruction_count(&mut self, amount: u64) -> PartialVMResult<()> {
         match self.instructions_executed.checked_add(amount) {
-            None => return Err(PartialVMError::new(StatusCode::PC_OVERFLOW)),
+            None => return Err(partial_vm_error!(PC_OVERFLOW)),
             Some(new_pc) => {
                 self.instructions_executed = new_pc;
             }
@@ -290,7 +293,7 @@ impl<'a> GasStatus<'a> {
 
     pub fn increase_stack_size(&mut self, size_amount: u64) -> PartialVMResult<()> {
         match self.stack_size_current.checked_add(size_amount) {
-            None => return Err(PartialVMError::new(StatusCode::ARITHMETIC_OVERFLOW)),
+            None => return Err(partial_vm_error!(ARITHMETIC_OVERFLOW)),
             Some(new_size) => {
                 if new_size > self.stack_size_high_water_mark {
                     self.stack_size_high_water_mark = new_size;
@@ -337,13 +340,13 @@ impl<'a> GasStatus<'a> {
             GasCost::new(
                 self.instructions_current_tier_mult
                     .checked_mul(num_instructions)
-                    .ok_or_else(|| PartialVMError::new(StatusCode::ARITHMETIC_OVERFLOW))?,
+                    .ok_or_else(|| partial_vm_error!(ARITHMETIC_OVERFLOW))?,
                 self.stack_size_current_tier_mult
                     .checked_mul(incr_size)
-                    .ok_or_else(|| PartialVMError::new(StatusCode::ARITHMETIC_OVERFLOW))?,
+                    .ok_or_else(|| partial_vm_error!(ARITHMETIC_OVERFLOW))?,
                 self.stack_height_current_tier_mult
                     .checked_mul(pushes)
-                    .ok_or_else(|| PartialVMError::new(StatusCode::ARITHMETIC_OVERFLOW))?,
+                    .ok_or_else(|| partial_vm_error!(ARITHMETIC_OVERFLOW))?,
             )
             .total_internal(),
         )?;
@@ -376,7 +379,7 @@ impl<'a> GasStatus<'a> {
             }
             None => {
                 self.gas_left = InternalGas::new(0);
-                Err(PartialVMError::new(StatusCode::OUT_OF_GAS))
+                Err(partial_vm_error!(OUT_OF_GAS))
             }
         }
     }

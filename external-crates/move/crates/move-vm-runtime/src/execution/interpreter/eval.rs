@@ -22,6 +22,7 @@ use crate::{
     },
     jit::execution::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
+    partial_vm_error,
     shared::{
         gas::{GasMeter, SimpleInstruction},
         vm_pointer::VMPointer,
@@ -31,7 +32,7 @@ use crate::{
 use move_binary_format::errors::*;
 use move_core_types::{
     gas_algebra::{NumArgs, NumBytes},
-    vm_status::{StatusCode, StatusType},
+    vm_status::StatusType,
 };
 use move_vm_config::runtime::{VMConfig, VMRuntimeLimitsConfig};
 
@@ -119,11 +120,11 @@ pub(super) fn run(
         "Call stack should be empty after execution"
     );
     if !frames.is_empty() {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Call stack should be empty after execution".to_owned())
-                .finish(Location::Undefined),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Call stack should be empty after execution"
+        )
+        .finish(Location::Undefined));
     }
     Ok(operand_stack.value)
 }
@@ -137,23 +138,20 @@ fn step(
     let instructions = fun_ref.code();
     let pc = state.call_stack.current_frame.pc as usize;
     if pc >= instructions.len() {
-        return Err(
-            state.set_location(
-                PartialVMError::new(StatusCode::PC_OVERFLOW).with_message(format!(
-                    "PC {} out of bounds for function {} with {} instructions",
-                    pc,
-                    fun_ref.name(&run_context.vtables.interner),
-                    instructions.len()
-                )),
-            ),
-        );
+        return Err(state.set_location(partial_vm_error!(
+            PC_OVERFLOW,
+            "PC {} out of bounds for function {} with {} instructions",
+            pc,
+            fun_ref.name(&run_context.vtables.interner),
+            instructions.len()
+        )));
     }
     let instruction = &instructions[pc];
     fail_point!("move_vm::interpreter_loop", |_| {
-        Err(state.set_location(
-            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
-                .with_message("Injected move_vm::interpreter verifier failure".to_owned()),
-        ))
+        Err(state.set_location(partial_vm_error!(
+            VERIFIER_INVARIANT_VIOLATION,
+            "Injected move_vm::interpreter verifier failure"
+        )))
     });
 
     trace!(run_context.tracer, |tracer| {
@@ -672,7 +670,7 @@ fn op_step_impl(
         Bytecode::Abort => {
             gas_meter.charge_simple_instr(S::Abort)?;
             let error_code = state.pop_operand_as::<u64>()?;
-            let error = PartialVMError::new(StatusCode::ABORTED)
+            let error = partial_vm_error!(ABORTED)
                 .with_sub_status(error_code)
                 .with_message(format!(
                     "{} at offset {}",
@@ -965,7 +963,7 @@ fn call_native_impl(
     let arg_count: u16 = match expected_args.try_into() {
         Ok(count) => count,
         Err(_) => {
-            return Err(PartialVMError::new(StatusCode::ABORTED));
+            return Err(partial_vm_error!(ABORTED));
         }
     };
     let args = state
@@ -1011,7 +1009,7 @@ pub(super) fn call_native_with_args(
     let return_type_count = function.return_type_count();
     let expected_args = function.arg_count();
     if args.len() != expected_args {
-        return Err(PartialVMError::new(StatusCode::EMPTY_VALUE_STACK));
+        return Err(partial_vm_error!(EMPTY_VALUE_STACK));
     }
     let mut native_context = NativeContext::new(
         state,
@@ -1039,18 +1037,17 @@ pub(super) fn call_native_with_args(
         Err(code) => {
             gas_meter
                 .charge_native_function(result.cost, Option::<std::iter::Empty<&Value>>::None)?;
-            return Err(PartialVMError::new(StatusCode::ABORTED).with_sub_status(code));
+            return Err(partial_vm_error!(ABORTED).with_sub_status(code));
         }
     };
 
     // Paranoid check to protect us against incorrect native function implementations. A native function that
     // returns a different number of values than its declared types will trigger this check
     if return_values.len() != return_type_count {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                "Arity mismatch: return value count does not match return type count".to_string(),
-            ),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Arity mismatch: return value count does not match return type count"
+        ));
     }
     Ok(return_values)
 }
@@ -1145,7 +1142,7 @@ fn check_depth_of_type_impl(
     macro_rules! check_depth {
         ($additional_depth:expr) => {
             if current_depth.saturating_add($additional_depth) > max_depth {
-                return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+                return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
             } else {
                 current_depth.saturating_add($additional_depth)
             }
@@ -1187,10 +1184,10 @@ fn check_depth_of_type_impl(
         }
         // NB: substitution must be performed before calling this function
         Type::TyParam(_) => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Type parameter should be fully resolved".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Type parameter should be fully resolved"
+            ));
         }
     };
 
@@ -1201,7 +1198,7 @@ fn check_depth_of_type_impl(
 fn finalize_execution_error(err: VMError) -> VMError {
     if err.status_type() == StatusType::Verification {
         error!("Verification error during runtime: {:?}", err);
-        let new_err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
+        let new_err = partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR);
         let new_err = match err.message() {
             None => new_err.with_message("No message provided for core dump".to_owned()),
             Some(msg) => new_err.with_message(msg.to_owned()),

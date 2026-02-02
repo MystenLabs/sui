@@ -11,15 +11,13 @@ use crate::{
     cache::move_cache::{self, MoveCache, Package, ResolvedPackageResult},
     dbg_println, jit,
     natives::functions::NativeFunctions,
+    partial_vm_error,
     runtime::telemetry::TransactionTelemetryContext,
     shared::{logging::expect_no_verification_errors, types::VersionId},
     validation::{validate_package, verification},
 };
-use move_binary_format::errors::{Location, PartialVMError, VMResult};
-use move_core_types::{
-    resolver::{ModuleResolver, SerializedPackage},
-    vm_status::StatusCode,
-};
+use move_binary_format::errors::{Location, VMResult};
+use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
 
 use std::{
@@ -50,13 +48,11 @@ pub(crate) fn resolve_package(
 
     let Some(pkg) = packages.remove(&package_to_read) else {
         debug_assert!(false, "A different package was loaded than was requested");
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(
-                    "Package not found in loaded cache despite just loading it".to_string(),
-                )
-                .finish(Location::Package(package_to_read)),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Package not found in loaded cache despite just loading it"
+        )
+        .finish(Location::Package(package_to_read)));
     };
 
     debug_assert!(
@@ -67,13 +63,11 @@ pub(crate) fn resolve_package(
         tracing::error!(
             "[VM] More than one package was loaded when only one was requested: {packages:#?}"
         );
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(
-                    "More than one package was loaded when only one was requested".to_string(),
-                )
-                .finish(Location::Package(package_to_read)),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "More than one package was loaded when only one was requested"
+        )
+        .finish(Location::Package(package_to_read)));
     }
 
     Ok(ResolvedPackageResult::Found(pkg))
@@ -181,19 +175,22 @@ fn load_packages(
             .enumerate()
             .map(|(idx, pkg)| {
                 pkg.ok_or_else(|| {
-                    PartialVMError::new(StatusCode::LINKER_ERROR)
-                        .with_message(format!("Cannot find package {:?} in data cache", ids[idx],))
-                        .finish(Location::Package(ids[idx]))
+                    partial_vm_error!(
+                        LINKER_ERROR,
+                        "Cannot find package {:?} in data cache",
+                        ids[idx],
+                    )
+                    .finish(Location::Package(ids[idx]))
                 })
             })
             .collect::<VMResult<Vec<_>>>()?,
         Err(err) => {
-            let msg = format!("Unexpected storage error: {:?}", err);
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(msg)
-                    .finish(Location::Undefined),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Unexpected storage error: {:?}",
+                err
+            )
+            .finish(Location::Undefined));
         }
     };
 
@@ -267,8 +264,10 @@ pub(crate) fn jit_and_cache_package(
     }
 
     cache.cached_package_at(version_id).ok_or_else(|| {
-        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-            .with_message("Package not found in cache after loading".to_string())
-            .finish(Location::Package(version_id))
+        partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Package not found in cache after loading"
+        )
+        .finish(Location::Package(version_id))
     })
 }

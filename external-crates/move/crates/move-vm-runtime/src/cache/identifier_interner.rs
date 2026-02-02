@@ -1,13 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::constants::IDENTIFIER_INTERNER_SIZE_LIMIT;
+use crate::{partial_vm_error, shared::constants::IDENTIFIER_INTERNER_SIZE_LIMIT};
 
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{
-    identifier::{IdentStr, Identifier},
-    vm_status::StatusCode,
-};
+use move_binary_format::errors::PartialVMResult;
+use move_core_types::identifier::{IdentStr, Identifier};
 
 use lasso::{Spur, ThreadedRodeo};
 
@@ -51,10 +48,10 @@ impl IdentifierInterner {
         if let Some(result) = self.0.try_resolve(&key.0) {
             unsafe { Ok(Identifier::new_unchecked(result)) }
         } else {
-            Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Failed to find {key_type} key in ident interner.")),
-            )
+            Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Failed to find {key_type} key in ident interner."
+            ))
         }
     }
 

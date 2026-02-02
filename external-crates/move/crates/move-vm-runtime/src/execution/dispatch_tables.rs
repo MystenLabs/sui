@@ -14,6 +14,7 @@ use crate::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
         TypeSubst,
     },
+    partial_vm_error,
     shared::{
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
@@ -26,7 +27,7 @@ use crate::{
 };
 
 use move_binary_format::{
-    errors::{Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
@@ -34,7 +35,6 @@ use move_core_types::{
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
     runtime_value,
-    vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
 
@@ -157,12 +157,10 @@ impl VMDispatchTables {
             for (addr, pkg) in &loaded_packages {
                 for defining_id in &pkg.vtable.defining_ids {
                     if let Some(prev) = defining_id_map.insert(*defining_id, *addr) {
-                        return Err(PartialVMError::new(
-                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        )
-                        .with_message(format!(
+                        return Err(partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
                             "Defining ID {defining_id} found for {addr} and {prev}"
-                        ))
+                        )
                         .finish(Location::Package(pkg.version_id)));
                     }
                 }
@@ -185,10 +183,10 @@ impl VMDispatchTables {
     }
 
     pub fn get_package(&self, id: &OriginalId) -> PartialVMResult<Arc<Package>> {
-        self.loaded_packages.get(id).cloned().ok_or_else(|| {
-            PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
-                .with_message(format!("Package {} not found", id))
-        })
+        self.loaded_packages
+            .get(id)
+            .cloned()
+            .ok_or_else(|| partial_vm_error!(VTABLE_KEY_LOOKUP_ERROR, "Package {} not found", id))
     }
 
     pub fn resolve_loaded_module(
@@ -197,8 +195,7 @@ impl VMDispatchTables {
     ) -> PartialVMResult<VMPointer<Module>> {
         let (package, module_id) = original_id.into();
         let package = self.loaded_packages.get(package).ok_or_else(|| {
-            PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
-                .with_message(format!("Package {} not found", package))
+            partial_vm_error!(VTABLE_KEY_LOOKUP_ERROR, "Package {} not found", package)
         })?;
 
         let interned = self.interner.intern_identifier(module_id);
@@ -208,8 +205,7 @@ impl VMDispatchTables {
             .get(&interned)
             .map(VMPointer::from_ref)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
-                    .with_message(format!("Module {} not found", module_id))
+                partial_vm_error!(VTABLE_KEY_LOOKUP_ERROR, "Module {} not found", module_id)
             })
     }
 
@@ -218,18 +214,20 @@ impl VMDispatchTables {
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<Function>> {
         let Some(pkg) = self.loaded_packages.get(&vtable_key.package_key) else {
-            return Err(PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
-                .with_message(format!("Could not find package {}", vtable_key.package_key)));
+            return Err(partial_vm_error!(
+                VTABLE_KEY_LOOKUP_ERROR,
+                "Could not find package {}",
+                vtable_key.package_key
+            ));
         };
         if let Some(function_) = pkg.vtable.functions.get(&vtable_key.inner_pkg_key) {
             Ok(function_.ptr_clone())
         } else {
-            Err(
-                PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR).with_message(format!(
-                    "Could not find function {}",
-                    vtable_key.to_string(&self.interner)?
-                )),
-            )
+            Err(partial_vm_error!(
+                VTABLE_KEY_LOOKUP_ERROR,
+                "Could not find function {}",
+                vtable_key.to_string(&self.interner)?
+            ))
         }
     }
 
@@ -238,18 +236,20 @@ impl VMDispatchTables {
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<DatatypeDescriptor>> {
         let Some(pkg) = self.loaded_packages.get(&vtable_key.package_key) else {
-            return Err(PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
-                .with_message(format!("Could not find package {}", vtable_key.package_key)));
+            return Err(partial_vm_error!(
+                VTABLE_KEY_LOOKUP_ERROR,
+                "Could not find package {}",
+                vtable_key.package_key
+            ));
         };
         if let Some(type_) = pkg.vtable.types.get(&vtable_key.inner_pkg_key) {
             Ok(type_.ptr_clone())
         } else {
-            Err(
-                PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR).with_message(format!(
-                    "Could not find type {}",
-                    vtable_key.to_string(&self.interner)?
-                )),
-            )
+            Err(partial_vm_error!(
+                VTABLE_KEY_LOOKUP_ERROR,
+                "Could not find type {}",
+                vtable_key.to_string(&self.interner)?
+            ))
         }
     }
 }
@@ -282,11 +282,11 @@ impl VMDispatchTables {
             TypeTag::Struct(struct_tag) => {
                 let defining_id = struct_tag.address;
                 let package_key = *self.defining_id_origins.get(&defining_id).ok_or_else(|| {
-                    PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
-                        .with_message(format!(
-                            "Defining ID {defining_id} for type {type_tag} not found in loaded packages"
-                        ))
-                        .finish(Location::Undefined)
+                    partial_vm_error!(
+                        TYPE_RESOLUTION_FAILURE,
+                        "Defining ID {defining_id} for type {type_tag} not found in loaded packages"
+                    )
+                    .finish(Location::Undefined)
                 })?;
                 let module_name = self.interner.intern_identifier(&struct_tag.module);
                 let member_name = self.interner.intern_identifier(&struct_tag.name);
@@ -306,25 +306,20 @@ impl VMDispatchTables {
                 // loaded.
                 if datatype.original_id.address() != &package_key {
                     return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(format!(
-                                "Runtime ID resolution of {defining_id} => {package_key} does not match runtime ID of loaded type: {}",
-                                datatype.original_id.address()
-
-                            ))
+                        partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "Runtime ID resolution of {defining_id} => {package_key} does not match runtime ID of loaded type: {}",
+                                datatype.original_id.address())
                             .finish(Location::Undefined),
                     );
                 }
                 // The defining ID should match the defining ID of the datatype that we
                 // have loaded.
                 if datatype.defining_id.address() != &defining_id {
-                    return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(format!(
-                                "Defining ID {defining_id} does not match defining ID of loaded type: {}", datatype.defining_id.address()
-                            ))
-                            .finish(Location::Package(defining_id)),
-                    );
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Defining ID {defining_id} does not match defining ID of loaded type: {}",
+                        datatype.defining_id.address()
+                    )
+                    .finish(Location::Package(defining_id)));
                 }
                 if datatype.type_parameters().is_empty() && struct_tag.type_params.is_empty() {
                     Type::Datatype(key)
@@ -350,13 +345,11 @@ impl VMDispatchTables {
     {
         let constraints = constraints.into_iter();
         if constraints.len() != ty_args.len() {
-            return Err(PartialVMError::new(
-                StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
-            ));
+            return Err(partial_vm_error!(NUMBER_OF_TYPE_ARGUMENTS_MISMATCH));
         }
         for (ty, expected_k) in ty_args.iter().zip(constraints) {
             if !expected_k.is_subset(self.abilities(ty)?) {
-                return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED));
+                return Err(partial_vm_error!(CONSTRAINT_NOT_SATISFIED));
             }
         }
         Ok(())
@@ -377,8 +370,9 @@ impl VMDispatchTables {
             Type::Reference(_) | Type::MutableReference(_) => Ok(AbilitySet::REFERENCES),
             Type::Signer => Ok(AbilitySet::SIGNER),
 
-            Type::TyParam(_) => Err(PartialVMError::new(StatusCode::UNREACHABLE).with_message(
-                "Unexpected TyParam type after translating from TypeTag to Type".to_string(),
+            Type::TyParam(_) => Err(partial_vm_error!(
+                UNREACHABLE,
+                "Unexpected TyParam type after translating from TypeTag to Type"
             )),
 
             Type::Vector(ty) => AbilitySet::polymorphic_abilities(
@@ -608,10 +602,11 @@ impl VMDispatchTables {
                 ))
             }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("no type tag for {:?}", ty)),
-                );
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "no type tag for {:?}",
+                    ty
+                ));
             }
         })
     }
@@ -695,10 +690,11 @@ impl VMDispatchTables {
                     .into_layout()
             }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("no type layout for {:?}", ty)),
-                );
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "no type layout for {:?}",
+                    ty
+                ));
             }
         };
         self.check_count_and_depth(count, &depth)?;
@@ -723,12 +719,10 @@ impl VMDispatchTables {
                 *count += enum_type.variants.len() as u64;
                 for variant in enum_type.variants.iter() {
                     if variant.fields.len() != variant.field_names.len() {
-                        return Err(
-                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                                "Field types did not match the length of field names in loaded enum variant"
-                                .to_owned(),
-                            ),
-                        );
+                        return Err(partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "Field types did not match the length of field names in loaded enum variant"
+                        ));
                     }
                     let field_layouts = variant
                         .field_names
@@ -760,13 +754,10 @@ impl VMDispatchTables {
             }
             Datatype::Struct(struct_type) => {
                 if struct_type.fields.len() != struct_type.field_names.len() {
-                    return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(
-                            "Field types did not match the length of field names in loaded struct"
-                                .to_owned(),
-                        ),
-                    );
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Field types did not match the length of field names in loaded struct"
+                    ));
                 }
                 let field_layouts = struct_type
                     .field_names
@@ -818,10 +809,11 @@ impl VMDispatchTables {
                     .into_layout()
             }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("no type layout for {:?}", ty)),
-                );
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "no type layout for {:?}",
+                    ty
+                ));
             }
         };
         self.check_count_and_depth(count, &depth)?;
@@ -888,10 +880,10 @@ impl VMDispatchTables {
                 .max_type_to_layout_nodes
                 .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
         {
-            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
+            return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
         }
         if *depth > VALUE_DEPTH_MAX {
-            return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+            return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
         }
         Ok(())
     }
@@ -954,10 +946,10 @@ impl DepthFormula {
         }
         for (t_i, c_i) in terms {
             let Some(mut u_form) = map.remove(t_i) else {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("{t_i:?} missing mapping")),
-                );
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "{t_i:?} missing mapping"
+                ));
             };
             u_form.add(*c_i);
             formulas.push(u_form)
@@ -972,10 +964,10 @@ impl DepthFormula {
         for (t_i, c_i) in terms {
             match tparam_depths.get(*t_i as usize) {
                 None => {
-                    return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(format!("{t_i:?} missing mapping")),
-                    );
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "{t_i:?} missing mapping"
+                    ));
                 }
                 Some(ty_depth) => depth = std::cmp::max(depth, ty_depth.saturating_add(*c_i)),
             }
@@ -1046,10 +1038,10 @@ impl<T> DefinitionMap<T> {
         let map = &mut self.0;
         for (name, value) in items {
             if map.insert(name, value).is_some() {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Duplicate vtable key".to_string()),
-                );
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Duplicate vtable key"
+                ));
             }
         }
         Ok(())
@@ -1062,10 +1054,10 @@ impl<T> DefinitionMap<T> {
         let mut map = HashMap::new();
         for (name, value) in items {
             if map.insert(name, value).is_some() {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Duplicate vtable key when making new vtable".to_string()),
-                );
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Duplicate vtable key when making new vtable"
+                ));
             }
         }
         Ok(Self(map))
@@ -1159,13 +1151,13 @@ pub(crate) fn checked_subst(ty: &ArenaType, ty_args: &[Type]) -> PartialVMResult
         for ty in type_params.iter() {
             sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
+                return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
             }
         }
         for ty in ty_args.iter() {
             sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
+                return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
             }
         }
     }

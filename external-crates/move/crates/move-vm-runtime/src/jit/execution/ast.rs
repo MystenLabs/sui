@@ -11,6 +11,7 @@ use crate::{
         values::ConstantValue,
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
+    partial_vm_error,
     shared::{
         constants::TYPE_DEPTH_MAX,
         types::{OriginalId, VersionId},
@@ -20,7 +21,7 @@ use crate::{
 
 use indexmap::IndexMap;
 use move_binary_format::{
-    errors::{PartialVMError, PartialVMResult},
+    errors::PartialVMResult,
     file_format::{
         AbilitySet, CodeOffset, DatatypeTyParameter, FunctionDefinitionIndex, LocalIndex,
         SignatureToken, VariantTag, Visibility,
@@ -29,7 +30,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::AbstractMemorySize, identifier::Identifier,
-    language_storage::ModuleId, vm_status::StatusCode,
+    language_storage::ModuleId,
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -922,16 +923,14 @@ impl Function {
         if cfg!(feature = "lazy_natives") {
             // If lazy_natives is configured, this is a MISSING_DEPENDENCY error, as we skip
             // checking those at module loading time.
-            self.native.as_deref().ok_or_else(|| {
-                PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                    .with_message("Missing Native Function".to_string())
-            })
+            self.native
+                .as_deref()
+                .ok_or_else(|| partial_vm_error!(MISSING_DEPENDENCY, "Missing Native Function"))
         } else {
             // Otherwise this error should not happen, hence UNREACHABLE
-            self.native.as_deref().ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNREACHABLE)
-                    .with_message("Missing Native Function".to_string())
-            })
+            self.native
+                .as_deref()
+                .ok_or_else(|| partial_vm_error!(UNREACHABLE, "Missing Native Function"))
         }
     }
 }
@@ -1113,17 +1112,17 @@ impl Type {
             S::Vector(inner) => L::Vector(Box::new(Self::from_const_signature(inner)?)),
             // Not yet supported
             S::Datatype(_) | S::DatatypeInstantiation(_) => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Unable to load const type signature".to_string()),
-                );
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Unable to load const type signature"
+                ));
             }
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Unable to load const type signature".to_string()),
-                );
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Unable to load const type signature"
+                ));
             }
         })
     }
@@ -1135,35 +1134,36 @@ impl Type {
                     inner.check_eq(inner_ty)?;
                     Ok(inner.as_ref().clone())
                 }
-                _ => Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("VecMutBorrow expects a vector reference".to_string()),
-                ),
+                _ => Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "VecMutBorrow expects a vector reference"
+                )),
             },
             Type::Reference(inner) if !is_mut => match &**inner {
                 Type::Vector(inner) => {
                     inner.check_eq(inner_ty)?;
                     Ok(inner.as_ref().clone())
                 }
-                _ => Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("VecMutBorrow expects a vector reference".to_string()),
-                ),
+                _ => Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "VecMutBorrow expects a vector reference"
+                )),
             },
-            _ => Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("VecMutBorrow expects a vector reference".to_string()),
-            ),
+            _ => Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "VecMutBorrow expects a vector reference"
+            )),
         }
     }
 
     pub fn check_eq(&self, other: &Self) -> PartialVMResult<()> {
         if self != other {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!("Type mismatch: expected {:?}, got {:?}", self, other),
-                ),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Type mismatch: expected {:?}, got {:?}",
+                self,
+                other
+            ));
         }
         Ok(())
     }
@@ -1173,10 +1173,10 @@ impl Type {
             Type::MutableReference(inner) | Type::Reference(inner) => {
                 inner.check_eq(expected_inner)
             }
-            _ => Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("VecMutBorrow expects a vector reference".to_string()),
-            ),
+            _ => Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "VecMutBorrow expects a vector reference"
+            )),
         }
     }
 }
@@ -1223,7 +1223,7 @@ macro_rules! impl_deep_subst {
                 F: Fn(u16, usize) -> PartialVMResult<Type> + Copy,
             {
                 if depth > TYPE_DEPTH_MAX {
-                    return Err(PartialVMError::new(StatusCode::VM_MAX_TYPE_DEPTH_REACHED));
+                    return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
                 }
                 let res = match self {
                     $ty::TyParam(idx) => subst(*idx, depth)?,
@@ -1260,14 +1260,12 @@ macro_rules! impl_deep_subst {
                 self.apply_subst(
                     |idx, depth| match ty_args.get(idx as usize) {
                         Some(ty) => ty.clone_impl(depth),
-                        None => Err(PartialVMError::new(
-                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        )
-                        .with_message(format!(
+                        None => Err($crate::partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
                             "type substitution failed: index out of bounds -- len {} got {}",
                             ty_args.len(),
                             idx
-                        ))),
+                        )),
                     },
                     1,
                 )

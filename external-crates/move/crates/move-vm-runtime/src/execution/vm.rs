@@ -12,6 +12,7 @@ use crate::{
     },
     jit::execution::ast::{Function, Type},
     natives::extensions::NativeExtensions,
+    partial_vm_error,
     runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
     shared::{
         gas::GasMeter,
@@ -22,7 +23,7 @@ use crate::{
     try_block,
 };
 use move_binary_format::{
-    errors::{Location, PartialVMError, VMError, VMResult},
+    errors::{Location, VMError, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility},
 };
 use move_core_types::{
@@ -30,7 +31,7 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     runtime_value,
-    vm_status::{StatusCode, StatusType},
+    vm_status::StatusType,
 };
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::runtime::VMConfig;
@@ -284,14 +285,14 @@ impl<'extensions> MoveVM<'extensions> {
 
     fn convert_to_external_resolution_error(err: VMError, msg: String) -> VMError {
         if err.major_status().status_type() == StatusType::InvariantViolation {
-            PartialVMError::new(StatusCode::EXTERNAL_RESOLUTION_REQUEST_ERROR)
-                .with_message(format!(
-                    "{msg}{}",
-                    err.message()
-                        .map(|s| format!(": {}", s))
-                        .unwrap_or_default()
-                ))
-                .finish(Location::Undefined)
+            partial_vm_error!(
+                EXTERNAL_RESOLUTION_REQUEST_ERROR,
+                "{msg}{}",
+                err.message()
+                    .map(|s| format!(": {}", s))
+                    .unwrap_or_default()
+            )
+            .finish(Location::Undefined)
         } else {
             err
         }
@@ -333,9 +334,7 @@ impl<'extensions> MoveVM<'extensions> {
                 } = self.find_function(original_id, function_name, &type_arguments)?;
 
                 if !bypass_declared_entry_check && !function.to_ref().is_entry {
-                    return Err(PartialVMError::new(
-                        StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
-                    )
+                    return Err(partial_vm_error!(EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION)
                     .finish(Location::Module(function.module_id(&self.interner))));
                 }
 

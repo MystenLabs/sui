@@ -7,14 +7,15 @@ pub mod verification;
 use crate::{
     dbg_println,
     natives::functions::NativeFunctions,
+    partial_vm_error,
     shared::types::{OriginalId, VersionId},
     validation::verification::linkage::verify_linkage_and_cyclic_checks_for_publication,
 };
 
 use std::collections::BTreeMap;
 
-use move_binary_format::errors::{Location, PartialVMError, VMResult};
-use move_core_types::{resolver::SerializedPackage, vm_status::StatusCode};
+use move_binary_format::errors::{Location, VMResult};
+use move_core_types::resolver::SerializedPackage;
 use move_vm_config::runtime::VMConfig;
 
 use self::verification::linkage::verify_linkage_and_cyclic_checks;
@@ -41,14 +42,13 @@ pub(crate) fn validate_for_publish(
     let validated_package = validate_package(natives, vm_config, package)?;
 
     if validated_package.original_id != original_id {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(format!(
-                    "Mismatched original package IDs: given '{}', found '{}'",
-                    original_id, validated_package.original_id
-                ))
-                .finish(Location::Package(validated_package.version_id)),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Mismatched original package IDs: given '{}', found '{}'",
+            original_id,
+            validated_package.original_id
+        )
+        .finish(Location::Package(validated_package.version_id)));
     }
 
     // Now verify linking on-the-spot to make sure that the current package links correctly in
