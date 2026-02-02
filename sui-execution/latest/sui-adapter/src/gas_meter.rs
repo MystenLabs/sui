@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::DerefMut;
+
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
     gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes},
@@ -16,7 +18,7 @@ use sui_types::gas_model::{
     tables::{GasStatus, REFERENCE_SIZE, STRUCT_SIZE, VEC_SIZE},
 };
 
-pub struct SuiGasMeter<'g>(pub &'g mut GasStatus);
+pub struct SuiGasMeter<G: DerefMut<Target = GasStatus>>(pub G);
 
 /// Returns a tuple of (<pops>, <pushes>, <stack_size_decrease>, <stack_size_increase>)
 fn get_simple_instruction_stack_change(
@@ -66,7 +68,7 @@ fn get_simple_instruction_stack_change(
     }
 }
 
-impl GasMeter for SuiGasMeter<'_> {
+impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
     /// Charge an instruction and fail if not enough gas units are left.
     fn charge_simple_instr(&mut self, instr: SimpleInstruction) -> PartialVMResult<()> {
         let (pops, pushes, pop_size, push_size) = get_simple_instruction_stack_change(instr);
@@ -75,7 +77,7 @@ impl GasMeter for SuiGasMeter<'_> {
     }
 
     fn charge_pop(&mut self, popped_val: impl ValueView) -> PartialVMResult<()> {
-        let decr_size = abstract_memory_size(self.0, popped_val)?;
+        let decr_size = abstract_memory_size(&self.0, popped_val)?;
         self.0.charge(1, 0, 1, 0, decr_size.into())
     }
 
@@ -94,7 +96,7 @@ impl GasMeter for SuiGasMeter<'_> {
         let size_increase = match ret_vals {
             Some(mut ret_vals) => ret_vals.try_fold(
                 AbstractMemorySize::zero(),
-                |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(self.0, elem)?) },
+                |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(&self.0, elem)?) },
             )?,
             None => AbstractMemorySize::zero(),
         };
@@ -129,7 +131,7 @@ impl GasMeter for SuiGasMeter<'_> {
         // Calculate the size decrease of the stack from the above pops.
         let stack_reduction_size = args.try_fold(
             AbstractMemorySize::new(pops),
-            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(self.0, elem)?) },
+            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(&self.0, elem)?) },
         )?;
         // Track that this is going to be popping from the operand stack. We also increment the
         // instruction count as we need to account for the `Call` bytecode that initiated this
@@ -150,7 +152,7 @@ impl GasMeter for SuiGasMeter<'_> {
         // the size on the operand stack is reduced by sum_{args} arg.size().
         let stack_reduction_size = args.try_fold(
             AbstractMemorySize::new(0),
-            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(self.0, elem)?) },
+            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(&self.0, elem)?) },
         )?;
         self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
     }
@@ -168,7 +170,7 @@ impl GasMeter for SuiGasMeter<'_> {
         // Calculate the size reduction on the operand stack.
         let stack_reduction_size = args.try_fold(
             AbstractMemorySize::new(0),
-            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(self.0, elem)?) },
+            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(&self.0, elem)?) },
         )?;
         // Charge for the pops, no pushes, and account for the stack size decrease. Also track the
         // `CallGeneric` instruction we must have encountered for this.
@@ -190,7 +192,7 @@ impl GasMeter for SuiGasMeter<'_> {
 
     fn charge_copy_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
         // Charge for the copy of the local onto the stack.
-        let incr_size = abstract_memory_size(self.0, val)?;
+        let incr_size = abstract_memory_size(&self.0, val)?;
         self.0.charge(1, 1, 0, incr_size.into(), 0)
     }
 
@@ -201,7 +203,7 @@ impl GasMeter for SuiGasMeter<'_> {
             // Charge for the move of the local on to the stack. Note that we charge here since we
             // aren't tracking the local size (at least not yet). If we were, this should be a net-zero
             // operation in terms of memory usage.
-            let incr_size = abstract_memory_size(self.0, val)?;
+            let incr_size = abstract_memory_size(&self.0, val)?;
             self.0.charge(1, 1, 0, incr_size.into(), 0)
         }
     }
@@ -210,7 +212,7 @@ impl GasMeter for SuiGasMeter<'_> {
         // Charge for the storing of the value on the stack into a local. Note here that if we were
         // also accounting for the size of the locals that this would be a net-zero operation in
         // terms of memory.
-        let decr_size = abstract_memory_size(self.0, val)?;
+        let decr_size = abstract_memory_size(&self.0, val)?;
         self.0.charge(1, 0, 1, 0, decr_size.into())
     }
 
@@ -238,7 +240,7 @@ impl GasMeter for SuiGasMeter<'_> {
 
     fn charge_variant_switch(&mut self, val: impl ValueView) -> PartialVMResult<()> {
         // We perform a single pop of a value from the stack.
-        let decr_size = abstract_memory_size(self.0, val)?;
+        let decr_size = abstract_memory_size(&self.0, val)?;
         self.0.charge(1, 0, 1, 0, decr_size.into())
     }
 
@@ -247,9 +249,9 @@ impl GasMeter for SuiGasMeter<'_> {
         // reference, and adding to it the size of the value that has been read from that
         // reference.
         let size = if reweight_read_ref(self.0.gas_model_version) {
-            abstract_memory_size_with_traversal(self.0, ref_val)?
+            abstract_memory_size_with_traversal(&self.0, ref_val)?
         } else {
-            abstract_memory_size(self.0, ref_val)?
+            abstract_memory_size(&self.0, ref_val)?
         };
         self.0.charge(1, 1, 1, size.into(), REFERENCE_SIZE.into())
     }
@@ -267,15 +269,15 @@ impl GasMeter for SuiGasMeter<'_> {
         } else {
             (1, 2)
         };
-        let incr_size = abstract_memory_size(self.0, new_val)?;
-        let decr_size = abstract_memory_size(self.0, old_val)?;
+        let incr_size = abstract_memory_size(&self.0, new_val)?;
+        let decr_size = abstract_memory_size(&self.0, old_val)?;
         self.0
             .charge(1, pushes, pops, incr_size.into(), decr_size.into())
     }
 
     fn charge_eq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
-        let size_reduction = abstract_memory_size_with_traversal(self.0, lhs)?
-            + abstract_memory_size_with_traversal(self.0, rhs)?;
+        let size_reduction = abstract_memory_size_with_traversal(&self.0, lhs)?
+            + abstract_memory_size_with_traversal(&self.0, rhs)?;
         self.0.charge(
             1,
             1,
@@ -286,8 +288,8 @@ impl GasMeter for SuiGasMeter<'_> {
     }
 
     fn charge_neq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
-        let size_reduction = abstract_memory_size_with_traversal(self.0, lhs)?
-            + abstract_memory_size_with_traversal(self.0, rhs)?;
+        let size_reduction = abstract_memory_size_with_traversal(&self.0, lhs)?
+            + abstract_memory_size_with_traversal(&self.0, rhs)?;
         let size_increase = if enable_traverse_refs(self.0.gas_model_version) {
             Type::Bool.size() + size_reduction
         } else {

@@ -211,7 +211,7 @@ impl SuiVMTestSetup {
 }
 
 impl VMTestSetup for SuiVMTestSetup {
-    type Meter<'a> = SuiGasMeter<SuiGasStatusTestWrapper>;
+    type Meter<'a> = SuiGasMeter<'a>;
 
     fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a> {
         SuiGasMeter(SuiGasStatusTestWrapper(
