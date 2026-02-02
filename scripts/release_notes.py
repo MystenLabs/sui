@@ -226,7 +226,7 @@ def parse_notes(notes):
         end = match.start() if match else len(notes)
 
         result[impacted] = Note(
-            checked=checked in "xX",
+            checked=checked is not None and checked in "xX",
             note=notes[begin:end].strip(),
         )
         start = end

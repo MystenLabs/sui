@@ -725,6 +725,22 @@ Just a description, no release notes section.
         has_checked = any(note.checked for note in notes.values())
         self.assertFalse(has_checked)
 
+    def test_parse_notes_handles_empty_checkbox_brackets(self):
+        """parse_notes should handle empty checkbox brackets [] without crashing."""
+        from release_notes import parse_notes
+
+        body = """## Release notes
+- [] Protocol: Empty brackets (no space)
+- [ ] CLI: Normal unchecked with space
+- [x] GraphQL: Checked
+"""
+        notes = parse_notes(body)
+
+        # Empty brackets should be treated as unchecked
+        self.assertFalse(notes["Protocol"].checked)
+        self.assertFalse(notes["CLI"].checked)
+        self.assertTrue(notes["GraphQL"].checked)
+
 
 if __name__ == "__main__":
     unittest.main()
