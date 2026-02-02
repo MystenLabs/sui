@@ -638,9 +638,6 @@ impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
         _request_stream: BlockRequestStream,
     ) -> ConsensusResult<ObserverBlockStream> {
         // TODO: Implement observer block streaming
-        // 1. Parse BlockStreamRequest stream (Start/Stop commands for flow control)
-        // 2. Stream blocks to observer based on their highest rounds from Start command
-        // 3. Include highest_commit_index in ObserverBlockStreamItem for each block
         todo!("Observer block streaming not yet implemented")
     }
 
@@ -650,17 +647,6 @@ impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
         _request_stream: CommitRequestStream,
     ) -> ConsensusResult<ObserverCommitStream> {
         // TODO: Implement observer commit streaming
-        // 1. Parse CommitStreamRequest stream (Start/Stop commands for flow control)
-        // 2. Extract highest_commit_index and batch_size from Start command
-        // 3. Stream commits to observer in batches starting from highest_commit_index + 1
-        // 4. For each batch, include:
-        //    - Serialized commits (from store)
-        //    - Certifier blocks that certify the last commit in the batch (quorum of blocks with votes)
-        //    - Committed blocks referenced by the commits
-        // 5. Include highest_commit_index in ObserverCommitStreamItem for each batch
-        // 6. Respect batch_size from the request (but can serve less if needed)
-        // 7. Handle Stop command to gracefully terminate the stream
-        // 8. Continue streaming as new commits become available
         todo!("Observer commit streaming not yet implemented")
     }
 
