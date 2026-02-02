@@ -248,8 +248,7 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
         TestRunInfo,
     ) {
         // Allow loading of unpublishable modules for the purpose of running tests.
-        // Safety: Unsafe function was purposely designed for this use case.
-        let vm_config = unsafe {
+        let vm_config = {
             let mut vm_config = self.vm_test_setup.vm_config();
             vm_config
                 .binary_config

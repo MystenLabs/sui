@@ -96,7 +96,9 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         let size_increase = match ret_vals {
             Some(mut ret_vals) => ret_vals.try_fold(
                 AbstractMemorySize::zero(),
-                |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(&self.0, elem)?) },
+                |acc, elem| -> PartialVMResult<_> {
+                    Ok(acc + abstract_memory_size(&self.0, elem)?)
+                },
             )?,
             None => AbstractMemorySize::zero(),
         };
