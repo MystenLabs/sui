@@ -110,6 +110,14 @@ public fun redeem_funds<T>(withdrawal: sui::funds_accumulator::Withdrawal<Balanc
 }
 
 /// Create a `Withdrawal<Balance<T>>` from an object to withdraw funds from it.
+/// Note: This function always succeeds, regardless of amount withdrawn. If the object
+/// balance is overdrawn during the course of the transaction, the transaction will be
+/// aborted after Move execution has completed. This means that it is not possible to
+/// detect overdraws at the time of withdrawal.
+///
+/// Note that detecting overdraw is not robustly possible even using `settled_funds_value`,
+/// since that value does not include any unsettled withdrawals made by prior transactions
+/// from the current consensus commit.
 public fun withdraw_funds_from_object<T>(obj: &mut UID, value: u64): Withdrawal<Balance<T>> {
     sui::funds_accumulator::withdraw_from_object(obj, value as u256)
 }
@@ -123,6 +131,39 @@ public fun settled_funds_value<T>(root: &sui::accumulator::AccumulatorRoot, addr
     let val: u128 = root.u128_read<Balance<T>>(address);
     let val = std::u128::min(std::u64::max_value!() as u128, val);
     val as u64
+}
+
+/// Read the value of the sum of the total pending deposits for type T, to the given address,
+/// sent by the current transaction up to this point in time.
+public fun pending_funds_deposits<T>(address: address): u64 {
+    sui::accumulator::pending_deposits<Balance<T>>(address)
+}
+
+/// Read the value of the sum of the total pending withdrawals for type T, from the given address,
+/// withdrawn by the current transaction up to this point in time.
+public fun pending_funds_withdrawals<T>(address: address): u64 {
+    sui::accumulator::pending_withdrawals<Balance<T>>(address)
+}
+
+/// Read the value of the pending balance of type T, for the given address,
+/// up to this point in time. The returned value is the sum of the settled balance
+/// plus pending deposits, minus pending withdrawals.
+///
+/// The returned value does not include and deposits or withdrawals made by
+/// other concurrently executing transactions.
+///
+/// Because object withdrawals always appear to succeed in Move, this value can
+/// be negative, in which case the function returns None.
+public fun positive_pending_funds_value<T>(
+    root: &sui::accumulator::AccumulatorRoot,
+    address: address,
+): Option<u64> {
+    let settled = settled_funds_value<T>(root, address) as u128;
+    let deposits = pending_funds_deposits<T>(address) as u128;
+    let withdrawals = pending_funds_withdrawals<T>(address) as u128;
+    let total_available = settled + deposits;
+    if (total_available >= withdrawals) option::some((total_available - withdrawals) as u64)
+    else option::none()
 }
 
 // === SUI specific operations ===

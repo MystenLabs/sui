@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 110;
+const MAX_PROTOCOL_VERSION: u64 = 111;
 
 // Record history of protocol version allocations here:
 //
@@ -295,6 +295,7 @@ const MAX_PROTOCOL_VERSION: u64 = 110;
 //              function on mainnet.
 //              split_checkpoints_in_consensus_handler in devnet
 //              Enable additional validation on zkLogin public identifier.
+// Version 111: New framework version
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1472,6 +1473,12 @@ pub struct ProtocolConfig {
     event_emit_tag_size_derivation_cost_per_byte: Option<u64>,
     event_emit_output_cost_per_byte: Option<u64>,
     event_emit_auth_stream_cost: Option<u64>,
+
+    // `accumulator` module
+    // Cost params for the Move native functions `emit_deposit_event` and `emit_withdraw_event`
+    accumulator_emit_cost_base: Option<u64>,
+    // Cost params for the Move native functions `pending_deposits` and `pending_withdrawals`
+    accumulator_pending_balance_cost_base: Option<u64>,
 
     //  `object` module
     // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -2850,6 +2857,10 @@ impl ProtocolConfig {
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
             event_emit_output_cost_per_byte: Some(10),
             event_emit_auth_stream_cost: None,
+
+            // `accumulator` module
+            accumulator_emit_cost_base: None,
+            accumulator_pending_balance_cost_base: None,
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -4524,7 +4535,11 @@ impl ProtocolConfig {
                     cfg.feature_flags.fix_checkpoint_signature_mapping = true;
                     cfg.feature_flags
                         .consensus_always_accept_system_transactions = true;
+
+                    cfg.accumulator_emit_cost_base = Some(52);
+                    cfg.accumulator_pending_balance_cost_base = Some(52);
                 }
+                111 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5089,10 +5104,9 @@ mod test {
         );
 
         // We didnt have this in version 1
-        assert!(
-            prot.lookup_attr("max_move_identifier_len".to_string())
-                .is_none()
-        );
+        assert!(prot
+            .lookup_attr("max_move_identifier_len".to_string())
+            .is_none());
 
         // But we did in version 9
         let prot: ProtocolConfig =
@@ -5105,12 +5119,11 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // We didnt have this in version 1
-        assert!(
-            prot.attr_map()
-                .get("max_move_identifier_len")
-                .unwrap()
-                .is_none()
-        );
+        assert!(prot
+            .attr_map()
+            .get("max_move_identifier_len")
+            .unwrap()
+            .is_none());
         // We had this in version 1
         assert!(
             prot.attr_map().get("max_arguments").unwrap()
@@ -5121,17 +5134,14 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // Does not exist
-        assert!(
-            prot.feature_flags
-                .lookup_attr("some random string".to_owned())
-                .is_none()
-        );
-        assert!(
-            !prot
-                .feature_flags
-                .attr_map()
-                .contains_key("some random string")
-        );
+        assert!(prot
+            .feature_flags
+            .lookup_attr("some random string".to_owned())
+            .is_none());
+        assert!(!prot
+            .feature_flags
+            .attr_map()
+            .contains_key("some random string"));
 
         // Was false in v1
         assert!(
