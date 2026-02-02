@@ -2,23 +2,18 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    NativeFunctionRecord,
-    sandbox::utils::{
-        explain_publish_changeset, explain_publish_error, get_gas_status,
-        on_disk_state_view::OnDiskStateView,
-    },
+use crate::sandbox::utils::{
+    explain_publish_changeset, explain_publish_error, on_disk_state_view::OnDiskStateView,
 };
 use anyhow::{Result, bail};
 use move_binary_format::errors::Location;
 use move_package_alt_compilation::compiled_package::CompiledPackage;
+use move_unit_test::vm_test_setup::VMTestSetup;
 use move_vm_runtime::move_vm::MoveVM;
-use move_vm_test_utils::gas_schedule::CostTable;
 use std::collections::BTreeMap;
 
-pub fn publish(
-    natives: impl IntoIterator<Item = NativeFunctionRecord>,
-    cost_table: &CostTable,
+pub fn publish<V: VMTestSetup>(
+    vm_test_setup: V,
     state: &OnDiskStateView,
     package: &CompiledPackage,
     ignore_breaking_changes: bool,
@@ -81,8 +76,8 @@ pub fn publish(
 
     // use the publish_module API from the VM if we do not allow breaking changes
     if !ignore_breaking_changes {
-        let vm = MoveVM::new(natives).unwrap();
-        let mut gas_status = get_gas_status(cost_table, None)?;
+        let vm = MoveVM::new(vm_test_setup.native_function_table()).unwrap();
+        let mut gas_status = vm_test_setup.new_meter(None);
         let mut session = vm.new_session(state);
         let mut has_error = false;
 

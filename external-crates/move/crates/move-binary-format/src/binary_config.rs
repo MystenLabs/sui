@@ -137,4 +137,11 @@ impl BinaryConfig {
     pub fn allow_unpublishable(&self) -> bool {
         self.allow_unpublishable
     }
+
+    /// # Safety
+    /// This function exists solely for propagating a VMConfig down into the unit testing
+    /// environment. It should never be called anywhere else.
+    pub unsafe fn allow_unpublishable_for_move_unit_testing(&mut self) {
+        self.allow_unpublishable = true;
+    }
 }
