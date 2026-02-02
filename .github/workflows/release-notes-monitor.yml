@@ -112,16 +112,7 @@ jobs:
         # Escape special characters for Slack mrkdwn format (& < > must be escaped)
         pr_title=$(echo "$pr_title" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-        # Check if author is a MystenLabs org member
-        if gh api "/orgs/MystenLabs/members/${author}" --silent 2>/dev/null; then
-          is_external="false"
-        else
-          is_external="true"
-        fi
-
-        # Store author info for use in Slack message
         echo "author=${author}" >> $GITHUB_ENV
-        echo "is_external=${is_external}" >> $GITHUB_ENV
         echo "pr_title=${pr_title}" >> $GITHUB_ENV
 
     - name: Post to a Slack channel
@@ -133,7 +124,7 @@ jobs:
           channel: "#ext-mysten-release-notes"
           text: |
             ${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS || '' }}${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS && ', please' || 'Please' }} review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
-            *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|#${{ matrix.pr }}: ${{ env.pr_title }}> by <https://github.com/${{ env.author }}|@${{ env.author }}>${{ env.is_external == 'true' && ' (external contributor)' || '' }}
+            *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|#${{ matrix.pr }}: ${{ env.pr_title }}> by <https://github.com/${{ env.author }}|@${{ env.author }}>
             *Release Notes:*
             ${{ steps.read-notes.outputs.release_notes }}
 

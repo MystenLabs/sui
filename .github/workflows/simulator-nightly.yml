@@ -161,10 +161,12 @@ jobs:
           --header 'Content-Type: application/json')
 
         oncall_email=$(echo "$response" | jq -r '.oncalls[0].user.email // empty')
-        oncall_name=$(echo "$response" | jq -r '.oncalls[0].escalation_policy.summary // empty')
+        oncall_user_name=$(echo "$response" | jq -r '.oncalls[0].user.summary // empty')
+        oncall_policy=$(echo "$response" | jq -r '.oncalls[0].escalation_policy.summary // empty')
 
         echo "oncall_email=${oncall_email}" >> "$GITHUB_ENV"
-        echo "oncall_name=${oncall_name}" >> "$GITHUB_ENV"
+        echo "oncall_user_name=${oncall_user_name}" >> "$GITHUB_ENV"
+        echo "oncall_policy=${oncall_policy}" >> "$GITHUB_ENV"
 
         if [ -z "$oncall_email" ]; then
           echo "::warning::Could not get oncall email from PagerDuty"
@@ -203,7 +205,8 @@ jobs:
         SUI_SHA: ${{ env.sui_sha }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
         SLACK_ID: ${{ env.slack_id }}
-        ONCALL_NAME: ${{ env.oncall_name }}
+        ONCALL_USER_NAME: ${{ env.oncall_user_name }}
+        ONCALL_POLICY: ${{ env.oncall_policy }}
       with:
         method: chat.postMessage
         token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -219,4 +222,4 @@ jobs:
             ${{ needs.simtest.outputs.failed_tests }}
             ```
 
-            <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug: `tsh ssh ubuntu@simtest-01` and look in `${{ needs.simtest.outputs.log_dir }}`
+            ${{ env.SLACK_ID && format('<@{0}>', env.SLACK_ID) || env.ONCALL_USER_NAME }}, current `${{ env.ONCALL_POLICY }}` oncall, please debug: `tsh ssh ubuntu@simtest-01` and look in `${{ needs.simtest.outputs.log_dir }}`

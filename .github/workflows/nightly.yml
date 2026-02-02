@@ -64,10 +64,12 @@ jobs:
             --header 'Content-Type: application/json')
 
           oncall_email=$(echo "$response" | jq -r '.oncalls[0].user.email // empty')
-          oncall_name=$(echo "$response" | jq -r '.oncalls[0].escalation_policy.summary // empty')
+          oncall_user_name=$(echo "$response" | jq -r '.oncalls[0].user.summary // empty')
+          oncall_policy=$(echo "$response" | jq -r '.oncalls[0].escalation_policy.summary // empty')
 
           echo "oncall_email=${oncall_email}" >> "$GITHUB_ENV"
-          echo "oncall_name=${oncall_name}" >> "$GITHUB_ENV"
+          echo "oncall_user_name=${oncall_user_name}" >> "$GITHUB_ENV"
+          echo "oncall_policy=${oncall_policy}" >> "$GITHUB_ENV"
 
           if [ -z "$oncall_email" ]; then
             echo "::warning::Could not get oncall email from PagerDuty"
@@ -105,7 +107,8 @@ jobs:
         env:
           SUI_SHA: ${{ env.sui_sha }}
           SLACK_ID: ${{ env.slack_id }}
-          ONCALL_NAME: ${{ env.oncall_name }}
+          ONCALL_USER_NAME: ${{ env.oncall_user_name }}
+          ONCALL_POLICY: ${{ env.oncall_policy }}
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -114,5 +117,5 @@ jobs:
             text: |
               :sui::error-cross: Workflow *${{ github.workflow }}* has `${{ env.WORKFLOW_CONCLUSION }}`.
               Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
-              <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures.
+              ${{ env.SLACK_ID && format('<@{0}>', env.SLACK_ID) || env.ONCALL_USER_NAME }}, current `${{ env.ONCALL_POLICY }}` oncall, please debug failures.
               Logs are here: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.run_id }}>
