@@ -197,7 +197,7 @@ pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = ObserverBlockStr
 /// A stream item for observer commit streaming that includes batched commits and highest commit index.
 #[allow(dead_code)]
 pub(crate) struct ObserverCommitStreamItem {
-    pub(crate) commits: Vec<crate::network::tonic_network::Commit>,
+    pub(crate) commits: Vec<crate::network::observer_network::Commit>,
     pub(crate) highest_commit_index: u32,
 }
 
@@ -208,12 +208,12 @@ pub(crate) type ObserverCommitStream = Pin<Box<dyn Stream<Item = ObserverCommitS
 /// Observer block request stream type for bidirectional streaming.
 #[allow(dead_code)]
 pub(crate) type BlockRequestStream =
-    Pin<Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>>;
+    Pin<Box<dyn Stream<Item = crate::network::observer_network::BlockStreamRequest> + Send>>;
 
 /// Observer commit request stream type for bidirectional streaming.
 #[allow(dead_code)]
 pub(crate) type CommitRequestStream =
-    Pin<Box<dyn Stream<Item = crate::network::tonic_network::CommitStreamRequest> + Send>>;
+    Pin<Box<dyn Stream<Item = crate::network::observer_network::CommitStreamRequest> + Send>>;
 
 /// Observer network service for handling requests from observer nodes.
 /// Unlike NetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)

@@ -813,6 +813,9 @@ impl TonicManager {
             let tcp_connection_metrics =
                 &self.context.metrics.network_metrics.tcp_connection_metrics;
 
+            // Try creating an ephemeral port to test the highest allowed send and recv buffer sizes.
+            // Buffer sizes are not set explicitly on the socket used for real traffic,
+            // to allow the OS to set appropriate values.
             {
                 let ephemeral_addr = SocketAddr::new(own_address.ip(), 0);
                 let ephemeral_socket = create_socket(&ephemeral_addr);
@@ -847,6 +850,12 @@ impl TonicManager {
             .http2_keepalive_timeout(Some(config.keepalive_interval))
             .accept_http1(false);
 
+        // Create server
+        //
+        // During simtest crash/restart tests there may be an older instance of consensus running
+        // that is bound to the TCP port of `own_address` that hasn't finished relinquishing
+        // control of the port yet. So instead of crashing when the address is inuse, we will retry
+        // for a short/reasonable period of time before giving up.
         let deadline = Instant::now() + Duration::from_secs(20);
         let server = loop {
             match sui_http::Builder::new()
@@ -1328,96 +1337,6 @@ pub(crate) struct GetLatestRoundsResponse {
     // Highest accepted round per authority.
     #[prost(uint32, repeated, tag = "2")]
     highest_accepted: Vec<u32>,
-}
-
-// Observer block streaming messages
-#[derive(Clone, prost::Message)]
-pub(crate) struct BlockStreamRequest {
-    #[prost(oneof = "block_stream_request::Command", tags = "1, 2")]
-    pub(crate) command: Option<block_stream_request::Command>,
-}
-
-pub(crate) mod block_stream_request {
-    #[derive(Clone, PartialEq, prost::Oneof)]
-    pub(crate) enum Command {
-        #[prost(message, tag = "1")]
-        Start(super::StartBlockStream),
-        #[prost(message, tag = "2")]
-        Stop(super::StopBlockStream),
-    }
-}
-
-#[derive(Clone, PartialEq, prost::Message)]
-pub(crate) struct StartBlockStream {
-    // The highest received round per authority (authorities in committee order)
-    #[prost(uint64, repeated, tag = "1")]
-    pub(crate) highest_round_per_authority: Vec<u64>,
-}
-
-#[derive(Clone, PartialEq, prost::Message)]
-pub(crate) struct StopBlockStream {}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct BlockStreamResponse {
-    // Serialized block
-    #[prost(bytes = "bytes", tag = "1")]
-    pub(crate) block: Bytes,
-    // The publisher's highest commit index
-    #[prost(uint64, tag = "2")]
-    pub(crate) highest_commit_index: u64,
-}
-
-// Observer commit streaming messages
-#[derive(Clone, prost::Message)]
-pub(crate) struct CommitStreamRequest {
-    #[prost(oneof = "commit_stream_request::Command", tags = "1, 2")]
-    pub(crate) command: Option<commit_stream_request::Command>,
-}
-
-pub(crate) mod commit_stream_request {
-    #[derive(Clone, PartialEq, prost::Oneof)]
-    pub(crate) enum Command {
-        #[prost(message, tag = "1")]
-        Start(super::StartCommitStream),
-        #[prost(message, tag = "2")]
-        Stop(super::StopCommitStream),
-    }
-}
-
-#[derive(Clone, PartialEq, prost::Message)]
-pub(crate) struct StartCommitStream {
-    // The Observer's highest (local) commit index
-    #[prost(uint32, tag = "1")]
-    pub(crate) highest_commit_index: u32,
-    // The desired commits batch size
-    #[prost(uint32, tag = "2")]
-    pub(crate) batch_size: u32,
-}
-
-#[derive(Clone, PartialEq, prost::Message)]
-pub(crate) struct StopCommitStream {}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct CommitStreamResponse {
-    // The batched commits
-    #[prost(message, repeated, tag = "1")]
-    pub(crate) commits: Vec<Commit>,
-    // The current highest commit publisher index
-    #[prost(uint32, tag = "2")]
-    pub(crate) highest_commit_index: u32,
-}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct Commit {
-    // The serialised committed sub dag
-    #[prost(bytes = "bytes", tag = "1")]
-    pub(crate) commit: Bytes,
-    // The blocks that certify the committed sub dag
-    #[prost(bytes = "bytes", repeated, tag = "2")]
-    pub(crate) certifier_blocks: Vec<Bytes>,
-    // The committed sub dag's blocks
-    #[prost(bytes = "bytes", repeated, tag = "3")]
-    pub(crate) committed_blocks: Vec<Bytes>,
 }
 
 pub(crate) fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {

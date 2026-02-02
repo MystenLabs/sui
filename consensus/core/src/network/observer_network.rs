@@ -4,19 +4,124 @@
 use std::{pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use futures::Stream;
 use tokio_stream::Iter;
 use tonic::{Request, Response, Streaming};
 
 use super::{
-    ObserverNetworkService,
-    tonic_gen::observer_consensus_service_server::ObserverConsensusService,
-    tonic_network::{
-        BlockStreamRequest, BlockStreamResponse, CommitStreamRequest, CommitStreamResponse,
-        FetchBlocksRequest, FetchBlocksResponse, FetchCommitsRequest, FetchCommitsResponse,
-    },
+    ObserverNetworkService, tonic_gen::observer_consensus_service_server::ObserverConsensusService,
 };
 use crate::context::Context;
+
+// Observer block streaming messages
+#[derive(Clone, prost::Message)]
+pub(crate) struct BlockStreamRequest {
+    #[prost(oneof = "block_stream_request::Command", tags = "1, 2")]
+    pub(crate) command: Option<block_stream_request::Command>,
+}
+
+pub(crate) mod block_stream_request {
+    #[derive(Clone, PartialEq, prost::Oneof)]
+    pub(crate) enum Command {
+        #[prost(message, tag = "1")]
+        Start(super::StartBlockStream),
+        #[prost(message, tag = "2")]
+        Stop(super::StopBlockStream),
+    }
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub(crate) struct StartBlockStream {
+    #[prost(uint64, repeated, tag = "1")]
+    pub(crate) highest_round_per_authority: Vec<u64>,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub(crate) struct StopBlockStream {}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct BlockStreamResponse {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub(crate) block: Bytes,
+    #[prost(uint64, tag = "2")]
+    pub(crate) highest_commit_index: u64,
+}
+
+// Observer commit streaming messages
+#[derive(Clone, prost::Message)]
+pub(crate) struct CommitStreamRequest {
+    #[prost(oneof = "commit_stream_request::Command", tags = "1, 2")]
+    pub(crate) command: Option<commit_stream_request::Command>,
+}
+
+pub(crate) mod commit_stream_request {
+    #[derive(Clone, PartialEq, prost::Oneof)]
+    pub(crate) enum Command {
+        #[prost(message, tag = "1")]
+        Start(super::StartCommitStream),
+        #[prost(message, tag = "2")]
+        Stop(super::StopCommitStream),
+    }
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub(crate) struct StartCommitStream {
+    #[prost(uint32, tag = "1")]
+    pub(crate) highest_commit_index: u32,
+    #[prost(uint32, tag = "2")]
+    pub(crate) batch_size: u32,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+pub(crate) struct StopCommitStream {}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct CommitStreamResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub(crate) commits: Vec<Commit>,
+    #[prost(uint32, tag = "2")]
+    pub(crate) highest_commit_index: u32,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct Commit {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub(crate) commit: Bytes,
+    #[prost(bytes = "bytes", repeated, tag = "2")]
+    pub(crate) certifier_blocks: Vec<Bytes>,
+    #[prost(bytes = "bytes", repeated, tag = "3")]
+    pub(crate) committed_blocks: Vec<Bytes>,
+}
+
+// Observer fetch messages
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchBlocksRequest {
+    #[prost(bytes = "vec", repeated, tag = "1")]
+    pub(crate) block_refs: Vec<Vec<u8>>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchBlocksResponse {
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub(crate) blocks: Vec<Bytes>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchCommitsRequest {
+    #[prost(uint32, tag = "1")]
+    pub(crate) start: u32,
+    #[prost(uint32, tag = "2")]
+    pub(crate) end: u32,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct FetchCommitsResponse {
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub(crate) commits: Vec<Bytes>,
+    #[prost(bytes = "bytes", repeated, tag = "2")]
+    pub(crate) certifier_blocks: Vec<Bytes>,
+}
 
 /// Proxies Observer Tonic requests to ObserverNetworkService.
 /// Extracts peer NodeId from TLS certificates and delegates to the service layer.
@@ -42,10 +147,6 @@ impl<S: ObserverNetworkService> ObserverConsensusService for ObserverServiceProx
         _request: Request<Streaming<BlockStreamRequest>>,
     ) -> Result<Response<Self::StreamBlocksStream>, tonic::Status> {
         // TODO: Implement stream_blocks for observer nodes
-        // 1. Extract peer public key from TLS certificate
-        // 2. Handle bidirectional streaming with flow control (Start/Stop commands)
-        // 3. Delegate to ObserverNetworkService::handle_stream_blocks
-        // 4. Map blocks to BlockStreamResponse with highest_commit_index
         Err(tonic::Status::unimplemented(
             "stream_blocks not yet implemented for observers",
         ))
@@ -59,10 +160,6 @@ impl<S: ObserverNetworkService> ObserverConsensusService for ObserverServiceProx
         _request: Request<Streaming<CommitStreamRequest>>,
     ) -> Result<Response<Self::StreamCommitsStream>, tonic::Status> {
         // TODO: Implement stream_commits for observer nodes
-        // 1. Extract peer public key from TLS certificate
-        // 2. Handle bidirectional streaming with flow control (Start/Stop commands)
-        // 3. Delegate to ObserverNetworkService::handle_stream_commits
-        // 4. Map commits to CommitStreamResponse with highest_commit_index
         Err(tonic::Status::unimplemented(
             "stream_commits not yet implemented for observers",
         ))
@@ -75,10 +172,6 @@ impl<S: ObserverNetworkService> ObserverConsensusService for ObserverServiceProx
         _request: Request<FetchBlocksRequest>,
     ) -> Result<Response<Self::FetchBlocksStream>, tonic::Status> {
         // TODO: Implement fetch_blocks for observer nodes
-        // 1. Extract peer public key from TLS certificate
-        // 2. Deserialize block_refs from request
-        // 3. Delegate to ObserverNetworkService::handle_fetch_blocks
-        // 4. Chunk blocks and return as streaming response
         Err(tonic::Status::unimplemented(
             "fetch_blocks not yet implemented for observers",
         ))
@@ -89,10 +182,6 @@ impl<S: ObserverNetworkService> ObserverConsensusService for ObserverServiceProx
         _request: Request<FetchCommitsRequest>,
     ) -> Result<Response<FetchCommitsResponse>, tonic::Status> {
         // TODO: Implement fetch_commits for observer nodes
-        // 1. Extract peer public key from TLS certificate
-        // 2. Extract commit range from request
-        // 3. Delegate to ObserverNetworkService::handle_fetch_commits
-        // 4. Serialize commits and certifier_blocks
         Err(tonic::Status::unimplemented(
             "fetch_commits not yet implemented for observers",
         ))
