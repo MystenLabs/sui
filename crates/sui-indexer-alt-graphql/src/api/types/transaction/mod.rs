@@ -41,7 +41,6 @@ use crate::api::types::epoch::Epoch;
 use crate::api::types::gas_input::GasInput;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::lookups::TxBoundsCursor;
-use crate::api::types::scan;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionKindInput;
 use crate::api::types::transaction_effects::EffectsContents;
@@ -57,6 +56,7 @@ use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
+pub(crate) mod scan;
 
 /// Cursor for transaction pagination
 pub(crate) type CTransaction = JsonCursor<u64>;

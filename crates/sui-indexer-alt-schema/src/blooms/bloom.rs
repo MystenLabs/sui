@@ -7,9 +7,9 @@ use crate::blooms::hash::DoubleHasher;
 use crate::blooms::hash::set_bit;
 
 /// Probe for checking membership in a bloom filter.
+/// Each entry in `bit_probes` is a (byte_offset, bit_mask) pair where the bit must be set.
 pub struct BloomProbe {
-    pub byte_offsets: Vec<usize>,
-    pub bit_masks: Vec<u8>,
+    pub bit_probes: Vec<(usize, u8)>,
 }
 
 /// A standard bloom filter with bits spread across the entire filter.
@@ -82,10 +82,8 @@ impl<const BYTES: usize, const HASHES: u32, const SEED: u128> BloomFilter<BYTES,
                 *by_offset.entry(b / 8).or_default() |= 1u8 << (b % 8);
             }
         }
-        let (byte_offsets, bit_masks) = by_offset.into_iter().unzip();
         BloomProbe {
-            byte_offsets,
-            bit_masks,
+            bit_probes: by_offset.into_iter().collect(),
         }
     }
 }

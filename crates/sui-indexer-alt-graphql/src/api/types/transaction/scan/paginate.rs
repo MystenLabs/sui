@@ -10,18 +10,17 @@ use itertools::Either;
 use sui_indexer_alt_reader::checkpoints::CheckpointKey;
 
 use crate::api::scalars::cursor::JsonCursor;
-use crate::api::types::scan::ScanError;
 use crate::api::types::transaction::SCTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::TransactionContents;
 use crate::api::types::transaction::TransactionCursor;
 use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::scan::ScanError;
+use crate::api::types::transaction::scan::lookup::DigestsByCheckpoint;
+use crate::api::types::transaction::scan::lookup::TransactionsByDigest;
 use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::scope::Scope;
-
-use super::lookup::DigestsByCheckpoint;
-use super::lookup::TransactionsByDigest;
 
 pub(super) fn results(
     scope: Scope,
