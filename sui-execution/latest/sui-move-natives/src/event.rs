@@ -116,7 +116,7 @@ fn emit_impl(
     let event_value_size = abstract_size(
         get_extension!(context, ObjectRuntime)?.protocol_config,
         &event_value,
-    );
+    )?;
 
     // Deriving event value size can be expensive due to recursion overhead
     native_charge_gas_early_exit!(

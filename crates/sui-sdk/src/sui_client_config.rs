@@ -7,12 +7,11 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{
-    SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_MAINNET_URL, SUI_TESTNET_URL, SuiClient,
-    SuiClientBuilder,
-};
+use crate::{SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_MAINNET_URL, SUI_TESTNET_URL};
 use sui_config::Config;
 use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_rpc_api::Client;
+use sui_rpc_api::client::HeadersInterceptor;
 use sui_types::{
     base_types::*,
     digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
@@ -100,18 +99,9 @@ pub struct SuiEnv {
 }
 
 impl SuiEnv {
-    pub async fn create_rpc_client(
-        &self,
-        request_timeout: Option<std::time::Duration>,
-        max_concurrent_requests: Option<u64>,
-    ) -> Result<SuiClient, anyhow::Error> {
-        let mut builder = SuiClientBuilder::default();
-        if let Some(request_timeout) = request_timeout {
-            builder = builder.request_timeout(request_timeout);
-        }
-        if let Some(ws_url) = &self.ws {
-            builder = builder.ws_url(ws_url);
-        }
+    pub fn create_grpc_client(&self) -> Result<Client, anyhow::Error> {
+        let mut client = Client::new(&self.rpc)?;
+
         if let Some(basic_auth) = &self.basic_auth {
             let fields: Vec<_> = basic_auth.split(':').collect();
             if fields.len() != 2 {
@@ -119,13 +109,12 @@ impl SuiEnv {
                     "Basic auth should be in the format `username:password`"
                 ));
             }
-            builder = builder.basic_auth(fields[0], fields[1]);
+            let mut headers = HeadersInterceptor::new();
+            headers.basic_auth(fields[0], Some(fields[1]));
+            client = client.with_headers(headers);
         }
 
-        if let Some(max_concurrent_requests) = max_concurrent_requests {
-            builder = builder.max_concurrent_requests(max_concurrent_requests as usize);
-        }
-        Ok(builder.build(&self.rpc).await?)
+        Ok(client)
     }
 
     pub fn devnet() -> Self {

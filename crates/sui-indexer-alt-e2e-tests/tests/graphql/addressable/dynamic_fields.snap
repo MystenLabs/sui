@@ -252,7 +252,9 @@ task 13, lines 139-151:
 Response: {
   "data": {
     "object": {
-      "asMoveObject": null
+      "asMoveObject": {
+        "dynamicFields": null
+      }
     }
   },
   "errors": [

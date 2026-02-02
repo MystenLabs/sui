@@ -117,12 +117,14 @@ pub trait WorkloadBuilder<T: Payload + ?Sized>: Send + Sync + std::fmt::Debug {
 pub trait Workload<T: Payload + ?Sized>: Send + Sync + std::fmt::Debug {
     async fn init(
         &mut self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     );
     async fn make_test_payloads(
         &self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<T>>;
     fn name(&self) -> &str;

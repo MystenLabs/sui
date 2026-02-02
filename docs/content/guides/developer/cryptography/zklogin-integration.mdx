@@ -39,10 +39,11 @@ $ npm install @mysten/sui@experimental
 
 ```typescript
 import { generateNonce, generateRandomness } from '@mysten/sui/zklogin';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 
-const FULLNODE_URL = 'https://fullnode.devnet.sui.io'; // replace with the RPC URL you want to use
-const suiClient = new SuiClient({ url: FULLNODE_URL });
-const { epoch, epochDurationMs, epochStartTimestampMs } = await suiClient.getLatestSuiSystemState();
+const FULLNODE_URL = 'https://fullnode.devnet.sui.io:443'; // replace with the RPC URL you want to use
+const suiClient = new SuiGrpcClient({ baseUrl: FULLNODE_URL, network: 'devnet' });
+const { epoch, epochDurationMs, epochStartTimestampMs } = await suiClient.core.getLatestSuiSystemState();
 
 const maxEpoch = Number(epoch) + 2; // this means the ephemeral key will be active for 2 epochs from now.
 const ephemeralKeyPair = new Ed25519Keypair();
@@ -122,7 +123,7 @@ Once the OAuth flow completes, the JWT can be found in the redirect URL. Along w
 ```typescript
 import { jwtToAddress } from '@mysten/sui/zklogin';
 
-const zkLoginUserAddress = jwtToAddress(jwt, userSalt);
+const zkLoginUserAddress = jwtToAddress(jwt, userSalt, false);
 ```
 
 ## Get the zero-knowledge proof
@@ -298,9 +299,11 @@ A few important things to note:
 First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional key pair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender` is also defined.
 
 ```typescript
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
 const ephemeralKeyPair = new Ed25519Keypair();
 
-const client = new SuiClient({ url: '<YOUR_RPC_URL>' });
+const client = new SuiGrpcClient({ baseUrl: '<YOUR_RPC_URL>', network: 'mainnet' });
 
 const txb = new Transaction();
 
@@ -342,9 +345,9 @@ const zkLoginSignature = getZkLoginSignature({
 Finally, execute the transaction.
 
 ```typescript
-client.executeTransactionBlock({
-	transactionBlock: bytes,
-	signature: zkLoginSignature,
+client.executeTransaction({
+	transaction: bytes,
+	signatures: [zkLoginSignature],
 });
 ```
 

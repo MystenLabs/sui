@@ -129,7 +129,7 @@ A `PaymentRecord` cannot be deleted before its expiration epoch, ensuring a mini
 
 ### Creating a registry
 
-To create a new payment registry, you need to provide a `name` which is simply an ACSII-based string that is used to derive an address for the registry. In addition to a `name`, the package `Namespace` object must also be provided. `Namespace` provides a higher-order organizational structure for managing multiple payment registries.
+To create a new payment registry, you need to provide a `name` which is simply an ASCII-based string that is used to derive an address for the registry. In addition to a `name`, the package `Namespace` object must also be provided. `Namespace` provides a higher-order organizational structure for managing multiple payment registries.
 
 ```move
 module sui::payment_kit;
@@ -299,41 +299,41 @@ The Payment Kit defines a standard URI format for encoding payment requests. Tra
 Payment Kit Transaction URIs use the following format:
 
 ```
-sui:<address>
-    ?amount=<amount>
+sui:pay?receiver=<receiverAddress>
+    &amount=<amount>
     &coinType=<coinType>
     &nonce=<nonce>
     &label=<label>
-    &icon=<icon>
+    &iconUrl=<iconUrl>
     &message=<message>
     &registry=<registry>
 ```
 
 ### URI parameters
 
-#### `address`
+#### `receiver`
 
-The destination address to receive the payment funds. Must be a valid Sui address. There is no pathname for the destination address.
+The destination address to receive the payment funds. Must be a valid Sui address.
 
 #### `amount`
 
-The `amount` field is a required pathname. The value must be a `u64`. This field represents the native amount of a specified coin type (for example, 100000000 MISTS represents 0.1 SUI).
+The `amount` field is a required query parameter. The value must be a positive `u64`. This field represents the native amount of a specified coin type (for example, 100000000 MISTS represents 0.1 SUI).
 
 #### `nonce`
 
-The `nonce` field is a required pathname. This represents a unique ascii based identifier for this payment. Must be unique within the registry to prevent duplicate payments. Recommended format is `UUIDv4`. Cannot exceed 36 characters.
+The `nonce` field is a required query parameter. This represents a unique ASCII-based identifier for this payment. Must be unique within the registry to prevent duplicate payments. Recommended format is `UUIDv4`. Cannot exceed 36 characters.
 
 #### `coinType`
 
-The `coinType` field is a required pathname. The full type identifier of the coin to be transferred (for example, `0x2::sui::SUI` or `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`).
+The `coinType` field is a required query parameter. The full type identifier of the coin to be transferred (for example, `0x2::sui::SUI` or `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`).
 
 #### `label`
 
 A human-readable name for the merchant or application receiving payment.
 
-#### `icon`
+#### `iconUrl`
 
-A URL pointing to an icon image for the merchant or application. Maybe be displayed to users during payment confirmation.
+A URL pointing to an icon image for the merchant or application. May be displayed to users during payment confirmation.
 
 #### `message`
 
@@ -341,24 +341,15 @@ A description or context for the payment. May be displayed to users to explain t
 
 #### `registry`
 
-The object ID or ascii represented `name` of the `PaymentRegistry` to use for processing the payment. If provided, the payment is processed through the registry with duplicate prevention. If omitted, the payment is processed as an ephemeral payment.
+The object ID or ASCII-represented `name` of the `PaymentRegistry` to use for processing the payment. If provided, the payment is processed through the registry with duplicate prevention. If omitted, the payment is processed as an ephemeral payment.
 
 ### Example URIs
 
 **Basic SUI payment:**
 
 ```
-sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=1000000000 // (1 SUI represented as MISTS)
-    &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
-    &nonce=550e8400-e29b-41d4-a716-446655440000
-```
-
-**Payment with custom coin type:**
-
-```
-sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=1000000000 // (1 SUI represented as MISTS)
+sui:pay?receiver=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    &amount=1000000000
     &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
     &nonce=550e8400-e29b-41d4-a716-446655440000
 ```
@@ -366,30 +357,31 @@ sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 **Payment with display metadata:**
 
 ```
-sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=1000000000 // (1 SUI represented as MISTS)
+sui:pay?receiver=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    &amount=1000000000
     &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
     &nonce=550e8400-e29b-41d4-a716-446655440000
     &label=Coffee%20Shop
-    &icon=https://example.com/icon.png
+    &iconUrl=https://example.com/icon.png
     &message=Espresso%20and%20croissant
 ```
 
 **Registry-based payment (registry object ID):**
 
 ```
-sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=1000000000 // (1 SUI represented as MISTS)
+sui:pay?receiver=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    &amount=1000000000
     &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
     &nonce=550e8400-e29b-41d4-a716-446655440000
     &registry=0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
 ```
 
-**Registry-based payment (Registry ACSII Name):**
+**Registry-based payment (registry ASCII name):**
 
 ```
-sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=1000000000 // (1 SUI represented as MISTS)
+sui:pay?receiver=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    &amount=1000000000
+    &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
     &nonce=550e8400-e29b-41d4-a716-446655440000
     &registry=default-payment-registry
 ```
@@ -407,11 +399,10 @@ All parameter values must be properly URL-encoded according to RFC 3986. Special
 
 When implementing transaction URI support:
 
-1. **Validate all parameters**: Ensure addresses are valid Sui addresses, amounts are valid `u64` values, and coin types follow the correct format.
+1. **Validate all parameters**: Ensure addresses are valid Sui addresses, amounts are positive `u64` values, nonces do not exceed 36 characters, and coin types follow the correct format.
 2. **Generate unique nonces**: Use UUIDv4 or another cryptographically secure random identifier to prevent accidental duplicates.
-3. **Handle missing optional parameters**: Provide sensible defaults (such as `0x2::sui::SUI` for `coinType`) when optional parameters are omitted.
-4. **Display metadata to users**: Show the `label`, `icon`, and `message` parameters to users during payment confirmation to provide context.
-5. **Route to correct payment function**: Use `process_registry_payment` when `registry` is provided, otherwise use `process_ephemeral_payment`.
+3. **Display metadata to users**: Show the `label`, `iconUrl`, and `message` parameters to users during payment confirmation to provide context.
+4. **Route to correct payment function**: Use `process_registry_payment` when `registry` is provided, otherwise use `process_ephemeral_payment`.
 
 ## Key structures
 

@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(deprecated)]
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -13,8 +15,8 @@ use rand::rngs::OsRng;
 use sui_config::node::RunWithRange;
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
 use sui_json_rpc_types::{
-    EventPage, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    EventPage, SuiEvent, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -109,7 +111,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
         counter_ref.1,
     )
     .await;
-    let digest = response.digest;
+    let digest = response.transaction.digest();
     handle
         .sui_node
         .state()
@@ -207,7 +209,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
         counter_ref.1,
     )
     .await;
-    let digest = response.digest;
+    let digest = response.transaction.digest();
 
     let txes = node
         .state()
@@ -562,8 +564,8 @@ async fn do_test_full_node_sync_flood() {
                     .unwrap();
 
                 let mut coins = context.gas_objects(sender).await.unwrap();
-                let object_to_split = coins.swap_remove(0).1.object_ref();
-                let gas_obj = coins.swap_remove(0).1.object_ref();
+                let object_to_split = coins.swap_remove(0).1.compute_object_reference();
+                let gas_obj = coins.swap_remove(0).1.compute_object_reference();
                 (sender, object_to_split, gas_obj)
             };
 
@@ -585,7 +587,7 @@ async fn do_test_full_node_sync_flood() {
                     test_cluster.execute_transaction(tx).await
                 };
 
-                owned_tx_digest = Some(res.digest);
+                owned_tx_digest = Some(res.transaction.digest());
 
                 shared_tx_digest = Some(
                     increment_counter(
@@ -597,7 +599,8 @@ async fn do_test_full_node_sync_flood() {
                         counter_ref.1,
                     )
                     .await
-                    .digest,
+                    .transaction
+                    .digest(),
                 );
             }
             tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap()))
@@ -1015,10 +1018,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
     // Delete the object
     let response = delete_nft(&test_cluster.wallet, recipient, package_id, object_ref_v2).await;
-    assert_eq!(
-        *response.effects.unwrap().status(),
-        SuiExecutionStatus::Success
-    );
+    assert!(response.effects.status().is_ok(),);
     sleep(Duration::from_secs(1)).await;
 
     // Now test get_object_read
@@ -1213,13 +1213,12 @@ async fn test_access_old_object_pruned() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let tx_builder = test_cluster.test_transaction_builder().await;
     let sender = tx_builder.sender();
-    let gas_object = tx_builder.gas_object();
+    let gas_object = tx_builder.gas_object().unwrap();
     let effects = test_cluster
         .sign_and_execute_transaction(&tx_builder.transfer_sui(None, sender).build())
         .await
-        .effects
-        .unwrap();
-    let new_gas_version = effects.gas_object().reference.version;
+        .effects;
+    let new_gas_version = effects.gas_object().0.1;
     test_cluster.trigger_reconfiguration().await;
     // Construct a new transaction that uses the old gas object reference.
     let tx = test_cluster
@@ -1314,7 +1313,13 @@ async fn transfer_coin(
         )
         .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
-    Ok((object_to_send.0, sender, receiver, resp.digest, gas_object))
+    Ok((
+        object_to_send.0,
+        sender,
+        receiver,
+        resp.transaction.digest(),
+        gas_object,
+    ))
 }
 
 #[sim_test]
@@ -1430,14 +1435,9 @@ async fn publish_init_events_without_local_execution() {
         .await
         .build();
     let tx = test_cluster.sign_transaction(&tx_data).await;
-    let client = test_cluster.wallet.get_client().await.unwrap();
+    let client = test_cluster.wallet.grpc_client().unwrap();
     let response = client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            tx,
-            SuiTransactionBlockResponseOptions::new().with_events(),
-            Some(ExecuteTransactionRequestType::WaitForEffectsCert),
-        )
+        .execute_transaction_and_wait_for_checkpoint(&tx)
         .await
         .unwrap();
     assert_eq!(response.events.unwrap().data.len(), 1);

@@ -293,8 +293,8 @@ const MAX_PROTOCOL_VERSION: u64 = 110;
 // Version 109: Update where we set bounds for some binary tables to be a bit more idiomatic.
 // Version 110: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
 //              function on mainnet.
-//              New framework.
 //              split_checkpoints_in_consensus_handler in devnet
+//              Enable additional validation on zkLogin public identifier.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -531,6 +531,10 @@ struct FeatureFlags {
     // If true, multisig containing passkey sig is accepted.
     #[serde(skip_serializing_if = "is_false")]
     accept_passkey_in_multisig: bool,
+
+    // If true, additional zkLogin public identifier structure is validated.
+    #[serde(skip_serializing_if = "is_false")]
+    validate_zklogin_public_identifier: bool,
 
     // If true, consensus prologue transaction also includes the consensus output digest.
     // It can be used to detect consensus output folk.
@@ -935,6 +939,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     address_aliases: bool,
 
+    // Corrects signature-to-signer mapping in CheckpointContentsV2.
+    // TODO: remove old code and deprecate once in mainnet.
+    #[serde(skip_serializing_if = "is_false")]
+    fix_checkpoint_signature_mapping: bool,
+
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
@@ -966,6 +975,10 @@ struct FeatureFlags {
     // If true, split checkpoints in consensus handler.
     #[serde(skip_serializing_if = "is_false")]
     split_checkpoints_in_consensus_handler: bool,
+
+    // If true, always accept committed system transactions.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_always_accept_system_transactions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2049,6 +2062,10 @@ impl ProtocolConfig {
         self.feature_flags.accept_passkey_in_multisig
     }
 
+    pub fn validate_zklogin_public_identifier(&self) -> bool {
+        self.feature_flags.validate_zklogin_public_identifier
+    }
+
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta
     }
@@ -2514,6 +2531,10 @@ impl ProtocolConfig {
         address_aliases
     }
 
+    pub fn fix_checkpoint_signature_mapping(&self) -> bool {
+        self.feature_flags.fix_checkpoint_signature_mapping
+    }
+
     pub fn enable_object_funds_withdraw(&self) -> bool {
         self.feature_flags.enable_object_funds_withdraw
     }
@@ -2546,6 +2567,11 @@ impl ProtocolConfig {
 
     pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
         self.feature_flags.split_checkpoints_in_consensus_handler
+    }
+
+    pub fn consensus_always_accept_system_transactions(&self) -> bool {
+        self.feature_flags
+            .consensus_always_accept_system_transactions
     }
 }
 
@@ -4494,6 +4520,10 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
                     }
+                    cfg.feature_flags.validate_zklogin_public_identifier = true;
+                    cfg.feature_flags.fix_checkpoint_signature_mapping = true;
+                    cfg.feature_flags
+                        .consensus_always_accept_system_transactions = true;
                 }
                 // Use this template when making changes:
                 //

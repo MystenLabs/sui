@@ -24,29 +24,11 @@ const concepts = [
 	{
 		type: 'category',
 		label: 'Transactions',
-		link: {
-			type: 'doc',
-			id: 'concepts/transactions',
-		},
 		items: [
 			'concepts/transactions/transaction-lifecycle',
-			'concepts/transactions/prog-txn-blocks',
-			'concepts/transactions/sponsored-transactions',
+			'concepts/transactions/inputs-and-results',
 			'concepts/transactions/gas-smashing',
-			'concepts/transactions/coin-mgt',
-			{
-				type: 'category',
-				label: 'Transaction Authentication',
-				link: {
-					type: 'doc',
-					id: 'concepts/transactions/transaction-auth',
-				},
-				items: [
-					'concepts/transactions/transaction-auth/multisig',
-					'concepts/transactions/transaction-auth/offline-signing',
-					'concepts/transactions/transaction-auth/intent-signing',
-				],
-			},
+			'concepts/transactions/transaction-auth',
 		],
 	},
 	{
@@ -62,6 +44,8 @@ const concepts = [
 			'concepts/tokenomics/gas-in-sui',
 		],
 	},
+	'concepts/coin-mgt',
+
 	{
 		type: 'category',
 		label: 'Move',

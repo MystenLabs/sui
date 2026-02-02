@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
         // whole network.
         let mut system_state_observer = SystemStateObserver::new(
             bench_setup
-                .proxies
+                .execution_proxies
                 .choose(&mut rand::thread_rng())
                 .context("Failed to get proxy for system state observer")?
                 .clone(),
@@ -147,7 +147,8 @@ async fn main() -> Result<()> {
             let driver = BenchDriver::new(opts.stat_collection_interval, stress_stat_collection);
             driver
                 .run(
-                    bench_setup.proxies,
+                    bench_setup.execution_proxies,
+                    bench_setup.fullnode_proxies,
                     workloads,
                     system_state_observer,
                     &registry_clone,

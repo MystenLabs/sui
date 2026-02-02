@@ -20,14 +20,99 @@ def reset_stdout_blocking():
     fcntl.fcntl(fd, fcntl.F_SETFL, flags & ~os.O_NONBLOCK)
 
 print_lock = threading.Lock()
+is_tty = sys.stdout.isatty()
+
+class Colors:
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    DIM = "\033[2m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+
+class ProgressTracker:
+    def __init__(self, total):
+        self.total = total
+        self.running = 0
+        self.passed = 0
+        self.failed = 0
+        self.failed_seeds = []
+        self.lock = threading.Lock()
+
+    @property
+    def remaining(self):
+        return self.total - self.passed - self.failed
+
+    def start_seed(self):
+        with self.lock:
+            self.running += 1
+
+    def finish_seed(self, success, seed=None):
+        with self.lock:
+            self.running -= 1
+            if success:
+                self.passed += 1
+            else:
+                self.failed += 1
+                if seed:
+                    self.failed_seeds.append(seed)
+
+    def format_header(self):
+        c = Colors
+        return (
+            f"{c.CYAN}Running{c.RESET}  "
+            f"{c.GREEN}Passed{c.RESET}  "
+            f"{c.RED}Failed{c.RESET}  "
+            f"{c.DIM}Remaining{c.RESET}"
+        )
+
+    def format_progress(self):
+        c = Colors
+        with self.lock:
+            return (
+                f"{c.CYAN}{c.BOLD}{self.running:>7}{c.RESET}  "
+                f"{c.GREEN}{c.BOLD}{self.passed:>6}{c.RESET}  "
+                f"{c.RED}{c.BOLD}{self.failed:>6}{c.RESET}  "
+                f"{c.DIM}{self.remaining:>9}{c.RESET}"
+            )
+
+progress_tracker = None
+
+def redraw_progress_display():
+    """Redraw both the header and progress lines."""
+    sys.stdout.write(progress_tracker.format_header() + "\n")
+    sys.stdout.write(progress_tracker.format_progress())
+    sys.stdout.flush()
+
 def safe_print(*args, **kwargs):
     with print_lock:
         try:
+            if is_tty and progress_tracker:
+                # Clear both progress and header lines (move up, clear, move up, clear)
+                sys.stdout.write("\033[2K\033[A\033[2K\r")
             print(*args, **kwargs)
+            sys.stdout.flush()
+            if is_tty and progress_tracker:
+                redraw_progress_display()
+        except BlockingIOError:
+            reset_stdout_blocking()
+            if is_tty and progress_tracker:
+                sys.stdout.write("\033[2K\033[A\033[2K\r")
+            print(*args, **kwargs)
+            sys.stdout.flush()
+            if is_tty and progress_tracker:
+                redraw_progress_display()
+
+def update_progress():
+    if not is_tty or not progress_tracker:
+        return
+    with print_lock:
+        try:
+            sys.stdout.write("\033[2K\r" + progress_tracker.format_progress())
             sys.stdout.flush()
         except BlockingIOError:
             reset_stdout_blocking()
-            print(*args, **kwargs)
+            sys.stdout.write("\033[2K\r" + progress_tracker.format_progress())
             sys.stdout.flush()
 
 def collect_satisfied_assertions(log_dir):
@@ -133,22 +218,31 @@ def run_command(command, env_vars):
         env = os.environ.copy()
         env.update(env_vars)
 
-        safe_print("running seed: " + env_vars["MSIM_TEST_SEED"])
+        seed = env_vars["MSIM_TEST_SEED"]
+        if not is_tty:
+            safe_print(f"running seed: {seed}")
+        progress_tracker.start_seed()
+        update_progress()
         process = subprocess.Popen(command, shell=True, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=os.setsid)
         stdout, stderr = process.communicate()
         exit_code = process.returncode
+        success = exit_code == 0
+        progress_tracker.finish_seed(success, seed)
         if exit_code != 0:
-            safe_print(f"Command '{command}' failed with exit code {exit_code} for seed: " + env_vars["MSIM_TEST_SEED"])
+            safe_print(f"Command '{command}' failed with exit code {exit_code} for seed: {seed}")
             if not args.no_capture:
                 safe_print(f"Run the script with --no-capture to see more details including error logs from simtest framework.")
             safe_print(f"stdout:\n=========================={stdout.decode('utf-8')}\n==========================")
             if stderr:
                 safe_print(f"stderr:\n=========================={stderr.decode('utf-8')}\n==========================")
         else:
-          safe_print("-- seed passed %s" % env_vars["MSIM_TEST_SEED"])
+            if not is_tty:
+                safe_print(f"-- seed passed {seed}")
+            update_progress()
 
         return exit_code
     except subprocess.CalledProcessError as e:
+        progress_tracker.finish_seed(False, env_vars["MSIM_TEST_SEED"])
         safe_print(f"Command '{e.cmd}' failed with exit code {e.returncode} for seed: " + env_vars["MSIM_TEST_SEED"])
         return e.returncode
 
@@ -193,6 +287,22 @@ if __name__ == "__main__":
         safe_print(f"run: `$ ls -ltr target/simulator/deps/ | tail` to find recent test binaries");
         sys.exit(1)
 
+    # Verify that the test filter matches at least one test
+    list_cmd = [binary, "--list", args.testname]
+    if args.exact:
+        list_cmd.insert(2, "--exact")
+    try:
+        result = subprocess.run(list_cmd, capture_output=True, text=True)
+        # --list output shows tests as "test_name: test" lines
+        test_lines = [line for line in result.stdout.strip().split('\n') if line.endswith(': test')]
+        if not test_lines:
+            safe_print(f"Error: No tests match filter '{args.testname}'")
+            safe_print(f"Run: `{binary} --list` to see available tests")
+            sys.exit(1)
+        safe_print(f"Found {len(test_lines)} test(s) matching filter")
+    except Exception as e:
+        safe_print(f"Warning: Could not verify test filter: {e}")
+
     # Create temp directory for reachable assertion logs
     reach_log_dir = None
     if not args.no_reachability:
@@ -201,11 +311,17 @@ if __name__ == "__main__":
 
     commands = []
 
+    if args.no_capture:
+      rust_log = "error"
+    else:
+      rust_log = "off"
+
     for i in range(1, args.num_seeds + 1):
         next_seed = args.seed_start + i
         env_vars = {
           "MSIM_TEST_SEED": "%d" % next_seed,
-          "RUST_LOG": "error",
+          "RUST_LOG": rust_log,
+          "MSIM_WATCHDOG_TIMEOUT_MS": "120000",
         }
         if reach_log_dir:
             env_vars["MSIM_LOG_REACHABLE_ASSERTIONS"] = reach_log_dir
@@ -214,16 +330,37 @@ if __name__ == "__main__":
     # register clean up code to kill all child processes on Ctrl+C
     import signal
     def kill_child_processes(*args):
-        safe_print("Killing child processes")
+        if is_tty and progress_tracker:
+            sys.stdout.write("\033[2K\033[A\033[2K\r")
+            sys.stdout.flush()
+        print("Killing child processes")
         os.killpg(0, signal.SIGKILL)
         sys.exit(0)
     signal.signal(signal.SIGINT, kill_child_processes)
 
+    # Initialize progress tracker
+    progress_tracker = ProgressTracker(args.num_seeds)
+
+    if is_tty:
+        print(progress_tracker.format_header())
+
     try:
         all_passed = main(commands)
 
+        # Clear progress display before final output
+        if is_tty:
+            sys.stdout.write("\033[2K\033[A\033[2K\r")
+            sys.stdout.flush()
+
         # Reset stdout to blocking mode (child processes may have changed it)
         reset_stdout_blocking()
+
+        # Print final summary
+        c = Colors
+        print(f"{c.GREEN}{c.BOLD}{progress_tracker.passed} passed{c.RESET}  "
+              f"{c.RED}{c.BOLD}{progress_tracker.failed} failed{c.RESET}")
+        if progress_tracker.failed_seeds:
+            print(f"{c.RED}Failed seeds:{c.RESET} {', '.join(progress_tracker.failed_seeds)}")
 
         # Collect and report reachability results
         if reach_log_dir:
@@ -231,7 +368,7 @@ if __name__ == "__main__":
             print_reachability_summary(binary, reached, sometimes)
 
         if all_passed:
-            safe_print("\033[92mAll tests passed successfully!\033[0m")
+            print("\033[92mAll tests passed successfully!\033[0m")
 
         # Ensure all output is flushed before exit
         sys.stdout.flush()

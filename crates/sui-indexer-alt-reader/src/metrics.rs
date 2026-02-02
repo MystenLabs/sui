@@ -44,6 +44,14 @@ pub(crate) struct FullnodeClientMetrics {
     pub requests_failed: IntCounterVec,
 }
 
+#[derive(Clone)]
+pub(crate) struct LedgerGrpcReaderMetrics {
+    pub latency: HistogramVec,
+    pub requests_received: IntCounterVec,
+    pub requests_succeeded: IntCounterVec,
+    pub requests_failed: IntCounterVec,
+}
+
 impl DbReaderMetrics {
     pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
         let prefix = prefix.unwrap_or("db");
@@ -158,6 +166,48 @@ impl FullnodeClientMetrics {
             requests_failed: register_int_counter_vec_with_registry!(
                 name("requests_failed"),
                 "Number of failed full node requests",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+        })
+    }
+}
+
+impl LedgerGrpcReaderMetrics {
+    pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
+        let prefix = prefix.unwrap_or("ledger_grpc");
+        let name = |n| format!("{prefix}_{n}");
+
+        Arc::new(Self {
+            latency: register_histogram_vec_with_registry!(
+                name("latency"),
+                "Time taken for ledger service gRPC operations",
+                &["method"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            requests_received: register_int_counter_vec_with_registry!(
+                name("requests_received"),
+                "Number of ledger service requests sent",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_succeeded: register_int_counter_vec_with_registry!(
+                name("requests_succeeded"),
+                "Number of successful ledger service requests",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_failed: register_int_counter_vec_with_registry!(
+                name("requests_failed"),
+                "Number of failed ledger service requests",
                 &["method"],
                 registry,
             )

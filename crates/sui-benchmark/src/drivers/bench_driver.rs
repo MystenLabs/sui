@@ -64,6 +64,7 @@ use super::{BenchmarkStats, StressStats};
 fn partition_into_random_bundles<T>(
     items: Vec<T>,
     max_bundles: NonZeroUsize,
+    max_bundle_size: usize,
 ) -> Vec<(usize, Vec<T>)> {
     if items.is_empty() {
         return vec![];
@@ -79,10 +80,15 @@ fn partition_into_random_bundles<T>(
         let bundle_size = if remaining == 1 {
             1
         } else if remaining_bundles == 1 {
+            assert!(
+                remaining <= max_bundle_size,
+                "Remaining items is greater than max bundle size"
+            );
             remaining
         } else {
             rng.gen_range(1..=remaining)
         };
+        let bundle_size = std::cmp::min(bundle_size, max_bundle_size);
         remaining_bundles -= 1;
 
         let mut bundle = Vec::with_capacity(bundle_size);
@@ -262,7 +268,7 @@ pub struct BenchWorker {
     pub id: u64,
     pub target_qps: u64,
     pub payload: Vec<Box<dyn Payload>>,
-    pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
+    pub execution_proxy: Arc<dyn ValidatorProxy + Send + Sync>,
     pub group: u32,
     pub duration: Interval,
 }
@@ -327,7 +333,8 @@ impl BenchDriver {
         &self,
         id: &mut u64,
         workload_info: &WorkloadInfo,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<BenchWorker> {
         let mut workers = vec![];
@@ -337,7 +344,11 @@ impl BenchDriver {
         }
         let mut payloads = workload_info
             .workload
-            .make_test_payloads(proxy.clone(), system_state_observer.clone())
+            .make_test_payloads(
+                execution_proxy.clone(),
+                fullnode_proxies,
+                system_state_observer.clone(),
+            )
             .await;
         let mut total_workers = workload_info.workload_params.num_workers;
         while total_workers > 0 {
@@ -349,7 +360,7 @@ impl BenchDriver {
                     id: *id,
                     target_qps,
                     payload: payloads,
-                    proxy: proxy.clone(),
+                    execution_proxy: execution_proxy.clone(),
                     group: workload_info.workload_params.group,
                     duration: workload_info.workload_params.duration,
                 });
@@ -378,7 +389,8 @@ async fn ctrl_c() -> std::io::Result<()> {
 impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     async fn run(
         &self,
-        proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
+        execution_proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
+        fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
         workloads_by_group_id: BTreeMap<GroupID, Vec<WorkloadInfo>>,
         system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
@@ -402,14 +414,15 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             let mut workers = vec![];
 
             for workload in workloads {
-                let proxy = proxies
+                let execution_proxy = execution_proxies
                     .choose(&mut rand::thread_rng())
-                    .context("Failed to get proxy for bench driver")?;
+                    .context("Failed to get execution proxy for bench driver")?;
                 workers.extend(
                     self.make_workers(
                         &mut worker_id,
                         workload,
-                        proxy.clone(),
+                        execution_proxy.clone(),
+                        fullnode_proxies.clone(),
                         system_state_observer.clone(),
                     )
                     .await,
@@ -1018,10 +1031,10 @@ async fn run_bench_worker(
                     num_submitted += 1;
                     let metrics = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
-                    let committee = worker.proxy.clone_committee();
+                    let committee = worker.execution_proxy.clone_committee();
                     let start = Arc::new(Instant::now());
                     let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
-                    let res = worker.proxy
+                    let res = worker.execution_proxy
                         .execute_transaction_block(tx.clone())
                         .then(|(client_type, res)| async move  {
                             metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
@@ -1041,16 +1054,17 @@ async fn run_bench_worker(
 
                     // Check if this is a batched payload
                     if payload.is_batched() {
-                        let txs = payload.make_transaction_batch();
+                        let txs = payload.make_transaction_batch().await;
                         let max_bundles = payload.max_soft_bundles();
 
                         let num_txs = txs.len();
                         let start = Arc::new(Instant::now());
                         let metrics_clone = Arc::clone(&metrics);
-                        let proxy = worker.proxy.clone_new();
+                        let proxy = worker.execution_proxy.clone_new();
 
+                        let max_bundle_size = payload.max_soft_bundle_size().get();
                         // Partition transactions into random bundles
-                        let bundles = partition_into_random_bundles(txs, max_bundles);
+                        let bundles = partition_into_random_bundles(txs, max_bundles, max_bundle_size);
                         let num_bundles = bundles.len();
                         debug!(
                             "Partitioned {} transactions into {} bundles (max_bundles={})",
@@ -1114,8 +1128,8 @@ async fn run_bench_worker(
                         let metrics = Arc::clone(&metrics);
                         let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
                         // TODO: clone committee for each request is not ideal.
-                        let committee = worker.proxy.clone_committee();
-                        let res = worker.proxy
+                        let committee = worker.execution_proxy.clone_committee();
+                        let res = worker.execution_proxy
                             .execute_transaction_block(tx.clone())
                         .then(|(client_type, res)| async move {
                             metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
@@ -1241,7 +1255,6 @@ fn process_bundle_results(
 ) -> NextOp {
     // Reassemble results in original transaction order
     let mut indexed_results: Vec<(usize, BatchedTransactionResult)> = Vec::with_capacity(num_txs);
-    let mut had_bundle_error = false;
 
     for (start_idx, digests, result) in bundle_results {
         match result {
@@ -1289,17 +1302,21 @@ fn process_bundle_results(
                                 }
                             }
                             WaitForEffectsResponse::Rejected { error } => {
-                                let is_retriable = error
-                                    .as_ref()
-                                    .map(|e| e.individual_error_indicates_epoch_change())
-                                    .unwrap_or(true);
-                                let error_str = error
-                                    .map(|e| format!("{:?}", e))
-                                    .unwrap_or_else(|| "Unknown rejection".to_string());
-                                if is_retriable {
-                                    BatchedTransactionStatus::RetriableFailure { error: error_str }
+                                if let Some(error) = error {
+                                    let is_retriable =
+                                        error.individual_error_indicates_epoch_change();
+                                    let error_str = format!("{:?}", error);
+                                    if is_retriable {
+                                        BatchedTransactionStatus::RetriableFailure {
+                                            error: error_str,
+                                        }
+                                    } else {
+                                        BatchedTransactionStatus::PermanentFailure {
+                                            error: error_str,
+                                        }
+                                    }
                                 } else {
-                                    BatchedTransactionStatus::PermanentFailure { error: error_str }
+                                    BatchedTransactionStatus::UnknownRejection
                                 }
                             }
                             WaitForEffectsResponse::Expired { epoch, round } => {
@@ -1320,7 +1337,6 @@ fn process_bundle_results(
                     "Soft bundle execution failed for bundle starting at {}: {:?}",
                     start_idx, err
                 );
-                had_bundle_error = true;
                 // Mark all transactions in this bundle as permanent failures
                 for (offset, digest) in digests.into_iter().enumerate() {
                     indexed_results.push((
@@ -1335,17 +1351,6 @@ fn process_bundle_results(
                 }
             }
         }
-    }
-
-    // If any bundle submission failed completely, return Failure without
-    // calling the handler (matching original behavior where submission
-    // errors don't trigger payload result handling)
-    if had_bundle_error {
-        metrics
-            .num_error
-            .with_label_values(&[&payload.to_string(), "soft_bundle_error", "soft_bundle"])
-            .inc();
-        return NextOp::Failure;
     }
 
     // Sort by original index and extract results
@@ -1381,7 +1386,9 @@ fn process_bundle_results(
             payload,
         }
     } else {
-        // All transactions failed with non-retriable errors
+        // All transactions failed with non-retriable errors.
+        // Return the payload anyway since the gas coins weren't spent
+        // (bundle submission failed or transactions were rejected before execution).
         metrics
             .num_error
             .with_label_values(&[
@@ -1390,7 +1397,12 @@ fn process_bundle_results(
                 "soft_bundle",
             ])
             .inc();
-        NextOp::Failure
+        NextOp::Response {
+            latency,
+            num_commands: 0,
+            gas_used: 0,
+            payload,
+        }
     }
 }
 

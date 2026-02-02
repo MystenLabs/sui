@@ -18,6 +18,7 @@ use tracing::warn;
 
 use crate::db::Db;
 use crate::db::config::DbConfig;
+use crate::handlers::address_balances::AddressBalances;
 use crate::handlers::balances::Balances;
 use crate::handlers::object_by_owner::ObjectByOwner;
 use crate::handlers::object_by_type::ObjectByType;
@@ -253,6 +254,7 @@ pub async fn start_restorer(
     add_restorer!(Balances);
     add_restorer!(ObjectByOwner);
     add_restorer!(ObjectByType);
+    add_restorer!(AddressBalances);
 
     ensure!(
         pipelines.is_empty(),

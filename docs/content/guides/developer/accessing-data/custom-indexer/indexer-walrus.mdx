@@ -40,7 +40,7 @@ When a user views a post, the service retrieves the relevant blog post `Metadata
 
 ## Data modeling
 
-One option for data modeling is to use a single table that maps publisher addresses to `Metadata` dynamic fields. With this approach, the table is keyed on `dynamic_field_id` because it both identifies your dApp data and uniquely represents the content of each uploaded blob. 
+One option for data modeling is to use a single table that maps publisher addresses to `Metadata` dynamic fields. With this approach, the table is keyed on `dynamic_field_id` because it both identifies your app data and uniquely represents the content of each uploaded blob. 
 
 For example, the `up.sql` file to create this table might looks like the following:
 

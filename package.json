@@ -57,11 +57,13 @@
 		"eslint-plugin-tsdoc": "^0.2.17",
 		"eslint-plugin-unused-imports": "^3.2.0",
 		"graphql-config": "^5.1.5",
+		"js-yaml": "^4.1.1",
 		"prettier": "^3.3.2",
 		"prettier-plugin-tailwindcss": "^0.6.11",
 		"tsx": "^4.19.4",
 		"turbo": "^2.5.3",
-		"typescript": "^5.5.3"
+		"typescript": "^5.5.3",
+		"unist-util-visit": "^5.1.0"
 	},
 	"packageManager": "pnpm@9.1.1+sha512.14e915759c11f77eac07faba4d019c193ec8637229e62ec99eefb7cf3c3b75c64447882b7c485142451ee3a6b408059cdfb7b7fa0341b975f12d0f7629c71195"
 }

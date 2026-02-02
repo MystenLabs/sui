@@ -1,0 +1,11 @@
+[package]
+name = "ModuleExt"
+edition = "2024.alpha"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+ModIdentUniform = { local = "../mod-ident-uniform/" }
+
+[addresses]
+ParseError = "0xCAFE"
+ModuleExt = "0x0"

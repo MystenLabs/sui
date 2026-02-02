@@ -2314,8 +2314,11 @@ impl GlobalValueImpl {
                 | Value::PrimVec(_)
                 | Value::Variant(_)
                 | Value::Reference(_)) => {
-                    return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                        .with_message(format!("global value is not a struct: {:#?}", other)));
+                    return Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "global value is not a struct: {:#?}",
+                        other
+                    ));
                 }
             },
         })
@@ -3143,53 +3146,45 @@ impl Value {
 impl PrimVec {
     /// Visit the indexed element, using the provided visitor and depth (or 0 is no depth is
     /// provided).
-    fn visit_indexed(&self, ndx: usize, visitor: &mut impl ValueVisitor, depth: usize) {
+    fn visit_indexed(
+        &self,
+        ndx: usize,
+        visitor: &mut impl ValueVisitor,
+        depth: usize,
+    ) -> PartialVMResult<()> {
         match self {
             PrimVec::VecU8(xs) => visitor.visit_u8(depth, xs[ndx]),
-            PrimVec::VecU16(xs) => {
-                visitor.visit_u16(depth, xs[ndx]);
-            }
-            PrimVec::VecU32(xs) => {
-                visitor.visit_u32(depth, xs[ndx]);
-            }
-            PrimVec::VecU64(xs) => {
-                visitor.visit_u64(depth, xs[ndx]);
-            }
-            PrimVec::VecU128(xs) => {
-                visitor.visit_u128(depth, xs[ndx]);
-            }
-            PrimVec::VecU256(xs) => {
-                visitor.visit_u256(depth, xs[ndx]);
-            }
-            PrimVec::VecBool(xs) => {
-                visitor.visit_bool(depth, xs[ndx]);
-            }
-            PrimVec::VecAddress(xs) => {
-                visitor.visit_address(depth, xs[ndx]);
-            }
+            PrimVec::VecU16(xs) => visitor.visit_u16(depth, xs[ndx]),
+            PrimVec::VecU32(xs) => visitor.visit_u32(depth, xs[ndx]),
+            PrimVec::VecU64(xs) => visitor.visit_u64(depth, xs[ndx]),
+            PrimVec::VecU128(xs) => visitor.visit_u128(depth, xs[ndx]),
+            PrimVec::VecU256(xs) => visitor.visit_u256(depth, xs[ndx]),
+            PrimVec::VecBool(xs) => visitor.visit_bool(depth, xs[ndx]),
+            PrimVec::VecAddress(xs) => visitor.visit_address(depth, xs[ndx]),
         }
     }
 }
 
 impl Reference {
-    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) {
-        if visitor.visit_ref(depth) {
+    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) -> PartialVMResult<()> {
+        if visitor.visit_ref(depth)? {
             match self {
-                Reference::Value(mem_box) => mem_box.borrow().visit_impl(visitor, depth),
+                Reference::Value(mem_box) => mem_box.borrow().visit_impl(visitor, depth)?,
                 Reference::Indexed(entry) => {
                     let (vec, ndx) = entry.as_ref();
                     vec.borrow()
                         .prim_vec_ref()
                         .unwrap_or_else(|_| panic!("Indexed ref that is not a prim vec: {:?}", vec))
-                        .visit_indexed(*ndx, visitor, depth + 1);
+                        .visit_indexed(*ndx, visitor, depth + 1)?
                 }
             }
         }
+        Ok(())
     }
 }
 
 impl Value {
-    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) {
+    fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) -> PartialVMResult<()> {
         match self {
             Value::Invalid => unreachable!("Should not be able to visit an invalid value"),
             Value::U8(val) => visitor.visit_u8(depth, *val),
@@ -3202,11 +3197,12 @@ impl Value {
             Value::Address(val) => visitor.visit_address(depth, **val),
             Value::Reference(r) => r.visit_impl(visitor, depth),
             Value::Vec(items) => {
-                if visitor.visit_vec(depth, items.len()) {
+                if visitor.visit_vec(depth, items.len())? {
                     for item in items {
-                        item.borrow().visit_impl(visitor, depth + 1);
+                        item.borrow().visit_impl(visitor, depth + 1)?;
                     }
                 }
+                Ok(())
             }
             Value::PrimVec(prim_vec) => match prim_vec {
                 PrimVec::VecU8(r) => visitor.visit_vec_u8(depth, r),
@@ -3219,54 +3215,57 @@ impl Value {
                 PrimVec::VecAddress(r) => visitor.visit_vec_address(depth, r),
             },
             Value::Struct(struct_) => {
-                if visitor.visit_struct(depth, struct_.len()) {
+                if visitor.visit_struct(depth, struct_.len())? {
                     for item in struct_.iter() {
-                        item.borrow().visit_impl(visitor, depth + 1);
+                        item.borrow().visit_impl(visitor, depth + 1)?;
                     }
                 }
+                Ok(())
             }
             Value::Variant(entry) => {
                 let (_tag, fields) = entry.as_ref();
-                if visitor.visit_struct(depth, fields.len()) {
+                if visitor.visit_struct(depth, fields.len())? {
                     for item in fields.iter() {
-                        item.borrow().visit_impl(visitor, depth + 1);
+                        item.borrow().visit_impl(visitor, depth + 1)?;
                     }
                 }
+                Ok(())
             }
         }
     }
 }
 
 impl ValueView for Value {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.visit_impl(visitor, 0)
     }
 }
 
 impl ValueView for MemBox<Value> {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.0.borrow().visit_impl(visitor, 0)
     }
 }
 
 impl ValueView for Struct {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
-        if visitor.visit_struct(0, self.0.len()) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
+        if visitor.visit_struct(0, self.0.len())? {
             for val in self.0.iter() {
-                val.borrow().visit_impl(visitor, 1);
+                val.borrow().visit_impl(visitor, 1)?;
             }
         }
+        Ok(())
     }
 }
 
 impl ValueView for Vector {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.0.visit_impl(visitor, 0)
     }
 }
 
 impl ValueView for IntegerValue {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         use IntegerValue::*;
 
         match self {
@@ -3281,7 +3280,7 @@ impl ValueView for IntegerValue {
 }
 
 impl ValueView for Reference {
-    fn visit(&self, visitor: &mut impl ValueVisitor) {
+    fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         self.visit_impl(visitor, 0)
     }
 }
@@ -3290,7 +3289,7 @@ macro_rules! impl_container_ref_views {
     ($($type_name:ty),+) => {
         $(
             impl ValueView for $type_name {
-                fn visit(&self, visitor: &mut impl ValueVisitor) {
+                fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                     self.0.borrow().visit_impl(visitor, 0)
                 }
             }
@@ -3330,14 +3329,10 @@ impl Vector {
         }
 
         impl ValueView for ElemView<'_> {
-            fn visit(&self, visitor: &mut impl ValueVisitor) {
+            fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 match &self.container {
-                    Value::Vec(v) => {
-                        v[self.ndx].borrow().visit(visitor);
-                    }
-                    Value::PrimVec(v) => {
-                        v.visit_indexed(self.ndx, visitor, 0);
-                    }
+                    Value::Vec(v) => v[self.ndx].borrow().visit(visitor),
+                    Value::PrimVec(v) => v.visit_indexed(self.ndx, visitor, 0),
                     _ => unreachable!(),
                 }
             }
@@ -3362,7 +3357,7 @@ impl Reference {
 
         /// Returns a `value` behind a reference; visiting it visits the underlying vaouel.
         impl<'b> ValueView for ValueBehindRef<'b> {
-            fn visit(&self, visitor: &mut impl ValueVisitor) {
+            fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 match self.0 {
                     Reference::Value(mem_box) => mem_box.borrow().visit_impl(visitor, 0),
                     Reference::Indexed(entry) => {
@@ -3370,7 +3365,7 @@ impl Reference {
                         let Value::PrimVec(prim_vec) = &*vec.borrow() else {
                             panic!("Expected prim vec for indexed reference, got {:?}", vec);
                         };
-                        prim_vec.visit_indexed(*ndx, visitor, 0);
+                        prim_vec.visit_indexed(*ndx, visitor, 0)
                     }
                 }
             }
@@ -3388,15 +3383,16 @@ impl GlobalValue {
         struct Wrapper<'b>(&'b MemBox<Value>);
 
         impl<'b> ValueView for Wrapper<'b> {
-            fn visit(&self, visitor: &mut impl ValueVisitor) {
+            fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 let Value::Struct(struct_) = &*self.0.borrow() else {
                     unreachable!()
                 };
-                if visitor.visit_struct(0, struct_.len()) {
+                if visitor.visit_struct(0, struct_.len())? {
                     for val in struct_.iter() {
-                        val.borrow().visit_impl(visitor, 1);
+                        val.borrow().visit_impl(visitor, 1)?;
                     }
                 }
+                Ok(())
             }
         }
 

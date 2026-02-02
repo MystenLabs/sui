@@ -1,0 +1,149 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== M1.move ========================================================
+-- test 0 -------------------
+use line: 5, use_ndx: 1
+Use: 'bar', start: 23, end: 26
+Def: 'bar', line: 11, def char: 15
+TypeDef: no info
+On Hover:
+public fun ModuleExt::M2::bar(): u64
+
+-- test 1 -------------------
+use line: 6, use_ndx: 1
+ERROR: No use_line 6 in mod_symbols UseDefMap(
+    {
+        0: {
+            UseDef {
+                col_start: 18,
+                col_end: 20,
+                def_loc: Loc {
+                    file_hash: "08aa457b92acf8f968cfb3acea2e3c75a2d69c5e32dba19a2a2015dacddfc5f1",
+                    start: 7,
+                    end: 20,
+                },
+                type_def_loc: None,
+            },
+        },
+        3: {
+            UseDef {
+                col_start: 8,
+                col_end: 12,
+                def_loc: Loc {
+                    file_hash: "08aa457b92acf8f968cfb3acea2e3c75a2d69c5e32dba19a2a2015dacddfc5f1",
+                    start: 44,
+                    end: 48,
+                },
+                type_def_loc: None,
+            },
+        },
+        4: {
+            UseDef {
+                col_start: 19,
+                col_end: 21,
+                def_loc: Loc {
+                    file_hash: "ba589af83dd8a9f0fe078b09dd620741847edc5913b1089e1bb5587bbc746e49",
+                    start: 7,
+                    end: 20,
+                },
+                type_def_loc: None,
+            },
+            UseDef {
+                col_start: 23,
+                col_end: 26,
+                def_loc: Loc {
+                    file_hash: "08aa457b92acf8f968cfb3acea2e3c75a2d69c5e32dba19a2a2015dacddfc5f1",
+                    start: 178,
+                    end: 181,
+                },
+                type_def_loc: None,
+            },
+        },
+        11: {
+            UseDef {
+                col_start: 15,
+                col_end: 18,
+                def_loc: Loc {
+                    file_hash: "08aa457b92acf8f968cfb3acea2e3c75a2d69c5e32dba19a2a2015dacddfc5f1",
+                    start: 178,
+                    end: 181,
+                },
+                type_def_loc: None,
+            },
+        },
+    },
+) for file M1.move
+
+-- test 2 -------------------
+use line: 12, use_ndx: 0
+Use: 'bar', start: 15, end: 18
+Def: 'bar', line: 11, def char: 15
+TypeDef: no info
+On Hover:
+public fun ModuleExt::M2::bar(): u64
+
+-- test 3 -------------------
+use line: 17, use_ndx: 0
+ERROR: No use_line 17 in mod_symbols UseDefMap(
+    {
+        0: {
+            UseDef {
+                col_start: 18,
+                col_end: 20,
+                def_loc: Loc {
+                    file_hash: "08aa457b92acf8f968cfb3acea2e3c75a2d69c5e32dba19a2a2015dacddfc5f1",
+                    start: 7,
+                    end: 20,
+                },
+                type_def_loc: None,
+            },
+        },
+        3: {
+            UseDef {
+                col_start: 8,
+                col_end: 12,
+                def_loc: Loc {
+                    file_hash: "08aa457b92acf8f968cfb3acea2e3c75a2d69c5e32dba19a2a2015dacddfc5f1",
+                    start: 44,
+                    end: 48,
+                },
+                type_def_loc: None,
+            },
+        },
+        4: {
+            UseDef {
+                col_start: 19,
+                col_end: 21,
+                def_loc: Loc {
+                    file_hash: "ba589af83dd8a9f0fe078b09dd620741847edc5913b1089e1bb5587bbc746e49",
+                    start: 7,
+                    end: 20,
+                },
+                type_def_loc: None,
+            },
+            UseDef {
+                col_start: 23,
+                col_end: 26,
+                def_loc: Loc {
+                    file_hash: "08aa457b92acf8f968cfb3acea2e3c75a2d69c5e32dba19a2a2015dacddfc5f1",
+                    start: 178,
+                    end: 181,
+                },
+                type_def_loc: None,
+            },
+        },
+        11: {
+            UseDef {
+                col_start: 15,
+                col_end: 18,
+                def_loc: Loc {
+                    file_hash: "08aa457b92acf8f968cfb3acea2e3c75a2d69c5e32dba19a2a2015dacddfc5f1",
+                    start: 178,
+                    end: 181,
+                },
+                type_def_loc: None,
+            },
+        },
+    },
+) for file M1.move

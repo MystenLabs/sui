@@ -33,7 +33,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{BlockStream, ExtendedSerializedBlock, NetworkService},
-    round_tracker::PeerRoundTracker,
+    round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
     synchronizer::SynchronizerHandle,
@@ -54,7 +54,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     transaction_certifier: TransactionCertifier,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
-    round_tracker: Arc<RwLock<PeerRoundTracker>>,
+    round_tracker: Arc<RwLock<RoundTracker>>,
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -62,7 +62,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         context: Arc<Context>,
         block_verifier: Arc<dyn BlockVerifier>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
-        round_tracker: Arc<RwLock<PeerRoundTracker>>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
@@ -179,7 +179,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             return Err(e);
         }
 
-        // Reject blocks failing validations.
+        // Reject blocks failing parsing and validations.
         let (verified_block, reject_txn_votes) = self
             .block_verifier
             .verify_and_vote(signed_block, serialized_block.block)
@@ -192,8 +192,27 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     .inc();
                 info!("Invalid block from {}: {}", peer, e);
             })?;
+        let excluded_ancestors = self
+            .parse_excluded_ancestors(peer, &verified_block, serialized_block.excluded_ancestors)
+            .tap_err(|e| {
+                debug!("Failed to parse excluded ancestors from {peer} {peer_hostname}: {e}");
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
+                    .inc();
+            })?;
+
         let block_ref = verified_block.reference();
         debug!("Received block {} via send block.", block_ref);
+
+        self.context
+            .metrics
+            .node_metrics
+            .verified_blocks
+            .with_label_values(&[peer_hostname])
+            .inc();
 
         let now = self.context.clock.timestamp_utc_ms();
         let forward_time_drift =
@@ -209,6 +228,14 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         // Observe the block for the commit votes. When local commit is lagging too much,
         // commit sync loop will trigger fetching.
         self.commit_vote_monitor.observe_block(&verified_block);
+
+        // Update own received rounds and peer accepted rounds from this verified block.
+        self.round_tracker
+            .write()
+            .update_from_verified_block(&ExtendedBlock {
+                block: verified_block.clone(),
+                excluded_ancestors: excluded_ancestors.clone(),
+            });
 
         // Reject blocks when local commit index is lagging too far from quorum commit index,
         // to avoid the memory overhead from suspended blocks.
@@ -245,20 +272,14 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             });
         }
 
-        self.context
-            .metrics
-            .node_metrics
-            .verified_blocks
-            .with_label_values(&[peer_hostname])
-            .inc();
-
-        // The block is verified and current, so it can be processed in the fastpath.
+        // The block is verified and current, so record own votes on the block
+        // before sending the block to Core.
         if self.context.protocol_config.mysticeti_fastpath() {
             self.transaction_certifier
                 .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
         }
 
-        // Try to accept the block into the DAG.
+        // Send the block to Core to try accepting it into the DAG.
         let missing_ancestors = self
             .core_dispatcher
             .add_blocks(vec![verified_block.clone()])
@@ -285,34 +306,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             });
         }
 
-        // ------------ After processing the block, process the excluded ancestors ------------
-
-        let excluded_ancestors = self
-            .parse_excluded_ancestors(peer, &verified_block, serialized_block.excluded_ancestors)
-            .tap_err(|e| {
-                debug!("Failed to parse excluded ancestors from {peer} {peer_hostname}: {e}");
-                self.context
-                    .metrics
-                    .node_metrics
-                    .invalid_blocks
-                    .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
-                    .inc();
-            })?;
-
-        self.round_tracker
-            .write()
-            .update_from_verified_block(&ExtendedBlock {
-                block: verified_block,
-                excluded_ancestors: excluded_ancestors.clone(),
-            });
-
+        // Schedule fetching missing soft links from this peer in the background.
         let missing_excluded_ancestors = self
             .core_dispatcher
             .check_block_refs(excluded_ancestors)
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
-
-        // Schedule fetching missing soft links from this peer in the background.
         if !missing_excluded_ancestors.is_empty() {
             self.context
                 .metrics
@@ -342,19 +341,36 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     ) -> ConsensusResult<BlockStream> {
         fail_point_async!("consensus-rpc-response");
 
-        let dag_state = self.dag_state.read();
-        // Find recent own blocks that have not been received by the peer.
-        // If last_received is a valid and more blocks have been proposed since then, this call is
-        // guaranteed to return at least some recent blocks, which will help with liveness.
-        let missed_blocks = stream::iter(
-            dag_state
-                .get_cached_blocks(self.context.own_index, last_received + 1)
-                .into_iter()
-                .map(|block| ExtendedSerializedBlock {
-                    block: block.serialized().clone(),
-                    excluded_ancestors: vec![],
-                }),
-        );
+        // Find past proposed blocks as the initial blocks to send to the peer.
+        //
+        // If there are cached blocks in the range which the peer requested, send all of them.
+        // The size is bounded by the local GC round and DagState cache size.
+        //
+        // Otherwise if there is no cached block in the range which the peer requested,
+        // and this node has proposed blocks before, at least one block should be sent to the peer
+        // to help with liveness.
+        let past_proposed_blocks = {
+            let dag_state = self.dag_state.read();
+
+            let mut proposed_blocks =
+                dag_state.get_cached_blocks(self.context.own_index, last_received + 1);
+            if proposed_blocks.is_empty() {
+                let last_proposed_block = dag_state.get_last_proposed_block();
+                proposed_blocks = if last_proposed_block.round() > GENESIS_ROUND {
+                    vec![last_proposed_block]
+                } else {
+                    vec![]
+                };
+            }
+            stream::iter(
+                proposed_blocks
+                    .into_iter()
+                    .map(|block| ExtendedSerializedBlock {
+                        block: block.serialized().clone(),
+                        excluded_ancestors: vec![],
+                    }),
+            )
+        };
 
         let broadcasted_blocks = BroadcastedBlockStream::new(
             peer,
@@ -363,7 +379,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         );
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
-        Ok(Box::pin(missed_blocks.chain(
+        Ok(Box::pin(past_proposed_blocks.chain(
             broadcasted_blocks.map(ExtendedSerializedBlock::from),
         )))
     }
@@ -608,7 +624,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
         fail_point_async!("consensus-rpc-response");
 
-        let mut highest_received_rounds = self.core_dispatcher.highest_received_rounds();
+        let highest_received_rounds = self.round_tracker.read().local_highest_received_rounds();
 
         let blocks = self
             .dag_state
@@ -618,10 +634,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .into_iter()
             .map(|(block, _)| block.round())
             .collect::<Vec<_>>();
-
-        // Own blocks do not go through the core dispatcher, so they need to be set separately.
-        highest_received_rounds[self.context.own_index] =
-            highest_accepted_rounds[self.context.own_index];
 
         Ok((highest_received_rounds, highest_accepted_rounds))
     }
@@ -804,6 +816,8 @@ mod tests {
     use parking_lot::{Mutex, RwLock};
     use tokio::{sync::broadcast, time::sleep};
 
+    use futures::StreamExt as _;
+
     use crate::{
         authority_service::AuthorityService,
         block::{BlockAPI, SignedBlock, TestBlock, VerifiedBlock},
@@ -814,7 +828,7 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkService},
-        round_tracker::PeerRoundTracker,
+        round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
@@ -874,10 +888,6 @@ mod tests {
         }
 
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
-            todo!()
-        }
-
-        fn highest_received_rounds(&self) -> Vec<Round> {
             todo!()
         }
     }
@@ -962,6 +972,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -969,10 +980,10 @@ mod tests {
             commit_vote_monitor.clone(),
             block_verifier.clone(),
             transaction_certifier.clone(),
+            round_tracker.clone(),
             dag_state.clone(),
             false,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -1080,6 +1091,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1087,10 +1099,10 @@ mod tests {
             commit_vote_monitor.clone(),
             block_verifier.clone(),
             transaction_certifier.clone(),
+            round_tracker.clone(),
             dag_state.clone(),
             false,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -1247,6 +1259,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1254,10 +1267,10 @@ mod tests {
             commit_vote_monitor.clone(),
             block_verifier.clone(),
             transaction_certifier.clone(),
+            round_tracker.clone(),
             dag_state.clone(),
             true,
         );
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -1298,5 +1311,160 @@ mod tests {
 
             assert_eq!(verified_block.round(), 10);
         }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_handle_subscribe_blocks() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let network_client = Arc::new(FakeNetworkClient::default());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            block_verifier.clone(),
+            transaction_certifier.clone(),
+            round_tracker.clone(),
+            dag_state.clone(),
+            false,
+        );
+
+        // Create 3 proposed blocks at rounds 5, 10, 15 for own authority (index 0)
+        dag_state
+            .write()
+            .accept_block(VerifiedBlock::new_for_test(TestBlock::new(5, 0).build()));
+        dag_state
+            .write()
+            .accept_block(VerifiedBlock::new_for_test(TestBlock::new(10, 0).build()));
+        dag_state
+            .write()
+            .accept_block(VerifiedBlock::new_for_test(TestBlock::new(15, 0).build()));
+
+        let authority_service = Arc::new(AuthorityService::new(
+            context.clone(),
+            block_verifier,
+            commit_vote_monitor,
+            round_tracker,
+            synchronizer,
+            core_dispatcher.clone(),
+            rx_block_broadcast,
+            transaction_certifier,
+            dag_state.clone(),
+            store,
+        ));
+
+        let peer = context.committee.to_authority_index(1).unwrap();
+
+        // Case A: Subscribe with last_received = 100 (after all proposed blocks)
+        // Should return last proposed block (round 15) as fallback
+        {
+            let mut stream = authority_service
+                .handle_subscribe_blocks(peer, 100)
+                .await
+                .unwrap();
+            let block: SignedBlock = bcs::from_bytes(&stream.next().await.unwrap().block).unwrap();
+            assert_eq!(
+                block.round(),
+                15,
+                "Should return last proposed block as fallback"
+            );
+            assert_eq!(block.author().value(), 0);
+        }
+
+        // Case B: Subscribe with last_received = 7 (includes rounds 10, 15)
+        // Should return cached blocks from round 8+
+        {
+            let mut stream = authority_service
+                .handle_subscribe_blocks(peer, 7)
+                .await
+                .unwrap();
+
+            let block1: SignedBlock = bcs::from_bytes(&stream.next().await.unwrap().block).unwrap();
+            assert_eq!(block1.round(), 10, "Should return block at round 10");
+
+            let block2: SignedBlock = bcs::from_bytes(&stream.next().await.unwrap().block).unwrap();
+            assert_eq!(block2.round(), 15, "Should return block at round 15");
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_handle_subscribe_blocks_not_proposed() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let network_client = Arc::new(FakeNetworkClient::default());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            block_verifier.clone(),
+            transaction_certifier.clone(),
+            round_tracker.clone(),
+            dag_state.clone(),
+            false,
+        );
+
+        // No blocks added to DagState - only genesis exists
+
+        let authority_service = Arc::new(AuthorityService::new(
+            context.clone(),
+            block_verifier,
+            commit_vote_monitor,
+            round_tracker,
+            synchronizer,
+            core_dispatcher.clone(),
+            rx_block_broadcast,
+            transaction_certifier,
+            dag_state.clone(),
+            store,
+        ));
+
+        let peer = context.committee.to_authority_index(1).unwrap();
+
+        // Subscribe - no blocks have been proposed yet (only genesis exists)
+        let mut stream = authority_service
+            .handle_subscribe_blocks(peer, 0)
+            .await
+            .unwrap();
+
+        // Should NOT receive any block (genesis must not be returned)
+        use futures::poll;
+        use std::task::Poll;
+        let poll_result = poll!(stream.next());
+        assert!(
+            matches!(poll_result, Poll::Pending),
+            "Should not receive genesis block on subscription stream"
+        );
     }
 }

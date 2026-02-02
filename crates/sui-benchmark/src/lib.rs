@@ -7,10 +7,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::bail;
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
-use prometheus::Registry;
+use futures::TryStreamExt;
+use mysten_common::{fatal, random::get_rng};
 use rand::{Rng, seq::IteratorRandom};
 use sui_config::genesis::Genesis;
 use sui_core::{
@@ -24,13 +24,8 @@ use sui_core::{
     },
     validator_client_monitor::ValidatorClientMetrics,
 };
-use sui_json_rpc_types::{
-    CheckpointId, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
-};
 use sui_protocol_config::ProtocolConfig;
-use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+use sui_rpc_api::{Client, client::ExecutedTransaction};
 use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::ObjectArg;
@@ -63,12 +58,33 @@ use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     execution_status::ExecutionFailureStatus,
 };
+use sui_types::{gas_coin::GAS, sui_system_state::sui_system_state_summary::SuiSystemStateSummary};
 use tokio::time::sleep;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::drivers::bench_driver::ClientType;
 
 pub mod bank;
+
+/// Shared metrics for benchmark proxies that use TransactionDriver.
+/// Creating these metrics multiple times with the same registry would cause
+/// duplicate metric registration panics, so they must be shared.
+#[derive(Clone)]
+pub struct BenchmarkProxyMetrics {
+    pub safe_client_metrics_base: SafeClientMetricsBase,
+    pub transaction_driver_metrics: Arc<TransactionDriverMetrics>,
+    pub client_metrics: Arc<ValidatorClientMetrics>,
+}
+
+impl BenchmarkProxyMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            safe_client_metrics_base: SafeClientMetricsBase::new(registry),
+            transaction_driver_metrics: Arc::new(TransactionDriverMetrics::new(registry)),
+            client_metrics: Arc::new(ValidatorClientMetrics::new(registry)),
+        }
+    }
+}
 pub mod benchmark_setup;
 pub mod drivers;
 pub mod fullnode_reconfig_observer;
@@ -84,7 +100,7 @@ pub mod workloads;
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionEffects {
     FinalizedTransactionEffects(FinalizedEffects, TransactionEvents),
-    SuiTransactionBlockEffects(SuiTransactionBlockEffects),
+    ExecutedTransaction(ExecutedTransaction),
 }
 
 impl ExecutionEffects {
@@ -93,9 +109,7 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 *effects.data().transaction_digest()
             }
-            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
-                *sui_tx_effects.transaction_digest()
-            }
+            ExecutionEffects::ExecutedTransaction(txn) => *txn.effects.transaction_digest(),
         }
     }
 
@@ -104,22 +118,14 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 effects.data().mutated().to_vec()
             }
-            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
-                .mutated()
-                .iter()
-                .map(|refe| (refe.reference.to_object_ref(), refe.owner.clone()))
-                .collect(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.mutated(),
         }
     }
 
     pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().created(),
-            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
-                .created()
-                .iter()
-                .map(|refe| (refe.reference.to_object_ref(), refe.owner.clone()))
-                .collect(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.created(),
         }
     }
 
@@ -128,11 +134,7 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 effects.data().deleted().to_vec()
             }
-            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
-                .deleted()
-                .iter()
-                .map(|refe| refe.to_object_ref())
-                .collect(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.deleted(),
         }
     }
 
@@ -144,7 +146,7 @@ impl ExecutionEffects {
                     _ => None,
                 }
             }
-            ExecutionEffects::SuiTransactionBlockEffects(_) => None,
+            ExecutionEffects::ExecutedTransaction(_) => None,
         }
     }
 
@@ -153,10 +155,7 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 effects.data().gas_object()
             }
-            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
-                let refe = &sui_tx_effects.gas_object();
-                (refe.reference.to_object_ref(), refe.owner.clone())
-            }
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.gas_object(),
         }
     }
 
@@ -175,9 +174,7 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 effects.data().status().is_ok()
             }
-            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
-                sui_tx_effects.status().is_ok()
-            }
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status().is_ok(),
         }
     }
 
@@ -196,10 +193,38 @@ impl ExecutionEffects {
                     _ => false,
                 }
             }
-            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
-                let status = format!("{}", sui_tx_effects.status());
-                status.contains("ExecutionCancelledDueToSharedObjectCongestion")
+            ExecutionEffects::ExecutedTransaction(txn) => match txn.effects.status() {
+                sui_types::execution_status::ExecutionStatus::Success => false,
+                sui_types::execution_status::ExecutionStatus::Failure {
+                    error:
+                        ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { .. },
+                    ..
+                } => true,
+                _ => false,
+            },
+        }
+    }
+
+    pub fn is_insufficient_funds(&self) -> bool {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                match effects.data().status() {
+                    sui_types::execution_status::ExecutionStatus::Success => false,
+                    sui_types::execution_status::ExecutionStatus::Failure {
+                        error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+                        ..
+                    } => true,
+                    _ => false,
+                }
             }
+            ExecutionEffects::ExecutedTransaction(txn) => match txn.effects.status() {
+                sui_types::execution_status::ExecutionStatus::Success => false,
+                sui_types::execution_status::ExecutionStatus::Failure {
+                    error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+                    ..
+                } => true,
+                _ => false,
+            },
         }
     }
 
@@ -226,20 +251,25 @@ impl ExecutionEffects {
                     _ => false,
                 }
             }
-            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
-                let status = format!("{}", sui_tx_effects.status());
-                status.contains("VMVerificationOrDeserializationError")
-                    || status.contains("VMInvariantViolation")
-                    || status.contains("FunctionNotFound")
-                    || status.contains("ArityMismatch")
-                    || status.contains("TypeArityMismatch")
-                    || status.contains("NonEntryFunctionInvoked")
-                    || status.contains("CommandArgumentError")
-                    || status.contains("TypeArgumentError")
-                    || status.contains("UnusedValueWithoutDrop")
-                    || status.contains("InvalidPublicFunctionReturnType")
-                    || status.contains("InvalidTransferObject")
-            }
+            ExecutionEffects::ExecutedTransaction(txn) => match txn.effects.status() {
+                sui_types::execution_status::ExecutionStatus::Failure { error, .. } => {
+                    matches!(
+                        error,
+                        ExecutionFailureStatus::VMVerificationOrDeserializationError
+                            | ExecutionFailureStatus::VMInvariantViolation
+                            | ExecutionFailureStatus::FunctionNotFound
+                            | ExecutionFailureStatus::ArityMismatch
+                            | ExecutionFailureStatus::TypeArityMismatch
+                            | ExecutionFailureStatus::NonEntryFunctionInvoked
+                            | ExecutionFailureStatus::CommandArgumentError { .. }
+                            | ExecutionFailureStatus::TypeArgumentError { .. }
+                            | ExecutionFailureStatus::UnusedValueWithoutDrop { .. }
+                            | ExecutionFailureStatus::InvalidPublicFunctionReturnType { .. }
+                            | ExecutionFailureStatus::InvalidTransferObject
+                    )
+                }
+                _ => false,
+            },
         }
     }
 
@@ -248,8 +278,8 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 format!("{:#?}", effects.data().status())
             }
-            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
-                format!("{:#?}", sui_tx_effects.status())
+            ExecutionEffects::ExecutedTransaction(txn) => {
+                format!("{:#?}", txn.effects.status())
             }
         }
     }
@@ -259,9 +289,7 @@ impl ExecutionEffects {
             crate::ExecutionEffects::FinalizedTransactionEffects(a, _) => {
                 a.data().gas_cost_summary().clone()
             }
-            crate::ExecutionEffects::SuiTransactionBlockEffects(b) => {
-                std::convert::Into::<GasCostSummary>::into(b.gas_cost_summary().clone())
-            }
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.gas_cost_summary().clone(),
         }
     }
 
@@ -296,6 +324,8 @@ impl ExecutionEffects {
 #[async_trait]
 pub trait ValidatorProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error>;
+
+    async fn get_sui_address_balance(&self, address: SuiAddress) -> Result<u64, anyhow::Error>;
 
     async fn get_owned_objects(
         &self,
@@ -340,34 +370,33 @@ pub struct LocalValidatorAggregatorProxy {
 impl LocalValidatorAggregatorProxy {
     pub async fn from_genesis(
         genesis: &Genesis,
-        registry: &Registry,
         reconfig_fullnode_rpc_url: &str,
+        metrics: &BenchmarkProxyMetrics,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
-            .with_registry(registry)
+            .with_safe_client_metrics_base(metrics.safe_client_metrics_base.clone())
             .build_network_clients();
-        let committee = genesis.committee().unwrap();
+        let committee = genesis.committee();
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
         Self::new_impl(
             aggregator,
-            registry,
             reconfig_fullnode_rpc_url,
             clients,
             committee,
             chain_identifier,
+            metrics,
         )
         .await
     }
 
     async fn new_impl(
         aggregator: AuthorityAggregator<NetworkAuthorityClient>,
-        registry: &Registry,
         reconfig_fullnode_rpc_url: &str,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
         chain_identifier: ChainIdentifier,
+        metrics: &BenchmarkProxyMetrics,
     ) -> Self {
-        let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
         let (aggregator, reconfig_observer): (
             Arc<_>,
             Arc<dyn ReconfigObserver<NetworkAuthorityClient> + Sync + Send>,
@@ -388,15 +417,13 @@ impl LocalValidatorAggregatorProxy {
             (Arc::new(aggregator), reconfig_observer)
         };
 
-        let client_metrics = Arc::new(ValidatorClientMetrics::new(registry));
-
         // For benchmark, pass None to use default validator client monitor config
         let td = TransactionDriver::new(
             aggregator,
             reconfig_observer,
-            transaction_driver_metrics,
+            metrics.transaction_driver_metrics.clone(),
             None,
-            client_metrics,
+            metrics.client_metrics.clone(),
         );
         Self {
             td,
@@ -425,6 +452,10 @@ impl LocalValidatorAggregatorProxy {
 
 #[async_trait]
 impl ValidatorProxy for LocalValidatorAggregatorProxy {
+    async fn get_sui_address_balance(&self, _: SuiAddress) -> Result<u64, anyhow::Error> {
+        unimplemented!("Not available for LocalValidatorAggregatorProxy");
+    }
+
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
         let auth_agg = self.td.authority_aggregator().load();
         Ok(auth_agg
@@ -489,7 +520,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         &self,
         txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        execute_soft_bundle_with_retries(&self.td, txs).await
+        execute_soft_bundle_with_retries(&self.td, &txs).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
@@ -497,32 +528,8 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 }
 
+#[instrument(level = "debug", skip_all, fields(digests = ?txs.iter().map(|tx| *tx.digest()).collect::<Vec<_>>()))]
 async fn execute_soft_bundle_with_retries(
-    td: &TransactionDriver<NetworkAuthorityClient>,
-    txs: Vec<Transaction>,
-) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-    let start = Instant::now();
-    let mut retry_cnt = 0;
-    loop {
-        match execute_soft_bundle_impl(td, &txs).await {
-            Ok(results) => {
-                return Ok(results);
-            }
-            Err(e) => {
-                if retry_cnt < 10 || start.elapsed() < Duration::from_secs(60) {
-                    retry_cnt += 1;
-                    continue;
-                } else {
-                    return Err(e);
-                }
-            }
-        }
-    }
-}
-
-/// Helper function to execute a soft bundle via gRPC.
-/// Shared by both LocalValidatorAggregatorProxy and FullNodeProxy.
-async fn execute_soft_bundle_impl(
     td: &TransactionDriver<NetworkAuthorityClient>,
     txs: &[Transaction],
 ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
@@ -530,82 +537,204 @@ async fn execute_soft_bundle_impl(
 
     let digests: Vec<_> = txs.iter().map(|tx| *tx.digest()).collect();
 
-    let request = RawSubmitTxRequest {
-        transactions: txs
-            .iter()
-            .map(|tx| bcs::to_bytes(tx).unwrap().into())
-            .collect(),
-        submit_type: SubmitTxType::SoftBundle.into(),
-    };
+    let mut retry_cnt = 0;
+    let max_retries = 10;
+    let min_retry_duration = Duration::from_secs(60);
+    let start = Instant::now();
 
-    // Get a validator client - use grpc client directly for soft bundle
-    let auth_agg = td.authority_aggregator().load();
-    let safe_client = auth_agg
-        .authority_clients
-        .values()
-        .choose(&mut mysten_common::random::get_rng())
-        .unwrap();
+    loop {
+        let request = RawSubmitTxRequest {
+            transactions: txs
+                .iter()
+                .map(|tx| bcs::to_bytes(tx).unwrap().into())
+                .collect(),
+            submit_type: SubmitTxType::SoftBundle.into(),
+        };
 
-    let mut validator_client = safe_client.authority_client().get_client_for_testing()?;
+        // Get a validator client - use grpc client directly for soft bundle
+        // Re-select on each retry in case the previous validator is halting
+        let auth_agg = td.authority_aggregator().load();
+        let safe_client = auth_agg
+            .authority_clients
+            .values()
+            .choose(&mut get_rng())
+            .unwrap();
 
-    // Submit the soft bundle via grpc
-    let result = validator_client
-        .submit_transaction(request.into_request())
-        .await
-        .map(sui_network::tonic::Response::into_inner)?;
-
-    if result.results.len() != txs.len() {
-        bail!(
-            "Expected {} results, got {}",
-            txs.len(),
-            result.results.len()
-        );
-    }
-
-    // Extract consensus positions from submission results
-    let mut consensus_positions = Vec::new();
-    for (i, raw_result) in result.results.iter().enumerate() {
-        let submit_result: SubmitTxResult = raw_result.clone().try_into()?;
-        match submit_result {
-            SubmitTxResult::Submitted { consensus_position } => {
-                consensus_positions.push(consensus_position);
+        let mut validator_client = match safe_client.authority_client().get_client_for_testing() {
+            Ok(client) => client,
+            Err(err) => {
+                // Check if this is a retriable error before retrying
+                if err.is_retryable().0
+                    && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
+                {
+                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+                    warn!(
+                        ?digests,
+                        retry_cnt,
+                        "Failed to get validator client with retriable error: {:?}. Sleeping for {:?} ...",
+                        err,
+                        delay,
+                    );
+                    retry_cnt += 1;
+                    sleep(delay).await;
+                    continue;
+                }
+                return Err(err.into());
             }
-            SubmitTxResult::Executed { .. } => {
-                bail!("Transaction {} was already executed during submission", i);
+        };
+
+        debug!("submitting soft bundle via grpc");
+
+        // Submit the soft bundle via grpc
+        let result = match validator_client
+            .submit_transaction(request.into_request())
+            .await
+        {
+            Ok(response) => response.into_inner(),
+            Err(err) => {
+                debug!("error submitting soft bundle via grpc: {:?}", err);
+                // Convert tonic error to SuiError to check if retriable
+                let sui_error: sui_types::error::SuiError = err.into();
+                if sui_error.is_retryable().0
+                    && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
+                {
+                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+                    warn!(
+                        ?digests,
+                        retry_cnt,
+                        "Soft bundle submission failed with retriable error: {:?}. Sleeping for {:?} ...",
+                        sui_error,
+                        delay,
+                    );
+                    retry_cnt += 1;
+                    sleep(delay).await;
+                    continue;
+                }
+                return Err(sui_error.into());
             }
-            SubmitTxResult::Rejected { error } => {
-                bail!("Transaction {} was rejected: {:?}", i, error);
+        };
+
+        if result.results.len() != txs.len() {
+            fatal!(
+                "Expected {} results, got {}",
+                txs.len(),
+                result.results.len()
+            );
+        }
+
+        // Extract consensus positions from submission results
+        // Track which transactions were submitted vs rejected/executed
+        // Index -> Either consensus position (for waiting) or immediate response
+        enum SubmissionOutcome {
+            Submitted(sui_types::messages_consensus::ConsensusPosition),
+            ImmediateResponse(WaitForEffectsResponse),
+        }
+        let mut outcomes: Vec<SubmissionOutcome> = Vec::with_capacity(txs.len());
+        let mut should_retry = false;
+        let mut last_error = None;
+
+        for raw_result in result.results.iter() {
+            let submit_result: SubmitTxResult = raw_result.clone().try_into()?;
+            match submit_result {
+                SubmitTxResult::Submitted { consensus_position } => {
+                    outcomes.push(SubmissionOutcome::Submitted(consensus_position));
+                }
+                SubmitTxResult::Executed {
+                    effects_digest,
+                    details,
+                    fast_path,
+                } => {
+                    // Transaction was already executed - return the effects directly
+                    outcomes.push(SubmissionOutcome::ImmediateResponse(
+                        WaitForEffectsResponse::Executed {
+                            effects_digest,
+                            details,
+                            fast_path,
+                        },
+                    ));
+                }
+                SubmitTxResult::Rejected { error } => {
+                    // Check if this is a retriable error (e.g., ValidatorHaltedAtEpochEnd)
+                    // If ANY transaction has a retriable error, retry the whole bundle
+                    if error.is_retryable().0
+                        && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
+                    {
+                        should_retry = true;
+                        last_error = Some(error);
+                        break;
+                    }
+                    // Non-retriable rejection - record as rejected response
+                    outcomes.push(SubmissionOutcome::ImmediateResponse(
+                        WaitForEffectsResponse::Rejected { error: Some(error) },
+                    ));
+                }
             }
         }
-    }
 
-    // Wait for effects using consensus positions
-    let wait_futures: Vec<_> = digests
-        .iter()
-        .zip(consensus_positions.iter())
-        .map(|(digest, position)| {
-            let request = WaitForEffectsRequest {
-                transaction_digest: Some(*digest),
-                consensus_position: Some(*position),
-                include_details: true,
-                ping_type: None,
+        if should_retry {
+            let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+            warn!(
+                ?digests,
+                retry_cnt,
+                "Soft bundle rejected with retriable error: {:?}. Sleeping for {:?} ...",
+                last_error,
+                delay,
+            );
+            retry_cnt += 1;
+            sleep(delay).await;
+            continue;
+        }
+
+        // Collect indices and consensus positions for transactions that need to wait for effects
+        let wait_indices: Vec<usize> = outcomes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, outcome)| match outcome {
+                SubmissionOutcome::Submitted(_) => Some(i),
+                SubmissionOutcome::ImmediateResponse(_) => None,
+            })
+            .collect();
+
+        let wait_futures: Vec<_> = wait_indices
+            .iter()
+            .map(|&i| {
+                let consensus_position = match &outcomes[i] {
+                    SubmissionOutcome::Submitted(pos) => pos,
+                    _ => unreachable!(),
+                };
+                let request = WaitForEffectsRequest {
+                    transaction_digest: Some(digests[i]),
+                    consensus_position: Some(*consensus_position),
+                    include_details: true,
+                    ping_type: None,
+                };
+                safe_client.wait_for_effects(request, None)
+            })
+            .collect();
+
+        let wait_responses = futures::future::join_all(wait_futures).await;
+
+        // Build final results by combining immediate responses with waited responses
+        let mut wait_response_iter = wait_responses.into_iter();
+        let mut results = Vec::with_capacity(digests.len());
+
+        for (i, outcome) in outcomes.into_iter().enumerate() {
+            let response = match outcome {
+                SubmissionOutcome::Submitted(_) => {
+                    // Get the next waited response
+                    wait_response_iter.next().unwrap()?
+                }
+                SubmissionOutcome::ImmediateResponse(resp) => resp,
             };
-            safe_client.wait_for_effects(request, None)
-        })
-        .collect();
+            results.push((digests[i], response));
+        }
 
-    let responses = futures::future::join_all(wait_futures).await;
-
-    let mut results = Vec::with_capacity(digests.len());
-    for (digest, response) in digests.into_iter().zip(responses.into_iter()) {
-        results.push((digest, response?));
+        return Ok(results);
     }
-
-    Ok(results)
 }
 
 pub struct FullNodeProxy {
-    sui_client: SuiClient,
+    sui_client: Client,
 
     // Committee and protocol config are initialized on startup and not updated on epoch changes.
     committee: Arc<Committee>,
@@ -617,7 +746,10 @@ pub struct FullNodeProxy {
 }
 
 impl FullNodeProxy {
-    pub async fn from_url(http_url: &str, registry: &Registry) -> Result<Self, anyhow::Error> {
+    pub async fn from_url(
+        http_url: &str,
+        metrics: &BenchmarkProxyMetrics,
+    ) -> Result<Self, anyhow::Error> {
         let http_url = if http_url.starts_with("http://") || http_url.starts_with("https://") {
             http_url.to_string()
         } else {
@@ -625,62 +757,46 @@ impl FullNodeProxy {
         };
 
         // Each request times out after 60s (default value)
-        let sui_client = SuiClientBuilder::default()
-            .max_concurrent_requests(500_000)
-            .build(&http_url)
-            .await?;
+        let sui_client = Client::new(&http_url)?;
 
-        let committee = {
-            let resp = sui_client.read_api().get_committee_info(None).await?;
-            let epoch = resp.epoch;
-            let committee_map = resp.validators.into_iter().collect();
-            Committee::new(epoch, committee_map)
-        };
+        let committee = sui_client.get_committee(None).await?;
 
-        let chain_identifier = {
-            let genesis = sui_client
-                .read_api()
-                .get_checkpoint(CheckpointId::SequenceNumber(0))
-                .await?;
-            ChainIdentifier::from(genesis.digest)
-        };
+        let chain_identifier = sui_client.get_chain_identifier().await?;
 
         let protocol_config = {
-            let resp = sui_client.read_api().get_protocol_config(None).await?;
+            let resp = sui_client.get_protocol_config(None).await?;
             let chain = chain_identifier.chain();
-            ProtocolConfig::get_for_version(resp.protocol_version, chain)
+            ProtocolConfig::get_for_version(resp.protocol_version().into(), chain)
         };
 
         // Build AuthorityAggregator and TransactionDriver for soft bundle support
-        let sui_system_state = sui_client
-            .governance_api()
-            .get_latest_sui_system_state()
-            .await?;
+        let sui_system_state = sui_client.get_system_state_summary(None).await?;
         let new_committee = sui_system_state.get_sui_committee_for_benchmarking();
         let committee_store = Arc::new(CommitteeStore::new_for_testing(new_committee.committee()));
-        let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
 
         let aggregator = AuthorityAggregator::new_from_committee(
             new_committee,
             Arc::new(sui_system_state.get_committee_authority_names_to_hostnames()),
             sui_system_state.reference_gas_price,
             &committee_store,
-            safe_client_metrics_base.clone(),
+            metrics.safe_client_metrics_base.clone(),
         );
 
-        let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
         let reconfig_observer = Arc::new(
-            FullNodeReconfigObserver::new(&http_url, committee_store, safe_client_metrics_base)
-                .await,
+            FullNodeReconfigObserver::new(
+                &http_url,
+                committee_store,
+                metrics.safe_client_metrics_base.clone(),
+            )
+            .await,
         );
 
-        let client_metrics = Arc::new(ValidatorClientMetrics::new(registry));
         let td = TransactionDriver::new(
             Arc::new(aggregator),
             reconfig_observer,
-            transaction_driver_metrics,
+            metrics.transaction_driver_metrics.clone(),
             None,
-            client_metrics,
+            metrics.client_metrics.clone(),
         );
 
         Ok(Self {
@@ -693,76 +809,53 @@ impl FullNodeProxy {
     }
 }
 
+fn is_retryable_sdk_error(err: &impl std::fmt::Debug) -> bool {
+    let err_str = format!("{:?}", err);
+    !(err_str.contains("Error checking transaction input objects")
+        || err_str.contains("Transaction Expired")
+        || err_str.contains("already locked by a different transaction")
+        || err_str.contains("is not available for consumption"))
+        || err_str.contains("Transaction executed but checkpoint wait timed out")
+}
+
 #[async_trait]
 impl ValidatorProxy for FullNodeProxy {
-    async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
-        let response = self
-            .sui_client
-            .read_api()
-            .get_object_with_options(object_id, SuiObjectDataOptions::bcs_lossless())
-            .await?;
+    async fn get_sui_address_balance(&self, address: SuiAddress) -> Result<u64, anyhow::Error> {
+        let balance = self.sui_client.get_balance(address, &GAS::type_()).await?;
 
-        if let Some(sui_object) = response.data {
-            sui_object.try_into_object(&self.protocol_config)
-        } else if let Some(error) = response.error {
-            bail!("Error getting object {:?}: {}", object_id, error)
-        } else {
-            bail!("Object {:?} not found and no error provided", object_id)
-        }
+        Ok(balance.address_balance())
+    }
+
+    async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
+        self.sui_client
+            .clone()
+            .get_object(object_id)
+            .await
+            .map_err(Into::into)
     }
 
     async fn get_owned_objects(
         &self,
         account_address: SuiAddress,
     ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
-        let mut objects: Vec<SuiObjectResponse> = Vec::new();
-        let mut cursor = None;
-        loop {
-            let response = self
-                .sui_client
-                .read_api()
-                .get_owned_objects(
-                    account_address,
-                    Some(SuiObjectResponseQuery::new_with_options(
-                        SuiObjectDataOptions::bcs_lossless(),
-                    )),
-                    cursor,
-                    None,
-                )
-                .await?;
-
-            objects.extend(response.data);
-
-            if response.has_next_page {
-                cursor = response.next_cursor;
-            } else {
-                break;
-            }
-        }
+        let objects: Vec<Object> = self
+            .sui_client
+            .list_owned_objects(account_address, Some(GasCoin::type_()))
+            .try_collect()
+            .await?;
 
         let mut values_objects = Vec::new();
 
         for object in objects {
-            let o = object.data;
-            if let Some(o) = o {
-                let temp: Object = o.clone().try_into_object(&self.protocol_config)?;
-                let gas_coin = GasCoin::try_from(&temp)?;
-                values_objects.push((
-                    gas_coin.value(),
-                    o.clone().try_into_object(&self.protocol_config)?,
-                ));
-            }
+            let gas_coin = GasCoin::try_from(&object)?;
+            values_objects.push((gas_coin.value(), object));
         }
 
         Ok(values_objects)
     }
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error> {
-        Ok(self
-            .sui_client
-            .governance_api()
-            .get_latest_sui_system_state()
-            .await?)
+        Ok(self.sui_client.get_system_state_summary(None).await?)
     }
 
     async fn execute_transaction_block(
@@ -777,23 +870,27 @@ impl ValidatorProxy for FullNodeProxy {
             // SuiClient times out after 60s
             match self
                 .sui_client
-                .quorum_driver_api()
-                .execute_transaction_block(
-                    tx.clone(),
-                    SuiTransactionBlockResponseOptions::new().with_effects(),
-                    None,
-                )
+                .clone()
+                .execute_transaction_and_wait_for_checkpoint(&tx)
                 .await
             {
                 Ok(resp) => {
                     return (
                         ClientType::QuorumDriver,
-                        Ok(ExecutionEffects::SuiTransactionBlockEffects(
-                            resp.effects.expect("effects field should not be None"),
-                        )),
+                        Ok(ExecutionEffects::ExecutedTransaction(resp)),
                     );
                 }
                 Err(err) => {
+                    if !is_retryable_sdk_error(&err) {
+                        return (
+                            ClientType::QuorumDriver,
+                            Err(anyhow::anyhow!(
+                                "Transaction {:?} failed with non-retriable error: {:?}",
+                                tx_digest,
+                                err
+                            )),
+                        );
+                    }
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     warn!(
                         ?tx_digest,
@@ -837,8 +934,7 @@ impl ValidatorProxy for FullNodeProxy {
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
         let validators = self
             .sui_client
-            .governance_api()
-            .get_latest_sui_system_state()
+            .get_system_state_summary(None)
             .await?
             .active_validators;
         Ok(validators.into_iter().map(|v| v.sui_address).collect())
@@ -848,7 +944,7 @@ impl ValidatorProxy for FullNodeProxy {
         &self,
         txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        execute_soft_bundle_with_retries(&self.td, txs).await
+        execute_soft_bundle_with_retries(&self.td, &txs).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {

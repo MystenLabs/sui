@@ -11,10 +11,9 @@ use std::{
 
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
-use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor, CommitIndex, CommitRef};
+use consensus_core::{CommitConsumerMonitor, CommitIndex, CommitRef};
 use consensus_types::block::TransactionIndex;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
-use itertools::Itertools as _;
 use lru::LruCache;
 use mysten_common::{
     assert_reachable, assert_sometimes, debug_fatal, random_util::randomize_cache_capacity_in_tests,
@@ -24,6 +23,7 @@ use mysten_metrics::{
     monitored_mpsc::{self, UnboundedReceiver},
     monitored_scope, spawn_monitored_task,
 };
+use nonempty::NonEmpty;
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
@@ -79,7 +79,7 @@ use crate::{
     },
     consensus_adapter::ConsensusAdapter,
     consensus_throughput_calculator::ConsensusThroughputCalculator,
-    consensus_types::consensus_output_api::{ConsensusCommitAPI, parse_block_transactions},
+    consensus_types::consensus_output_api::ConsensusCommitAPI,
     epoch::{
         randomness::{DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
@@ -171,14 +171,6 @@ impl ConsensusHandlerInitializer {
             self.backpressure_manager.subscribe(),
             self.state.traffic_controller.clone(),
         )
-    }
-
-    pub(crate) fn metrics(&self) -> &Arc<AuthorityMetrics> {
-        &self.state.metrics
-    }
-
-    pub(crate) fn backpressure_subscriber(&self) -> BackpressureSubscriber {
-        self.backpressure_manager.subscribe()
     }
 }
 
@@ -807,10 +799,6 @@ impl<C> ConsensusHandler<C> {
     /// Returns the last subdag index processed by the handler.
     pub(crate) fn last_processed_subdag_index(&self) -> u64 {
         self.last_consensus_stats.index.sub_dag_index
-    }
-
-    pub(crate) fn execution_scheduler_sender(&self) -> &ExecutionSchedulerSender {
-        &self.execution_scheduler_sender
     }
 
     pub(crate) fn new_for_testing(
@@ -2661,7 +2649,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                if parsed.transaction.is_mfp_transaction()
+                if parsed.transaction.is_user_transaction()
                     && !self.epoch_store.protocol_config().mysticeti_fastpath()
                 {
                     debug!(
@@ -2935,7 +2923,26 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         }
                         ConsensusTransactionKind::UserTransactionV2(tx) => {
                             // Extract the aliases claim (required) from the claims
-                            let used_alias_versions = tx.aliases();
+                            let used_alias_versions = if self
+                                .epoch_store
+                                .protocol_config()
+                                .fix_checkpoint_signature_mapping()
+                            {
+                                tx.aliases()
+                            } else {
+                                // Convert V1 to V2 format using dummy signature indices
+                                // which will be ignored with `fix_checkpoint_signature_mapping`
+                                // disabled.
+                                tx.aliases_v1().map(|a| {
+                                    NonEmpty::from_vec(
+                                        a.into_iter()
+                                            .enumerate()
+                                            .map(|(idx, (_, seq))| (idx as u8, seq))
+                                            .collect(),
+                                    )
+                                    .unwrap()
+                                })
+                            };
                             let inner_tx = tx.into_tx();
                             // Safe because transactions are certified by consensus.
                             let tx = VerifiedTransaction::new_unchecked(inner_tx);
@@ -3129,9 +3136,7 @@ impl MysticetiConsensusHandler {
     pub(crate) fn new(
         last_processed_commit_at_startup: CommitIndex,
         mut consensus_handler: ConsensusHandler<CheckpointService>,
-        consensus_block_handler: ConsensusBlockHandler,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
-        mut block_receiver: UnboundedReceiver<consensus_core::CertifiedBlocksOutput>,
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
     ) -> Self {
         debug!(
@@ -3153,15 +3158,6 @@ impl MysticetiConsensusHandler {
                 commit_consumer_monitor.set_highest_handled_commit(commit_index);
             }
         }));
-        if consensus_block_handler.enabled() {
-            tasks.spawn(monitored_future!(async move {
-                while let Some(blocks) = block_receiver.recv().await {
-                    consensus_block_handler
-                        .handle_certified_blocks(blocks)
-                        .await;
-                }
-            }));
-        }
         Self { tasks }
     }
 
@@ -3462,160 +3458,6 @@ impl SequencedConsensusTransaction {
     }
 }
 
-/// Handles certified and rejected transactions output by consensus.
-pub(crate) struct ConsensusBlockHandler {
-    /// Whether to enable handling certified transactions.
-    enabled: bool,
-    /// Per-epoch store.
-    epoch_store: Arc<AuthorityPerEpochStore>,
-    /// Enqueues transactions to the execution scheduler via a separate task.
-    execution_scheduler_sender: ExecutionSchedulerSender,
-    /// Backpressure subscriber to wait for backpressure to be resolved.
-    backpressure_subscriber: BackpressureSubscriber,
-    /// Metrics for consensus transaction handling.
-    metrics: Arc<AuthorityMetrics>,
-}
-
-impl ConsensusBlockHandler {
-    pub fn new(
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        execution_scheduler_sender: ExecutionSchedulerSender,
-        backpressure_subscriber: BackpressureSubscriber,
-        metrics: Arc<AuthorityMetrics>,
-    ) -> Self {
-        Self {
-            // Disable mysticeti fastpath execution when preconsensus locking is disabled,
-            // ensuring all transactions go through normal consensus commit path
-            // where post-consensus conflict detection runs.
-            enabled: epoch_store.protocol_config().mysticeti_fastpath()
-                && !epoch_store.protocol_config().disable_preconsensus_locking(),
-            epoch_store,
-            execution_scheduler_sender,
-            backpressure_subscriber,
-            metrics,
-        }
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.enabled
-    }
-
-    #[instrument(level = "debug", skip_all)]
-    async fn handle_certified_blocks(&self, blocks_output: CertifiedBlocksOutput) {
-        self.backpressure_subscriber.await_no_backpressure().await;
-
-        let _scope = monitored_scope("ConsensusBlockHandler::handle_certified_blocks");
-
-        // Avoid triggering fastpath execution or setting transaction status to fastpath certified, during reconfiguration.
-        let reconfiguration_lock = self.epoch_store.get_reconfig_state_read_lock_guard();
-        if !reconfiguration_lock.should_accept_user_certs() {
-            debug!(
-                "Skipping fastpath execution because epoch {} is closing user transactions: {}",
-                self.epoch_store.epoch(),
-                blocks_output
-                    .blocks
-                    .iter()
-                    .map(|b| b.block.reference().to_string())
-                    .join(", "),
-            );
-            return;
-        }
-
-        self.metrics.consensus_block_handler_block_processed.inc();
-        let epoch = self.epoch_store.epoch();
-        let parsed_transactions = blocks_output
-            .blocks
-            .into_iter()
-            .map(|certified_block| {
-                let block_ref = certified_block.block.reference();
-                let transactions =
-                    parse_block_transactions(&certified_block.block, &certified_block.rejected);
-                (block_ref, transactions)
-            })
-            .collect::<Vec<_>>();
-        let mut executable_transactions = vec![];
-        for (block, transactions) in parsed_transactions.into_iter() {
-            // Set the "ping" transaction status for this block. This is ncecessary as there might be some ping requests waiting for the ping transaction to be certified.
-            self.epoch_store.set_consensus_tx_status(
-                ConsensusPosition::ping(epoch, block),
-                ConsensusTxStatus::FastpathCertified,
-            );
-
-            for (txn_idx, parsed) in transactions.into_iter().enumerate() {
-                let position = ConsensusPosition {
-                    epoch,
-                    block,
-                    index: txn_idx as TransactionIndex,
-                };
-
-                let status_str = if parsed.rejected {
-                    "rejected"
-                } else {
-                    "certified"
-                };
-                if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
-                    debug!(
-                        "User Transaction in position: {:} with digest {:} is {:}",
-                        position,
-                        tx.digest(),
-                        status_str
-                    );
-                } else {
-                    debug!(
-                        "System Transaction in position: {:} is {:}",
-                        position, status_str
-                    );
-                }
-
-                if parsed.rejected {
-                    // TODO(fastpath): avoid parsing blocks twice between handling commit and fastpath transactions?
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
-                    self.metrics
-                        .consensus_block_handler_txn_processed
-                        .with_label_values(&["rejected"])
-                        .inc();
-                    continue;
-                }
-
-                self.metrics
-                    .consensus_block_handler_txn_processed
-                    .with_label_values(&["certified"])
-                    .inc();
-
-                if let Some(tx) = parsed.transaction.kind.into_user_transaction() {
-                    if tx.is_consensus_tx() {
-                        continue;
-                    }
-                    // Only set fastpath certified status on transactions intended for fastpath execution.
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
-                    let tx = VerifiedTransaction::new_unchecked(tx);
-                    executable_transactions.push(Schedulable::Transaction(
-                        VerifiedExecutableTransaction::new_from_consensus(
-                            tx,
-                            self.epoch_store.epoch(),
-                        ),
-                    ));
-                }
-            }
-        }
-
-        if executable_transactions.is_empty() {
-            return;
-        }
-        self.metrics
-            .consensus_block_handler_fastpath_executions
-            .inc_by(executable_transactions.len() as u64);
-
-        self.execution_scheduler_sender.send(
-            executable_transactions,
-            Default::default(),
-            SchedulingSource::MysticetiFastPath,
-        );
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub(crate) struct CommitIntervalObserver {
     ring_buffer: VecDeque<u64>,
@@ -3654,10 +3496,8 @@ mod tests {
     use std::collections::HashSet;
 
     use consensus_core::{
-        BlockAPI, CertifiedBlock, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
-        VerifiedBlock,
+        BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
     };
-    use consensus_types::block::TransactionIndex;
     use futures::pin_mut;
     use prometheus::Registry;
     use sui_protocol_config::{ConsensusTransactionOrdering, ProtocolConfig};
@@ -3675,8 +3515,7 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         transaction::{
-            CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
-            VerifiedCertificate,
+            CertifiedTransaction, TransactionData, TransactionDataAPI, VerifiedCertificate,
         },
     };
 
@@ -3813,6 +3652,7 @@ mod tests {
             blocks.clone(),
             leader_block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
+            true,
         );
 
         // Test that the consensus handler respects backpressure.
@@ -3875,171 +3715,6 @@ mod tests {
 
         // THEN check for no inflight or suspended transactions.
         state.execution_scheduler().check_empty_for_testing();
-    }
-
-    #[tokio::test]
-    async fn test_consensus_block_handler() {
-        // GIVEN
-        // 1 account keypair
-        let (sender, keypair) = deterministic_random_account_key();
-        // 8 gas objects.
-        let gas_objects: Vec<Object> = (0..8)
-            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
-            .collect();
-        // 4 owned objects.
-        let owned_objects: Vec<Object> = (0..4)
-            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
-            .collect();
-        // 4 shared objects.
-        let shared_objects: Vec<Object> = (0..4)
-            .map(|_| Object::shared_for_testing())
-            .collect::<Vec<_>>();
-        let mut all_objects = gas_objects.clone();
-        all_objects.extend(owned_objects.clone());
-        all_objects.extend(shared_objects.clone());
-
-        let network_config =
-            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                .with_objects(all_objects.clone())
-                .build();
-
-        let state = TestAuthorityBuilder::new()
-            .with_network_config(&network_config, 0)
-            .build()
-            .await;
-        let epoch_store = state.epoch_store_for_testing().clone();
-        let execution_scheduler_sender = ExecutionSchedulerSender::start(
-            state.execution_scheduler().clone(),
-            epoch_store.clone(),
-        );
-
-        let backpressure_manager = BackpressureManager::new_for_tests();
-        let block_handler = ConsensusBlockHandler::new(
-            epoch_store.clone(),
-            execution_scheduler_sender,
-            backpressure_manager.subscribe(),
-            state.metrics.clone(),
-        );
-
-        // AND create test transactions alternating between owned and shared input.
-        let mut transactions = vec![];
-        for (i, gas_object) in gas_objects.iter().enumerate() {
-            let input_object = if i % 2 == 0 {
-                owned_objects.get(i / 2).unwrap().clone()
-            } else {
-                shared_objects.get(i / 2).unwrap().clone()
-            };
-            let transaction = test_user_transaction(
-                &state,
-                sender,
-                &keypair,
-                gas_object.clone(),
-                vec![input_object],
-            )
-            .await;
-            transactions.push(transaction);
-        }
-
-        let serialized_transactions: Vec<_> = transactions
-            .iter()
-            .cloned()
-            .map(|t| {
-                Transaction::new(
-                    bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
-                        &state.name,
-                        t.into(),
-                    ))
-                    .unwrap(),
-                )
-            })
-            .collect();
-
-        // AND create block for all transactions
-        let block = VerifiedBlock::new_for_test(
-            TestBlock::new(100, 1)
-                .set_transactions(serialized_transactions.clone())
-                .build(),
-        );
-
-        // AND set rejected transactions.
-        let rejected_transactions = vec![0, 3, 4];
-
-        // AND process the transactions from consensus output.
-        block_handler
-            .handle_certified_blocks(CertifiedBlocksOutput {
-                blocks: vec![CertifiedBlock {
-                    block: block.clone(),
-                    rejected: rejected_transactions.clone(),
-                }],
-            })
-            .await;
-
-        // Ensure the correct consensus status is set for the correct consensus position
-        let consensus_tx_status_cache = epoch_store.consensus_tx_status_cache.as_ref().unwrap();
-        for txn_idx in 0..transactions.len() {
-            let position = ConsensusPosition {
-                epoch: epoch_store.epoch(),
-                block: block.reference(),
-                index: txn_idx as TransactionIndex,
-            };
-            if rejected_transactions.contains(&(txn_idx as TransactionIndex)) {
-                // Expect rejected transactions to be marked as such.
-                assert_eq!(
-                    consensus_tx_status_cache.get_transaction_status(&position),
-                    Some(ConsensusTxStatus::Rejected)
-                );
-            } else if txn_idx % 2 == 0 {
-                // Expect owned object transactions to be marked as fastpath certified.
-                assert_eq!(
-                    consensus_tx_status_cache.get_transaction_status(&position),
-                    Some(ConsensusTxStatus::FastpathCertified),
-                );
-            } else {
-                // Expect shared object transactions to be marked as fastpath certified.
-                assert_eq!(
-                    consensus_tx_status_cache.get_transaction_status(&position),
-                    None,
-                );
-            }
-        }
-
-        // THEN check for status of transactions that should have been executed.
-        for (i, t) in transactions.iter().enumerate() {
-            // Do not expect shared transactions or rejected transactions to be executed.
-            if i % 2 == 1 || rejected_transactions.contains(&(i as TransactionIndex)) {
-                continue;
-            }
-            let digest = t.tx().digest();
-            if tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                state
-                    .get_transaction_cache_reader()
-                    .notify_read_fastpath_transaction_outputs(&[*digest]),
-            )
-            .await
-            .is_err()
-            {
-                panic!("Transaction {} {} did not execute", i, digest);
-            }
-        }
-
-        // THEN check for no inflight or suspended transactions.
-        state.execution_scheduler().check_empty_for_testing();
-
-        // THEN check that rejected transactions are not executed.
-        for (i, t) in transactions.iter().enumerate() {
-            // Expect shared transactions or rejected transactions to not have executed.
-            if i % 2 == 0 && !rejected_transactions.contains(&(i as TransactionIndex)) {
-                continue;
-            }
-            let digest = t.tx().digest();
-            assert!(
-                !state.is_tx_already_executed(digest),
-                "Rejected transaction {} {} should not have been executed",
-                i,
-                digest
-            );
-        }
     }
 
     fn to_short_strings(txs: Vec<VerifiedExecutableTransactionWithAliases>) -> Vec<String> {
@@ -4152,6 +3827,7 @@ mod tests {
             vec![block.clone()],
             block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
+            true,
         );
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
@@ -4272,6 +3948,7 @@ mod tests {
             vec![block.clone()],
             block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
+            true,
         );
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
@@ -4343,20 +4020,25 @@ mod tests {
 
     fn user_txn(gas_price: u64) -> VerifiedExecutableTransactionWithAliases {
         let (committee, keypairs) = Committee::new_simple_test_committee();
-        let data = SenderSignedData::new(
+        let (sender, sender_keypair) = deterministic_random_account_key();
+        let tx = sui_types::transaction::Transaction::from_data_and_signer(
             TransactionData::new_transfer(
                 SuiAddress::default(),
                 FullObjectRef::from_fastpath_ref(random_object_ref()),
-                SuiAddress::default(),
+                sender,
                 random_object_ref(),
                 1000 * gas_price,
                 gas_price,
             ),
-            vec![],
+            vec![&sender_keypair],
         );
         let tx = VerifiedExecutableTransaction::new_from_certificate(
             VerifiedCertificate::new_unchecked(
-                CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
+                CertifiedTransaction::new_from_keypairs_for_testing(
+                    tx.into_data(),
+                    &keypairs,
+                    &committee,
+                ),
             ),
         );
         VerifiedExecutableTransactionWithAliases::no_aliases(tx)

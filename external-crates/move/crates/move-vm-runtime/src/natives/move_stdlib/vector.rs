@@ -130,14 +130,11 @@ pub fn native_push_back(
     let r = pop_arg!(args, VectorRef);
 
     if gas_params.legacy_per_abstract_memory_unit != 0.into() {
-        let cost = gas_params.legacy_per_abstract_memory_unit
-            * std::cmp::max(
-                e.abstract_memory_size(&SizeConfig {
-                    traverse_references: false,
-                    include_vector_size: false,
-                }),
-                1.into(),
-            );
+        let size = e.abstract_memory_size(&SizeConfig {
+            traverse_references: false,
+            include_vector_size: false,
+        })?;
+        let cost = gas_params.legacy_per_abstract_memory_unit * std::cmp::max(size, 1.into());
         native_charge_gas_early_exit!(context, cost);
     }
 

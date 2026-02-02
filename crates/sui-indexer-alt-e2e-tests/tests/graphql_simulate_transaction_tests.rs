@@ -27,12 +27,12 @@ use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GasCoin;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -579,13 +579,12 @@ async fn test_simulate_transaction_command_results() {
     // Find the published package ID from created objects
     let package_id = publish_result
         .effects
-        .unwrap()
         .created()
-        .iter()
-        .find(|obj| obj.owner.is_immutable())
+        .into_iter()
+        .find(|obj| obj.1.is_immutable())
         .unwrap()
-        .reference
-        .object_id;
+        .0
+        .0;
 
     // Now create a programmable transaction that calls our Move functions exactly like move_call.move:
     // Command 0: create_test_object(Input(42)) -> TestObject
@@ -1236,6 +1235,52 @@ async fn test_simulate_transaction_effects_json() {
         ".effects.effectsJson.dependencies" => insta::sorted_redaction(),
         ".effects.balanceChangesJson" => insta::sorted_redaction(),
     });
+}
+
+#[tokio::test]
+async fn test_simulate_transaction_payload_bypasses_query_limit() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    let mut tx_builder = validator_cluster.test_transaction_builder().await;
+    let payload_size = GraphQlConfig::default().limits.max_query_payload_size;
+    tx_builder
+        .ptb_builder_mut()
+        .pure_bytes(vec![0u8; payload_size as usize], false);
+
+    let tx_data = tx_builder.build();
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects { status }
+                    error
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    assert_eq!(
+        result.pointer("/data/simulateTransaction/effects/status"),
+        Some(&json!("SUCCESS"))
+    );
+    assert_eq!(
+        result.pointer("/data/simulateTransaction/error"),
+        Some(&serde_json::Value::Null)
+    );
 }
 
 #[tokio::test]

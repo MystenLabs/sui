@@ -4,6 +4,7 @@
 
 use crate::accumulators::coin_reservations::CoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
+use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -21,7 +22,7 @@ use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
-use arc_swap::{ArcSwap, Guard};
+use arc_swap::{ArcSwap, ArcSwapOption, Guard};
 use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
 use fastcrypto::encoding::Base58;
@@ -32,7 +33,7 @@ use move_binary_format::CompiledModule;
 use move_binary_format::binary_config::BinaryConfig;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
-use mysten_common::fatal;
+use mysten_common::{assert_reachable, fatal};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
@@ -960,6 +961,8 @@ pub struct AuthorityState {
 
     /// Notification channel for reconfiguration
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
+
+    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1191,6 +1194,7 @@ impl AuthorityState {
         if epoch_store.is_recently_finalized(&tx_digest)
             || epoch_store.transactions_executed_in_cur_epoch(&[tx_digest])?[0]
         {
+            assert_reachable!("transaction recently executed");
             return Ok(());
         }
 
@@ -1198,6 +1202,7 @@ impl AuthorityState {
             .get_transaction_cache_reader()
             .transaction_executed_in_last_epoch(transaction.digest(), epoch_store.epoch())
         {
+            assert_reachable!("transaction executed in last epoch");
             return Err(SuiErrorKind::TransactionAlreadyExecuted {
                 digest: (*transaction.digest()),
             }
@@ -1711,11 +1716,13 @@ impl AuthorityState {
             .kind()
             .is_accumulator_barrier_settle_tx()
         {
-            // unwrap safe because we assign accumulator version for every transaction
-            // when accumulator is enabled.
-            let next_accumulator_version = accumulator_version.unwrap().next();
-            self.execution_scheduler
-                .settle_object_funds(next_accumulator_version);
+            let object_funds_checker = self.object_funds_checker.load();
+            if let Some(object_funds_checker) = object_funds_checker.as_ref() {
+                // unwrap safe because we assign accumulator version for every transaction
+                // when accumulator is enabled.
+                let next_accumulator_version = accumulator_version.unwrap().next();
+                object_funds_checker.settle_accumulator_version(next_accumulator_version);
+            }
         }
 
         tx_guard.commit_tx();
@@ -2092,12 +2099,15 @@ impl AuthorityState {
                 &mut None,
             );
 
-        if !self
-            .execution_scheduler
-            .should_commit_object_funds_withdraws(
+        let object_funds_checker = self.object_funds_checker.load();
+        // FIXME: effects contain merged funds changes. But we need the sum of all the withdraws per account.
+        if let Some(object_funds_checker) = object_funds_checker.as_ref()
+            && !object_funds_checker.should_commit_object_funds_withdraws(
                 certificate,
                 &effects,
                 &execution_env,
+                self.get_account_funds_read(),
+                &self.execution_scheduler,
                 epoch_store,
             )
         {
@@ -3662,7 +3672,9 @@ impl AuthorityState {
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
+            object_funds_checker: ArcSwapOption::empty(),
         });
+        state.init_object_funds_checker().await;
 
         let state_clone = Arc::downgrade(&state);
         spawn_monitored_task!(fix_indexes(state_clone));
@@ -3705,6 +3717,23 @@ impl AuthorityState {
         }
 
         state
+    }
+
+    async fn init_object_funds_checker(&self) {
+        let epoch_store = self.epoch_store.load();
+        if self.is_validator(&epoch_store)
+            && epoch_store.protocol_config().enable_object_funds_withdraw()
+        {
+            if self.object_funds_checker.load().is_none() {
+                let inner = self
+                    .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                    .await
+                    .map(|o| Arc::new(ObjectFundsChecker::new(o.version())));
+                self.object_funds_checker.store(inner);
+            }
+        } else {
+            self.object_funds_checker.store(None);
+        }
     }
 
     // TODO: Consolidate our traits to reduce the number of methods here.
@@ -3960,6 +3989,7 @@ impl AuthorityState {
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.execution_scheduler
             .reconfigure(&new_epoch_store, self.get_account_funds_read());
+        self.init_object_funds_checker().await;
         *execution_lock = new_epoch;
 
         self.notify_epoch(new_epoch);
@@ -6271,13 +6301,8 @@ impl RandomnessRoundReceiver {
             let mut effects = match result {
                 Ok(result) => result,
                 Err(_) => {
-                    if cfg!(debug_assertions) {
-                        // Crash on randomness update execution timeout in debug builds.
-                        panic!(
-                            "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
-                        );
-                    }
-                    warn!(
+                    // Crash on randomness update execution timeout in debug builds.
+                    debug_fatal!(
                         "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
                     );
                     // Continue waiting as long as necessary in non-debug builds.

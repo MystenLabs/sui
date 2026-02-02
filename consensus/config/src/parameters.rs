@@ -95,6 +95,10 @@ pub struct Parameters {
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
+
+    /// Internal consensus parameters.
+    #[serde(default = "InternalParameters::default")]
+    pub internal: InternalParameters,
 }
 
 impl Parameters {
@@ -210,6 +214,7 @@ impl Default for Parameters {
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             tonic: TonicParameters::default(),
+            internal: InternalParameters::default(),
         }
     }
 }
@@ -268,6 +273,29 @@ impl Default for TonicParameters {
             connection_buffer_size: TonicParameters::default_connection_buffer_size(),
             excessive_message_size: TonicParameters::default_excessive_message_size(),
             message_size_limit: TonicParameters::default_message_size_limit(),
+        }
+    }
+}
+
+/// Internal parameters unrelated to operating a consensus node in the real world.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct InternalParameters {
+    /// Whether to skip equivocation validation, when testing with equivocators.
+    #[serde(default = "InternalParameters::default_skip_equivocation_validation")]
+    pub skip_equivocation_validation: bool,
+}
+
+impl InternalParameters {
+    fn default_skip_equivocation_validation() -> bool {
+        false
+    }
+}
+
+impl Default for InternalParameters {
+    fn default() -> Self {
+        Self {
+            skip_equivocation_validation: InternalParameters::default_skip_equivocation_validation(
+            ),
         }
     }
 }

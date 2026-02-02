@@ -216,6 +216,7 @@ impl RandomizedTransactionPayload {
     }
 }
 
+#[async_trait]
 impl Payload for RandomizedTransactionPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
@@ -276,7 +277,7 @@ impl Payload for RandomizedTransactionPayload {
         true
     }
 
-    fn make_transaction_batch(&mut self) -> Vec<Transaction> {
+    async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let rgp = self
             .system_state_observer
             .state
@@ -400,6 +401,15 @@ impl Payload for RandomizedTransactionPayload {
                         i,
                         result.digest,
                         error
+                    );
+                }
+                // we treat unknown rejections as retriable for now
+                BatchedTransactionStatus::UnknownRejection => {
+                    retriable_count += 1;
+                    tracing::debug!(
+                        "Transaction {} ({}) had unknown rejection",
+                        i,
+                        result.digest
                     );
                 }
             }
@@ -555,7 +565,8 @@ pub struct RandomizedTransactionWorkload {
 impl Workload<dyn Payload> for RandomizedTransactionWorkload {
     async fn init(
         &mut self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         // We observed that randomness may need a few seconds until DKG completion, and this may
@@ -581,7 +592,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
         // Publish basics package
         info!("Publishing basics package");
         self.basics_package_id = Some(
-            publish_basics_package(head.0, proxy.clone(), head.1, &head.2, gas_price)
+            publish_basics_package(head.0, execution_proxy.clone(), head.1, &head.2, gas_price)
                 .await
                 .0,
         );
@@ -596,7 +607,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                 let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
                     .call_counter_create(self.basics_package_id.unwrap())
                     .build_and_sign(keypair.as_ref());
-                let proxy_ref = proxy.clone();
+                let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
                     let (_, execution_result) =
                         proxy_ref.execute_transaction_block(transaction).await;
@@ -623,7 +634,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     ],
                 )
                 .build_and_sign(keypair.as_ref());
-            let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+            let (_, execution_result) =
+                execution_proxy.execute_transaction_block(transaction).await;
             let effects = execution_result.expect("Failed to create immutable object");
             let created_obj = effects.created()[0].0;
             current_gas = effects.gas_object().0;
@@ -638,7 +650,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(created_obj))],
                 )
                 .build_and_sign(keypair.as_ref());
-            let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+            let (_, execution_result) =
+                execution_proxy.execute_transaction_block(transaction).await;
             let effects = execution_result.expect("Failed to freeze object");
 
             // After freezing, the object becomes immutable - find it in mutated objects
@@ -670,7 +683,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                         ],
                     )
                     .build_and_sign(keypair.as_ref());
-                let proxy_ref = proxy.clone();
+                let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
                     let (_, execution_result) =
                         proxy_ref.execute_transaction_block(transaction).await;
@@ -692,7 +705,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
 
         // Get randomness shared object initial version
         if self.randomness_initial_shared_version.is_none() {
-            let obj = proxy
+            let obj = execution_proxy
                 .get_object(SUI_RANDOMNESS_STATE_OBJECT_ID)
                 .await
                 .expect("Failed to get randomness object");
@@ -714,7 +727,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
 
     async fn make_test_payloads(
         &self,
-        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         info!("Creating randomized transaction payloads...");

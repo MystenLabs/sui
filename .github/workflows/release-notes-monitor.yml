@@ -5,23 +5,31 @@ on:
   schedule:
     - cron: '0 */3 * * *'  # every 3 hours
 
+# Required for updating repository variables
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   get-list-of-prs:
     name: Get Release Notes for new PRs
     outputs:
       matrix: ${{ steps.get-pr-list.outputs.matrix }}
       new_commit_hash: ${{ steps.get-pr-list.outputs.new_commit_hash }}
-      existing_commit_tag: ${{ steps.get-pr-list.outputs.existing_commit_tag }}
-      new_tag: ${{ steps.get-pr-list.outputs.new_tag }}
       sui_version: ${{ steps.get-pr-list.outputs.sui_version }}
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout sui repo main branch
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       with:
         fetch-depth: 0
         ref: main
+
+    - name: Setup Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin@v6.2.0
+      with:
+        python-version: 3.10.10
 
     - name: Get list of PRs
       id: get-pr-list
@@ -30,20 +38,25 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         export new_commit_hash=$(git rev-parse HEAD)
-        export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
 
-        export previous_tag=$(git tag -l 'sui_v1*_rel_notes' --sort=-version:refname | head -n1 || true)
+        # Use repo variable to track last processed commit instead of tags
+        export last_processed_commit="${{ vars.RELEASE_NOTES_LAST_COMMIT }}"
+
+        # If no last processed commit, default to only checking last 50 commits for safety
+        # This prevents processing entire history if variable is missing/deleted
+        if [ -z "$last_processed_commit" ]; then
+          last_processed_commit=$(git rev-parse HEAD~50 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          echo "Warning: RELEASE_NOTES_LAST_COMMIT variable not set, defaulting to last 50 commits"
+          echo "Starting from: $last_processed_commit"
+        fi
 
         # Use the release_notes.py script to get the list of PRs with release notes
-        export list_of_prs=$(python3 ./scripts/release_notes.py list-prs "${previous_tag}" "${new_commit_hash}")
+        export list_of_prs=$(python3 ./scripts/release_notes.py list-prs "${last_processed_commit}" "${new_commit_hash}")
 
         echo "matrix=${list_of_prs}" >> $GITHUB_OUTPUT
         echo "new_commit_hash=${new_commit_hash}" >> $GITHUB_OUTPUT
-        echo "existing_commit_tag=${existing_commit_tag}" >> $GITHUB_OUTPUT
 
         export sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
-        export new_tag=$(echo "sui_v${sui_crate_version}_$(date +%s)_rel_notes")
-        echo "new_tag=${new_tag}" >> $GITHUB_OUTPUT
         echo "sui_version=${sui_crate_version}" >> $GITHUB_OUTPUT
 
   process-prs:
@@ -57,12 +70,12 @@ jobs:
 
     steps:
     - name: Checkout sui repo main branch
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       with:
         ref: main
 
     - name: Setup Python
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # pin@v5.6.0
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin@v6.2.0
       with:
         python-version: 3.10.10
 
@@ -88,45 +101,73 @@ jobs:
         } >> "$GITHUB_OUTPUT"
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
+      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
 
-    - name: Get PR author
+    - name: Get PR author and title
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        export author=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".user.login")
-        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
+        # Fetch PR info (author and title) in one API call
+        pr_info=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }})
+        author=$(echo "$pr_info" | jq -r ".user.login")
+        pr_title=$(echo "$pr_info" | jq -r ".title")
+
+        # Escape special characters for Slack mrkdwn format (& < > must be escaped)
+        pr_title=$(echo "$pr_title" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+
+        # Fetch employees.json once and reuse
+        employees=$(aws s3 cp s3://mysten-employees-dir/employees.json -)
+        slack_id=$(echo "$employees" | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
 
         # if we don't have the slack id or the author is not part of Mysten org, get the reviewer instead
         if [ -z "$slack_id" ]; then
-          export reviewer=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}/reviews --jq ".[0].user.login")
-          export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${reviewer}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
+          reviewer=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}/reviews --jq ".[0].user.login")
+          slack_id=$(echo "$employees" | jq --arg AUTHOR "${reviewer}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
         fi
 
+        # Store slack_id, author, and title for use in Slack message
         echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
+        echo "author=${author}" >> $GITHUB_ENV
+        echo "pr_title=${pr_title}" >> $GITHUB_ENV
 
     - name: Post to a Slack channel
-      uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
       with:
-        channel-id: '#ext-mysten-release-notes'
-        slack-message: |
-          <@U03LRLPR1QX> and <@U097GDYSX24>, please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
-          *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>
-          *Release Notes:*
-          ${{ steps.read-notes.outputs.release_notes }}
+        method: chat.postMessage
+        token: ${{ secrets.SLACK_BOT_TOKEN }}
+        payload: |
+          channel: "#ext-mysten-release-notes"
+          text: |
+            ${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS || '' }}${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS && ', please' || 'Please' }} review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
+            *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|#${{ matrix.pr }}: ${{ env.pr_title }}> by ${{ env.slack_id && format('<@{0}>', env.slack_id) || format('`{0}` (external contributor)', env.author) }}
+            *Release Notes:*
+            ${{ steps.read-notes.outputs.release_notes }}
 
-  tag:
-    name: Adding git tag to processed commit
-    needs: [ get-list-of-prs ]
-    if: ${{ success() && needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
-    uses: mystenlabs/sui/.github/workflows/tag.yml@main
-    with:
-      sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
-      tag_name: ${{ needs.get-list-of-prs.outputs.new_tag }}
-    secrets: inherit
+  update-last-processed-commit:
+    name: Update last processed commit
+    needs: [ get-list-of-prs, process-prs ]
+    if: ${{ always() && needs.get-list-of-prs.result == 'success' && (needs.process-prs.result == 'success' || needs.process-prs.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Update RELEASE_NOTES_LAST_COMMIT variable
+      env:
+        # Requires a PAT with repo scope to update repository variables
+        GH_TOKEN: ${{ secrets.SUI_CREATE_RELEASE }}
+      run: |
+        # Retry up to 3 times to ensure variable is updated
+        for attempt in 1 2 3; do
+          if gh variable set RELEASE_NOTES_LAST_COMMIT \
+              --repo MystenLabs/sui \
+              --body "${{ needs.get-list-of-prs.outputs.new_commit_hash }}"; then
+            echo "Updated RELEASE_NOTES_LAST_COMMIT to ${{ needs.get-list-of-prs.outputs.new_commit_hash }}"
+            exit 0
+          fi
+          echo "Attempt $attempt failed, retrying in 5 seconds..."
+          sleep 5
+        done
+        echo "ERROR: Failed to update RELEASE_NOTES_LAST_COMMIT after 3 attempts"
+        exit 1

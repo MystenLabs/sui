@@ -132,17 +132,12 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
     )
     .await?;
 
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
+    let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx.id())
         .await?
-        .unwrap();
+        .as_object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
-    ptb.transfer_object(
-        recipient,
-        get_object_ref(&mut client.clone(), gas_for_split_tx.id()).await?,
-    )?;
+    ptb.transfer_arg(recipient, sui_types::transaction::Argument::GasCoin);
     let tx_data = TransactionData::new_programmable(
         sender,
         vec![gas_object],
@@ -369,17 +364,12 @@ async fn test_limit_many_small_coins() -> Result<()> {
     )
     .await?;
 
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
+    let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx.id())
         .await?
-        .unwrap();
+        .as_object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
-    ptb.transfer_object(
-        recipient,
-        get_object_ref(&mut client.clone(), gas_for_split_tx.id()).await?,
-    )?;
+    ptb.transfer_arg(recipient, sui_types::transaction::Argument::GasCoin);
     let tx_data = TransactionData::new_programmable(
         sender,
         vec![gas_object],
@@ -514,12 +504,9 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
 
     // Send rest of the coins to recipient first
     for coin in all_coins_sender.iter().skip(2) {
-        // Get fresh gas object for each transaction
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
+        let gas_object = get_object_ref(&mut client.clone(), second_coin_id)
             .await?
-            .unwrap();
+            .as_object_ref();
 
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
@@ -585,17 +572,12 @@ async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
     )
     .await?;
 
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
+    let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx.id())
         .await?
-        .unwrap();
+        .as_object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
-    ptb.transfer_object(
-        recipient,
-        get_object_ref(&mut client.clone(), gas_for_split_tx.id()).await?,
-    )?;
+    ptb.transfer_arg(recipient, sui_types::transaction::Argument::GasCoin);
     let tx_data = TransactionData::new_programmable(
         sender,
         vec![gas_object],
@@ -848,17 +830,12 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
 
     // Now send coin previously been used as gas, in order to only have
     // the change coins.
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
+    let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx.id())
         .await?
-        .unwrap();
+        .as_object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
-    ptb.transfer_object(
-        recipient,
-        get_object_ref(&mut client.clone(), gas_for_split_tx.id()).await?,
-    )?;
+    ptb.transfer_arg(recipient, sui_types::transaction::Argument::GasCoin);
     let tx_data = TransactionData::new_programmable(
         sender,
         vec![gas_object],
@@ -1029,16 +1006,15 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
     )
     .await?;
 
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
+    let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx.id())
         .await?
-        .unwrap();
+        .as_object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
+    ptb.transfer_arg(recipient, sui_types::transaction::Argument::GasCoin);
     ptb.transfer_object(
         recipient,
-        get_object_ref(&mut client.clone(), gas_for_split_tx.id()).await?,
+        get_object_ref(&mut client.clone(), coin_to_split.id()).await?,
     )?;
     let tx_data = TransactionData::new_programmable(
         sender,
@@ -1217,17 +1193,12 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
     )
     .await?;
 
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
+    let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx.id())
         .await?
-        .unwrap();
+        .as_object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
-    ptb.transfer_object(
-        recipient,
-        get_object_ref(&mut client.clone(), gas_for_split_tx.id()).await?,
-    )?;
+    ptb.transfer_arg(recipient, sui_types::transaction::Argument::GasCoin);
     let tx_data = TransactionData::new_programmable(
         sender,
         vec![gas_object],

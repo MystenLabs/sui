@@ -11,7 +11,7 @@ When the enclave starts, it exposes 3 HTTP endpoints:
 
 1. `/get_attestation`: Returns the signed attestation document. It is used during on-chain registration.
 
-1. `/process_data`: Contains your custom logic. You will write the code for this yourself. This is the endpoint that your dApp frontend will hit.
+1. `/process_data`: Contains your custom logic. You will write the code for this yourself. This is the endpoint that your app frontend will hit.
 
 ## Platform Configuration Registers (PCR)
 
@@ -47,15 +47,15 @@ Move smart contracts do two things in this process:
 
 Example object types created by Move smart contracts include the `EnclaveConfig` object for the PCRs and the `Enclave` object for the public key and metadata.
 
-2. They verify signed responses. The Move dApp logic calls `verify_signature()` inside the Nautilus Move library. If the call is valid, data is accepted and logic continues. This guarantees that the dApp only accepts data from a real, authenticated enclave.
+2. They verify signed responses. The Move app logic calls `verify_signature()` inside the Nautilus Move library. If the call is valid, data is accepted and logic continues. This guarantees that the app only accepts data from a real, authenticated enclave.
 
 ## Natilus workflows 
 
-Nautilus involves two main participants: dApp developers who build and deploy the system, and users who interact with it. The framework establishes a trust model that allows users to verify computations without trusting the developer.
+Nautilus involves two main participants: app developers who build and deploy the system, and users who interact with it. The framework establishes a trust model that allows users to verify computations without trusting the developer.
 
 ### Developer workflow
 
-As a dApp developer, follow these steps to deploy an instance of Nautilus:
+As an app developer, follow these steps to deploy an instance of Nautilus:
 
 1. Create a Nautilus off-chain server with a reproducible build using the [provided template](https://github.com/MystenLabs/nautilus).
 
@@ -107,7 +107,7 @@ This approach provides the following benefits:
 
 - Any changes to the software result in different PCR values, making unauthorized modifications detectable.
 
-- Reproducible builds shift the trust from runtime to build time, strengthening the overall security posture of the dApp.
+- Reproducible builds shift the trust from runtime to build time, strengthening the overall security posture of the app.
 
 ### TEE security considerations
 

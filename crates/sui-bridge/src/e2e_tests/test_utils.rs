@@ -13,7 +13,7 @@ use crate::events::*;
 use crate::metrics::BridgeMetrics;
 use crate::node::run_bridge_node;
 use crate::server::BridgeNodePublicMetadata;
-use crate::sui_client::SuiBridgeClient;
+use crate::sui_client::{SuiBridgeClient, SuiClientInner};
 use crate::sui_transaction_builder::{
     build_add_tokens_on_sui_transaction, build_committee_register_transaction,
 };
@@ -46,11 +46,11 @@ use std::process::{Child, Command};
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::local_ip_utils::get_available_port;
-use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::{
-    SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionFilter,
+    SuiEvent, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionFilter,
 };
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::SuiClient;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -62,6 +62,8 @@ use sui_types::bridge::{
 use sui_types::committee::{ProtocolVersion, TOTAL_VOTING_POWER};
 use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, ToFromBytes, get_key_pair};
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
@@ -273,6 +275,7 @@ impl BridgeTestCluster {
     }
 
     pub fn sui_client(&self) -> &SuiClient {
+        #[allow(deprecated)]
         &self.test_cluster.inner.fullnode_handle.sui_client
     }
 
@@ -343,7 +346,7 @@ impl BridgeTestCluster {
     pub async fn sign_and_execute_transaction(
         &self,
         tx_data: &TransactionData,
-    ) -> SuiTransactionBlockResponse {
+    ) -> ExecutedTransaction {
         self.test_cluster
             .inner
             .sign_and_execute_transaction(tx_data)
@@ -1036,15 +1039,13 @@ impl TestClusterWrapperBuilder {
         // Committee registers themselves
         let mut server_ports = vec![];
         let mut tasks = vec![];
-        let quorum_driver_api = test_cluster.quorum_driver_api().clone();
         // Reorder the nodes so that the last node has the largest stake.
         let validator_with_max_stake = test_cluster
-            .sui_client()
-            .governance_api()
-            .get_committee_info(None)
+            .grpc_client()
+            .get_committee(None)
             .await
             .unwrap()
-            .validators
+            .voting_rights
             .iter()
             .max_by(|a, b| a.0.cmp(&b.0))
             .unwrap()
@@ -1090,14 +1091,10 @@ impl TestClusterWrapperBuilder {
                 data,
                 vec![node.config().account_key_pair.keypair()],
             );
-            let api_clone = quorum_driver_api.clone();
+            let api_clone = test_cluster.wallet.grpc_client().unwrap();
             tasks.push(async move {
                 api_clone
-                    .execute_transaction_block(
-                        tx,
-                        SuiTransactionBlockResponseOptions::new().with_effects(),
-                        None,
-                    )
+                    .execute_transaction_and_wait_for_checkpoint(&tx)
                     .await
             });
         }
@@ -1164,19 +1161,14 @@ impl TestClusterWrapperBuilder {
             .unwrap();
 
             let response = test_cluster.sign_and_execute_transaction(&tx).await;
-            assert_eq!(
-                response.effects.unwrap().status(),
-                &SuiExecutionStatus::Success
-            );
+            assert!(response.effects.status().is_ok());
             info!("Deploy tokens took {:?} secs", timer.elapsed().as_secs());
         } else {
             await_committee_register_tasks(&test_cluster, tasks).await;
         }
         async fn await_committee_register_tasks(
             test_cluster: &TestCluster,
-            tasks: Vec<
-                impl Future<Output = Result<SuiTransactionBlockResponse, sui_sdk::error::Error>>,
-            >,
+            tasks: Vec<impl Future<Output = Result<ExecutedTransaction, tonic::Status>>>,
         ) {
             // The tx may fail if a member tries to register when the committee is already finalized.
             // In that case, we just need to check the committee members is not empty since once
@@ -1184,7 +1176,7 @@ impl TestClusterWrapperBuilder {
             let responses = join_all(tasks).await;
             let mut has_failure = false;
             for response in responses {
-                if response.unwrap().effects.unwrap().status() != &SuiExecutionStatus::Success {
+                if response.unwrap().effects.status() != &ExecutionStatus::Success {
                     has_failure = true;
                 }
             }
@@ -1256,9 +1248,9 @@ impl TestClusterWrapper {
 
 async fn get_bridge_summary(test_cluster: &TestCluster) -> BridgeSummary {
     test_cluster
-        .sui_client()
-        .http()
-        .get_latest_bridge()
+        .grpc_client()
+        .inner_mut()
+        .get_bridge_summary()
         .await
         .unwrap()
 }
@@ -1509,7 +1501,7 @@ async fn initiate_bridge_sui_to_eth_internal(
     .await
     {
         Ok(resp) => {
-            if !resp.status_ok().unwrap() {
+            if !resp.effects.status().is_ok() {
                 return Err(anyhow!("Sui TX error"));
             } else {
                 resp
@@ -1522,7 +1514,7 @@ async fn initiate_bridge_sui_to_eth_internal(
     let bridge_action = sui_events
         .iter()
         .filter_map(|e| {
-            let sui_bridge_event = SuiBridgeEvent::try_from_sui_event(e).unwrap()?;
+            let sui_bridge_event = SuiBridgeEvent::try_from_event(e).unwrap()?;
             sui_bridge_event.try_into_bridge_action()
         })
         .find(|action| {
@@ -1625,7 +1617,7 @@ async fn deposit_eth_to_sui_package(
     bridge_object_arg: ObjectArg,
     sui_token_type_tags: &HashMap<u8, TypeTag>,
     use_v2: bool,
-) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
+) -> Result<ExecutedTransaction, anyhow::Error> {
     let mut builder = ProgrammableTransactionBuilder::new();
     let arg_target_chain = builder.pure(target_chain as u8).unwrap();
     let arg_target_address = builder.pure(target_address.as_slice()).unwrap();

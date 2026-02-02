@@ -7,9 +7,7 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
 use sui_move_build::{BuildConfig, CompiledPackage};
-use sui_sdk::rpc_types::{
-    SuiObjectDataOptions, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-};
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::balance::Balance;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
@@ -17,6 +15,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{AccountKeyPair, Signature, Signer, get_key_pair};
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GAS;
 use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
@@ -25,10 +24,9 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    Argument, CallArg, DEFAULT_VALIDATOR_GAS_PRICE, FundsWithdrawalArg, GasData, ObjectArg,
+    Argument, CallArg, DEFAULT_VALIDATOR_GAS_PRICE, FundsWithdrawalArg, ObjectArg,
     SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData, TransactionDataV1,
-    TransactionExpiration,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{SUI_SYSTEM_PACKAGE_ID, TypeTag};
@@ -100,7 +98,7 @@ impl FundSource {
 pub struct TestTransactionBuilder {
     ptb_builder: ProgrammableTransactionBuilder,
     sender: SuiAddress,
-    gas_object: ObjectRef,
+    gas_object: Option<ObjectRef>,
     gas_price: u64,
     gas_budget: Option<u64>,
     address_balance_gas: Option<AddressBalanceGasConfig>,
@@ -108,6 +106,10 @@ pub struct TestTransactionBuilder {
 
 impl TestTransactionBuilder {
     pub fn new(sender: SuiAddress, gas_object: ObjectRef, gas_price: u64) -> Self {
+        Self::new_impl(sender, Some(gas_object), gas_price)
+    }
+
+    fn new_impl(sender: SuiAddress, gas_object: Option<ObjectRef>, gas_price: u64) -> Self {
         Self {
             ptb_builder: ProgrammableTransactionBuilder::new(),
             sender,
@@ -118,11 +120,25 @@ impl TestTransactionBuilder {
         }
     }
 
+    pub fn new_with_address_balance_gas(
+        sender: SuiAddress,
+        gas_price: u64,
+        chain_identifier: ChainIdentifier,
+        current_epoch: EpochId,
+        nonce: u32,
+    ) -> Self {
+        Self::new_impl(sender, None, gas_price).with_address_balance_gas(
+            chain_identifier,
+            current_epoch,
+            nonce,
+        )
+    }
+
     pub fn sender(&self) -> SuiAddress {
         self.sender
     }
 
-    pub fn gas_object(&self) -> ObjectRef {
+    pub fn gas_object(&self) -> Option<ObjectRef> {
         self.gas_object
     }
 
@@ -423,7 +439,7 @@ impl TestTransactionBuilder {
             .sum::<u64>();
         match fund_source {
             FundSource::Coin(coin) => {
-                let source = if coin == self.gas_object {
+                let source = if Some(coin) == self.gas_object {
                     Argument::GasCoin
                 } else {
                     self.ptb_builder
@@ -606,28 +622,22 @@ impl TestTransactionBuilder {
             .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE);
 
         if let Some(ab_gas) = self.address_balance_gas {
-            TransactionData::V1(TransactionDataV1 {
-                kind: sui_types::transaction::TransactionKind::ProgrammableTransaction(pt),
-                sender: self.sender,
-                gas_data: GasData {
-                    payment: vec![],
-                    owner: self.sender,
-                    price: self.gas_price,
-                    budget: gas_budget,
-                },
-                expiration: TransactionExpiration::ValidDuring {
-                    min_epoch: Some(ab_gas.current_epoch),
-                    max_epoch: Some(ab_gas.current_epoch + 1),
-                    min_timestamp: None,
-                    max_timestamp: None,
-                    chain: ab_gas.chain_identifier,
-                    nonce: ab_gas.nonce,
-                },
-            })
+            TransactionData::new_programmable_with_address_balance_gas(
+                self.sender,
+                pt,
+                gas_budget,
+                self.gas_price,
+                ab_gas.chain_identifier,
+                ab_gas.current_epoch,
+                ab_gas.nonce,
+            )
         } else {
             TransactionData::new_programmable(
                 self.sender,
-                vec![self.gas_object],
+                vec![
+                    self.gas_object
+                        .expect("gas_object required when not using address_balance_gas"),
+                ],
                 pt,
                 gas_budget,
                 self.gas_price,
@@ -867,13 +877,11 @@ pub async fn publish_basics_package_and_make_counter(
         .await;
     let counter_ref = resp
         .effects
-        .unwrap()
         .created()
         .iter()
-        .find(|obj_ref| matches!(obj_ref.owner, Owner::Shared { .. }))
+        .find(|obj_ref| matches!(obj_ref.1, Owner::Shared { .. }))
         .unwrap()
-        .reference
-        .to_object_ref();
+        .0;
     (package_ref, counter_ref)
 }
 
@@ -897,13 +905,11 @@ pub async fn publish_basics_package_and_make_party_object(
         .await;
     let object_ref = resp
         .effects
-        .unwrap()
         .created()
         .iter()
-        .find(|obj_ref| matches!(obj_ref.owner, Owner::ConsensusAddressOwner { .. }))
+        .find(|obj_ref| matches!(obj_ref.1, Owner::ConsensusAddressOwner { .. }))
         .unwrap()
-        .reference
-        .to_object_ref();
+        .0;
     (package_ref, object_ref)
 }
 
@@ -916,7 +922,7 @@ pub async fn increment_counter(
     package_id: ObjectID,
     counter_id: ObjectID,
     initial_shared_version: SequenceNumber,
-) -> SuiTransactionBlockResponse {
+) -> ExecutedTransaction {
     let gas_object = if let Some(gas_object_id) = gas_object_id {
         context.get_object_ref(gas_object_id).await.unwrap()
     } else {
@@ -941,24 +947,16 @@ pub async fn increment_counter(
 pub async fn emit_new_random_u128(
     context: &WalletContext,
     package_id: ObjectID,
-) -> SuiTransactionBlockResponse {
+) -> ExecutedTransaction {
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let rgp = context.get_reference_gas_price().await.unwrap();
 
-    let client = context.get_client().await.unwrap();
+    let mut client = context.grpc_client().unwrap();
     let random_obj = client
-        .read_api()
-        .get_object_with_options(
-            SUI_RANDOMNESS_STATE_OBJECT_ID,
-            SuiObjectDataOptions::new().with_owner(),
-        )
+        .get_object(SUI_RANDOMNESS_STATE_OBJECT_ID)
         .await
-        .unwrap()
-        .into_object()
         .unwrap();
-    let random_obj_owner = random_obj
-        .owner
-        .expect("Expect Randomness object to have an owner");
+    let random_obj_owner = random_obj.owner().to_owned();
 
     let Owner::Shared {
         initial_shared_version,
@@ -1000,7 +998,7 @@ pub async fn publish_nfts_package(
         .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
     let package_id = resp.get_new_package_obj().unwrap().0;
-    (package_id, gas_id, resp.digest)
+    (package_id, gas_id, resp.transaction.digest())
 }
 
 /// Pre-requisite: `publish_nfts_package` must be called before this function.  Executes a
@@ -1022,17 +1020,9 @@ pub async fn create_nft(
         .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
 
-    let object_id = resp
-        .effects
-        .as_ref()
-        .unwrap()
-        .created()
-        .first()
-        .unwrap()
-        .reference
-        .object_id;
+    let object_id = resp.effects.created().first().unwrap().0.0;
 
-    (sender, object_id, resp.digest)
+    (sender, object_id, resp.transaction.digest())
 }
 
 /// Executes a transaction to delete the given NFT.
@@ -1041,7 +1031,7 @@ pub async fn delete_nft(
     sender: SuiAddress,
     package_id: ObjectID,
     nft_to_delete: ObjectRef,
-) -> SuiTransactionBlockResponse {
+) -> ExecutedTransaction {
     let gas = context
         .get_one_gas_object_owned_by_address(sender)
         .await

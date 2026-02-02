@@ -18,6 +18,7 @@ humantime.workspace = true
 prometheus.workspace = true
 prost.workspace = true
 prost-types.workspace = true
+rustls.workspace = true
 serde.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true

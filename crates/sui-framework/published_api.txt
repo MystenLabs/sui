@@ -5260,6 +5260,9 @@ lossless_shl
 lossless_shr
 	public fun
 	0x1::u128
+lossless_div
+	public fun
+	0x1::u128
 bitwise_not
 	public fun
 	0x1::u16
@@ -5318,6 +5321,9 @@ lossless_shl
 	public fun
 	0x1::u16
 lossless_shr
+	public fun
+	0x1::u16
+lossless_div
 	public fun
 	0x1::u16
 bitwise_not
@@ -5383,6 +5389,9 @@ lossless_shl
 lossless_shr
 	public fun
 	0x1::u256
+lossless_div
+	public fun
+	0x1::u256
 bitwise_not
 	public fun
 	0x1::u32
@@ -5444,6 +5453,9 @@ lossless_shl
 	public fun
 	0x1::u32
 lossless_shr
+	public fun
+	0x1::u32
+lossless_div
 	public fun
 	0x1::u32
 bitwise_not
@@ -5512,6 +5524,9 @@ lossless_shl
 lossless_shr
 	public fun
 	0x1::u64
+lossless_div
+	public fun
+	0x1::u64
 bitwise_not
 	public fun
 	0x1::u8
@@ -5567,6 +5582,9 @@ lossless_shl
 	public fun
 	0x1::u8
 lossless_shr
+	public fun
+	0x1::u8
+lossless_div
 	public fun
 	0x1::u8
 UQ32_32

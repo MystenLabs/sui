@@ -50,6 +50,13 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Install ring as the default rustls crypto provider. Required because hyper-rustls
+    // (via gcp_auth) enables aws-lc-rs by default, and we also use ring elsewhere.
+    // With both providers compiled in, rustls can't auto-detect which to use.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     let _guard = TelemetryConfig::new().with_env().init();
 
     let args = Args::parse();

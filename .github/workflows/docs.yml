@@ -15,7 +15,7 @@ jobs:
       isOldDoc: ${{ steps.diff.outputs.isOldDoc }}
       isExamples: ${{ steps.diff.outputs.isExamples }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - name: Detect Changes
         uses: './.github/actions/diffs'
         id: diff
@@ -45,8 +45,8 @@ jobs:
     runs-on: [ubuntu-latest]
 
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - name: Spell Check Docs
-        uses: crate-ci/typos@v1.16.11
+        uses: crate-ci/typos@73edd198fc9a18a49c00475ca869188a13ae0117 # pin@v1.42.3
         with:
           files: ./docs/content

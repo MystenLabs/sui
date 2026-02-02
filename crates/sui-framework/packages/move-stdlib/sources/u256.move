@@ -119,6 +119,13 @@ public fun lossless_shr(x: u256, shift: u8): Option<u256> {
     if (result << shift == x) option::some(result) else option::none()
 }
 
+/// Divides `x` by `y`.
+/// Returns `None` if `y` is zero or if there is a non-zero remainder (if `x % y != 0`). In other
+/// words, it returns `None` if the operation is not reversible.
+public fun lossless_div(x: u256, y: u256): Option<u256> {
+    std::macros::num_lossless_div!(x, y)
+}
+
 /// Maximum value for a `u256`
 public macro fun max_value(): u256 {
     0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF

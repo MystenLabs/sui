@@ -108,7 +108,6 @@ insta.workspace = true
 more-asserts.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true
-serde-reflection.workspace = true
 serde_yaml.workspace = true
 num-bigint = "0.4.4"
 
@@ -129,11 +128,6 @@ moka = { workspace = true, default-features = false, features = [
 ] }
 [target.'cfg(not(msim))'.dependencies]
 moka = { workspace = true, features = ["sync"] }
-
-[[example]]
-name = "generate-format"
-path = "src/generate_format.rs"
-test = false
 
 [[bench]]
 name = "verified_cert_cache_bench"

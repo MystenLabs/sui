@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Install Teleport
-        uses: teleport-actions/setup@176c25dfcd19cd31a252f275d579822b243e7b9c # pin@v1.0.6
+        uses: teleport-actions/setup@a820ebbf1bc1a496efca348ad21042d6e8df73a6 # pin@v1.1.0
         with:
           version: 18.2.0
       - name: Authorize against Teleport
@@ -135,7 +135,7 @@ jobs:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
     - name: Checkout sui repo main branch
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
     
     - name: Get sui commit
       env:
@@ -170,7 +170,7 @@ jobs:
         echo "oncall_name=$(echo ${oncall_name})" >> $GITHUB_ENV
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
+      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -182,23 +182,25 @@ jobs:
         echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV        
 
     - name: Post to slack
-      uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
+      uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
       env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SUI_SHA: ${{ env.sui_sha }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
         SLACK_ID: ${{ env.slack_id }}
         ONCALL_NAME: ${{ env.oncall_name }}
       with:
-        channel-id: 'simtest-nightly'
-        slack-message: |
-          :sui::error-cross: *${{ github.workflow }}* ${{ needs.simtest.outputs.protocol_message }}workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
-          Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
-          Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
+        method: chat.postMessage
+        token: ${{ secrets.SLACK_BOT_TOKEN }}
+        payload: |
+          channel: "simtest-nightly"
+          text: |
+            :sui::error-cross: *${{ github.workflow }}* ${{ needs.simtest.outputs.protocol_message }}workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
+            Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
+            Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
 
-          *Failed tests:*
-          ```
-          ${{ needs.simtest.outputs.failed_tests }}
-          ```
+            *Failed tests:*
+            ```
+            ${{ needs.simtest.outputs.failed_tests }}
+            ```
 
-          <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug: `tsh ssh ubuntu@simtest-01` and look in `${{ needs.simtest.outputs.log_dir }}`
+            <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug: `tsh ssh ubuntu@simtest-01` and look in `${{ needs.simtest.outputs.log_dir }}`
