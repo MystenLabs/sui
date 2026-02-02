@@ -199,8 +199,11 @@ mod tests {
 
         let addresses = vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()];
 
-        let result = endpoint_manager
-            .update_endpoint(EndpointId::Consensus(network_pubkey.clone()), AddressSource::Admin, addresses);
+        let result = endpoint_manager.update_endpoint(
+            EndpointId::Consensus(network_pubkey.clone()),
+            AddressSource::Admin,
+            addresses,
+        );
 
         assert!(result.is_err());
         let err = result.unwrap_err();
