@@ -112,6 +112,11 @@ impl Context {
         self.protocol_config = protocol_config;
         self
     }
+
+    /// Returns true if this node is a validator (i.e., part of the committee).
+    pub fn is_validator(&self) -> bool {
+        self.committee.is_valid_index(self.own_index)
+    }
 }
 
 /// A clock that allows to derive the current UNIX system timestamp while guaranteeing that timestamp
