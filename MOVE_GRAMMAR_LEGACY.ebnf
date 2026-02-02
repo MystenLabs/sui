@@ -1,0 +1,400 @@
+(*
+ * Legacy Move Language EBNF Grammar
+ * ==================================
+ *
+ * This grammar covers Legacy Move edition (pre-2024).
+ * For Move 2024+, see MOVE_GRAMMAR_2024.ebnf
+ *
+ * Derived from: external-crates/move/crates/move-compiler/src/parser/syntax.rs
+ * Verified against: external-crates/move/crates/move-compiler/tests/move_check/parser/
+ *
+ * Key differences from Move 2024:
+ *   - No enum declarations or match expressions
+ *   - No mut keyword (can use "mut" as identifier)
+ *   - No positional struct fields (only named fields)
+ *   - No named blocks or labeled control flow
+ *   - Simpler lambda expressions (no explicit return types)
+ *   - No visibility modifier on structs (implicitly public)
+ *   - No module labels (must use braced form)
+ *   - No use fun declarations
+ *   - No macro functions
+ *
+ * Reserved keywords in Legacy Move (25 total, from lexer.rs):
+ *   abort, acquires, as, break, const, continue, copy, else, false,
+ *   friend, fun, if, invariant, let, loop, module, move, native,
+ *   public, return, spec, struct, true, use, while
+ *
+ * Contextual keywords (parsed contextually, not as tokens):
+ *   address, entry, has, phantom, Self
+ *
+ * NOT reserved in legacy (can be used as identifiers, keywords in Move 2024):
+ *   enum, for, match, mut, type
+ *)
+
+(* ============================================================================
+ * LEXICAL ELEMENTS
+ * ============================================================================ *)
+
+Identifier = <letter_or_underscore> { <alphanumeric_or_underscore> } ;
+RestrictedIdentifier = "`" <identifier_text> "`" ;
+
+(* ============================================================================
+ * LITERALS
+ * ============================================================================ *)
+
+Value =
+    "@" LeadingNameAccess
+  | "true" | "false"
+  | NumValue
+  | NumTypedValue
+  | ByteStringValue
+  | HexStringValue
+  ;
+
+NumValue = <decimal_number> | "0x" <hex_number> ;
+NumTypedValue = NumValue ("u8" | "u16" | "u32" | "u64" | "u128" | "u256") ;
+ByteStringValue = 'b"' { <char> } '"' ;
+HexStringValue = 'x"' { <hex_digit> } '"' ;
+
+(* ============================================================================
+ * TOP-LEVEL STRUCTURE
+ * ============================================================================ *)
+
+File = { Definition } ;
+
+Definition = ModuleDefinition | AddressBlock ;
+
+AddressBlock = "address" LeadingNameAccess "{" { ModuleDefinition } "}" ;
+
+ModuleDefinition =
+    { Attributes }
+    [ DocComment ]
+    ( "module" | "spec" )
+    [ LeadingNameAccess "::" ] ModuleName
+    "{" { ModuleMember } "}"           (* Only braced form in legacy *)
+  ;
+
+ModuleName = Identifier ;
+
+(* ============================================================================
+ * MODULE MEMBERS
+ * No enums in legacy Move
+ * ============================================================================ *)
+
+ModuleMember =
+    UseDecl
+  | FriendDecl
+  | ConstantDecl
+  | StructDecl
+  | FunctionDecl
+  | SpecBlock
+  ;
+
+(* ============================================================================
+ * USE DECLARATIONS
+ * No "use fun" in legacy Move
+ * ============================================================================ *)
+
+UseDecl =
+    { Attributes }
+    "use" Use ";"
+  ;
+
+Use =
+    LeadingNameAccess "::" UseModule
+  | LeadingNameAccess "::" "{" Comma<UseNestedModule> "}"
+  ;
+
+UseModule =
+    ModuleName [ UseAlias ]
+  | ModuleName "::" UseMember
+  | ModuleName "::" "{" Comma<UseMember> "}"
+  ;
+
+UseNestedModule = ModuleName UseModule ;
+UseMember = Identifier [ UseAlias ] ;
+UseAlias = "as" Identifier ;
+
+(* ============================================================================
+ * FRIEND DECLARATIONS
+ * ============================================================================ *)
+
+FriendDecl = { Attributes } "friend" NameAccessChain ";" ;
+
+(* ============================================================================
+ * CONSTANT DECLARATIONS
+ * ============================================================================ *)
+
+ConstantDecl =
+    { Attributes }
+    [ DocComment ]
+    "const" ConstantName ":" Type "=" Exp ";"
+  ;
+
+ConstantName = Identifier ;
+
+(* ============================================================================
+ * STRUCT DECLARATIONS
+ *
+ * In Legacy Move:
+ *   - NO visibility modifier allowed (structs are implicitly public)
+ *   - Only named fields (no positional fields)
+ * ============================================================================ *)
+
+StructDecl =
+    { Attributes }
+    [ DocComment ]
+    (* No visibility modifier in legacy *)
+    [ "native" ]
+    "struct" DatatypeName
+    [ TypeParameters ]
+    [ "has" AbilityList ]
+    StructFields
+    [ "has" AbilityList ";" ]
+  ;
+
+StructFields =
+    "{" Comma<FieldAnnot> "}"          (* Only named fields *)
+  | ";"                                (* Native struct *)
+  ;
+
+FieldAnnot = [ DocComment ] Field ":" Type ;
+Field = Identifier ;
+DatatypeName = Identifier ;
+
+(* ============================================================================
+ * FUNCTION DECLARATIONS
+ * No "macro" modifier in legacy (but "entry" is available)
+ * ============================================================================ *)
+
+FunctionDecl =
+    { Attributes }
+    [ DocComment ]
+    [ Visibility ]
+    [ "entry" ]
+    [ "native" ]
+    "fun" FunctionName
+    [ TypeParameters ]
+    "(" Comma<Parameter> ")"
+    [ ":" Type ]
+    FunctionBody
+  ;
+
+FunctionName = Identifier ;
+
+Visibility =
+    "public"
+  | "public" "(" "friend" ")"
+  ;
+
+Parameter = Var ":" Type ;             (* No "mut" keyword *)
+
+FunctionBody =
+    "{" Sequence "}"
+  | ";"
+  ;
+
+Var = Identifier ;
+
+(* ============================================================================
+ * TYPE PARAMETERS AND ABILITIES
+ * ============================================================================ *)
+
+TypeParameters = "<" Comma<TypeParameter> ">" ;
+
+TypeParameter = [ "phantom" ] Identifier [ ":" AbilityList ] ;
+
+AbilityList = Ability { "," Ability } ;
+
+Ability = "copy" | "drop" | "store" | "key" ;
+
+(* ============================================================================
+ * TYPES
+ * No function types in legacy
+ * ============================================================================ *)
+
+Type =
+    NameAccessChain
+  | "&" Type
+  | "&" "mut" Type                     (* "mut" here is contextual, not keyword *)
+  | "(" Comma<Type> ")"
+  ;
+
+(* ============================================================================
+ * NAME ACCESS CHAINS
+ * No macro invocations in legacy
+ * ============================================================================ *)
+
+NameAccessChain =
+    LeadingNameAccess [ TypeArgs ]
+    { "::" Identifier [ TypeArgs ] }
+  ;
+
+LeadingNameAccess = Identifier | NumValue ;
+
+TypeArgs = "<" Comma<Type> ">" ;
+
+(* ============================================================================
+ * SEQUENCES AND BLOCKS
+ * ============================================================================ *)
+
+Sequence =
+    { UseDecl }
+    { SequenceItem ";" }
+    [ Exp ]
+  ;
+
+SequenceItem =
+    "let" BindList [ ":" Type ] [ "=" Exp ]
+  | Exp
+  ;
+
+(* ============================================================================
+ * EXPRESSIONS
+ * No match expressions, no labeled blocks in legacy
+ * ============================================================================ *)
+
+Exp =
+    LambdaExp
+  | AssignExp
+  | BinOpExp
+  | QuantExp
+  ;
+
+(* Simpler lambdas - no return type annotation *)
+LambdaExp =
+    "|" Comma<LambdaBinding> "|" Exp
+  | "||" Exp
+  ;
+
+LambdaBinding = BindList [ ":" Type ] ;
+
+AssignExp = UnaryExp "=" Exp ;
+
+BinOpExp = UnaryExp { BinOp UnaryExp } ;
+
+BinOp =
+    "==>" | "<==>"                     (* Spec only *)
+  | "||" | "&&"
+  | "==" | "!=" | "<" | ">" | "<=" | ">="
+  | "as"
+  | ".."                               (* Spec only *)
+  | "|" | "^" | "&"
+  | "<<" | ">>"
+  | "+" | "-"
+  | "*" | "/" | "%"
+  ;
+
+UnaryExp =
+    "!" UnaryExp
+  | "&" UnaryExp
+  | "&" "mut" UnaryExp                 (* Contextual "mut" *)
+  | "*" UnaryExp
+  | "move" UnaryExp
+  | "copy" UnaryExp
+  | DotOrIndexChain
+  ;
+
+DotOrIndexChain = Term { DotOrIndexSuffix } ;
+
+(* No receiver-style method calls in legacy - only field access *)
+DotOrIndexSuffix =
+    "." Identifier                     (* Field access only *)
+  | "[" Comma<Exp> "]"                 (* Spec only *)
+  ;
+
+Term =
+    Value
+  | NameExp
+  | "(" ")"
+  | "(" Exp ")"
+  | "(" Exp ":" Type ")"
+  | "(" Exp "," Comma<Exp> ")"
+  | "{" Sequence "}"
+  | "vector" [ TypeArgs ] "[" Comma<Exp> "]"
+  | ControlExp
+  ;
+
+NameExp =
+    NameAccessChain
+  | NameAccessChain "(" Comma<Exp> ")"
+  | NameAccessChain "{" Comma<ExpField> "}"
+  ;
+
+ExpField = Field [ ":" Exp ] ;
+
+(* No match expression, no labeled blocks in legacy *)
+ControlExp =
+    IfExp | WhileExp | LoopExp
+  | BreakExp | ContinueExp | ReturnExp | AbortExp
+  ;
+
+IfExp = "if" "(" Exp ")" ExpOrBlock [ "else" ExpOrBlock ] ;
+WhileExp = "while" "(" Exp ")" ExpOrBlock ;
+LoopExp = "loop" ExpOrBlock ;
+
+BreakExp = "break" ;                   (* No labels, no values *)
+ContinueExp = "continue" ;             (* No labels *)
+ReturnExp = "return" [ Exp ] ;         (* No labels *)
+AbortExp = "abort" [ Exp ] ;
+
+ExpOrBlock = "{" Sequence "}" | Exp ;
+
+(* ============================================================================
+ * BINDINGS
+ * No "mut" keyword, no ellipsis in legacy
+ * ============================================================================ *)
+
+BindList =
+    Bind
+  | "(" Comma<Bind> ")"
+  ;
+
+Bind =
+    Var
+  | NameAccessChain "{" Comma<BindField> "}"
+  ;
+
+BindField = Field [ ":" Bind ] ;
+
+(* ============================================================================
+ * QUANTIFIERS (Spec only)
+ * ============================================================================ *)
+
+QuantExp =
+    "forall" QuantBindList [ "where" Exp ] ":" Exp
+  | "exists" QuantBindList [ "where" Exp ] ":" Exp
+  | "choose" QuantBind "where" Exp
+  | "choose" "min" QuantBind "where" Exp
+  ;
+
+QuantBindList = QuantBind { "," QuantBind } ;
+QuantBind = Identifier ":" Type | Identifier "in" Exp ;
+
+(* ============================================================================
+ * ATTRIBUTES
+ * ============================================================================ *)
+
+Attributes = "#" "[" Comma<Attribute> "]" ;
+
+Attribute =
+    Identifier
+  | Identifier "=" AttributeValue
+  | Identifier "(" Comma<Attribute> ")"
+  ;
+
+AttributeValue = Value | NameAccessChain ;
+
+(* ============================================================================
+ * SPECIFICATION BLOCKS
+ * ============================================================================ *)
+
+SpecBlock = "spec" [ Identifier ] "{" <spec_content> "}" ;
+
+(* ============================================================================
+ * HELPER
+ * ============================================================================ *)
+
+Comma<X> = [ X { "," X } [ "," ] ] ;
+
+DocComment = { "///" <text> } | "/**" <text> "*/" ;

@@ -1,0 +1,260 @@
+Move 2024 Language Changes
+==========================
+
+This document summarizes the syntax changes between Legacy Move and Move 2024.
+
+
+NEW KEYWORDS
+------------
+Move 2024 reserves these words that were valid identifiers in legacy:
+  - mut      Mutable variable bindings
+  - enum     Enum type declarations
+  - match    Pattern matching expressions
+  - type     Reserved for future use
+  - for      Reserved for future use (loops)
+
+To use these as identifiers in Move 2024, escape with backticks: `mut`, `enum`
+
+
+ENUMS AND PATTERN MATCHING
+--------------------------
+Move 2024 adds enum types and match expressions:
+
+  public enum Color {
+      Red,
+      Green,
+      Blue,
+      Custom { r: u8, g: u8, b: u8 }
+  }
+
+  match (color) {
+      Color::Red => 1,
+      Color::Green | Color::Blue => 2,
+      Color::Custom { r, .. } if (r > 100) => 3,
+      _ => 0,
+  }
+
+Match patterns support:
+  - Or patterns: pat1 | pat2
+  - Guard clauses: pat if (condition)
+  - At-patterns: x @ SomeVariant(...)
+  - Ellipsis for partial matching: { field1, .. }
+  - Mut bindings in patterns: mut x
+
+
+MUTABLE BINDINGS
+----------------
+Move 2024 requires explicit `mut` for variables that are reassigned:
+
+  Legacy:   let x = 1; x = 2;           // x is always mutable
+  Move2024: let mut x = 1; x = 2;       // explicit mut required for reassignment
+
+Parameters:
+  Legacy:   fun f(x: u64) { x = x + 1; }
+  Move2024: fun f(mut x: u64) { x = x + 1; }  // mut required if reassigned
+
+Variables that are only read (never reassigned) don't need mut.
+The migration tool automatically detects which variables need mut.
+
+
+POSITIONAL STRUCT FIELDS
+------------------------
+Move 2024 allows tuple-like structs:
+
+  public struct Point(u64, u64);
+
+  let p = Point(10, 20);
+  let x = p.0;                        // Access by index
+  let Point(x, y) = p;                // Destructure
+
+
+STRUCT AND ENUM VISIBILITY
+--------------------------
+Legacy:   struct Foo { }              // Implicitly public, no modifier allowed
+Move2024: public struct Foo { }       // "public" is required
+
+For enums:
+  public enum Bar { }                 // "public" is required (only option)
+
+Other visibility modifiers (friend, public(package)) not yet supported for types.
+
+
+FRIEND REMOVAL
+--------------
+Move 2024 removes "friend" entirely in favor of "public(package)":
+
+  Legacy:
+    friend 0x1::other_module;
+    public(friend) fun f() { }
+
+  Move2024:
+    public(package) fun f() { }       // Visible within the same package
+
+The migration tool comments out friend declarations:
+    /* friend 0x1::other_module; */
+
+And converts public(friend) to public(package) automatically.
+
+
+ADDRESS BLOCKS (DEPRECATED)
+---------------------------
+Legacy address block syntax is deprecated in Move 2024:
+
+  Legacy:
+    address 0x1 {
+        module m { }
+    }
+
+  Move2024:
+    module 0x1::m { }                 // Address in module path
+
+The migration tool comments out address declarations:
+    /* address 0x1 */ {
+        module m { }
+    }
+
+Note: Module address is REQUIRED in Move 2024. This is an error:
+    module m { }                      // Error: missing address
+
+Must specify address in module path:
+    module 0x1::m { }                 // Numeric address
+    module pkg::m { }                 // Named address from Move.toml
+
+
+RESTRICTED IDENTIFIERS
+----------------------
+Move 2024 introduces new keywords (mut, enum, type, match, for).
+Code using these as identifiers must escape them with backticks:
+
+  Legacy:   let type = 5;             // "type" was a valid identifier
+  Move2024: let `type` = 5;           // Must escape with backticks
+
+The migration tool automatically adds backticks where needed.
+
+
+GLOBAL PATH QUALIFICATION
+-------------------------
+Move 2024 may require global path qualification to disambiguate:
+
+  Legacy:   foo::bar()
+  Move2024: ::foo::bar()              // Global :: prefix if ambiguous
+
+This is needed when local names shadow global paths.
+
+
+NAMED BLOCKS AND LABELED CONTROL FLOW
+-------------------------------------
+Move 2024 adds labeled blocks:
+
+  let result = 'outer: {
+      'inner: loop {
+          if (condition) { break 'outer 42 };
+          if (other) { continue 'inner };
+      }
+  };
+
+  return 'block_name value;           // Return from named block
+
+
+LAMBDA EXPRESSIONS
+------------------
+Move 2024 adds explicit return types for lambdas:
+
+  Legacy:   |x| x + 1
+  Move2024: |x| x + 1                 // Still works
+  Move2024: |x: u64| -> u64 { x + 1 } // Explicit types
+
+
+RECEIVER-STYLE (DOT-CALL) SYNTAX
+---------------------------------
+Move 2024 adds method-style function calls:
+
+  Legacy:   vector::push_back(&mut v, 1);
+  Move2024: v.push_back(1);               // Receiver-style call
+
+The first argument becomes the receiver before the dot.
+Works with any function where the first parameter matches the receiver type.
+
+
+USE FUN DECLARATIONS
+--------------------
+Move 2024 adds method-style aliases (works with receiver syntax above):
+
+  use fun my_module::to_string as MyType.to_string;
+
+  let s = my_value.to_string();       // Calls my_module::to_string(my_value)
+
+Can be made public to export the method alias:
+
+  public use fun my_module::to_string as MyType.to_string;
+
+
+MACRO FUNCTIONS
+---------------
+Move 2024 adds compile-time macros:
+
+  macro fun assert_eq($left: u64, $right: u64) {
+      assert!($left == $right, 0);
+  }
+
+  assert_eq!(x, y);                   // Called with ! suffix
+
+
+MODULE LABELS
+-------------
+Move 2024 allows module label syntax for single-module files:
+
+  Legacy:   module foo { ... }
+  Move2024: module foo;               // Contents follow until EOF
+            fun f() { }
+            ...
+
+Note: Module labels can only be used when there's ONE module in the file.
+Multiple modules in a file must use braces:
+
+  module foo { ... }
+  module bar { ... }
+
+
+MACRO FUNCTIONS
+---------------
+Move 2024 adds macro modifier for compile-time code generation:
+
+  macro fun assert_eq($left: u64, $right: u64) {
+      assert!($left == $right, 0);
+  }
+
+  assert_eq!(x, y);                   // Called with ! suffix
+
+
+ELLIPSIS IN PATTERNS
+--------------------
+Move 2024 allows .. in struct patterns:
+
+  let S { field1, .. } = s;           // Ignore other fields
+  let T(a, ..) = t;                   // Ignore remaining positional fields
+
+
+SUMMARY TABLE
+-------------
+Feature                    Legacy    Move2024
+---------------------------------------------
+enum declarations          No        Yes
+match expressions          No        Yes
+mut keyword                No        Yes (required for reassignment)
+Positional structs         No        Yes
+Named blocks               No        Yes
+Lambda return types        No        Yes
+Receiver-style calls       No        Yes
+use fun / public use fun   No        Yes
+macro functions            No        Yes
+Module labels              No        Yes
+Ellipsis in patterns       No        Yes
+Global :: paths            No        Yes
+Restricted identifiers     No        Yes (backtick escaping)
+Struct visibility          None      public (required)
+Enum visibility            N/A       public (required)
+friend declarations        Yes       Removed
+public(friend) visibility  Yes       Removed
+public(package) visibility No        Yes (replaces friend)
+address blocks             Yes       Deprecated
