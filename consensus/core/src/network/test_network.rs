@@ -12,7 +12,10 @@ use crate::{
     block::VerifiedBlock,
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
-    network::{BlockStream, NetworkService},
+    network::{
+        BlockRequestStream, BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService,
+        ValidatorNetworkService,
+    },
 };
 
 use super::ExtendedSerializedBlock;
@@ -43,7 +46,7 @@ impl TestService {
 }
 
 #[async_trait]
-impl NetworkService for Mutex<TestService> {
+impl ValidatorNetworkService for Mutex<TestService> {
     async fn handle_send_block(
         &self,
         peer: AuthorityIndex,
@@ -104,5 +107,32 @@ impl NetworkService for Mutex<TestService> {
         _peer: AuthorityIndex,
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
         unimplemented!("Unimplemented")
+    }
+}
+
+#[async_trait]
+impl ObserverNetworkService for Mutex<TestService> {
+    async fn handle_stream_blocks(
+        &self,
+        _peer: NodeId,
+        _request_stream: BlockRequestStream,
+    ) -> ConsensusResult<ObserverBlockStream> {
+        unimplemented!("ObserverNetworkService not implemented for TestService")
+    }
+
+    async fn handle_fetch_blocks(
+        &self,
+        _peer: NodeId,
+        _block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        unimplemented!("ObserverNetworkService not implemented for TestService")
+    }
+
+    async fn handle_fetch_commits(
+        &self,
+        _peer: NodeId,
+        _commit_range: CommitRange,
+    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+        unimplemented!("ObserverNetworkService not implemented for TestService")
     }
 }

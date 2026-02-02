@@ -24,7 +24,7 @@ fn main() -> Result<()> {
 fn build_tonic_services(out_dir: &Path) {
     let codec_path = "tonic_prost::ProstCodec";
 
-    let service = tonic_build::manual::Service::builder()
+    let validator_service = tonic_build::manual::Service::builder()
         .name("ConsensusService")
         .package("consensus")
         .comment("Consensus authority interface")
@@ -88,7 +88,43 @@ fn build_tonic_services(out_dir: &Path) {
         )
         .build();
 
+    let observer_service = tonic_build::manual::Service::builder()
+        .name("ObserverService")
+        .package("consensus")
+        .comment("Observer node interface to serve observer clients")
+        .method(
+            tonic_build::manual::Method::builder()
+                .name("stream_blocks")
+                .route_name("StreamBlocks")
+                .input_type("crate::network::observer::BlockStreamRequest")
+                .output_type("crate::network::observer::BlockStreamResponse")
+                .codec_path(codec_path)
+                .server_streaming()
+                .client_streaming()
+                .build(),
+        )
+        .method(
+            tonic_build::manual::Method::builder()
+                .name("fetch_blocks")
+                .route_name("FetchBlocks")
+                .input_type("crate::network::observer::FetchBlocksRequest")
+                .output_type("crate::network::observer::FetchBlocksResponse")
+                .codec_path(codec_path)
+                .server_streaming()
+                .build(),
+        )
+        .method(
+            tonic_build::manual::Method::builder()
+                .name("fetch_commits")
+                .route_name("FetchCommits")
+                .input_type("crate::network::observer::FetchCommitsRequest")
+                .output_type("crate::network::observer::FetchCommitsResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .build();
+
     tonic_build::manual::Builder::new()
         .out_dir(out_dir)
-        .compile(&[service]);
+        .compile(&[validator_service, observer_service]);
 }
