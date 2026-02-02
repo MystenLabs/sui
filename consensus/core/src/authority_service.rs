@@ -634,7 +634,9 @@ impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
     async fn handle_stream_blocks(
         &self,
         _peer: NodeId,
-        _request_stream: Pin<Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>>,
+        _request_stream: Pin<
+            Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>,
+        >,
     ) -> ConsensusResult<crate::network::ObserverBlockStream> {
         // TODO: Implement observer block streaming
         // 1. Parse BlockStreamRequest stream (Start/Stop commands for flow control)

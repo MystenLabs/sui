@@ -189,8 +189,7 @@ pub(crate) struct ObserverBlockStreamItem {
 }
 
 /// Observer block stream type.
-pub(crate) type ObserverBlockStream =
-    Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send>>;
+pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send>>;
 
 /// Observer network service for handling requests from observer nodes.
 /// Unlike NetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
@@ -203,7 +202,9 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,
-        request_stream: Pin<Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>>,
+        request_stream: Pin<
+            Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>,
+        >,
     ) -> ConsensusResult<ObserverBlockStream>;
 
     /// Handles the request to fetch blocks by references from an observer peer.
@@ -234,7 +235,9 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
     async fn stream_blocks(
         &self,
         peer: NodeId,
-        request_stream: Pin<Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>>,
+        request_stream: Pin<
+            Box<dyn Stream<Item = crate::network::tonic_network::BlockStreamRequest> + Send>,
+        >,
         timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream>;
 
