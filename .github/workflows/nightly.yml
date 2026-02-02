@@ -54,38 +54,58 @@ jobs:
           export sui_sha=$(git rev-parse HEAD)
           echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
 
-      - name: Get current oncall
+      - name: Get current oncall from PagerDuty
         run: |
-          export current_oncall=$(curl -s --request GET \
-            --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
+          # Fetch oncall info including user details (for email)
+          response=$(curl -s --max-time 30 --request GET \
+            --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS&include[]=users' \
             --header 'Accept: application/json' \
             --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
-            --header 'Content-Type: application/json' \
-            | jq '.oncalls[].user.summary' | tr -d '"')
-          echo "current_oncall=$(echo ${current_oncall})" >> $GITHUB_ENV
+            --header 'Content-Type: application/json')
 
-          export oncall_name=$(curl -s --request GET \
-            --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
-            --header 'Accept: application/json' \
-            --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
-            --header 'Content-Type: application/json' \
-            | jq '.oncalls[].escalation_policy.summary' | tr -d '"')
-          echo "oncall_name=$(echo ${oncall_name})" >> $GITHUB_ENV
+          oncall_email=$(echo "$response" | jq -r '.oncalls[0].user.email // empty')
+          oncall_name=$(echo "$response" | jq -r '.oncalls[0].escalation_policy.summary // empty')
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
+          echo "oncall_email=${oncall_email}" >> "$GITHUB_ENV"
+          echo "oncall_name=${oncall_name}" >> "$GITHUB_ENV"
 
-      - name: Get slack id for the oncall
+          if [ -z "$oncall_email" ]; then
+            echo "::warning::Could not get oncall email from PagerDuty"
+          fi
+
+      - name: Get Slack ID for oncall
         run: |
-          export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ env.current_oncall }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
-          echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV 
+          if [ -z "${{ env.oncall_email }}" ]; then
+            echo "::warning::No oncall email available, skipping Slack lookup"
+            echo "slack_id=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          # URL-encode the email for the API call
+          encoded_email=$(printf '%s' "${{ env.oncall_email }}" | jq -sRr @uri)
+
+          # Lookup Slack ID from email
+          slack_response=$(curl -s --max-time 30 "https://slack.com/api/users.lookupByEmail?email=${encoded_email}" \
+            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}")
+
+          slack_ok=$(echo "$slack_response" | jq -r '.ok')
+          slack_id=$(echo "$slack_response" | jq -r '.user.id // empty')
+
+          if [ "$slack_ok" != "true" ]; then
+            error=$(echo "$slack_response" | jq -r '.error')
+            echo "::warning::Slack lookup failed for ${{ env.oncall_email }}: ${error}"
+            echo "slack_id=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          echo "slack_id=${slack_id}" >> "$GITHUB_ENV" 
 
       - name: Post to slack
         uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
+        env:
+          SUI_SHA: ${{ env.sui_sha }}
+          SLACK_ID: ${{ env.slack_id }}
+          ONCALL_NAME: ${{ env.oncall_name }}
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
