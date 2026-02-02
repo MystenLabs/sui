@@ -24,7 +24,7 @@ use crate::scope::Scope;
 pub(crate) enum ScanError {
     #[error(
         "Scan range of {requested} checkpoints exceeds maximum of {max}. \
-         Use afterCheckpoint/beforeCheckpoint filters to narrow the range."
+         Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to narrow the range."
     )]
     LimitExceeded { requested: u64, max: u64 },
 }
