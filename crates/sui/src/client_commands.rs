@@ -1640,7 +1640,7 @@ impl SuiClientCommands {
                 };
 
                 // Check urls are valid and server is reachable
-                env.create_rpc_client(None, None).await?;
+                let _ = env.create_grpc_client()?.get_latest_checkpoint().await?;
                 context.config.envs.push(env.clone());
                 context.config.save()?;
                 let chain_id = context.cache_chain_id().await?;

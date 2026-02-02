@@ -13,7 +13,7 @@ use crate::events::*;
 use crate::metrics::BridgeMetrics;
 use crate::node::run_bridge_node;
 use crate::server::BridgeNodePublicMetadata;
-use crate::sui_client::SuiBridgeClient;
+use crate::sui_client::{SuiBridgeClient, SuiClientInner};
 use crate::sui_transaction_builder::{
     build_add_tokens_on_sui_transaction, build_committee_register_transaction,
 };
@@ -46,7 +46,6 @@ use std::process::{Child, Command};
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::local_ip_utils::get_available_port;
-use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::{
     SuiEvent, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
     SuiTransactionBlockResponseQuery, TransactionFilter,
@@ -276,6 +275,7 @@ impl BridgeTestCluster {
     }
 
     pub fn sui_client(&self) -> &SuiClient {
+        #[allow(deprecated)]
         &self.test_cluster.inner.fullnode_handle.sui_client
     }
 
@@ -1041,12 +1041,11 @@ impl TestClusterWrapperBuilder {
         let mut tasks = vec![];
         // Reorder the nodes so that the last node has the largest stake.
         let validator_with_max_stake = test_cluster
-            .sui_client()
-            .governance_api()
-            .get_committee_info(None)
+            .grpc_client()
+            .get_committee(None)
             .await
             .unwrap()
-            .validators
+            .voting_rights
             .iter()
             .max_by(|a, b| a.0.cmp(&b.0))
             .unwrap()
@@ -1249,9 +1248,9 @@ impl TestClusterWrapper {
 
 async fn get_bridge_summary(test_cluster: &TestCluster) -> BridgeSummary {
     test_cluster
-        .sui_client()
-        .http()
-        .get_latest_bridge()
+        .grpc_client()
+        .inner_mut()
+        .get_bridge_summary()
         .await
         .unwrap()
 }

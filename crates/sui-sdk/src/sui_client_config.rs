@@ -7,10 +7,7 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{
-    SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_MAINNET_URL, SUI_TESTNET_URL, SuiClient,
-    SuiClientBuilder,
-};
+use crate::{SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_MAINNET_URL, SUI_TESTNET_URL};
 use sui_config::Config;
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_rpc_api::Client;
@@ -102,34 +99,6 @@ pub struct SuiEnv {
 }
 
 impl SuiEnv {
-    pub async fn create_rpc_client(
-        &self,
-        request_timeout: Option<std::time::Duration>,
-        max_concurrent_requests: Option<u64>,
-    ) -> Result<SuiClient, anyhow::Error> {
-        let mut builder = SuiClientBuilder::default();
-        if let Some(request_timeout) = request_timeout {
-            builder = builder.request_timeout(request_timeout);
-        }
-        if let Some(ws_url) = &self.ws {
-            builder = builder.ws_url(ws_url);
-        }
-        if let Some(basic_auth) = &self.basic_auth {
-            let fields: Vec<_> = basic_auth.split(':').collect();
-            if fields.len() != 2 {
-                return Err(anyhow!(
-                    "Basic auth should be in the format `username:password`"
-                ));
-            }
-            builder = builder.basic_auth(fields[0], fields[1]);
-        }
-
-        if let Some(max_concurrent_requests) = max_concurrent_requests {
-            builder = builder.max_concurrent_requests(max_concurrent_requests as usize);
-        }
-        Ok(builder.build(&self.rpc).await?)
-    }
-
     pub fn create_grpc_client(&self) -> Result<Client, anyhow::Error> {
         let mut client = Client::new(&self.rpc)?;
 

@@ -21,6 +21,7 @@ use test_cluster::TestClusterBuilder;
 async fn test_indexing_with_tto() {
     let cluster = TestClusterBuilder::new().build().await;
 
+    #[allow(deprecated)]
     let http_client = cluster.rpc_client();
     let address = cluster.get_address_0();
 

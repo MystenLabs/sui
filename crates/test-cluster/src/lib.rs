@@ -16,14 +16,12 @@ use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CO
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_json_rpc_api::CoinReadApiClient;
-use sui_json_rpc_types::{Balance, SuiTransactionBlockEffectsAPI, TransactionFilter};
+use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, TransactionFilter};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_rpc_api::Client;
 use sui_rpc_api::client::ExecutedTransaction;
-use sui_sdk::apis::QuorumDriverApi;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -71,7 +69,9 @@ const NUM_VALIDATOR: usize = 4;
 
 pub struct FullNodeHandle {
     pub sui_node: SuiNodeHandle,
+    #[deprecated = "use grpc_client"]
     pub sui_client: SuiClient,
+    #[deprecated = "use grpc_client"]
     pub rpc_client: HttpClient,
     pub grpc_client: Client,
     pub rpc_url: String,
@@ -87,7 +87,9 @@ impl FullNodeHandle {
 
         Self {
             sui_node,
+            #[allow(deprecated)]
             sui_client,
+            #[allow(deprecated)]
             rpc_client,
             grpc_client,
             rpc_url,
@@ -102,11 +104,15 @@ pub struct TestCluster {
 }
 
 impl TestCluster {
+    #[deprecated = "use grpc_client()"]
     pub fn rpc_client(&self) -> &HttpClient {
+        #[allow(deprecated)]
         &self.fullnode_handle.rpc_client
     }
 
+    #[deprecated = "use grpc_client()"]
     pub fn sui_client(&self) -> &SuiClient {
+        #[allow(deprecated)]
         &self.fullnode_handle.sui_client
     }
 
@@ -116,10 +122,6 @@ impl TestCluster {
 
     pub fn rpc_url(&self) -> &str {
         &self.fullnode_handle.rpc_url
-    }
-
-    pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
-        self.sui_client().quorum_driver_api()
     }
 
     pub fn wallet(&mut self) -> &WalletContext {
@@ -247,8 +249,7 @@ impl TestCluster {
     }
 
     pub async fn get_reference_gas_price(&self) -> u64 {
-        self.sui_client()
-            .governance_api()
+        self.grpc_client()
             .get_reference_gas_price()
             .await
             .expect("failed to get reference gas price")
@@ -951,24 +952,7 @@ impl TestCluster {
             .build();
         let effects = self.sign_and_execute_transaction(&tx).await.effects;
         assert!(effects.status().is_ok());
-        // assert_eq!(&SuiExecutionStatus::Success, effects.status());
         effects.created().first().unwrap().0.0
-    }
-
-    pub async fn get_sui_balance(&self, address: SuiAddress) -> Balance {
-        self.fullnode_handle
-            .rpc_client
-            .get_balance(address, Some("0x2::sui::SUI".to_string()))
-            .await
-            .unwrap()
-    }
-
-    pub async fn get_address_balance(&self, address: SuiAddress, coin_type: &str) -> Balance {
-        self.fullnode_handle
-            .rpc_client
-            .get_balance(address, Some(coin_type.to_string()))
-            .await
-            .unwrap()
     }
 
     #[cfg(msim)]
