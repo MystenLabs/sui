@@ -246,9 +246,26 @@ pub struct TonicParameters {
     /// If unspecified, this will default to 1GiB.
     #[serde(default = "TonicParameters::default_message_size_limit")]
     pub message_size_limit: usize,
+
+    /// Port for the observer server. If configured, then the node will run the observer server on this port.
+    ///
+    /// If unspecified, this will default to `None`.
+    #[serde(default = "TonicParameters::default_observer_server_port")]
+    pub observer_server_port: Option<u16>,
+
+    /// Allowlist of observer public keys (hex encoded). If empty, all observers are allowed.
+    /// If non-empty, only observers with these public keys will be allowed to connect.
+    ///
+    /// If unspecified, this will default to an empty Vec (no allowlist, all observers allowed).
+    #[serde(default = "TonicParameters::default_observer_allowlist")]
+    pub observer_allowlist: Vec<String>,
 }
 
 impl TonicParameters {
+    pub fn is_observer_server_enabled(&self) -> bool {
+        self.observer_server_port.is_some()
+    }
+
     fn default_keepalive_interval() -> Duration {
         Duration::from_secs(10)
     }
@@ -264,6 +281,14 @@ impl TonicParameters {
     fn default_message_size_limit() -> usize {
         64 << 20
     }
+
+    fn default_observer_server_port() -> Option<u16> {
+        None
+    }
+
+    fn default_observer_allowlist() -> Vec<String> {
+        Vec::new()
+    }
 }
 
 impl Default for TonicParameters {
@@ -273,6 +298,8 @@ impl Default for TonicParameters {
             connection_buffer_size: TonicParameters::default_connection_buffer_size(),
             excessive_message_size: TonicParameters::default_excessive_message_size(),
             message_size_limit: TonicParameters::default_message_size_limit(),
+            observer_server_port: TonicParameters::default_observer_server_port(),
+            observer_allowlist: TonicParameters::default_observer_allowlist(),
         }
     }
 }
