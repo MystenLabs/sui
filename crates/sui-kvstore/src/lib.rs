@@ -16,6 +16,7 @@ pub use crate::handlers::ObjectTypesPipeline;
 pub use crate::handlers::ObjectsPipeline;
 pub use crate::handlers::PrevEpochUpdate;
 pub use crate::handlers::TransactionsPipeline;
+pub use crate::handlers::set_max_checkpoints_per_batch;
 pub use crate::handlers::set_max_mutations;
 
 /// All pipeline names registered by the indexer. Single source of truth used for:

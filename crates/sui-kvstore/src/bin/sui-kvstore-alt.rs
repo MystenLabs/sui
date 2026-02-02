@@ -15,6 +15,7 @@ use sui_kvstore::BIGTABLE_MAX_MUTATIONS;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
+use sui_kvstore::set_max_checkpoints_per_batch;
 use sui_kvstore::set_max_mutations;
 use sui_kvstore::set_write_legacy_data;
 use telemetry_subscribers::TelemetryConfig;
@@ -61,6 +62,10 @@ struct Args {
     #[arg(long, value_parser = parse_max_mutations)]
     max_mutations: Option<usize>,
 
+    /// Maximum checkpoints worth of data per batch before flushing
+    #[arg(long)]
+    max_checkpoints_per_batch: Option<usize>,
+
     /// Enable writing legacy data: watermark \[0\] row, epoch DEFAULT_COLUMN, and transaction tx column
     #[arg(long)]
     write_legacy_data: bool,
@@ -91,6 +96,9 @@ async fn main() -> Result<()> {
     set_write_legacy_data(args.write_legacy_data);
     if let Some(v) = args.max_mutations {
         set_max_mutations(v);
+    }
+    if let Some(v) = args.max_checkpoints_per_batch {
+        set_max_checkpoints_per_batch(v);
     }
 
     info!("Starting sui-kvstore-alt indexer");

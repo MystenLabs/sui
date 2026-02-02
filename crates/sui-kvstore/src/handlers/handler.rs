@@ -22,6 +22,7 @@ pub const BIGTABLE_MAX_MUTATIONS: usize = 100_000;
 
 const DEFAULT_MAX_MUTATIONS: usize = 10_000;
 static MAX_MUTATIONS: OnceLock<usize> = OnceLock::new();
+static MAX_CHECKPOINTS_PER_BATCH: OnceLock<usize> = OnceLock::new();
 
 /// Extension of `Processor` that specifies a BigTable table name.
 pub trait BigTableProcessor: Processor<Value = Entry> {
@@ -52,6 +53,7 @@ pub struct BigTableBatch {
 struct BigTableBatchInner {
     entries: BTreeMap<Bytes, Entry>,
     total_mutations: usize,
+    checkpoint_count: usize,
 }
 
 impl<P> BigTableHandler<P>
@@ -93,6 +95,7 @@ where
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
         let mut inner = batch.inner.write().unwrap();
+        inner.checkpoint_count += 1;
 
         for entry in values {
             inner.total_mutations += entry.mutations.len();
@@ -101,6 +104,10 @@ where
             if inner.total_mutations == max_mutations() {
                 return BatchStatus::Ready;
             }
+        }
+
+        if max_checkpoints_per_batch().is_some_and(|max| inner.checkpoint_count == max) {
+            return BatchStatus::Ready;
         }
 
         BatchStatus::Pending
@@ -153,6 +160,16 @@ pub fn set_max_mutations(value: usize) {
 
 fn max_mutations() -> usize {
     *MAX_MUTATIONS.get_or_init(|| DEFAULT_MAX_MUTATIONS)
+}
+
+pub fn set_max_checkpoints_per_batch(value: usize) {
+    MAX_CHECKPOINTS_PER_BATCH
+        .set(value)
+        .expect("max_checkpoints_per_batch already set");
+}
+
+fn max_checkpoints_per_batch() -> Option<usize> {
+    MAX_CHECKPOINTS_PER_BATCH.get().copied()
 }
 
 #[cfg(test)]
