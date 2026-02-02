@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::accumulator_event::AccumulatorEvent;
+use crate::accumulator_root::AccumulatorObjId;
 use crate::base_types::{SequenceNumber, VersionDigest};
 use crate::effects::TransactionEvents;
 use crate::error::SuiResult;
@@ -36,6 +37,15 @@ pub struct InnerTemporaryStore {
     pub binary_config: BinaryConfig,
     pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, PackageObject>,
     pub lamport_version: SequenceNumber,
+    /// For each accumulator account, tracks the max running net withdraws during this transaction.
+    /// For instance, if the funds accumulator events looke like this for an account:
+    /// - Split(100)
+    /// - Merge(100)
+    /// - Split(100)
+    ///
+    /// Then the accumulator_running_max_withdraws for this account will be 100,
+    /// because at any given moment, the net withdraws is at most 100.
+    pub accumulator_running_max_withdraws: BTreeMap<AccumulatorObjId, u128>,
 }
 
 pub struct TemporaryModuleResolver<'a, R> {

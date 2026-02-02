@@ -7,18 +7,12 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
-    accumulator_event::AccumulatorEvent,
     accumulator_root::AccumulatorObjId,
     base_types::{ObjectID, SequenceNumber, random_object_ref},
     crypto::get_account_key_pair,
-    effects::{
-        AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
-        TestEffectsBuilder,
-    },
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::FundsWithdrawStatus,
     execution_status::{ExecutionFailureStatus, ExecutionStatus},
-    gas_coin::GAS,
 };
 
 use crate::{
@@ -320,21 +314,13 @@ async fn test_should_commit_early_exits() {
         &keypair,
     );
     let account = ObjectID::random();
-    let effects_builder =
-        TestEffectsBuilder::new(tx.data()).with_accumulator_events(vec![AccumulatorEvent::new(
-            AccumulatorObjId::new_unchecked(account),
-            AccumulatorWriteV1 {
-                address: AccumulatorAddress::new(sender, GAS::type_tag()),
-                operation: AccumulatorOperation::Split,
-                value: AccumulatorValue::Integer(100),
-            },
-        )]);
+    let withdraws = BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]);
 
-    let effects = effects_builder.clone().build();
     // Normal path that triggers object funds check. Should not commit since insufficient funds.
     assert!(!checker.should_commit_object_funds_withdraws(
         &tx,
-        &effects,
+        &ExecutionStatus::Success,
+        &withdraws,
         &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
             vec![],
             Some(SequenceNumber::from_u64(0))
@@ -346,7 +332,8 @@ async fn test_should_commit_early_exits() {
     // Fastpath path transactions that have object funds withdraws must wait.
     assert!(!checker.should_commit_object_funds_withdraws(
         &tx,
-        &effects,
+        &ExecutionStatus::Success,
+        &withdraws,
         &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(vec![], None)),
         state.get_account_funds_read(),
         state.execution_scheduler(),
@@ -354,16 +341,10 @@ async fn test_should_commit_early_exits() {
     ));
 
     // Failed execution should always commit.
-    let effects = effects_builder
-        .clone()
-        .with_status(ExecutionStatus::new_failure(
-            ExecutionFailureStatus::FunctionNotFound,
-            None,
-        ))
-        .build();
     assert!(checker.should_commit_object_funds_withdraws(
         &tx,
-        &effects,
+        &ExecutionStatus::new_failure(ExecutionFailureStatus::FunctionNotFound, None,),
+        &withdraws,
         &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
             vec![],
             Some(SequenceNumber::from_u64(0))

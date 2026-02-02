@@ -2100,11 +2100,11 @@ impl AuthorityState {
             );
 
         let object_funds_checker = self.object_funds_checker.load();
-        // FIXME: effects contain merged funds changes. But we need the sum of all the withdraws per account.
         if let Some(object_funds_checker) = object_funds_checker.as_ref()
             && !object_funds_checker.should_commit_object_funds_withdraws(
                 certificate,
-                &effects,
+                effects.status(),
+                &inner_temp_store.accumulator_running_max_withdraws,
                 &execution_env,
                 self.get_account_funds_read(),
                 &self.execution_scheduler,

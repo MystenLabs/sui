@@ -11,9 +11,10 @@ use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     accumulator_root::AccumulatorObjId,
     base_types::SequenceNumber,
-    effects::{AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI},
+    effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::FundsWithdrawStatus,
+    execution_status::ExecutionStatus,
     transaction::TransactionDataAPI,
 };
 use tokio::{
@@ -81,13 +82,14 @@ impl ObjectFundsChecker {
     pub fn should_commit_object_funds_withdraws(
         &self,
         certificate: &VerifiedExecutableTransaction,
-        effects: &TransactionEffects,
+        execution_status: &ExecutionStatus,
+        accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
         execution_env: &ExecutionEnv,
         funds_read: &Arc<dyn AccountFundsRead>,
         execution_scheduler: &Arc<ExecutionScheduler>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> bool {
-        if effects.status().is_err() {
+        if execution_status.is_err() {
             // This transaction already failed. It does not matter any more
             // whether it has sufficient object funds or not.
             debug!("Transaction failed, committing effects");
@@ -101,22 +103,10 @@ impl ObjectFundsChecker {
         // All withdraws will show up as accumulator events with integer values.
         // Among them, addresses that do not have funds reservations are object
         // withdraws.
-        let object_withdraws: BTreeMap<_, _> = effects
-            .accumulator_events()
+        let object_withdraws: BTreeMap<_, _> = accumulator_running_max_withdraws
+            .clone()
             .into_iter()
-            .filter_map(|event| {
-                if address_funds_reservations.contains(&event.accumulator_obj) {
-                    return None;
-                }
-                // Only integer splits are funds withdraws.
-                if let (AccumulatorOperation::Split, AccumulatorValue::Integer(amount)) =
-                    (event.write.operation, event.write.value)
-                {
-                    Some((event.accumulator_obj, amount))
-                } else {
-                    None
-                }
-            })
+            .filter(|(account, _)| !address_funds_reservations.contains(account))
             .collect();
         // If there are no object withdraws, we can skip checking object funds.
         if object_withdraws.is_empty() {
@@ -196,7 +186,7 @@ impl ObjectFundsChecker {
 
     fn check_object_funds(
         &self,
-        object_withdraws: BTreeMap<AccumulatorObjId, u64>,
+        object_withdraws: BTreeMap<AccumulatorObjId, u128>,
         accumulator_version: SequenceNumber,
         funds_read: &dyn AccountFundsRead,
     ) -> ObjectFundsWithdrawStatus {
@@ -241,7 +231,7 @@ impl ObjectFundsChecker {
     fn try_withdraw(
         &self,
         funds_read: &dyn AccountFundsRead,
-        object_withdraws: &BTreeMap<AccumulatorObjId, u64>,
+        object_withdraws: &BTreeMap<AccumulatorObjId, u128>,
         accumulator_version: SequenceNumber,
     ) -> bool {
         for (obj_id, amount) in object_withdraws {
@@ -265,7 +255,7 @@ impl ObjectFundsChecker {
                 "Trying to withdraw"
             );
             assert!(funds >= unsettled_withdraw);
-            if funds - unsettled_withdraw < *amount as u128 {
+            if funds - unsettled_withdraw < *amount {
                 return false;
             }
         }
@@ -278,7 +268,7 @@ impl ObjectFundsChecker {
                 .entry(accumulator_version)
                 .or_default();
             debug!(?obj_id, ?amount, ?entry, "Updating unsettled withdraws");
-            *entry = entry.checked_add(*amount as u128).unwrap();
+            *entry = entry.checked_add(*amount).unwrap();
 
             inner
                 .unsettled_accounts
