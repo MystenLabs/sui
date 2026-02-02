@@ -19,14 +19,14 @@ use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 pub trait WriteApi {
     /// Execute the transaction and wait for results if desired.
     /// Request types:
-    /// 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.
+    /// 1. WaitForEffectsCert: waits for TransactionEffectsCert and then returns to the client.
     ///     This mode is a proxy for transaction finality.
-    /// 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node
-    ///     executed the transaction locally before returning the client. The local execution
-    ///     makes sure this node is aware of this transaction when client fires subsequent queries.
+    /// 2. WaitForLocalExecution: waits for TransactionEffectsCert and ensures the node
+    ///     has executed the transaction locally before returning to the client. Local execution
+    ///     ensures this node is aware of this transaction when the client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,
-    ///     a bool type in the response is set to false to indicated the case.
-    /// request_type is default to be `WaitForEffectsCert` unless options.show_events or options.show_effects is true
+    ///     a bool type in the response is set to false to indicate the case.
+    /// request_type defaults to `WaitForEffectsCert` unless options.show_events or options.show_effects is true
     #[method(name = "executeTransactionBlock")]
     async fn execute_transaction_block(
         &self,
