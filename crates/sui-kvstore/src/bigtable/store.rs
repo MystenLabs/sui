@@ -85,7 +85,7 @@ impl Connection for BigTableConnection<'_> {
         pipeline_task: &str,
         _default_next_checkpoint: u64,
     ) -> Result<Option<u64>> {
-        Ok(None)
+        Ok(None) 
     }
 
     async fn committer_watermark(
