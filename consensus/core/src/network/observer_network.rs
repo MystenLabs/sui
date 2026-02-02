@@ -1,18 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use consensus_config::NetworkKeyPair;
+use consensus_types::block::BlockRef;
 use futures::Stream;
 use tokio_stream::Iter;
 use tonic::{Request, Response, Streaming};
 
 use super::{
+    NodeId, ObserverBlockStream, ObserverCommitStream, ObserverNetworkClient,
     ObserverNetworkService, tonic_gen::observer_consensus_service_server::ObserverConsensusService,
 };
-use crate::context::Context;
+use crate::{
+    commit::CommitRange,
+    context::Context,
+    error::{ConsensusError, ConsensusResult},
+};
 
 // Observer block streaming messages
 #[derive(Clone, prost::Message)]
@@ -121,6 +128,74 @@ pub(crate) struct FetchCommitsResponse {
     pub(crate) commits: Vec<Bytes>,
     #[prost(bytes = "bytes", repeated, tag = "2")]
     pub(crate) certifier_blocks: Vec<Bytes>,
+}
+
+/// Tonic-based implementation of ObserverNetworkClient for observer nodes.
+#[allow(dead_code)]
+pub(crate) struct TonicObserverClient {
+    context: Arc<Context>,
+    _network_keypair: NetworkKeyPair,
+}
+
+impl TonicObserverClient {
+    #[allow(dead_code)]
+    pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
+        Self {
+            context,
+            _network_keypair: network_keypair,
+        }
+    }
+}
+
+#[async_trait]
+impl ObserverNetworkClient for TonicObserverClient {
+    async fn stream_blocks(
+        &self,
+        _peer: NodeId,
+        _request_stream: super::BlockRequestStream,
+        _timeout: Duration,
+    ) -> ConsensusResult<ObserverBlockStream> {
+        // TODO: Implement bidirectional block streaming for observers
+        Err(ConsensusError::NetworkRequest(
+            "stream_blocks not yet implemented".to_string(),
+        ))
+    }
+
+    async fn stream_commits(
+        &self,
+        _peer: NodeId,
+        _request_stream: super::CommitRequestStream,
+        _timeout: Duration,
+    ) -> ConsensusResult<ObserverCommitStream> {
+        // TODO: Implement bidirectional commit streaming for observers
+        Err(ConsensusError::NetworkRequest(
+            "stream_commits not yet implemented".to_string(),
+        ))
+    }
+
+    async fn fetch_blocks(
+        &self,
+        _peer: NodeId,
+        _block_refs: Vec<BlockRef>,
+        _timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        // TODO: Implement block fetching for observers
+        Err(ConsensusError::NetworkRequest(
+            "fetch_blocks not yet implemented".to_string(),
+        ))
+    }
+
+    async fn fetch_commits(
+        &self,
+        _peer: NodeId,
+        _commit_range: CommitRange,
+        _timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+        // TODO: Implement commit fetching for observers
+        Err(ConsensusError::NetworkRequest(
+            "fetch_commits not yet implemented".to_string(),
+        ))
+    }
 }
 
 /// Proxies Observer Tonic requests to ObserverNetworkService.
