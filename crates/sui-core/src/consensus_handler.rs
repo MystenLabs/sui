@@ -686,6 +686,44 @@ impl CheckpointQueue {
     }
 }
 
+struct CheckpointCreationConfig {
+    epoch: u64,
+    accumulators_enabled: bool,
+    max_transactions_per_checkpoint: usize,
+    should_write_random_checkpoint: bool,
+}
+
+struct ChunkedSchedulables<T> {
+    chunks: Vec<(Vec<Schedulable<T>>, CheckpointHeight)>,
+}
+
+impl<T: Clone> ChunkedSchedulables<T> {
+    fn empty() -> Self {
+        Self { chunks: vec![] }
+    }
+
+    fn flatten_for_version_assignment(&self) -> Vec<Schedulable<T>> {
+        self.chunks
+            .iter()
+            .flat_map(|(chunk, _)| chunk.iter())
+            .cloned()
+            .collect()
+    }
+
+    fn last_height(&self) -> Option<CheckpointHeight> {
+        self.chunks.last().map(|(_, height)| *height)
+    }
+}
+
+impl ChunkedSchedulables<VerifiedExecutableTransactionWithAliases> {
+    fn into_flat_schedulables(self) -> Vec<Schedulable> {
+        self.chunks
+            .into_iter()
+            .flat_map(|(chunk, _)| chunk.into_iter().map(|s| s.into()))
+            .collect()
+    }
+}
+
 pub struct ConsensusHandler<C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
     /// corresponding store. This store is also used to get the current epoch ID.
@@ -1677,77 +1715,140 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         Vec<Schedulable>,
         AssignedTxAndVersions,
     ) {
-        let protocol_config = self.epoch_store.protocol_config();
-        assert!(protocol_config.split_checkpoints_in_consensus_handler());
-
-        let epoch = self.epoch_store.epoch();
-        let accumulators_enabled = self.epoch_store.accumulators_enabled();
-        let max_transactions_per_checkpoint =
-            protocol_config.max_transactions_per_checkpoint() as usize;
-
-        let should_write_random_checkpoint = state.randomness_round.is_some()
-            || (state.dkg_failed && !randomness_schedulables.is_empty());
+        let config = self.build_checkpoint_creation_config(state, &randomness_schedulables);
 
         let mut checkpoint_queue = self.checkpoint_queue.lock().unwrap();
 
-        let build_chunks =
-            |schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
-             queue: &mut CheckpointQueue|
-             -> Vec<(
-                Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
-                CheckpointHeight,
-            )> {
-                schedulables
-                    .chunks(max_transactions_per_checkpoint)
-                    .map(|chunk| {
-                        let height = queue.next_height();
-                        let mut chunk_vec: Vec<_> = chunk.to_vec();
-                        if accumulators_enabled {
-                            chunk_vec.push(Schedulable::AccumulatorSettlement(epoch, height));
-                        }
-                        (chunk_vec, height)
-                    })
-                    .collect()
-            };
-
-        let chunked_schedulables = build_chunks(schedulables, &mut checkpoint_queue);
-        let chunked_randomness_schedulables = if should_write_random_checkpoint {
-            build_chunks(randomness_schedulables, &mut checkpoint_queue)
+        let mut chunked =
+            self.chunk_schedulables_into_checkpoints(schedulables, &config, &mut checkpoint_queue);
+        let chunked_randomness = if config.should_write_random_checkpoint {
+            self.chunk_schedulables_into_checkpoints(
+                randomness_schedulables,
+                &config,
+                &mut checkpoint_queue,
+            )
         } else {
-            vec![]
+            ChunkedSchedulables::empty()
         };
 
-        let schedulables_for_version_assignment: Vec<_> = chunked_schedulables
-            .iter()
-            .flat_map(|(chunk, _)| chunk.iter())
-            .cloned()
-            .collect();
-        let randomness_schedulables_for_version_assignment: Vec<_> =
-            chunked_randomness_schedulables
-                .iter()
-                .flat_map(|(chunk, _)| chunk.iter())
-                .cloned()
-                .collect();
+        let mut assigned_versions = self.assign_shared_object_versions(
+            state,
+            &chunked,
+            &chunked_randomness,
+            cancelled_txns,
+        );
 
-        let assigned_versions = self
-            .epoch_store
+        self.inject_consensus_commit_prologue(
+            state,
+            commit_info,
+            &mut chunked,
+            &mut assigned_versions,
+        );
+
+        self.process_signatures_and_queue_roots(
+            &chunked,
+            &chunked_randomness,
+            commit_info,
+            &mut checkpoint_queue,
+        );
+
+        let pending_checkpoints = self.build_pending_checkpoints(
+            &config,
+            &chunked_randomness,
+            commit_info,
+            &mut checkpoint_queue,
+            final_round,
+        );
+
+        let commit_height = chunked_randomness
+            .last_height()
+            .or(chunked.last_height())
+            .expect("at least one checkpoint root must be created per commit");
+
+        drop(checkpoint_queue);
+
+        self.persist_pending_checkpoints(state, pending_checkpoints);
+
+        (
+            commit_height,
+            chunked.into_flat_schedulables(),
+            chunked_randomness.into_flat_schedulables(),
+            assigned_versions,
+        )
+    }
+
+    fn build_checkpoint_creation_config(
+        &self,
+        state: &CommitHandlerState,
+        randomness_schedulables: &[Schedulable<VerifiedExecutableTransactionWithAliases>],
+    ) -> CheckpointCreationConfig {
+        let protocol_config = self.epoch_store.protocol_config();
+        assert!(protocol_config.split_checkpoints_in_consensus_handler());
+
+        CheckpointCreationConfig {
+            epoch: self.epoch_store.epoch(),
+            accumulators_enabled: self.epoch_store.accumulators_enabled(),
+            max_transactions_per_checkpoint: protocol_config.max_transactions_per_checkpoint()
+                as usize,
+            should_write_random_checkpoint: state.randomness_round.is_some()
+                || (state.dkg_failed && !randomness_schedulables.is_empty()),
+        }
+    }
+
+    fn chunk_schedulables_into_checkpoints(
+        &self,
+        schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
+        config: &CheckpointCreationConfig,
+        queue: &mut CheckpointQueue,
+    ) -> ChunkedSchedulables<VerifiedExecutableTransactionWithAliases> {
+        let chunks = schedulables
+            .chunks(config.max_transactions_per_checkpoint)
+            .map(|chunk| {
+                let height = queue.next_height();
+                let mut chunk_vec: Vec<_> = chunk.to_vec();
+                if config.accumulators_enabled {
+                    chunk_vec.push(Schedulable::AccumulatorSettlement(config.epoch, height));
+                }
+                (chunk_vec, height)
+            })
+            .collect();
+        ChunkedSchedulables { chunks }
+    }
+
+    fn assign_shared_object_versions(
+        &self,
+        state: &mut CommitHandlerState,
+        chunked: &ChunkedSchedulables<VerifiedExecutableTransactionWithAliases>,
+        chunked_randomness: &ChunkedSchedulables<VerifiedExecutableTransactionWithAliases>,
+        cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+    ) -> AssignedTxAndVersions {
+        let schedulables = chunked.flatten_for_version_assignment();
+        let randomness_schedulables = chunked_randomness.flatten_for_version_assignment();
+
+        self.epoch_store
             .process_consensus_transaction_shared_object_versions(
                 self.cache_reader.as_ref(),
-                schedulables_for_version_assignment.iter(),
-                randomness_schedulables_for_version_assignment.iter(),
+                schedulables.iter(),
+                randomness_schedulables.iter(),
                 cancelled_txns,
                 &mut state.output,
             )
-            .expect("failed to assign shared object versions");
+            .expect("failed to assign shared object versions")
+    }
 
+    fn inject_consensus_commit_prologue(
+        &self,
+        state: &mut CommitHandlerState,
+        commit_info: &ConsensusCommitInfo,
+        chunked: &mut ChunkedSchedulables<VerifiedExecutableTransactionWithAliases>,
+        assigned_versions: &mut AssignedTxAndVersions,
+    ) {
         let consensus_commit_prologue =
-            self.add_consensus_commit_prologue_transaction(state, commit_info, &assigned_versions);
+            self.add_consensus_commit_prologue_transaction(state, commit_info, assigned_versions);
 
-        let mut chunked_schedulables = chunked_schedulables;
-        let mut assigned_versions = assigned_versions;
         if let Some(consensus_commit_prologue) = consensus_commit_prologue {
             assert!(matches!(
-                chunked_schedulables[0].0[0],
+                chunked.chunks[0].0[0],
                 Schedulable::ConsensusCommitPrologue(..)
             ));
             assert!(matches!(
@@ -1756,36 +1857,57 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ));
             assigned_versions.0[0].0 =
                 TransactionKey::Digest(*consensus_commit_prologue.tx().digest());
-            chunked_schedulables[0].0[0] = Schedulable::Transaction(consensus_commit_prologue);
+            chunked.chunks[0].0[0] = Schedulable::Transaction(consensus_commit_prologue);
         }
+    }
 
+    fn process_signatures_and_queue_roots(
+        &self,
+        chunked: &ChunkedSchedulables<VerifiedExecutableTransactionWithAliases>,
+        chunked_randomness: &ChunkedSchedulables<VerifiedExecutableTransactionWithAliases>,
+        commit_info: &ConsensusCommitInfo,
+        checkpoint_queue: &mut CheckpointQueue,
+    ) {
         self.epoch_store.process_user_signatures(
-            chunked_schedulables
+            chunked
+                .chunks
                 .iter()
                 .flat_map(|(chunk, _)| chunk.iter())
                 .chain(
-                    chunked_randomness_schedulables
+                    chunked_randomness
+                        .chunks
                         .iter()
                         .flat_map(|(chunk, _)| chunk.iter()),
                 ),
         );
 
-        let checkpoint_roots_list = Self::to_checkpoint_roots(&chunked_schedulables);
+        let checkpoint_roots_list = Self::to_checkpoint_roots(&chunked.chunks);
         checkpoint_queue.push_checkpoint_roots(
             checkpoint_roots_list,
             commit_info.timestamp,
             commit_info.consensus_commit_ref,
             commit_info.rejected_transactions_digest,
         );
+    }
 
-        let mut pending_checkpoints = if final_round || should_write_random_checkpoint {
+    fn build_pending_checkpoints(
+        &self,
+        config: &CheckpointCreationConfig,
+        chunked_randomness: &ChunkedSchedulables<VerifiedExecutableTransactionWithAliases>,
+        commit_info: &ConsensusCommitInfo,
+        checkpoint_queue: &mut CheckpointQueue,
+        final_round: bool,
+    ) -> Vec<PendingCheckpointV2> {
+        let protocol_config = self.epoch_store.protocol_config();
+
+        let mut pending_checkpoints = if final_round || config.should_write_random_checkpoint {
             checkpoint_queue.flush_all_checkpoint_roots(protocol_config, commit_info.timestamp)
         } else {
             checkpoint_queue.flush_checkpoint_roots(protocol_config, commit_info.timestamp)
         };
 
-        if should_write_random_checkpoint {
-            for randomness_roots in Self::to_checkpoint_roots(&chunked_randomness_schedulables) {
+        if config.should_write_random_checkpoint {
+            for randomness_roots in Self::to_checkpoint_roots(&chunked_randomness.chunks) {
                 let checkpoint_height = randomness_roots.height;
                 pending_checkpoints.push(PendingCheckpointV2 {
                     roots: vec![randomness_roots],
@@ -1804,14 +1926,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             last.details.last_of_epoch = true;
         }
 
-        let commit_height = chunked_randomness_schedulables
-            .last()
-            .or(chunked_schedulables.last())
-            .map(|(_, height)| *height)
-            .expect("at least one checkpoint root must be created per commit");
+        pending_checkpoints
+    }
 
-        drop(checkpoint_queue);
-
+    fn persist_pending_checkpoints(
+        &self,
+        state: &mut CommitHandlerState,
+        pending_checkpoints: Vec<PendingCheckpointV2>,
+    ) {
         for pending_checkpoint in pending_checkpoints {
             debug!(
                 checkpoint_height = pending_checkpoint.details.checkpoint_height,
@@ -1822,23 +1944,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .write_pending_checkpoint_v2(&mut state.output, &pending_checkpoint)
                 .expect("failed to write pending checkpoint");
         }
-
-        // Strip alias version information
-        let flat_schedulables: Vec<Schedulable> = chunked_schedulables
-            .into_iter()
-            .flat_map(|(chunk, _)| chunk.into_iter().map(|s| s.into()))
-            .collect();
-        let flat_randomness_schedulables: Vec<Schedulable> = chunked_randomness_schedulables
-            .into_iter()
-            .flat_map(|(chunk, _)| chunk.into_iter().map(|s| s.into()))
-            .collect();
-
-        (
-            commit_height,
-            flat_schedulables,
-            flat_randomness_schedulables,
-            assigned_versions,
-        )
     }
 
     fn to_checkpoint_roots<T: crate::authority::shared_object_version_manager::AsTx>(
