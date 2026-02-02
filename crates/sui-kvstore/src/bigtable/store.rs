@@ -85,11 +85,7 @@ impl Connection for BigTableConnection<'_> {
         pipeline_task: &str,
         _default_next_checkpoint: u64,
     ) -> Result<Option<u64>> {
-        Ok(self
-            .client
-            .get_pipeline_watermark(pipeline_task)
-            .await?
-            .map(|wm| wm.checkpoint_hi_inclusive))
+        Ok(None)
     }
 
     async fn committer_watermark(
