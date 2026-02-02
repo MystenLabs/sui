@@ -108,49 +108,49 @@ impl Connection for BigTableConnection<'_> {
         pipeline_task: &str,
         watermark: CommitterWatermark,
     ) -> Result<bool> {
-        let pipeline_watermark: Watermark = watermark.into();
-        self.client
-            .set_pipeline_watermark(pipeline_task, &pipeline_watermark)
-            .await?;
-
-        // TODO(migration): Remove this dual-write once GraphQL reads per-pipeline watermarks.
-        if let Some(ref tracker) = self.legacy_watermark_tracker {
-            // Strip the task suffix (e.g. "pipeline@task" -> "pipeline") so
-            // the tracker matches on the bare pipeline name.
-            let pipeline_name = pipeline_task
-                .split_once('@')
-                .map_or(pipeline_task, |(name, _)| name);
-
-            let maybe_update = {
-                let mut guard = tracker.lock().expect("legacy tracker lock poisoned");
-                guard.update(pipeline_name, pipeline_watermark.checkpoint_hi_inclusive)
-            };
-
-            if let Some((min, prev)) = maybe_update {
-                // Write min + 1 to the legacy `[0]` row.
-                // The legacy format stores `next_checkpoint` (exclusive upper bound).
-                let next_checkpoint = min + 1;
-                let entry = tables::make_entry(
-                    vec![0u8],
-                    [(
-                        tables::DEFAULT_COLUMN,
-                        Bytes::from(next_checkpoint.to_be_bytes().to_vec()),
-                    )],
-                    Some(next_checkpoint),
-                );
-                if let Err(e) = self
-                    .client
-                    .write_entries(tables::watermark_alt_legacy::NAME, [entry])
-                    .await
-                {
-                    tracker
-                        .lock()
-                        .expect("legacy tracker lock poisoned")
-                        .rollback(min, prev);
-                    return Err(e);
-                }
-            }
-        }
+        // let pipeline_watermark: Watermark = watermark.into();
+        // self.client
+        //     .set_pipeline_watermark(pipeline_task, &pipeline_watermark)
+        //     .await?;
+        //
+        // // TODO(migration): Remove this dual-write once GraphQL reads per-pipeline watermarks.
+        // if let Some(ref tracker) = self.legacy_watermark_tracker {
+        //     // Strip the task suffix (e.g. "pipeline@task" -> "pipeline") so
+        //     // the tracker matches on the bare pipeline name.
+        //     let pipeline_name = pipeline_task
+        //         .split_once('@')
+        //         .map_or(pipeline_task, |(name, _)| name);
+        //
+        //     let maybe_update = {
+        //         let mut guard = tracker.lock().expect("legacy tracker lock poisoned");
+        //         guard.update(pipeline_name, pipeline_watermark.checkpoint_hi_inclusive)
+        //     };
+        //
+        //     if let Some((min, prev)) = maybe_update {
+        //         // Write min + 1 to the legacy `[0]` row.
+        //         // The legacy format stores `next_checkpoint` (exclusive upper bound).
+        //         let next_checkpoint = min + 1;
+        //         let entry = tables::make_entry(
+        //             vec![0u8],
+        //             [(
+        //                 tables::DEFAULT_COLUMN,
+        //                 Bytes::from(next_checkpoint.to_be_bytes().to_vec()),
+        //             )],
+        //             Some(next_checkpoint),
+        //         );
+        //         if let Err(e) = self
+        //             .client
+        //             .write_entries(tables::watermark_alt_legacy::NAME, [entry])
+        //             .await
+        //         {
+        //             tracker
+        //                 .lock()
+        //                 .expect("legacy tracker lock poisoned")
+        //                 .rollback(min, prev);
+        //             return Err(e);
+        //         }
+        //     }
+        // }
 
         Ok(true)
     }
