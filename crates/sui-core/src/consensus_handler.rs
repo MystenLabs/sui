@@ -2512,6 +2512,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             );
 
             for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
+                debug!(
+                    "filter_consensus_txns: processing transaction key {:?}",
+                    parsed.transaction.key()
+                );
                 let position = ConsensusPosition {
                     epoch,
                     block,
