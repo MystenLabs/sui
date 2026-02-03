@@ -768,6 +768,10 @@ impl ExecutionTimeEstimator {
         duration: Duration,
         skip_update: bool,
     ) {
+        debug!(
+            "process_observation_from_consensus: source={}, generation={:?}, key={:?}, duration={:?}",
+            source, generation, observation_key, duration
+        );
         if matches!(observation_key, ExecutionTimeObservationKey::Publish) {
             // Special-case handling for Publish command: only use hard-coded default estimate.
             warn!(
