@@ -7,9 +7,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+use anyhow::bail;
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
-use futures::TryStreamExt;
 use mysten_common::{fatal, random::get_rng};
 use rand::{Rng, seq::IteratorRandom};
 use sui_config::genesis::Genesis;
@@ -24,8 +24,13 @@ use sui_core::{
     },
     validator_client_monitor::ValidatorClientMetrics,
 };
+use sui_json_rpc_types::{
+    CheckpointId, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
+};
 use sui_protocol_config::ProtocolConfig;
-use sui_rpc_api::{Client, client::ExecutedTransaction};
+use sui_sdk::{SuiClient, SuiClientBuilder, error::Error as SuiSdkError};
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::ObjectArg;
@@ -58,7 +63,6 @@ use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     execution_status::ExecutionFailureStatus,
 };
-use sui_types::{gas_coin::GAS, sui_system_state::sui_system_state_summary::SuiSystemStateSummary};
 use tokio::time::sleep;
 use tracing::{debug, info, instrument, warn};
 
@@ -100,7 +104,7 @@ pub mod workloads;
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionEffects {
     FinalizedTransactionEffects(FinalizedEffects, TransactionEvents),
-    ExecutedTransaction(ExecutedTransaction),
+    SuiTransactionBlockEffects(SuiTransactionBlockEffects),
 }
 
 impl ExecutionEffects {
@@ -109,7 +113,9 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 *effects.data().transaction_digest()
             }
-            ExecutionEffects::ExecutedTransaction(txn) => *txn.effects.transaction_digest(),
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                *sui_tx_effects.transaction_digest()
+            }
         }
     }
 
@@ -118,14 +124,22 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 effects.data().mutated().to_vec()
             }
-            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.mutated(),
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
+                .mutated()
+                .iter()
+                .map(|refe| (refe.reference.to_object_ref(), refe.owner.clone()))
+                .collect(),
         }
     }
 
     pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().created(),
-            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.created(),
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
+                .created()
+                .iter()
+                .map(|refe| (refe.reference.to_object_ref(), refe.owner.clone()))
+                .collect(),
         }
     }
 
@@ -134,7 +148,11 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 effects.data().deleted().to_vec()
             }
-            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.deleted(),
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
+                .deleted()
+                .iter()
+                .map(|refe| refe.to_object_ref())
+                .collect(),
         }
     }
 
@@ -146,7 +164,7 @@ impl ExecutionEffects {
                     _ => None,
                 }
             }
-            ExecutionEffects::ExecutedTransaction(_) => None,
+            ExecutionEffects::SuiTransactionBlockEffects(_) => None,
         }
     }
 
@@ -155,7 +173,10 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 effects.data().gas_object()
             }
-            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.gas_object(),
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                let refe = &sui_tx_effects.gas_object();
+                (refe.reference.to_object_ref(), refe.owner.clone())
+            }
         }
     }
 
@@ -174,7 +195,9 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 effects.data().status().is_ok()
             }
-            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status().is_ok(),
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                sui_tx_effects.status().is_ok()
+            }
         }
     }
 
@@ -193,15 +216,10 @@ impl ExecutionEffects {
                     _ => false,
                 }
             }
-            ExecutionEffects::ExecutedTransaction(txn) => match txn.effects.status() {
-                sui_types::execution_status::ExecutionStatus::Success => false,
-                sui_types::execution_status::ExecutionStatus::Failure {
-                    error:
-                        ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { .. },
-                    ..
-                } => true,
-                _ => false,
-            },
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                let status = format!("{}", sui_tx_effects.status());
+                status.contains("ExecutionCancelledDueToSharedObjectCongestion")
+            }
         }
     }
 
@@ -217,14 +235,10 @@ impl ExecutionEffects {
                     _ => false,
                 }
             }
-            ExecutionEffects::ExecutedTransaction(txn) => match txn.effects.status() {
-                sui_types::execution_status::ExecutionStatus::Success => false,
-                sui_types::execution_status::ExecutionStatus::Failure {
-                    error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
-                    ..
-                } => true,
-                _ => false,
-            },
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                let status = format!("{}", sui_tx_effects.status());
+                status.contains("InsufficientFundsForWithdraw")
+            }
         }
     }
 
@@ -251,25 +265,20 @@ impl ExecutionEffects {
                     _ => false,
                 }
             }
-            ExecutionEffects::ExecutedTransaction(txn) => match txn.effects.status() {
-                sui_types::execution_status::ExecutionStatus::Failure { error, .. } => {
-                    matches!(
-                        error,
-                        ExecutionFailureStatus::VMVerificationOrDeserializationError
-                            | ExecutionFailureStatus::VMInvariantViolation
-                            | ExecutionFailureStatus::FunctionNotFound
-                            | ExecutionFailureStatus::ArityMismatch
-                            | ExecutionFailureStatus::TypeArityMismatch
-                            | ExecutionFailureStatus::NonEntryFunctionInvoked
-                            | ExecutionFailureStatus::CommandArgumentError { .. }
-                            | ExecutionFailureStatus::TypeArgumentError { .. }
-                            | ExecutionFailureStatus::UnusedValueWithoutDrop { .. }
-                            | ExecutionFailureStatus::InvalidPublicFunctionReturnType { .. }
-                            | ExecutionFailureStatus::InvalidTransferObject
-                    )
-                }
-                _ => false,
-            },
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                let status = format!("{}", sui_tx_effects.status());
+                status.contains("VMVerificationOrDeserializationError")
+                    || status.contains("VMInvariantViolation")
+                    || status.contains("FunctionNotFound")
+                    || status.contains("ArityMismatch")
+                    || status.contains("TypeArityMismatch")
+                    || status.contains("NonEntryFunctionInvoked")
+                    || status.contains("CommandArgumentError")
+                    || status.contains("TypeArgumentError")
+                    || status.contains("UnusedValueWithoutDrop")
+                    || status.contains("InvalidPublicFunctionReturnType")
+                    || status.contains("InvalidTransferObject")
+            }
         }
     }
 
@@ -278,8 +287,8 @@ impl ExecutionEffects {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
                 format!("{:#?}", effects.data().status())
             }
-            ExecutionEffects::ExecutedTransaction(txn) => {
-                format!("{:#?}", txn.effects.status())
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                format!("{:#?}", sui_tx_effects.status())
             }
         }
     }
@@ -289,7 +298,9 @@ impl ExecutionEffects {
             crate::ExecutionEffects::FinalizedTransactionEffects(a, _) => {
                 a.data().gas_cost_summary().clone()
             }
-            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.gas_cost_summary().clone(),
+            crate::ExecutionEffects::SuiTransactionBlockEffects(b) => {
+                std::convert::Into::<GasCostSummary>::into(b.gas_cost_summary().clone())
+            }
         }
     }
 
@@ -734,7 +745,7 @@ async fn execute_soft_bundle_with_retries(
 }
 
 pub struct FullNodeProxy {
-    sui_client: Client,
+    sui_client: SuiClient,
 
     // Committee and protocol config are initialized on startup and not updated on epoch changes.
     committee: Arc<Committee>,
@@ -757,20 +768,37 @@ impl FullNodeProxy {
         };
 
         // Each request times out after 60s (default value)
-        let sui_client = Client::new(&http_url)?;
+        let sui_client = SuiClientBuilder::default()
+            .max_concurrent_requests(500_000)
+            .build(&http_url)
+            .await?;
 
-        let committee = sui_client.get_committee(None).await?;
+        let committee = {
+            let resp = sui_client.read_api().get_committee_info(None).await?;
+            let epoch = resp.epoch;
+            let committee_map = resp.validators.into_iter().collect();
+            Committee::new(epoch, committee_map)
+        };
 
-        let chain_identifier = sui_client.get_chain_identifier().await?;
+        let chain_identifier = {
+            let genesis = sui_client
+                .read_api()
+                .get_checkpoint(CheckpointId::SequenceNumber(0))
+                .await?;
+            ChainIdentifier::from(genesis.digest)
+        };
 
         let protocol_config = {
-            let resp = sui_client.get_protocol_config(None).await?;
+            let resp = sui_client.read_api().get_protocol_config(None).await?;
             let chain = chain_identifier.chain();
-            ProtocolConfig::get_for_version(resp.protocol_version().into(), chain)
+            ProtocolConfig::get_for_version(resp.protocol_version, chain)
         };
 
         // Build AuthorityAggregator and TransactionDriver for soft bundle support
-        let sui_system_state = sui_client.get_system_state_summary(None).await?;
+        let sui_system_state = sui_client
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await?;
         let new_committee = sui_system_state.get_sui_committee_for_benchmarking();
         let committee_store = Arc::new(CommitteeStore::new_for_testing(new_committee.committee()));
 
@@ -809,53 +837,94 @@ impl FullNodeProxy {
     }
 }
 
-fn is_retryable_sdk_error(err: &impl std::fmt::Debug) -> bool {
+fn is_retryable_sdk_error(err: &SuiSdkError) -> bool {
     let err_str = format!("{:?}", err);
     !(err_str.contains("Error checking transaction input objects")
         || err_str.contains("Transaction Expired")
         || err_str.contains("already locked by a different transaction")
         || err_str.contains("is not available for consumption"))
-        || err_str.contains("Transaction executed but checkpoint wait timed out")
 }
 
 #[async_trait]
 impl ValidatorProxy for FullNodeProxy {
     async fn get_sui_address_balance(&self, address: SuiAddress) -> Result<u64, anyhow::Error> {
-        let balance = self.sui_client.get_balance(address, &GAS::type_()).await?;
+        let response = self
+            .sui_client
+            .coin_read_api()
+            .get_balance(address, None)
+            .await?;
 
-        Ok(balance.address_balance())
+        Ok(u64::try_from(response.funds_in_address_balance).unwrap())
     }
 
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
-        self.sui_client
-            .clone()
-            .get_object(object_id)
-            .await
-            .map_err(Into::into)
+        let response = self
+            .sui_client
+            .read_api()
+            .get_object_with_options(object_id, SuiObjectDataOptions::bcs_lossless())
+            .await?;
+
+        if let Some(sui_object) = response.data {
+            sui_object.try_into_object(&self.protocol_config)
+        } else if let Some(error) = response.error {
+            bail!("Error getting object {:?}: {}", object_id, error)
+        } else {
+            bail!("Object {:?} not found and no error provided", object_id)
+        }
     }
 
     async fn get_owned_objects(
         &self,
         account_address: SuiAddress,
     ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
-        let objects: Vec<Object> = self
-            .sui_client
-            .list_owned_objects(account_address, Some(GasCoin::type_()))
-            .try_collect()
-            .await?;
+        let mut objects: Vec<SuiObjectResponse> = Vec::new();
+        let mut cursor = None;
+        loop {
+            let response = self
+                .sui_client
+                .read_api()
+                .get_owned_objects(
+                    account_address,
+                    Some(SuiObjectResponseQuery::new_with_options(
+                        SuiObjectDataOptions::bcs_lossless(),
+                    )),
+                    cursor,
+                    None,
+                )
+                .await?;
+
+            objects.extend(response.data);
+
+            if response.has_next_page {
+                cursor = response.next_cursor;
+            } else {
+                break;
+            }
+        }
 
         let mut values_objects = Vec::new();
 
         for object in objects {
-            let gas_coin = GasCoin::try_from(&object)?;
-            values_objects.push((gas_coin.value(), object));
+            let o = object.data;
+            if let Some(o) = o {
+                let temp: Object = o.clone().try_into_object(&self.protocol_config)?;
+                let gas_coin = GasCoin::try_from(&temp)?;
+                values_objects.push((
+                    gas_coin.value(),
+                    o.clone().try_into_object(&self.protocol_config)?,
+                ));
+            }
         }
 
         Ok(values_objects)
     }
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error> {
-        Ok(self.sui_client.get_system_state_summary(None).await?)
+        Ok(self
+            .sui_client
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await?)
     }
 
     async fn execute_transaction_block(
@@ -870,14 +939,20 @@ impl ValidatorProxy for FullNodeProxy {
             // SuiClient times out after 60s
             match self
                 .sui_client
-                .clone()
-                .execute_transaction_and_wait_for_checkpoint(&tx)
+                .quorum_driver_api()
+                .execute_transaction_block(
+                    tx.clone(),
+                    SuiTransactionBlockResponseOptions::new().with_effects(),
+                    None,
+                )
                 .await
             {
                 Ok(resp) => {
                     return (
                         ClientType::QuorumDriver,
-                        Ok(ExecutionEffects::ExecutedTransaction(resp)),
+                        Ok(ExecutionEffects::SuiTransactionBlockEffects(
+                            resp.effects.expect("effects field should not be None"),
+                        )),
                     );
                 }
                 Err(err) => {
@@ -934,7 +1009,8 @@ impl ValidatorProxy for FullNodeProxy {
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
         let validators = self
             .sui_client
-            .get_system_state_summary(None)
+            .governance_api()
+            .get_latest_sui_system_state()
             .await?
             .active_validators;
         Ok(validators.into_iter().map(|v| v.sui_address).collect())
