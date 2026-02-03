@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{
-    HistogramVec, IntCounterVec, Registry, register_histogram_vec_with_registry,
-    register_int_counter_vec_with_registry,
-};
 use std::sync::Arc;
+
+use prometheus::HistogramVec;
+use prometheus::IntCounterVec;
+use prometheus::Registry;
+use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
 
 pub(crate) struct KvMetrics {
     pub kv_get_success: IntCounterVec,
