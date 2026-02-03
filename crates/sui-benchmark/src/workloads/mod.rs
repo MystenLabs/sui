@@ -4,7 +4,6 @@
 pub mod adversarial;
 pub mod batch_payment;
 pub mod composite;
-pub mod conflicting_transfer;
 pub mod delegation;
 pub mod expected_failure;
 pub mod party;

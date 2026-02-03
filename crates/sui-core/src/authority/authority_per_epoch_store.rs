@@ -1104,6 +1104,7 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_passkey_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
             protocol_config.additional_multisig_checks(),
+            protocol_config.validate_zklogin_public_identifier(),
             protocol_config.address_aliases(),
         );
 
@@ -2597,7 +2598,7 @@ impl AuthorityPerEpochStore {
         lock: Option<&RwLockReadGuard<ReconfigState>>,
     ) -> SuiResult {
         let key_value_pairs = transactions.iter().filter_map(|tx| {
-            if tx.is_mfp_transaction() {
+            if tx.is_user_transaction() {
                 // UserTransaction does not need to be resubmitted on recovery.
                 None
             } else {
@@ -3074,15 +3075,27 @@ impl AuthorityPerEpochStore {
     ) {
         let sigs: Vec<_> = txs
             .filter_map(|s| match s {
-                Schedulable::Transaction(tx) => Some((
-                    *tx.tx().digest(),
-                    tx.tx()
-                        .tx_signatures()
-                        .iter()
-                        .cloned()
-                        .zip(tx.aliases().iter().map(|(_, seq)| *seq))
-                        .collect(),
-                )),
+                Schedulable::Transaction(tx) => {
+                    let tx_signatures = tx.tx().tx_signatures();
+                    let sigs_with_versions: Vec<_> =
+                        if self.protocol_config().fix_checkpoint_signature_mapping() {
+                            tx.aliases()
+                                .iter()
+                                .map(|(sig_idx, seq)| {
+                                    let sig = tx_signatures[*sig_idx as usize].clone();
+                                    (sig, *seq)
+                                })
+                                .collect()
+                        } else {
+                            // Old behavior: zip all signatures with alias versions in order.
+                            tx_signatures
+                                .iter()
+                                .cloned()
+                                .zip(tx.aliases().iter().map(|(_, seq)| *seq))
+                                .collect()
+                        };
+                    Some((*tx.tx().digest(), sigs_with_versions))
+                }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
                 Schedulable::AccumulatorSettlement(_, _) => None,
                 Schedulable::ConsensusCommitPrologue(_, _, _) => None,
@@ -3604,6 +3617,12 @@ impl AuthorityPerEpochStore {
             return Ok(Some(summary.clone()));
         }
 
+        self.last_persisted_checkpoint_builder_summary()
+    }
+
+    pub fn last_persisted_checkpoint_builder_summary(
+        &self,
+    ) -> SuiResult<Option<BuilderCheckpointSummary>> {
         Ok(self
             .tables()?
             .builder_checkpoint_summary_v2

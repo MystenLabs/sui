@@ -105,6 +105,8 @@ async-trait.workspace = true
 p256.workspace = true
 passkey-client.workspace = true
 passkey-authenticator.workspace = true
+insta.workspace = true
+serde-reflection.workspace = true
 
 [[bench]]
 name = "global_state_hash_bench"

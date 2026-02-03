@@ -14,6 +14,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
+use sui_rpc_api::Client;
 
 use move_binary_format::file_format::{
     AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
@@ -44,10 +45,8 @@ use move_core_types::{
 };
 use move_ir_types::location::{ByteIndex, Loc};
 use move_package_alt_compilation::compiled_package::CompiledUnitWithSource;
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
-use sui_sdk::apis::ReadApi;
 use sui_types::base_types::ObjectID;
 use sui_types::move_package::UpgradePolicy;
 
@@ -684,31 +683,21 @@ upgrade_codes!(
 
 /// Check the upgrade compatibility of a new package with an existing on-chain package.
 pub(crate) async fn check_compatibility(
-    read_api: &ReadApi,
+    mut client: Client,
     package_id: ObjectID,
     new_package: CompiledPackage,
     package_path: PathBuf,
     upgrade_policy: u8,
     protocol_config: ProtocolConfig,
 ) -> Result<(), Error> {
-    let existing_obj_read = read_api
-        .get_object_with_options(package_id, SuiObjectDataOptions::new().with_bcs())
-        .await
-        .context("Unable to get existing package")?;
-
-    let existing_obj = existing_obj_read
-        .into_object()
-        .context("Unable to get existing package")?
-        .bcs
-        .ok_or_else(|| anyhow!("Unable to read object"))?;
-
-    let existing_package = match existing_obj {
-        SuiRawData::Package(pkg) => Ok(pkg),
-        SuiRawData::MoveObject(_) => Err(anyhow!("Object found when package expected")),
-    }?;
+    let existing_obj = client.get_object(package_id).await?;
+    let existing_package = existing_obj
+        .data
+        .try_as_package()
+        .ok_or_else(|| anyhow!("Object found when package expected"))?;
 
     let existing_modules = existing_package
-        .module_map
+        .serialized_module_map()
         .iter()
         .map(|m| CompiledModule::deserialize_with_config(m.1, &protocol_config.binary_config(None)))
         .collect::<Result<Vec<_>, _>>()
@@ -718,9 +707,7 @@ pub(crate) async fn check_compatibility(
         UpgradePolicy::try_from(upgrade_policy).map_err(|_| anyhow!("Invalid upgrade policy"))?;
 
     compare_packages(
-        *existing_package
-            .to_move_package(u64::MAX /* safe as this pkg comes from the network */)?
-            .original_package_id(),
+        *existing_package.original_package_id(),
         existing_modules,
         new_package,
         package_path,

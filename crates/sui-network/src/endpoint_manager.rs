@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anemo::types::{PeerAffinity, PeerInfo};
 use mysten_network::Multiaddr;
 use tap::TapFallible;
 use tracing::warn;
@@ -20,10 +19,16 @@ impl EndpointManager {
         Self { discovery_handle }
     }
 
-    /// Updates the address(es) for the given endpoint.
+    /// Updates the address(es) for the given endpoint from the specified source.
     ///
-    /// If the addresses have changed, forcibly reconnects to the peer.
-    pub fn update_endpoint(&self, endpoint: EndpointId, addresses: Vec<Multiaddr>) {
+    /// Multiple sources can provide addresses for the same peer. The highest-priority
+    /// source's addresses are used. Empty `addresses` clears a source.
+    pub fn update_endpoint(
+        &self,
+        endpoint: EndpointId,
+        source: AddressSource,
+        addresses: Vec<Multiaddr>,
+    ) {
         match endpoint {
             EndpointId::P2p(peer_id) => {
                 let anemo_addresses: Vec<_> = addresses
@@ -39,14 +44,8 @@ impl EndpointManager {
                             .ok()
                     })
                     .collect();
-                if anemo_addresses.is_empty() {
-                    warn!(?peer_id, "No valid addresses for peer after conversion");
-                }
-                self.discovery_handle.peer_address_change(PeerInfo {
-                    peer_id,
-                    affinity: PeerAffinity::High,
-                    address: anemo_addresses,
-                });
+                self.discovery_handle
+                    .peer_address_change(peer_id, source, anemo_addresses);
             }
         }
     }
@@ -56,4 +55,12 @@ pub enum EndpointId {
     P2p(anemo::PeerId),
     // TODO: Implement support for updating consensus addresses via EndpointManager.
     // Consensus(NetworkPublicKey),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// NOTE: AddressSources are prioritized in order of the enum variants below.
+pub enum AddressSource {
+    Admin,
+    Config,
+    Committee,
 }

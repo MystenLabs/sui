@@ -1391,7 +1391,10 @@ pub(crate) fn legacy_test_cost() -> InternalGas {
     InternalGas::new(0)
 }
 
-pub(crate) fn abstract_size(_protocol_config: &ProtocolConfig, v: &Value) -> AbstractMemorySize {
+pub(crate) fn abstract_size(
+    _protocol_config: &ProtocolConfig,
+    v: &Value,
+) -> PartialVMResult<AbstractMemorySize> {
     v.abstract_memory_size(&SizeConfig {
         include_vector_size: true,
         traverse_references: false,

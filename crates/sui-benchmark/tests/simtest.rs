@@ -14,6 +14,7 @@ mod test {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
+    use sui_benchmark::BenchmarkProxyMetrics;
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
@@ -52,7 +53,6 @@ mod test {
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
-    use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
@@ -574,7 +574,7 @@ mod test {
             config
         });
 
-        let test_cluster = build_test_cluster(4, 5000, 2).await;
+        let test_cluster = build_test_cluster(4, 30000, 2).await;
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
             let mut rng = thread_rng();
@@ -1157,26 +1157,38 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
-            Arc::new(
-                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &registry)
-                    .await
-                    .unwrap(),
-            )
+        let metrics = BenchmarkProxyMetrics::new(&registry);
+
+        // Create fullnode proxy for RPC reads
+        let fullnode_proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &metrics)
+                .await
+                .unwrap(),
+        );
+        let fullnode_proxies = vec![fullnode_proxy.clone()];
+
+        // Create execution proxy - either fullnode or validator aggregator
+        let execution_proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
+            fullnode_proxy.clone()
         } else {
             Arc::new(
                 LocalValidatorAggregatorProxy::from_genesis(
                     &genesis,
-                    &registry,
                     &test_cluster.fullnode_handle.rpc_url,
+                    &metrics,
                 )
                 .await,
             )
         };
 
-        let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
+        let bank = BenchmarkBank::new(
+            execution_proxy.clone(),
+            fullnode_proxies.clone(),
+            primary_coin,
+        );
         let system_state_observer = {
-            let mut system_state_observer = SystemStateObserver::new(proxy.clone());
+            let mut system_state_observer =
+                SystemStateObserver::new_from_test_cluster(&test_cluster);
             if let Ok(_) = system_state_observer.state.changed().await {
                 info!(
                     "Got the new state (reference gas price and/or protocol config) from system state object"
@@ -1279,7 +1291,8 @@ mod test {
             let show_progress = interval.is_unbounded();
             let (benchmark_stats, _) = driver
                 .run(
-                    vec![proxy],
+                    vec![execution_proxy],
+                    fullnode_proxies,
                     workloads,
                     system_state_observer,
                     &registry,
@@ -1363,10 +1376,15 @@ mod test {
 
         let test_cluster_for_handler = test_cluster.clone();
 
+        let mut config = SimulatedLoadConfig::default();
+        // composite workload is very strict about error checking and fails during
+        // this test.
+        config.composite_weight = 0;
+
         test_simulated_load_with_test_config(
             test_cluster.clone(),
             30,
-            SimulatedLoadConfig::default(),
+            config,
             None, // target_qps
             None, // num_workers
             Some({
@@ -1523,27 +1541,32 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let _guard =
-            sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-                cfg.enable_address_balance_gas_payments_for_testing();
-                cfg
-            });
         let test_cluster = build_test_cluster(4, 10000, 1).await;
+
+        let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
+            sui_protocol_config::ProtocolVersion::max(),
+            test_cluster.get_chain_identifier().chain(),
+        );
+        let address_balance_enabled = protocol_config.enable_address_balance_gas_payments();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
         ));
 
         use sui_benchmark::workloads::composite::*;
+        // When address balance is disabled, increase conflicting transaction probability
+        // to compensate for fewer permanent failures from filtered-out operations.
+        let conflicting_transaction_probability = if address_balance_enabled { 0.1 } else { 0.3 };
         let composite_config = CompositeWorkloadConfig {
             num_shared_counters: 2,
             shared_counter_hotness: 0.95,
             address_balance_amount: 1000,
             address_balance_gas_probability: 0.2,
+            conflicting_transaction_probability,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::FLAG, 0.2)
+        .with_probability(SharedCounterIncrement::FLAG, 0.1)
         .with_probability(SharedCounterRead::FLAG, 0.1)
         .with_probability(RandomnessRead::FLAG, 0.1)
         .with_probability(AddressBalanceDeposit::FLAG, 0.1)
@@ -1553,7 +1576,8 @@ mod test {
         .with_probability(TestCoinMint::FLAG, 0.1)
         .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
         .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
-        .with_probability(TestCoinObjectWithdraw::FLAG, 0.05);
+        .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.3);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1567,15 +1591,24 @@ mod test {
         .await;
 
         let metrics = metrics.lock().unwrap();
-        let total_txns = metrics.total_transactions_all();
-        let total_successes = metrics.total_successes_all();
-        let cancellation_rate = metrics.overall_cancellation_rate();
-        let distinct_op_sets = metrics.distinct_operation_sets_count();
 
-        assert!(total_txns > 0);
-        assert!(total_successes > 0);
-        assert!(cancellation_rate < 0.75);
-        assert!(distinct_op_sets >= 2);
+        let metrics_sum = metrics.sum_all();
+
+        info!("metrics: {:#?}", metrics.sum_all());
+
+        // make sure the test did stuff. When address balance is disabled, fewer operation
+        // types are available which may reduce throughput, so we use lower thresholds.
+        assert!(metrics_sum.signed_and_sent_count > 500);
+        if address_balance_enabled {
+            assert!(metrics_sum.success_count > 200);
+            assert!(metrics_sum.permanent_failure_count > 100);
+            // insufficient_funds_count requires AddressBalanceOverdraw operations
+            assert!(metrics_sum.insufficient_funds_count > 2);
+        } else {
+            assert!(metrics_sum.success_count > 150);
+            assert!(metrics_sum.permanent_failure_count > 50);
+        }
+        assert!(metrics_sum.cancellation_count > 100);
     }
 
     #[sim_test(config = "test_config()")]

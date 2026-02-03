@@ -204,7 +204,7 @@ fn ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
     let mut output = String::new();
 
     let mut record_val_size = |val: &Value| {
-        let val_size = val.abstract_memory_size(&SIZE_CONFIG);
+        let val_size = val.abstract_memory_size(&SIZE_CONFIG).unwrap();
         writeln!(&mut output, "size of {:?}: {}, ", print_val(val), val_size).unwrap();
     };
 
@@ -222,10 +222,10 @@ fn ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
 
     locals.store_loc(2, Value::make_struct(vec![]))?;
     let r: Reference = VMValueCast::cast(locals.borrow_loc(2)?)?;
-    let val_size = r.abstract_memory_size(&SIZE_CONFIG);
+    let val_size = r.abstract_memory_size(&SIZE_CONFIG).unwrap();
     writeln!(&mut output, "size of {:?}: {}, ", print_ref(&r), val_size).unwrap();
 
-    let val_size_traverse = r.abstract_memory_size(&SIZE_CONFIG_TRAVERSE);
+    let val_size_traverse = r.abstract_memory_size(&SIZE_CONFIG_TRAVERSE).unwrap();
     writeln!(
         &mut output,
         "traversed size of {:?}: {}, ",
@@ -252,7 +252,7 @@ fn struct_abstract_memory_size_consistenty() -> PartialVMResult<()> {
         writeln!(
             &mut output,
             "size of struct {1:?}: {0}",
-            s.abstract_memory_size(&SIZE_CONFIG),
+            s.abstract_memory_size(&SIZE_CONFIG).unwrap(),
             print_val(&Value::Struct(s)),
         )
         .unwrap();
@@ -290,13 +290,13 @@ fn val_abstract_memory_size_consistency() -> PartialVMResult<()> {
     let mut locals = heap.allocate_stack_frame(vec![], vals.len())?;
 
     let record_val_size = |output: &mut String, val: &Value| {
-        let val_size = val.abstract_memory_size(&SIZE_CONFIG);
+        let val_size = val.abstract_memory_size(&SIZE_CONFIG).unwrap();
         writeln!(output, "size of {:?}: {}, ", print_val(val), val_size).unwrap();
     };
 
     let record_ref_size = |output: &mut String, val: &Reference| {
-        let val_size = val.abstract_memory_size(&SIZE_CONFIG);
-        let val_size_traverse = val.abstract_memory_size(&SIZE_CONFIG_TRAVERSE);
+        let val_size = val.abstract_memory_size(&SIZE_CONFIG).unwrap();
+        let val_size_traverse = val.abstract_memory_size(&SIZE_CONFIG_TRAVERSE).unwrap();
         writeln!(output, "size of {:?}: {}, ", print_ref(val), val_size).unwrap();
         writeln!(
             output,

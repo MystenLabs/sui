@@ -97,13 +97,36 @@ const guides = [
 					'guides/developer/packages/automated-address-management',
 				],
 			},
-  {
-    type: 'category',
-    label: 'Transactions',
-    items: [
-          'guides/developer/transactions/sign-and-send-txn',
-          'guides/developer/transactions/building-ptb',
-          'guides/developer/transactions/sponsor-txn',
+      {
+				type: 'category',
+				label: 'Transactions',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/transactions/txn-overview',
+				},
+        items: [
+           {
+            type: 'category',
+            label: 'Programmable Transaction Blocks',
+            link: {
+              type: 'doc',
+              id: 'guides/developer/transactions/prog-txn-blocks',
+            },
+              items: [
+              'guides/developer/transactions/building-ptb',
+              ],
+            },
+            'guides/developer/transactions/sign-and-send-txn',
+            'guides/developer/transactions/sponsor-txn',
+            {
+            type: 'category',
+            label: 'Transaction Authentication',
+              items: [
+              'guides/developer/transactions/transaction-auth/intent-signing',
+              'guides/developer/transactions/transaction-auth/multisig',
+              'guides/developer/transactions/transaction-auth/offline-signing',
+              ],
+            },
         ],
   },
   {

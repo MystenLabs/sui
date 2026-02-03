@@ -1057,7 +1057,7 @@ impl Object {
             } => {
                 consistent_reader
                     .list_owned_objects(
-                        checkpoint,
+                        Some(checkpoint),
                         kind.unwrap_or(OwnerKind::Address).into(),
                         Some(address.to_string()),
                         type_.map(|t| t.to_string()),
@@ -1076,7 +1076,7 @@ impl Object {
             } => {
                 consistent_reader
                     .list_owned_objects(
-                        checkpoint,
+                        Some(checkpoint),
                         kind.into(),
                         None,
                         Some(type_.to_string()),
@@ -1095,7 +1095,7 @@ impl Object {
             } => {
                 consistent_reader
                     .list_objects_by_type(
-                        checkpoint,
+                        Some(checkpoint),
                         type_.to_string(),
                         Some(page.limit() as u32),
                         page.after().map(|c| c.1.clone()),

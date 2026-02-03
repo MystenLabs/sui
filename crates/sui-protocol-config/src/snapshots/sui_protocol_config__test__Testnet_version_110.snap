@@ -41,6 +41,7 @@ feature_flags:
   recompute_has_public_transfer_in_execution: true
   accept_zklogin_in_multisig: true
   accept_passkey_in_multisig: true
+  validate_zklogin_public_identifier: true
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
@@ -136,11 +137,13 @@ feature_flags:
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
   address_aliases: true
+  fix_checkpoint_signature_mapping: true
   consensus_skip_gced_blocks_in_direct_finalization: true
   gas_rounding_halve_digits: true
   flexible_tx_context_positions: true
   disable_entry_point_signature_check: true
   restrict_hot_or_not_entry_functions: true
+  consensus_always_accept_system_transactions: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

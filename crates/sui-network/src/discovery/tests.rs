@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    endpoint_manager::{EndpointId, EndpointManager},
+    endpoint_manager::{AddressSource, EndpointId, EndpointManager},
     utils::{build_network_and_key, build_network_with_anemo_config},
 };
 use anemo::Result;
@@ -241,6 +241,7 @@ async fn peers_are_added_from_endpoint_manager() -> Result<()> {
         .unwrap();
     endpoint_manager_1.update_endpoint(
         EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+        AddressSource::Committee,
         vec![peer2_addr],
     );
 
@@ -752,4 +753,191 @@ fn start_network(
     );
     let state = event_loop.state.clone();
     (event_loop, handle, state)
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_address_source_priority() -> Result<()> {
+    let config = P2pConfig::default();
+    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (event_loop_1, handle_1) = builder.build(network_1.clone(), key_1);
+    let endpoint_manager_1 = EndpointManager::new(handle_1);
+
+    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
+
+    let state_1 = event_loop_1.state.clone();
+
+    tokio::spawn(event_loop_1.start());
+    tokio::spawn(event_loop_2.start());
+
+    let peer_id_2 = network_2.peer_id();
+    let peer_2_network_pubkey =
+        Ed25519PublicKey(ed25519_consensus::VerificationKey::try_from(peer_id_2.0).unwrap());
+
+    let committee_addr: Multiaddr = "/dns/committee.example.com/udp/8080".parse().unwrap();
+    let admin_addr: Multiaddr = "/dns/admin.example.com/udp/9090".parse().unwrap();
+
+    // First, set Committee source address
+    endpoint_manager_1.update_endpoint(
+        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+        AddressSource::Committee,
+        vec![committee_addr.clone()],
+    );
+
+    // Allow discovery to process the message
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Verify Committee address is used
+    let known_peer = network_1.known_peers().get(&peer_id_2);
+    assert!(known_peer.is_some());
+    let addrs = known_peer.unwrap().address;
+    assert_eq!(addrs.len(), 1);
+    assert!(addrs[0].to_string().contains("committee"));
+
+    // Now set Admin source address (should take priority)
+    endpoint_manager_1.update_endpoint(
+        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+        AddressSource::Admin,
+        vec![admin_addr.clone()],
+    );
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Verify Admin address now takes priority
+    let known_peer = network_1.known_peers().get(&peer_id_2);
+    assert!(known_peer.is_some());
+    let addrs = known_peer.unwrap().address;
+    assert_eq!(addrs.len(), 1);
+    assert!(addrs[0].to_string().contains("admin"));
+
+    // Both sources should be stored
+    let state = state_1.read().unwrap();
+    let sources = state.peer_address_overrides.get(&peer_id_2).unwrap();
+    assert_eq!(sources.len(), 2);
+    assert!(sources.contains_key(&AddressSource::Admin));
+    assert!(sources.contains_key(&AddressSource::Committee));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_address_source_clear() -> Result<()> {
+    let config = P2pConfig::default();
+    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (event_loop_1, handle_1) = builder.build(network_1.clone(), key_1);
+    let endpoint_manager_1 = EndpointManager::new(handle_1);
+
+    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
+
+    let state_1 = event_loop_1.state.clone();
+
+    tokio::spawn(event_loop_1.start());
+    tokio::spawn(event_loop_2.start());
+
+    let peer_id_2 = network_2.peer_id();
+    let peer_2_network_pubkey =
+        Ed25519PublicKey(ed25519_consensus::VerificationKey::try_from(peer_id_2.0).unwrap());
+
+    let committee_addr: Multiaddr = "/dns/committee.example.com/udp/8080".parse().unwrap();
+    let admin_addr: Multiaddr = "/dns/admin.example.com/udp/9090".parse().unwrap();
+
+    // Set both sources
+    endpoint_manager_1.update_endpoint(
+        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+        AddressSource::Committee,
+        vec![committee_addr.clone()],
+    );
+    endpoint_manager_1.update_endpoint(
+        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+        AddressSource::Admin,
+        vec![admin_addr.clone()],
+    );
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Verify Admin address is used
+    let known_peer = network_1.known_peers().get(&peer_id_2);
+    assert!(known_peer.is_some());
+    let addrs = known_peer.unwrap().address;
+    assert!(addrs[0].to_string().contains("admin"));
+
+    // Clear Admin source by sending empty addresses
+    endpoint_manager_1.update_endpoint(
+        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+        AddressSource::Admin,
+        vec![],
+    );
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Verify it falls back to Committee address
+    let known_peer = network_1.known_peers().get(&peer_id_2);
+    assert!(known_peer.is_some());
+    let addrs = known_peer.unwrap().address;
+    assert_eq!(addrs.len(), 1);
+    assert!(addrs[0].to_string().contains("committee"));
+
+    // Only Committee source should remain
+    let state = state_1.read().unwrap();
+    let sources = state.peer_address_overrides.get(&peer_id_2).unwrap();
+    assert_eq!(sources.len(), 1);
+    assert!(sources.contains_key(&AddressSource::Committee));
+    assert!(!sources.contains_key(&AddressSource::Admin));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_address_source_clear_all() -> Result<()> {
+    let config = P2pConfig::default();
+    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (event_loop_1, handle_1) = builder.build(network_1.clone(), key_1);
+    let endpoint_manager_1 = EndpointManager::new(handle_1);
+
+    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
+
+    tokio::spawn(event_loop_1.start());
+    tokio::spawn(event_loop_2.start());
+
+    let peer_id_2 = network_2.peer_id();
+    let peer_2_network_pubkey =
+        Ed25519PublicKey(ed25519_consensus::VerificationKey::try_from(peer_id_2.0).unwrap());
+
+    let committee_addr: Multiaddr = "/dns/committee.example.com/udp/8080".parse().unwrap();
+
+    // Set Committee source
+    endpoint_manager_1.update_endpoint(
+        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+        AddressSource::Committee,
+        vec![committee_addr.clone()],
+    );
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Verify peer is known
+    assert!(network_1.known_peers().get(&peer_id_2).is_some());
+
+    // Clear Committee source
+    endpoint_manager_1.update_endpoint(
+        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+        AddressSource::Committee,
+        vec![],
+    );
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Verify peer has empty addresses (clearing all sources)
+    let known_peer = network_1.known_peers().get(&peer_id_2);
+    assert!(known_peer.is_some());
+    assert!(known_peer.unwrap().address.is_empty());
+
+    Ok(())
 }

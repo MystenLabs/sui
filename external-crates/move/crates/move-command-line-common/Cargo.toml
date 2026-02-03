@@ -21,8 +21,9 @@ dirs-next.workspace = true
 vfs.workspace = true
 bcs.workspace = true
 
-move-core-types.workspace = true
 move-binary-format.workspace = true
+move-core-types.workspace = true
+move-symbol-pool.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

@@ -14,7 +14,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::future::BoxFuture;
-use mysten_common::debug_fatal;
+use mysten_common::{debug_fatal, in_test_configuration};
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -38,7 +38,7 @@ use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
-use sui_network::endpoint_manager::EndpointId;
+use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_network::validator::server::SUI_TLS_SERVER_NAME;
 use sui_types::full_checkpoint_content::Checkpoint;
 
@@ -68,6 +68,19 @@ use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{Instrument, error_span, info};
 use tracing::{debug, error, warn};
+
+// Logs at debug level in test configuration, info level otherwise.
+// JWK logs cause significant volume in tests, but are insignificant in prod,
+// so we keep them at info
+macro_rules! jwk_log {
+    ($($arg:tt)+) => {
+        if in_test_configuration() {
+            debug!($($arg)+);
+        } else {
+            info!($($arg)+);
+        }
+    };
+}
 
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
@@ -393,7 +406,7 @@ impl SuiNode {
                     // just best-effort to reduce unneeded submissions.
                     let mut seen = HashSet::new();
                     loop {
-                        info!("fetching JWK for provider {:?}", p);
+                        jwk_log!("fetching JWK for provider {:?}", p);
                         metrics.jwk_requests.with_label_values(&[&provider_str]).inc();
                         match Self::fetch_jwks(authority, &p).await {
                             Err(e) => {
@@ -426,7 +439,7 @@ impl SuiNode {
                                 }
 
                                 for (id, jwk) in keys.into_iter() {
-                                    info!("Submitting JWK to consensus: {:?}", id);
+                                    jwk_log!("Submitting JWK to consensus: {:?}", id);
 
                                     let txn = ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
                                     consensus_adapter.submit(txn, None, &epoch_store, None, None)
@@ -482,7 +495,7 @@ impl SuiNode {
         let genesis = config.genesis()?.clone();
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
-        let genesis_committee = genesis.committee()?;
+        let genesis_committee = genesis.committee();
         let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
             &genesis_committee,
@@ -700,6 +713,15 @@ impl SuiNode {
         )?;
 
         let endpoint_manager = EndpointManager::new(discovery_handle.clone());
+
+        // Inject configured peer address overrides.
+        for peer in &config.p2p_config.peer_address_overrides {
+            endpoint_manager.update_endpoint(
+                EndpointId::P2p(peer.peer_id),
+                AddressSource::Config,
+                peer.addresses.clone(),
+            );
+        }
 
         // Send initial peer addresses to the p2p network.
         update_peer_addresses(&config, &endpoint_manager, epoch_store.epoch_start_state());
@@ -2108,6 +2130,10 @@ impl SuiNode {
         self.randomness_handle.clone()
     }
 
+    pub fn endpoint_manager(&self) -> &EndpointManager {
+        &self.endpoint_manager
+    }
+
     /// Get a short prefix of a digest for metric labels
     fn get_digest_prefix(digest: impl std::fmt::Display) -> String {
         let digest_str = digest.to_string();
@@ -2422,7 +2448,11 @@ fn update_peer_addresses(
     for (peer_id, address) in
         epoch_start_state.get_validator_as_p2p_peers(config.protocol_public_key())
     {
-        endpoint_manager.update_endpoint(EndpointId::P2p(peer_id), vec![address]);
+        endpoint_manager.update_endpoint(
+            EndpointId::P2p(peer_id),
+            AddressSource::Committee,
+            vec![address],
+        );
     }
 }
 

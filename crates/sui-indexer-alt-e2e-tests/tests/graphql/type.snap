@@ -453,7 +453,9 @@ Response: {
 task 6, lines 61-76:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "type": null
+  },
   "errors": [
     {
       "message": "Type parameter nesting exceeded limit of 16",
@@ -476,7 +478,9 @@ Response: {
 task 7, lines 78-83:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "type": null
+  },
   "errors": [
     {
       "message": "Error resolving type: Expected 1 type parameters, but got 2",

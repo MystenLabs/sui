@@ -23,6 +23,7 @@ This module holds shared implementation of macros used in <code>std</code>
 -  [Macro function `num_checked_shr`](#std_macros_num_checked_shr)
 -  [Macro function `num_lossless_shl`](#std_macros_num_lossless_shl)
 -  [Macro function `num_lossless_shr`](#std_macros_num_lossless_shr)
+-  [Macro function `num_lossless_div`](#std_macros_num_lossless_div)
 -  [Macro function `range_do`](#std_macros_range_do)
 -  [Macro function `range_do_eq`](#std_macros_range_do_eq)
 -  [Macro function `do`](#std_macros_do)
@@ -555,6 +556,34 @@ This module holds shared implementation of macros used in <code>std</code>
         <b>let</b> result = x &gt;&gt; shift;
         <b>if</b> (result &lt;&lt; shift == x) <a href="../std/option.md#std_option_some">option::some</a>(result) <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_lossless_div"></a>
+
+## Macro function `num_lossless_div`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_div">num_lossless_div</a>&lt;$T&gt;($x: $T, $y: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_div">num_lossless_div</a>&lt;$T&gt;($x: $T, $y: $T): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>if</b> (y == 0) <a href="../std/option.md#std_option_none">option::none</a>()
+    <b>else</b> <b>if</b> (x % y == 0) <a href="../std/option.md#std_option_some">option::some</a>(x / y)
+    <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
 }
 </code></pre>
 

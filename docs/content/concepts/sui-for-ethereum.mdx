@@ -1,6 +1,6 @@
 ---
 title: Ethereum -> Sui
-description: Build your first dApp on Sui if you have EVM experience
+description: Build your first app on Sui if you have EVM experience
 keywords: [ ethereum, solidity, EVM,  ]
 pagination_prev: null
 ---
@@ -17,7 +17,7 @@ If you have worked with Ethereum Virtual Machine (EVM) before, the biggest diffe
 | Access control | Identity/role-based access control through `Ownable` and `AccessControl` contract. | Mostly [capability based access control](https://move-book.com/programmability/capability.html) through owned objects. Identity/role-based access control is possible. |
 | Contract upgrades | Proxy contract forwards user transactions. | New contracts must be [layout-compatible](/guides/developer/packages/upgrade#upgrade-requirements) with the old one. Need to consider versioning shared objects. |
 | Development environment | Hardhat, Foundry | [Move VSCode extension](https://marketplace.visualstudio.com/items?itemName=mysten.move). |
-| Mutate contract state | Sending transactions through compile time ABI interface. | Sending transaction through runtime [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) construction. |
+| Mutate contract state | Sending transactions through compile time ABI interface. | Sending transaction through runtime [programmable transaction block](/guides/developer/transactions/prog-txn-blocks.mdx) (PTB) construction. |
 
 ## Object model
 
@@ -75,7 +75,7 @@ In Move, PTBs solve this problem. PTBs give builders the ability to chain contra
 
 Builders on Sui leverage PTBs to provide experiences that would otherwise be intractable. A good example is a DeFi aggregator that routes token swaps across multiple DeFi protocols with the best price. On Sui, the aggregator would use a single PTB with the guarantee that the transaction would execute at the displayed price or it would revert completely. The PTB is one of the most powerful Sui features. Experience shows builders who are most successful on Sui are the ones who learn to leverage this feature early and often, leaning into it rather than treating it just as a way to batch transactions.
 
-See [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx) for details on PTBs.
+See [Programmable Transaction Blocks](/guides/developer/transactions/prog-txn-blocks.mdx) for details on PTBs.
 
 ## More comparison
 
@@ -113,5 +113,5 @@ See [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx
 
 <RelatedLink to="/concepts/sui-move-concepts" />
 <RelatedLink to="/guides/developer/objects/object-ownership" />
-<RelatedLink to="/concepts/transactions/prog-txn-blocks" />
+<RelatedLink to="/guides/developer/transactions/prog-txn-blocks" />
 <RelatedLink href="https://move-book.com/programmability/dynamic-object-fields.html)" label="Dynamic Object Fields" desc="Learn more about Dynamic Object Fields in The Move Book." />

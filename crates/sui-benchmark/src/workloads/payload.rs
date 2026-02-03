@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{ExecutionEffects, workloads::ExpectedFailureType};
+use async_trait::async_trait;
 use std::{fmt::Display, num::NonZeroUsize};
 use sui_types::digests::TransactionDigest;
 use sui_types::transaction::Transaction;
@@ -39,6 +40,9 @@ pub enum BatchedTransactionStatus {
         /// Error message describing the failure.
         error: String,
     },
+    /// We didn't get a specific error message, so the failure could be
+    /// retriable or permanent.
+    UnknownRejection,
 }
 
 impl BatchedTransactionResult {
@@ -61,6 +65,7 @@ impl BatchedTransactionResult {
             BatchedTransactionStatus::Success { .. } => None,
             BatchedTransactionStatus::PermanentFailure { error }
             | BatchedTransactionStatus::RetriableFailure { error } => Some(error),
+            BatchedTransactionStatus::UnknownRejection => Some("unknown rejection"),
         }
     }
 
@@ -71,12 +76,30 @@ impl BatchedTransactionResult {
             _ => None,
         }
     }
+
+    pub fn description(&self) -> String {
+        match &self.status {
+            BatchedTransactionStatus::Success { effects } => {
+                format!("{}: success: {:?}", self.digest, effects.status())
+            }
+            BatchedTransactionStatus::PermanentFailure { error } => {
+                format!("{}: permanent failure: {}", self.digest, error)
+            }
+            BatchedTransactionStatus::RetriableFailure { error } => {
+                format!("{}: retriable failure: {}", self.digest, error)
+            }
+            BatchedTransactionStatus::UnknownRejection => {
+                format!("{}: unknown rejection", self.digest)
+            }
+        }
+    }
 }
 
 /// A Payload is a transaction wrapper of a particular type (transfer object, shared counter, etc).
 /// Calling `make_transaction()` on a payload produces the transaction it is wrapping. Once that
 /// transaction is returned with effects (by quorum driver), a new payload can be generated with that
 /// effect by invoking `make_new_payload(effects)`
+#[async_trait]
 pub trait Payload: Send + Sync + std::fmt::Debug + Display {
     fn make_new_payload(&mut self, effects: &ExecutionEffects);
     fn make_transaction(&mut self) -> Transaction;
@@ -98,12 +121,16 @@ pub trait Payload: Send + Sync + std::fmt::Debug + Display {
         NonZeroUsize::MAX
     }
 
-    // TODO: Implement this to allow limiting the size of each soft bundle.
-    // fn max_soft_bundle_size(&self) -> NonZeroUsize
+    /// Maximum size of any individual soft bundle.
+    fn max_soft_bundle_size(&self) -> NonZeroUsize {
+        // TODO: we could get this from the protocol config but a) its unlikely to change
+        // b) it would be very hard to do that
+        NonZeroUsize::new(5).unwrap()
+    }
 
     /// Creates a batch of transactions for concurrent execution.
     /// Only called when `is_batched()` returns true.
-    fn make_transaction_batch(&mut self) -> Vec<Transaction> {
+    async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         vec![self.make_transaction()] // Default: single transaction
     }
 

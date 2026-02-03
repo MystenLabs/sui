@@ -3333,7 +3333,7 @@ type Query {
 	"""
 	address(address: SuiAddress, name: String, rootVersion: UInt53, atCheckpoint: UInt53): Address
 	"""
-	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
+	The network's genesis checkpoint digest (uniquely identifies the network), Base58-encoded.
 	"""
 	chainIdentifier: String!
 	"""

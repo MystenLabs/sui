@@ -2206,16 +2206,12 @@ impl AstDebug for LambdaLValues_ {
 
 #[test]
 fn naming_ast_sizes() {
-    assert_eq!(
-        std::mem::size_of::<TypeName>(),
-        104,
-        "TypeName size changed"
-    );
+    assert_eq!(std::mem::size_of::<TypeName>(), 56, "TypeName size changed");
     assert_eq!(
         std::mem::size_of::<TypeInner>(),
-        160,
+        112,
         "TypeInner size changed"
     );
     assert_eq!(std::mem::size_of::<Type_>(), 8, "Type_ size changed");
-    assert_eq!(std::mem::size_of::<Type>(), 48, "Type size changed");
+    assert_eq!(std::mem::size_of::<Type>(), 24, "Type size changed");
 }

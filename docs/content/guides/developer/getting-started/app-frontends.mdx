@@ -74,7 +74,7 @@ In the "Hello, World!" example project, the subdirectory `sui-stack-hello-world/
 
 ### `App.tsx`
 
-The `App.tsx` file contains code that creates a basic starter template for your React dApp. It includes a button to connect a Slush wallet to the dApp and a button to open the Sui Faucet to obtain Testnet SUI. 
+The `App.tsx` file contains code that creates a basic starter template for your React app. It includes a button to connect a Slush wallet to the app and a button to open the Sui Faucet to obtain Testnet SUI. 
 
 <ImportContent source="/ui/src/App.tsx" mode="code" org="MystenLabs" repo="sui-stack-hello-world" />
 
@@ -92,7 +92,7 @@ The `Greeting.tsx` file also contains logic that creates and sends a transaction
 
 ## Connect the React interface to your Move package
 
-The `constants.ts` file is where you connect the React dApp to your Move package. This file contains a single line that sets your Move package ID as a constant `TESTNET_HELLO_WORLD_PACKAGE_ID`. By default, this file contains a sample package ID. 
+The `constants.ts` file is where you connect the React app to your Move package. This file contains a single line that sets your Move package ID as a constant `TESTNET_HELLO_WORLD_PACKAGE_ID`. By default, this file contains a sample package ID. 
 
 Modify this file to include your Move package ID instead.
 
@@ -118,7 +118,7 @@ Start the React application in your local development environment:
 $ pnpm dev
 ```
 
-Then, open `http://localhost:5173/` in your browser. The dApp prompts you to connect your Slush wallet. Click **Connect Wallet**, authenticate when prompted, then approve the connection.
+Then, open `http://localhost:5173/` in your browser. The app prompts you to connect your Slush wallet. Click **Connect Wallet**, authenticate when prompted, then approve the connection.
 
 ## Send SUI tokens to your Slush wallet
 

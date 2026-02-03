@@ -45,7 +45,7 @@ jobs:
       - name: Install Rust
         run: rustup update stable
         
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
             ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
@@ -63,7 +63,7 @@ jobs:
         run: rustup show active-toolchain || rustup toolchain install
 
       - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
         
@@ -71,7 +71,7 @@ jobs:
         run: RUSTFLAGS="-C debuginfo=0" SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest -vv -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
 
       - name: Upload report to Codecov for nextest
-        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # pin v4.0.1
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # pin@v5.5.2
         with:
           files: lcov.info
 
@@ -81,7 +81,7 @@ jobs:
           ./scripts/simtest/codecov.sh
 
       - name: Upload report to Codecov for simtest
-        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # pin v4.0.1
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # pin@v5.5.2
         with:
           files: lcov-simtest.info
 
@@ -95,7 +95,7 @@ jobs:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
     - name: Checkout sui repo
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v3.0.3
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       with:
         ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
     
@@ -142,7 +142,7 @@ jobs:
         echo "oncall_name=$(echo ${oncall_name})" >> $GITHUB_ENV                  
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
+      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

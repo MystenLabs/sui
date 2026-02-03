@@ -6,7 +6,7 @@ keywords: [ epochs, equivocation, reconfiguration, validators, object versioning
 
 On Sui, an _epoch_ is a period of time defined by the network. During this time, the Sui [validator](/guides/operator/validator/validator-config.mdx) set and their stakes remain unchanged. On both [Mainnet](/concepts/sui-architecture/networks.mdx) and [Testnet](/concepts/sui-architecture/networks.mdx), an epoch is about 24 hours. Epochs on Devnet are 1 hour. This timeframe allows validators to process transactions efficiently without worrying about ad hoc validator changes.
 
-Epoch values are included in the metadata of all [transactions](/concepts/transactions.mdx). A transaction is only valid if executed before a set epoch.
+Epoch values are included in the metadata of all [transactions](/guides/developer/transactions/txn-overview.mdx). A transaction is only valid if executed before a set epoch.
 
 ## Equivocation
 
@@ -22,7 +22,7 @@ Equivocation can occur when:
 
 ### Locked objects
 
-Even though both transactions aren't finalized, submitting equivocated transactions still causes other problems for both developers and users. For example, when equivocation is detected, the involved objects are locked until the end of the current epoch. Neither transaction can proceed, and the objects cannot be used in any other transaction. Bad actors could intentionally submit equivocated transactions to lock up important objects and intentionally disrupt dApps.
+Even though both transactions aren't finalized, submitting equivocated transactions still causes other problems for both developers and users. For example, when equivocation is detected, the involved objects are locked until the end of the current epoch. Neither transaction can proceed, and the objects cannot be used in any other transaction. Bad actors could intentionally submit equivocated transactions to lock up important objects and intentionally disrupt apps.
 
 If you find your smart contracts [unintentionally locking objects](/guides/developer/common-errors) you can install the [`sui-tool`](https://github.com/MystenLabs/sui/tree/main/crates/sui-tool) utility and use the `locked-object` command to check the locked status of the passed asset on a specific RPC network (`--fullnode-rpc-url` value). If you provide an address, `locked-object` checks if all the gas objects owned by that address are locked. Pass an object ID to check if that specific object is locked. Include the `--rescue` flag to try and unlock the object the command targets. Rescue is possible if the object isn't already locked by a majority of validators.
 

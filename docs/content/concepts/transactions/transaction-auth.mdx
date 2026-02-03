@@ -56,7 +56,7 @@ After Sui defines the deterministic way to derive the master key from a seed, BI
 
 ### Address format
 
-For deriving a 32-byte Sui address, Sui hashes the signature scheme flag 1-byte concatenated with public key bytes using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. Sui addresses currently support pure Ed25519, Secp256k1, Secp256r1, and [multisig](/concepts/transactions/transaction-auth/multisig.mdx) with corresponding flag bytes of 0x00, 0x01, 0x02, and 0x03, respectively.
+For deriving a 32-byte Sui address, Sui hashes the signature scheme flag 1-byte concatenated with public key bytes using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. Sui addresses currently support pure Ed25519, Secp256k1, Secp256r1, and [multisig](/guides/developer/transactions/transaction-auth/multisig.mdx) with corresponding flag bytes of 0x00, 0x01, 0x02, and 0x03, respectively.
 
 ## Signatures
 
@@ -87,7 +87,7 @@ The following table lists each signing scheme and its corresponding flag, signat
 
 ### Signature requirements {#signature-requirements}
 
-The signature must commit to the hash of the intent message of the transaction data, which you can construct by appending the 3-byte intent before the BCS serialized transaction data. To learn more on what an intent is and how to construct an intent message, see [Intent Signing](/concepts/transactions/transaction-auth/intent-signing.mdx).
+The signature must commit to the hash of the intent message of the transaction data, which you can construct by appending the 3-byte intent before the BCS serialized transaction data. To learn more on what an intent is and how to construct an intent message, see [Intent Signing](/guides/developer/transactions/transaction-auth/intent-signing.mdx).
 
 When invoking the signing API, you must first hash the intent message of the transaction data to 32 bytes using Blake2b. This external hashing is distinct from the hashing performed inside the signing API. To be compatible with existing standards and hardware secure modules (HSMs), the signing algorithms perform additional hashing internally. For ECDSA Secp256k1 and Secp256r1, you must use SHA-2 SHA256 as the internal hash function. For pure Ed25519, you must use SHA-512.
 
@@ -121,9 +121,9 @@ For more information on advanced signature schemes:
 
 - **Passkey**: See [SIP-8](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md) for passkey implementation details.
 
-- **Multisig**: See [Multisig](/concepts/transactions/transaction-auth/multisig.mdx) for multi-signature transactions.
+- **Multisig**: See [Multisig](/guides/developer/transactions/transaction-auth/multisig.mdx) for multi-signature transactions.
 
-- **Offline Signing**: See [Offline Signing](/concepts/transactions/transaction-auth/offline-signing.mdx) for concrete examples of signing transactions offline.
+- **Offline Signing**: See [Offline Signing](/guides/developer/transactions/transaction-auth/offline-signing.mdx) for concrete examples of signing transactions offline.
 
 ## Authority signatures
 
@@ -135,7 +135,7 @@ The protocol key pair provides authority signatures on user-signed transactions 
 
 As with the BLS scheme, you can aggregate independent signatures resulting in a single BLS signature payload. Sui also accompanies the aggregated signature with a bitmap to denote which of the validators signed. This effectively reduces the authorities signature size from (2f + 1) × `BLS_sig` size to just 1 `BLS_sig` payload. This has significant network cost benefits resulting in compressed transaction certificates independently on the validators set size.
 
-To counter potential rogue key attacks on BLS12381 aggregated signatures, proof of knowledge of the secret key (KOSK) is used during authority registration. When an authority requests to be added to the validator set, a proof of possession is submitted and verified. See [Intent Signing](/concepts/transactions/transaction-auth/intent-signing.mdx) on how to create a proof of possession. Unlike most standards, the Sui proof of knowledge scheme commits to the address as well, which offers an extra protection against adversarial reuse of a validator BLS key from another malicious validator.
+To counter potential rogue key attacks on BLS12381 aggregated signatures, proof of knowledge of the secret key (KOSK) is used during authority registration. When an authority requests to be added to the validator set, a proof of possession is submitted and verified. See [Intent Signing](/guides/developer/transactions/transaction-auth/intent-signing.mdx) on how to create a proof of possession. Unlike most standards, the Sui proof of knowledge scheme commits to the address as well, which offers an extra protection against adversarial reuse of a validator BLS key from another malicious validator.
 
 ### Account key pair {#account-pair}
 

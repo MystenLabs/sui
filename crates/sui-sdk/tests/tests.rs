@@ -93,7 +93,7 @@ async fn test_verify_signature_zklogin() {
         .await;
     test_cluster.wait_for_epoch(Some(1)).await;
     test_cluster.wait_for_authenticator_state_update().await;
-    let client = test_cluster.sui_client();
+    let client = test_cluster.grpc_client();
     let res = verify_personal_message_signature(
         signature.clone(),
         message,
@@ -107,7 +107,7 @@ async fn test_verify_signature_zklogin() {
         signature,
         "wrong msg".as_bytes(),
         user_address,
-        Some(client.clone()),
+        Some(client),
     )
     .await;
     assert!(res.is_err());
@@ -242,7 +242,6 @@ async fn test_update_env_chain_id_new_chain_id() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
     let context = &mut test_cluster.wallet;
-    let client = context.get_client().await?;
 
     let config = SuiClientConfig::load(&config_path)?;
     let active_env = config.get_active_env()?;
@@ -252,7 +251,7 @@ async fn test_update_env_chain_id_new_chain_id() -> Result<(), anyhow::Error> {
         "Chain ID should not be cached initially"
     );
 
-    let chain_id = context.load_or_cache_chain_id(&client).await?;
+    let chain_id = context.load_or_cache_chain_id().await?;
     assert!(!chain_id.is_empty(), "Chain ID should not be empty");
 
     let reloaded_config = SuiClientConfig::load(&config_path)?;
@@ -271,7 +270,6 @@ async fn test_update_env_chain_id_overwrite_existing() -> Result<(), anyhow::Err
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
     let context = &mut test_cluster.wallet;
-    let client = context.get_client().await?;
 
     let mut config = SuiClientConfig::load(&config_path)?;
     let active_env_alias = config.get_active_env()?.alias.clone();
@@ -285,7 +283,7 @@ async fn test_update_env_chain_id_overwrite_existing() -> Result<(), anyhow::Err
         "Fake chain ID should be set"
     );
 
-    let real_chain_id = context.cache_chain_id(&client).await?;
+    let real_chain_id = context.cache_chain_id().await?;
     assert_ne!(
         real_chain_id, "fake-chain-id",
         "Real chain ID should be different from fake one"
@@ -308,8 +306,7 @@ async fn test_chain_id_persistence() -> Result<(), anyhow::Error> {
 
     let chain_id = {
         let context = &mut test_cluster.wallet;
-        let client = context.get_client().await?;
-        context.cache_chain_id(&client).await?
+        context.cache_chain_id().await?
     };
 
     let new_context = WalletContext::new(&config_path)?;

@@ -7,6 +7,6 @@ task 1, lines 8-11:
 //# run-graphql
 Response: {
   "data": {
-    "chainIdentifier": "a6a639f2"
+    "chainIdentifier": "CDXgyfL9effgQDWAiNSAnk34hMVbnyvzpTohmNRNQgKc"
   }
 }

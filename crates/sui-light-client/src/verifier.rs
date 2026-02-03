@@ -6,10 +6,8 @@ use crate::committee::extract_new_committee_info;
 use crate::config::Config;
 use crate::object_store::SuiObjectStore;
 use anyhow::{Result, anyhow};
-use std::sync::Arc;
 use sui_config::genesis::Genesis;
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponseOptions};
-use sui_sdk::SuiClientBuilder;
+use sui_rpc_api::Client;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -55,23 +53,11 @@ pub fn extract_verified_effects_and_events(
 }
 
 pub async fn get_verified_object(config: &Config, id: ObjectID) -> Result<Object> {
-    let sui_client: Arc<sui_sdk::SuiClient> = Arc::new(
-        SuiClientBuilder::default()
-            .build(config.full_node_url.as_str())
-            .await?,
-    );
+    let mut client = Client::new(config.full_node_url.as_str())?;
 
     info!("Getting object: {}", id);
 
-    let read_api = sui_client.read_api();
-    let object_json = read_api
-        .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
-        .await
-        .expect("Cannot get object");
-    let object = object_json
-        .into_object()
-        .expect("Cannot make into object data");
-    let object: Object = object.try_into().expect("Cannot reconstruct object");
+    let object = client.get_object(id).await?;
 
     // Need to authenticate this object
     let (effects, _) = get_verified_effects_and_events(config, object.previous_transaction)
@@ -94,19 +80,14 @@ pub async fn get_verified_effects_and_events(
     config: &Config,
     tid: TransactionDigest,
 ) -> Result<(TransactionEffects, Option<TransactionEvents>)> {
-    let sui_mainnet: sui_sdk::SuiClient = SuiClientBuilder::default()
-        .build(config.full_node_url.as_str())
-        .await?;
-    let read_api = sui_mainnet.read_api();
+    let mut client = Client::new(config.full_node_url.as_str())?;
 
     info!("Getting effects and events for TID: {}", tid);
 
     // Lookup the transaction id and get the checkpoint sequence number
-    let options = SuiTransactionBlockResponseOptions::new();
-    let seq = read_api
-        .get_transaction_with_options(tid, options)
-        .await
-        .map_err(|e| anyhow!(format!("Cannot get transaction: {e}")))?
+    let seq = client
+        .get_transaction(&tid)
+        .await?
         .checkpoint
         .ok_or(anyhow!("Transaction not found"))?;
 
@@ -144,9 +125,7 @@ pub async fn get_verified_effects_and_events(
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
         genesis_path.push(&config.genesis_filename);
-        Genesis::load(&genesis_path)?
-            .committee()
-            .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?
+        Genesis::load(&genesis_path)?.committee()
     };
 
     info!("Extracting effects and events for TID: {}", tid);
@@ -164,25 +143,13 @@ pub async fn get_verified_checkpoint(
     id: ObjectID,
     config: &Config,
 ) -> Result<CheckpointSequenceNumber> {
-    let sui_client: sui_sdk::SuiClient = SuiClientBuilder::default()
-        .build(config.full_node_url.as_str())
-        .await?;
-    let read_api = sui_client.read_api();
-    let object_json = read_api
-        .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
-        .await
-        .expect("Cannot get object");
-    let object = object_json
-        .into_object()
-        .expect("Cannot make into object data");
-    let object: Object = object.try_into().expect("Cannot reconstruct object");
+    let mut client = Client::new(config.full_node_url.as_str())?;
+    let object = client.get_object(id).await?;
 
     // Lookup the transaction id and get the checkpoint sequence number
-    let options = SuiTransactionBlockResponseOptions::new();
-    let seq = read_api
-        .get_transaction_with_options(object.previous_transaction, options)
-        .await
-        .map_err(|e| anyhow!(format!("Cannot get transaction: {e}")))?
+    let seq = client
+        .get_transaction(&object.previous_transaction)
+        .await?
         .checkpoint
         .ok_or(anyhow!("Transaction not found"))?;
 
@@ -234,9 +201,7 @@ pub async fn get_verified_checkpoint(
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
         genesis_path.push(&config.genesis_filename);
-        Genesis::load(&genesis_path)?
-            .committee()
-            .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?
+        Genesis::load(&genesis_path)?.committee()
     };
 
     // Verify that committee signed this checkpoint and checkpoint contents with digest

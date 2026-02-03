@@ -62,7 +62,7 @@ pub async fn init_package(
         .wallet
         .gas_for_owner_budget(sender, budget, Default::default())
         .await?;
-    let gas_object = gas_object_data.object_ref();
+    let gas_object = gas_object_data.compute_object_reference();
     let tx_data = TransactionData::new_programmable(sender, vec![gas_object], pt, budget, price);
 
     let sig = keystore
@@ -130,7 +130,7 @@ pub async fn mint(
         .wallet
         .gas_for_owner_budget(treasury_cap_owner, budget, forbidden_objects)
         .await?;
-    let gas_object = gas_object_data.object_ref();
+    let gas_object = gas_object_data.compute_object_reference();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
 

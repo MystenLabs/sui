@@ -58,7 +58,7 @@ jobs:
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
       isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - name: Detect Changes
         uses: './.github/actions/diffs'
         id: diff
@@ -68,7 +68,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: rustup component add rustfmt
@@ -79,7 +79,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: rustup component add clippy
@@ -102,10 +102,10 @@ jobs:
           - [ ubuntu-ghcloud ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
       - name: Install Foundry
@@ -131,7 +131,7 @@ jobs:
     if: needs.diff.outputs.isSolidity == 'true'
     runs-on: [ ubuntu-ghcloud ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - name: Install Foundry
         run: |
           curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup -i nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710'; } | bash

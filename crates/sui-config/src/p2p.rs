@@ -23,6 +23,9 @@ pub struct P2pConfig {
     /// connection is established with these nodes.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub seed_peers: Vec<SeedPeer>,
+    /// Manually configured peer addresses. These override addresses loaded from on-chain configs.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub peer_address_overrides: Vec<PeerAddresses>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anemo_config: Option<anemo::Config>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -49,6 +52,7 @@ impl Default for P2pConfig {
             listen_address: default_listen_address(),
             external_address: Default::default(),
             seed_peers: Default::default(),
+            peer_address_overrides: Default::default(),
             anemo_config: Default::default(),
             state_sync: None,
             discovery: None,
@@ -86,6 +90,13 @@ pub struct AllowlistedPeer {
     pub peer_id: anemo::PeerId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<Multiaddr>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct PeerAddresses {
+    pub peer_id: anemo::PeerId,
+    pub addresses: Vec<Multiaddr>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

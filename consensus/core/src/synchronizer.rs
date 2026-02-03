@@ -31,13 +31,14 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     BlockAPI,
-    block::{SignedBlock, VerifiedBlock},
+    block::{ExtendedBlock, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit_vote_monitor::CommitVoteMonitor,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
+    round_tracker::RoundTracker,
 };
 use crate::{
     authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher,
@@ -241,6 +242,7 @@ pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThread
     network_client: Arc<C>,
     block_verifier: Arc<V>,
     transaction_certifier: TransactionCertifier,
+    round_tracker: Arc<RwLock<RoundTracker>>,
     inflight_blocks_map: Arc<InflightBlocksMap>,
     commands_sender: Sender<Command>,
 }
@@ -253,6 +255,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         block_verifier: Arc<V>,
         transaction_certifier: TransactionCertifier,
+        round_tracker: Arc<RwLock<RoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
         sync_last_known_own_block: bool,
     ) -> Arc<SynchronizerHandle> {
@@ -280,6 +283,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 dag_state.clone(),
                 receiver,
                 commands_sender.clone(),
+                round_tracker.clone(),
             );
             tasks.spawn(monitored_future!(fetch_blocks_from_authority_async));
             fetch_block_senders.insert(index, sender);
@@ -309,6 +313,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 inflight_blocks_map,
                 commands_sender: commands_sender_clone,
                 dag_state,
+                round_tracker,
             };
             s.run().await;
         }));
@@ -451,6 +456,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         dag_state: Arc<RwLock<DagState>>,
         mut receiver: Receiver<BlocksGuard>,
         commands_sender: Sender<Command>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
     ) {
         const MAX_RETRIES: u32 = 3;
         let peer_hostname = &context.committee.authority(peer_index).hostname;
@@ -476,6 +482,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 commit_vote_monitor.clone(),
                                 context.clone(),
                                 commands_sender.clone(),
+                                round_tracker.clone(),
                                 "live"
                             ).await {
                                 warn!("Error while processing fetched blocks from peer {peer_index} {peer_hostname}: {err}");
@@ -514,6 +521,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         context: Arc<Context>,
         commands_sender: Sender<Command>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
         sync_method: &str,
     ) -> ConsensusResult<()> {
         if serialized_blocks.is_empty() {
@@ -544,6 +552,18 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         // Record commit votes from the verified blocks.
         for block in &blocks {
             commit_vote_monitor.observe_block(block);
+        }
+
+        // Update round tracker from the verified blocks. For fetched blocks,
+        // excluded_ancestors are not available so we use an empty vector.
+        {
+            let mut tracker = round_tracker.write();
+            for block in &blocks {
+                tracker.update_from_verified_block(&ExtendedBlock {
+                    block: block.clone(),
+                    excluded_ancestors: vec![],
+                });
+            }
         }
 
         let metrics = &context.metrics.node_metrics;
@@ -884,6 +904,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let blocks_to_fetch = self.inflight_blocks_map.clone();
         let commands_sender = self.commands_sender.clone();
         let dag_state = self.dag_state.clone();
+        let round_tracker = self.round_tracker.clone();
 
         // If we are commit lagging, then we don't want to enable the scheduler. As the node is sycnhronizing via the commit syncer, the certified commits
         // will bring all the necessary blocks to run the commits. As the commits are certified, we are guaranteed that all the necessary causal history is present.
@@ -935,6 +956,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                         commit_vote_monitor.clone(),
                         context.clone(),
                         commands_sender.clone(),
+                        round_tracker.clone(),
                         "periodic",
                     )
                     .await
@@ -1192,7 +1214,7 @@ mod tests {
     };
     use crate::{
         authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
-        transaction_certifier::TransactionCertifier,
+        round_tracker::RoundTracker, transaction_certifier::TransactionCertifier,
     };
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
@@ -1428,6 +1450,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let handle = Synchronizer::start(
             network_client.clone(),
@@ -1436,6 +1459,7 @@ mod tests {
             commit_vote_monitor,
             block_verifier,
             transaction_certifier,
+            round_tracker,
             dag_state,
             false,
         );
@@ -1485,6 +1509,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let handle = Synchronizer::start(
             network_client.clone(),
@@ -1493,6 +1518,7 @@ mod tests {
             commit_vote_monitor,
             block_verifier,
             transaction_certifier,
+            round_tracker,
             dag_state,
             false,
         );
@@ -1553,6 +1579,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // Create some test blocks
         let expected_blocks = (0..10)
@@ -1594,6 +1621,7 @@ mod tests {
             commit_vote_monitor,
             block_verifier,
             transaction_certifier,
+            round_tracker,
             dag_state,
             false,
         );
@@ -1633,6 +1661,7 @@ mod tests {
             blocks_sender,
         );
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // AND stub some missing blocks. The highest accepted round is 0. Create blocks that are above the sync threshold.
         let sync_missing_block_round_threshold = context.parameters.commit_sync_batch_size;
@@ -1699,6 +1728,7 @@ mod tests {
             commit_vote_monitor.clone(),
             block_verifier,
             transaction_certifier,
+            round_tracker,
             dag_state.clone(),
             false,
         );
@@ -1765,6 +1795,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let our_index = AuthorityIndex::new_for_test(0);
 
         // Create some test blocks
@@ -1837,6 +1868,7 @@ mod tests {
             commit_vote_monitor,
             block_verifier,
             transaction_certifier,
+            round_tracker,
             dag_state,
             true,
         );
@@ -1889,6 +1921,7 @@ mod tests {
             dag_state.clone(),
             blocks_sender,
         );
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let (commands_sender, _commands_receiver) =
             monitored_mpsc::channel("consensus_synchronizer_commands", 1000);
 
@@ -1943,6 +1976,7 @@ mod tests {
             commit_vote_monitor,
             context.clone(),
             commands_sender,
+            round_tracker,
             "test",
         )
         .await;

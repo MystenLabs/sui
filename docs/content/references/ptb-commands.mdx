@@ -1,0 +1,116 @@
+---
+title: PTB Commands
+description: This topic describes each PTB command and their format, return type, and signature.
+keywords: [ programmable transaction blocks, transaction blocks, program transaction blocks, PTB, PTBs, what are PTBs, what is PTB, transaction group, programmable group of transactions, program transaction block, block of transactions, group of transactions ]
+---
+
+The following sections describe each PTB command. Command signatures shown are conceptual Move representations, as these operations cannot always be expressed as standard Move functions.
+
+#### `TransferObjects`
+
+**Form:** `TransferObjects(ObjectArgs, AddressArg)`
+
+Sends one or more objects to a specified address.
+
+- `ObjectArgs: [Argument]`: Vector of objects, any type. Taken by value.
+
+- `AddressArg: Argument`: Target address from `Pure` input or result. Taken by value.
+
+**Returns:** Empty result vector.
+
+**Signature:** `(vector<forall T: key + store. T>, address): ()`
+
+#### `SplitCoins`
+
+**Form:** `SplitCoins(CoinArg, AmountArgs)`
+
+Splits off one or more coins from a single coin.
+
+- `CoinArg: Argument`: Coin of type `sui::coin::Coin<T>` (any coin type). Taken by mutable reference.
+
+- `AmountArgs: [Argument]`: `u64` values for split amounts. Taken by value (copied).
+
+**Returns:** Vector of coins `sui::coin::Coin<T>` matching the number of amounts.
+
+**Signature:** `<T: key + store>(coin: &mut sui::coin::Coin<T>, amounts: vector<u64>): vector<sui::coin::Coin<T>>`
+
+#### `MergeCoins`
+
+**Form:** `MergeCoins(CoinArg, ToMergeArgs)`
+
+Merges multiple coins into a single coin.
+
+- `CoinArg: Argument`: Target coin of type `sui::coin::Coin<T>` (any coin type). Taken by mutable reference.
+
+- `ToMergeArgs: [Argument]`: Coins of type `sui::coin::Coin<T>` to merge. Taken by value (moved).
+
+**Returns:** Empty result vector.
+
+**Signature:** `<T: key + store>(coin: &mut sui::coin::Coin<T>, to_merge: vector<sui::coin::Coin<T>>): ()`
+
+#### `MakeMoveVec`
+
+**Form:** `MakeMoveVec(VecTypeOption, Args)`
+
+Creates a vector (potentially empty) of Move values.
+
+- `VecTypeOption: Option<TypeTag>`: Optional type specifier for elements. Must be specified for non-object types or empty vectors.
+
+- `Args: [Argument]`: Vector elements (any type). Taken by value (copied if `T: copy`, moved otherwise).
+
+**Returns:** Single result of type `vector<T>`. Elements cannot be accessed individually using `NestedResult`; use the entire vector or access elements inside Move code via `MoveCall`.
+
+**Signature:** `(T...): vector<T>`
+
+#### `MoveCall`
+
+**Form:** `MoveCall(Package, Module, Function, TypeArgs, Args)`
+
+Invokes an `entry` or `public` Move function in a published package.
+
+- `Package: ObjectID`: Object ID of the package.
+
+- `Module: String`: Module name.
+
+- `Function: String`: Function name.
+
+- `TypeArgs: [TypeTag]`: Type arguments satisfying the function's type parameters.
+
+- `Args: [Argument]`: Arguments matching the function's signature.
+
+**Returns:** Dynamic number of results based on the function signature.
+
+Unlike other commands, argument usage and result count depend on the Move function being called.
+
+#### `Publish`
+
+**Form:** `Publish(ModuleBytes, TransitiveDependencies)`
+
+Creates a new package and calls the `init` function of each module.
+
+- `ModuleBytes: [[u8]]`: Bytes of modules being published (each `[u8]` is one module).
+
+- `TransitiveDependencies: [ObjectID]`: Object IDs of package dependencies for version selection.
+
+**Returns:** Single result of type `sui::package::UpgradeCap` for the newly published package.
+
+After verification, the `init` function of each module is called in the same order as the module byte vector.
+
+#### `Upgrade`
+
+**Form:** `Upgrade(ModuleBytes, TransitiveDependencies, Package, UpgradeTicket)`
+
+Upgrades an existing package. No `init` functions are called for upgraded modules.
+
+- `ModuleBytes: [[u8]]`: Bytes of upgraded modules.
+
+- `TransitiveDependencies: [ObjectID]`: Object IDs of package dependencies.
+
+- `Package: ObjectID`: Object ID of the package being upgraded (must exist and be latest version).
+
+- `UpgradeTicket: sui::package::UpgradeTicket`: Upgrade ticket generated from `sui::package::UpgradeCap`. Taken by value (moved).
+
+**Returns:** Single result of type `sui::package::UpgradeReceipt` providing proof of upgrade.
+
+For more details on upgrades, see [Upgrading Packages](/guides/developer/packages/upgrade.mdx).
+

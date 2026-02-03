@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(deprecated)]
+
 //! NB: Most tests in this module expect real network connections and interactions, thus
 //! they should nearly all be tokio::test rather than simtest.
 

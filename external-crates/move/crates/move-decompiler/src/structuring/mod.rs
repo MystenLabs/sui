@@ -28,6 +28,11 @@ pub(crate) fn structure(
     mut input: BTreeMap<D::Label, D::Input>,
     entry_node: D::Label,
 ) -> D::Structured {
+    // Native functions have empty basic blocks - return early to avoid panicking in Graph::new
+    if input.is_empty() {
+        return D::Structured::Seq(vec![]);
+    }
+
     let mut graph = Graph::new(config, &input, entry_node);
 
     let mut structured_blocks: BTreeMap<D::Label, D::Structured> = BTreeMap::new();
@@ -132,12 +137,11 @@ fn structure_loop(
             .all_children()
             .any(|child| child == succ_node)
     {
-        result = D::Structured::Seq(vec![
-            result,
-            structured_blocks.remove(&succ_node).unwrap_or_else(|| {
-                panic!("Expected successor node {succ_node:?} to be structured")
-            }),
-        ]);
+        if let Some(succ_structured) = structured_blocks.remove(&succ_node) {
+            result = D::Structured::Seq(vec![result, succ_structured]);
+        } else if config.debug_print.structuring {
+            println!("  failed to find successor node {succ_node:?} in structured blocks");
+        }
     }
     structured_blocks.insert(loop_head, result);
 }

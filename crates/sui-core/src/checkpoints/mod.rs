@@ -1454,7 +1454,7 @@ impl CheckpointBuilder {
             .get_pending_checkpoints_v2(last_height)
             .expect("unexpected epoch store error")
         {
-            info!(checkpoint_commit_height = height, "Making checkpoint");
+            debug!(checkpoint_commit_height = height, "Making checkpoint");
 
             let seq = self.make_checkpoint_v2(pending).await?;
 
@@ -1897,7 +1897,7 @@ impl CheckpointBuilder {
                 .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
         );
 
-        let mut sorted: Vec<TransactionEffects> = Vec::new();
+        let mut all_effects: Vec<TransactionEffects> = Vec::new();
         let mut all_root_digests: Vec<TransactionDigest> = Vec::new();
 
         let last_checkpoint =
@@ -1967,6 +1967,9 @@ impl CheckpointBuilder {
                 self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
 
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+            let tx_index_offset = all_effects.len() as u64;
+            let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+
             if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
                 if cfg!(debug_assertions) {
                     for tx in unsorted.iter() {
@@ -1983,24 +1986,25 @@ impl CheckpointBuilder {
                         &sorted,
                         checkpoint_roots.height,
                         next_checkpoint_seq,
-                        0, // TODO we may remove offset param post split_checkpoints_in_consensus_handler;
-                           // all txn effects now included in sorted; no need for offset.
+                        tx_index_offset,
                     )
                     .await;
                 debug!(?tx_key, "executed settlement transactions");
 
                 sorted.extend(settlement_effects);
             }
+
+            all_effects.extend(sorted);
         }
 
         #[cfg(msim)]
         {
             self.expensive_consensus_commit_prologue_invariants_check_v2(
                 &all_root_digests,
-                &sorted,
+                &all_effects,
             );
         }
-        Ok((sorted, all_root_digests.into_iter().collect()))
+        Ok((all_effects, all_root_digests.into_iter().collect()))
     }
 
     // Extracts the consensus commit prologue digest and effects from the root transactions.
@@ -2233,7 +2237,7 @@ impl CheckpointBuilder {
         let mut last_checkpoint =
             Self::load_last_built_checkpoint_summary(&self.epoch_store, &self.store)?;
         let last_checkpoint_seq = last_checkpoint.as_ref().map(|(seq, _)| *seq);
-        info!(
+        debug!(
             checkpoint_commit_height = details.checkpoint_height,
             next_checkpoint_seq = last_checkpoint_seq.unwrap_or_default() + 1,
             checkpoint_timestamp = details.timestamp_ms,
@@ -3495,14 +3499,27 @@ impl CheckpointService {
     ) {
         let (builder, aggregator, state_hasher) = self.state.lock().take_unstarted();
 
-        // Clean up state hashes computed after the last committed checkpoint
+        // Clean up state hashes computed after the last built checkpoint
         // This prevents ECMH divergence after fork recovery restarts
-        if let Some(last_committed_seq) = self
+
+        // Note: there is a rare crash recovery edge case where we write the builder
+        // summary, but crash before we can bump the highest executed checkpoint.
+        // If we committed the builder summary, it was certified and unforked, so there
+        // is no need to clear that state hash. If we do clear it, then checkpoint executor
+        // will wait forever for checkpoint builder to produce the state hash, which will
+        // never happen.
+        let last_persisted_builder_seq = epoch_store
+            .last_persisted_checkpoint_builder_summary()
+            .expect("epoch should not have ended")
+            .map(|s| s.summary.sequence_number);
+
+        let last_executed_seq = self
             .tables
             .get_highest_executed_checkpoint()
             .expect("Failed to get highest executed checkpoint")
-            .map(|checkpoint| *checkpoint.sequence_number())
-        {
+            .map(|checkpoint| *checkpoint.sequence_number());
+
+        if let Some(last_committed_seq) = last_persisted_builder_seq.max(last_executed_seq) {
             if let Err(e) = builder
                 .epoch_store
                 .clear_state_hashes_after_checkpoint(last_committed_seq)

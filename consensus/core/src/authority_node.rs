@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Instant};
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use consensus_types::block::Round;
 use itertools::Itertools;
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
@@ -13,7 +14,7 @@ use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::{
-    CommitConsumerArgs,
+    BlockAPI as _, CommitConsumerArgs,
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_verifier::SignedBlockVerifier,
@@ -30,7 +31,7 @@ use crate::{
     network::{NetworkManager, tonic_network::TonicManager},
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
-    round_tracker::PeerRoundTracker,
+    round_tracker::RoundTracker,
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
@@ -258,7 +259,16 @@ where
         )
         .await;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let initial_received_rounds = dag_state
+            .read()
+            .get_last_cached_block_per_authority(Round::MAX)
+            .into_iter()
+            .map(|(block, _)| block.round())
+            .collect::<Vec<_>>();
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(
+            context.clone(),
+            initial_received_rounds,
+        )));
 
         // To avoid accidentally leaking the private key, the protocol key pair should only be
         // kept in Core.
@@ -291,6 +301,7 @@ where
             commit_vote_monitor.clone(),
             block_verifier.clone(),
             transaction_certifier.clone(),
+            round_tracker.clone(),
             dag_state.clone(),
             sync_last_known_own_block,
         );
@@ -302,6 +313,7 @@ where
             commit_consumer_monitor.clone(),
             block_verifier.clone(),
             transaction_certifier.clone(),
+            round_tracker.clone(),
             network_client.clone(),
             dag_state.clone(),
         )
@@ -427,7 +439,7 @@ mod tests {
     use super::*;
     use crate::{
         CommittedSubDag,
-        block::{BlockAPI as _, CertifiedBlocksOutput, GENESIS_ROUND},
+        block::{BlockAPI as _, GENESIS_ROUND},
         transaction::NoopTransactionVerifier,
     };
 
@@ -450,7 +462,7 @@ mod tests {
         let protocol_keypair = keypairs[own_index].1.clone();
         let network_keypair = keypairs[own_index].0.clone();
 
-        let (commit_consumer, _, _) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _) = CommitConsumerArgs::new(0, 0);
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -497,12 +509,11 @@ mod tests {
             .collect::<Vec<_>>();
 
         let mut commit_receivers = Vec::with_capacity(committee.size());
-        let mut block_receivers = Vec::with_capacity(committee.size());
         let mut authorities = Vec::with_capacity(committee.size());
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
         for (index, _authority_info) in committee.authorities() {
-            let (authority, commit_receiver, block_receiver) = make_authority(
+            let (authority, commit_receiver) = make_authority(
                 index,
                 &temp_dirs[index.value()],
                 committee.clone(),
@@ -514,7 +525,6 @@ mod tests {
             .await;
             boot_counters[index] += 1;
             commit_receivers.push(commit_receiver);
-            block_receivers.push(block_receiver);
             authorities.push(authority);
         }
 
@@ -560,7 +570,7 @@ mod tests {
         sleep(Duration::from_secs(10)).await;
 
         // Restart authority 1 and let it run.
-        let (authority, commit_receiver, block_receiver) = make_authority(
+        let (authority, commit_receiver) = make_authority(
             index,
             &temp_dirs[index.value()],
             committee.clone(),
@@ -572,7 +582,6 @@ mod tests {
         .await;
         boot_counters[index] += 1;
         commit_receivers[index] = commit_receiver;
-        block_receivers[index] = block_receiver;
         authorities.insert(index.value(), authority);
         sleep(Duration::from_secs(10)).await;
 
@@ -604,7 +613,7 @@ mod tests {
         let mut boot_counters = vec![0; num_authorities];
 
         for (index, _authority_info) in committee.authorities() {
-            let (authority, commit_receiver, _block_receiver) = make_authority(
+            let (authority, commit_receiver) = make_authority(
                 index,
                 &temp_dirs[index.value()],
                 committee.clone(),
@@ -661,7 +670,7 @@ mod tests {
         sleep(Duration::from_secs(10)).await;
 
         // Restart authority 0 and let it run.
-        let (authority, commit_receiver, _block_receiver) = make_authority(
+        let (authority, commit_receiver) = make_authority(
             index,
             &temp_dirs[index.value()],
             committee.clone(),
@@ -692,7 +701,6 @@ mod tests {
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
         let mut commit_receivers = vec![];
-        let mut block_receivers = vec![];
         let mut authorities = BTreeMap::new();
         let mut temp_dirs = BTreeMap::new();
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
@@ -702,7 +710,7 @@ mod tests {
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
-            let (authority, commit_receiver, block_receiver) = make_authority(
+            let (authority, commit_receiver) = make_authority(
                 index,
                 &dir,
                 committee.clone(),
@@ -714,7 +722,6 @@ mod tests {
             .await;
             boot_counters[index] += 1;
             commit_receivers.push(commit_receiver);
-            block_receivers.push(block_receiver);
             authorities.insert(index, authority);
             temp_dirs.insert(index, dir);
         }
@@ -751,7 +758,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         // We do reset the boot counter for this one to simulate a "binary" restart
         boot_counters[index_1] = 0;
-        let (authority, mut commit_receiver, _block_receiver) = make_authority(
+        let (authority, mut commit_receiver) = make_authority(
             index_1,
             &dir,
             committee.clone(),
@@ -768,7 +775,7 @@ mod tests {
 
         // Now spin up authority 2 using its earlier directly - so no amnesia recovery should be forced here.
         // Authority 1 should be able to recover from amnesia successfully.
-        let (authority, _commit_receiver, _block_receiver) = make_authority(
+        let (authority, _commit_receiver) = make_authority(
             index_2,
             &temp_dirs[&index_2],
             committee.clone(),
@@ -806,11 +813,7 @@ mod tests {
         network_type: NetworkType,
         boot_counter: u64,
         protocol_config: ProtocolConfig,
-    ) -> (
-        ConsensusAuthority,
-        UnboundedReceiver<CommittedSubDag>,
-        UnboundedReceiver<CertifiedBlocksOutput>,
-    ) {
+    ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
         let registry = Registry::new();
 
         // Cache less blocks to exercise commit sync.
@@ -827,7 +830,7 @@ mod tests {
         let protocol_keypair = keypairs[index].1.clone();
         let network_keypair = keypairs[index].0.clone();
 
-        let (commit_consumer, commit_receiver, block_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, commit_receiver) = CommitConsumerArgs::new(0, 0);
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -846,6 +849,6 @@ mod tests {
         )
         .await;
 
-        (authority, commit_receiver, block_receiver)
+        (authority, commit_receiver)
     }
 }

@@ -135,6 +135,7 @@ pub(crate) async fn verify_signature(
         true,
         config.max_epoch_upper_bound_delta,
         true,
+        true,
     );
 
     Ok(match intent_scope {
