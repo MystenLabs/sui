@@ -21,3 +21,5 @@ authority-store-pruning-config:
   pruning-run-delay-seconds: 60
 state-debug-dump-config:
   dump-file-directory: /opt/sui/state_debug_dump
+rpc:
+  enable-indexing: true
