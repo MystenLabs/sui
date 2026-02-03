@@ -729,6 +729,56 @@ if (!BridgeUtilsV2.isMatureMessage(timestampSeconds, block.timestamp)) {
 
 - Rolling back to the baseline flow requires dropping the V2 message types from the WAL and sticking to the original endpoints. Keep this section handy if you need to compare behaviors across commits or audit limiter-bypass allowances.
 
+## ⚠️ Critical: Mainnet vs Testnet Storage Layout Difference
+
+**The EVM SuiBridge proxy has different storage layouts between mainnet and testnet (Sepolia).** This is because a `__gap` storage array was added to `CommitteeUpgradeable.sol` between the testnet and mainnet deployments.
+
+### Storage Layout Comparison
+
+| Variable | Testnet (Sepolia) Slot | Mainnet Slot | Difference |
+|----------|------------------------|--------------|------------|
+| `committee` | 0 | 0 | Same |
+| `nonces` | 1 | 1 | Same |
+| `_upgradeAuthorized` | 2 | 2 | Same |
+| `__gap[50]` | **N/A** | 3–52 | **Missing on testnet** |
+| `isTransferProcessed` | 3 | 53 | +50 offset |
+| `vault` | **4** | **54** | +50 offset |
+| `limiter` | **5** | **55** | +50 offset |
+
+### Proxy Addresses
+
+| Network | SuiBridge Proxy | vault slot | limiter slot |
+|---------|-----------------|------------|--------------|
+| **Mainnet** | `0xda3bD1fE1973470312db04551B65f401Bc8a92fD` | 54 | 55 |
+| **Sepolia Testnet** | `0xAE68F87938439afEEDd6552B0E83D2CbC2473623` | 4 | 5 |
+
+### Implications for Upgrades
+
+1. **Mainnet upgrades**: The current codebase (with `__gap` in `CommitteeUpgradeable.sol`) is correct for mainnet. Do NOT remove the `__gap`.
+
+2. **Testnet upgrades**: The `__gap` must be removed from `CommitteeUpgradeable.sol` before deploying any implementation upgrade, or the new implementation will read `vault` and `limiter` from the wrong storage slots (returning `0x0`).
+
+3. **Verification before ANY upgrade**: Always verify the target proxy's storage layout by querying slots directly:
+   ```bash
+   # Check vault slot (should contain a non-zero address)
+   cast storage <PROXY_ADDRESS> 4 --rpc-url <RPC>   # testnet
+   cast storage <PROXY_ADDRESS> 54 --rpc-url <RPC>  # mainnet
+   ```
+
+### Historical Context
+
+The `__gap` array (50 `uint256` slots reserved for future upgrades) was added to `CommitteeUpgradeable.sol` after the Sepolia testnet deployment but before the mainnet deployment. This is a standard OpenZeppelin pattern for upgradeable contracts, but the timing created this permanent storage layout divergence.
+
+### Code Reference
+
+The `__gap` in `CommitteeUpgradeable.sol`:
+```solidity
+bool private _upgradeAuthorized;
+uint256[50] private __gap;  // Present on mainnet, absent on original testnet deployment
+```
+
+**Bottom line:** When upgrading EVM contracts, always verify which network you're targeting and ensure the implementation's storage layout matches the deployed proxy's layout.
+
 ## Verification Checklist for Future Agents
 
 - **Explain the nonce story:** Can you point to `BridgeInner.sequence_nums` and `SuiBridge.nonces` and describe how they prevent replays across message types?
