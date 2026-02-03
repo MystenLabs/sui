@@ -23,10 +23,10 @@ use http::Response;
 use prometheus::Registry;
 use sui_types::base_types::EpochId;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectType;
 use sui_types::base_types::TransactionDigest;
 use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tonic::body::Body;
@@ -636,50 +636,33 @@ impl KeyValueStoreReader for BigTableClient {
         Ok(None)
     }
 
-    async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber> {
-        match self
-            .multi_get(tables::watermark_alt_legacy::NAME, vec![vec![0]], None)
-            .await?
-            .pop()
-            .and_then(|(_, mut row)| row.pop())
-        {
-            Some((_, value_bytes)) => Ok(u64::from_be_bytes(value_bytes.as_ref().try_into()?)),
-            None => Ok(0),
-        }
-    }
+    async fn get_watermark_for_pipelines(
+        &mut self,
+        pipelines: &[&str],
+    ) -> Result<Option<Watermark>> {
+        let keys: Vec<Vec<u8>> = pipelines
+            .iter()
+            .map(|name| tables::watermarks::encode_key(name))
+            .collect();
 
-    async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>> {
-        let sequence_number = self.get_latest_checkpoint().await?;
-        if sequence_number == 0 {
-            return Ok(None);
-        }
-
-        // Fetch just the summary for the latest checkpoint sequence number.
-        // TODO(migration): Remove the `- 1` once get_latest_checkpoint reads per-pipeline
-        // watermarks (checkpoint_hi_inclusive) instead of the legacy next_checkpoint format.
-        let mut response = self
-            .multi_get(
-                tables::checkpoints::NAME,
-                vec![tables::checkpoints::encode_key(sequence_number - 1)],
-                Some(RowFilter {
-                    filter: Some(Filter::ColumnQualifierRegexFilter(
-                        format!("^({})$", tables::checkpoints::col::SUMMARY).into(),
-                    )),
-                }),
-            )
+        let rows = self
+            .multi_get(tables::watermark_alt_legacy::NAME, keys, None)
             .await?;
 
-        let Some((_, row)) = response.pop() else {
+        if rows.len() != pipelines.len() {
             return Ok(None);
-        };
-
-        for (column, value) in row {
-            if column.as_ref() == tables::checkpoints::col::SUMMARY.as_bytes() {
-                return Ok(Some(bcs::from_bytes(&value)?));
-            }
         }
 
-        Ok(None)
+        let mut min_wm: Option<Watermark> = None;
+        for (_, row) in &rows {
+            let wm = tables::watermarks::decode(row)?;
+            min_wm = Some(match min_wm {
+                Some(prev) if prev.checkpoint_hi_inclusive <= wm.checkpoint_hi_inclusive => prev,
+                _ => wm,
+            });
+        }
+
+        Ok(min_wm)
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
@@ -754,6 +737,21 @@ impl KeyValueStoreReader for BigTableClient {
         }
 
         Ok(results)
+    }
+
+    async fn get_object_types(&mut self, object_ids: &[ObjectID]) -> Result<Vec<ObjectType>> {
+        let keys = object_ids
+            .iter()
+            .map(tables::object_types::encode_key)
+            .collect();
+        let mut result = Vec::with_capacity(object_ids.len());
+        for (_, row) in self
+            .multi_get(tables::object_types::NAME, keys, None)
+            .await?
+        {
+            result.push(tables::object_types::decode(&row)?);
+        }
+        Ok(result)
     }
 }
 

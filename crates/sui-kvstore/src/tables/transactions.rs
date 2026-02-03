@@ -9,8 +9,9 @@ use sui_types::balance_change::BalanceChange;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::signature::GenericSignature;
 use sui_types::storage::ObjectKey;
-use sui_types::transaction::Transaction;
+use sui_types::transaction::{SenderSignedData, Transaction};
 
 use crate::write_legacy_data;
 use crate::{TransactionData, TransactionEventsData};
@@ -82,7 +83,10 @@ pub fn encode(
 }
 
 pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
-    let mut transaction = None;
+    let mut transaction_legacy: Option<Transaction> = None;
+    let mut tx_data: Option<sui_types::transaction::TransactionData> = None;
+    let mut tx_signatures: Option<Vec<GenericSignature>> = None;
+
     let mut effects = None;
     let mut events = None;
     let mut timestamp = 0;
@@ -90,7 +94,9 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
 
     for (column, value) in row {
         match column.as_ref() {
-            b"tx" => transaction = Some(bcs::from_bytes(value)?),
+            b"tx" => transaction_legacy = Some(bcs::from_bytes(value)?),
+            b"td" => tx_data = Some(bcs::from_bytes(value)?),
+            b"sg" => tx_signatures = Some(bcs::from_bytes(value)?),
             b"ef" => effects = Some(bcs::from_bytes(value)?),
             b"ev" => events = Some(bcs::from_bytes(value)?),
             b"ts" => timestamp = bcs::from_bytes(value)?,
@@ -99,8 +105,16 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
         }
     }
 
+    let transaction = match (tx_data, tx_signatures) {
+        (Some(data), Some(sigs)) => {
+            let sender_signed_data = SenderSignedData::new(data, sigs);
+            Transaction::new(sender_signed_data)
+        }
+        _ => transaction_legacy.context("transaction field is missing")?,
+    };
+
     Ok(TransactionData {
-        transaction: transaction.context("transaction field is missing")?,
+        transaction,
         effects: effects.context("effects field is missing")?,
         events: events.context("events field is missing")?,
         timestamp,

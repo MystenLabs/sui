@@ -92,16 +92,31 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<EpochData> {
     let mut data = EpochData::default();
 
     for (col, value) in row {
-        if let b"" = col.as_ref() {
-            let info: EpochInfo = bcs::from_bytes(value)?;
-            data.epoch = Some(info.epoch);
-            data.protocol_version = info.protocol_version;
-            data.start_timestamp_ms = info.start_timestamp_ms;
-            data.start_checkpoint = info.start_checkpoint;
-            data.reference_gas_price = info.reference_gas_price;
-            data.system_state = info.system_state;
-            data.end_timestamp_ms = info.end_timestamp_ms;
-            data.end_checkpoint = info.end_checkpoint;
+        match col.as_ref() {
+            // Legacy format: empty column contains BCS-serialized EpochInfo
+            b"" => {
+                let info: EpochInfo = bcs::from_bytes(value)?;
+                data.epoch = Some(info.epoch);
+                data.protocol_version = info.protocol_version;
+                data.start_timestamp_ms = info.start_timestamp_ms;
+                data.start_checkpoint = info.start_checkpoint;
+                data.reference_gas_price = info.reference_gas_price;
+                data.system_state = info.system_state;
+                data.end_timestamp_ms = info.end_timestamp_ms;
+                data.end_checkpoint = info.end_checkpoint;
+            }
+            // New format: individual columns
+            b"ep" => data.epoch = Some(u64::from_be_bytes(value.as_ref().try_into()?)),
+            b"pv" => data.protocol_version = Some(u64::from_be_bytes(value.as_ref().try_into()?)),
+            b"st" => data.start_timestamp_ms = Some(u64::from_be_bytes(value.as_ref().try_into()?)),
+            b"sc" => data.start_checkpoint = Some(u64::from_be_bytes(value.as_ref().try_into()?)),
+            b"rg" => {
+                data.reference_gas_price = Some(u64::from_be_bytes(value.as_ref().try_into()?))
+            }
+            b"ss" => data.system_state = Some(bcs::from_bytes(value)?),
+            b"et" => data.end_timestamp_ms = Some(u64::from_be_bytes(value.as_ref().try_into()?)),
+            b"ec" => data.end_checkpoint = Some(u64::from_be_bytes(value.as_ref().try_into()?)),
+            _ => {}
         }
     }
 

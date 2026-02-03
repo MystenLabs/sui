@@ -344,18 +344,18 @@ impl Default for Watermarks {
 }
 
 async fn watermark_from_bigtable(bigtable_reader: &BigtableReader) -> anyhow::Result<WatermarkRow> {
-    let summary = bigtable_reader
-        .checkpoint_watermark()
+    let wm = bigtable_reader
+        .watermark()
         .await
         .context("Failed to get checkpoint watermark")?
         .context("Checkpoint watermark not found")?;
 
     Ok(WatermarkRow {
         pipeline: "bigtable".to_owned(),
-        epoch_hi_inclusive: summary.epoch as i64,
-        checkpoint_hi_inclusive: summary.sequence_number as i64,
-        tx_hi: summary.network_total_transactions as i64,
-        timestamp_ms_hi_inclusive: summary.timestamp_ms as i64,
+        epoch_hi_inclusive: wm.epoch_hi_inclusive as i64,
+        checkpoint_hi_inclusive: wm.checkpoint_hi_inclusive as i64,
+        tx_hi: wm.tx_hi as i64,
+        timestamp_ms_hi_inclusive: wm.timestamp_ms_hi_inclusive as i64,
         epoch_lo: 0,
         checkpoint_lo: 0,
         tx_lo: 0,
