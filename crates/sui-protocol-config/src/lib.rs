@@ -4524,6 +4524,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.fix_checkpoint_signature_mapping = true;
                     cfg.feature_flags
                         .consensus_always_accept_system_transactions = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_object_funds_withdraw = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
