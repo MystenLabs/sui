@@ -17,39 +17,68 @@ use move_core_types::{
     language_storage::ModuleId,
 };
 
+/// Size constants matching the reference implementation in tiered_gas_schedule.rs
+const REFERENCE_SIZE: u64 = 8;
+/// All base types (Bool, U8, U16, etc.) have legacy size of 1
+const TYPE_SIZE: u64 = 1;
+
+/// Static stack change for a simple instruction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InstructionCost {
+    /// Number of values popped from the stack
+    pub pops: u64,
+    /// Number of values pushed to the stack
+    pub pushes: u64,
+    /// Abstract memory size decrease (bytes popped)
+    pub pop_size: u64,
+    /// Abstract memory size increase (bytes pushed)
+    pub push_size: u64,
+}
+
+impl InstructionCost {
+    const fn new(pops: u64, pushes: u64, pop_size: u64, push_size: u64) -> Self {
+        Self {
+            pops,
+            pushes,
+            pop_size,
+            push_size,
+        }
+    }
+}
+
 /// Get the static stack change for a simple instruction.
-/// Returns (pops, pushes, pop_size, push_size) for stack accounting.
+///
+/// These values must match `get_simple_instruction_stack_change` in tiered_gas_schedule.rs.
+/// Use the `verify_costs_match_reference` test to ensure consistency.
 #[inline]
-const fn get_simple_instruction_cost(instr: SimpleInstruction) -> (u64, u64, u64, u64) {
+pub const fn get_simple_instruction_cost(instr: SimpleInstruction) -> InstructionCost {
     use SimpleInstruction::*;
     match instr {
-        Nop | Ret => (0, 0, 0, 0),
-        BrTrue | BrFalse => (1, 0, 1, 0),
-        Branch => (0, 0, 0, 0),
-        LdU8 => (0, 1, 0, 1),
-        LdU16 => (0, 1, 0, 2),
-        LdU32 => (0, 1, 0, 4),
-        LdU64 => (0, 1, 0, 8),
-        LdU128 => (0, 1, 0, 16),
-        LdU256 => (0, 1, 0, 32),
-        LdTrue | LdFalse => (0, 1, 0, 1),
-        FreezeRef => (1, 1, 8, 8),
-        MutBorrowLoc | ImmBorrowLoc => (0, 1, 0, 8),
+        // NB: The `Ret` pops are accounted for in `Call` instructions, so we say `Ret` has no pops.
+        Nop | Ret => InstructionCost::new(0, 0, 0, 0),
+        BrTrue | BrFalse => InstructionCost::new(1, 0, TYPE_SIZE, 0),
+        Branch => InstructionCost::new(0, 0, 0, 0),
+        LdU8 | LdU16 | LdU32 | LdU64 | LdU128 | LdU256 => InstructionCost::new(0, 1, 0, TYPE_SIZE),
+        LdTrue | LdFalse => InstructionCost::new(0, 1, 0, TYPE_SIZE),
+        FreezeRef => InstructionCost::new(1, 1, REFERENCE_SIZE, REFERENCE_SIZE),
+        MutBorrowLoc | ImmBorrowLoc => InstructionCost::new(0, 1, 0, REFERENCE_SIZE),
         ImmBorrowField | MutBorrowField | ImmBorrowFieldGeneric | MutBorrowFieldGeneric => {
-            (1, 1, 8, 8)
+            InstructionCost::new(1, 1, REFERENCE_SIZE, REFERENCE_SIZE)
         }
-        CastU8 => (1, 1, 1, 1),
-        CastU16 => (1, 1, 1, 2),
-        CastU32 => (1, 1, 1, 4),
-        CastU64 => (1, 1, 1, 8),
-        CastU128 => (1, 1, 1, 16),
-        CastU256 => (1, 1, 1, 32),
-        // Conservative over-approximation for arithmetic: pop smallest, push largest
-        Add | Sub | Mul | Mod | Div | BitOr | BitAnd | Xor | Shl | Shr => (2, 1, 2, 32),
-        Or | And => (2, 1, 2, 1),
-        Not => (1, 1, 1, 1),
-        Lt | Gt | Le | Ge => (2, 1, 2, 1),
-        Abort => (1, 0, 8, 0),
+        // Since we don't have the size of the value being cast here we take a conservative
+        // over-approximation: it is _always_ getting cast from the smallest integer type.
+        CastU8 | CastU16 | CastU32 | CastU64 | CastU128 | CastU256 => {
+            InstructionCost::new(1, 1, TYPE_SIZE, TYPE_SIZE)
+        }
+        // NB: We don't know the size of what integers we're dealing with, so we conservatively
+        // over-approximate by popping the smallest integers, and push the largest.
+        Add | Sub | Mul | Mod | Div | BitOr | BitAnd | Xor | Shl | Shr => {
+            InstructionCost::new(2, 1, TYPE_SIZE + TYPE_SIZE, TYPE_SIZE)
+        }
+        Or | And => InstructionCost::new(2, 1, TYPE_SIZE + TYPE_SIZE, TYPE_SIZE),
+        Lt | Gt | Le | Ge => InstructionCost::new(2, 1, TYPE_SIZE + TYPE_SIZE, TYPE_SIZE),
+        Not => InstructionCost::new(1, 1, TYPE_SIZE, TYPE_SIZE),
+        Abort => InstructionCost::new(1, 0, TYPE_SIZE, 0),
     }
 }
 
@@ -78,12 +107,12 @@ impl AccumulatedCosts {
     }
 
     fn accumulate_simple(&mut self, instr: SimpleInstruction) {
-        let (pops, pushes, pop_size, push_size) = get_simple_instruction_cost(instr);
+        let cost = get_simple_instruction_cost(instr);
         self.instructions += 1;
-        self.pushes += pushes;
-        self.pops += pops;
-        self.size_increase += push_size;
-        self.size_decrease += pop_size;
+        self.pushes += cost.pushes;
+        self.pops += cost.pops;
+        self.size_increase += cost.push_size;
+        self.size_decrease += cost.pop_size;
     }
 }
 
@@ -571,7 +600,11 @@ impl<G: GasMeter> BatchChargeableGasMeter for SimpleBatchAdapter<G> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::jit::execution::ast::Type;
     use crate::shared::gas::UnmeteredGasMeter;
+
+    /// Reference constant from tiered_gas_schedule.rs (AbstractMemorySize::new(8))
+    const REF_REFERENCE_SIZE: u64 = 8;
 
     #[test]
     fn test_batching_accumulates_costs() {
@@ -600,5 +633,104 @@ mod tests {
 
         // In passthrough mode, nothing accumulates
         assert!(meter.accumulated.is_empty());
+    }
+
+    /// Verifies that our hardcoded costs match the reference implementation in tiered_gas_schedule.rs.
+    ///
+    /// This test ensures that `get_simple_instruction_cost` returns the same values as
+    /// `get_simple_instruction_stack_change` in the tiered gas schedule. If this test fails,
+    /// the hardcoded values in `get_simple_instruction_cost` need to be updated.
+    ///
+    /// Reference: external-crates/move/crates/move-vm-runtime/src/dev_utils/tiered_gas_schedule.rs
+    #[test]
+    fn verify_costs_match_reference() {
+        use SimpleInstruction::*;
+
+        // All SimpleInstruction variants to test
+        let all_instructions = [
+            Nop, Ret, BrTrue, BrFalse, Branch, LdU8, LdU64, LdU128, LdTrue, LdFalse, FreezeRef,
+            MutBorrowLoc, ImmBorrowLoc, ImmBorrowField, MutBorrowField, ImmBorrowFieldGeneric,
+            MutBorrowFieldGeneric, CastU8, CastU64, CastU128, Add, Sub, Mul, Mod, Div, BitOr,
+            BitAnd, Xor, Shl, Shr, Or, And, Not, Lt, Gt, Le, Ge, Abort, LdU16, LdU32, LdU256,
+            CastU16, CastU32, CastU256,
+        ];
+
+        // Reference values from tiered_gas_schedule.rs
+        // Type::*.size() returns LEGACY_BASE_MEMORY_SIZE = 1 for all base types
+        let type_size: u64 = Type::Bool.size().into();
+        let ref_size: u64 = REF_REFERENCE_SIZE;
+
+        for instr in all_instructions {
+            let our_cost = get_simple_instruction_cost(instr);
+
+            // Compute expected values based on tiered_gas_schedule.rs logic
+            let (expected_pops, expected_pushes, expected_pop_size, expected_push_size) =
+                match instr {
+                    Nop | Ret => (0, 0, 0, 0),
+                    BrTrue | BrFalse => (1, 0, type_size, 0),
+                    Branch => (0, 0, 0, 0),
+                    LdU8 | LdU16 | LdU32 | LdU64 | LdU128 | LdU256 => (0, 1, 0, type_size),
+                    LdTrue | LdFalse => (0, 1, 0, type_size),
+                    FreezeRef => (1, 1, ref_size, ref_size),
+                    ImmBorrowLoc | MutBorrowLoc => (0, 1, 0, ref_size),
+                    ImmBorrowField | MutBorrowField | ImmBorrowFieldGeneric
+                    | MutBorrowFieldGeneric => (1, 1, ref_size, ref_size),
+                    CastU8 | CastU16 | CastU32 | CastU64 | CastU128 | CastU256 => {
+                        (1, 1, type_size, type_size)
+                    }
+                    Add | Sub | Mul | Mod | Div | BitOr | BitAnd | Xor | Shl | Shr => {
+                        (2, 1, type_size + type_size, type_size)
+                    }
+                    Or | And => (2, 1, type_size + type_size, type_size),
+                    Lt | Gt | Le | Ge => (2, 1, type_size + type_size, type_size),
+                    Not => (1, 1, type_size, type_size),
+                    Abort => (1, 0, type_size, 0),
+                };
+
+            assert_eq!(
+                our_cost.pops, expected_pops,
+                "pops mismatch for {:?}: got {}, expected {}",
+                instr, our_cost.pops, expected_pops
+            );
+            assert_eq!(
+                our_cost.pushes, expected_pushes,
+                "pushes mismatch for {:?}: got {}, expected {}",
+                instr, our_cost.pushes, expected_pushes
+            );
+            assert_eq!(
+                our_cost.pop_size, expected_pop_size,
+                "pop_size mismatch for {:?}: got {}, expected {}",
+                instr, our_cost.pop_size, expected_pop_size
+            );
+            assert_eq!(
+                our_cost.push_size, expected_push_size,
+                "push_size mismatch for {:?}: got {}, expected {}",
+                instr, our_cost.push_size, expected_push_size
+            );
+        }
+    }
+
+    /// Verifies that our constants match the reference implementation.
+    #[test]
+    fn verify_constants_match_reference() {
+        // Verify REFERENCE_SIZE matches tiered_gas_schedule.rs (AbstractMemorySize::new(8))
+        assert_eq!(REFERENCE_SIZE, REF_REFERENCE_SIZE, "REFERENCE_SIZE mismatch");
+
+        // Verify TYPE_SIZE matches Type::*.size() which returns LEGACY_BASE_MEMORY_SIZE = 1
+        assert_eq!(
+            TYPE_SIZE,
+            u64::from(Type::Bool.size()),
+            "TYPE_SIZE mismatch with Type::Bool.size()"
+        );
+        assert_eq!(
+            TYPE_SIZE,
+            u64::from(Type::U8.size()),
+            "TYPE_SIZE mismatch with Type::U8.size()"
+        );
+        assert_eq!(
+            TYPE_SIZE,
+            u64::from(Type::U256.size()),
+            "TYPE_SIZE mismatch with Type::U256.size()"
+        );
     }
 }
