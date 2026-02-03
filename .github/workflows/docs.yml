@@ -27,16 +27,17 @@ jobs:
     runs-on: [ubuntu-latest]
     
     steps:
-      - name: Notify Slack of Examples Changes
-        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
+      - name: Dispatch to sui-operations for notification
+        uses: peter-evans/repository-dispatch@8e2aaa08bcf5d9a5ef61e3b5ecc11e8e41cbcc48 # pin@v3.0.0
         with:
-          method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: "docs-automations"
-            text: |
-              An open PR modifies files in the `examples/` directory.
-              Please review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}|PR${{ github.event.number }}>
+          token: ${{ secrets.OPERATIONS_DISPATCH_TOKEN }}
+          repository: MystenLabs/sui-operations
+          event-type: docs-change-notify
+          client-payload: |-
+            {
+              "pr_number": "${{ github.event.number }}",
+              "repository": "${{ github.repository }}"
+            }
   
   spelling:
     name: Lint documentation
