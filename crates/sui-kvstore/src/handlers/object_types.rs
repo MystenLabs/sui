@@ -22,16 +22,18 @@ impl Processor for ObjectTypesPipeline {
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
         let timestamp_ms = checkpoint.summary.timestamp_ms;
-        let mut entries = Vec::with_capacity(checkpoint.object_set.len());
+        let mut entries = Vec::new();
 
-        for obj in checkpoint.object_set.iter() {
-            let object_type = ObjectType::from(obj);
-            let entry = tables::make_entry(
-                tables::object_types::encode_key(&obj.id()),
-                tables::object_types::encode(&object_type)?,
-                Some(timestamp_ms),
-            );
-            entries.push(entry);
+        for tx in &checkpoint.transactions {
+            for obj in tx.created_objects(&checkpoint.object_set) {
+                let object_type = ObjectType::from(obj);
+                let entry = tables::make_entry(
+                    tables::object_types::encode_key(&obj.id()),
+                    tables::object_types::encode(&object_type)?,
+                    Some(timestamp_ms),
+                );
+                entries.push(entry);
+            }
         }
 
         Ok(entries)

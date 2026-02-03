@@ -392,6 +392,16 @@ impl ExecutedTransaction {
                     .and_then(|version| object_set.get(&ObjectKey(change.id, version)))
             })
     }
+
+    pub fn created_objects<'a>(
+        &self,
+        object_set: &'a ObjectSet,
+    ) -> impl Iterator<Item = &'a Object> + 'a {
+        self.effects
+            .created()
+            .into_iter()
+            .filter_map(move |((id, version, _), _)| object_set.get(&ObjectKey(id, version)))
+    }
 }
 
 impl From<Checkpoint> for CheckpointData {
