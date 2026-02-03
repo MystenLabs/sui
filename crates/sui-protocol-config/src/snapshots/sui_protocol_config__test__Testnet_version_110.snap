@@ -138,6 +138,7 @@ feature_flags:
   include_cancelled_randomness_txns_in_prologue: true
   address_aliases: true
   fix_checkpoint_signature_mapping: true
+  enable_object_funds_withdraw: true
   consensus_skip_gced_blocks_in_direct_finalization: true
   gas_rounding_halve_digits: true
   flexible_tx_context_positions: true
