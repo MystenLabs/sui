@@ -84,14 +84,14 @@ pub struct BigTableIndexer {
     pub indexer: Indexer<BigTableStore>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Checkpoint {
     pub summary: CheckpointSummary,
     pub contents: CheckpointContents,
     pub signatures: AuthorityStrongQuorumSignInfo,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TransactionData {
     pub transaction: Transaction,
     pub effects: TransactionEffects,
@@ -103,7 +103,7 @@ pub struct TransactionData {
 }
 
 /// Partial transaction and events for when we only need transaction content for events
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TransactionEventsData {
     pub events: Vec<Event>,
     pub timestamp_ms: u64,
