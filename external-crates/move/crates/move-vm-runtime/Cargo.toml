@@ -53,6 +53,9 @@ move-stdlib.workspace = true
 move-proc-macros.workspace = true
 insta.workspace = true
 
+[lints.clippy]
+indexing_slicing = "warn"
+
 [features]
 default = []
 fuzzing = []

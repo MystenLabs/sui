@@ -81,6 +81,7 @@ fn generate_basic_blocks(
             let start = cfg.block_start(label) as usize;
             let end = cfg.block_end(label) as usize;
             let label = label as ast::Label;
+            // TODO: Try and make this code a bit nicer
             let code = input
                 .safe_get(start..(end + 1))?
                 .iter()

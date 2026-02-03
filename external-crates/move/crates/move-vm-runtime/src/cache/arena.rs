@@ -140,16 +140,20 @@ impl<T> std::ops::Deref for ArenaVec<T> {
     }
 }
 
-impl<T> std::ops::Deref for ArenaBox<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
+impl<T> AsRef<[T]> for ArenaVec<T> {
+    fn as_ref(&self) -> &[T] {
         &self.0
     }
 }
 
-impl<T> AsRef<[T]> for ArenaVec<T> {
-    fn as_ref(&self) -> &[T] {
+// -----------------------------------------------
+// ArenaBox Trait Implementations
+// -----------------------------------------------
+
+impl<T> std::ops::Deref for ArenaBox<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
