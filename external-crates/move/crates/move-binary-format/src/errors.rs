@@ -140,30 +140,6 @@ impl VMError {
             offsets,
         )
     }
-
-    pub fn to_partial(self) -> PartialVMError {
-        let VMError_ {
-            major_status,
-            sub_status,
-            message,
-            exec_state,
-            indices,
-            offsets,
-            #[cfg(debug_assertions)]
-            backtrace,
-            ..
-        } = *self.0;
-        PartialVMError(Box::new(PartialVMError_ {
-            major_status,
-            sub_status,
-            message,
-            exec_state,
-            indices,
-            offsets,
-            #[cfg(debug_assertions)]
-            backtrace,
-        }))
-    }
 }
 
 impl fmt::Debug for VMError {
