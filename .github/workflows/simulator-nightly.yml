@@ -84,6 +84,7 @@ jobs:
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
 
       - name: Set protocol config override based on trigger
+        id: protocol
         # This step determines which protocol config override to use.
         # It checks if the trigger was a manual dispatch or a specific schedule.
         run: |
@@ -124,6 +125,7 @@ jobs:
     outputs:
       failed_tests: ${{ steps.failures.outputs.failed_tests }}
       log_dir: ${{ steps.failures.outputs.log_dir }}
+      protocol_message: ${{ steps.protocol.outputs.protocol_message }}
 
   notify:
     name: Notify
@@ -134,92 +136,23 @@ jobs:
     steps:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
-    - name: Checkout sui repo main branch
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
-    
     - name: Get sui commit
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        export sui_sha=$(git rev-parse HEAD)
-        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+      run: echo "sui_sha=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
-    - name: Get link to logs
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
-        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
-
-    - name: Get current oncall from PagerDuty
-      run: |
-        # Fetch oncall info including user details (for email)
-        response=$(curl -s --max-time 30 --request GET \
-          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS&include[]=users' \
-          --header 'Accept: application/json' \
-          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
-          --header 'Content-Type: application/json')
-
-        oncall_email=$(echo "$response" | jq -r '.oncalls[0].user.email // empty')
-        oncall_user_name=$(echo "$response" | jq -r '.oncalls[0].user.summary // empty')
-        oncall_policy=$(echo "$response" | jq -r '.oncalls[0].escalation_policy.summary // empty')
-
-        echo "oncall_email=${oncall_email}" >> "$GITHUB_ENV"
-        echo "oncall_user_name=${oncall_user_name}" >> "$GITHUB_ENV"
-        echo "oncall_policy=${oncall_policy}" >> "$GITHUB_ENV"
-
-        if [ -z "$oncall_email" ]; then
-          echo "::warning::Could not get oncall email from PagerDuty"
-        fi
-
-    - name: Get Slack ID for oncall
-      run: |
-        if [ -z "${{ env.oncall_email }}" ]; then
-          echo "::warning::No oncall email available, skipping Slack lookup"
-          echo "slack_id=" >> "$GITHUB_ENV"
-          exit 0
-        fi
-
-        # URL-encode the email for the API call
-        encoded_email=$(printf '%s' "${{ env.oncall_email }}" | jq -sRr @uri)
-
-        # Lookup Slack ID from email
-        slack_response=$(curl -s --max-time 30 "https://slack.com/api/users.lookupByEmail?email=${encoded_email}" \
-          -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}")
-
-        slack_ok=$(echo "$slack_response" | jq -r '.ok')
-        slack_id=$(echo "$slack_response" | jq -r '.user.id // empty')
-
-        if [ "$slack_ok" != "true" ]; then
-          error=$(echo "$slack_response" | jq -r '.error')
-          echo "::warning::Slack lookup failed for ${{ env.oncall_email }}: ${error}"
-          echo "slack_id=" >> "$GITHUB_ENV"
-          exit 0
-        fi
-
-        echo "slack_id=${slack_id}" >> "$GITHUB_ENV"        
-
-    - name: Post to slack
-      uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
-      env:
-        SUI_SHA: ${{ env.sui_sha }}
-        GH_JOB_LINK: ${{ env.gh_job_link }}
-        SLACK_ID: ${{ env.slack_id }}
-        ONCALL_USER_NAME: ${{ env.oncall_user_name }}
-        ONCALL_POLICY: ${{ env.oncall_policy }}
+    - name: Dispatch to sui-operations for notification
+      uses: peter-evans/repository-dispatch@8e2aaa08bcf5d9a5ef61e3b5ecc11e8e41cbcc48 # pin@v3.0.0
       with:
-        method: chat.postMessage
-        token: ${{ secrets.SLACK_BOT_TOKEN }}
-        payload: |
-          channel: "simtest-nightly"
-          text: |
-            :sui::error-cross: *${{ github.workflow }}* ${{ needs.simtest.outputs.protocol_message }}workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
-            Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
-            Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
-
-            *Failed tests:*
-            ```
-            ${{ needs.simtest.outputs.failed_tests }}
-            ```
-
-            ${{ env.SLACK_ID && format('<@{0}>', env.SLACK_ID) || env.ONCALL_USER_NAME }}, current `${{ env.ONCALL_POLICY }}` oncall, please debug: `tsh ssh ubuntu@simtest-01` and look in `${{ needs.simtest.outputs.log_dir }}`
+        token: ${{ secrets.OPERATIONS_DISPATCH_TOKEN }}
+        repository: MystenLabs/sui-operations
+        event-type: simtest-failure
+        client-payload: |-
+          {
+            "commit_sha": "${{ env.sui_sha }}",
+            "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "run_id": "${{ github.run_id }}",
+            "workflow_name": "${{ github.workflow }}",
+            "workflow_conclusion": "${{ env.WORKFLOW_CONCLUSION }}",
+            "protocol_message": "${{ needs.simtest.outputs.protocol_message }}",
+            "failed_tests": ${{ toJSON(needs.simtest.outputs.failed_tests) }},
+            "log_dir": "${{ needs.simtest.outputs.log_dir }}"
+          }

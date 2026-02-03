@@ -115,18 +115,20 @@ jobs:
         echo "author=${author}" >> $GITHUB_ENV
         echo "pr_title=${pr_title}" >> $GITHUB_ENV
 
-    - name: Post to a Slack channel
-      uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
+    - name: Dispatch to sui-operations for notification
+      uses: peter-evans/repository-dispatch@8e2aaa08bcf5d9a5ef61e3b5ecc11e8e41cbcc48 # pin@v3.0.0
       with:
-        method: chat.postMessage
-        token: ${{ secrets.SLACK_BOT_TOKEN }}
-        payload: |
-          channel: "#ext-mysten-release-notes"
-          text: |
-            ${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS || '' }}${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS && ', please' || 'Please' }} review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
-            *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|#${{ matrix.pr }}: ${{ env.pr_title }}> by <https://github.com/${{ env.author }}|@${{ env.author }}>
-            *Release Notes:*
-            ${{ steps.read-notes.outputs.release_notes }}
+        token: ${{ secrets.OPERATIONS_DISPATCH_TOKEN }}
+        repository: MystenLabs/sui-operations
+        event-type: release-notes-review
+        client-payload: |-
+          {
+            "pr_number": "${{ matrix.pr }}",
+            "pr_title": "${{ env.pr_title }}",
+            "author": "${{ env.author }}",
+            "release_notes": ${{ toJSON(steps.read-notes.outputs.release_notes) }},
+            "sui_version": "${{ needs.get-list-of-prs.outputs.sui_version }}"
+          }
 
   update-last-processed-commit:
     name: Update last processed commit
