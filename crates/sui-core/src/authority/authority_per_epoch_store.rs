@@ -2160,10 +2160,18 @@ impl AuthorityPerEpochStore {
             self.consensus_quarantine.read().is_empty(),
             "get_last_consensus_stats should only be called at startup"
         );
-        Ok(self
-            .tables()?
-            .get_last_consensus_stats()?
-            .unwrap_or_default())
+        let tables = self.tables()?;
+        match tables.get_last_consensus_stats()? {
+            Some(stats) => Ok(stats),
+            None => {
+                let indices = tables.get_last_consensus_index()?.unwrap_or_default();
+                Ok(ExecutionIndicesWithStats {
+                    index: indices,
+                    height: 0,
+                    stats: ConsensusStats::default(),
+                })
+            }
+        }
     }
 
     pub fn get_accumulators_in_checkpoint_range(
