@@ -12,6 +12,8 @@ pub use crate::rocks::options::{
     DBMapTableConfigMap, DBOptions, ReadWriteOptions, default_db_options, read_size_from_env,
 };
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
+#[cfg(not(tidehunter))]
+use backoff::backoff::Backoff;
 #[cfg(tidehunter)]
 use crate::tidehunter_util::{
     apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
@@ -24,7 +26,6 @@ use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
     traits::{Map, TableSummary},
 };
-use backoff::backoff::Backoff;
 use fastcrypto::hash::{Digest, HashFunction};
 use mysten_common::debug_fatal;
 use mysten_metrics::RegistryID;
@@ -92,6 +93,8 @@ pub enum ColumnFamily {
     InMemory(String),
     #[cfg(tidehunter)]
     TideHunter((KeySpace, Option<Vec<u8>>)),
+    #[cfg(tidehunter)]
+    TideHunterInvariant((KeySpace, Option<Vec<u8>>), String), // (TH keyspace/prefix, RocksDB cf name)
 }
 
 impl std::fmt::Debug for ColumnFamily {
@@ -101,6 +104,8 @@ impl std::fmt::Debug for ColumnFamily {
             ColumnFamily::InMemory(name) => write!(f, "InMemory cf: {}", name),
             #[cfg(tidehunter)]
             ColumnFamily::TideHunter(_) => write!(f, "TideHunter column family"),
+            #[cfg(tidehunter)]
+            ColumnFamily::TideHunterInvariant(_, name) => write!(f, "TideHunterInvariant cf: {} (TH+RocksDB)", name),
         }
     }
 }
@@ -122,6 +127,8 @@ pub enum Storage {
     InMemory(InMemoryDB),
     #[cfg(tidehunter)]
     TideHunter(Arc<TideHunterDb>),
+    #[cfg(tidehunter)]
+    TideHunterInvariant(Arc<TideHunterDb>, RocksDB),
 }
 
 impl std::fmt::Debug for Storage {
@@ -131,6 +138,8 @@ impl std::fmt::Debug for Storage {
             Storage::InMemory(db) => write!(f, "InMemoryDB Storage {:?}", db),
             #[cfg(tidehunter)]
             Storage::TideHunter(_) => write!(f, "TideHunterDB Storage"),
+            #[cfg(tidehunter)]
+            Storage::TideHunterInvariant(_, _) => write!(f, "TideHunterInvariant Storage (dual TH+RocksDB)"),
         }
     }
 }
@@ -196,6 +205,13 @@ impl Database {
                 // TideHunter doesn't support an explicit flush.
                 Ok(())
             }
+            #[cfg(tidehunter)]
+            Storage::TideHunterInvariant(_, rocks_db) => {
+                // Flush the RocksDB component; TideHunter doesn't support explicit flush
+                rocks_db.underlying.flush().map_err(|e| {
+                    TypedStoreError::RocksDBError(format!("Failed to flush database: {}", e))
+                })
+            }
         }
     }
 
@@ -219,6 +235,36 @@ impl Database {
                 .get(*ks, &transform_th_key(key.as_ref(), prefix))
                 .map_err(typed_store_error_from_th_error)?
                 .map(GetResult::TideHunter)),
+            #[cfg(tidehunter)]
+            (Storage::TideHunterInvariant(th_db, rocks_db), ColumnFamily::TideHunterInvariant((ks, prefix), cf_name)) => {
+                let key_bytes = key.as_ref();
+                let th_result = th_db
+                    .get(*ks, &transform_th_key(key_bytes, prefix))
+                    .map_err(typed_store_error_from_th_error)?;
+                let rocks_result = rocks_db
+                    .underlying
+                    .get_pinned_cf_opt(&rocks_cf(rocks_db, cf_name), key_bytes, readopts)
+                    .map_err(typed_store_err_from_rocks_err)?;
+
+                match (&th_result, &rocks_result) {
+                    (Some(th_val), Some(rocks_val)) => {
+                        if th_val.as_ref() != rocks_val.as_ref() {
+                            panic!("{}", create_value_mismatch_message(
+                                cf_name, key_bytes, th_val.as_ref(), rocks_val.as_ref(), None
+                            ));
+                        }
+                    }
+                    (None, None) => {}
+                    (Some(_), None) => {
+                        panic!("TideHunter invariant violation: TH has value but RocksDB doesn't for key in cf '{}'. Key: {:02x?}", cf_name, key_bytes);
+                    }
+                    (None, Some(_)) => {
+                        panic!("TideHunter invariant violation: RocksDB has value but TH doesn't for key in cf '{}'. Key: {:02x?}", cf_name, key_bytes);
+                    }
+                }
+
+                Ok(rocks_result.map(GetResult::Rocks))
+            }
 
             _ => Err(TypedStoreError::RocksDBError(
                 "typed store invariant violation".to_string(),
@@ -267,6 +313,45 @@ impl Database {
                     .map(|r| r.map(|item| item.map(GetResult::TideHunter)))
                     .collect()
             }
+            #[cfg(tidehunter)]
+            (Storage::TideHunterInvariant(th_db, rocks_db), ColumnFamily::TideHunterInvariant((ks, prefix), cf_name)) => {
+                let keys_vec: Vec<K> = keys.into_iter().collect();
+                let th_results: Vec<_> = keys_vec.iter().map(|k| {
+                    th_db.get(*ks, &transform_th_key(k.as_ref(), prefix))
+                        .map_err(typed_store_error_from_th_error)
+                }).collect();
+
+                let rocks_results = rocks_db.underlying.batched_multi_get_cf_opt(
+                    &rocks_cf(rocks_db, cf_name),
+                    keys_vec.iter(),
+                    false,
+                    readopts,
+                );
+
+                th_results.iter().zip(rocks_results.iter()).zip(keys_vec.iter()).enumerate().for_each(|(idx, ((th_res, rocks_res), key))| {
+                    match (th_res, rocks_res) {
+                        (Ok(Some(th_val)), Ok(Some(rocks_val))) => {
+                            if th_val.as_ref() != rocks_val.as_ref() {
+                                panic!("{}", create_value_mismatch_message(
+                                    cf_name, key.as_ref(), th_val.as_ref(), rocks_val.as_ref(), Some(idx)
+                                ));
+                            }
+                        }
+                        (Ok(None), Ok(None)) => {}
+                        (Ok(Some(_)), Ok(None)) => {
+                            panic!("TideHunter invariant violation: multi_get at index {}: TH has value but RocksDB doesn't in cf '{}'. Key: {:02x?}", idx, cf_name, key.as_ref());
+                        }
+                        (Ok(None), Ok(Some(_))) => {
+                            panic!("TideHunter invariant violation: multi_get at index {}: RocksDB has value but TH doesn't in cf '{}'. Key: {:02x?}", idx, cf_name, key.as_ref());
+                        }
+                        (Err(_), _) | (_, Err(_)) => {}
+                    }
+                });
+
+                rocks_results.into_iter()
+                    .map(|r| r.map_err(typed_store_err_from_rocks_err).map(|item| item.map(GetResult::Rocks)))
+                    .collect()
+            }
             _ => unreachable!("typed store invariant violation"),
         }
     }
@@ -282,6 +367,8 @@ impl Database {
             Storage::TideHunter(_) => {
                 unimplemented!("TideHunter: deletion of column family on a fly not implemented")
             }
+            #[cfg(tidehunter)]
+            Storage::TideHunterInvariant(_, rocks_db) => rocks_db.underlying.drop_cf(name)
         }
     }
 
@@ -312,6 +399,21 @@ impl Database {
             (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
                 .remove(*ks, transform_th_key(key.as_ref(), prefix))
                 .map_err(typed_store_error_from_th_error),
+            #[cfg(tidehunter)]
+            (Storage::TideHunterInvariant(th_db, rocks_db), ColumnFamily::TideHunterInvariant((ks, prefix), cf_name)) => {
+                let th_result = th_db.remove(*ks, transform_th_key(key.as_ref(), prefix));
+                let rocks_result = rocks_db
+                    .underlying
+                    .delete_cf(&rocks_cf(rocks_db, cf_name), key);
+
+                match (&th_result, &rocks_result) {
+                    (Err(e), Ok(())) => panic!("TideHunter invariant violation: delete failed in TH but succeeded in RocksDB for cf '{}': {:?}", cf_name, e),
+                    (Ok(()), Err(e)) => panic!("TideHunter invariant violation: delete succeeded in TH but failed in RocksDB for cf '{}': {:?}", cf_name, e),
+                    _ => {}
+                }
+
+                rocks_result.map_err(typed_store_err_from_rocks_err)
+            }
             _ => Err(TypedStoreError::RocksDBError(
                 "typed store invariant violation".to_string(),
             )),
@@ -348,6 +450,21 @@ impl Database {
             (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
                 .insert(*ks, transform_th_key(&key, prefix), value)
                 .map_err(typed_store_error_from_th_error),
+            #[cfg(tidehunter)]
+            (Storage::TideHunterInvariant(th_db, rocks_db), ColumnFamily::TideHunterInvariant((ks, prefix), cf_name)) => {
+                let th_result = th_db.insert(*ks, transform_th_key(&key, prefix), value.clone());
+                let rocks_result = rocks_db
+                    .underlying
+                    .put_cf(&rocks_cf(rocks_db, cf_name), key, value);
+
+                match (&th_result, &rocks_result) {
+                    (Err(e), Ok(())) => panic!("TideHunter invariant violation: put failed in TH but succeeded in RocksDB for cf '{}': {:?}", cf_name, e),
+                    (Ok(()), Err(e)) => panic!("TideHunter invariant violation: put succeeded in TH but failed in RocksDB for cf '{}': {:?}", cf_name, e),
+                    _ => {}
+                }
+
+                rocks_result.map_err(typed_store_err_from_rocks_err)
+            }
             _ => Err(TypedStoreError::RocksDBError(
                 "typed store invariant violation".to_string(),
             )),
@@ -396,8 +513,35 @@ impl Database {
                 // TideHunter doesn't support write options
                 batch.commit().map_err(typed_store_error_from_th_error)
             }
+            #[cfg(tidehunter)]
+            (Storage::TideHunterInvariant(_th_db, rocks_db), StorageWriteBatch::TideHunterInvariant(th_batch, rocks_batch)) => {
+                let th_result = th_batch.commit();
+                let rocks_result = rocks_db
+                    .underlying
+                    .write_opt(rocks_batch, write_options);
+
+                match (&th_result, &rocks_result) {
+                    (Err(e), Ok(())) => panic!("TideHunter invariant violation: batch commit failed in TH but succeeded in RocksDB: {:?}", e),
+                    (Ok(()), Err(e)) => panic!("TideHunter invariant violation: batch commit succeeded in TH but failed in RocksDB: {:?}", e),
+                    _ => {}
+                }
+
+                rocks_result.map_err(typed_store_err_from_rocks_err)
+            }
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(_), StorageWriteBatch::TideHunterInvariant(_, _)) => {
+                Err(TypedStoreError::RocksDBError(
+                    "storage type mismatch: TideHunter storage with TideHunterInvariant batch".to_string(),
+                ))
+            }
+            #[cfg(tidehunter)]
+            (Storage::TideHunterInvariant(_, _), StorageWriteBatch::TideHunter(_)) => {
+                Err(TypedStoreError::RocksDBError(
+                    "storage type mismatch: TideHunterInvariant storage with TideHunter batch".to_string(),
+                ))
+            }
             _ => Err(TypedStoreError::RocksDBError(
-                "using invalid batch type for the database".to_string(),
+                format!("using invalid batch type for the database: storage={:?}", self.storage),
             )),
         };
         fail_point!("batch-write-after");
@@ -503,8 +647,13 @@ fn rocks_cf_from_db<'a>(
             .underlying
             .cf_handle(cf_name)
             .expect("Map-keying column family should have been checked at DB creation")),
+        #[cfg(tidehunter)]
+        Storage::TideHunterInvariant(_, rocksdb) => Ok(rocksdb
+            .underlying
+            .cf_handle(cf_name)
+            .expect("Map-keying column family should have been checked at DB creation")),
         _ => Err(TypedStoreError::RocksDBError(
-            "using invalid batch type for the database".to_string(),
+            format!("rocks_cf_from_db called on non-RocksDB storage: {:?}", db.storage),
         )),
     }
 }
@@ -641,11 +790,41 @@ impl<K, V> DBMap<K, V> {
         ks: KeySpace,
         prefix: Option<Vec<u8>>,
     ) -> Self {
+        // Check the actual storage type and create appropriate column family
+        let column_family = match &db.storage {
+            Storage::TideHunterInvariant(_, _) => {
+                ColumnFamily::TideHunterInvariant((ks, prefix.clone()), cf_name.to_string())
+            }
+            Storage::TideHunter(_) => {
+                ColumnFamily::TideHunter((ks, prefix.clone()))
+            }
+            _ => {
+                // Fallback to regular TideHunter column family
+                ColumnFamily::TideHunter((ks, prefix.clone()))
+            }
+        };
+
         DBMap::new(
             db,
             &ReadWriteOptions::default(),
             cf_name,
-            ColumnFamily::TideHunter((ks, prefix.clone())),
+            column_family,
+            false,
+        )
+    }
+
+    #[cfg(tidehunter)]
+    pub fn reopen_th_invariant(
+        db: Arc<Database>,
+        cf_name: &str,
+        ks: KeySpace,
+        prefix: Option<Vec<u8>>,
+    ) -> Self {
+        DBMap::new(
+            db,
+            &ReadWriteOptions::default(),
+            cf_name,
+            ColumnFamily::TideHunterInvariant((ks, prefix.clone()), cf_name.to_string()),
             false,
         )
     }
@@ -660,6 +839,11 @@ impl<K, V> DBMap<K, V> {
             Storage::InMemory(_) => StorageWriteBatch::InMemory(InMemoryBatch::default()),
             #[cfg(tidehunter)]
             Storage::TideHunter(db) => StorageWriteBatch::TideHunter(db.write_batch()),
+            #[cfg(tidehunter)]
+            Storage::TideHunterInvariant(th_db, _) => StorageWriteBatch::TideHunterInvariant(
+                th_db.write_batch(),
+                WriteBatch::default(),
+            ),
         };
         DBBatch::new(
             &self.db,
@@ -1131,6 +1315,32 @@ impl<K, V> DBMap<K, V> {
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
+            #[cfg(tidehunter)]
+            Storage::TideHunterInvariant(_th_db, rocks_db) => match &self.column_family {
+                ColumnFamily::TideHunterInvariant(_, cf_name) => {
+                    let readopts = rocks_util::apply_range_bounds(
+                        self.opts.readopts(),
+                        it_lower_bound,
+                        it_upper_bound,
+                    );
+                    let upper_bound_key = upper_bound.as_ref().map(|k| be_fix_int_ser(&k));
+                    let db_iter = rocks_db
+                        .underlying
+                        .raw_iterator_cf_opt(&rocks_cf(rocks_db, cf_name), readopts);
+                    let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+                    let iter = SafeIter::new(
+                        self.cf.clone(),
+                        db_iter,
+                        _timer,
+                        _perf_ctx,
+                        bytes_scanned,
+                        keys_scanned,
+                        Some(self.db_metrics.clone()),
+                    );
+                    Ok(Box::new(SafeRevIter::new(iter, upper_bound_key)))
+                }
+                _ => unreachable!("storage backend invariant violation"),
+            },
         }
     }
 }
@@ -1140,6 +1350,8 @@ pub enum StorageWriteBatch {
     InMemory(InMemoryBatch),
     #[cfg(tidehunter)]
     TideHunter(tidehunter::batch::WriteBatch),
+    #[cfg(tidehunter)]
+    TideHunterInvariant(tidehunter::batch::WriteBatch, rocksdb::WriteBatch),
 }
 
 /// Provides a mutable struct to form a collection of database write operations, and execute them.
@@ -1286,6 +1498,8 @@ impl DBBatch {
             // TODO: implement size_in_bytes method
             #[cfg(tidehunter)]
             StorageWriteBatch::TideHunter(_) => 0,
+            #[cfg(tidehunter)]
+            StorageWriteBatch::TideHunterInvariant(_, ref rocks_b) => rocks_b.size_in_bytes(),
         }
     }
 
@@ -1313,8 +1527,27 @@ impl DBBatch {
                     (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter((ks, prefix))) => {
                         b.delete(*ks, transform_th_key(&k_buf, prefix))
                     }
+                    #[cfg(tidehunter)]
+                    (StorageWriteBatch::TideHunterInvariant(th_b, rocks_b), ColumnFamily::TideHunterInvariant((ks, prefix), cf_name)) => {
+                        th_b.delete(*ks, transform_th_key(&k_buf, prefix));
+                        rocks_b.delete_cf(&rocks_cf_from_db(&self.database, cf_name)?, k_buf)
+                    }
+                    #[cfg(tidehunter)]
+                    (StorageWriteBatch::TideHunter(_), ColumnFamily::TideHunterInvariant(_, _)) => {
+                        Err(TypedStoreError::RocksDBError(
+                            "batch/column mismatch: TideHunter batch with TideHunterInvariant column family".to_string(),
+                        ))?
+                    }
+                    #[cfg(tidehunter)]
+                    (StorageWriteBatch::TideHunterInvariant(_, _), ColumnFamily::TideHunter(_)) => {
+                        Err(TypedStoreError::RocksDBError(
+                            "batch/column mismatch: TideHunterInvariant batch with TideHunter column family".to_string(),
+                        ))?
+                    }
                     _ => Err(TypedStoreError::RocksDBError(
-                        "typed store invariant violation".to_string(),
+                        format!("typed store invariant violation in delete_batch: batch={:?}, column={:?}",
+                            std::mem::discriminant(&self.batch),
+                            std::mem::discriminant(&db.column_family)),
                     ))?,
                 }
                 Ok(())
@@ -1391,8 +1624,27 @@ impl DBBatch {
                     (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter((ks, prefix))) => {
                         b.write(*ks, transform_th_key(&k_buf, prefix), v_buf.to_vec())
                     }
+                    #[cfg(tidehunter)]
+                    (StorageWriteBatch::TideHunterInvariant(th_b, rocks_b), ColumnFamily::TideHunterInvariant((ks, prefix), cf_name)) => {
+                        th_b.write(*ks, transform_th_key(&k_buf, prefix), v_buf.to_vec());
+                        rocks_b.put_cf(&rocks_cf_from_db(&self.database, cf_name)?, k_buf, v_buf)
+                    }
+                    #[cfg(tidehunter)]
+                    (StorageWriteBatch::TideHunter(_), ColumnFamily::TideHunterInvariant(_, _)) => {
+                        Err(TypedStoreError::RocksDBError(
+                            "batch/column mismatch: TideHunter batch with TideHunterInvariant column family".to_string(),
+                        ))?
+                    }
+                    #[cfg(tidehunter)]
+                    (StorageWriteBatch::TideHunterInvariant(_, _), ColumnFamily::TideHunter(_)) => {
+                        Err(TypedStoreError::RocksDBError(
+                            "batch/column mismatch: TideHunterInvariant batch with TideHunter column family".to_string(),
+                        ))?
+                    }
                     _ => Err(TypedStoreError::RocksDBError(
-                        "typed store invariant violation".to_string(),
+                        format!("typed store invariant violation in insert_batch: batch={:?}, column={:?}",
+                            std::mem::discriminant(&self.batch),
+                            std::mem::discriminant(&db.column_family)),
                     ))?,
                 }
                 Ok(())
@@ -1637,6 +1889,25 @@ where
                 )),
                 _ => unreachable!("storage backend invariant violation"),
             },
+            #[cfg(tidehunter)]
+            Storage::TideHunterInvariant(_th_db, rocks_db) => match &self.column_family {
+                ColumnFamily::TideHunterInvariant(_, cf_name) => {
+                    let db_iter = rocks_db
+                        .underlying
+                        .raw_iterator_cf_opt(&rocks_cf(rocks_db, cf_name), self.opts.readopts());
+                    let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+                    Box::new(SafeIter::new(
+                        self.cf.clone(),
+                        db_iter,
+                        _timer,
+                        _perf_ctx,
+                        bytes_scanned,
+                        keys_scanned,
+                        Some(self.db_metrics.clone()),
+                    ))
+                }
+                _ => unreachable!("storage backend invariant violation"),
+            },
         }
     }
 
@@ -1674,6 +1945,26 @@ where
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
+            #[cfg(tidehunter)]
+            Storage::TideHunterInvariant(_th_db, rocks_db) => match &self.column_family {
+                ColumnFamily::TideHunterInvariant(_, cf_name) => {
+                    let readopts = rocks_util::apply_range_bounds(self.opts.readopts(), lower_bound, upper_bound);
+                    let db_iter = rocks_db
+                        .underlying
+                        .raw_iterator_cf_opt(&rocks_cf(rocks_db, cf_name), readopts);
+                    let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+                    Box::new(SafeIter::new(
+                        self.cf.clone(),
+                        db_iter,
+                        _timer,
+                        _perf_ctx,
+                        bytes_scanned,
+                        keys_scanned,
+                        Some(self.db_metrics.clone()),
+                    ))
+                }
+                _ => unreachable!("storage backend invariant violation"),
+            },
         }
     }
 
@@ -1704,6 +1995,26 @@ where
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, lower_bound, upper_bound);
                     Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
+                }
+                _ => unreachable!("storage backend invariant violation"),
+            },
+            #[cfg(tidehunter)]
+            Storage::TideHunterInvariant(_th_db, rocks_db) => match &self.column_family {
+                ColumnFamily::TideHunterInvariant(_, cf_name) => {
+                    let readopts = rocks_util::apply_range_bounds(self.opts.readopts(), lower_bound, upper_bound);
+                    let db_iter = rocks_db
+                        .underlying
+                        .raw_iterator_cf_opt(&rocks_cf(rocks_db, cf_name), readopts);
+                    let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+                    Box::new(SafeIter::new(
+                        self.cf.clone(),
+                        db_iter,
+                        _timer,
+                        _perf_ctx,
+                        bytes_scanned,
+                        keys_scanned,
+                        Some(self.db_metrics.clone()),
+                    ))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1937,4 +2248,74 @@ fn default_hash(value: &[u8]) -> Digest<32> {
     let mut hasher = fastcrypto::hash::Blake2b256::default();
     hasher.update(value);
     hasher.finalize()
+}
+
+#[cfg(tidehunter)]
+fn format_bytes_for_display(bytes: &[u8]) -> String {
+    if bytes.len() <= 32 {
+        format!("{:02x?}", bytes)
+    } else {
+        format!("{:02x?}... ({} bytes total)", &bytes[..32], bytes.len())
+    }
+}
+
+#[cfg(tidehunter)]
+fn create_value_mismatch_message(
+    cf_name: &str,
+    key: &[u8],
+    th_bytes: &[u8],
+    rocks_bytes: &[u8],
+    index: Option<usize>,
+) -> String {
+    let first_diff = th_bytes.iter().zip(rocks_bytes.iter())
+        .position(|(a, b)| a != b)
+        .unwrap_or(th_bytes.len().min(rocks_bytes.len()));
+
+    let index_prefix = if let Some(idx) = index {
+        format!("multi_get mismatch at index {} in", idx)
+    } else {
+        "get mismatch for key in".to_string()
+    };
+
+    format!(
+        "TideHunter invariant violation: {} cf '{}'.\n\
+         Key: {:02x?}\n\
+         TH value:     {} (len={})\n\
+         RocksDB value: {} (len={})\n\
+         First difference at byte offset: {}",
+        index_prefix, cf_name, key,
+        format_bytes_for_display(th_bytes), th_bytes.len(),
+        format_bytes_for_display(rocks_bytes), rocks_bytes.len(),
+        first_diff
+    )
+}
+
+#[cfg(tidehunter)]
+pub fn open_tidehunter_invariant(
+    th_db: Arc<TideHunterDb>,
+    rocks_path: &Path,
+    metric_conf: MetricConf,
+    opt_cfs: &[(&str, rocksdb::Options)],
+    registry_id: Option<prometheus::core::GenericGauge<prometheus::core::AtomicU64>>,
+) -> Result<Arc<Database>, TypedStoreError> {
+    let cfs = populate_missing_cfs(opt_cfs, rocks_path).map_err(typed_store_err_from_rocks_err)?;
+    let mut options = default_db_options().options;
+    options.create_if_missing(true);
+    options.create_missing_column_families(true);
+
+    let rocksdb = nondeterministic!({
+        rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
+            &options,
+            rocks_path,
+            cfs.into_iter()
+                .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts)),
+        )
+        .map_err(typed_store_err_from_rocks_err)?
+    });
+
+    Ok(Arc::new(Database::new(
+        Storage::TideHunterInvariant(th_db, RocksDB { underlying: rocksdb }),
+        metric_conf,
+        registry_id,
+    )))
 }

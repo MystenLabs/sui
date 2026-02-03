@@ -383,10 +383,29 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     );
                     let key_shape = builder.build();
                     let (inner_db, registry_id) = typed_store::tidehunter_util::open(path.as_path(), key_shape, metric_conf.db_name.clone());
-                    let db = std::sync::Arc::new(typed_store::rocks::Database::new(
-                        typed_store::rocks::Storage::TideHunter(inner_db),
-                        metric_conf,
-                        Some(registry_id)));
+                    let db = {
+                        #[cfg(debug_assertions)]
+                        {
+                            // In debug builds, create invariant store with RocksDB comparison
+                            let mut rocks_path = path.clone();
+                            rocks_path.set_extension("rocksdb_invariant");
+                            // Use default RocksDB options for all column families in the comparison database
+                            let cf_names: Vec<_> = cf_configs.keys().map(|s| s.to_string()).collect();
+                            let cf_options: Vec<_> = cf_names.iter()
+                                .map(|name| (name.as_str(), typed_store::rocks::default_db_options().options))
+                                .collect();
+                            typed_store::rocks::open_tidehunter_invariant(inner_db, &rocks_path, metric_conf, &cf_options, Some(registry_id))
+                                .expect("Failed to open TideHunter invariant store")
+                        }
+                        #[cfg(not(debug_assertions))]
+                        {
+                            std::sync::Arc::new(typed_store::rocks::Database::new(
+                                typed_store::rocks::Storage::TideHunter(inner_db),
+                                metric_conf,
+                                Some(registry_id)
+                            ))
+                        }
+                    };
                     let (
                         #(
                             #field_names
