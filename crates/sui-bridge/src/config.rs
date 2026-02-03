@@ -5,7 +5,7 @@ use crate::abi::EthBridgeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::error::BridgeError;
 use crate::eth_client::EthClient;
-use crate::metered_eth_provider::new_metered_eth_provider;
+use crate::metered_eth_provider::{new_metered_eth_provider, new_metered_multi_eth_provider};
 use crate::metrics::BridgeMetrics;
 use crate::sui_client::SuiBridgeClient;
 use crate::types::{BridgeAction, is_route_valid};
@@ -40,8 +40,22 @@ use tracing::info;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct EthConfig {
-    /// Rpc url for Eth fullnode, used for query stuff.
-    pub eth_rpc_url: String,
+    /// Rpc url for Eth fullnode. Kept for backward compatibility —
+    /// if `eth_rpc_urls` is not set, this single URL is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eth_rpc_url: Option<String>,
+    /// Multiple RPC URLs for Eth fullnodes. When multiple URLs are provided,
+    /// quorum-based consensus is used across providers for redundancy.
+    /// Takes precedence over `eth_rpc_url` when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eth_rpc_urls: Option<Vec<String>>,
+    /// Quorum size for multi-provider consensus. Must be <= number of URLs.
+    /// Defaults to 1.
+    #[serde(default = "default_quorum")]
+    pub eth_rpc_quorum: usize,
+    /// Health check interval in seconds for multi-provider. Defaults to 300.
+    #[serde(default = "default_health_check_interval_secs")]
+    pub eth_health_check_interval_secs: u64,
     /// The proxy address of SuiBridge
     pub eth_bridge_proxy_address: String,
     /// The expected BridgeChainId on Eth side.
@@ -61,6 +75,28 @@ pub struct EthConfig {
     /// reprocess the events from this block number every time it starts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eth_contracts_start_block_override: Option<u64>,
+}
+
+fn default_quorum() -> usize {
+    1
+}
+
+fn default_health_check_interval_secs() -> u64 {
+    300
+}
+
+impl EthConfig {
+    /// Returns the list of RPC URLs, supporting both the legacy single-URL
+    /// field and the new multi-URL field. `eth_rpc_urls` takes precedence.
+    pub fn rpc_urls(&self) -> Vec<String> {
+        if let Some(ref urls) = self.eth_rpc_urls {
+            urls.clone()
+        } else if let Some(ref url) = self.eth_rpc_url {
+            vec![url.clone()]
+        } else {
+            vec![]
+        }
+    }
 }
 
 #[serde_as]
@@ -266,7 +302,24 @@ impl BridgeNodeConfig {
     ) -> anyhow::Result<(Arc<EthClient>, Vec<EthAddress>)> {
         info!("Creating Ethereum client provider");
         let bridge_proxy_address = EthAddress::from_str(&self.eth.eth_bridge_proxy_address)?;
-        let provider = new_metered_eth_provider(&self.eth.eth_rpc_url, metrics.clone()).unwrap();
+        let rpc_urls = self.eth.rpc_urls();
+        anyhow::ensure!(
+            !rpc_urls.is_empty(),
+            "At least one Ethereum RPC URL must be provided via eth-rpc-url or eth-rpc-urls"
+        );
+
+        let provider = if rpc_urls.len() > 1 {
+            new_metered_multi_eth_provider(
+                rpc_urls.clone(),
+                self.eth.eth_rpc_quorum,
+                self.eth.eth_health_check_interval_secs,
+                metrics.clone(),
+            )
+            .await?
+        } else {
+            new_metered_eth_provider(&rpc_urls[0], metrics.clone())?
+        };
+
         let chain_id = provider.get_chain_id().await?;
         let (
             committee_address,
@@ -332,12 +385,7 @@ impl BridgeNodeConfig {
         }
 
         let eth_client = Arc::new(
-            EthClient::new(
-                &self.eth.eth_rpc_url,
-                HashSet::from_iter(valid_addresses.clone()),
-                metrics,
-            )
-            .await?,
+            EthClient::from_provider(provider, HashSet::from_iter(valid_addresses.clone())).await?,
         );
         info!("Ethereum client setup complete");
         Ok((eth_client, valid_addresses))

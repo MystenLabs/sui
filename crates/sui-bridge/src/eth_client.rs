@@ -37,6 +37,21 @@ impl EthClient {
         Ok(self_)
     }
 
+    /// Construct from a pre-built provider. Use this when the provider has
+    /// already been created (e.g. during config validation) to avoid
+    /// creating a second connection.
+    pub async fn from_provider(
+        provider: EthProvider,
+        contract_addresses: HashSet<EthAddress>,
+    ) -> anyhow::Result<Self> {
+        let self_ = Self {
+            provider,
+            contract_addresses,
+        };
+        self_.describe().await?;
+        Ok(self_)
+    }
+
     pub fn provider(&self) -> EthProvider {
         self.provider.clone()
     }

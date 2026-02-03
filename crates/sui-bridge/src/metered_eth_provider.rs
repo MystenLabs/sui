@@ -87,6 +87,37 @@ pub fn new_metered_eth_provider(
     Ok(Arc::new(RootProvider::new(rpc_client)))
 }
 
+/// Create a metered Ethereum provider backed by multiple RPC endpoints with
+/// quorum-based consensus. The `QuorumTransport` handles health ranking and
+/// failover internally; `MeteredHttpService` wraps it to provide aggregate
+/// Prometheus metrics.
+pub async fn new_metered_multi_eth_provider(
+    urls: Vec<String>,
+    quorum: usize,
+    health_check_interval_secs: u64,
+    metrics: Arc<BridgeMetrics>,
+) -> anyhow::Result<EthProvider> {
+    use alloy_multiprovider_strategy::{MultiProviderConfig, QuorumTransport};
+
+    let config = MultiProviderConfig::new(urls, quorum)
+        .with_health_check_interval(Duration::from_secs(health_check_interval_secs))
+        .with_request_timeout(Duration::from_secs(30))
+        .with_start_health_check_on_init(false);
+
+    let transport = QuorumTransport::new(config)
+        .map_err(|e| anyhow::anyhow!("Failed to create QuorumTransport: {}", e))?;
+
+    // Run initial health check to rank providers before serving requests
+    transport.run_health_check().await;
+    // Start periodic background health checks
+    transport.start_health_check_task();
+
+    let metered_transport = MeteredHttpService::new(transport, metrics);
+    let rpc_client =
+        RpcClient::new(metered_transport, false).with_poll_interval(Duration::from_millis(2000));
+    Ok(Arc::new(RootProvider::new(rpc_client)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
