@@ -20,7 +20,21 @@ abstract contract CommitteeUpgradeable is
     /* ========== STATE VARIABLES ========== */
 
     bool private _upgradeAuthorized;
-    // upgradeablity storage gap
+
+    // CRITICAL: Storage layout differs between mainnet and testnet!
+    //
+    // The __gap array was added AFTER testnet deployment but BEFORE mainnet deployment.
+    // This creates a permanent storage layout divergence:
+    //
+    //   - TESTNET (Sepolia 0xAE68...): vault @ slot 4, limiter @ slot 5 (NO __gap)
+    //   - MAINNET (0xda3b...):         vault @ slot 54, limiter @ slot 55 (HAS __gap)
+    //
+    // This file currently has __gap INCLUDED to support MAINNET upgrades.
+    //
+    // See bridge/SUI_NATIVE_BRIDGE_PRIMER.md for full documentation.
+    // For TESTNET upgrades, you must remove __gap.
+
+    // upgradeable storage gap
     uint256[50] private __gap;
 
     /* ========== INITIALIZER ========== */

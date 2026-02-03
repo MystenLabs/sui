@@ -162,54 +162,18 @@ async fn start_watchdog(
         .await
         .unwrap_or_else(|e| panic!("get_eth_contract_addresses should not fail: {}", e));
 
-    let eth_vault_balance = EthereumVaultBalance::new(
-        eth_provider.clone(),
-        vault_address,
-        weth_address,
-        VaultAsset::WETH,
-        watchdog_metrics.eth_vault_balance.clone(),
-    )
-    .await
-    .unwrap_or_else(|e| panic!("Failed to create eth vault balance: {}", e));
-
-    let usdt_vault_balance = EthereumVaultBalance::new(
-        eth_provider.clone(),
-        vault_address,
-        usdt_address,
-        VaultAsset::USDT,
-        watchdog_metrics.usdt_vault_balance.clone(),
-    )
-    .await
-    .unwrap_or_else(|e| panic!("Failed to create usdt vault balance: {}", e));
-
-    let wbtc_vault_balance = EthereumVaultBalance::new(
-        eth_provider.clone(),
-        vault_address,
-        wbtc_address,
-        VaultAsset::WBTC,
-        watchdog_metrics.wbtc_vault_balance.clone(),
-    )
-    .await
-    .unwrap_or_else(|e| panic!("Failed to create wbtc vault balance: {}", e));
-
-    let lbtc_vault_balance = if !lbtc_address.is_zero() {
-        Some(
-            EthereumVaultBalance::new(
-                eth_provider.clone(),
-                vault_address,
-                lbtc_address,
-                VaultAsset::LBTC,
-                watchdog_metrics.lbtc_vault_balance.clone(),
-            )
-            .await
-            .unwrap_or_else(|e| panic!("Failed to create lbtc vault balance: {}", e)),
-        )
-    } else {
-        None
-    };
+    // If vault_address is zero (can happen due to storage layout mismatch during upgrades),
+    // skip vault balance monitoring but allow node to start for signing server functionality.
+    let vault_monitoring_enabled = !vault_address.is_zero() && !weth_address.is_zero();
+    if !vault_monitoring_enabled {
+        tracing::warn!(
+            "Vault address or token addresses are zero - skipping vault balance monitoring. \
+            This is expected during storage layout mismatch recovery."
+        );
+    }
 
     let eth_bridge_status = EthBridgeStatus::new(
-        eth_provider,
+        eth_provider.clone(),
         eth_bridge_proxy_address,
         watchdog_metrics.eth_bridge_paused.clone(),
     );
@@ -219,17 +183,57 @@ async fn start_watchdog(
         watchdog_metrics.sui_bridge_paused.clone(),
     );
 
-    let mut observables: Vec<Box<dyn Observable + Send + Sync>> = vec![
-        Box::new(eth_vault_balance),
-        Box::new(usdt_vault_balance),
-        Box::new(wbtc_vault_balance),
-        Box::new(eth_bridge_status),
-        Box::new(sui_bridge_status),
-    ];
+    let mut observables: Vec<Box<dyn Observable + Send + Sync>> =
+        vec![Box::new(eth_bridge_status), Box::new(sui_bridge_status)];
 
-    // Add lbtc_vault_balance if it's available
-    if let Some(balance) = lbtc_vault_balance {
-        observables.push(Box::new(balance));
+    // Add vault balance monitors only when addresses are valid
+    if vault_monitoring_enabled {
+        let eth_vault_balance = EthereumVaultBalance::new(
+            eth_provider.clone(),
+            vault_address,
+            weth_address,
+            VaultAsset::WETH,
+            watchdog_metrics.eth_vault_balance.clone(),
+        )
+        .await
+        .unwrap_or_else(|e| panic!("Failed to create eth vault balance: {}", e));
+
+        let usdt_vault_balance = EthereumVaultBalance::new(
+            eth_provider.clone(),
+            vault_address,
+            usdt_address,
+            VaultAsset::USDT,
+            watchdog_metrics.usdt_vault_balance.clone(),
+        )
+        .await
+        .unwrap_or_else(|e| panic!("Failed to create usdt vault balance: {}", e));
+
+        let wbtc_vault_balance = EthereumVaultBalance::new(
+            eth_provider.clone(),
+            vault_address,
+            wbtc_address,
+            VaultAsset::WBTC,
+            watchdog_metrics.wbtc_vault_balance.clone(),
+        )
+        .await
+        .unwrap_or_else(|e| panic!("Failed to create wbtc vault balance: {}", e));
+
+        observables.push(Box::new(eth_vault_balance));
+        observables.push(Box::new(usdt_vault_balance));
+        observables.push(Box::new(wbtc_vault_balance));
+
+        if !lbtc_address.is_zero() {
+            let lbtc_vault_balance = EthereumVaultBalance::new(
+                eth_provider,
+                vault_address,
+                lbtc_address,
+                VaultAsset::LBTC,
+                watchdog_metrics.lbtc_vault_balance.clone(),
+            )
+            .await
+            .unwrap_or_else(|e| panic!("Failed to create lbtc vault balance: {}", e));
+            observables.push(Box::new(lbtc_vault_balance));
+        }
     }
 
     if let Some(watchdog_config) = watchdog_config
