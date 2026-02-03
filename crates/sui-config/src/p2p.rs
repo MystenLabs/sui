@@ -418,15 +418,21 @@ impl StateSyncConfig {
 /// AccessType info is shared in the discovery process.
 /// * If the node marks itself as Public, other nodes may try to connect to it.
 /// * If the node marks itself as Private, only nodes that have it in
-///   their `allowlisted_peers` or `seed_peers` will try to connect to it.
+///   their `allowlisted_peers` or `seed_peers` will try to connect to it. The
+///   node's info will not be shared through discovery.
+/// * Trusted is the same as Private, except it allows sharing the node's info
+///   only to other preconfigured peers (i.e. those in `allowlisted_peers` and
+///   `seed_peers`).
 /// * If not set, defaults to Public.
 ///
 /// AccessType is useful when a network of nodes want to stay private. To achieve this,
-/// mark every node in this network as `Private` and allowlist/seed them to each other.
+/// mark every node in this network as `Private` or `Trusted`, and allowlist/seed them
+/// to each other.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AccessType {
     Public,
     Private,
+    Trusted,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
