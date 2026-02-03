@@ -98,7 +98,12 @@ impl Container {
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
                     config.metrics_address
                 );
+                let admin_interface_port = config.admin_interface_port;
                 let server = SuiNode::start(config, registry_service).await.unwrap();
+                let admin_node = server.clone();
+                tokio::spawn(async move {
+                    sui_node::admin::run_admin_server(admin_node, admin_interface_port, None).await;
+                });
                 // Notify that we've successfully started the node
                 let _ = startup_sender.send(Arc::downgrade(&server));
                 // run until canceled
