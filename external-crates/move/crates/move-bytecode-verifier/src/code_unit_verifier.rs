@@ -241,7 +241,6 @@ impl<'env> CodeUnitVerifier<'env, '_> {
                             .unwrap_err()
                             .finish(Location::Undefined)
                             .message()
-                            .cloned()
                             .unwrap_or_default(),
                     ),
                 );
