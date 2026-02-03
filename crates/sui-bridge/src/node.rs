@@ -236,7 +236,7 @@ async fn start_watchdog(
         && !watchdog_config.total_supplies.is_empty()
     {
         let total_supplies = TotalSupplies::new(
-            Arc::new(sui_client.jsonrpc_client().clone()),
+            sui_client.grpc_client().clone().into_inner(),
             watchdog_config.total_supplies,
             watchdog_metrics.total_supplies.clone(),
         );
@@ -345,7 +345,7 @@ async fn start_client_components(
             .with_label_values(&["sui_monitor_queue"]),
     );
     tokio::spawn(monitor::subscribe_bridge_events(
-        sui_client.grpc_client().clone(),
+        sui_client.grpc_client().clone().into_inner(),
         sui_monitor_tx,
     ));
     let monitor = BridgeMonitor::new(

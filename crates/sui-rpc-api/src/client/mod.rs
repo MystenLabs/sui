@@ -53,6 +53,10 @@ impl Client {
         &mut self.0
     }
 
+    pub fn into_inner(self) -> sui_rpc::Client {
+        self.0
+    }
+
     pub async fn get_latest_checkpoint(&mut self) -> Result<CertifiedCheckpointSummary> {
         self.get_checkpoint_internal(None).await
     }

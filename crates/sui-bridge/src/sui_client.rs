@@ -67,7 +67,7 @@ pub type SuiBridgeClient = SuiClient<SuiClientInternal>;
 
 pub struct SuiClientInternal {
     jsonrpc_client: SuiSdkClient,
-    grpc_client: sui_rpc::Client,
+    grpc_client: sui_rpc_api::Client,
 }
 
 #[derive(Clone, Debug)]
@@ -84,7 +84,7 @@ impl SuiBridgeClient {
             .map_err(|e| {
                 anyhow!("Can't establish connection with Sui Rpc {rpc_url}. Error: {e}")
             })?;
-        let grpc_client = sui_rpc::Client::new(rpc_url)?;
+        let grpc_client = sui_rpc_api::Client::new(rpc_url)?;
         let inner = SuiClientInternal {
             jsonrpc_client,
             grpc_client,
@@ -101,7 +101,7 @@ impl SuiBridgeClient {
         &self.inner.jsonrpc_client
     }
 
-    pub fn grpc_client(&self) -> &sui_rpc::Client {
+    pub fn grpc_client(&self) -> &sui_rpc_api::Client {
         &self.inner.grpc_client
     }
 }
@@ -678,7 +678,7 @@ impl SuiClientInner for SuiSdkClient {
 }
 
 #[async_trait]
-impl SuiClientInner for sui_rpc::Client {
+impl SuiClientInner for sui_rpc_api::Client {
     async fn query_events(
         &self,
         _query: EventFilter,
@@ -695,6 +695,7 @@ impl SuiClientInner for sui_rpc::Client {
     ) -> Result<SuiEvents, BridgeError> {
         let mut client = self.clone();
         let resp = client
+            .inner_mut()
             .ledger_client()
             .get_transaction(
                 GetTransactionRequest::new(&(tx_digest.into())).with_read_mask(
@@ -746,6 +747,7 @@ impl SuiClientInner for sui_rpc::Client {
     async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
         let chain_id = self
             .clone()
+            .inner_mut()
             .ledger_client()
             .get_service_info(GetServiceInfoRequest::default())
             .await?
@@ -758,7 +760,7 @@ impl SuiClientInner for sui_rpc::Client {
 
     async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
         let mut client = self.clone();
-        sui_rpc::Client::get_reference_gas_price(&mut client)
+        sui_rpc::Client::get_reference_gas_price(client.inner_mut())
             .await
             .map_err(Into::into)
     }
@@ -767,6 +769,7 @@ impl SuiClientInner for sui_rpc::Client {
         let mut client = self.clone();
         let resp =
             client
+                .inner_mut()
                 .ledger_client()
                 .get_checkpoint(GetCheckpointRequest::latest().with_read_mask(
                     FieldMask::from_paths([Checkpoint::path_builder().sequence_number()]),
@@ -779,6 +782,7 @@ impl SuiClientInner for sui_rpc::Client {
     async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, BridgeError> {
         let owner = self
             .clone()
+            .inner_mut()
             .ledger_client()
             .get_object(
                 GetObjectRequest::new(&(SUI_BRIDGE_OBJECT_ID.into())).with_read_mask(
@@ -805,6 +809,7 @@ impl SuiClientInner for sui_rpc::Client {
             .get_or_try_init::<BridgeError, _, _>(|| async {
                 let bridge_wrapper_bcs = self
                     .clone()
+                    .inner_mut()
                     .ledger_client()
                     .get_object(
                         GetObjectRequest::new(&(SUI_BRIDGE_OBJECT_ID.into())).with_read_mask(
@@ -828,6 +833,7 @@ impl SuiClientInner for sui_rpc::Client {
 
         let field_bcs = self
             .clone()
+            .inner_mut()
             .ledger_client()
             .get_object(GetObjectRequest::new(&bridge_inner_id).with_read_mask(
                 FieldMask::from_paths([Object::path_builder().contents().finish()]),
@@ -906,6 +912,7 @@ impl SuiClientInner for sui_rpc::Client {
 
         let response = self
             .clone()
+            .inner_mut()
             .execution_client()
             .execute_transaction(request)
             .await
@@ -1047,6 +1054,7 @@ impl SuiClientInner for sui_rpc::Client {
         let response =
             match self
                 .clone()
+                .inner_mut()
                 .ledger_client()
                 .get_object(GetObjectRequest::new(&record_id).with_read_mask(
                     FieldMask::from_paths([Object::path_builder().contents().finish()]),
@@ -1081,6 +1089,7 @@ impl SuiClientInner for sui_rpc::Client {
             let result = async {
                 let resp = self
                     .clone()
+                    .inner_mut()
                     .ledger_client()
                     .get_object(
                         GetObjectRequest::new(&(gas_object_id.into())).with_read_mask(
@@ -1165,11 +1174,11 @@ impl SuiClientInner for SuiClientInternal {
     }
 
     async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
-        self.grpc_client.get_chain_identifier().await
+        SuiClientInner::get_chain_identifier(&self.grpc_client).await
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
-        self.grpc_client.get_reference_gas_price().await
+        SuiClientInner::get_reference_gas_price(&self.grpc_client).await
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, BridgeError> {
