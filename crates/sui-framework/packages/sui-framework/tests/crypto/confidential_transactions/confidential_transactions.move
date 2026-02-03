@@ -6,6 +6,7 @@ use sui::coin::{Self, Coin};
 use sui::group_ops::Element;
 use sui::ristretto255::{Self, Point};
 use sui::twisted_elgamal::{
+    Self,
     g,
     add_assign,
     encrypted_amount_2_u_32_zero,
@@ -20,7 +21,11 @@ use sui::twisted_elgamal::{
     encrypt_zero,
     encrypted_amount_4_u32_from_4_u16,
     verify_value_proof,
-    verify_sum_proof
+    verify_sum_proof,
+    verify_handle_eq,
+    encrypted_amount_2_u32_unverified_to_encryption,
+    verify_sum_proof_simple,
+    encrypted_amount_4_u16_to_encryption
 };
 use sui::vec_map::VecMap;
 
@@ -64,6 +69,7 @@ public fun wrap<T>(
 ): BoundedEncryptedAmount<T> {
     let value = coins.value();
     coin::put(&mut ct.pool, coins);
+    // TODO: Do we need an actual encryption (with randomness) here?
     let amount = encrypted_amount_4_u16_from_value(value, &pk);
     BoundedEncryptedAmount { pk, amount }
 }
@@ -114,7 +120,6 @@ public fun merge_pending_deposit<T>(
 }
 
 /// Add an encrypted amount to the balance.
-///
 public fun add_to_balance<T>(
     ct: &mut ConfidentialToken<T>,
     amount: BoundedEncryptedAmount<T>,
@@ -146,26 +151,94 @@ public fun add_to_balance<T>(
 
 /// Take an amount from the balance.
 /// The taken amount is expected to be well-formed (i.e., each limb is an u16 encryption), and should be encrypted under taken_amount_pk.
-public fun take_from_balance<T>(
+public fun take_from_balance_to_other<T>(
     ct: &mut ConfidentialToken<T>,
-    new_balance: vector<Encryption>,
-    taken_amount: vector<Encryption>,
-    taken_amount_pk: Element<Point>,
-    _proof: &vector<u8>,
+    new_balance: vector<Encryption>, // expected to be EncryptedAmount2U32Unverified
+    taken_amount: vector<Encryption>, // Under other_pk - expected to be EncryptedAmount4U16
+    decryption_handle: Element<Point>, // Under account.pk - sum of the taken_amount decryption handles
+    other_pk: Element<Point>,
+    proofs: vector<vector<u8>>,
     ctx: &mut TxContext,
 ): BoundedEncryptedAmount<T> {
     let new_balance = encrypted_amount_2_u32_unverified(new_balance);
     let taken_amount = encrypted_amount_4_u16(taken_amount);
 
+    let account = &mut ct.accounts[&ctx.sender()];
+    let pk = &account.pk;
+
+    let mut proofs = proofs;
+    let _taken_balance_range_proof = proofs.pop_back();
+    let _new_balance_range_proof = proofs.pop_back();
+    let balance_sum_proof = proofs.pop_back();
+    let handle_eq_proof = proofs.pop_back();
+
+    std::debug::print(&handle_eq_proof);
+
+    // (1) check that the blinding used in decryption_handle is the same as for the taken_amount
+    let total_taken_amount = twisted_elgamal::encrypted_amount_4_u16_to_encryption(&taken_amount);
+    // total_taken_amount under account.pk
+    if (pk != other_pk) {
+        assert!(
+            verify_handle_eq(
+                pk,
+                &other_pk,
+                &decryption_handle,
+                total_taken_amount.decryption_handle(),
+                handle_eq_proof,
+            ),
+        );
+    };
+
+    // (2) current_balance = new_balance + taken_balance,
+    let taken_amount_my_pk = twisted_elgamal::new(
+        *total_taken_amount.ciphertext(),
+        decryption_handle,
+    );
+    //assert!(verify_sum_proof_simple(&account.balance, &new_balance, &taken_amount_my_pk, pk, balance_sum_proof));
+
     // TODO: check proofs that
-    // (1) current_balance = new_balance + taken_balance (sigma protocol),
     // (2) new_balance is u32 or full new_balance is u64 (not negative),
     // (3) taken_balance is u16 (batch range proofs)
 
-    ct.accounts[&ctx.sender()].balance = new_balance;
+    account.balance = new_balance;
 
     BoundedEncryptedAmount {
-        pk: taken_amount_pk,
+        pk: other_pk,
+        amount: taken_amount,
+    }
+}
+
+/// Take an amount from the balance.
+/// The taken amount is expected to be well-formed (i.e., each limb is an u16 encryption), and should be encrypted under taken_amount_pk.
+public fun take_from_balance_to_self<T>(
+    ct: &mut ConfidentialToken<T>,
+    new_balance: vector<Encryption>, // expected to be EncryptedAmount2U32Unverified
+    taken_amount: vector<Encryption>, // Under other_pk - expected to be EncryptedAmount4U16
+    proofs: vector<vector<u8>>,
+    ctx: &mut TxContext,
+): BoundedEncryptedAmount<T> {
+    let new_balance = encrypted_amount_2_u32_unverified(new_balance);
+    let taken_amount = encrypted_amount_4_u16(taken_amount);
+
+    let account = &mut ct.accounts[&ctx.sender()];
+    let pk = &account.pk;
+
+    let mut proofs = proofs;
+    let _taken_balance_range_proof = proofs.pop_back();
+    let _new_balance_range_proof = proofs.pop_back();
+    let balance_sum_proof = proofs.pop_back();
+
+    // (2) current_balance = new_balance + taken_balance,
+    //assert!(verify_sum_proof_simple(&account.balance, &new_balance, &taken_amount_my_pk, pk, balance_sum_proof));
+
+    // TODO: check proofs that
+    // (2) new_balance is u32 or full new_balance is u64 (not negative),
+    // (3) taken_balance is u16 (batch range proofs)
+
+    account.balance = new_balance;
+
+    BoundedEncryptedAmount {
+        pk: *pk,
         amount: taken_amount,
     }
 }
@@ -183,7 +256,7 @@ public struct PendingDeposits<phantom T> has store {
     // Once num_of_deposits = 2^16 we create a new pending balance.
     // If pending_balance.len() > 1000, we reject the deposit.
     num_of_deposits: u16,
-    pending_balances: vector<EncryptedAmount4U32>, // TODO: Support for up to 1000 pending balances.
+    pending_balances: vector<EncryptedAmount4U32>,
 }
 
 /// Add an encrypted amount to the pending deposits. The amount is expected to be well-formed (i.e., each limb is an u16 encryption).
@@ -307,7 +380,7 @@ fun test_flow() {
     );
 
     // Take some from the balance and deposit to another account. Make sure to take it as encrypted to account 2
-    let taken = confidential_token.take_from_balance(
+    let taken = confidential_token.take_from_balance_to_other(
         vector[encrypt_zero(&pk_1), encrypt_zero(&pk_1)],
         vector[
             encrypt_trivial(50, &pk_2),
@@ -315,8 +388,14 @@ fun test_flow() {
             encrypt_trivial(0, &pk_2),
             encrypt_trivial(0, &pk_2),
         ],
+        ristretto255::point_mul(&ristretto255::scalar_from_u64(281479271743489u64), &pk_1), // decryption handle under owners pk. Note that 281479271743489 = 2^48 + 2^32 + 2^16 + 1 is the sum of the blinding factors for the four limbs when encrypting 50
         pk_2,
-        &vector::empty(), // TODO
+        vector[
+            x"4ec74ffb7b9991039a09f3b076090ca410135eb33dba879068cee4356d858023fcb8b20b11c1bdb8a7858910dedebf6bfc341b408848c5899d8a917657921c6f3ee48728e43c4f994ec514b2188ca5b801e498490ae3bb1c66aabdaf8ab5c40e",
+            x"",
+            x"",
+            x"",
+        ], // TODO
         scenario.ctx(),
     );
 
@@ -333,14 +412,13 @@ fun test_flow() {
 
     // Account 2 merges the pending deposit into its balance, merges and unwraps
     scenario.next_tx(addr2);
-    let new_balance = vector[encrypt_trivial(50, &pk_2), encrypt_zero(&pk_2)];
     confidential_token.merge_pending_deposit(
-        new_balance,
+        vector[encrypt_trivial(50, &pk_2), encrypt_zero(&pk_2)],
         // Proof generated in fastcrypto
         x"94c23f676ffd26d996be23ca8a34d15b4ae45660c8a4f9f16dc3975023a444415ea6e591ee90950b31bfb39f5601eec1e294ebde6713c9d351dfc39e148715353e6b237b5cc782de8c21fc7f35402765247635412eff733e45d0d1bb027ad301",
         scenario.ctx(),
     );
-    let taken = confidential_token.take_from_balance(
+    let taken = confidential_token.take_from_balance_to_self(
         vector[encrypt_zero(&pk_2), encrypt_zero(&pk_2)],
         vector[
             encrypt_trivial(50, &pk_2),
@@ -348,8 +426,7 @@ fun test_flow() {
             encrypt_trivial(0, &pk_2),
             encrypt_trivial(0, &pk_2),
         ],
-        pk_2,
-        &vector::empty(), // TODO
+        vector[x"", x"", x"", x""], // TODO
         scenario.ctx(),
     );
 

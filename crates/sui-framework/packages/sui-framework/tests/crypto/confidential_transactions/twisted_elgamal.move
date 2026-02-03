@@ -18,6 +18,14 @@ public struct Encryption has copy, drop, store {
     decryption_handle: Element<Point>,
 }
 
+public fun ciphertext(e: &Encryption): &Element<Point> {
+    &e.ciphertext
+}
+
+public fun decryption_handle(e: &Encryption): &Element<Point> {
+    &e.decryption_handle
+}
+
 public(package) fun new(ciphertext: Element<Point>, decryption_handle: Element<Point>): Encryption {
     Encryption {
         ciphertext,
@@ -148,7 +156,7 @@ public fun encrypted_amount_4_u16_from_value(value: u64, pk: &Element<Point>): E
     }
 }
 
-fun encrypted_amount_4_u16_to_encryption(ea: &EncryptedAmount4U16): Encryption {
+public(package) fun encrypted_amount_4_u16_to_encryption(ea: &EncryptedAmount4U16): Encryption {
     ea
         .l0
         .add(
@@ -167,11 +175,33 @@ public fun verify_value_proof(
     let encryption = encrypted_amount_4_u16_to_encryption(ea);
     proof.verify(
         &b"",
+        &ristretto255::generator(),
         &ristretto255::point_sub(
             &encryption.ciphertext,
             &ristretto255::point_mul(&ristretto255::scalar_from_u64(amount), &h()),
         ),
         pk,
+        &encryption.decryption_handle,
+    )
+}
+
+/// Verify a NIZK proof that the encrypted amount equals the given value where the encryption is created by someone who knows the blinding factor.
+public fun verify_value_proof_to_other(
+    amount: u64,
+    ea: &EncryptedAmount4U16,
+    pk: &Element<Point>,
+    proof: vector<u8>,
+): bool {
+    let proof = sui::nizk::from_bytes(proof);
+    let encryption = encrypted_amount_4_u16_to_encryption(ea);
+    proof.verify(
+        &b"",
+        &ristretto255::generator(),
+        pk,
+        &ristretto255::point_sub(
+            &encryption.ciphertext,
+            &ristretto255::point_mul(&ristretto255::scalar_from_u64(amount), &h()),
+        ),
         &encryption.decryption_handle,
     )
 }
@@ -184,21 +214,57 @@ public fun verify_sum_proof(
     pk: &Element<Point>,
     proof: vector<u8>,
 ): bool {
+    verify_sum_proof_simple(sum, a, &encrypted_amount_4_u32_to_encryption(b), pk, proof)
+}
+
+/// Verify a NIZK proof that sum = a + b
+public fun verify_sum_proof_simple(
+    sum: &EncryptedAmount2U32Unverified,
+    a: &EncryptedAmount2U32Unverified,
+    b: &Encryption,
+    pk: &Element<Point>,
+    proof: vector<u8>,
+): bool {
     let proof = sui::nizk::from_bytes(proof);
     let sum_encryption = encrypted_amount_2_u32_unverified_to_encryption(sum);
     let a_encryption = encrypted_amount_2_u32_unverified_to_encryption(a);
-    let b_encryption = encrypted_amount_4_u32_to_encryption(b);
-    let zero_encryption = sub(&add(&a_encryption, &b_encryption), &sum_encryption);
+    let zero_encryption = sub(&add(&a_encryption, b), &sum_encryption);
 
-    std::debug::print(&sum_encryption);
-    std::debug::print(&a_encryption);
-    std::debug::print(&b_encryption);
+    // std::debug::print(&sum_encryption);
+    // std::debug::print(&a_encryption);
+    // std::debug::print(b);
+    // std::debug::print(&zero_encryption);
 
     proof.verify(
         &b"",
+        &ristretto255::generator(),
         &zero_encryption.ciphertext,
         pk,
         &zero_encryption.decryption_handle,
+    )
+}
+
+/// Verify a NIZK proof that there is r such that d1 = r*p1 and d2 = r*p2
+public fun verify_handle_eq(
+    p1: &Element<Point>,
+    p2: &Element<Point>,
+    d1: &Element<Point>,
+    d2: &Element<Point>,
+    proof: vector<u8>,
+): bool {
+    std::debug::print(p1);
+    std::debug::print(p2);
+    std::debug::print(d1);
+    std::debug::print(d2);
+
+    let proof = sui::nizk::from_bytes(proof);
+
+    proof.verify(
+        &b"",
+        p1,
+        p2,
+        d1,
+        d2,
     )
 }
 
@@ -233,6 +299,7 @@ fun test_value_proof() {
     assert!(
         proof.verify(
             &x"",
+            &ristretto255::generator(),
             &ristretto255::point_sub(&c, &ristretto255::point_mul(&amount_as_scalar, &h())),
             &pk,
             &d,

@@ -29,6 +29,7 @@ fun peel_tuple_u8(bcs: &mut sui::bcs::BCS, length: u64): vector<u8> {
 
 fun challenge(
     dst: &vector<u8>,
+    g: &Element<Point>,
     h: &Element<Point>,
     x_g: &Element<Point>,
     x_h: &Element<Point>,
@@ -38,7 +39,7 @@ fun challenge(
     let mut bytes: vector<u8> = vector::empty();
     bytes.append(x"00000000"); // length of dst as BE - todo: make variable
     bytes.append(*dst);
-    bytes.append(*ristretto255::generator().bytes());
+    bytes.append(*g.bytes());
     bytes.append(*h.bytes());
     bytes.append(*x_g.bytes());
     bytes.append(*x_h.bytes());
@@ -51,6 +52,7 @@ fun challenge(
 public fun verify(
     proof: &NIZK,
     dst: &vector<u8>,
+    g: &Element<Point>,
     h: &Element<Point>,
     x_g: &Element<Point>,
     x_h: &Element<Point>,
@@ -59,12 +61,12 @@ public fun verify(
         h != ristretto255::identity() && x_g != ristretto255::identity() && x_h != ristretto255::identity(),
     );
 
-    let challenge = challenge(dst, h, x_g, x_h, &proof.a, &proof.b);
+    let challenge = challenge(dst, g, h, x_g, x_h, &proof.a, &proof.b);
 
     is_valid_relation(
                 &proof.a,
                 x_g,
-                &ristretto255::generator(),
+                g,
                 &proof.z,
                 &challenge,
             ) && is_valid_relation(
@@ -91,14 +93,15 @@ fun is_valid_relation(
 public fun prove(
     dst: &vector<u8>,
     x: &Element<Scalar>,
+    g: &Element<Point>,
     h: &Element<Point>,
     x_g: &Element<Point>,
     x_h: &Element<Point>,
     r: &Element<Scalar>,
 ): NIZK {
-    let a = ristretto255::point_mul(r, &ristretto255::generator());
+    let a = ristretto255::point_mul(r, g);
     let b = ristretto255::point_mul(r, h);
-    let c = challenge(dst, h, x_g, x_h, &a, &b);
+    let c = challenge(dst, g, h, x_g, x_h, &a, &b);
     let z = ristretto255::scalar_add(r, &ristretto255::scalar_mul(&c, x));
     NIZK { a, b, z }
 }
@@ -122,11 +125,12 @@ fun prove_nizk_round_trip() {
     let nizk = prove(
         &dst,
         &ristretto255::scalar_from_u64(4),
+        &ristretto255::generator(),
         &tuple1,
         &tuple2,
         &tuple3,
         &ristretto255::scalar_from_u64(91011), // randomness
     );
 
-    assert!(nizk.verify(&dst, &tuple1, &tuple2, &tuple3));
+    assert!(nizk.verify(&dst, &ristretto255::generator(), &tuple1, &tuple2, &tuple3));
 }
