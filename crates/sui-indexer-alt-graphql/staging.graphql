@@ -1465,18 +1465,13 @@ type ExecutionError {
 }
 
 """
-The execution result of a transaction, including the transaction effects and any potential errors due to signing or quorum-driving.
+The execution result of a transaction, including the transaction effects.
 """
 type ExecutionResult {
 	"""
-	The effects of the transaction execution, if successful.
+	The effects of the transaction execution.
 	"""
 	effects: TransactionEffects
-	"""
-	Errors that occurred during execution (e.g., network errors, validation failures).
-	These are distinct from execution failures within the transaction itself.
-	"""
-	errors: [String!]
 }
 
 """
@@ -3771,21 +3766,13 @@ type SharedInput {
 }
 
 """
-The result of simulating a transaction, including the predicted effects and any errors.
+The result of simulating a transaction, including the predicted effects.
 """
 type SimulationResult {
 	"""
 	The predicted effects of the transaction if it were executed.
-	
-	`None` if the simulation failed due to an error.
 	"""
 	effects: TransactionEffects
-	"""
-	Error message if the simulation failed.
-	
-	`None` if the simulation was successful.
-	"""
-	error: String
 	"""
 	The intermediate outputs for each command of the transaction simulation, including contents of mutated references and return values.
 	"""
