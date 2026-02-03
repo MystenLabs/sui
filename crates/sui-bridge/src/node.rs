@@ -172,8 +172,22 @@ async fn start_watchdog(
         );
     }
 
-    let mut observables: Vec<Box<dyn Observable + Send + Sync>> = if vault_monitoring_enabled {
-        // Create vault balance monitors when addresses are valid
+    let eth_bridge_status = EthBridgeStatus::new(
+        eth_provider.clone(),
+        eth_bridge_proxy_address,
+        watchdog_metrics.eth_bridge_paused.clone(),
+    );
+
+    let sui_bridge_status = SuiBridgeStatus::new(
+        sui_client.clone(),
+        watchdog_metrics.sui_bridge_paused.clone(),
+    );
+
+    let mut observables: Vec<Box<dyn Observable + Send + Sync>> =
+        vec![Box::new(eth_bridge_status), Box::new(sui_bridge_status)];
+
+    // Add vault balance monitors only when addresses are valid
+    if vault_monitoring_enabled {
         let eth_vault_balance = EthereumVaultBalance::new(
             eth_provider.clone(),
             vault_address,
@@ -204,60 +218,23 @@ async fn start_watchdog(
         .await
         .unwrap_or_else(|e| panic!("Failed to create wbtc vault balance: {}", e));
 
-        let lbtc_vault_balance = if !lbtc_address.is_zero() {
-            Some(
-                EthereumVaultBalance::new(
-                    eth_provider.clone(),
-                    vault_address,
-                    lbtc_address,
-                    VaultAsset::LBTC,
-                    watchdog_metrics.lbtc_vault_balance.clone(),
-                )
-                .await
-                .unwrap_or_else(|e| panic!("Failed to create lbtc vault balance: {}", e)),
+        observables.push(Box::new(eth_vault_balance));
+        observables.push(Box::new(usdt_vault_balance));
+        observables.push(Box::new(wbtc_vault_balance));
+
+        if !lbtc_address.is_zero() {
+            let lbtc_vault_balance = EthereumVaultBalance::new(
+                eth_provider,
+                vault_address,
+                lbtc_address,
+                VaultAsset::LBTC,
+                watchdog_metrics.lbtc_vault_balance.clone(),
             )
-        } else {
-            None
-        };
-
-        let eth_bridge_status = EthBridgeStatus::new(
-            eth_provider,
-            eth_bridge_proxy_address,
-            watchdog_metrics.eth_bridge_paused.clone(),
-        );
-
-        let sui_bridge_status = SuiBridgeStatus::new(
-            sui_client.clone(),
-            watchdog_metrics.sui_bridge_paused.clone(),
-        );
-
-        let mut obs: Vec<Box<dyn Observable + Send + Sync>> = vec![
-            Box::new(eth_vault_balance),
-            Box::new(usdt_vault_balance),
-            Box::new(wbtc_vault_balance),
-            Box::new(eth_bridge_status),
-            Box::new(sui_bridge_status),
-        ];
-
-        if let Some(balance) = lbtc_vault_balance {
-            obs.push(Box::new(balance));
+            .await
+            .unwrap_or_else(|e| panic!("Failed to create lbtc vault balance: {}", e));
+            observables.push(Box::new(lbtc_vault_balance));
         }
-        obs
-    } else {
-        // When vault addresses are zero (storage layout mismatch), only monitor bridge status
-        let eth_bridge_status = EthBridgeStatus::new(
-            eth_provider,
-            eth_bridge_proxy_address,
-            watchdog_metrics.eth_bridge_paused.clone(),
-        );
-
-        let sui_bridge_status = SuiBridgeStatus::new(
-            sui_client.clone(),
-            watchdog_metrics.sui_bridge_paused.clone(),
-        );
-
-        vec![Box::new(eth_bridge_status), Box::new(sui_bridge_status)]
-    };
+    }
 
     if let Some(watchdog_config) = watchdog_config
         && !watchdog_config.total_supplies.is_empty()
