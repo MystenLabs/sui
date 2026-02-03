@@ -626,10 +626,12 @@ fn update_known_peers(
             continue;
         }
 
-        // If Peer is Private, and not in our configured peers, skip it.
-        if peer_info.access_type == AccessType::Private
-            && !configured_peers.contains_key(&peer_info.peer_id)
-        {
+        // If Peer is Private or Trusted, and not in our configured peers, skip it.
+        let is_restricted = match peer_info.access_type {
+            AccessType::Public => false,
+            AccessType::Private | AccessType::Trusted => true,
+        };
+        if is_restricted && !configured_peers.contains_key(&peer_info.peer_id) {
             continue;
         }
 

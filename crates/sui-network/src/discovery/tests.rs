@@ -76,6 +76,117 @@ async fn get_known_peers() -> Result<()> {
 }
 
 #[tokio::test]
+async fn trusted_peers_shared_only_with_configured_peers() {
+    // Set up a config with a configured peer (via seed_peers).
+    let configured_peer_id = PeerId([42; 32]);
+    let non_configured_peer_id = PeerId([99; 32]);
+
+    let mut config = P2pConfig::default();
+    config.seed_peers.push(SeedPeer {
+        peer_id: Some(configured_peer_id),
+        address: "/dns/localhost/udp/8080".parse().unwrap(),
+    });
+
+    let (builder, server) = Builder::new().config(config).build_internal();
+    let (network, keypair) = crate::utils::build_network_and_key(|router| router);
+    let _ = builder.build(network, keypair);
+
+    let our_info = NodeInfo {
+        peer_id: PeerId([9; 32]),
+        addresses: Vec::new(),
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    };
+    server.state.write().unwrap().our_info = Some(SignedNodeInfo::new_from_data_and_sig(
+        our_info,
+        Ed25519Signature::default(),
+    ));
+
+    // Add a Trusted peer and a Public peer to known_peers.
+    let trusted_peer = NodeInfo {
+        peer_id: PeerId([10; 32]),
+        addresses: Vec::new(),
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Trusted,
+    };
+    let public_peer = NodeInfo {
+        peer_id: PeerId([11; 32]),
+        addresses: Vec::new(),
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    };
+
+    {
+        let mut state = server.state.write().unwrap();
+        state.known_peers.insert(
+            trusted_peer.peer_id,
+            VerifiedSignedNodeInfo::new_unchecked(SignedNodeInfo::new_from_data_and_sig(
+                trusted_peer.clone(),
+                Ed25519Signature::default(),
+            )),
+        );
+        state.known_peers.insert(
+            public_peer.peer_id,
+            VerifiedSignedNodeInfo::new_unchecked(SignedNodeInfo::new_from_data_and_sig(
+                public_peer.clone(),
+                Ed25519Signature::default(),
+            )),
+        );
+    }
+
+    // Request from a configured peer - should see both Public and Trusted peers.
+    let request_from_configured = Request::new(()).with_extension(configured_peer_id);
+    let response = server
+        .get_known_peers_v2(request_from_configured)
+        .await
+        .unwrap()
+        .into_inner();
+    let returned_peer_ids: HashSet<_> = response.known_peers.iter().map(|p| p.peer_id).collect();
+    assert!(
+        returned_peer_ids.contains(&trusted_peer.peer_id),
+        "Configured peer should see Trusted peers"
+    );
+    assert!(
+        returned_peer_ids.contains(&public_peer.peer_id),
+        "Configured peer should see Public peers"
+    );
+
+    // Request from a non-configured peer - should see only Public peer, not Trusted.
+    let request_from_non_configured = Request::new(()).with_extension(non_configured_peer_id);
+    let response = server
+        .get_known_peers_v2(request_from_non_configured)
+        .await
+        .unwrap()
+        .into_inner();
+    let returned_peer_ids: HashSet<_> = response.known_peers.iter().map(|p| p.peer_id).collect();
+    assert!(
+        !returned_peer_ids.contains(&trusted_peer.peer_id),
+        "Non-configured peer should NOT see Trusted peers"
+    );
+    assert!(
+        returned_peer_ids.contains(&public_peer.peer_id),
+        "Non-configured peer should see Public peers"
+    );
+
+    // Request with no peer_id - should see only Public peer, not Trusted.
+    let request_anonymous = Request::new(());
+    let response = server
+        .get_known_peers_v2(request_anonymous)
+        .await
+        .unwrap()
+        .into_inner();
+    let returned_peer_ids: HashSet<_> = response.known_peers.iter().map(|p| p.peer_id).collect();
+    assert!(
+        !returned_peer_ids.contains(&trusted_peer.peer_id),
+        "Anonymous request should NOT see Trusted peers"
+    );
+    assert!(
+        returned_peer_ids.contains(&public_peer.peer_id),
+        "Anonymous request should see Public peers"
+    );
+}
+
+#[tokio::test]
 async fn make_connection_to_seed_peer() -> Result<()> {
     let mut config = P2pConfig::default();
     let (builder, server) = Builder::new().config(config.clone()).build();

@@ -12,7 +12,7 @@ use anemo_tower::rate_limit;
 use fastcrypto::traits::KeyPair;
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, OnceLock, RwLock},
 };
 use sui_config::p2p::P2pConfig;
 use sui_types::crypto::NetworkKeyPair;
@@ -91,8 +91,11 @@ impl Builder {
         .pipe(RwLock::new)
         .pipe(Arc::new);
 
+        let configured_peers = Arc::new(OnceLock::new());
+
         let server = Server {
             state: state.clone(),
+            configured_peers: configured_peers.clone(),
         };
 
         (
@@ -103,6 +106,7 @@ impl Builder {
                 state,
                 mailbox: mailbox_rx,
                 metrics,
+                configured_peers,
             },
             server,
         )
@@ -117,6 +121,7 @@ pub struct UnstartedDiscovery {
     pub(super) state: Arc<RwLock<State>>,
     pub(super) mailbox: mpsc::Receiver<DiscoveryMessage>,
     pub(super) metrics: Metrics,
+    pub(super) configured_peers: Arc<OnceLock<HashMap<PeerId, PeerInfo>>>,
 }
 
 impl UnstartedDiscovery {
@@ -132,16 +137,23 @@ impl UnstartedDiscovery {
             state,
             mailbox,
             metrics,
+            configured_peers,
         } = self;
 
         let discovery_config = config.discovery.clone().unwrap_or_default();
-        let (configured_peers, unidentified_seed_peers) =
+        let (built_configured_peers, unidentified_seed_peers) =
             build_peer_config(&config, &discovery_config);
+
+        // Populate the shared configured_peers for the Server.
+        configured_peers
+            .set(built_configured_peers.clone())
+            .expect("configured_peers should only be set once");
+
         (
             DiscoveryEventLoop {
                 config,
                 discovery_config: Arc::new(discovery_config),
-                configured_peers: Arc::new(configured_peers),
+                configured_peers: Arc::new(built_configured_peers),
                 unidentified_seed_peers,
                 network,
                 keypair,
