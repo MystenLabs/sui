@@ -25,6 +25,7 @@ use crate::{
 use backoff::backoff::Backoff;
 use fastcrypto::hash::{Digest, HashFunction};
 use mysten_common::debug_fatal;
+use mysten_metrics::RegistryID;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::properties::num_files_at_level;
 use rocksdb::{
@@ -136,11 +137,16 @@ impl std::fmt::Debug for Storage {
 pub struct Database {
     storage: Storage,
     metric_conf: MetricConf,
+    registry_id: Option<RegistryID>,
 }
 
 impl Drop for Database {
     fn drop(&mut self) {
-        DBMetrics::get().decrement_num_active_dbs(&self.metric_conf.db_name);
+        let metrics = DBMetrics::get();
+        metrics.decrement_num_active_dbs(&self.metric_conf.db_name);
+        if let Some(registry_id) = self.registry_id {
+            metrics.registry_serivce.remove(registry_id);
+        }
     }
 }
 
@@ -164,11 +170,12 @@ impl Deref for GetResult<'_> {
 }
 
 impl Database {
-    pub fn new(storage: Storage, metric_conf: MetricConf) -> Self {
+    pub fn new(storage: Storage, metric_conf: MetricConf, registry_id: Option<RegistryID>) -> Self {
         DBMetrics::get().increment_num_active_dbs(&metric_conf.db_name);
         Self {
             storage,
             metric_conf,
+            registry_id,
         }
     }
 
@@ -1802,6 +1809,7 @@ pub fn open_cf_opts<P: AsRef<Path>>(
                 underlying: rocksdb,
             }),
             metric_conf,
+            None,
         )))
     })
 }
@@ -1867,6 +1875,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
                 underlying: rocksdb,
             }),
             metric_conf,
+            None,
         )))
     })
 }
