@@ -43,6 +43,9 @@ use sui_types::{
 pub static MAX_UNIT_TEST_INSTRUCTIONS: LazyLock<u64> =
     LazyLock::new(|| ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas());
 
+/// Gas price used for the meter during Move unit tests.
+const TEST_GAS_PRICE: u64 = 500;
+
 #[derive(Parser)]
 #[group(id = "sui-move-test")]
 pub struct Test {
@@ -191,15 +194,12 @@ impl Default for SuiVMTestSetup {
 
 impl SuiVMTestSetup {
     pub fn new() -> Self {
-        let reference_gas_price = 500;
-        let gas_price = reference_gas_price;
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let native_function_table =
             sui_move_natives::all_natives(/* silent */ false, &protocol_config);
-
         Self {
-            gas_price,
-            reference_gas_price,
+            gas_price: TEST_GAS_PRICE,
+            reference_gas_price: TEST_GAS_PRICE,
             protocol_config,
             native_function_table,
         }
