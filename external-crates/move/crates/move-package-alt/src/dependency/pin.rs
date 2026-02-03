@@ -336,7 +336,6 @@ impl From<Pinned> for EphemeralDependencyInfo {
 
         match value.into() {
             LockfileDependencyInfo::OnChain(onchain) => Self::OnChain(onchain),
-            LockfileDependencyInfo::Git(git) => Self::Git(git),
             _ => Self::Local(LocalDepInfo { local }),
         }
     }
