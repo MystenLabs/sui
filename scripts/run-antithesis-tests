@@ -16,7 +16,7 @@ if ! git diff --quiet --exit-code -- $path || ! git diff --cached --quiet --exit
 fi
 
 # parse options
-while getopts t:d:sua:l:T:c:S:p:n:h flag
+while getopts t:d:sua:l:T:c:S:p:n:C:h flag
 do
     case "${flag}" in
         t) TEST_DURATION=${OPTARG};;
@@ -30,6 +30,7 @@ do
         S) STRESS_COMMIT=${OPTARG};;
         p) PROTOCOL_CONFIG_OVERRIDE=${OPTARG};;
         n) TEST_NAME=${OPTARG};;
+        C) SUI_COMMIT=${OPTARG};;
         h) echo "Usage: run-antithesis-tests [options]"
            echo "  -t test_duration        Antithesis test duration in hours (default: 0.25)"
            echo "  -s                      Split version mode (uses merge-base as primary commit)"
@@ -42,6 +43,7 @@ do
            echo "  -S stress_commit        Sui repo sha for stress image"
            echo "  -p protocol_override    Protocol config override (none, testnet, mainnet)"
            echo "  -n test_name            Name to group test history"
+           echo "  -C sui_commit           Sui repo sha (default: current HEAD)"
            exit 0;;
     esac
 done
@@ -50,7 +52,9 @@ if [ -z "$TEST_DURATION" ]; then
   TEST_DURATION=0.25
 fi
 
-branch=$(git rev-parse HEAD)
+if [ -z "$SUI_COMMIT" ]; then
+  SUI_COMMIT=$(git rev-parse HEAD)
+fi
 
 remote_branches=$(git branch -r --contains "$branch" 2>/dev/null)
 if [ -z "$remote_branches" ]; then
@@ -80,9 +84,9 @@ if [ "$SPLIT_VERSION" = true ]; then
   else
     COMMIT=$(git merge-base origin/main HEAD)
   fi
-  ALT_COMMIT=$branch
+  ALT_COMMIT=$SUI_COMMIT
 else
-  COMMIT=$branch
+  COMMIT=$SUI_COMMIT
 fi
 
 cd $SUI_OPS_REPO
