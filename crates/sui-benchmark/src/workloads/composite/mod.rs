@@ -692,7 +692,10 @@ impl AccountState {
             };
             let pool_balance = if let Some((pool_id, _)) = balance_pool {
                 let pool_address: SuiAddress = pool_id.into();
-                proxy.get_sui_address_balance(pool_address).await.unwrap_or(0)
+                proxy
+                    .get_sui_address_balance(pool_address)
+                    .await
+                    .unwrap_or(0)
             } else {
                 0
             };
