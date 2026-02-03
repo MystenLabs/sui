@@ -13,6 +13,7 @@ use crate::{
         make_module_natives,
     },
     pop_arg,
+    shared::SafeIndex as _,
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
@@ -148,7 +149,7 @@ fn native_sub_string(
         // This is safe because we guarantee the bytes to be utf8.
         std::str::from_utf8_unchecked(s_ref.as_slice())
     };
-    let v = Value::vector_u8(s_str.as_bytes()[i..j].iter().cloned());
+    let v = Value::vector_u8(s_str.as_bytes().safe_get(i..j)?.iter().cloned());
     NativeResult::map_partial_vm_result_one(context.gas_used(), Ok(v))
 }
 

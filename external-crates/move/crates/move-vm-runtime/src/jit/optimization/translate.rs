@@ -1,12 +1,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{jit::optimization::ast, validation::verification::ast as Input};
+use crate::{
+    jit::optimization::ast, shared::SafeIndex as _, validation::verification::ast as Input,
+};
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
-use move_binary_format::file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex};
+use move_binary_format::{
+    errors::PartialVMResult,
+    file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex},
+};
 use std::collections::BTreeMap;
 
-pub(crate) fn package(pkg: Input::Package) -> ast::Package {
+pub(crate) fn package(pkg: Input::Package) -> PartialVMResult<ast::Package> {
     let Input::Package {
         original_id,
         modules: in_modules,
@@ -17,18 +22,18 @@ pub(crate) fn package(pkg: Input::Package) -> ast::Package {
     } = pkg;
     let mut modules = BTreeMap::new();
     for (module_id, d_module) in in_modules {
-        modules.insert(module_id, module(d_module));
+        modules.insert(module_id, module(d_module)?);
     }
-    ast::Package {
+    Ok(ast::Package {
         original_id,
         modules,
         version_id,
         type_origin_table,
         linkage_table,
-    }
+    })
 }
 
-fn module(m: Input::Module) -> ast::Module {
+fn module(m: Input::Module) -> PartialVMResult<ast::Module> {
     let Input::Module {
         value: compiled_module,
     } = m;
@@ -36,20 +41,23 @@ fn module(m: Input::Module) -> ast::Module {
         .function_defs()
         .iter()
         .enumerate()
-        .map(|(ndx, fun)| {
+        .map(|(ndx, fun)| -> PartialVMResult<_> {
             let index = FF::FunctionDefinitionIndex::new(ndx as u16);
-            (index, function(index, fun))
+            Ok((index, function(index, fun)?))
         })
-        .collect();
-    ast::Module {
+        .collect::<PartialVMResult<_>>()?;
+    Ok(ast::Module {
         compiled_module,
         functions,
-    }
+    })
 }
 
-fn function(ndx: FunctionDefinitionIndex, fun: &FunctionDefinition) -> ast::Function {
+fn function(
+    ndx: FunctionDefinitionIndex,
+    fun: &FunctionDefinition,
+) -> PartialVMResult<ast::Function> {
     let Some(code) = &fun.code else {
-        return ast::Function { ndx, code: None };
+        return Ok(ast::Function { ndx, code: None });
     };
     let FF::CodeUnit {
         locals: _,
@@ -57,26 +65,31 @@ fn function(ndx: FunctionDefinitionIndex, fun: &FunctionDefinition) -> ast::Func
         jump_tables,
     } = code;
 
-    let code = generate_basic_blocks(code, jump_tables);
+    let code = generate_basic_blocks(code, jump_tables)?;
     let jump_tables = jump_tables.clone();
     let code = Some(ast::Code { code, jump_tables });
-    ast::Function { ndx, code }
+    Ok(ast::Function { ndx, code })
 }
 
 fn generate_basic_blocks(
     input: &[FF::Bytecode],
     jump_tables: &[FF::VariantJumpTable],
-) -> BTreeMap<ast::Label, Vec<ast::Bytecode>> {
+) -> PartialVMResult<BTreeMap<ast::Label, Vec<ast::Bytecode>>> {
     let cfg = VMControlFlowGraph::new(input, jump_tables);
     cfg.blocks()
         .map(|label| {
             let start = cfg.block_start(label) as usize;
             let end = cfg.block_end(label) as usize;
             let label = label as ast::Label;
-            let code = input[start..(end + 1)].iter().map(bytecode).collect();
-            (label, code)
+            // TODO: Try and make this code a bit nicer
+            let code = input
+                .safe_get(start..(end + 1))?
+                .iter()
+                .map(bytecode)
+                .collect();
+            Ok((label, code))
         })
-        .collect::<BTreeMap<ast::Label, Vec<ast::Bytecode>>>()
+        .collect::<PartialVMResult<BTreeMap<ast::Label, Vec<ast::Bytecode>>>>()
 }
 
 fn bytecode(code: &FF::Bytecode) -> ast::Bytecode {

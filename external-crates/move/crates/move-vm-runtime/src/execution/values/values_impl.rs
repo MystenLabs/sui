@@ -6,7 +6,10 @@ use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
     partial_vm_error,
-    shared::views::{ValueView, ValueVisitor},
+    shared::{
+        SafeIndex,
+        views::{ValueView, ValueVisitor},
+    },
 };
 use move_binary_format::{
     errors::*,
@@ -19,10 +22,7 @@ use move_core_types::{
     u256,
     vm_status::sub_status::NFE_VECTOR_ERROR_BASE,
 };
-use std::{
-    fmt::{self, Debug, Display, Formatter},
-    ops::{Index, IndexMut},
-};
+use std::fmt::{self, Debug, Display, Formatter};
 
 macro_rules! debug_write {
     ($($toks: tt)*) => {
@@ -448,19 +448,11 @@ impl std::iter::IntoIterator for FixedSizeVec {
     }
 }
 
-// Implement the `Index` trait to allow immutable indexing.
-impl Index<usize> for FixedSizeVec {
-    type Output = MemBox<Value>;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
-    }
-}
-
-// Implement the `IndexMut` trait to allow mutable indexing.
-impl IndexMut<usize> for FixedSizeVec {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.0[index]
+// Implement `AsRef<[Membox<Value>]>` for `FixedSizeVec` to get access to the `SafeIndex` trait to
+// allow safe immutable indexing.
+impl AsRef<[MemBox<Value>]> for FixedSizeVec {
+    fn as_ref(&self) -> &[MemBox<Value>] {
+        self.as_slice()
     }
 }
 
@@ -787,7 +779,7 @@ impl Reference {
                     vec_2.borrow().prim_vec_ref()?,
                     items1,
                     items2,
-                    items1[*ndx_1] == items2[*ndx_2],
+                    items1.safe_get(*ndx_1)? == items2.safe_get(*ndx_2)?,
                     partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
                         "cannot compare values: {:?}, {:?}",
@@ -808,14 +800,16 @@ impl Reference {
                     ));
                 };
                 match (vec, box_value) {
-                    (PrimVec::VecU8(lhs), Value::U8(rhs)) => Ok(lhs[*ndx] == *rhs),
-                    (PrimVec::VecU16(lhs), Value::U16(rhs)) => Ok(lhs[*ndx] == *rhs),
-                    (PrimVec::VecU32(lhs), Value::U32(rhs)) => Ok(lhs[*ndx] == *rhs),
-                    (PrimVec::VecU64(lhs), Value::U64(rhs)) => Ok(lhs[*ndx] == *rhs),
-                    (PrimVec::VecU128(lhs), Value::U128(rhs)) => Ok(lhs[*ndx] == **rhs),
-                    (PrimVec::VecU256(lhs), Value::U256(rhs)) => Ok(lhs[*ndx] == **rhs),
-                    (PrimVec::VecBool(lhs), Value::Bool(rhs)) => Ok(lhs[*ndx] == *rhs),
-                    (PrimVec::VecAddress(lhs), Value::Address(rhs)) => Ok(lhs[*ndx] == **rhs),
+                    (PrimVec::VecU8(lhs), Value::U8(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
+                    (PrimVec::VecU16(lhs), Value::U16(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
+                    (PrimVec::VecU32(lhs), Value::U32(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
+                    (PrimVec::VecU64(lhs), Value::U64(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
+                    (PrimVec::VecU128(lhs), Value::U128(rhs)) => Ok(lhs.safe_get(*ndx)? == &**rhs),
+                    (PrimVec::VecU256(lhs), Value::U256(rhs)) => Ok(lhs.safe_get(*ndx)? == &**rhs),
+                    (PrimVec::VecBool(lhs), Value::Bool(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
+                    (PrimVec::VecAddress(lhs), Value::Address(rhs)) => {
+                        Ok(lhs.safe_get(*ndx)? == &**rhs)
+                    }
                     _ => Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
                         "cannot compare values: {:?}, {:?}",
@@ -944,7 +938,7 @@ impl StructRef {
             // index into it to obtain the desired field.
             Value::Struct(fixed_vec) => {
                 // fixed_vec is a FixedSizeVec, so we can use the Index impl.
-                let field: &MemBox<Value> = &fixed_vec[index];
+                let field: &MemBox<Value> = fixed_vec.safe_get(index)?;
                 // Return a Value::Reference wrapping a clone of the field.
                 Ok(Value::Reference(Reference::Value(field.ptr_clone())))
             }
@@ -968,7 +962,7 @@ impl StructRef {
         let container = &mut *self.0.borrow_mut();
         match container {
             Value::Struct(fixed_vec) => {
-                fixed_vec.0[index] = mem_box;
+                fixed_vec.0.0[index] = mem_box;
                 Ok(())
             }
             _ => Err(partial_vm_error!(
@@ -1039,7 +1033,7 @@ impl VectorRef {
                     )
                     .with_sub_status(INDEX_OUT_OF_BOUNDS));
                 }
-                let elem = &vec[index];
+                let elem = vec.safe_get(index)?;
                 // Return a reference value to the element.
                 Ok(Value::Reference(Reference::Value(elem.ptr_clone())))
             }
@@ -1094,7 +1088,7 @@ impl SignerRef {
                     ));
                 }
                 // Retrieve the 0th element.
-                let field = &fixed_vec[0];
+                let field = fixed_vec.safe_get(0)?;
                 // Return it as a reference by cloning its pointer.
                 Ok(Value::Reference(Reference::Value(field.ptr_clone())))
             }
@@ -1793,11 +1787,9 @@ impl Struct {
 }
 
 // Implement the `Index` trait to allow immutable indexing.
-impl Index<usize> for Struct {
-    type Output = MemBox<Value>;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
+impl AsRef<[MemBox<Value>]> for Struct {
+    fn as_ref(&self) -> &[MemBox<Value>] {
+        self.0.as_slice()
     }
 }
 
@@ -2448,9 +2440,13 @@ impl Display for Reference {
             Reference::Indexed(index_ref) => {
                 let (vec, ndx) = index_ref.as_ref();
                 let Value::PrimVec(vec) = &*vec.borrow() else {
-                    unreachable!()
+                    return Err(fmt::Error);
                 };
-                match_prim_vec!(vec, vec, write!(f, "{}", vec[*ndx]))
+                match_prim_vec!(
+                    vec,
+                    vec,
+                    write!(f, "{}", vec.safe_get(*ndx).map_err(|_| fmt::Error)?)
+                )
             }
         }
     }
@@ -2821,7 +2817,10 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveTypeLayout, Value> {
                 }
                 (AnnotatedValue {
                     layout: &MoveTypeLayout::Address,
-                    val: &*struct_[0].borrow(),
+                    val: &*struct_
+                        .safe_get(0)
+                        .map_err(|e| invariant_violation::<S>(e.to_string()))?
+                        .borrow(),
                 })
                 .serialize(serializer)
             }
@@ -2868,7 +2867,11 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, Fi
             *tag as u8
         };
 
-        let fields = &self.layout.0[tag as usize];
+        let fields = &self
+            .layout
+            .0
+            .safe_get(tag as usize)
+            .map_err(|e| invariant_violation::<S>(e.to_string()))?;
         if fields.len() != values.len() {
             return Err(invariant_violation::<S>(format!(
                 "cannot serialize variant value {:?} as {:?} -- number of fields mismatch",
@@ -3153,14 +3156,14 @@ impl PrimVec {
         depth: usize,
     ) -> PartialVMResult<()> {
         match self {
-            PrimVec::VecU8(xs) => visitor.visit_u8(depth, xs[ndx]),
-            PrimVec::VecU16(xs) => visitor.visit_u16(depth, xs[ndx]),
-            PrimVec::VecU32(xs) => visitor.visit_u32(depth, xs[ndx]),
-            PrimVec::VecU64(xs) => visitor.visit_u64(depth, xs[ndx]),
-            PrimVec::VecU128(xs) => visitor.visit_u128(depth, xs[ndx]),
-            PrimVec::VecU256(xs) => visitor.visit_u256(depth, xs[ndx]),
-            PrimVec::VecBool(xs) => visitor.visit_bool(depth, xs[ndx]),
-            PrimVec::VecAddress(xs) => visitor.visit_address(depth, xs[ndx]),
+            PrimVec::VecU8(xs) => visitor.visit_u8(depth, *xs.safe_get(ndx)?),
+            PrimVec::VecU16(xs) => visitor.visit_u16(depth, *xs.safe_get(ndx)?),
+            PrimVec::VecU32(xs) => visitor.visit_u32(depth, *xs.safe_get(ndx)?),
+            PrimVec::VecU64(xs) => visitor.visit_u64(depth, *xs.safe_get(ndx)?),
+            PrimVec::VecU128(xs) => visitor.visit_u128(depth, *xs.safe_get(ndx)?),
+            PrimVec::VecU256(xs) => visitor.visit_u256(depth, *xs.safe_get(ndx)?),
+            PrimVec::VecBool(xs) => visitor.visit_bool(depth, *xs.safe_get(ndx)?),
+            PrimVec::VecAddress(xs) => visitor.visit_address(depth, *xs.safe_get(ndx)?),
         }
     }
 }
@@ -3331,7 +3334,7 @@ impl Vector {
         impl ValueView for ElemView<'_> {
             fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 match &self.container {
-                    Value::Vec(v) => v[self.ndx].borrow().visit(visitor),
+                    Value::Vec(v) => v.safe_get(self.ndx)?.borrow().visit(visitor),
                     Value::PrimVec(v) => v.visit_indexed(self.ndx, visitor, 0),
                     _ => unreachable!(),
                 }
@@ -3540,11 +3543,11 @@ use move_core_types::runtime_value::{
 };
 
 impl Value {
-    pub fn as_move_value(&self, layout: &MoveTypeLayout) -> RuntimeValue {
+    pub fn as_move_value(&self, layout: &MoveTypeLayout) -> PartialVMResult<RuntimeValue> {
         use MoveTypeLayout as L;
         use PrimVec as PV;
 
-        match (layout, self) {
+        Ok(match (layout, self) {
             (L::U8, Value::U8(x)) => RuntimeValue::U8(*x),
             (L::U16, Value::U16(x)) => RuntimeValue::U16(*x),
             (L::U32, Value::U32(x)) => RuntimeValue::U32(*x),
@@ -3559,10 +3562,10 @@ impl Value {
                 let MoveEnumLayout(variants) = &**enum_layout;
                 let (tag, values) = entry.as_ref();
                 let tag = *tag; // Simply copy the u16 value, no need for dereferencing
-                let field_layouts = &variants[tag as usize];
+                let field_layouts = variants.safe_get(tag as usize)?;
                 let mut fields = vec![];
                 for (v, field_layout) in values.iter().zip(field_layouts) {
-                    fields.push(v.borrow().as_move_value(field_layout));
+                    fields.push(v.borrow().as_move_value(field_layout)?);
                 }
                 RuntimeValue::Variant(RuntimeVariant { tag, fields })
             }
@@ -3571,7 +3574,7 @@ impl Value {
             (L::Struct(struct_layout), Value::Struct(values)) => {
                 let mut fields = vec![];
                 for (v, field_layout) in values.iter().zip(struct_layout.fields().iter()) {
-                    fields.push(v.borrow().as_move_value(field_layout));
+                    fields.push(v.borrow().as_move_value(field_layout)?);
                 }
                 RuntimeValue::Struct(RuntimeStruct::new(fields))
             }
@@ -3581,7 +3584,7 @@ impl Value {
                 values
                     .iter()
                     .map(|v| v.borrow().as_move_value(inner_layout.as_ref()))
-                    .collect(),
+                    .collect::<PartialVMResult<_>>()?,
             ),
             (L::Vector(inner_layout), Value::PrimVec(values)) => {
                 use RuntimeValue as MV;
@@ -3626,14 +3629,14 @@ impl Value {
                 if values.len() != 1 {
                     panic!("Unexpected signer layout: {:?}", values);
                 }
-                match &*values[0].borrow() {
+                match &*values.safe_get(0)?.borrow() {
                     Value::Address(a) => RuntimeValue::Signer(**a),
                     v => panic!("Unexpected non-address while converting signer: {:?}", v),
                 }
             }
 
             (layout, val) => panic!("Cannot convert value {:?} as {:?}", val, layout),
-        }
+        })
     }
 }
 
@@ -3718,7 +3721,7 @@ impl Value {
                 if values.len() != 1 {
                     return None;
                 }
-                match &*values[0].borrow() {
+                match &*values.safe_get(0).ok()?.borrow() {
                     Value::Address(a) => Some(AV::Signer(**a)),
                     _ => None,
                 }

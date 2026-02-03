@@ -373,7 +373,7 @@ mod testing {
                     // vector<T> to a MoveValue and print it.
                     _ => {
                         let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
-                        let mv = val.as_move_value(&ty_layout).decorate(&ann_ty_layout);
+                        let mv = val.as_move_value(&ty_layout)?.decorate(&ann_ty_layout);
                         print_move_value(
                             out,
                             mv,
@@ -388,7 +388,7 @@ mod testing {
             }
             // For a struct, we convert it to a MoveValue annotated with its field names and types and print it
             R::MoveTypeLayout::Struct(_) => {
-                let move_struct = match val.as_move_value(&ty_layout) {
+                let move_struct = match val.as_move_value(&ty_layout)? {
                     R::MoveValue::Struct(s) => s,
                     _ => {
                         return Err(partial_vm_error!(
@@ -419,7 +419,7 @@ mod testing {
                 )?;
             }
             R::MoveTypeLayout::Enum(_) => {
-                let move_struct = match val.as_move_value(&ty_layout) {
+                let move_struct = match val.as_move_value(&ty_layout)? {
                     R::MoveValue::Variant(v) => v,
                     _ => {
                         return Err(partial_vm_error!(
@@ -454,7 +454,7 @@ mod testing {
                 let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
                 print_move_value(
                     out,
-                    val.as_move_value(&ty_layout).decorate(&ann_ty_layout),
+                    val.as_move_value(&ty_layout)?.decorate(&ann_ty_layout),
                     move_std_addr,
                     depth,
                     canonicalize,

@@ -10,6 +10,7 @@
 use crate::{
     partial_vm_error,
     shared::{
+        SafeIndex,
         gas::{GasMeter, SimpleInstruction},
         views::{SizeConfig, TypeView, ValueView},
     },
@@ -79,10 +80,10 @@ pub struct CostTable {
 
 impl CostTable {
     #[inline]
-    pub fn instruction_cost(&self, instr_index: u8) -> &GasCost {
+    pub fn instruction_cost(&self, instr_index: u8) -> PartialVMResult<&GasCost> {
         // The instruction index starts at 1.
         debug_assert!(instr_index > 0 && instr_index <= (self.instruction_table.len() as u8));
-        &self.instruction_table[(instr_index - 1) as usize]
+        self.instruction_table.safe_get((instr_index - 1) as usize)
     }
 }
 
@@ -180,7 +181,7 @@ impl<'a> GasStatus<'a> {
     fn charge_instr(&mut self, opcode: Opcodes) -> PartialVMResult<()> {
         self.deduct_gas(
             self.cost_table
-                .instruction_cost(opcode as u8)
+                .instruction_cost(opcode as u8)?
                 .total()
                 .into(),
         )
@@ -196,7 +197,7 @@ impl<'a> GasStatus<'a> {
         let size = std::cmp::max(1.into(), size);
         self.deduct_gas(
             InternalGasPerAbstractMemoryUnit::new(
-                self.cost_table.instruction_cost(opcode as u8).total(),
+                self.cost_table.instruction_cost(opcode as u8)?.total(),
             )
             .mul(size),
         )

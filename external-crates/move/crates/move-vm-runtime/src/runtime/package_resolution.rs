@@ -13,7 +13,7 @@ use crate::{
     natives::functions::NativeFunctions,
     partial_vm_error,
     runtime::telemetry::TransactionTelemetryContext,
-    shared::{logging::expect_no_verification_errors, types::VersionId},
+    shared::{SafeIndex, logging::expect_no_verification_errors, types::VersionId},
     validation::{validate_package, verification},
 };
 use move_binary_format::errors::{Location, VMResult};
@@ -175,12 +175,12 @@ fn load_packages(
             .enumerate()
             .map(|(idx, pkg)| {
                 pkg.ok_or_else(|| {
-                    partial_vm_error!(
-                        LINKER_ERROR,
-                        "Cannot find package {:?} in data cache",
-                        ids[idx],
-                    )
-                    .finish(Location::Package(ids[idx]))
+                    let addr = match ids.safe_get(idx) {
+                        Ok(addr) => addr,
+                        Err(e) => return e.finish(Location::Undefined),
+                    };
+                    partial_vm_error!(LINKER_ERROR, "Cannot find package {addr:?} in data cache")
+                        .finish(Location::Package(*addr))
                 })
             })
             .collect::<VMResult<Vec<_>>>()?,
