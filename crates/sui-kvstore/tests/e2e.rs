@@ -391,7 +391,7 @@ impl TestHarness {
                     .client
                     .get_latest_epoch()
                     .await
-                    .is_ok_and(|e| e.is_some_and(|e| e.epoch >= epoch));
+                    .is_ok_and(|e| e.is_some_and(|e| e.epoch.is_some_and(|ep| ep >= epoch)));
                 if cp_ok && epoch_ok {
                     break;
                 }
@@ -538,7 +538,7 @@ async fn test_indexer_e2e() -> Result<()> {
         .get_epoch(0)
         .await?
         .expect("epoch 0");
-    assert_eq!(e0.epoch, 0);
+    assert_eq!(e0.epoch, Some(0));
     assert!(e0.start_checkpoint.is_some());
     assert!(e0.start_timestamp_ms.is_some());
     assert!(e0.reference_gas_price.is_some());
@@ -564,13 +564,13 @@ async fn test_indexer_e2e() -> Result<()> {
         .get_epoch(1)
         .await?
         .expect("epoch 1");
-    assert_eq!(e1.epoch, 1);
+    assert_eq!(e1.epoch, Some(1));
     assert!(e1.start_checkpoint.is_some());
     assert!(e1.start_timestamp_ms.is_some());
 
     let latest = harness.bigtable_client().get_latest_epoch().await?;
     assert!(latest.is_some());
-    assert!(latest.unwrap().epoch >= 1);
+    assert!(latest.unwrap().epoch.unwrap() >= 1);
 
     Ok(())
 }

@@ -10,7 +10,7 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
 };
 
-use crate::Checkpoint;
+use crate::CheckpointData;
 
 pub mod col {
     pub const SUMMARY: &str = "s";
@@ -36,7 +36,7 @@ pub fn encode(
     ])
 }
 
-pub fn decode(row: &[(Bytes, Bytes)]) -> Result<Checkpoint> {
+pub fn decode(row: &[(Bytes, Bytes)]) -> Result<CheckpointData> {
     let mut summary = None;
     let mut contents = None;
     let mut signatures = None;
@@ -50,7 +50,7 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<Checkpoint> {
         }
     }
 
-    Ok(Checkpoint {
+    Ok(CheckpointData {
         summary: summary.context("summary field is missing")?,
         contents: contents.context("contents field is missing")?,
         signatures: signatures.context("signatures field is missing")?,

@@ -96,7 +96,7 @@ impl Handler for EpochLegacyPipeline {
 
         // Update previous epoch with end info if needed (read-modify-write)
         if let Some(prev_update) = &epoch_batch.prev_epoch_update {
-            let mut prev = conn
+            let prev_data = conn
                 .client()
                 .get_epoch(prev_update.epoch_id)
                 .await?
@@ -106,8 +106,16 @@ impl Handler for EpochLegacyPipeline {
                         prev_update.epoch_id, epoch_batch.epoch_info.epoch
                     )
                 })?;
-            prev.end_checkpoint = prev_update.end_checkpoint;
-            prev.end_timestamp_ms = prev_update.end_timestamp_ms;
+            let prev = EpochInfo {
+                epoch: prev_data.epoch.context("missing epoch")?,
+                protocol_version: prev_data.protocol_version,
+                start_timestamp_ms: prev_data.start_timestamp_ms,
+                start_checkpoint: prev_data.start_checkpoint,
+                reference_gas_price: prev_data.reference_gas_price,
+                system_state: prev_data.system_state,
+                end_checkpoint: prev_update.end_checkpoint,
+                end_timestamp_ms: prev_update.end_timestamp_ms,
+            };
             entries.push(epoch_to_entry(&prev)?);
         }
 

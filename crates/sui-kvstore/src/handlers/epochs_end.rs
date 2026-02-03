@@ -3,10 +3,10 @@
 
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::EpochEndData;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::handlers::BigTableProcessor;
 use crate::tables;
@@ -30,15 +30,18 @@ impl Processor for EpochEndPipeline {
         }
 
         let epoch_id = epoch_info.epoch - 1;
-        let end_data = EpochEndData {
-            end_timestamp_ms: epoch_info.start_timestamp_ms,
-            end_checkpoint: epoch_info.start_checkpoint.map(|sq| sq - 1),
-        };
+        let start_checkpoint = epoch_info
+            .start_checkpoint
+            .context("missing start_checkpoint for epoch end")?;
+        let end_timestamp_ms = epoch_info
+            .start_timestamp_ms
+            .context("missing start_timestamp_ms for epoch end")?;
+        let end_checkpoint = start_checkpoint - 1;
 
         let entry = tables::make_entry(
             tables::epochs::encode_key(epoch_id),
-            tables::epochs::encode_end(&end_data)?,
-            end_data.end_timestamp_ms,
+            tables::epochs::encode_end(end_timestamp_ms, end_checkpoint),
+            Some(end_timestamp_ms),
         );
 
         Ok(vec![entry])

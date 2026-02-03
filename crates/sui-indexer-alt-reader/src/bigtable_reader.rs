@@ -10,7 +10,7 @@ use anyhow::bail;
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_kvstore::BigTableClient;
-use sui_kvstore::Checkpoint;
+use sui_kvstore::CheckpointData;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TransactionEventsData;
@@ -96,7 +96,7 @@ impl BigtableReader {
     pub(crate) async fn checkpoints(
         &self,
         keys: &[CheckpointSequenceNumber],
-    ) -> anyhow::Result<Vec<Checkpoint>> {
+    ) -> anyhow::Result<Vec<CheckpointData>> {
         measure("checkpoints", &keys, self.0.clone().get_checkpoints(keys)).await
     }
 

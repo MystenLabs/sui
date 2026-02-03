@@ -10,6 +10,7 @@ use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::EpochData;
 use anyhow::Context as _;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -27,7 +28,6 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
-use sui_types::storage::EpochInfo;
 use sui_types::storage::ObjectKey;
 use tonic::body::Body;
 use tonic::codegen::Service;
@@ -35,7 +35,7 @@ use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 
-use crate::Checkpoint;
+use crate::CheckpointData;
 use crate::KeyValueStoreReader;
 use crate::TransactionData;
 use crate::TransactionEventsData;
@@ -603,7 +603,7 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_checkpoints(
         &mut self,
         sequence_numbers: &[CheckpointSequenceNumber],
-    ) -> Result<Vec<Checkpoint>> {
+    ) -> Result<Vec<CheckpointData>> {
         let keys = sequence_numbers
             .iter()
             .copied()
@@ -622,7 +622,7 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_checkpoint_by_digest(
         &mut self,
         digest: CheckpointDigest,
-    ) -> Result<Option<Checkpoint>> {
+    ) -> Result<Option<CheckpointData>> {
         let key = tables::checkpoints_by_digest::encode_key(&digest);
         let mut response = self
             .multi_get(tables::checkpoints_by_digest::NAME, vec![key], None)
@@ -694,7 +694,7 @@ impl KeyValueStoreReader for BigTableClient {
         Ok(None)
     }
 
-    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>> {
+    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochData>> {
         let key = tables::epochs::encode_key(epoch_id);
         match self
             .multi_get(tables::epochs::NAME, vec![key], None)
@@ -706,7 +706,7 @@ impl KeyValueStoreReader for BigTableClient {
         }
     }
 
-    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>> {
+    async fn get_latest_epoch(&mut self) -> Result<Option<EpochData>> {
         let upper_limit = tables::epochs::encode_key_upper_bound();
         match self
             .reversed_scan(tables::epochs::NAME, upper_limit)

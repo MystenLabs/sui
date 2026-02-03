@@ -58,7 +58,6 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
-use sui_types::storage::EpochInfo;
 use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
 
@@ -85,7 +84,7 @@ pub struct BigTableIndexer {
 }
 
 #[derive(Clone, Debug)]
-pub struct Checkpoint {
+pub struct CheckpointData {
     pub summary: CheckpointSummary,
     pub contents: CheckpointContents,
     pub signatures: AuthorityStrongQuorumSignInfo,
@@ -109,33 +108,16 @@ pub struct TransactionEventsData {
     pub timestamp_ms: u64,
 }
 
-/// Data written at epoch start (before transactions are processed)
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EpochStartData {
-    pub epoch: u64,
+/// Epoch data returned by reader methods.
+/// All fields are optional to support partial column queries.
+#[derive(Clone, Debug, Default)]
+pub struct EpochData {
+    pub epoch: Option<u64>,
     pub protocol_version: Option<u64>,
     pub start_timestamp_ms: Option<u64>,
     pub start_checkpoint: Option<u64>,
     pub reference_gas_price: Option<u64>,
     pub system_state: Option<sui_types::sui_system_state::SuiSystemState>,
-}
-
-impl From<&EpochInfo> for EpochStartData {
-    fn from(info: &EpochInfo) -> Self {
-        Self {
-            epoch: info.epoch,
-            protocol_version: info.protocol_version,
-            start_timestamp_ms: info.start_timestamp_ms,
-            start_checkpoint: info.start_checkpoint,
-            reference_gas_price: info.reference_gas_price,
-            system_state: info.system_state.clone(),
-        }
-    }
-}
-
-/// Data written at epoch end (after the last transaction of the epoch)
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EpochEndData {
     pub end_timestamp_ms: Option<u64>,
     pub end_checkpoint: Option<u64>,
 }
@@ -160,16 +142,16 @@ pub trait KeyValueStoreReader {
     async fn get_checkpoints(
         &mut self,
         sequence_numbers: &[CheckpointSequenceNumber],
-    ) -> Result<Vec<Checkpoint>>;
+    ) -> Result<Vec<CheckpointData>>;
     async fn get_checkpoint_by_digest(
         &mut self,
         digest: CheckpointDigest,
-    ) -> Result<Option<Checkpoint>>;
+    ) -> Result<Option<CheckpointData>>;
     async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber>;
     async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>>;
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
-    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>>;
-    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>>;
+    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochData>>;
+    async fn get_latest_epoch(&mut self) -> Result<Option<EpochData>>;
     async fn get_events_for_transactions(
         &mut self,
         keys: &[TransactionDigest],
