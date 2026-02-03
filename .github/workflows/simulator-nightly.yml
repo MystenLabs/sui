@@ -140,7 +140,7 @@ jobs:
       run: echo "sui_sha=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
     - name: Dispatch to sui-operations for notification
-      uses: peter-evans/repository-dispatch@8e2aaa08bcf5d9a5ef61e3b5ecc11e8e41cbcc48 # pin@v3.0.0
+      uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
       with:
         token: ${{ secrets.OPERATIONS_DISPATCH_TOKEN }}
         repository: MystenLabs/sui-operations
