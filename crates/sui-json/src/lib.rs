@@ -105,7 +105,7 @@ impl SuiJsonValue {
                 // Must be castable to u64
                 if !n.is_u64() {
                     return Err(anyhow!(
-                        "{n} not allowed. Number must be unsigned integer of at most u32"
+                        "{n} not allowed. Number must be an unsigned integer"
                     ));
                 }
             }
@@ -240,7 +240,7 @@ impl SuiJsonValue {
             // Bool to Bool is simple
             (JsonValue::Bool(b), MoveTypeLayout::Bool) => R::MoveValue::Bool(*b),
 
-            // In constructor, we have already checked that the JSON number is unsigned int of at most U32
+            // In constructor, we have already checked that the JSON number is a non-negative integer (u64)
             (JsonValue::Number(n), MoveTypeLayout::U8) => match n.as_u64() {
                 Some(x) => R::MoveValue::U8(u8::try_from(x)?),
                 None => return Err(anyhow!("{} is not a valid number. Only u8 allowed.", n)),
