@@ -246,7 +246,6 @@ impl DagBuilder {
                 to_commit,
                 last_timestamp_ms,
                 commit.reference(),
-                true,
             );
 
             self.committed_sub_dags.push((sub_dag, commit));

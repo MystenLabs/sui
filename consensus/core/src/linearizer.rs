@@ -114,9 +114,6 @@ impl Linearizer {
             to_commit,
             timestamp_ms,
             commit.reference(),
-            self.context
-                .protocol_config
-                .consensus_always_accept_system_transactions(),
         );
 
         (sub_dag, commit)

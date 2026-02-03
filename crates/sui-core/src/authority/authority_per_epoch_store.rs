@@ -2598,7 +2598,7 @@ impl AuthorityPerEpochStore {
         lock: Option<&RwLockReadGuard<ReconfigState>>,
     ) -> SuiResult {
         let key_value_pairs = transactions.iter().filter_map(|tx| {
-            if tx.is_user_transaction() {
+            if tx.is_mfp_transaction() {
                 // UserTransaction does not need to be resubmitted on recovery.
                 None
             } else {

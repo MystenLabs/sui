@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt::Display};
+use std::{cmp::Ordering, fmt::Display};
 
 use consensus_core::{BlockAPI, CommitRef, VerifiedBlock};
 use consensus_types::block::{BlockRef, TransactionIndex};
@@ -89,11 +89,7 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
                     .unwrap_or(&no_transaction);
                 (
                     block.reference(),
-                    parse_block_transactions(
-                        block,
-                        rejected_transactions,
-                        self.always_accept_system_transactions,
-                    ),
+                    parse_block_transactions(block, rejected_transactions),
                 )
             })
             .collect()
@@ -128,14 +124,11 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
 pub(crate) fn parse_block_transactions(
     block: &VerifiedBlock,
     rejected_transactions: &[TransactionIndex],
-    always_accept_system_transactions: bool,
 ) -> Vec<ParsedTransaction> {
     let round = block.round();
     let authority = block.author().value() as AuthorityIndex;
 
-    // rejected_transactions contains sorted indices and can be checked more efficiently.
-    // But for simplicity, check rejection status from a BTreeSet.
-    let rejected_transaction_indices = BTreeSet::from_iter(rejected_transactions.iter().cloned());
+    let mut rejected_idx = 0;
     block
         .transactions()
         .iter().enumerate()
@@ -146,7 +139,22 @@ pub(crate) fn parse_block_transactions(
                     panic!("Failed to deserialize sequenced consensus transaction(this should not happen) {err} from {authority} at {round}");
                 },
             };
-            let rejected = rejected_transaction_indices.contains(&(index as TransactionIndex)) && (transaction.is_user_transaction() || !always_accept_system_transactions);
+            let rejected = if rejected_idx < rejected_transactions.len() {
+                match (index as TransactionIndex).cmp(&rejected_transactions[rejected_idx]) {
+                    Ordering::Less => {
+                        false
+                    },
+                    Ordering::Equal => {
+                        rejected_idx += 1;
+                        true
+                    },
+                    Ordering::Greater => {
+                        panic!("Rejected transaction indices are not in order. Block {block:?}, rejected transactions: {rejected_transactions:?}");
+                    },
+                }
+            } else {
+                false
+            };
             ParsedTransaction {
                 transaction,
                 rejected,

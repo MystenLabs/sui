@@ -676,7 +676,6 @@ mod tests {
             vec![],
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
-            true,
         )];
         dag_state.write().add_scoring_subdags(unscored_subdags);
 
@@ -772,7 +771,6 @@ mod tests {
             blocks,
             context.clock.timestamp_utc_ms(),
             last_commit.reference(),
-            true,
         )];
 
         let mut dag_state_write = dag_state.write();

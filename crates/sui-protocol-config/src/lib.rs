@@ -975,10 +975,6 @@ struct FeatureFlags {
     // If true, split checkpoints in consensus handler.
     #[serde(skip_serializing_if = "is_false")]
     split_checkpoints_in_consensus_handler: bool,
-
-    // If true, always accept committed system transactions.
-    #[serde(skip_serializing_if = "is_false")]
-    consensus_always_accept_system_transactions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2567,11 +2563,6 @@ impl ProtocolConfig {
 
     pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
         self.feature_flags.split_checkpoints_in_consensus_handler
-    }
-
-    pub fn consensus_always_accept_system_transactions(&self) -> bool {
-        self.feature_flags
-            .consensus_always_accept_system_transactions
     }
 }
 
@@ -4522,8 +4513,6 @@ impl ProtocolConfig {
                     }
                     cfg.feature_flags.validate_zklogin_public_identifier = true;
                     cfg.feature_flags.fix_checkpoint_signature_mapping = true;
-                    cfg.feature_flags
-                        .consensus_always_accept_system_transactions = true;
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }

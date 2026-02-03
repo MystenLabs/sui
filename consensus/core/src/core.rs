@@ -27,8 +27,8 @@ use tracing::{debug, info, trace, warn};
 
 #[cfg(test)]
 use crate::{
-    CommitConsumerArgs, TransactionClient, block_verifier::NoopBlockVerifier,
-    storage::mem_store::MemStore,
+    CommitConsumerArgs, TransactionClient, block::CertifiedBlocksOutput,
+    block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
 };
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
@@ -1389,6 +1389,7 @@ pub(crate) struct CoreTextFixture {
     pub(crate) signal_receivers: CoreSignalsReceivers,
     pub(crate) block_receiver: broadcast::Receiver<ExtendedBlock>,
     pub(crate) _commit_output_receiver: UnboundedReceiver<CommittedSubDag>,
+    pub(crate) _blocks_output_receiver: UnboundedReceiver<CertifiedBlocksOutput>,
     pub(crate) dag_state: Arc<RwLock<DagState>>,
     pub(crate) store: Arc<MemStore>,
 }
@@ -1433,7 +1434,8 @@ impl CoreTextFixture {
         // Need at least one subscriber to the block broadcast channel.
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, commit_output_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, commit_output_receiver, blocks_output_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1466,6 +1468,7 @@ impl CoreTextFixture {
             signal_receivers,
             block_receiver,
             _commit_output_receiver: commit_output_receiver,
+            _blocks_output_receiver: blocks_output_receiver,
             dag_state,
             store,
         }
@@ -1561,7 +1564,8 @@ mod test {
             blocks_sender,
         );
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1701,7 +1705,8 @@ mod test {
             blocks_sender,
         );
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1818,7 +1823,8 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2046,7 +2052,8 @@ mod test {
             blocks_sender,
         );
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2213,7 +2220,8 @@ mod test {
             blocks_sender,
         );
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2312,7 +2320,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2669,7 +2678,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2968,7 +2978,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -3064,7 +3075,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -3514,7 +3526,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,

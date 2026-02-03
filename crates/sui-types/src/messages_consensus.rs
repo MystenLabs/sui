@@ -790,12 +790,20 @@ impl ConsensusTransaction {
         )
     }
 
-    pub fn is_user_transaction(&self) -> bool {
-        // CertifiedTransaction is unused and not accepted now.
+    pub fn is_mfp_transaction(&self) -> bool {
         matches!(
             self.kind,
             ConsensusTransactionKind::UserTransaction(_)
                 | ConsensusTransactionKind::UserTransactionV2(_)
+        )
+    }
+
+    pub fn is_user_transaction(&self) -> bool {
+        matches!(
+            self.kind,
+            ConsensusTransactionKind::UserTransaction(_)
+                | ConsensusTransactionKind::UserTransactionV2(_)
+                | ConsensusTransactionKind::CertifiedTransaction(_)
         )
     }
 

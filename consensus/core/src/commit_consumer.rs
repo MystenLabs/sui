@@ -34,9 +34,13 @@ impl CommitConsumerArgs {
     pub fn new(
         replay_after_commit_index: CommitIndex,
         consumer_last_processed_commit_index: CommitIndex,
-    ) -> (Self, UnboundedReceiver<CommittedSubDag>) {
+    ) -> (
+        Self,
+        UnboundedReceiver<CommittedSubDag>,
+        UnboundedReceiver<CertifiedBlocksOutput>,
+    ) {
         let (commit_sender, commit_receiver) = unbounded_channel("consensus_commit_output");
-        let (block_sender, _block_receiver) = unbounded_channel("consensus_block_output");
+        let (block_sender, block_receiver) = unbounded_channel("consensus_block_output");
 
         let monitor = Arc::new(CommitConsumerMonitor::new(
             replay_after_commit_index,
@@ -51,6 +55,7 @@ impl CommitConsumerArgs {
                 monitor,
             },
             commit_receiver,
+            block_receiver,
         )
     }
 

@@ -287,7 +287,7 @@ pub(crate) async fn make_authority(
     let protocol_keypair = keypairs[authority_index].1.clone();
     let network_keypair = keypairs[authority_index].0.clone();
 
-    let (commit_consumer, commit_receiver) = CommitConsumerArgs::new(0, 0);
+    let (commit_consumer, commit_receiver, _) = CommitConsumerArgs::new(0, 0);
     let commit_consumer_monitor = commit_consumer.monitor();
 
     let authority = ConsensusAuthority::start(
