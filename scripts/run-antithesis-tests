@@ -15,8 +15,8 @@ if ! git diff --quiet --exit-code -- $path || ! git diff --cached --quiet --exit
   echo "Warning: git repo is dirty"
 fi
 
-# parse -t option to get test duration, -s flag for split version, -d flag for description, and -u flag for upgrade
-while getopts t:d:sua:l:h flag
+# parse options
+while getopts t:d:sua:l:T:c:S:p:n:h flag
 do
     case "${flag}" in
         t) TEST_DURATION=${OPTARG};;
@@ -25,7 +25,24 @@ do
         u) UPGRADE=true;;
         a) ALT_COMMIT=${OPTARG};;
         l) LOG_LEVEL=${OPTARG};;
-        h) echo "Usage: run-antithesis-tests [-t test_duration] [-s] [-d description] [-u] [-a alt_commit] [-l log_level]"; exit 0;;
+        T) TIDEHUNTER_COMMIT=${OPTARG};;
+        c) CONFIG_COMMIT=${OPTARG};;
+        S) STRESS_COMMIT=${OPTARG};;
+        p) PROTOCOL_CONFIG_OVERRIDE=${OPTARG};;
+        n) TEST_NAME=${OPTARG};;
+        h) echo "Usage: run-antithesis-tests [options]"
+           echo "  -t test_duration        Antithesis test duration in hours (default: 0.25)"
+           echo "  -s                      Split version mode (uses merge-base as primary commit)"
+           echo "  -d description          Description of the test run"
+           echo "  -u                      Upgrade test type"
+           echo "  -a alt_commit           Additional sha for split-cluster upgrade test"
+           echo "  -l log_level            Logging filter for sui-node (no spaces allowed)"
+           echo "  -T tidehunter_commit    Tidehunter repo sha (if unset, rocksdb will be used)"
+           echo "  -c config_commit        Sha for config image"
+           echo "  -S stress_commit        Sui repo sha for stress image"
+           echo "  -p protocol_override    Protocol config override (none, testnet, mainnet)"
+           echo "  -n test_name            Name to group test history"
+           exit 0;;
     esac
 done
 
@@ -89,7 +106,27 @@ if [ -n "$LOG_LEVEL" ]; then
     echo "Error: LOG_LEVEL cannot contain spaces"
     exit 1
   fi
-  cmd="$cmd -f log_level=$LOG_LEVEL"
+  cmd="$cmd -f rust_log_filter=$LOG_LEVEL"
+fi
+
+if [ -n "$TIDEHUNTER_COMMIT" ]; then
+  cmd="$cmd -f tidehunter_commit=$TIDEHUNTER_COMMIT"
+fi
+
+if [ -n "$CONFIG_COMMIT" ]; then
+  cmd="$cmd -f config_commit=$CONFIG_COMMIT"
+fi
+
+if [ -n "$STRESS_COMMIT" ]; then
+  cmd="$cmd -f stress_commit=$STRESS_COMMIT"
+fi
+
+if [ -n "$PROTOCOL_CONFIG_OVERRIDE" ]; then
+  cmd="$cmd -f protocol_config_override=$PROTOCOL_CONFIG_OVERRIDE"
+fi
+
+if [ -n "$TEST_NAME" ]; then
+  cmd="$cmd -f test_name=$TEST_NAME"
 fi
 
 echo Running: $cmd
