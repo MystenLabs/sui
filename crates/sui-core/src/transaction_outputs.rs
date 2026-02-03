@@ -54,6 +54,7 @@ impl TransactionOutputs {
             binary_config: _,
             runtime_packages_loaded_from_db: _,
             lamport_version,
+            accumulator_running_max_withdraws: _,
         } = inner_temporary_store;
 
         let tx_digest = *transaction.digest();
@@ -241,7 +242,7 @@ pub fn unchanged_loaded_runtime_objects(
         .collect();
 
     // Remove any object that is referenced in the changed objects effects set since it would be
-    // redundent to include it again.
+    // redundant to include it again.
     for change in effects.object_changes() {
         unchanged_loaded_runtime_objects.remove(&change.id);
     }
