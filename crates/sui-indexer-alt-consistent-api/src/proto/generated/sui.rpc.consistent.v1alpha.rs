@@ -123,7 +123,8 @@ pub struct ListOwnedObjectsRequest {
     /// Required. The owner kind and address.
     #[prost(message, optional, tag = "1")]
     pub owner: ::core::option::Option<Owner>,
-    /// Optional type filter to limit the types of objects listed.
+    /// Optional type filter to limit the types of objects listed. Mutually exclusive
+    /// with `exclude_object_type`.
     ///
     /// Accepts filters by the type's package, module, fully-qualified name, or a
     /// type instantiation:
@@ -134,6 +135,18 @@ pub struct ListOwnedObjectsRequest {
     /// * `0x2::coin::Coin<0x2::sui::SUI>`
     #[prost(string, optional, tag = "2")]
     pub object_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// Optional type filter to exclude objects of a certain type. Mutually exclusive
+    /// with `object_type`.
+    ///
+    /// Accepts filters by the type's package, module, fully-qualified name, or a
+    /// type instantiation:
+    ///
+    /// * `0x2`
+    /// * `0x2::coin`
+    /// * `0x2::coin::Coin`
+    /// * `0x2::coin::Coin<0x2::sui::SUI>`
+    #[prost(string, optional, tag = "3")]
+    pub exclude_object_type: ::core::option::Option<::prost::alloc::string::String>,
     /// The maximum number of entries to return. The service may return fewer than
     /// this value.
     ///

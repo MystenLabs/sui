@@ -134,7 +134,8 @@ message ListOwnedObjectsRequest {
   // Required. The owner kind and address.
   optional Owner owner = 1;
 
-  // Optional type filter to limit the types of objects listed.
+  // Optional type filter to limit the types of objects listed. Mutually exclusive
+  // with `exclude_object_type`.
   //
   // Accepts filters by the type's package, module, fully-qualified name, or a
   // type instantiation:
@@ -144,6 +145,18 @@ message ListOwnedObjectsRequest {
   //  - `0x2::coin::Coin`
   //  - `0x2::coin::Coin<0x2::sui::SUI>`
   optional string object_type = 2;
+
+  // Optional type filter to exclude objects of a certain type. Mutually exclusive
+  // with `object_type`.
+  //
+  // Accepts filters by the type's package, module, fully-qualified name, or a
+  // type instantiation:
+  //
+  //  - `0x2`
+  //  - `0x2::coin`
+  //  - `0x2::coin::Coin`
+  //  - `0x2::coin::Coin<0x2::sui::SUI>`
+  optional string exclude_object_type = 3;
 
   // The maximum number of entries to return. The service may return fewer than
   // this value.
