@@ -310,29 +310,37 @@ impl BridgeNodeConfig {
             chain_id, bridge_chain_id,
         );
 
-        let eth_client = Arc::new(
-            EthClient::new(
-                &self.eth.eth_rpc_url,
-                HashSet::from_iter(vec![
-                    bridge_proxy_address,
-                    committee_address,
-                    config_address,
-                    limiter_address,
-                    vault_address,
-                ]),
-                metrics,
-            )
-            .await?,
-        );
-        let contract_addresses = vec![
+        // Filter out zero addresses (can happen due to storage layout mismatch during upgrades)
+        let all_addresses = vec![
             bridge_proxy_address,
             committee_address,
             config_address,
             limiter_address,
             vault_address,
         ];
+        let valid_addresses: Vec<_> = all_addresses
+            .into_iter()
+            .filter(|addr| !addr.is_zero())
+            .collect();
+
+        if valid_addresses.len() < 5 {
+            tracing::warn!(
+                "Some contract addresses are zero - likely storage layout mismatch. \
+                Event watching will be limited. Valid addresses: {:?}",
+                valid_addresses
+            );
+        }
+
+        let eth_client = Arc::new(
+            EthClient::new(
+                &self.eth.eth_rpc_url,
+                HashSet::from_iter(valid_addresses.clone()),
+                metrics,
+            )
+            .await?,
+        );
         info!("Ethereum client setup complete");
-        Ok((eth_client, contract_addresses))
+        Ok((eth_client, valid_addresses))
     }
 
     async fn prepare_for_sui(

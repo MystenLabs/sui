@@ -185,11 +185,54 @@ pub async fn get_eth_contract_addresses(
     let bridge_config = EthBridgeConfig::new(config_address, provider.clone());
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
     let vault_address: EthAddress = sui_bridge.vault().call().await?;
-    let vault = EthBridgeVault::new(vault_address, provider.clone());
-    let weth_address: EthAddress = vault.wETH().call().await?;
-    let usdt_address: EthAddress = bridge_config.tokenAddressOf(4).call().await?;
-    let wbtc_address: EthAddress = bridge_config.tokenAddressOf(1).call().await?;
-    let lbtc_address: EthAddress = bridge_config.tokenAddressOf(6).call().await?;
+
+    // Token address lookups are only used for watchdog monitoring and are not critical
+    // for the signing server. If vault_address is zero (can happen due to storage layout
+    // mismatch during upgrades), skip these lookups and use zero addresses.
+    let (weth_address, usdt_address, wbtc_address, lbtc_address) =
+        if vault_address.is_zero() {
+            tracing::warn!(
+                "Vault address is zero - likely storage layout mismatch. \
+            Token address lookups skipped. Watchdog monitoring will be limited."
+            );
+            (
+                EthAddress::ZERO,
+                EthAddress::ZERO,
+                EthAddress::ZERO,
+                EthAddress::ZERO,
+            )
+        } else {
+            let vault = EthBridgeVault::new(vault_address, provider.clone());
+            let weth_address: EthAddress = vault.wETH().call().await.unwrap_or_else(|e| {
+                tracing::warn!("Failed to get wETH address from vault: {:?}", e);
+                EthAddress::ZERO
+            });
+            let usdt_address: EthAddress = bridge_config
+                .tokenAddressOf(4)
+                .call()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to get USDT address: {:?}", e);
+                    EthAddress::ZERO
+                });
+            let wbtc_address: EthAddress = bridge_config
+                .tokenAddressOf(1)
+                .call()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to get WBTC address: {:?}", e);
+                    EthAddress::ZERO
+                });
+            let lbtc_address: EthAddress = bridge_config
+                .tokenAddressOf(6)
+                .call()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to get LBTC address: {:?}", e);
+                    EthAddress::ZERO
+                });
+            (weth_address, usdt_address, wbtc_address, lbtc_address)
+        };
 
     Ok((
         committee_address,
