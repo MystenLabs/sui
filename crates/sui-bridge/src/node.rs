@@ -96,9 +96,8 @@ pub async fn run_bridge_node(
     // Before reconfiguration happens we only set it once when the node starts
     let sui_system = server_config
         .sui_client
-        .jsonrpc_client()
-        .governance_api()
-        .get_latest_sui_system_state()
+        .grpc_client()
+        .get_system_state_summary(None)
         .await?;
 
     // Start Client
