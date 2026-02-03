@@ -8,6 +8,7 @@ use move_binary_format::file_format_common::VERSION_MAX;
 pub const DEFAULT_MAX_VALUE_NEST_DEPTH: u64 = 128;
 
 /// Dynamic config options for the Move VM.
+#[derive(Clone, Debug)]
 pub struct VMConfig {
     pub verifier: VerifierConfig,
     pub max_binary_format_version: u32,
