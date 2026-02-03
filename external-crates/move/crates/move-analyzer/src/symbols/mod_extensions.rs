@@ -108,7 +108,7 @@ fn extract_extension_targets(
     match def {
         P::Definition::Module(mdef) if mdef.is_extension => {
             if let Some(addr) = mdef.address.as_ref().or(inherited_addr) {
-                let e_address = parsed_address(addr.clone(), named_address_map);
+                let e_address = parsed_address(*addr, named_address_map);
                 result.push(sp(
                     mdef.name_loc,
                     E::ModuleIdent_::new(e_address, mdef.name),

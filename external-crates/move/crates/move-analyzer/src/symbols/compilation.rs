@@ -430,7 +430,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     let mut compiler_autocomplete_info_opt = None;
 
     let compiler_flags = compiler_flags(&build_config);
-    let (mut caching_result, other_diags) = if let Ok(deps_package_paths) =
+    let (caching_result, other_diags) = if let Ok(deps_package_paths) =
         make_deps_for_compiler(&mut Vec::new(), dependencies.clone(), &build_config)
     {
         let src_deps: BTreeMap<Symbol, PackagePaths> = deps_package_paths
