@@ -1249,7 +1249,6 @@ impl TestClusterWrapper {
 async fn get_bridge_summary(test_cluster: &TestCluster) -> BridgeSummary {
     test_cluster
         .grpc_client()
-        .inner_mut()
         .get_bridge_summary()
         .await
         .unwrap()

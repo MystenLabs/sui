@@ -22,10 +22,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::Config;
-use sui_json_rpc_types::Coin;
 use sui_keys::keypair_file::read_key;
-use sui_sdk::SuiClientBuilder;
-use sui_sdk::apis::CoinReadApi;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::bridge::BridgeChainId;
@@ -33,6 +30,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 use sui_types::digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier};
 use sui_types::event::EventID;
+use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use tracing::info;
 
@@ -388,14 +386,9 @@ impl BridgeNodeConfig {
             Some(id) => id,
             None => {
                 info!("No gas object configured, finding gas object with highest balance");
-                let sui_client = SuiClientBuilder::default()
-                    .build(&self.sui.sui_rpc_url)
-                    .await?;
-                let coin =
-                    // Minimum balance for gas object is 10 SUI
-                    pick_highest_balance_coin(sui_client.coin_read_api(), client_sui_address, 10_000_000_000)
-                        .await?;
-                coin.coin_object_id
+                let sui_client = sui_rpc_api::Client::new(&self.sui.sui_rpc_url)?;
+                // Minimum balance for gas object is 10 SUI
+                pick_highest_balance_coin(sui_client, client_sui_address, 10_000_000_000).await?
             }
         };
         let (gas_coin, gas_object_ref, owner) = sui_client
@@ -456,33 +449,38 @@ pub struct BridgeCommitteeConfig {
 impl Config for BridgeCommitteeConfig {}
 
 pub async fn pick_highest_balance_coin(
-    coin_read_api: &CoinReadApi,
+    client: sui_rpc_api::Client,
     address: SuiAddress,
     minimal_amount: u64,
-) -> anyhow::Result<Coin> {
+) -> anyhow::Result<ObjectID> {
     info!("Looking for a suitable gas coin for address {:?}", address);
 
     // Only look at SUI coins specifically
-    let mut stream = coin_read_api
-        .get_coins_stream(address, Some("0x2::sui::SUI".to_string()))
+    let mut stream = client
+        .list_owned_objects(address, Some(GasCoin::type_()))
         .boxed();
 
     let mut coins_checked = 0;
 
-    while let Some(coin) = stream.next().await {
+    while let Some(Ok(object)) = stream.next().await {
+        let Ok(coin) = GasCoin::try_from(&object) else {
+            continue;
+        };
         info!(
             "Checking coin: {:?}, balance: {}",
-            coin.coin_object_id, coin.balance
+            object.id(),
+            coin.value()
         );
         coins_checked += 1;
 
         // Take the first coin with a sufficient balance
-        if coin.balance >= minimal_amount {
+        if coin.value() >= minimal_amount {
             info!(
                 "Found suitable gas coin with {} mist (object ID: {:?})",
-                coin.balance, coin.coin_object_id
+                coin.value(),
+                object.id(),
             );
-            return Ok(coin);
+            return Ok(object.id());
         }
 
         // Only check a small number of coins before giving up
