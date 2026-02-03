@@ -13,6 +13,7 @@ permissions:
 jobs:
   get-list-of-prs:
     name: Get Release Notes for new PRs
+    if: github.repository == 'MystenLabs/sui'
     outputs:
       matrix: ${{ steps.get-pr-list.outputs.matrix }}
       new_commit_hash: ${{ steps.get-pr-list.outputs.new_commit_hash }}
