@@ -293,7 +293,6 @@ const MAX_PROTOCOL_VERSION: u64 = 110;
 // Version 109: Update where we set bounds for some binary tables to be a bit more idiomatic.
 // Version 110: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
 //              function on mainnet.
-//              split_checkpoints_in_consensus_handler in devnet
 //              Enable additional validation on zkLogin public identifier.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -971,10 +970,6 @@ struct FeatureFlags {
     // If true, additional restrictions for hot or not entry functions are enforced.
     #[serde(skip_serializing_if = "is_false")]
     restrict_hot_or_not_entry_functions: bool,
-
-    // If true, split checkpoints in consensus handler.
-    #[serde(skip_serializing_if = "is_false")]
-    split_checkpoints_in_consensus_handler: bool,
 
     // If true, always accept committed system transactions.
     #[serde(skip_serializing_if = "is_false")]
@@ -2563,10 +2558,6 @@ impl ProtocolConfig {
 
     pub fn restrict_hot_or_not_entry_functions(&self) -> bool {
         self.feature_flags.restrict_hot_or_not_entry_functions
-    }
-
-    pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
-        self.feature_flags.split_checkpoints_in_consensus_handler
     }
 
     pub fn consensus_always_accept_system_transactions(&self) -> bool {
@@ -4517,9 +4508,6 @@ impl ProtocolConfig {
                         .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
                     cfg.feature_flags
                         .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
-                    }
                     cfg.feature_flags.validate_zklogin_public_identifier = true;
                     cfg.feature_flags.fix_checkpoint_signature_mapping = true;
                     cfg.feature_flags
@@ -4916,10 +4904,6 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
-    }
-
-    pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
-        self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
 }
 

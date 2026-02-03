@@ -107,7 +107,7 @@ use crate::authority::shared_object_version_manager::{
     AsTx, AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
 use crate::checkpoints::{
-    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint, PendingCheckpointV2,
+    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint,
 };
 use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -3518,45 +3518,6 @@ impl AuthorityPerEpochStore {
             .consensus_quarantine
             .read()
             .pending_checkpoint_exists(index))
-    }
-
-    pub(crate) fn write_pending_checkpoint_v2(
-        &self,
-        output: &mut ConsensusCommitOutput,
-        checkpoint: &PendingCheckpointV2,
-    ) -> SuiResult {
-        assert!(
-            !self.pending_checkpoint_exists_v2(&checkpoint.height())?,
-            "Duplicate pending checkpoint notification at height {:?}",
-            checkpoint.height()
-        );
-
-        debug!(
-            checkpoint_commit_height = checkpoint.height(),
-            "Pending checkpoint has {} roots",
-            checkpoint.num_roots(),
-        );
-
-        output.insert_pending_checkpoint_v2(checkpoint.clone());
-
-        Ok(())
-    }
-
-    pub fn get_pending_checkpoints_v2(
-        &self,
-        last: Option<CheckpointHeight>,
-    ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
-        Ok(self
-            .consensus_quarantine
-            .read()
-            .get_pending_checkpoints_v2(last))
-    }
-
-    fn pending_checkpoint_exists_v2(&self, index: &CheckpointHeight) -> SuiResult<bool> {
-        Ok(self
-            .consensus_quarantine
-            .read()
-            .pending_checkpoint_exists_v2(index))
     }
 
     pub fn process_constructed_checkpoint(
