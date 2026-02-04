@@ -709,7 +709,7 @@ mod type_mismatch_types {
 }
 
 #[tokio::test]
-async fn test_safe_iter_silently_ignores_deserialization_errors() {
+async fn test_safe_iter_returns_error_on_deserialization_failure() {
     use type_mismatch_types::{IncompatibleValue, OriginalValue};
 
     let path = temp_dir();
@@ -768,38 +768,45 @@ async fn test_safe_iter_silently_ignores_deserialization_errors() {
         DBMap::reopen(&rocks, Some(cf_name), &ReadWriteOptions::default(), false)
             .expect("Failed to reopen storage with different type");
 
-    // Step 3: Iterate using safe_iter - this demonstrates the bug
-    // The values should fail to deserialize, but currently safe_iter silently ignores them
+    // Step 3: Iterate using safe_iter with the incompatible type
+    // The values should fail to deserialize and return Err for each entry
     let results: Vec<_> = db_incompatible.safe_iter().collect();
 
-    // BUG DEMONSTRATION:
+    // EXPECTED BEHAVIOR:
     // - We inserted 3 values into the database
-    // - When we iterate with an incompatible type, deserialization should fail
-    // - Currently, safe_iter silently returns None for failed deserializations
-    // - This means we get NO values and NO errors - the data appears to not exist
+    // - When we iterate with an incompatible type, deserialization fails
+    // - safe_iter should return an Err for each entry that fails to deserialize
+    // - This allows callers to detect and handle deserialization failures
 
-    // Count how many Ok results we got
-    let ok_count = results.iter().filter(|r| r.is_ok()).count();
-    // Count how many Err results we got
-    let err_count = results.iter().filter(|r| r.is_err()).count();
-
-    // This assertion documents the current buggy behavior:
-    // We expect 0 values because they all fail to deserialize
-    assert_eq!(
-        ok_count, 0,
-        "BUG: safe_iter returns no values when deserialization fails"
-    );
-    // We also expect 0 errors - the failures are silent!
-    assert_eq!(
-        err_count, 0,
-        "BUG: safe_iter emits no errors when deserialization fails"
-    );
-    // The total number of items yielded by the iterator is 0
+    // We should get exactly 3 results - one for each entry in the database
     assert_eq!(
         results.len(),
-        0,
-        "BUG: safe_iter yields nothing - failures are completely silent"
+        3,
+        "safe_iter should yield one result per database entry"
     );
+
+    // Count how many Ok results we got (should be 0 - all fail to deserialize)
+    let ok_count = results.iter().filter(|r| r.is_ok()).count();
+    assert_eq!(
+        ok_count, 0,
+        "No values should deserialize successfully with incompatible type"
+    );
+
+    // Count how many Err results we got (should be 3 - all entries fail)
+    let err_count = results.iter().filter(|r| r.is_err()).count();
+    assert_eq!(
+        err_count, 3,
+        "All entries should return Err when deserialization fails"
+    );
+
+    // Verify each result is an error
+    for (i, result) in results.iter().enumerate() {
+        assert!(
+            result.is_err(),
+            "Entry {} should be an Err, got Ok",
+            i
+        );
+    }
 
     // Verify the data is still there by reading with the correct type
     let verification_count = db_original.safe_iter().count();
