@@ -747,4 +747,112 @@ mod tests {
             RpcError::NotInRange(2),
         ));
     }
+
+    #[test]
+    fn paginate_exclude_forward() {
+        let d = tempfile::tempdir().unwrap();
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+
+        let cfs = vec![("test", rocksdb::Options::default())];
+
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+
+        let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
+
+        let mut batch = rocksdb::WriteBatch::default();
+        map.insert((0, 1, 0x0001), 10, &mut batch).unwrap();
+        map.insert((0, 1, 0x0002), 20, &mut batch).unwrap();
+        map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
+        map.insert((0, 2, 0x0004), 40, &mut batch).unwrap();
+        map.insert((0, 3, 0x0005), 50, &mut batch).unwrap();
+        db.write("batch", wm(0), batch).unwrap();
+        db.take_snapshot(wm(0));
+        // First page: limit 2
+        let resp = Page::from_request(&config(), &[], &[], 2, End::Front)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: false,
+                has_next: true,
+                results: vec![
+                    (key::encode(&(0u8, 1u8, 0x0001u16)), (0, 1, 0x0001), 10),
+                    (key::encode(&(0u8, 1u8, 0x0002u16)), (0, 1, 0x0002), 20),
+                ],
+            }
+        );
+
+        // Second page: cursor after (0,1,0x0002), should skip (0,2,...) and get (0,3,0x0005)
+        let after = &resp.results.last().unwrap().0; // should be key::encode(&(0u8, 1u8, 0x0002u16))
+        let resp = Page::from_request(&config(), &after, &[], 2, End::Front)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: true,
+                has_next: false,
+                results: vec![(key::encode(&(0u8, 3u8, 0x0005u16)), (0, 3, 0x0005), 50),],
+            }
+        );
+    }
+
+    #[test]
+    fn paginate_exclude_backward() {
+        let d = tempfile::tempdir().unwrap();
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+
+        let cfs = vec![("test", rocksdb::Options::default())];
+
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+
+        let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
+
+        let mut batch = rocksdb::WriteBatch::default();
+        map.insert((0, 1, 0x0001), 10, &mut batch).unwrap();
+        map.insert((0, 1, 0x0002), 20, &mut batch).unwrap();
+        map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
+        map.insert((0, 2, 0x0004), 40, &mut batch).unwrap();
+        map.insert((0, 3, 0x0005), 50, &mut batch).unwrap();
+        db.write("batch", wm(0), batch).unwrap();
+        db.take_snapshot(wm(0));
+
+        // Page 1 from back: gets last 2 non-excluded results
+        let resp = Page::from_request(&config(), &[], &[], 2, End::Back)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: true,
+                has_next: false,
+                results: vec![
+                    (key::encode(&(0u8, 1u8, 0x0002u16)), (0, 1, 0x0002), 20),
+                    (key::encode(&(0u8, 3u8, 0x0005u16)), (0, 3, 0x0005), 50),
+                ],
+            }
+        );
+        // Results: [(0,1,0x0002), (0,3,0x0005)] - reversed to forward order
+
+        // Page 2: use first result's cursor as `before`
+        let before = &resp.results.first().unwrap().0;
+        let resp = Page::from_request(&config(), &[], before, 2, End::Back)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: false,
+                has_next: true,
+                results: vec![(key::encode(&(0u8, 1u8, 0x0001u16)), (0, 1, 0x0001), 10),],
+            }
+        );
+    }
 }

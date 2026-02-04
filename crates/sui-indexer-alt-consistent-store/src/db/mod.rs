@@ -1721,4 +1721,68 @@ pub(crate) mod tests {
         db.restore_at("tess", wm(10)).unwrap();
         db.restore_at("tesu", wm(30)).unwrap();
     }
+
+    #[test]
+    fn test_forward_skip() {
+        use Bound::Excluded as E;
+        use Bound::Unbounded as U;
+
+        let d = tempfile::tempdir().unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
+        let cf = db.cf("test").unwrap();
+
+        // Insert keys: 0, 2, 4, 6, 8 with values 1, 3, 5, 7, 9
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (0u64..10).step_by(2) {
+            batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
+        }
+        db.write("test", wm(0), batch).unwrap();
+        db.take_snapshot(wm(0));
+
+        let mut iter: iter::FwdIter<'_, u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
+
+        // Skip past prefix that covers keys 4, 6 (e.g., skip to first key >= 7)
+        // This tests the skip primitive
+        iter.skip_prefix(&key::encode(&7u64));
+
+        // Should land on 8
+        let (k, v) = iter.next().unwrap().unwrap();
+        assert_eq!((k, v), (8, 9));
+
+        // Skip past end
+        let mut iter: iter::FwdIter<'_, u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
+        iter.skip_prefix(&key::encode(&100u64));
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_reverse_skip() {
+        use Bound::Excluded as E;
+        use Bound::Unbounded as U;
+
+        let d = tempfile::tempdir().unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
+        let cf = db.cf("test").unwrap();
+
+        // Insert keys: 1, 3, 5, 7, 9 with values 2, 4, 6, 8, 10
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (1u64..10).step_by(2) {
+            batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
+        }
+        db.write("test", wm(0), batch).unwrap();
+        db.take_snapshot(wm(0));
+
+        // Create iterator, seek to start
+        let mut iter: iter::RevIter<'_, u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
+
+        // Skip to last key before 6
+        iter.skip_prefix(&key::encode(&6u64));
+        let (k, v) = iter.next().unwrap().unwrap();
+        assert_eq!((k, v), (5, 6));
+
+        // Reset and skip past end
+        let mut iter: iter::RevIter<'_, u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
+        iter.skip_prefix(&key::encode(&0u64));
+        assert!(iter.next().is_none());
+    }
 }
