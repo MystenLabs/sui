@@ -19,7 +19,7 @@ use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::{RegistryID, RegistryService};
 use mysten_network::Multiaddr;
 use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -48,11 +48,11 @@ enum Running {
 
 /// Stores address updates that should be persisted across epoch changes.
 /// We store the consensus NetworkPublicKey to avoid repeated conversions.
-/// Using BTreeMap since ConsensusNetworkPublicKey implements Ord but not Hash.
 struct AddressOverridesMap {
+    // We store the AddressSource on a BTreeMap as it helps accessing the keys in priority order.
     map: BTreeMap<
         ConsensusNetworkPublicKey,
-        HashMap<sui_network::endpoint_manager::AddressSource, Vec<Multiaddr>>,
+        BTreeMap<sui_network::endpoint_manager::AddressSource, Vec<Multiaddr>>,
     >,
 }
 
@@ -97,7 +97,7 @@ impl AddressOverridesMap {
     ) -> Option<Multiaddr> {
         self.map
             .get(&network_pubkey)
-            .and_then(|sources| sources.iter().min_by_key(|(source, _)| *source))
+            .and_then(|sources| sources.first_key_value())
             .and_then(|(_, addresses)| addresses.first().cloned())
     }
 
@@ -107,7 +107,7 @@ impl AddressOverridesMap {
         let mut result = Vec::new();
 
         for (network_pubkey, sources) in self.map.iter() {
-            if let Some((_source, addresses)) = sources.iter().min_by_key(|(source, _)| *source)
+            if let Some((_source, addresses)) = sources.first_key_value()
                 && let Some(address) = addresses.first()
             {
                 result.push((network_pubkey.clone(), address.clone()));
