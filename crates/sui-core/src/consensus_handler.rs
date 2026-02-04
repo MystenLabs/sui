@@ -2565,31 +2565,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         num_rejected_user_transactions[author] += 1;
                     }
                     // Skip processing rejected transactions.
-                    // TODO(fastpath): Handle unlocking.
                     continue;
                 }
-                // Set Finalized status for user transactions.
-                // For UserTransactionV2 with disable_preconsensus_locking, we defer setting
-                // Finalized until after successful lock acquisition (see below).
-                let defer_finalized_status = self
-                    .epoch_store
-                    .protocol_config()
-                    .disable_preconsensus_locking()
-                    && matches!(
-                        parsed.transaction.kind,
-                        ConsensusTransactionKind::UserTransactionV2(_)
-                    );
-                if !defer_finalized_status
-                    && matches!(
-                        parsed.transaction.kind,
-                        ConsensusTransactionKind::UserTransaction(_)
-                            | ConsensusTransactionKind::UserTransactionV2(_)
-                    )
-                {
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
-                    num_finalized_user_transactions[author] += 1;
-                }
+
                 let kind = classify(&parsed.transaction);
                 self.metrics
                     .consensus_handler_processed
@@ -2719,12 +2697,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // This must happen AFTER all filtering checks above to avoid acquiring locks
                 // for transactions that will be dropped (e.g., during epoch change).
                 // Only applies to UserTransactionV2 - other transaction types don't need lock acquisition.
-                if self
-                    .epoch_store
-                    .protocol_config()
-                    .disable_preconsensus_locking()
-                    && let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
-                        &parsed.transaction.kind
+                if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                    &parsed.transaction.kind
                 {
                     let immutable_object_ids: HashSet<ObjectID> =
                         tx_with_claims.get_immutable_objects().into_iter().collect();

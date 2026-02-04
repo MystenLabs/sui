@@ -574,33 +574,6 @@ impl VersionedDkgConfirmation {
 }
 
 impl ConsensusTransaction {
-    pub fn new_certificate_message(
-        authority: &AuthorityName,
-        certificate: CertifiedTransaction,
-    ) -> Self {
-        let mut hasher = DefaultHasher::new();
-        let tx_digest = certificate.digest();
-        tx_digest.hash(&mut hasher);
-        authority.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
-        }
-    }
-
-    pub fn new_user_transaction_message(authority: &AuthorityName, tx: Transaction) -> Self {
-        let mut hasher = DefaultHasher::new();
-        let tx_digest = tx.digest();
-        tx_digest.hash(&mut hasher);
-        authority.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::UserTransaction(Box::new(tx)),
-        }
-    }
-
     pub fn new_user_transaction_v2_message(
         authority: &AuthorityName,
         tx: PlainTransactionWithClaims,

@@ -24,7 +24,8 @@ use sui_types::{
     error::{SuiError, SuiErrorKind, SuiResult, UserInputError},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::{
-        InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI, TransactionWithClaims,
+        CertifiedTransaction, InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI,
+        TransactionWithClaims,
     },
 };
 use tap::TapFallible;
@@ -71,19 +72,18 @@ impl SuiTxValidator {
 
     fn validate_transactions(&self, txs: &[ConsensusTransactionKind]) -> Result<(), SuiError> {
         let epoch_store = &self.epoch_store;
-        let mut cert_batch = Vec::new();
+        // cert_batch is always empty since CertifiedTransaction is rejected
+        let cert_batch: Vec<&CertifiedTransaction> = Vec::new();
         let mut ckpt_messages = Vec::new();
         let mut ckpt_batch = Vec::new();
         for tx in txs.iter() {
             match tx {
-                ConsensusTransactionKind::CertifiedTransaction(certificate) => {
-                    if epoch_store.protocol_config().disable_preconsensus_locking() {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "CertifiedTransaction cannot be used when preconsensus locking is disabled".to_string(),
-                        )
-                        .into());
-                    }
-                    cert_batch.push(certificate.as_ref());
+                ConsensusTransactionKind::CertifiedTransaction(_) => {
+                    return Err(SuiErrorKind::UnexpectedMessage(
+                        "CertifiedTransaction cannot be used when preconsensus locking is disabled"
+                            .to_string(),
+                    )
+                    .into());
                 }
                 ConsensusTransactionKind::CheckpointSignature(_) => {
                     return Err(SuiErrorKind::UnexpectedMessage(
@@ -127,25 +127,13 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::CapabilityNotificationV2(_) => {}
 
                 ConsensusTransactionKind::UserTransaction(_) => {
-                    if epoch_store.protocol_config().address_aliases()
-                        || epoch_store.protocol_config().disable_preconsensus_locking()
-                    {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransaction cannot be used when address aliases is enabled or preconsensus locking is disabled".to_string(),
-                        )
-                        .into());
-                    }
+                    return Err(SuiErrorKind::UnexpectedMessage(
+                        "ConsensusTransactionKind::UserTransaction cannot be used when address aliases is enabled or preconsensus locking is disabled".to_string(),
+                    )
+                    .into());
                 }
 
                 ConsensusTransactionKind::UserTransactionV2(tx) => {
-                    if !(epoch_store.protocol_config().address_aliases()
-                        || epoch_store.protocol_config().disable_preconsensus_locking())
-                    {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransactionV2 must be used when either address aliases is enabled or preconsensus locking is disabled".to_string(),
-                        )
-                        .into());
-                    }
                     if epoch_store.protocol_config().address_aliases() {
                         let has_aliases = if epoch_store
                             .protocol_config()
@@ -333,9 +321,7 @@ impl SuiTxValidator {
         self.authority_state
             .handle_vote_transaction(epoch_store, inner_tx.clone())?;
 
-        if epoch_store.protocol_config().disable_preconsensus_locking()
-            && !claimed_immutable_ids.is_empty()
-        {
+        if !claimed_immutable_ids.is_empty() {
             let owned_object_refs: HashSet<ObjectRef> = inner_tx
                 .data()
                 .transaction_data()
@@ -1031,15 +1017,6 @@ mod tests {
 
     #[sim_test]
     async fn accept_already_executed_transaction() {
-        // This test uses ConsensusTransaction::new_user_transaction_message which creates a
-        // UserTransaction. When disable_preconsensus_locking=true (protocol version 105+),
-        // UserTransaction is not allowed. Gate with disable_preconsensus_locking=false.
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_disable_preconsensus_locking_for_testing(false);
-            config.set_address_aliases_for_testing(false);
-            config
-        });
-
         let (sender, keypair) = deterministic_random_account_key();
 
         let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
@@ -1066,10 +1043,10 @@ mod tests {
             gas_object.clone(),
             vec![owned_object.clone()],
         )
-        .await
-        .into_tx();
-        let tx_digest = *transaction.digest();
-        let cert = VerifiedExecutableTransaction::new_from_consensus(transaction.clone(), 0);
+        .await;
+        let tx_digest = *transaction.tx().digest();
+        let cert =
+            VerifiedExecutableTransaction::new_from_consensus(transaction.clone().into_tx(), 0);
         let (executed_effects, _) = state
             .try_execute_immediately(&cert, ExecutionEnv::new(), &state.epoch_store_for_testing())
             .await
@@ -1083,10 +1060,10 @@ mod tests {
         assert_eq!(read_effects, executed_effects);
         assert_eq!(read_effects.executed_epoch(), epoch_store.epoch());
 
-        // Now try to vote on the already executed transaction
-        let serialized_tx = bcs::to_bytes(&ConsensusTransaction::new_user_transaction_message(
+        // Now try to vote on the already executed transaction using UserTransactionV2
+        let serialized_tx = bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
             &state.name,
-            transaction.into_inner().clone(),
+            transaction.into(),
         ))
         .unwrap();
         let validator = SuiTxValidator::new(
