@@ -60,22 +60,20 @@ pub(crate) fn run(
                 &ty_args,
                 args.into(),
             )
-            .map_err(|e| {
-                e.at_code_offset(fun_ref.index(), 0)
-                    .finish(Location::Module(
-                        fun_ref.module_id(&vtables.interner).clone(),
-                    ))
+            .or_else(|e| {
+                let module_id = fun_ref.module_id(&vtables.interner)?;
+                Err(e.at_code_offset(fun_ref.index(), 0)
+                    .finish(Location::Module(module_id)))
             });
             trace!(tracer, |tracer| {
                 tracer.exit_initial_native_frame(&return_result, &gas_meter.remaining_gas().into())
             });
             return_result.map(|values| values.into_iter().collect())
         } else {
-            let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {
-                e.at_code_offset(fun_ref.index(), 0)
-                    .finish(Location::Module(
-                        fun_ref.module_id(&vtables.interner).clone(),
-                    ))
+            let call_stack = CallStack::new(function, ty_args, args).or_else(|e| {
+                let module_id = fun_ref.module_id(&vtables.interner)?;
+                Err(e.at_code_offset(fun_ref.index(), 0)
+                    .finish(Location::Module(module_id)))
             })?;
             let state = MachineState::new(Arc::clone(&vtables.interner), call_stack);
             eval::run(state, vtables, vm_config, extensions, tracer, gas_meter)
@@ -85,15 +83,5 @@ pub(crate) fn run(
     telemetry.report_time(interpreter_timer);
     result
 }
-
-macro_rules! set_err_info {
-    ($interner:expr, $frame:expr, $e:expr) => {{
-        let function = $frame.function();
-        $e.at_code_offset(function.index(), $frame.pc)
-            .finish($frame.location($interner))
-    }};
-}
-
-pub(crate) use set_err_info;
 
 use super::tracing::tracer::VMTracer;
