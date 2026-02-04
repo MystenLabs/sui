@@ -61,7 +61,7 @@ impl BenchmarkSetup {
         for fullnode_rpc_url in fullnode_rpc_urls.iter() {
             info!("Creating FullNodeProxy: {:?}", fullnode_rpc_url);
             fullnode_proxies.push(Arc::new(
-                FullNodeProxy::from_url(fullnode_rpc_url, &metrics).await?,
+                FullNodeProxy::from_url(fullnode_rpc_url, &genesis.committee(), &metrics).await?,
             ));
         }
 
