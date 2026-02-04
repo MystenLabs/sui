@@ -29,9 +29,7 @@ use tokio::time;
 use tracing::debug;
 use tracing::warn;
 
-use crate::api::types::available_range::pipeline_unavailable;
 use crate::config::WatermarkConfig;
-use crate::error::RpcError;
 use crate::metrics::RpcMetrics;
 
 /// Background task responsible for tracking per-pipeline upper- and lower-bounds.
@@ -77,8 +75,8 @@ pub(crate) struct Watermarks {
     /// Timestamp for the inclusive global upperbound checkpoint.
     timestamp_ms_hi_inclusive: i64,
 
-    /// Per-pipeline inclusive lowerbound watermarks
-    pipeline_lo: BTreeMap<String, Watermark>,
+    /// Per-pipeline watermarks keyed by pipeline name.
+    per_pipeline: BTreeMap<String, Pipeline>,
 }
 
 #[derive(Clone, Default)]
@@ -86,6 +84,13 @@ pub(crate) struct Watermark {
     epoch: i64,
     checkpoint: i64,
     transaction: i64,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct Pipeline {
+    hi: Watermark,
+    lo: Watermark,
+    timestamp_ms_hi_inclusive: i64,
 }
 
 #[derive(QueryableByName, Clone)]
@@ -216,11 +221,9 @@ impl Watermarks {
         &self.global_hi
     }
 
-    /// The reader_lo watermark for a pipeline.
-    pub(crate) fn pipeline_lo_watermark(&self, pipeline: &str) -> Result<&Watermark, RpcError> {
-        self.pipeline_lo
-            .get(pipeline)
-            .ok_or_else(|| pipeline_unavailable(pipeline))
+    /// Per-pipeline watermarks keyed by pipeline name.
+    pub(crate) fn per_pipeline(&self) -> &BTreeMap<String, Pipeline> {
+        &self.per_pipeline
     }
 
     /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range
@@ -234,22 +237,36 @@ impl Watermarks {
         self.timestamp_ms_hi_inclusive as u64
     }
 
-    fn merge(&mut self, row: WatermarkRow) {
-        self.global_hi.epoch = self.global_hi.epoch.min(row.epoch_hi_inclusive);
-        self.global_hi.checkpoint = self.global_hi.checkpoint.min(row.checkpoint_hi_inclusive);
-        self.global_hi.transaction = self.global_hi.transaction.min(row.tx_hi);
-        self.timestamp_ms_hi_inclusive = self
-            .timestamp_ms_hi_inclusive
-            .min(row.timestamp_ms_hi_inclusive);
+    pub(crate) fn lag_ms(&self, now: DateTime<Utc>) -> u64 {
+        now.signed_duration_since(self.timestamp_hi().unwrap_or(now))
+            .to_std()
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
 
-        self.pipeline_lo.insert(
-            row.pipeline.clone(),
-            Watermark {
+    fn merge(&mut self, row: WatermarkRow) {
+        let pipeline = Pipeline {
+            hi: Watermark {
+                epoch: row.epoch_hi_inclusive,
+                checkpoint: row.checkpoint_hi_inclusive,
+                transaction: row.tx_hi,
+            },
+            lo: Watermark {
                 epoch: row.epoch_lo,
                 checkpoint: row.checkpoint_lo,
                 transaction: row.tx_lo,
             },
-        );
+            timestamp_ms_hi_inclusive: row.timestamp_ms_hi_inclusive,
+        };
+
+        self.global_hi.epoch = self.global_hi.epoch.min(pipeline.hi.epoch);
+        self.global_hi.checkpoint = self.global_hi.checkpoint.min(pipeline.hi.checkpoint);
+        self.global_hi.transaction = self.global_hi.transaction.min(pipeline.hi.transaction);
+        self.timestamp_ms_hi_inclusive = self
+            .timestamp_ms_hi_inclusive
+            .min(pipeline.timestamp_ms_hi_inclusive);
+
+        self.per_pipeline.insert(row.pipeline, pipeline);
     }
 }
 
@@ -260,6 +277,23 @@ impl Watermark {
 
     pub(crate) fn transaction(&self) -> u64 {
         self.transaction as u64
+    }
+}
+
+impl Pipeline {
+    pub(crate) fn timestamp_hi(&self) -> Option<DateTime<Utc>> {
+        DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive)
+    }
+
+    pub(crate) fn lag_ms(&self, now: DateTime<Utc>) -> u64 {
+        now.signed_duration_since(self.timestamp_hi().unwrap_or(now))
+            .to_std()
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+
+    pub(crate) fn lo(&self) -> &Watermark {
+        &self.lo
     }
 }
 
@@ -338,7 +372,7 @@ impl Default for Watermarks {
                 transaction: i64::MAX,
             },
             timestamp_ms_hi_inclusive: i64::MAX,
-            pipeline_lo: BTreeMap::new(),
+            per_pipeline: BTreeMap::new(),
         }
     }
 }
