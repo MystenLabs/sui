@@ -337,20 +337,45 @@ impl ConsensusCommitOutput {
             &self.deleted_deferred_txns,
         )?;
 
-        batch.insert_batch(
-            &tables.deferred_transactions_with_aliases_v2,
-            self.deferred_txns.into_iter().map(|(key, txs)| {
-                (
-                    key,
-                    txs.into_iter()
-                        .map(|tx| {
-                            let tx: TrustedExecutableTransactionWithAliases = tx.serializable();
-                            tx
-                        })
-                        .collect::<Vec<_>>(),
-                )
-            }),
-        )?;
+        // Gate the storage format based on protocol config to ensure compatibility during
+        // split-cluster upgrades. When fix_checkpoint_signature_mapping is disabled, we store
+        // in the old table format (without aliases) to maintain backwards compatibility.
+        // The WithAliases struct format changed from (SuiAddress, Option<Seq>) to
+        // (u8, Option<Seq>), and storing in the old format ensures old and new binaries
+        // can read each other's deferred transactions.
+        if epoch_store
+            .protocol_config()
+            .fix_checkpoint_signature_mapping()
+        {
+            batch.insert_batch(
+                &tables.deferred_transactions_with_aliases_v2,
+                self.deferred_txns.into_iter().map(|(key, txs)| {
+                    (
+                        key,
+                        txs.into_iter()
+                            .map(|tx| {
+                                let tx: TrustedExecutableTransactionWithAliases = tx.serializable();
+                                tx
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                }),
+            )?;
+        } else {
+            // Store without aliases in the old table format for backwards compatibility.
+            // When loaded, these will be wrapped with no_aliases() by get_all_deferred_transactions_v2.
+            batch.insert_batch(
+                &tables.deferred_transactions_v2,
+                self.deferred_txns.into_iter().map(|(key, txs)| {
+                    (
+                        key,
+                        txs.into_iter()
+                            .map(|tx| tx.into_tx().serializable())
+                            .collect::<Vec<_>>(),
+                    )
+                }),
+            )?;
+        }
 
         if let Some((round, commit_timestamp)) = self.next_randomness_round {
             batch.insert_batch(&tables.randomness_next_round, [(SINGLETON_KEY, round)])?;
