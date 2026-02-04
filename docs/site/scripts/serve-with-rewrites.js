@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Local development server that handles Vercel rewrites
  * This allows testing .md URLs locally before deployment
