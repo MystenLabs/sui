@@ -25,11 +25,11 @@ pub struct SubscriptionServiceHandle {
 
 impl SubscriptionServiceHandle {
     pub async fn register_subscription(&self) -> Option<mpsc::Receiver<Arc<Checkpoint>>> {
-        let (sender, reciever) = oneshot::channel();
+        let (sender, receiver) = oneshot::channel();
         let request = SubscriptionRequest { sender };
         self.sender.send(request).await.ok()?;
 
-        reciever.await.ok()
+        receiver.await.ok()
     }
 }
 
