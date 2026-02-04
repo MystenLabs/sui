@@ -8,9 +8,8 @@ use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::ristretto255::RistrettoPoint;
 use fastcrypto::pedersen::PedersenCommitment;
 use fastcrypto::serde_helpers::ToFromByteArray;
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -65,16 +64,27 @@ pub fn verify_bulletproof_ristretto255(
         .len(&Type::Vector(Box::new(Type::U8)))?
         .value_as::<u64>()?;
 
-    let Ok(commitments) = (0..length)
+    let commitment_bytes = (0..length)
         .map(|i| {
-            let reference = commitments.borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))?;
-            let bytes: [u8; 32] = reference.value_as::<VectorRef>()?.as_bytes_ref().to_vec().try_into().map_err(|_| PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_ARGUMENT))?;
-            let point = RistrettoPoint::from_byte_array(&bytes).map_err(|_| PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_ARGUMENT))?;
-            Ok(PedersenCommitment(point))
+            commitments
+                .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
+                .and_then(|reference| reference.value_as::<VectorRef>())
+                .map(|v| v.as_bytes_ref().to_vec())
         })
-        .collect::<PartialVMResult<Vec<_>>>() else {
-            return Ok(NativeResult::err(context.gas_used(), INVALID_COMMITMENT));
-        };
+        .collect::<PartialVMResult<Vec<Vec<u8>>>>()?;
+
+    let Ok(commitments) = commitment_bytes
+        .into_iter()
+        .map(|b| {
+            b.try_into()
+                .map_err(|_| InvalidInput)
+                .and_then(|b| RistrettoPoint::from_byte_array(&b))
+                .map(PedersenCommitment)
+        })
+        .collect::<FastCryptoResult<Vec<PedersenCommitment>>>()
+    else {
+        return Ok(NativeResult::err(context.gas_used(), INVALID_COMMITMENT));
+    };
 
     let result = proof.verify_batch(&commitments, &range, &mut thread_rng());
 

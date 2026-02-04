@@ -145,7 +145,7 @@ pub fn sha3_512(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {    
+) -> PartialVMResult<NativeResult> {
     // TODO: Add the correct cost params
     let hash_blake2b256_cost_params = get_extension!(context, NativesCostTable)?
         .hash_blake2b256_cost_params
