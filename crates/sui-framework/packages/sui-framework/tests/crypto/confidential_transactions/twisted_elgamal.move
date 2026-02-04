@@ -214,11 +214,11 @@ public fun verify_sum_proof(
     pk: &Element<Point>,
     proof: vector<u8>,
 ): bool {
-    verify_sum_proof_simple(sum, a, &encrypted_amount_4_u32_to_encryption(b), pk, proof)
+    verify_sum_proof_with_encryption(sum, a, &encrypted_amount_4_u32_to_encryption(b), pk, proof)
 }
 
 /// Verify a NIZK proof that sum = a + b
-public fun verify_sum_proof_simple(
+public fun verify_sum_proof_with_encryption(
     sum: &EncryptedAmount2U32Unverified,
     a: &EncryptedAmount2U32Unverified,
     b: &Encryption,
@@ -229,11 +229,8 @@ public fun verify_sum_proof_simple(
     let sum_encryption = encrypted_amount_2_u32_unverified_to_encryption(sum);
     let a_encryption = encrypted_amount_2_u32_unverified_to_encryption(a);
     let zero_encryption = sub(&add(&a_encryption, b), &sum_encryption);
-
-    // std::debug::print(&sum_encryption);
-    // std::debug::print(&a_encryption);
-    // std::debug::print(b);
-    // std::debug::print(&zero_encryption);
+    std::debug::print(pk);
+    std::debug::print(&zero_encryption);
 
     proof.verify(
         &b"",
@@ -252,14 +249,7 @@ public fun verify_handle_eq(
     d2: &Element<Point>,
     proof: vector<u8>,
 ): bool {
-    std::debug::print(p1);
-    std::debug::print(p2);
-    std::debug::print(d1);
-    std::debug::print(d2);
-
-    let proof = sui::nizk::from_bytes(proof);
-
-    proof.verify(
+    sui::nizk::from_bytes(proof).verify(
         &b"",
         p1,
         p2,

@@ -24,7 +24,7 @@ use sui::twisted_elgamal::{
     verify_sum_proof,
     verify_handle_eq,
     encrypted_amount_2_u32_unverified_to_encryption,
-    verify_sum_proof_simple,
+    verify_sum_proof_with_encryption,
     encrypted_amount_4_u16_to_encryption
 };
 use sui::vec_map::VecMap;
@@ -189,12 +189,22 @@ public fun take_from_balance_to_other<T>(
         );
     };
 
+    std::debug::print(&25);
+
     // (2) current_balance = new_balance + taken_balance,
     let taken_amount_my_pk = twisted_elgamal::new(
         *total_taken_amount.ciphertext(),
         decryption_handle,
     );
-    //assert!(verify_sum_proof_simple(&account.balance, &new_balance, &taken_amount_my_pk, pk, balance_sum_proof));
+    assert!(
+        verify_sum_proof_with_encryption(
+            &account.balance,
+            &new_balance,
+            &taken_amount_my_pk,
+            pk,
+            balance_sum_proof,
+        ),
+    );
 
     // TODO: check proofs that
     // (2) new_balance is u32 or full new_balance is u64 (not negative),
@@ -228,7 +238,17 @@ public fun take_from_balance_to_self<T>(
     let _new_balance_range_proof = proofs.pop_back();
     let balance_sum_proof = proofs.pop_back();
 
-    // (2) current_balance = new_balance + taken_balance,
+    assert!(
+        verify_sum_proof(
+            &account.balance,
+            &new_balance,
+            &encrypted_amount_4_u32_from_4_u16(taken_amount),
+            pk,
+            balance_sum_proof,
+        ),
+    );
+
+    // (1) current_balance = new_balance + taken_balance,
     //assert!(verify_sum_proof_simple(&account.balance, &new_balance, &taken_amount_my_pk, pk, balance_sum_proof));
 
     // TODO: check proofs that
@@ -369,6 +389,7 @@ fun test_flow() {
         pk_1,
     );
     assert!(confidential_token.pool.value() == 100);
+    std::debug::print(&1);
 
     // Add the newly minted coins to the balance of account 1
     let new_balance = vector[encrypt_trivial(100, &pk_1), encrypt_zero(&pk_1)];
@@ -378,10 +399,11 @@ fun test_flow() {
         x"002b72d4814f160298c2df462b71ad3ecda58b3819663be75c70b44c2ef8f33cfeed1c05a4091ad1c24bf5683d0d60fbc7a2aa86258aee3c65d35da00ed18b7f165610ee8e101f561e89ce0225900a7f9ea89a2e57c2c419d0105a6e6d3afa0b",
         scenario.ctx(),
     );
+    std::debug::print(&2);
 
     // Take some from the balance and deposit to another account. Make sure to take it as encrypted to account 2
     let taken = confidential_token.take_from_balance_to_other(
-        vector[encrypt_zero(&pk_1), encrypt_zero(&pk_1)],
+        vector[encrypt_trivial(50, &pk_1), encrypt_trivial(0, &pk_1)],
         vector[
             encrypt_trivial(50, &pk_2),
             encrypt_trivial(0, &pk_2),
@@ -392,12 +414,13 @@ fun test_flow() {
         pk_2,
         vector[
             x"4ec74ffb7b9991039a09f3b076090ca410135eb33dba879068cee4356d858023fcb8b20b11c1bdb8a7858910dedebf6bfc341b408848c5899d8a917657921c6f3ee48728e43c4f994ec514b2188ca5b801e498490ae3bb1c66aabdaf8ab5c40e",
-            x"",
+            x"305cb80cd22385166ca38a21268d8444ef51565238b82c22a5ed2c958e2cf85ce86f3ceacd6e58fea84b553f92289a24d345a73750b0242b6b72b99089b65859f6ff9546e477e3567079995f0d9e70dc58c8f45bf0137a8f8e74e24b1ae3410d",
             x"",
             x"",
         ], // TODO
         scenario.ctx(),
     );
+    std::debug::print(&3);
 
     // Register second account and deposit
     scenario.next_tx(addr2);
@@ -409,7 +432,7 @@ fun test_flow() {
         taken,
         addr2,
     );
-
+    std::debug::print(&4);
     // Account 2 merges the pending deposit into its balance, merges and unwraps
     scenario.next_tx(addr2);
     confidential_token.merge_pending_deposit(
@@ -418,6 +441,7 @@ fun test_flow() {
         x"94c23f676ffd26d996be23ca8a34d15b4ae45660c8a4f9f16dc3975023a444415ea6e591ee90950b31bfb39f5601eec1e294ebde6713c9d351dfc39e148715353e6b237b5cc782de8c21fc7f35402765247635412eff733e45d0d1bb027ad301",
         scenario.ctx(),
     );
+    std::debug::print(&5);
     let taken = confidential_token.take_from_balance_to_self(
         vector[encrypt_zero(&pk_2), encrypt_zero(&pk_2)],
         vector[
@@ -426,9 +450,14 @@ fun test_flow() {
             encrypt_trivial(0, &pk_2),
             encrypt_trivial(0, &pk_2),
         ],
-        vector[x"", x"", x"", x""], // TODO
+        vector[
+            x"d4e6e331bcabcd2507a2fb1e5137078e0cf88801fc0d78fa68486207efd2023090d3988ba69737b2e8ad52d54ccc7a6b35f8c7eb517780c4e19765167d051b63ba160348dd2d19bb50e0a109bab8ef35b2f03611df00c7aea4f80535d2ca3d01",
+            x"",
+            x"",
+        ], // TODO
         scenario.ctx(),
     );
+    std::debug::print(&6);
 
     let unwrapped = unwrap(
         &mut confidential_token,
@@ -438,6 +467,8 @@ fun test_flow() {
         x"9ed4828b102660f6f788a5fcb390229fad5e9642f33f947c649f3e99437eee48faf9a28df164fdcc460d827d48d8a5d98d9327c6f2eda486d975a02685efb01889c6352af6c11b33913c6ae8a5cbc1ddf8e33a1bbde17fa67a6bd72abb4e1d04",
         scenario.ctx(),
     );
+
+    std::debug::print(&7);
 
     assert!(confidential_token.pool.value() == 50);
     assert!(unwrapped.value() == 50);
