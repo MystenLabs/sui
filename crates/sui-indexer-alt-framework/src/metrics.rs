@@ -74,6 +74,9 @@ pub struct IngestionMetrics {
     pub ingested_checkpoint_timestamp_lag: Histogram,
 
     pub ingested_checkpoint_latency: Histogram,
+
+    /// Current dynamic ingestion concurrency limit (only set when AIMD is enabled).
+    pub ingestion_concurrency: IntGauge,
 }
 
 #[derive(Clone)]
@@ -148,6 +151,8 @@ pub struct IndexerMetrics {
     pub watermark_timestamp_in_db_ms: IntGaugeVec,
     pub watermark_reader_lo_in_db: IntGaugeVec,
     pub watermark_pruner_hi_in_db: IntGaugeVec,
+
+    pub committer_write_concurrency: IntGaugeVec,
 }
 
 /// A helper struct to report metrics regarding the checkpoint lag at various points in the indexer.
@@ -271,6 +276,12 @@ impl IngestionMetrics {
                 name("ingested_checkpoint_latency"),
                 "Time taken to fetch a checkpoint from the remote store, including retries",
                 INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            ingestion_concurrency: register_int_gauge_with_registry!(
+                name("ingestion_concurrency"),
+                "Current dynamic ingestion concurrency limit when AIMD is enabled",
                 registry,
             )
             .unwrap(),
@@ -667,6 +678,13 @@ impl IndexerMetrics {
             watermark_pruner_hi_in_db: register_int_gauge_vec_with_registry!(
                 name("watermark_pruner_hi_in_db"),
                 "Last pruner high watermark this pruner wrote to the DB",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_write_concurrency: register_int_gauge_vec_with_registry!(
+                name("committer_write_concurrency"),
+                "Current dynamic write concurrency limit for this committer",
                 &["pipeline"],
                 registry,
             )

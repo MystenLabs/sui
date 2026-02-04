@@ -38,6 +38,11 @@ pub struct CommitterConfig {
 
     /// Maximum random jitter to add to the watermark interval, in milliseconds.
     pub watermark_interval_jitter_ms: u64,
+
+    /// Optional AIMD (Additive Increase / Multiplicative Decrease) configuration for dynamic
+    /// write concurrency. When set, `write_concurrency` is ignored and the limit is adjusted
+    /// automatically based on commit outcomes.
+    pub aimd: Option<sui_concurrency_limiter::AimdConfig>,
 }
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
@@ -154,6 +159,7 @@ impl Default for CommitterConfig {
             collect_interval_ms: 500,
             watermark_interval_ms: 500,
             watermark_interval_jitter_ms: 0,
+            aimd: None,
         }
     }
 }

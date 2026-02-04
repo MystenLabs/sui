@@ -12,6 +12,7 @@ use std::time::Duration;
 use prometheus::Registry;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_concurrency_limiter::AimdConfig;
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
 
@@ -69,6 +70,11 @@ pub struct IngestionConfig {
 
     /// Timeout for streaming statement (peek/next) operations in milliseconds.
     pub streaming_statement_timeout_ms: u64,
+
+    /// Optional AIMD configuration for dynamic ingestion concurrency. When set,
+    /// `ingest_concurrency` is ignored and the limit is adjusted automatically based on
+    /// fetch outcomes.
+    pub aimd: Option<AimdConfig>,
 }
 
 pub struct IngestionService {
@@ -82,6 +88,16 @@ pub struct IngestionService {
 }
 
 impl IngestionConfig {
+    /// Returns an `AimdConfig` with defaults tuned for checkpoint ingestion from object stores,
+    /// where high concurrency is expected. The initial limit matches `ingest_concurrency` so
+    /// AIMD starts where static concurrency would, then tunes from there.
+    pub fn default_aimd(&self) -> AimdConfig {
+        AimdConfig {
+            initial_limit: self.ingest_concurrency,
+            ..AimdConfig::default()
+        }
+    }
+
     pub fn retry_interval(&self) -> Duration {
         Duration::from_millis(self.retry_interval_ms)
     }
@@ -216,6 +232,7 @@ impl Default for IngestionConfig {
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
             streaming_connection_timeout_ms: 5000,    // 5 seconds
             streaming_statement_timeout_ms: 5000,     // 5 seconds
+            aimd: None,
         }
     }
 }

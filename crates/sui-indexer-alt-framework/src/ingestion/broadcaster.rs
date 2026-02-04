@@ -11,6 +11,9 @@ use anyhow::anyhow;
 use futures::Stream;
 use futures::future::try_join_all;
 use futures::stream;
+use sui_concurrency_limiter::AimdLimit;
+use sui_concurrency_limiter::Limit;
+use sui_concurrency_limiter::Outcome;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
@@ -99,6 +102,11 @@ where
         // This value is updated every outer loop iteration after both streaming and broadcasting complete.
         let mut checkpoint_hi = start_cp;
 
+        let aimd = config.aimd.as_ref().map(|aimd_config| {
+            let (limiter, rx) = AimdLimit::new(aimd_config.clone());
+            (Arc::new(limiter), rx)
+        });
+
         'outer: while checkpoint_hi < end_cp {
             // Set up the streaming task for the current range [checkpoint_hi, end_cp). This function
             // will return a handle to the streaming task and the end cp of the ingestion task, calculated
@@ -128,6 +136,8 @@ where
                 ingest_hi_watch_rx.clone(),
                 client.clone(),
                 subscribers.clone(),
+                aimd.as_ref().map(|(l, rx)| (l.clone(), rx.clone())),
+                metrics.clone(),
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -196,15 +206,25 @@ fn ingest_and_broadcast_range(
     ingest_hi_rx: watch::Receiver<Option<u64>>,
     client: IngestionClient,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    aimd: Option<(Arc<AimdLimit>, watch::Receiver<usize>)>,
+    metrics: Arc<IngestionMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
-        stream::iter(start..end)
-            .try_for_each_spawned(ingest_concurrency, |cp| {
-                let mut ingest_hi_rx = ingest_hi_rx.clone();
-                let client = client.clone();
-                let subscribers = subscribers.clone();
+        let limiter = aimd.as_ref().map(|(l, _)| l.clone());
 
-                async move {
+        let make_task = |cp: u64| {
+            let mut ingest_hi_rx = ingest_hi_rx.clone();
+            let client = client.clone();
+            let subscribers = subscribers.clone();
+            let limiter = limiter.clone();
+            let metrics = metrics.clone();
+
+            async move {
+                if let Some(ref limiter) = limiter {
+                    limiter.acquire();
+                }
+
+                let result = async {
                     // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                     // Wait until ingest_hi allows processing this checkpoint.
                     // None means no backpressure limit. If we get Some(hi) we wait until cp < hi.
@@ -225,15 +245,45 @@ fn ingest_and_broadcast_range(
                     // Send checkpoint to all subscribers.
                     if send_checkpoint(checkpoint, &subscribers).await.is_ok() {
                         debug!(checkpoint = cp, "Broadcasted checkpoint");
+                        if let Some(ref limiter) = limiter {
+                            limiter.on_sample(Outcome::Success);
+                            metrics.ingestion_concurrency.set(limiter.current() as i64);
+                        }
                         Ok(())
                     } else {
-                        // An error is returned meaning some subscriber channel has closed, which
-                        // we consider a shutdown signal for ingestion.
+                        if let Some(ref limiter) = limiter {
+                            limiter.on_sample(Outcome::Ignore);
+                        }
                         Err(Break::Break)
                     }
                 }
-            })
-            .await
+                .await;
+
+                if let Some(ref limiter) = limiter {
+                    limiter.release();
+                }
+
+                // Signal Dropped for fetch errors.
+                if let Err(Break::Err(_)) = &result
+                    && let Some(ref limiter) = limiter
+                {
+                    limiter.on_sample(Outcome::Dropped);
+                    metrics.ingestion_concurrency.set(limiter.current() as i64);
+                }
+
+                result
+            }
+        };
+
+        if let Some((_, limit_rx)) = aimd {
+            stream::iter(start..end)
+                .try_for_each_spawned_dynamic(limit_rx, make_task)
+                .await
+        } else {
+            stream::iter(start..end)
+                .try_for_each_spawned(ingest_concurrency, make_task)
+                .await
+        }
     }))
 }
 
@@ -464,6 +514,7 @@ mod tests {
             streaming_backoff_max_batch_size: 16,
             streaming_connection_timeout_ms: 100,
             streaming_statement_timeout_ms: 100,
+            aimd: None,
         }
     }
 

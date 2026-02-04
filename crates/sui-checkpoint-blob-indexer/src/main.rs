@@ -11,6 +11,7 @@ use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
+use sui_concurrency_limiter::AimdConfig;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -78,6 +79,40 @@ struct Args {
     /// Maximum size of checkpoint backlog across all workers
     #[arg(long, default_value = "5000")]
     checkpoint_buffer_size: usize,
+
+    /// Enable AIMD dynamic write concurrency with this initial limit.
+    /// When set, --write-concurrency is ignored.
+    #[arg(long)]
+    aimd_initial_limit: Option<usize>,
+
+    /// AIMD minimum concurrency limit (default: 1)
+    #[arg(long)]
+    aimd_min_limit: Option<usize>,
+
+    /// AIMD maximum concurrency limit (default: 1000)
+    #[arg(long)]
+    aimd_max_limit: Option<usize>,
+
+    /// AIMD backoff ratio on failure, in [0.5, 1.0) (default: 0.9)
+    #[arg(long)]
+    aimd_backoff_ratio: Option<f64>,
+
+    /// Enable AIMD dynamic ingestion concurrency with this initial limit.
+    /// When set, --ingest-concurrency is ignored.
+    #[arg(long)]
+    ingest_aimd_initial_limit: Option<usize>,
+
+    /// Ingestion AIMD minimum concurrency limit (default: 1)
+    #[arg(long)]
+    ingest_aimd_min_limit: Option<usize>,
+
+    /// Ingestion AIMD maximum concurrency limit (default: 1000)
+    #[arg(long)]
+    ingest_aimd_max_limit: Option<usize>,
+
+    /// Ingestion AIMD backoff ratio on failure, in [0.5, 1.0) (default: 0.9)
+    #[arg(long)]
+    ingest_aimd_backoff_ratio: Option<f64>,
 
     #[command(flatten)]
     metrics_args: MetricsArgs,
@@ -150,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
-    let config = ConcurrentConfig {
+    let mut config = ConcurrentConfig {
         committer: CommitterConfig {
             write_concurrency: args.write_concurrency,
             watermark_interval_ms: args.watermark_interval.as_millis() as u64,
@@ -160,11 +195,45 @@ async fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let ingestion_config = IngestionConfig {
+    if let Some(initial_limit) = args.aimd_initial_limit {
+        let mut aimd = AimdConfig {
+            initial_limit,
+            ..AimdConfig::default()
+        };
+        if let Some(v) = args.aimd_min_limit {
+            aimd.min_limit = v;
+        }
+        if let Some(v) = args.aimd_max_limit {
+            aimd.max_limit = v;
+        }
+        if let Some(v) = args.aimd_backoff_ratio {
+            aimd.backoff_ratio = v;
+        }
+        config.committer.aimd = Some(aimd);
+    }
+
+    let mut ingestion_config = IngestionConfig {
         ingest_concurrency: args.ingest_concurrency,
         checkpoint_buffer_size: args.checkpoint_buffer_size,
         ..Default::default()
     };
+
+    if let Some(initial_limit) = args.ingest_aimd_initial_limit {
+        let mut aimd = AimdConfig {
+            initial_limit,
+            ..ingestion_config.default_aimd()
+        };
+        if let Some(v) = args.ingest_aimd_min_limit {
+            aimd.min_limit = v;
+        }
+        if let Some(v) = args.ingest_aimd_max_limit {
+            aimd.max_limit = v;
+        }
+        if let Some(v) = args.ingest_aimd_backoff_ratio {
+            aimd.backoff_ratio = v;
+        }
+        ingestion_config.aimd = Some(aimd);
+    }
 
     let mut indexer = Indexer::new(
         store.clone(),
