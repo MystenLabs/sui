@@ -25,7 +25,12 @@ struct Inner {
 }
 
 pub trait ConsensusAddressUpdater: Send + Sync + 'static {
-    fn update(&self, network_pubkey: NetworkPublicKey, addresses: Vec<Multiaddr>) -> SuiResult<()>;
+    fn update(
+        &self,
+        network_pubkey: NetworkPublicKey,
+        source: AddressSource,
+        addresses: Vec<Multiaddr>,
+    ) -> SuiResult<()>;
 }
 
 impl EndpointManager {
@@ -80,7 +85,7 @@ impl EndpointManager {
             EndpointId::Consensus(network_pubkey) => {
                 if let Some(updater) = self.inner.consensus_address_updater.load_full() {
                     updater
-                        .update(network_pubkey.clone(), addresses)
+                        .update(network_pubkey.clone(), source, addresses)
                         .map_err(|e| {
                             warn!(?network_pubkey, "Error updating consensus address: {e:?}");
                             e
@@ -138,6 +143,7 @@ mod tests {
         fn update(
             &self,
             network_pubkey: NetworkPublicKey,
+            _source: AddressSource,
             addresses: Vec<Multiaddr>,
         ) -> SuiResult<()> {
             self.updates

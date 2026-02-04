@@ -86,8 +86,8 @@ impl TonicClient {
         Ok(client)
     }
 
-    pub(crate) fn update_peer_address(&self, peer: AuthorityIndex, addresses: Vec<Multiaddr>) {
-        self.channel_pool.update_address(peer, addresses);
+    pub(crate) fn update_peer_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>) {
+        self.channel_pool.update_address(peer, address);
     }
 }
 
@@ -361,7 +361,7 @@ struct ChannelPool {
     context: Arc<Context>,
     // Size is limited by known authorities in the committee.
     channels: RwLock<BTreeMap<AuthorityIndex, Channel>>,
-    // Address overrides for peers, indexed by AuthorityIndex
+    // Simple address override for peers. If set, this address is used instead of the committee address.
     address_overrides: RwLock<BTreeMap<AuthorityIndex, Multiaddr>>,
 }
 
@@ -374,31 +374,26 @@ impl ChannelPool {
         }
     }
 
-    // Update the address override for a peer. If the list of addresses is empty, the override is cleared.
-    fn update_address(&self, peer: AuthorityIndex, addresses: Vec<Multiaddr>) {
+    // Update the address override for a peer. If None, clears the override.
+    fn update_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>) {
         {
             let mut overrides = self.address_overrides.write();
 
-            // Treat the empty list as a clear operation.
-            if addresses.is_empty() {
-                overrides.remove(&peer);
+            if let Some(addr) = address {
+                if let Some(previous_address) = overrides.insert(peer, addr.clone()) {
+                    info!(
+                        "Updated address override for peer {}: {} -> {}",
+                        peer, previous_address, addr
+                    );
+                } else {
+                    info!("Set address override for peer {} to {}", peer, addr);
+                }
+            } else if overrides.remove(&peer).is_some() {
                 info!("Cleared address override for peer {}", peer);
-                return;
-            }
-
-            // Otherwise, set the first address as the override.
-            // TODO: support multiple addresses. For now, we only support one address per peer.
-            let address = addresses.first().cloned().unwrap();
-            if let Some(previous_address) = overrides.insert(peer, address.clone()) {
-                info!(
-                    "Updated address override for peer {} from {} to {}",
-                    peer, previous_address, address
-                );
-            } else {
-                info!("Set address override for peer {} to {}", peer, address);
             }
         }
 
+        // Clear the cached channel so that the next connection attempt uses the updated address.
         let mut channels = self.channels.write();
         if channels.remove(&peer).is_some() {
             info!(
@@ -762,8 +757,8 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         self.client.clone()
     }
 
-    fn update_peer_address(&self, peer: AuthorityIndex, addresses: Vec<Multiaddr>) {
-        self.client.update_peer_address(peer, addresses);
+    fn update_peer_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>) {
+        self.client.update_peer_address(peer, address);
     }
 
     async fn install_service(&mut self, service: Arc<S>) {
@@ -1258,7 +1253,7 @@ mod tests {
         let peer = context.committee.to_authority_index(1).unwrap();
         let new_address: Multiaddr = "/ip4/127.0.0.1/udp/9000".parse().unwrap();
 
-        client.update_peer_address(peer, vec![new_address.clone()]);
+        client.update_peer_address(peer, Some(new_address.clone()));
 
         // Verify the override was set
         {
@@ -1268,7 +1263,7 @@ mod tests {
 
         // Update with a different address
         let newer_address: Multiaddr = "/ip4/127.0.0.1/udp/9001".parse().unwrap();
-        client.update_peer_address(peer, vec![newer_address.clone()]);
+        client.update_peer_address(peer, Some(newer_address.clone()));
 
         // Verify the override was updated
         {
@@ -1291,7 +1286,7 @@ mod tests {
         let new_address: Multiaddr = "/ip4/127.0.0.1/udp/9000".parse().unwrap();
 
         // Set address override
-        client.update_peer_address(peer, vec![new_address]);
+        client.update_peer_address(peer, Some(new_address));
 
         // Verify the override was set
         {
@@ -1299,8 +1294,8 @@ mod tests {
             assert!(overrides.contains_key(&peer));
         }
 
-        // Clear the override with empty list
-        client.update_peer_address(peer, vec![]);
+        // Clear the override
+        client.update_peer_address(peer, None);
 
         // Verify the override was cleared
         {
@@ -1320,8 +1315,8 @@ mod tests {
         let address2: Multiaddr = "/ip4/127.0.0.1/udp/9001".parse().unwrap();
 
         // Set different addresses for different peers
-        client.update_peer_address(peer1, vec![address1.clone()]);
-        client.update_peer_address(peer2, vec![address2.clone()]);
+        client.update_peer_address(peer1, Some(address1.clone()));
+        client.update_peer_address(peer2, Some(address2.clone()));
 
         // Verify both overrides are set correctly
         {
@@ -1331,7 +1326,7 @@ mod tests {
         }
 
         // Clear one peer's override
-        client.update_peer_address(peer1, vec![]);
+        client.update_peer_address(peer1, None);
 
         // Verify only peer1's override was cleared
         {

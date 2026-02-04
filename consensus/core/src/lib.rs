@@ -54,6 +54,7 @@ mod randomized_tests;
 /// Exported Consensus API.
 pub use authority_node::{ConsensusAuthority, NetworkType};
 pub use block::{BlockAPI, CertifiedBlock, CertifiedBlocksOutput};
+pub use network::AddressSource;
 
 /// Exported API for testing and tools.
 pub use block::{TestBlock, Transaction, VerifiedBlock};

@@ -172,6 +172,14 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// NOTE: AddressSources are prioritized in order of the enum variants below.
+pub enum AddressSource {
+    Admin,
+    Config,
+    Committee,
+}
+
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.
 /// Dropping `NetworkManager` will shutdown the network service.
 pub(crate) trait NetworkManager<S>: Send + Sync
@@ -193,8 +201,8 @@ where
     async fn stop(&mut self);
 
     /// Updates the network address for a peer identified by their authority index.
-    /// If addresses is empty, any address override is cleared.
-    fn update_peer_address(&self, peer: AuthorityIndex, addresses: Vec<Multiaddr>);
+    /// If address is None, the override is cleared and the committee address will be used.
+    fn update_peer_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>);
 }
 
 /// Serialized block with extended information from the proposing authority.

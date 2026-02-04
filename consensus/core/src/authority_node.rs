@@ -96,9 +96,9 @@ impl ConsensusAuthority {
         }
     }
 
-    pub fn update_peer_address(&self, network_pubkey: NetworkPublicKey, addresses: Vec<Multiaddr>) {
+    pub fn update_peer_address(&self, network_pubkey: NetworkPublicKey, address: Option<Multiaddr>) {
         match self {
-            Self::WithTonic(authority) => authority.update_peer_address(network_pubkey, addresses),
+            Self::WithTonic(authority) => authority.update_peer_address(network_pubkey, address),
         }
     }
 
@@ -427,7 +427,7 @@ where
     pub(crate) fn update_peer_address(
         &self,
         network_pubkey: NetworkPublicKey,
-        addresses: Vec<Multiaddr>,
+        address: Option<Multiaddr>,
     ) {
         // Find the peer index for this network key
         let Some(peer) = self
@@ -445,7 +445,7 @@ where
         };
 
         // Update the address in the network manager
-        self.network_manager.update_peer_address(peer, addresses);
+        self.network_manager.update_peer_address(peer, address);
 
         // Re-subscribe to the peer to force reconnection with new address
         if peer != self.context.own_index {
