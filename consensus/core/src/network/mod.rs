@@ -172,14 +172,6 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-// NOTE: AddressSources are prioritized in order of the enum variants below.
-pub enum AddressSource {
-    Admin,
-    Config,
-    Committee,
-}
-
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.
 /// Dropping `NetworkManager` will shutdown the network service.
 pub(crate) trait NetworkManager<S>: Send + Sync
