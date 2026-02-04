@@ -22,14 +22,14 @@ use std::sync::Arc;
 // Once via RPC, once via consensus.
 const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 100_000;
 
-pub struct VerifiedDigestCache<D, V = ()> {
-    inner: RwLock<LruCache<D, V>>,
+pub struct VerifiedDigestCache<D> {
+    inner: RwLock<LruCache<D, ()>>,
     cache_hits_counter: IntCounter,
     cache_misses_counter: IntCounter,
     cache_evictions_counter: IntCounter,
 }
 
-impl<D: Hash + Eq + Copy, V: Clone> VerifiedDigestCache<D, V> {
+impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
     pub fn new(
         cache_hits_counter: IntCounter,
         cache_misses_counter: IntCounter,
@@ -56,45 +56,13 @@ impl<D: Hash + Eq + Copy, V: Clone> VerifiedDigestCache<D, V> {
         }
     }
 
-    /// Returns the cached value for the given digest, if present.
-    pub fn get_cached(&self, digest: &D) -> Option<V> {
-        let inner = self.inner.read();
-        if let Some(value) = inner.peek(digest) {
-            self.cache_hits_counter.inc();
-            Some(value.clone())
-        } else {
-            self.cache_misses_counter.inc();
-            None
-        }
-    }
-
-    pub fn cache_with_value(&self, digest: D, value: V) {
+    pub fn cache_digest(&self, digest: D) {
         let mut inner = self.inner.write();
-        if let Some(old) = inner.push(digest, value)
+        if let Some(old) = inner.push(digest, ())
             && old.0 != digest
         {
             self.cache_evictions_counter.inc();
         }
-    }
-
-    pub fn clear(&self) {
-        let mut inner = self.inner.write();
-        inner.clear();
-    }
-
-    // Initialize an empty cache when the cache is not needed (in testing scenarios, graphql and rosetta initialization).
-    pub fn new_empty() -> Self {
-        Self::new(
-            IntCounter::new("test_cache_hits", "test cache hits").unwrap(),
-            IntCounter::new("test_cache_misses", "test cache misses").unwrap(),
-            IntCounter::new("test_cache_evictions", "test cache evictions").unwrap(),
-        )
-    }
-}
-
-impl<D: Hash + Eq + Copy> VerifiedDigestCache<D, ()> {
-    pub fn cache_digest(&self, digest: D) {
-        self.cache_with_value(digest, ())
     }
 
     pub fn cache_digests(&self, digests: Vec<D>) {
@@ -122,22 +90,40 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D, ()> {
         }
         Ok(())
     }
+
+    pub fn clear(&self) {
+        let mut inner = self.inner.write();
+        inner.clear();
+    }
+
+    // Initialize an empty cache when the cache is not needed (in testing scenarios, graphql and rosetta initialization).
+    pub fn new_empty() -> Self {
+        Self::new(
+            IntCounter::new("test_cache_hits", "test cache hits").unwrap(),
+            IntCounter::new("test_cache_misses", "test cache misses").unwrap(),
+            IntCounter::new("test_cache_evictions", "test cache evictions").unwrap(),
+        )
+    }
 }
 
 /// Does crypto validation for a transaction which may be user-provided, or may be from a checkpoint.
-/// Returns the signature index (into `tx_signatures`) used to verify each required signer,
-/// in the same order as `required_signers`.
 pub fn verify_sender_signed_data_message_signatures(
     txn: &SenderSignedData,
     current_epoch: EpochId,
     verify_params: &VerifyParams,
     zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     aliased_addresses: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
-) -> SuiResult<Vec<u8>> {
+) -> SuiResult {
     let intent_message = txn.intent_message();
     assert_eq!(intent_message.intent, Intent::sui_transaction());
 
-    // 1. One signature per signer is required.
+    // 1. System transactions do not require signatures. User-submitted transactions are verified not to
+    // be system transactions before this point
+    if intent_message.value.is_system_tx() {
+        return Ok(());
+    }
+
+    // 2. One signature per signer is required.
     let required_signers = txn.intent_message().value.required_signers();
     fp_ensure!(
         txn.inner().tx_signatures.len() == required_signers.len(),
@@ -148,45 +134,31 @@ pub fn verify_sender_signed_data_message_signatures(
         .into()
     );
 
-    // 2. System transactions do not require valid signatures. User-submitted transactions are
-    // verified not to be system transactions before this point.
-    if intent_message.value.is_system_tx() {
-        // System tx are defined to use all of the dummy signatures provided.
-        return Ok((0..required_signers.len() as u8).collect());
-    }
-
     // 3. Each signer must provide a signature from one of the set of allowed aliases.
-    // Use index mapping to track which signature index satisfies each required signer.
-    let sig_mapping = txn.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
-
-    let mut signer_to_sig_index = Vec::with_capacity(required_signers.len());
-    for signer in required_signers.iter() {
-        let alias_set = aliased_addresses
+    let present_sigs = txn.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
+    let required_signer_alias_sets = required_signers.map(|s| {
+        aliased_addresses
             .iter()
-            .find(|(addr, _)| *addr == *signer)
+            .find(|(addr, _)| *addr == s)
             .map(|(_, aliases)| aliases.clone())
-            .unwrap_or(NonEmpty::new(*signer));
-
-        // Find the signature that matches any alias for this signer.
-        let Some(sig_index) = alias_set
-            .iter()
-            .find_map(|alias| sig_mapping.get(alias).map(|(idx, _)| *idx))
-        else {
+            .unwrap_or(NonEmpty::new(s))
+    });
+    for s in required_signer_alias_sets {
+        if !s.iter().any(|s| present_sigs.contains_key(s)) {
             return Err(SuiErrorKind::SignerSignatureAbsent {
-                expected: alias_set
+                expected: s
                     .iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>()
                     .join(" or "),
-                actual: sig_mapping.keys().map(|s| s.to_string()).collect(),
+                actual: present_sigs.keys().map(|s| s.to_string()).collect(),
             }
             .into());
-        };
-        signer_to_sig_index.push(sig_index);
+        }
     }
 
     // 4. Every signature must be valid.
-    for (signer, (_, signature)) in sig_mapping {
+    for (signer, signature) in present_sigs {
         signature.verify_authenticator(
             intent_message,
             signer,
@@ -195,5 +167,5 @@ pub fn verify_sender_signed_data_message_signatures(
             zklogin_inputs_cache.clone(),
         )?;
     }
-    Ok(signer_to_sig_index)
+    Ok(())
 }

@@ -23,7 +23,6 @@ use mysten_metrics::{
     monitored_mpsc::{self, UnboundedReceiver},
     monitored_scope, spawn_monitored_task,
 };
-use nonempty::NonEmpty;
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
@@ -2922,27 +2921,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 ));
                         }
                         ConsensusTransactionKind::UserTransactionV2(tx) => {
-                            // Extract the aliases claim (required) from the claims
-                            let used_alias_versions = if self
-                                .epoch_store
-                                .protocol_config()
-                                .fix_checkpoint_signature_mapping()
-                            {
-                                tx.aliases()
-                            } else {
-                                // Convert V1 to V2 format using dummy signature indices
-                                // which will be ignored with `fix_checkpoint_signature_mapping`
-                                // disabled.
-                                tx.aliases_v1().map(|a| {
-                                    NonEmpty::from_vec(
-                                        a.into_iter()
-                                            .enumerate()
-                                            .map(|(idx, (_, seq))| (idx as u8, seq))
-                                            .collect(),
-                                    )
-                                    .unwrap()
-                                })
-                            };
+                            let used_alias_versions = tx.aliases();
                             let inner_tx = tx.into_tx();
                             // Safe because transactions are certified by consensus.
                             let tx = VerifiedTransaction::new_unchecked(inner_tx);
@@ -3515,7 +3494,8 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         transaction::{
-            CertifiedTransaction, TransactionData, TransactionDataAPI, VerifiedCertificate,
+            CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+            VerifiedCertificate,
         },
     };
 
@@ -4020,25 +4000,20 @@ mod tests {
 
     fn user_txn(gas_price: u64) -> VerifiedExecutableTransactionWithAliases {
         let (committee, keypairs) = Committee::new_simple_test_committee();
-        let (sender, sender_keypair) = deterministic_random_account_key();
-        let tx = sui_types::transaction::Transaction::from_data_and_signer(
+        let data = SenderSignedData::new(
             TransactionData::new_transfer(
                 SuiAddress::default(),
                 FullObjectRef::from_fastpath_ref(random_object_ref()),
-                sender,
+                SuiAddress::default(),
                 random_object_ref(),
                 1000 * gas_price,
                 gas_price,
             ),
-            vec![&sender_keypair],
+            vec![],
         );
         let tx = VerifiedExecutableTransaction::new_from_certificate(
             VerifiedCertificate::new_unchecked(
-                CertifiedTransaction::new_from_keypairs_for_testing(
-                    tx.into_data(),
-                    &keypairs,
-                    &committee,
-                ),
+                CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
             ),
         );
         VerifiedExecutableTransactionWithAliases::no_aliases(tx)

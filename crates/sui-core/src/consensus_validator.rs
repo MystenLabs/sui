@@ -147,15 +147,7 @@ impl SuiTxValidator {
                         .into());
                     }
                     if epoch_store.protocol_config().address_aliases() {
-                        let has_aliases = if epoch_store
-                            .protocol_config()
-                            .fix_checkpoint_signature_mapping()
-                        {
-                            tx.aliases().is_some()
-                        } else {
-                            tx.aliases_v1().is_some()
-                        };
-                        if !has_aliases {
+                        if tx.aliases().is_none() {
                             return Err(SuiErrorKind::UnexpectedMessage(
                                 "ConsensusTransactionKind::UserTransactionV2 must contain an aliases claim".to_string(),
                             )
@@ -261,8 +253,7 @@ impl SuiTxValidator {
         tx: PlainTransactionWithClaims,
     ) -> SuiResult<()> {
         // Extract claims before consuming the transaction
-        let aliases_v2 = tx.aliases();
-        let aliases_v1 = tx.aliases_v1();
+        let aliases_v1 = tx.aliases();
         let claimed_immutable_ids = tx.get_immutable_objects();
         let inner_tx = tx.into_tx();
 
@@ -292,37 +283,23 @@ impl SuiTxValidator {
 
         // aliases must have data when address_aliases() is enabled.
         if epoch_store.protocol_config().address_aliases() {
-            let aliases_match = if epoch_store
-                .protocol_config()
-                .fix_checkpoint_signature_mapping()
-            {
-                // V2 format comparison
-                let Some(claimed_v2) = aliases_v2 else {
-                    return Err(
-                        SuiErrorKind::InvalidRequest("missing address alias claim".into()).into(),
-                    );
-                };
-                *verified_tx.aliases() == claimed_v2
-            } else {
-                // V1 format comparison: derive V1 from verified_tx and compare
-                let Some(claimed_v1) = aliases_v1 else {
-                    return Err(
-                        SuiErrorKind::InvalidRequest("missing address alias claim".into()).into(),
-                    );
-                };
-                let computed_v1: Vec<_> = verified_tx
-                    .tx()
-                    .data()
-                    .intent_message()
-                    .value
-                    .required_signers()
-                    .into_iter()
-                    .zip_eq(verified_tx.aliases().iter().map(|(_, seq)| *seq))
-                    .collect();
-                let computed_v1 =
-                    NonEmpty::from_vec(computed_v1).expect("must have at least one signer");
-                computed_v1 == claimed_v1
+            let Some(claimed_v1) = aliases_v1 else {
+                return Err(
+                    SuiErrorKind::InvalidRequest("missing address alias claim".into()).into(),
+                );
             };
+            let computed_v1: Vec<_> = verified_tx
+                .tx()
+                .data()
+                .intent_message()
+                .value
+                .required_signers()
+                .into_iter()
+                .zip_eq(verified_tx.aliases().iter().map(|(_, seq)| *seq))
+                .collect();
+            let computed_v1 =
+                NonEmpty::from_vec(computed_v1).expect("must have at least one signer");
+            let aliases_match = computed_v1 == claimed_v1;
 
             if !aliases_match || fail_point_always_report_aliases_changed {
                 return Err(SuiErrorKind::AliasesChanged.into());
