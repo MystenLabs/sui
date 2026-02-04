@@ -9,7 +9,7 @@ task 0, lines 1-9:
 module 6.m {
 
 entry foo() {
-L0:	loc0: u64
+L0:	x: u64
 B0:
 	0: Ret
 }
