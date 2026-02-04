@@ -96,7 +96,11 @@ impl ConsensusAuthority {
         }
     }
 
-    pub fn update_peer_address(&self, network_pubkey: NetworkPublicKey, address: Option<Multiaddr>) {
+    pub fn update_peer_address(
+        &self,
+        network_pubkey: NetworkPublicKey,
+        address: Option<Multiaddr>,
+    ) {
         match self {
             Self::WithTonic(authority) => authority.update_peer_address(network_pubkey, address),
         }
