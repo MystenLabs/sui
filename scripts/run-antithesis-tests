@@ -33,6 +33,18 @@ if [ -z "$TEST_DURATION" ]; then
   TEST_DURATION=0.25
 fi
 
+if [ -n "$ALT_COMMIT" ]; then
+  resolved_commit=$(git rev-parse --verify "$ALT_COMMIT^{commit}" 2>/dev/null)
+  if [ -z "$resolved_commit" ]; then
+    resolved_commit=$(git rev-parse --verify "origin/$ALT_COMMIT^{commit}" 2>/dev/null)
+  fi
+  if [ -z "$resolved_commit" ]; then
+    echo "Error: Could not resolve '$ALT_COMMIT' to a commit SHA" >&2
+    exit 1
+  fi
+  ALT_COMMIT=$resolved_commit
+fi
+
 branch=$(git rev-parse HEAD)
 
 remote_branches=$(git branch -r --contains "$branch" 2>/dev/null)
