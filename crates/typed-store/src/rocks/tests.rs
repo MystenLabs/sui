@@ -801,11 +801,7 @@ async fn test_safe_iter_returns_error_on_deserialization_failure() {
 
     // Verify each result is an error
     for (i, result) in results.iter().enumerate() {
-        assert!(
-            result.is_err(),
-            "Entry {} should be an Err, got Ok",
-            i
-        );
+        assert!(result.is_err(), "Entry {} should be an Err, got Ok", i);
     }
 
     // Verify the data is still there by reading with the correct type
