@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use sui_config::{Config, PersistedConfig};
 use sui_keys::key_identity::KeyIdentity;
-use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_keys::keystore::{AccountKeystore, Alias, Keystore};
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{Signature, SuiKeyPair};
@@ -84,7 +84,23 @@ impl WalletContext {
     }
 
     pub fn get_addresses(&self) -> Vec<SuiAddress> {
-        self.config.keystore.addresses()
+        let mut addresses = self.config.keystore.addresses();
+
+        if let Some(external_keys) = &self.config.external_keys {
+            addresses.extend(external_keys.addresses());
+        }
+
+        addresses
+    }
+
+    pub fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)> {
+        let mut addresses = self.config.keystore.addresses_with_alias();
+
+        if let Some(external_keys) = &self.config.external_keys {
+            addresses.extend(external_keys.addresses_with_alias());
+        }
+
+        addresses
     }
 
     pub fn get_env_override(&self) -> Option<String> {
@@ -398,12 +414,21 @@ impl WalletContext {
         &self,
         key_identity: &KeyIdentity,
     ) -> Result<&Keystore, anyhow::Error> {
-        if self.config.keystore.get_by_identity(key_identity).is_ok() {
+        if self
+            .config
+            .keystore
+            .get_by_identity(key_identity)
+            .map(|address| self.config.keystore.addresses().contains(&address))
+            .unwrap_or(false)
+        {
             return Ok(&self.config.keystore);
         }
 
         if let Some(external_keys) = self.config.external_keys.as_ref()
-            && external_keys.get_by_identity(key_identity).is_ok()
+            && external_keys
+                .get_by_identity(key_identity)
+                .map(|address| external_keys.addresses().contains(&address))
+                .unwrap_or(false)
         {
             return Ok(external_keys);
         }
@@ -439,7 +464,10 @@ impl WalletContext {
         intent: Intent,
     ) -> Result<Signature, anyhow::Error> {
         let keystore = self.get_keystore_by_identity(key_identity)?;
-        let sig = keystore.sign_secure(&data.sender(), data, intent).await?;
+        let address = keystore.get_by_identity(key_identity).map_err(|_| {
+            anyhow!("No address found for the provided key identity: {key_identity}")
+        })?;
+        let sig = keystore.sign_secure(&address, data, intent).await?;
         Ok(sig)
     }
 
