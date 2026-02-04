@@ -4,7 +4,7 @@ description: Use SuiLink to connect wallets across different chains.
 keywords: [ wallet, wallets, sui, playtron, cross-chain, ethereum, solana, link, connect ]
 ---
 
-[SuiLink](https://www.suilink.io/) is a Mysten Labs product that allows you to securely link wallet addresses from different blockchain networks to your Sui wallet. When you create a SuiLink, you receive a soulbound NFT that serves as authenticated proof of ownership for your connected wallets.
+[SuiLink](https://www.suilink.io/) is a Mysten Labs product that lets you securely link wallet addresses from different blockchain networks to your Sui wallet. When you create a SuiLink, you receive a soulbound NFT that serves as authenticated proof of ownership for your connected wallets.
 
 ## Key features
 
@@ -19,7 +19,7 @@ SuiLink provides the following capabilities:
 
 SuiLink currently supports linking wallets cross-chain between Sui and Ethereum (Sui-to-Ethereum), and Sui and Solana (Sui-to-Solana).
 
-Sui-to-Sui linking is currently only supported programmatically with a custom solution for the [Playtron wallet app](https://wallet.playtron.one/). For more information, please visit the [SuiPlay0X1 SuiLink integration guide](/guides/suiplay0x1/wallet-integration.mdx#suilink).
+Sui-to-Sui linking is currently only supported programmatically with a custom solution for the [Playtron wallet app](https://wallet.playtron.one/). For more information, visit the [SuiPlay0X1 SuiLink integration guide](/guides/suiplay0x1/wallet-integration.mdx#suilink).
 
 ## Creating a SuiLink
 
@@ -31,7 +31,7 @@ To create a SuiLink:
 4. Follow the prompts to authenticate and connect the wallet you wish to link
 5. Complete the transaction to mint your SuiLink NFT
 
-Creating a SuiLink requires a small gas fee on the Sui network to mint the NFT. Ensure you have some SUI tokens in your wallet to complete the connection.
+Creating a SuiLink incurs a small gas fee on the Sui network to mint the NFT. Ensure you have some SUI tokens in your wallet to complete the connection.
 
 ## Managing SuiLink
 
@@ -43,7 +43,7 @@ To view your linked addresses:
 2. Check the `network_address` field to see which wallets are linked
 3. Review the timestamp to see when each link was created
 
-You can also permanently unlink a wallet by burning the corresponding NFT pass. To unlink an address:
+You can permanently unlink a wallet by burning the corresponding NFT pass. To unlink an address:
 
 1. Navigate to the NFTs section of your Sui wallet
 2. For the SuiLink NFT you wish to burn, select "Send" or "Transfer"
@@ -53,14 +53,14 @@ Additionally, there are various third-party tools (such as [SUI Manager](https:/
 
 ## Integrating SuiLink
 
-If you are building an application on Sui, you can integrate SuiLink to verify cross-chain ownership.
+When building an application on Sui, you can integrate SuiLink to verify cross-chain ownership.
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 
 - [x] [Install and configure a Sui client instance](/guides/developer/getting-started/configure-sui-client.mdx).
 
-- [x] [Install the Sui dApp Kit SDK in your project](https://sdk.mystenlabs.com/dapp-kit).
+- [x] [Install the Sui gRPC client to your project](https://sdk.mystenlabs.com/sui/clients/grpc).
 
 - [x] Obtain the correct SuiLink package ID for your target network.
 
@@ -74,33 +74,23 @@ If you are building an application on Sui, you can integrate SuiLink to verify c
 
 ### Querying SuiLink objects
 
-To retrieve a user's SuiLink connections, use the following dApp Kit SDK query:
+To retrieve a user's SuiLink connections, use the following gRPC query:
 
 ```typescript
 const SUILINK_PACKAGE_ID_ETH_SOL = '0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3';
 const SUILINK_PACKAGE_ID_SUI = '0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5';
 
-const SuiLink = bcs.struct('SuiLink', {
-  id: bcs.Address,
-  network_address: bcs.String,
-  timestamp_ms: bcs.U64,
+const ethSolSuiLinks = await grpcClient.listOwnedObjects({
+  owner: suiAddress,
+  type: `${SUILINK_PACKAGE_ID_ETH_SOL}::suilink::SuiLink`,
+  include: { json: true },
 });
 
-const ethSolSuiLinks = response.objects?.filter(obj => 
-  obj.type?.includes(SUILINK_PACKAGE_ID_ETH_SOL)
-) || [];
-
-const suiSuiLinks = response.objects?.filter(obj => 
-  obj.type?.includes(SUILINK_PACKAGE_ID_SUI)
-) || [];
-
-const parsedEthSolObjects = ethSolSuiLinks
-  .filter(obj => !(obj instanceof Error))
-  .map(obj => SuiLink.parse(obj.content));
-
-const parsedSuiObjects = suiSuiLinks
-  .filter(obj => !(obj instanceof Error))
-  .map(obj => SuiLink.parse(obj.content));
+const suiSuiLinks = await grpcClient.listOwnedObjects({
+  owner: suiAddress,
+  type: `${SUILINK_PACKAGE_ID_SUI}::suilink::SuiLink`,
+  include: { json: true },
+});
 ```
 
 This returns all SuiLink NFTs owned by the specified Sui address. Each NFT contains information about the linked wallet.
@@ -111,17 +101,23 @@ Each SuiLink NFT contains the following fields:
 
 ```typescript
 {
-  id: {
-    id: "0xcafe"
-  },
-  network_address: "0xdecaf",
-  timestamp_ms: "1751541273947"
+  "id": "0xcafe",
+  "network_address": "0xdecaf",
+  "timestamp_ms": "1751541273947"
 }
 ```
 
 The NFT type indicates which blockchain network the wallet is linked to:
 
 ```typescript
+for (const link of ethSolSuiLinks.objects) {
+  const id = link.json.id as string;                   // "0xcafe"
+  const linkedAddress = link.json.network_address as string; // "0xdecaf"
+  const timestamp = link.json.timestamp_ms as string;        // "1751541273947"
+  const chainType = link.type; // full type string includes the generic param,
+                               // e.g. "...::SuiLink<...::ethereum::Ethereum>"
+}
+
 // Sui-to-Sui SuiLink (Mainnet)
 0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3::suilink::SuiLink<0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5::sui::Sui>
 
@@ -137,123 +133,13 @@ The NFT type indicates which blockchain network the wallet is linked to:
 After retrieving a user's SuiLink objects, you can verify their ownership of specific assets on the linked blockchain:
 
 1. Extract the `network_address` from the SuiLink NFT.
-2. Use the appropriate blockchain API to query assets at that address. The examples use [Alchemy](https://www.alchemy.com/) for Ethereum, and [Metaplex](https://www.metaplex.com/) for Solana.
+2. Use the appropriate blockchain APIs to query assets at that address, such as [Alchemy](https://www.alchemy.com/) for Ethereum, and [Metaplex](https://www.metaplex.com/) for Solana.
 3. Verify the presence of the required asset.
 4. Attribute benefits to the user through their Sui wallet.
-
-<Tabs>
-
-<TabItem label="Ethereum" value="ethverify">
-
-```typescript
-// Get the user's SuiLink objects
-const suilinks = await client.core.getOwnedObjects({
-  owner: userSuiAddress,
-  filter: { Package: SUILINK_PACKAGE_ID_ETH_SOL },
-  options: { showContent: true, showType: true },
-});
-
-// Extract linked Ethereum addresses
-const ethereumAddresses = suilinks.data
-  .filter(obj => {
-    const type = obj.data?.content?.type || '';
-    return type.includes('ethereum::Ethereum');
-  })
-  .map(obj => obj.data?.content?.fields?.network_address)
-  .filter(Boolean);
-
-// Initialize Alchemy
-const alchemy = new Alchemy({
-  apiKey: alchemyApiKey,
-  network: Network.ETH_MAINNET,
-});
-
-// Query Ethereum blockchain for assets
-for (const ethAddress of ethereumAddresses) {
-  const assets = await alchemy.nft.getNftsForOwner(ethAddress);
-    
-  if (assets.ownedNfts.some(nft => nft.contract.address === requiredNFT)) {
-    // Grant benefit to user
-    grantBenefit(userSuiAddress);
-  }
-}
-```
-
-</TabItem>
-
-<TabItem label="Solana" value="solverify">
-
-```typescript
-// Get the user's SuiLink objects
-const suilinks = await client.core.getOwnedObjects({
-  owner: userSuiAddress,
-  filter: { Package: SUILINK_PACKAGE_ID_ETH_SOL },
-  options: { showContent: true, showType: true },
-});
-
-// Extract linked Solana addresses
-const solanaAddresses = suilinks.data
-  .filter(obj => {
-    const type = obj.data?.content?.type || '';
-    return type.includes('solana::Solana');
-  })
-  .map(obj => obj.data?.content?.fields?.network_address)
-  .filter(Boolean);
-
-// Query Solana blockchain
-const connection = new Connection('https://api.mainnet-beta.solana.com');
-const metaplex = Metaplex.make(connection);
-
-for (const solanaAddress of solanaAddresses) {
-  const publicKey = new PublicKey(solanaAddress);
-  const assets = await metaplex.nfts().findAllByOwner({ owner: publicKey });
-    
-  if (assets.some(nft => nft.mintAddress.toString() === requiredNFT)) {
-    grantBenefit(userSuiAddress);
-  }
-}
-```
-
-</TabItem>
-
-<TabItem label="Sui" value="suiverify">
-
-```typescript
-// Get the user's SuiLink objects (Sui-to-Sui)
-const suilinks = await client.core.getOwnedObjects({
-  owner: userSuiAddress,
-  filter: { Package: SUILINK_PACKAGE_ID_SUI },
-  options: { showContent: true, showType: true },
-});
-
-// Extract linked Sui addresses
-const linkedSuiAddresses = suilinks.data
-  .filter(obj => {
-    const type = obj.data?.content?.type || '';
-    return type.includes('sui::Sui');
-  })
-  .map(obj => obj.data?.content?.fields?.network_address)
-  .filter(Boolean);
-
-// Query Sui blockchain for assets in linked wallets
-for (const linkedSuiAddress of linkedSuiAddresses) {
-  const assets = await client.core.getOwnedObjects({
-    owner: linkedSuiAddress,
-    options: { showContent: true, showType: true },
-  });
-    
-  if (assets.data.some(obj => obj.data?.objectId === requiredNFT)) {
-    grantBenefit(userSuiAddress);
-  }
-}
-```
-
-</TabItem>
-
-</Tabs>
 
 ## Related links
 
 - [SuiLink](https://www.suilink.io/): SuiLink main product page
-- [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): React components and hooks for building Sui dApps
+- [Sui gRPC Client](https://sdk.mystenlabs.com/sui/clients/grpc): Full Node gRPC API documentation
+- [Sui JSON-RPC Migration](https://sdk.mystenlabs.com/sui/migrations/sui-2.0/json-rpc-migration): Migration guide for deprecated Sui JSON-RPC
 - [Wallet Integration Options](/guides/suiplay0x1/wallet-integration): Comprehensive guide on wallet strategies for SuiPlay0X1
