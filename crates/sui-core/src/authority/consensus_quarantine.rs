@@ -336,9 +336,13 @@ impl ConsensusCommitOutput {
             &tables.deferred_transactions_with_aliases_v2,
             &self.deleted_deferred_txns,
         )?;
+        batch.delete_batch(
+            &tables.deferred_transactions_with_aliases_v3,
+            &self.deleted_deferred_txns,
+        )?;
 
         batch.insert_batch(
-            &tables.deferred_transactions_with_aliases_v2,
+            &tables.deferred_transactions_with_aliases_v3,
             self.deferred_txns.into_iter().map(|(key, txs)| {
                 (
                     key,

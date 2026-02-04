@@ -3868,6 +3868,21 @@ pub type TransactionWithAliases = WithAliases<Transaction>;
 pub type VerifiedTransactionWithAliases = WithAliases<VerifiedTransaction>;
 pub type TrustedTransactionWithAliases = WithAliases<TrustedTransaction>;
 
+/// Deprecated version of WithAliases that uses SuiAddress instead of u8.
+/// This is needed to read data from deferred_transactions_with_aliases_v2 table
+/// which was written with the old format before the type was changed.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DeprecatedWithAliases<T>(
+    T,
+    #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+);
+
+impl<T> DeprecatedWithAliases<T> {
+    pub fn into_inner(self) -> (T, NonEmpty<(SuiAddress, Option<SequenceNumber>)>) {
+        (self.0, self.1)
+    }
+}
+
 impl<T: Message, S> From<WithAliases<VerifiedEnvelope<T, S>>> for WithAliases<Envelope<T, S>> {
     fn from(value: WithAliases<VerifiedEnvelope<T, S>>) -> Self {
         Self(value.0.into(), value.1)
