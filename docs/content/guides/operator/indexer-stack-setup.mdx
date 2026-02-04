@@ -75,7 +75,7 @@ Example:
 
 ```sh
 $ sui-indexer-alt indexer \
-    --config misc.toml \
+    --config unpruned.toml \
     --database-url postgres://username:password@localhost:5432/database \
     --remote-store-url https://checkpoints.mainnet.sui.io
 ```
@@ -83,6 +83,7 @@ $ sui-indexer-alt indexer \
 ### Run config recommendations {#indexer-run-config}
 
 We recommend using the TOML files below which are grouped by pipeline speed. All pipelines in an instance are limited by the slowest pipeline in that instance so these files each contain pipelines that run at approximately the same speed.
+Note: when backfilling, you should set the `ingest-concurrency` to a higher value, e.g. 200, then reduce it to 20 for normal operation at network tip.
 
 <table>
 	<thead>
@@ -116,12 +117,11 @@ We recommend using the TOML files below which are grouped by pipeline speed. All
 			</td>
 		</tr>
 		<tr>
-			<td>`misc.toml`</td>
-			<td>Lightweight miscellaneous tables.</td>
+			<td>`unpruned.toml`</td>
+			<td>Foundational and reference data that other queries and parts of the indexer depend on.</td>
 			<td>
 				<ul className="pl-4">
 					<li>`cp_sequence_numbers`</li>
-					<li>`tx_balance_changes`</li>
 					<li>`tx_digests`</li>
 					<li>`kv_epoch_ends`</li>
 					<li>`kv_epoch_starts`</li>
@@ -132,13 +132,13 @@ We recommend using the TOML files below which are grouped by pipeline speed. All
 				</ul>
 			</td>
 			<td>2-4 days</td>
-			<td>90 days</td>
+			<td>Unpruned</td>
 		</tr>
 		<tr>
 			<td colspan={5}>
 				<details>
-					<summary>`misc.toml`</summary>
-					<ImportContent source="examples/prod-config/misc.toml" mode="code" />
+					<summary>`unpruned.toml`</summary>
+					<ImportContent source="examples/prod-config/unpruned.toml" mode="code" />
 				</details>
 			</td>
 		</tr>
@@ -214,6 +214,21 @@ We recommend using the TOML files below which are grouped by pipeline speed. All
 				<details>
 					<summary>`tx_kinds.toml`</summary>
 					<ImportContent source="examples/prod-config/tx_kinds.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+				<tr>
+			<td>`tx_balance_changes.toml`</td>
+			<td>Midweight transaction table.</td>
+			<td>`tx_balance_changes`</td>
+			<td>1-2 days</td>
+			<td>90 days</td>
+		</tr>
+		<tr>
+			<td colspan={5}>
+				<details>
+					<summary>`tx_balance_changes.toml`</summary>
+					<ImportContent source="examples/prod-config/tx_balance_changes.toml" mode="code" />
 				</details>
 			</td>
 		</tr>
@@ -390,7 +405,7 @@ Example:
 sui-indexer-alt-graphql rpc \
     --config graphql.toml \
     --indexer-config events.toml \
-    --indexer-config misc.toml \
+    --indexer-config unpruned.toml \
     --indexer-config obj_versions.toml \
     --indexer-config tx_affected_addresses.toml \
     --indexer-config tx_affected_objects.toml \

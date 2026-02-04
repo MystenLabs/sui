@@ -6,3 +6,5 @@ ingest-concurrency = 20
 [pipeline.object-by-owner]
 
 [pipeline.object-by-type]
+
+[pipeline.address-balances]
