@@ -2930,14 +2930,21 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             {
                                 tx.aliases()
                             } else {
-                                // Convert V1 to V2 format using dummy signature indices
-                                // which will be ignored with `fix_checkpoint_signature_mapping`
-                                // disabled.
+                                // Convert V1 to V2 format by deriving actual signature indices
+                                // from the transaction's signer-signature mapping.
                                 tx.aliases_v1().map(|a| {
+                                    let sig_mapping = tx.tx().data()
+                                        .get_signer_sig_mapping(false)
+                                        .expect("signature mapping must succeed for verified transaction");
+
                                     NonEmpty::from_vec(
                                         a.into_iter()
-                                            .enumerate()
-                                            .map(|(idx, (_, seq))| (idx as u8, seq))
+                                            .map(|(addr, seq)| {
+                                                let (sig_idx, _) = sig_mapping
+                                                    .get(&addr)
+                                                    .expect("required signer must have corresponding signature");
+                                                (*sig_idx, seq)
+                                            })
                                             .collect(),
                                     )
                                     .unwrap()

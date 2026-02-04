@@ -3173,7 +3173,7 @@ impl<'de> Deserialize<'de> for SenderSignedTransaction {
 
 impl SenderSignedTransaction {
     /// Returns a mapping from signer address to the signature and its index in `tx_signatures`.
-    pub(crate) fn get_signer_sig_mapping(
+    pub fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
     ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
@@ -3228,7 +3228,7 @@ impl SenderSignedData {
         self.inner_mut().tx_signatures.push(new_signature.into());
     }
 
-    pub(crate) fn get_signer_sig_mapping(
+    pub fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
     ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
