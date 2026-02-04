@@ -716,11 +716,13 @@ impl SuiNode {
 
         // Inject configured peer address overrides.
         for peer in &config.p2p_config.peer_address_overrides {
-            endpoint_manager.update_endpoint(
-                EndpointId::P2p(peer.peer_id),
-                AddressSource::Config,
-                peer.addresses.clone(),
-            );
+            endpoint_manager
+                .update_endpoint(
+                    EndpointId::P2p(peer.peer_id),
+                    AddressSource::Config,
+                    peer.addresses.clone(),
+                )
+                .expect("Updating peer address overrides should not fail");
         }
 
         // Send initial peer addresses to the p2p network.
@@ -904,6 +906,9 @@ impl SuiNode {
 
             // Start the gRPC server
             components.validator_server_handle = components.validator_server_handle.start().await;
+
+            // Set the consensus address updater so that we can update the consensus peer addresses when requested.
+            endpoint_manager.set_consensus_address_updater(components.consensus_manager.clone());
 
             Some(components)
         } else {
@@ -2028,6 +2033,10 @@ impl SuiNode {
                     components.validator_server_handle =
                         components.validator_server_handle.start().await;
 
+                    // Set the consensus address updater as the full node got promoted now to a validator.
+                    self.endpoint_manager
+                        .set_consensus_address_updater(components.consensus_manager.clone());
+
                     Some(components)
                 } else {
                     None
@@ -2448,11 +2457,13 @@ fn update_peer_addresses(
     for (peer_id, address) in
         epoch_start_state.get_validator_as_p2p_peers(config.protocol_public_key())
     {
-        endpoint_manager.update_endpoint(
-            EndpointId::P2p(peer_id),
-            AddressSource::Committee,
-            vec![address],
-        );
+        endpoint_manager
+            .update_endpoint(
+                EndpointId::P2p(peer_id),
+                AddressSource::Committee,
+                vec![address],
+            )
+            .expect("Updating peer addresses should not fail");
     }
 }
 

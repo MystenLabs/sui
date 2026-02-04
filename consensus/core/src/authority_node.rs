@@ -3,10 +3,13 @@
 
 use std::{sync::Arc, time::Instant};
 
-use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use consensus_config::{
+    AuthorityIndex, Committee, NetworkKeyPair, NetworkPublicKey, Parameters, ProtocolKeyPair,
+};
 use consensus_types::block::Round;
 use itertools::Itertools;
 use mysten_metrics::spawn_logged_monitored_task;
+use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
@@ -90,6 +93,16 @@ impl ConsensusAuthority {
     pub async fn stop(self) {
         match self {
             Self::WithTonic(authority) => authority.stop().await,
+        }
+    }
+
+    pub fn update_peer_address(
+        &self,
+        network_pubkey: NetworkPublicKey,
+        address: Option<Multiaddr>,
+    ) {
+        match self {
+            Self::WithTonic(authority) => authority.update_peer_address(network_pubkey, address),
         }
     }
 
@@ -413,6 +426,36 @@ where
 
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
+    }
+
+    pub(crate) fn update_peer_address(
+        &self,
+        network_pubkey: NetworkPublicKey,
+        address: Option<Multiaddr>,
+    ) {
+        // Find the peer index for this network key
+        let Some(peer) = self
+            .context
+            .committee
+            .authorities()
+            .find(|(_, authority)| authority.network_key == network_pubkey)
+            .map(|(index, _)| index)
+        else {
+            warn!(
+                "Network public key {:?} not found in committee, ignoring address update",
+                network_pubkey
+            );
+            return;
+        };
+
+        // Update the address in the network manager
+        self.network_manager.update_peer_address(peer, address);
+
+        // Re-subscribe to the peer to force reconnection with new address
+        if peer != self.context.own_index {
+            info!("Re-subscribing to peer {} after address update", peer);
+            self.subscriber.subscribe(peer);
+        }
     }
 }
 
