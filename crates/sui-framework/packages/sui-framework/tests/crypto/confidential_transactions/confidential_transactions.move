@@ -1,6 +1,7 @@
 #[allow(implicit_const_copy), test_only]
 module sui::confidential_transactions;
 
+use std::unit_test::assert_eq;
 use sui::balance::Balance;
 use sui::coin::{Self, Coin};
 use sui::group_ops::Element;
@@ -26,7 +27,8 @@ use sui::twisted_elgamal::{
     encrypted_amount_2_u32_unverified_to_encryption,
     verify_sum_proof_with_encryption,
     encrypted_amount_4_u16_to_encryption,
-    encrypted_amount_2_u_32_zero_verify_non_negative
+    encrypted_amount_2_u_32_zero_verify_non_negative,
+    encrypted_amount_4_u16_verify_range
 };
 use sui::vec_map::VecMap;
 
@@ -168,7 +170,7 @@ public fun take_from_balance_to_other<T>(
     let pk = &account.pk;
 
     let mut proofs = proofs;
-    let _taken_balance_range_proof = proofs.pop_back();
+    let taken_amount_range_proof = proofs.pop_back();
     let new_balance_range_proof = proofs.pop_back();
     let balance_sum_proof = proofs.pop_back();
     let handle_eq_proof = proofs.pop_back();
@@ -207,12 +209,13 @@ public fun take_from_balance_to_other<T>(
         ),
     );
 
-    // TODO: check proofs that
-    // (2) new_balance is u32 or full new_balance is u64 (not negative),
+    // (3) new_balance is u32 or full new_balance is u64 (not negative),
     assert!(
         encrypted_amount_2_u_32_zero_verify_non_negative(&new_balance, &new_balance_range_proof),
     );
-    // (3) taken_balance is u16 (batch range proofs)
+
+    // (4) taken_balance is u16 (batch range proofs)
+    assert!(encrypted_amount_4_u16_verify_range(&taken_amount, &taken_amount_range_proof));
 
     account.balance = new_balance;
 
@@ -238,7 +241,7 @@ public fun take_from_balance_to_self<T>(
     let pk = &account.pk;
 
     let mut proofs = proofs;
-    let _taken_balance_range_proof = proofs.pop_back();
+    let taken_amount_range_proof = proofs.pop_back();
     let new_balance_range_proof = proofs.pop_back();
     let balance_sum_proof = proofs.pop_back();
 
@@ -259,6 +262,7 @@ public fun take_from_balance_to_self<T>(
     );
 
     // (3) taken_balance is u16 (batch range proofs)
+    assert!(encrypted_amount_4_u16_verify_range(&taken_amount, &taken_amount_range_proof));
 
     account.balance = new_balance;
 
@@ -421,8 +425,8 @@ fun test_flow() {
             x"4ec74ffb7b9991039a09f3b076090ca410135eb33dba879068cee4356d858023fcb8b20b11c1bdb8a7858910dedebf6bfc341b408848c5899d8a917657921c6f3ee48728e43c4f994ec514b2188ca5b801e498490ae3bb1c66aabdaf8ab5c40e",
             x"305cb80cd22385166ca38a21268d8444ef51565238b82c22a5ed2c958e2cf85ce86f3ceacd6e58fea84b553f92289a24d345a73750b0242b6b72b99089b65859f6ff9546e477e3567079995f0d9e70dc58c8f45bf0137a8f8e74e24b1ae3410d",
             x"a00538b4ad0cbbda8d89776300f698ee7d54c6ceaff9739069a6386aeaca8ae3ec44068731bc8835977574b1cf3cfe497e335e4aaa53e53b8235a2951d6cc1b003500c70d34e53b7cf2ab9f8d21e7740529f17d477e6ebba8c610c940eefbb2dfb609a7aa96518ea78c30488f8a24284393d6346345d01f1ad93b05cc6c17da6e751fd8ba91c51032cf8704dd4afa4114ccdca5d3d9d70e9316e7650c076dca30a01bbefdd3c46f43d79292008967c4f232096813194875cdc185e08e902a3b6e80bb2b745ec08d81a0821c92d7c908547b7b8634157063324365a4d75a38dc7ca0a20b3a73503e3566f5b251e96cbd08047f355f50d26d915e37d8e479e30bd265b6c5a77daffe86c3d32b0197cb0d7013d58bacc313d49d11a524757bd22b3081dc21caada4cdd3fbfa83ee8bad11d9ec18af9fc06b0915293738ad9b88a79ae00423a48de0aa62df58ccc150db1f86579c112dcfa464fed7383c45215465b3161f2e1b896a6e1e9d2961c639145beb5ccfb6d1e4a280005ab8c666879df880e15f02dd97bad72148b266f80b06c350993908d5de1e52c38dda238848686df4e44e6ef4e1d518b0a21c42a67ce0fdd1df7d2a715844964a7ca77e6a6c90ba90a78b43857609bdccde5543e1461d412291a5cdb9d2f026b0e5e0dcd54d72fd6dc39a0766a866b315c52ca83f23bfb76ab2170548978a678cbd042d9ffed20eb4441104d4bd9144e78bcf3a64a157987e61e2ae24e79582b5dc7dcf1dafc4b3edc57a8557341878ee50f15c0b8fd52b3dba57d667f1497154f133a35e9bd16f5f63c7cc5163657a539a7a135440dbccebaeb1348cb1bded858d15740b91e91b28f7d6abefa05d6754c992843d575bb0cad8846b1a6d02f9d398c8f9d519b7a5deb06f4c1427a777175fb23f2eb16a577eb2ec31f28e2186bb0dbf79b3cb2abb41408",
-            x"",
-        ], // TODO
+            x"a0051e2e2666752cbaa7a6f5cabfd3dcf84338d13a1bf380da7d9442e64c35565a06de7b2de412ebde9d8cda2486bf1007ea7c5cf5e704c48478b3075245827acc2084d5816b4b9331572c648dbb56b5da2ca0973fc6cdc34557a37aa8eef21b1a5762c51ce77c28983fe09f736ff43d6795a1163844b959663d462ed4c7a4ba5973c4ed0ad46ef07782c324a748c5dc712302394ce998b27bdb040152c70c0441032f813fd43541705a3052c411c47c0b25837151018f1d6096f776bfd129492103aba83ab64d6baaddddebe1d1c3983a2e943567d6e3e20b24a3bf94d19496570754b28e28a9862c26df9a52e5452b6f35d3a560f617995f992984610decf21974e028363bded76bd048398e317e60fecdbcd6cfc2d542b30d55a8592063ba117ac655a61ec37f06a37cb4280dd5d4ddb24bfad469741f29310bb8bbc51cad4346026727531708a88195c68b5737613918e30d68a1c9ac066a9f8128b5397033515290ea3cdcc184585dd626dfc6c4149077c5b683552fa23202a5e643465751628a8ca705ce920a8fafeccb5c1b9da1535e05608c5cb6708a29c0ec4366d6fa6cfe019eefac265c9e628a39e8b270e067bd8593dfd7863cf0db2236328c35b66f7edf5dd3b7a103257c6ad3764ba4cf00a93cae882fb4d67ce862e4e7dc6e7011c8b3673121a26062def1b72bc3ebf1c41cbde27caf47c0e0595a15aa3d41b17e9cd888ae1b17b16215b892fd1a96eef87de05cd9066866e1485b4915d8c0d074a05b45dbc048f8580f18172f797ae7263b7b1ee65ffecb06ecd6a6d498bc860fa47db0d5b6a6377953092e2084df6be6ebbef8b8e7bac0a0b22fce3f3e468c30d9ba937eeea9fa01119e35e5ce32cab1d1080329bb4b78a57f874c46905454098e20aff8c62ba98417b6faef8f7ad888de96ca7b8f3523355950b80a468bbd00",
+        ],
         scenario.ctx(),
     );
     std::debug::print(&3);
@@ -458,8 +462,8 @@ fun test_flow() {
         vector[
             x"d4e6e331bcabcd2507a2fb1e5137078e0cf88801fc0d78fa68486207efd2023090d3988ba69737b2e8ad52d54ccc7a6b35f8c7eb517780c4e19765167d051b63ba160348dd2d19bb50e0a109bab8ef35b2f03611df00c7aea4f80535d2ca3d01",
             x"a00514fffca8e77d8f9bfca17e33d8454a3f7fa8834720b271f8841678f3b2552f490cc64dac5588a18589cd7ded16c7364bdc5903bbfcfd563682e6e290147de84dccbad55be7241ebd0865f2b5a52c38566a9c059ff1aafc8a1aba056ec7c02e04b84bce1537bfd1541ee720eb0280ee9161d5b15e6b79e194d2db5ab9ca62800760fd1aeaccb540fd2c93a1a3d0094079ad79874a289cb9d554eb06b4f78e16072cc647bbd7dce21fadd48bd704b54afbdaf7ee870bcd9e7f5551e8283cdddf08110fe806470b9bf8c3fa60d00b6ebb4953258799c2643a2b8d165abc5b2a170494a344be2e3342f4bef1257fec1a15a3117a177f8bc0572db0ac47455dca946842c3b5f383ff89a77cdfccd413d09a1035c30f6b6f63eeb24a9f7d5d761baf397c777540eec41f050c21b07cf0e6a2e6b289cb70baca2b2853143de1a08f7f7d4ac7d9de7966cc30b6534cb817afb1add42f6b27b9a034ee42f67b495fb92301823fa76f0b4306c57469d034b4985401039aa4e84e5927bf05c8248ea2465b1aeabb37ed7dc3beefd65389db5f513798b2ae9a132d4d545e31b0aab4596774421a9592086e1bbe13a7aae661d43049e98e28100ba5541b5c51fa5d982b7af364629addffc445ec67c489d8cb0a31e639680e2a05370453f0623e11a1a7446357e0ef935bd966052c648bc46df6cea7585a5ca0e2d49a70a0e58664f77d1af664c0b01e85ca5dceaee43c0e1017d2ef97a51348e152c1db371f87055ea3699c4d6c17df8f23361a936134ec7d80d44cb80234ea151563ba4b37536d3be31ee65e98e93746c43b81ecd052694532f4a0eb5ef429807417a6c95f03176585e7287e44083c9e134ef8ea97cd9d2ceb30ac81cdcf8dcea39ccce774335c1065712b095f11c07232b31d522d8b9a8681935d1dd96f78415dd47bc58fe9226f8c02ba03",
-            x"",
-        ], // TODO
+            x"a0051e2e2666752cbaa7a6f5cabfd3dcf84338d13a1bf380da7d9442e64c35565a06de7b2de412ebde9d8cda2486bf1007ea7c5cf5e704c48478b3075245827acc2084d5816b4b9331572c648dbb56b5da2ca0973fc6cdc34557a37aa8eef21b1a5762c51ce77c28983fe09f736ff43d6795a1163844b959663d462ed4c7a4ba5973c4ed0ad46ef07782c324a748c5dc712302394ce998b27bdb040152c70c0441032f813fd43541705a3052c411c47c0b25837151018f1d6096f776bfd129492103aba83ab64d6baaddddebe1d1c3983a2e943567d6e3e20b24a3bf94d19496570754b28e28a9862c26df9a52e5452b6f35d3a560f617995f992984610decf21974e028363bded76bd048398e317e60fecdbcd6cfc2d542b30d55a8592063ba117ac655a61ec37f06a37cb4280dd5d4ddb24bfad469741f29310bb8bbc51cad4346026727531708a88195c68b5737613918e30d68a1c9ac066a9f8128b5397033515290ea3cdcc184585dd626dfc6c4149077c5b683552fa23202a5e643465751628a8ca705ce920a8fafeccb5c1b9da1535e05608c5cb6708a29c0ec4366d6fa6cfe019eefac265c9e628a39e8b270e067bd8593dfd7863cf0db2236328c35b66f7edf5dd3b7a103257c6ad3764ba4cf00a93cae882fb4d67ce862e4e7dc6e7011c8b3673121a26062def1b72bc3ebf1c41cbde27caf47c0e0595a15aa3d41b17e9cd888ae1b17b16215b892fd1a96eef87de05cd9066866e1485b4915d8c0d074a05b45dbc048f8580f18172f797ae7263b7b1ee65ffecb06ecd6a6d498bc860fa47db0d5b6a6377953092e2084df6be6ebbef8b8e7bac0a0b22fce3f3e468c30d9ba937eeea9fa01119e35e5ce32cab1d1080329bb4b78a57f874c46905454098e20aff8c62ba98417b6faef8f7ad888de96ca7b8f3523355950b80a468bbd00",
+        ],
         scenario.ctx(),
     );
     std::debug::print(&6);
