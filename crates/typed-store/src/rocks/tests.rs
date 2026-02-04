@@ -687,3 +687,124 @@ fn open_rocksdb<P: AsRef<Path>>(path: P, opt_cfs: &[&str]) -> Arc<Database> {
     )
     .expect("failed to open rocksdb")
 }
+
+/// Two types that have different BCS serialization formats
+mod type_mismatch_types {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    pub struct OriginalValue {
+        pub field_a: u64,
+        pub field_b: String,
+        pub field_c: Vec<u8>,
+    }
+
+    /// A different type with an incompatible layout - BCS is position-based,
+    /// so even with the same field names, different types will fail to deserialize
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    pub struct IncompatibleValue {
+        pub field_a: String, // Changed from u64 to String - will fail to deserialize
+        pub field_b: u64,    // Changed from String to u64
+    }
+}
+
+#[tokio::test]
+async fn test_safe_iter_silently_ignores_deserialization_errors() {
+    use type_mismatch_types::{IncompatibleValue, OriginalValue};
+
+    let path = temp_dir();
+    let cf_name = "test_cf";
+
+    // Step 1: Create a database and insert values with OriginalValue type
+    let rocks = open_rocksdb(path.clone(), &[cf_name]);
+
+    let db_original: DBMap<i32, OriginalValue> =
+        DBMap::reopen(&rocks, Some(cf_name), &ReadWriteOptions::default(), false)
+            .expect("Failed to open storage");
+
+    // Insert multiple values
+    let original_values = vec![
+        (
+            1,
+            OriginalValue {
+                field_a: 100,
+                field_b: "hello".to_string(),
+                field_c: vec![1, 2, 3],
+            },
+        ),
+        (
+            2,
+            OriginalValue {
+                field_a: 200,
+                field_b: "world".to_string(),
+                field_c: vec![4, 5, 6],
+            },
+        ),
+        (
+            3,
+            OriginalValue {
+                field_a: 300,
+                field_b: "test".to_string(),
+                field_c: vec![7, 8, 9],
+            },
+        ),
+    ];
+
+    for (key, value) in &original_values {
+        db_original
+            .insert(key, value)
+            .expect("Failed to insert value");
+    }
+
+    // Verify the values were inserted correctly with the original type
+    let original_count = db_original.safe_iter().count();
+    assert_eq!(
+        original_count, 3,
+        "Should have 3 values when reading with correct type"
+    );
+
+    // Step 2: Reopen the same column family with a different, incompatible value type
+    let db_incompatible: DBMap<i32, IncompatibleValue> =
+        DBMap::reopen(&rocks, Some(cf_name), &ReadWriteOptions::default(), false)
+            .expect("Failed to reopen storage with different type");
+
+    // Step 3: Iterate using safe_iter - this demonstrates the bug
+    // The values should fail to deserialize, but currently safe_iter silently ignores them
+    let results: Vec<_> = db_incompatible.safe_iter().collect();
+
+    // BUG DEMONSTRATION:
+    // - We inserted 3 values into the database
+    // - When we iterate with an incompatible type, deserialization should fail
+    // - Currently, safe_iter silently returns None for failed deserializations
+    // - This means we get NO values and NO errors - the data appears to not exist
+
+    // Count how many Ok results we got
+    let ok_count = results.iter().filter(|r| r.is_ok()).count();
+    // Count how many Err results we got
+    let err_count = results.iter().filter(|r| r.is_err()).count();
+
+    // This assertion documents the current buggy behavior:
+    // We expect 0 values because they all fail to deserialize
+    assert_eq!(
+        ok_count, 0,
+        "BUG: safe_iter returns no values when deserialization fails"
+    );
+    // We also expect 0 errors - the failures are silent!
+    assert_eq!(
+        err_count, 0,
+        "BUG: safe_iter emits no errors when deserialization fails"
+    );
+    // The total number of items yielded by the iterator is 0
+    assert_eq!(
+        results.len(),
+        0,
+        "BUG: safe_iter yields nothing - failures are completely silent"
+    );
+
+    // Verify the data is still there by reading with the correct type
+    let verification_count = db_original.safe_iter().count();
+    assert_eq!(
+        verification_count, 3,
+        "Data should still exist in the database"
+    );
+}
