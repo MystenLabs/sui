@@ -11,6 +11,7 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::End;
 
 use crate::db::iter::FwdIter;
 use crate::db::iter::RevIter;
+use crate::db::key;
 use crate::db::map::DbMap;
 use crate::rpc::error::RpcError;
 use crate::rpc::error::db_error;
@@ -102,12 +103,47 @@ impl<'r> Page<'r> {
                 map.prefix(checkpoint, prefix)
                     .map_err(|e| db_error(e, "failed to create forward iterator"))?,
                 pred,
+                None,
             )
         } else {
             self.paginate_from_back(
                 map.prefix_rev(checkpoint, prefix)
                     .map_err(|e| db_error(e, "failed to create reverse iterator"))?,
                 pred,
+                None,
+            )
+        }
+    }
+
+    /// Paginate over the key-value pairs in `map` that start with the `base_prefix`, excluding
+    /// those that include the `exclude`, at the given `checkpoint`.
+    pub(super) fn paginate_exclude<B, P, K, V, E>(
+        &self,
+        map: &DbMap<K, V>,
+        checkpoint: u64,
+        base: &B,
+        exclude: &P,
+    ) -> Result<Response<K, V>, RpcError<E>>
+    where
+        B: Encode,
+        P: Encode,
+        K: Encode + Decode<()>,
+        V: Serialize + DeserializeOwned,
+    {
+        let exclude_prefix = key::encode(&(base, exclude));
+        if self.is_from_front {
+            self.paginate_from_front(
+                map.prefix(checkpoint, base)
+                    .map_err(|e| db_error(e, "failed to create forward iterator"))?,
+                |_, _, _| true,
+                Some(&exclude_prefix),
+            )
+        } else {
+            self.paginate_from_back(
+                map.prefix_rev(checkpoint, base)
+                    .map_err(|e| db_error(e, "failed to create reverse iterator"))?,
+                |_, _, _| true,
+                Some(&exclude_prefix),
             )
         }
     }
@@ -120,10 +156,12 @@ impl<'r> Page<'r> {
         self.is_from_front
     }
 
+    /// Fully-qualified prefix to exclude from results
     fn paginate_from_front<K, V, E>(
         &self,
         mut iter: FwdIter<'_, K, V>,
         mut pred: impl FnMut(&[u8], &K, &V) -> bool,
+        exclude_prefix: Option<&[u8]>,
     ) -> Result<Response<K, V>, RpcError<E>>
     where
         K: Decode<()>,
@@ -150,6 +188,15 @@ impl<'r> Page<'r> {
             let Some(cursor) = iter.raw_key() else {
                 break;
             };
+
+            // Cursors should never point into an exclusion range and we expect callers to use
+            // consistent filters across pages.
+            if let Some(excl) = exclude_prefix {
+                if cursor.starts_with(excl) {
+                    iter.skip_prefix(excl);
+                    continue;
+                }
+            }
 
             if self.before.is_some_and(|b| cursor >= b) {
                 return Ok(Response {
@@ -179,6 +226,7 @@ impl<'r> Page<'r> {
         &self,
         mut iter: RevIter<'_, K, V>,
         mut pred: impl FnMut(&[u8], &K, &V) -> bool,
+        exclude_prefix: Option<&[u8]>,
     ) -> Result<Response<K, V>, RpcError<E>>
     where
         K: Decode<()>,
@@ -205,6 +253,13 @@ impl<'r> Page<'r> {
             let Some(cursor) = iter.raw_key() else {
                 break;
             };
+
+            if let Some(excl) = exclude_prefix {
+                if cursor.starts_with(excl) {
+                    iter.skip_prefix(excl);
+                    continue;
+                }
+            }
 
             if self.after.is_some_and(|a| a >= cursor) {
                 results.reverse();
