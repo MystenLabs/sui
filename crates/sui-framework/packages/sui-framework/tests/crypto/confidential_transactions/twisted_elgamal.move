@@ -125,6 +125,16 @@ public fun encrypted_amount_2_u_32_zero(pk: &Element<Point>): EncryptedAmount2U3
     }
 }
 
+public(package) fun encrypted_amount_2_u_32_zero_verify_non_negative(
+    ea: &EncryptedAmount2U32Unverified,
+    proof: &vector<u8>,
+): bool {
+    // TODO: No need to also add decryption handles here
+    let value = ea.l0.add(&ea.l1.shift_left(32));
+    std::debug::print(&value);
+    ristretto255::verify_range_proof(proof, 64, &vector[value.ciphertext])
+}
+
 // Encrypted u64 amount.
 // Stored as four u16 encryptions, which can be decrypted by user and aggregated.
 // Value is l0 + 2^16 * l1 + 2^32 * l2 + 2^48 * l3.
@@ -162,6 +172,19 @@ public(package) fun encrypted_amount_4_u16_to_encryption(ea: &EncryptedAmount4U1
         .add(
             &ea.l1.shift_left(16).add(&ea.l2.shift_left(32)).add(&ea.l3.shift_left(48)),
         )
+}
+
+public(package) fun encrypted_amount_4_u16_verify_range(
+    ea: &EncryptedAmount4U16,
+    proof: &vector<u8>,
+): bool {
+    let commitments = vector[
+        ea.l0.ciphertext,
+        ea.l1.ciphertext,
+        ea.l2.ciphertext,
+        ea.l3.ciphertext,
+    ];
+    ristretto255::verify_range_proof(proof, 16, &commitments)
 }
 
 /// Verify a NIZK proof that the encrypted amount equals the given value.
@@ -229,9 +252,6 @@ public fun verify_sum_proof_with_encryption(
     let sum_encryption = encrypted_amount_2_u32_unverified_to_encryption(sum);
     let a_encryption = encrypted_amount_2_u32_unverified_to_encryption(a);
     let zero_encryption = sub(&add(&a_encryption, b), &sum_encryption);
-    std::debug::print(pk);
-    std::debug::print(&zero_encryption);
-
     proof.verify(
         &b"",
         &ristretto255::generator(),
