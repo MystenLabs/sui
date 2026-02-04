@@ -53,7 +53,7 @@ The target times indicated below are tentative and subject to updates based on p
 | :heavy_check_mark: April 2025 | Beta release of initial set of polling-based APIs. | You can start validating the initial gRPC integration from your application and share feedback on the improvements you want to see. |
 | :heavy_check_mark: July 2025 | Beta release of streaming APIs and the remaining set of polling-based APIs. | If your use case requires streaming low-latency data, this is an apt time to start validating that integration. Also, the functionality of the API coverage is complete at this point, so you can start migrating your application in non-production environments. |
 | :heavy_check_mark: September-October 2025 | GA release of polling-based and streaming APIs. | Begin migration and cutover of your application in the production environment. **JSON-RPC is deprecated at this point and migration notice period starts.** |
-| April 2026 | End of migration timeline. | **JSON-RPC is fully deactivated at this point.** This timeline assumes about 7 months of migration notice period. |
+| July 2026 | End of migration timeline. | **JSON-RPC is fully deactivated at this point.** This timeline assumes about 7 months of migration notice period. |
 
 :::warning
 The gRPC and GraphQL RPC APIs have replaced JSON-RPC. View the video below to learn more about the migration timeline and which API to use. 
@@ -105,6 +105,16 @@ This infrastructure serves as the historical backbone for GraphQL RPC, gRPC-base
 You can query the archival store through gRPC-based archival service for missing data when using a full node and power GraphQL RPC queries that span unretained data. You can host the service yourself, use a provider, or rely on the public-good version (with rate limits).
 
 Learn more about [Archival Store and Service](/guides/developer/accessing-data/archival-store.mdx).
+
+## Supported SDKs
+
+The following SDKs can be used to interact with gRPC and GraphQL:
+
+- [TypeScript SDK](https://sdk.mystenlabs.com/sui/migrations/sui-2.0/json-rpc-migration)
+
+- [Rust SDK](https://github.com/MystenLabs/sui-rust-sdk)
+
+- Community maintained [Python SDK](https://github.com/FrankC01/pysui)
 
 ## Custom indexer
 
