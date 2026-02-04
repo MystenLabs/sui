@@ -7,9 +7,9 @@ use async_graphql::SimpleObject;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
+use sui_indexer_alt_reader::consistent_reader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::proto::Balance as ProtoBalance;
-use sui_indexer_alt_reader::consistent_reader::{self};
 use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress;
 
