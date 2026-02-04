@@ -10,9 +10,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::dynamic_rpc_validator_config::ValidatorInfo;
 use sui_macros::sim_test;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::transaction::Transaction;
 use test_cluster::TestClusterBuilder;
 
 /// Helper to get the path to the reject_zero_sender shared library.
@@ -107,7 +109,7 @@ async fn test_all_validators_with_library_accepts_normal_sender() {
 
     // Set up the callback to provide the library to all validators
     let library_path_clone = library_path.clone();
-    let _test_cluster = TestClusterBuilder::new()
+    let test_cluster = TestClusterBuilder::new()
         .with_num_validators(4)
         .with_validator_library_callback(Arc::new(move |_info: &ValidatorInfo| {
             Some(library_path_clone.clone())
@@ -116,16 +118,42 @@ async fn test_all_validators_with_library_accepts_normal_sender() {
         .await;
 
     // Generate a sender that does NOT end in zero
-    let (sender, _keypair) = generate_address_not_ending_in_zero();
+    let (sender, keypair) = generate_address_not_ending_in_zero();
     println!("Using sender address: {:?}", sender);
     assert!(
         !address_ends_in_zero(&sender),
         "Sender should NOT end in zero"
     );
 
-    // This test would need more setup to actually send a transaction with the generated
-    // keypair. For now, we just verify the library loading mechanism works.
-    println!("Test setup complete with library path: {:?}", library_path);
+    // Fund the sender address
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(10_000_000_000), sender)
+        .await;
+
+    // Build and sign the transaction with the custom keypair
+    let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui(Some(1_000_000), SuiAddress::ZERO)
+        .build();
+    let tx = Transaction::from_data_and_signer(tx_data, vec![&keypair]);
+
+    // Execute the transaction - should succeed because sender doesn't end in zero
+    let result = test_cluster.wallet.execute_transaction_may_fail(tx).await;
+
+    assert!(
+        result.is_ok(),
+        "Transaction from normal sender should succeed, got error: {:?}",
+        result.err()
+    );
+    let response = result.unwrap();
+    assert!(
+        response.effects.status().is_ok(),
+        "Transaction effects should indicate success"
+    );
+    println!(
+        "Transaction succeeded as expected with library path: {:?}",
+        library_path
+    );
 }
 
 /// Test that transactions from senders ending in zero are rejected when all validators
@@ -145,7 +173,7 @@ async fn test_all_validators_with_library_rejects_zero_sender() {
 
     // Set up the callback to provide the library to all validators
     let library_path_clone = library_path.clone();
-    let _test_cluster = TestClusterBuilder::new()
+    let test_cluster = TestClusterBuilder::new()
         .with_num_validators(4)
         .with_validator_library_callback(Arc::new(move |_info: &ValidatorInfo| {
             Some(library_path_clone.clone())
@@ -154,13 +182,39 @@ async fn test_all_validators_with_library_rejects_zero_sender() {
         .await;
 
     // Generate a sender that ends in zero
-    let (sender, _keypair) = generate_address_ending_in_zero();
+    let (sender, keypair) = generate_address_ending_in_zero();
     println!("Generated sender ending in zero: {:?}", sender);
     assert!(address_ends_in_zero(&sender), "Sender should end in zero");
 
-    // This test would need more setup to actually send a transaction with the generated
-    // keypair. For now, we just verify the library loading mechanism works.
-    println!("Test setup complete with library path: {:?}", library_path);
+    // Fund the sender address
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(10_000_000_000), sender)
+        .await;
+
+    // Build and sign the transaction with the custom keypair
+    let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui(Some(1_000_000), SuiAddress::ZERO)
+        .build();
+    let tx = Transaction::from_data_and_signer(tx_data, vec![&keypair]);
+
+    // Execute the transaction - should fail because all validators reject zero-ending senders
+    let result = test_cluster.wallet.execute_transaction_may_fail(tx).await;
+
+    assert!(
+        result.is_err(),
+        "Transaction from zero-ending sender should be rejected by all validators"
+    );
+    let error_msg = result.unwrap_err().to_string();
+    println!("Transaction rejected as expected with error: {}", error_msg);
+    // The error should indicate the transaction was rejected by the dynamic validator
+    assert!(
+        error_msg.contains("rejected")
+            || error_msg.contains("PermissionDenied")
+            || error_msg.contains("failed"),
+        "Error message should indicate rejection, got: {}",
+        error_msg
+    );
 }
 
 /// Test that transactions can still succeed when only one validator is using
@@ -180,7 +234,7 @@ async fn test_single_validator_with_library() {
 
     // Set up the callback to provide the library only to validator 0
     let library_path_clone = library_path.clone();
-    let _test_cluster = TestClusterBuilder::new()
+    let test_cluster = TestClusterBuilder::new()
         .with_num_validators(4)
         .with_validator_library_callback(Arc::new(move |info: &ValidatorInfo| {
             if info.index == 0 {
@@ -193,14 +247,38 @@ async fn test_single_validator_with_library() {
         .await;
 
     // Generate a sender that ends in zero
-    let (sender, _keypair) = generate_address_ending_in_zero();
+    let (sender, keypair) = generate_address_ending_in_zero();
     println!("Generated sender ending in zero: {:?}", sender);
     assert!(address_ends_in_zero(&sender), "Sender should end in zero");
 
-    // With only one validator rejecting, the transaction should still succeed
-    // because the other 3 validators will accept it and form a quorum.
+    // Fund the sender address
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(10_000_000_000), sender)
+        .await;
+
+    // Build and sign the transaction with the custom keypair
+    let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui(Some(1_000_000), SuiAddress::ZERO)
+        .build();
+    let tx = Transaction::from_data_and_signer(tx_data, vec![&keypair]);
+
+    // Execute the transaction - should succeed because only 1 of 4 validators rejects,
+    // and the other 3 form a quorum to accept the transaction
+    let result = test_cluster.wallet.execute_transaction_may_fail(tx).await;
+
+    assert!(
+        result.is_ok(),
+        "Transaction should succeed with quorum (3/4 validators accepting), got error: {:?}",
+        result.err()
+    );
+    let response = result.unwrap();
+    assert!(
+        response.effects.status().is_ok(),
+        "Transaction effects should indicate success"
+    );
     println!(
-        "Test setup complete - only validator 0 has the library: {:?}",
+        "Transaction succeeded as expected - only validator 0 had the library: {:?}",
         library_path
     );
 }

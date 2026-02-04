@@ -200,10 +200,7 @@ mod tests {
             parse_rpc_method("/sui.validator.Validator/ObjectInfo"),
             Some(RpcMethod::ObjectInfo)
         );
-        assert_eq!(
-            parse_rpc_method("/grpc.health.v1.Health/Check"),
-            None
-        );
+        assert_eq!(parse_rpc_method("/grpc.health.v1.Health/Check"), None);
         assert_eq!(
             parse_rpc_method("/sui.validator.Validator/UnknownMethod"),
             None
