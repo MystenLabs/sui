@@ -192,11 +192,11 @@ impl<'r> Page<'r> {
 
             // Cursors should never point into an exclusion range and we expect callers to use
             // consistent filters across pages.
-            if let Some(excl) = exclude_prefix {
-                if cursor.starts_with(excl) {
-                    iter.skip_prefix(excl);
-                    continue;
-                }
+            if let Some(excl) = exclude_prefix
+                && cursor.starts_with(excl)
+            {
+                iter.skip_prefix(excl);
+                continue;
             }
 
             if self.before.is_some_and(|b| cursor >= b) {
@@ -218,10 +218,10 @@ impl<'r> Page<'r> {
 
         // It's possible to have hit the `limit` such that the iterator points at an excluded entry.
         // This checks for and advances past it.
-        if let Some(excl) = exclude_prefix {
-            if iter.raw_key().is_some_and(|k| k.starts_with(excl)) {
-                iter.skip_prefix(excl);
-            }
+        if let Some(excl) = exclude_prefix
+            && iter.raw_key().is_some_and(|k| k.starts_with(excl))
+        {
+            iter.skip_prefix(excl);
         }
 
         Ok(Response {
@@ -265,11 +265,11 @@ impl<'r> Page<'r> {
                 break;
             };
 
-            if let Some(excl) = exclude_prefix {
-                if cursor.starts_with(excl) {
-                    iter.skip_prefix(excl);
-                    continue;
-                }
+            if let Some(excl) = exclude_prefix
+                && cursor.starts_with(excl)
+            {
+                iter.skip_prefix(excl);
+                continue;
             }
 
             if self.after.is_some_and(|a| a >= cursor) {
@@ -292,10 +292,10 @@ impl<'r> Page<'r> {
 
         // It's possible to have hit the `limit` such that the iterator points at an excluded entry.
         // This checks for and advances past it.
-        if let Some(excl) = exclude_prefix {
-            if iter.raw_key().is_some_and(|k| k.starts_with(excl)) {
-                iter.skip_prefix(excl);
-            }
+        if let Some(excl) = exclude_prefix
+            && iter.raw_key().is_some_and(|k| k.starts_with(excl))
+        {
+            iter.skip_prefix(excl);
         }
 
         results.reverse();
@@ -806,7 +806,7 @@ mod tests {
 
         // Second page: cursor after (0,1,0x0002), should skip (0,2,...) and get (0,3,0x0005)
         let after = &resp.results.last().unwrap().0; // should be key::encode(&(0u8, 1u8, 0x0002u16))
-        let resp = Page::from_request(&config(), &after, &[], 2, End::Front)
+        let resp = Page::from_request(&config(), after, &[], 2, End::Front)
             .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
             .unwrap();
 
