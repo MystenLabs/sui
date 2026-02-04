@@ -1099,29 +1099,6 @@ impl AuthorityState {
         Ok(())
     }
 
-    /// This is a private method and should be kept that way. It doesn't check whether
-    /// the provided transaction is a system transaction, and hence can only be called internally.
-    #[instrument(level = "trace", skip_all)]
-    fn handle_transaction_impl(
-        &self,
-        transaction: VerifiedTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<()> {
-        // Ensure that validator cannot reconfigure while we are validating the transaction.
-        let _execution_lock = self.execution_lock_for_validation()?;
-
-        let checked_input_objects =
-            self.handle_transaction_deny_checks(&transaction, epoch_store)?;
-
-        let owned_objects = checked_input_objects.inner().filter_owned_objects();
-
-        // Validate owned object versions without acquiring locks. Locking happens post-consensus
-        // in the consensus handler. Validation still runs to prevent spam transactions with
-        // invalid object versions, and is necessary to handle recently created objects.
-        self.get_cache_writer()
-            .validate_owned_object_versions(&owned_objects)
-    }
-
     /// Vote for a transaction, either when validator receives a submit_transaction request,
     /// or sees a transaction from consensus. Performs the same types of checks as
     /// transaction signing, but does not explicitly sign the transaction.
@@ -1178,7 +1155,19 @@ impl AuthorityState {
             .into());
         }
 
-        self.handle_transaction_impl(transaction, epoch_store)
+        // Ensure that validator cannot reconfigure while we are validating the transaction.
+        let _execution_lock = self.execution_lock_for_validation()?;
+
+        let checked_input_objects =
+            self.handle_transaction_deny_checks(&transaction, epoch_store)?;
+
+        let owned_objects = checked_input_objects.inner().filter_owned_objects();
+
+        // Validate owned object versions without acquiring locks. Locking happens post-consensus
+        // in the consensus handler. Validation still runs to prevent spam transactions with
+        // invalid object versions, and is necessary to handle recently created objects.
+        self.get_cache_writer()
+            .validate_owned_object_versions(&owned_objects)
     }
 
     /// Used for early client validation check for transactions before submission to server.

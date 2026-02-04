@@ -134,11 +134,21 @@ impl SuiTxValidator {
                 }
 
                 ConsensusTransactionKind::UserTransactionV2(tx) => {
-                    if epoch_store.protocol_config().address_aliases() && tx.aliases().is_none() {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransactionV2 must contain an aliases claim".to_string(),
-                        )
-                        .into());
+                    if epoch_store.protocol_config().address_aliases() {
+                        let has_aliases = if epoch_store
+                            .protocol_config()
+                            .fix_checkpoint_signature_mapping()
+                        {
+                            tx.aliases().is_some()
+                        } else {
+                            tx.aliases_v1().is_some()
+                        };
+                        if !has_aliases {
+                            return Err(SuiErrorKind::UnexpectedMessage(
+                                "ConsensusTransactionKind::UserTransactionV2 must contain an aliases claim".to_string(),
+                            )
+                            .into());
+                        }
                     }
                     // TODO(fastpath): move deterministic verifications of user transactions here.
                 }
