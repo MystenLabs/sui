@@ -129,8 +129,8 @@ public(package) fun encrypted_amount_2_u_32_zero_verify_non_negative(
     ea: &EncryptedAmount2U32Unverified,
     proof: &vector<u8>,
 ): bool {
-    // TODO: No need to also add decryption handles here
-    let value = ea.l0.add(&ea.l1.shift_left(32));
+    // TODO: No need to also add the decryption handles here
+    let value = ea.encrypted_amount_2_u32_unverified_to_encryption();
     ristretto255::verify_range_proof(proof, 64, &vector[value.ciphertext])
 }
 
