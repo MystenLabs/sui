@@ -35,6 +35,28 @@ fi
 
 branch=$(git rev-parse HEAD)
 
+remote_branches=$(git branch -r --contains "$branch" 2>/dev/null)
+if [ -z "$remote_branches" ]; then
+  echo "Error: Current commit $branch has not been pushed to remote. Please push your changes first." >&2
+  exit 1
+fi
+
+if [ -z "$DESCRIPTION" ]; then
+  tracking_branch=$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null)
+  if [ -n "$tracking_branch" ]; then
+    DESCRIPTION=${tracking_branch#origin/}
+  else
+    local_branch=$(git rev-parse --abbrev-ref HEAD)
+    if [ "$local_branch" != "HEAD" ]; then
+      DESCRIPTION=$local_branch
+    fi
+  fi
+fi
+
+if [ -n "$DESCRIPTION" ]; then
+  echo "Description: $DESCRIPTION"
+fi
+
 if [ "$SPLIT_VERSION" = true ]; then
   if [ -n "$ALT_COMMIT" ]; then
     COMMIT=$ALT_COMMIT
