@@ -16,7 +16,7 @@ if ! git diff --quiet --exit-code -- $path || ! git diff --cached --quiet --exit
 fi
 
 # parse options
-while getopts t:d:sua:l:T:c:S:p:n:C:r:h flag
+while getopts t:d:sua:l:T:c:S:p:n:C:r:Dh flag
 do
     case "${flag}" in
         t) TEST_DURATION=${OPTARG};;
@@ -32,6 +32,7 @@ do
         n) TEST_NAME=${OPTARG};;
         C) SUI_COMMIT=${OPTARG};;
         r) WORKFLOW_REF=${OPTARG};;
+        D) DRY_RUN=true;;
         h) echo "Usage: run-antithesis-tests [options]"
            echo "  -t test_duration        Antithesis test duration in hours (default: 0.25)"
            echo "  -s                      Split version mode (uses merge-base as primary commit)"
@@ -46,6 +47,7 @@ do
            echo "  -n test_name            Name to group test history"
            echo "  -C sui_commit           Sui repo sha (default: current HEAD)"
            echo "  -r workflow_ref         Branch/ref in sui-operations repo to run workflow from"
+           echo "  -D                      Dry run mode (print command without executing)"
            exit 0;;
     esac
 done
@@ -142,6 +144,10 @@ if [ -n "$TEST_NAME" ]; then
 fi
 
 echo Running: $cmd
+
+if [ "$DRY_RUN" = true ]; then
+  exit 0
+fi
 
 $cmd
 
