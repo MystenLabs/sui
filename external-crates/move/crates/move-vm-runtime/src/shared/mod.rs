@@ -4,6 +4,7 @@
 use move_binary_format::errors::PartialVMResult;
 use std::{collections::HashMap, hash::Hash, slice::SliceIndex};
 
+pub mod batching_gas_meter;
 pub mod binary_cache;
 pub mod constants;
 pub mod gas;
