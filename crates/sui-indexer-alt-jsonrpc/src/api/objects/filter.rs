@@ -75,18 +75,30 @@ pub(super) async fn owned_objects(
 ) -> Result<ObjectIDs, RpcError<Error>> {
     match filter {
         Some(SuiObjectDataFilter::MatchNone(exclusions)) if exclusions.len() == 1 => {
-            by_type_exclude(
+            query_objects(
                 ctx,
                 owner,
                 StoredOwnerKind::Address,
-                &Some(exclusions[0].clone()),
+                None,
+                Some(filter_to_type_string(&exclusions[0])),
                 cursor,
                 limit,
             )
             .await
         }
         Some(SuiObjectDataFilter::MatchNone(_)) => Err(invalid_params(Error::MultipleExclusions)),
-        filter => by_type(ctx, owner, StoredOwnerKind::Address, filter, cursor, limit).await,
+        filter => {
+            query_objects(
+                ctx,
+                owner,
+                StoredOwnerKind::Address,
+                filter.as_ref().map(filter_to_type_string),
+                None,
+                cursor,
+                limit,
+            )
+            .await
+        }
     }
 }
 
@@ -99,50 +111,23 @@ pub(crate) async fn dynamic_fields(
     cursor: Option<String>,
     limit: Option<usize>,
 ) -> Result<ObjectIDs, RpcError<Error>> {
-    by_type(
+    let type_ = StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: DYNAMIC_FIELD_MODULE_NAME.to_owned(),
+        name: DYNAMIC_FIELD_FIELD_STRUCT_NAME.to_owned(),
+        type_params: vec![],
+    };
+
+    query_objects(
         ctx,
         owner.into(),
         StoredOwnerKind::Object,
-        &Some(SuiObjectDataFilter::StructType(StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: DYNAMIC_FIELD_MODULE_NAME.to_owned(),
-            name: DYNAMIC_FIELD_FIELD_STRUCT_NAME.to_owned(),
-            type_params: vec![],
-        })),
+        Some(type_.to_canonical_string(true)),
+        None,
         cursor,
         limit,
     )
     .await
-}
-
-/// Fetch ObjectIDs for a page of objects owned by `owner` that satisfy the given `filter` which is
-/// assumed to be a simple type filter that can be served by indices in the database, as well as
-/// the pagination parameters. Returns the IDs and a cursor pointing to the last result (if
-/// there are any results).
-async fn by_type(
-    ctx: &Context,
-    owner: SuiAddress,
-    kind: StoredOwnerKind,
-    filter: &Option<SuiObjectDataFilter>,
-    cursor: Option<String>,
-    limit: Option<usize>,
-) -> Result<ObjectIDs, RpcError<Error>> {
-    let object_type = filter.as_ref().map(filter_to_type_string);
-    query_objects(ctx, owner, kind, object_type, None, cursor, limit).await
-}
-
-/// Fetch ObjectIDs for a page of objects owned by `owner` that do not match the given `exclude`
-/// type filter.
-async fn by_type_exclude(
-    ctx: &Context,
-    owner: SuiAddress,
-    kind: StoredOwnerKind,
-    exclude: &Option<SuiObjectDataFilter>,
-    cursor: Option<String>,
-    limit: Option<usize>,
-) -> Result<ObjectIDs, RpcError<Error>> {
-    let exclude_type = exclude.as_ref().map(filter_to_type_string);
-    query_objects(ctx, owner, kind, None, exclude_type, cursor, limit).await
 }
 
 fn filter_to_type_string(filter: &SuiObjectDataFilter) -> String {
@@ -191,7 +176,7 @@ async fn query_objects(
             owner_kind,
             Some(owner.to_string()),
             object_type,
-            exclude_object_type, // NEW parameter
+            exclude_object_type,
             Some(page.limit as u32),
             page.cursor.as_ref().map(|c| c.0.clone()),
             None,
