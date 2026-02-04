@@ -696,8 +696,8 @@ mod tests {
                 sui_bridge_next_sequence_number_override: None,
             },
             eth: EthConfig {
-                eth_rpc_url: Some(bridge_test_cluster.eth_rpc_url()),
-                eth_rpc_urls: None,
+                eth_rpc_url: None,
+                eth_rpc_urls: Some(vec![bridge_test_cluster.eth_rpc_url()]),
                 eth_rpc_quorum: 1,
                 eth_health_check_interval_secs: 300,
                 eth_bridge_proxy_address: bridge_test_cluster.sui_bridge_address(),
@@ -767,8 +767,8 @@ mod tests {
                 sui_bridge_next_sequence_number_override: None,
             },
             eth: EthConfig {
-                eth_rpc_url: Some(bridge_test_cluster.eth_rpc_url()),
-                eth_rpc_urls: None,
+                eth_rpc_url: None,
+                eth_rpc_urls: Some(vec![bridge_test_cluster.eth_rpc_url()]),
                 eth_rpc_quorum: 1,
                 eth_health_check_interval_secs: 300,
                 eth_bridge_proxy_address: bridge_test_cluster.sui_bridge_address(),
@@ -849,8 +849,8 @@ mod tests {
                 sui_bridge_next_sequence_number_override: None,
             },
             eth: EthConfig {
-                eth_rpc_url: Some(bridge_test_cluster.eth_rpc_url()),
-                eth_rpc_urls: None,
+                eth_rpc_url: None,
+                eth_rpc_urls: Some(vec![bridge_test_cluster.eth_rpc_url()]),
                 eth_rpc_quorum: 1,
                 eth_health_check_interval_secs: 300,
                 eth_bridge_proxy_address: bridge_test_cluster.sui_bridge_address(),

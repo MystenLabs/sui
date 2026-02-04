@@ -87,11 +87,7 @@ pub fn new_metered_eth_provider(
     Ok(Arc::new(RootProvider::new(rpc_client)))
 }
 
-/// Create a metered Ethereum provider backed by multiple RPC endpoints with
-/// quorum-based consensus. The `QuorumTransport` handles health ranking and
-/// failover internally; `MeteredHttpService` wraps it to provide aggregate
-/// Prometheus metrics.
-pub async fn new_metered_multi_eth_provider(
+pub async fn new_metered_eth_multi_provider(
     urls: Vec<String>,
     quorum: usize,
     health_check_interval_secs: u64,
@@ -107,9 +103,7 @@ pub async fn new_metered_multi_eth_provider(
     let transport = QuorumTransport::new(config)
         .map_err(|e| anyhow::anyhow!("Failed to create QuorumTransport: {}", e))?;
 
-    // Run initial health check to rank providers before serving requests
     transport.run_health_check().await;
-    // Start periodic background health checks
     transport.start_health_check_task();
 
     let metered_transport = MeteredHttpService::new(transport, metrics);
@@ -124,45 +118,64 @@ mod tests {
     use alloy::providers::Provider;
     use prometheus::Registry;
 
+    async fn test_provider(metrics: &BridgeMetrics, provider: &EthProvider) {
+        assert_eq!(
+            metrics
+                .eth_rpc_queries
+                .get_metric_with_label_values(&["eth_blockNumber"])
+                .unwrap()
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .eth_rpc_queries_latency
+                .get_metric_with_label_values(&["eth_blockNumber"])
+                .unwrap()
+                .get_sample_count(),
+            0
+        );
+
+        provider.get_block_number().await.unwrap_err(); // the rpc call will fail but we don't care
+
+        assert_eq!(
+            metrics
+                .eth_rpc_queries
+                .get_metric_with_label_values(&["eth_blockNumber"])
+                .unwrap()
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .eth_rpc_queries_latency
+                .get_metric_with_label_values(&["eth_blockNumber"])
+                .unwrap()
+                .get_sample_count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_metered_eth_multi_provider() {
+        let metrics = Arc::new(BridgeMetrics::new(&Registry::new()));
+        let provider = new_metered_eth_multi_provider(
+            vec!["http://localhost:9876".to_string()],
+            1,
+            300,
+            metrics.clone(),
+        )
+        .await
+        .unwrap();
+
+        test_provider(&metrics, &provider).await;
+    }
+
     #[tokio::test]
     async fn test_metered_eth_provider() {
         let metrics = Arc::new(BridgeMetrics::new(&Registry::new()));
         let provider = new_metered_eth_provider("http://localhost:9876", metrics.clone()).unwrap();
 
-        assert_eq!(
-            metrics
-                .eth_rpc_queries
-                .get_metric_with_label_values(&["eth_blockNumber"])
-                .unwrap()
-                .get(),
-            0
-        );
-        assert_eq!(
-            metrics
-                .eth_rpc_queries_latency
-                .get_metric_with_label_values(&["eth_blockNumber"])
-                .unwrap()
-                .get_sample_count(),
-            0
-        );
-
-        provider.get_block_number().await.unwrap_err(); // the rpc cal will fail but we don't care
-
-        assert_eq!(
-            metrics
-                .eth_rpc_queries
-                .get_metric_with_label_values(&["eth_blockNumber"])
-                .unwrap()
-                .get(),
-            1
-        );
-        assert_eq!(
-            metrics
-                .eth_rpc_queries_latency
-                .get_metric_with_label_values(&["eth_blockNumber"])
-                .unwrap()
-                .get_sample_count(),
-            1
-        );
+        test_provider(&metrics, &provider).await;
     }
 }

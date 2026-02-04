@@ -314,8 +314,8 @@ pub fn generate_bridge_node_config_and_write_to_file(
             sui_bridge_next_sequence_number_override: None,
         },
         eth: EthConfig {
-            eth_rpc_url: Some("your_eth_rpc_url".to_string()),
-            eth_rpc_urls: None,
+            eth_rpc_url: None, // to be deprecated
+            eth_rpc_urls: Some(vec!["your_eth_rpc_url".to_string()]),
             eth_rpc_quorum: 1,
             eth_health_check_interval_secs: 300,
             eth_bridge_proxy_address: "0x0000000000000000000000000000000000000000".to_string(),

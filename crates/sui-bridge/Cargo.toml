@@ -8,7 +8,7 @@ edition = "2024"
 
 [dependencies]
 alloy = { version = "1.1.3", features = ["rand", "sol-types", "json-rpc", "provider-ws"] }
-alloy-multiprovider-strategy = { git = "https://github.com/0xsiddharthks/alloy-multiprovider-strategy", rev = "d94800292ffd393b7776817d01bca0c4f2533087" }
+alloy-multiprovider-strategy = { git = "https://github.com/0xsiddharthks/alloy-multiprovider-strategy", rev = "0f8d034e679631a715f9eed104089430ae57283a" }
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
 sui-authority-aggregation.workspace = true

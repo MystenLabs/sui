@@ -37,9 +37,8 @@ impl EthClient {
         Ok(self_)
     }
 
-    /// Construct from a pre-built provider. Use this when the provider has
-    /// already been created (e.g. during config validation) to avoid
-    /// creating a second connection.
+    /// Construct from a pre-built provider.
+    /// Use this when the provider has already been created, to avoid creating a new connection.
     pub async fn from_provider(
         provider: EthProvider,
         contract_addresses: HashSet<EthAddress>,

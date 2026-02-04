@@ -5,7 +5,7 @@ use crate::abi::EthBridgeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::error::BridgeError;
 use crate::eth_client::EthClient;
-use crate::metered_eth_provider::{new_metered_eth_provider, new_metered_multi_eth_provider};
+use crate::metered_eth_provider::new_metered_eth_multi_provider;
 use crate::metrics::BridgeMetrics;
 use crate::sui_client::SuiBridgeClient;
 use crate::types::{BridgeAction, is_route_valid};
@@ -40,20 +40,18 @@ use tracing::info;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct EthConfig {
-    /// Rpc url for Eth fullnode. Kept for backward compatibility —
-    /// if `eth_rpc_urls` is not set, this single URL is used.
+    /// Rpc url for Eth fullnode, used for query stuff.
+    /// @deprecated (use eth_rpc_urls instead)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub eth_rpc_url: Option<String>,
-    /// Multiple RPC URLs for Eth fullnodes. When multiple URLs are provided,
-    /// quorum-based consensus is used across providers for redundancy.
-    /// Takes precedence over `eth_rpc_url` when set.
+    /// Multiple RPC URLs for Eth fullnodes.
+    /// Quorum-based consensus is used across providers for redundancy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub eth_rpc_urls: Option<Vec<String>>,
     /// Quorum size for multi-provider consensus. Must be <= number of URLs.
-    /// Defaults to 1.
     #[serde(default = "default_quorum")]
     pub eth_rpc_quorum: usize,
-    /// Health check interval in seconds for multi-provider. Defaults to 300.
+    /// Health check interval in seconds for multi-provider.
     #[serde(default = "default_health_check_interval_secs")]
     pub eth_health_check_interval_secs: u64,
     /// The proxy address of SuiBridge
@@ -82,12 +80,11 @@ fn default_quorum() -> usize {
 }
 
 fn default_health_check_interval_secs() -> u64 {
-    300
+    300 // 5 minutes
 }
 
 impl EthConfig {
-    /// Returns the list of RPC URLs, supporting both the legacy single-URL
-    /// field and the new multi-URL field. `eth_rpc_urls` takes precedence.
+    /// Backwards compatible function to get list of RPC URLs
     pub fn rpc_urls(&self) -> Vec<String> {
         if let Some(ref urls) = self.eth_rpc_urls {
             urls.clone()
@@ -305,20 +302,16 @@ impl BridgeNodeConfig {
         let rpc_urls = self.eth.rpc_urls();
         anyhow::ensure!(
             !rpc_urls.is_empty(),
-            "At least one Ethereum RPC URL must be provided via eth-rpc-url or eth-rpc-urls"
+            "At least one Ethereum RPC URL must be provided"
         );
 
-        let provider = if rpc_urls.len() > 1 {
-            new_metered_multi_eth_provider(
-                rpc_urls.clone(),
-                self.eth.eth_rpc_quorum,
-                self.eth.eth_health_check_interval_secs,
-                metrics.clone(),
-            )
-            .await?
-        } else {
-            new_metered_eth_provider(&rpc_urls[0], metrics.clone())?
-        };
+        let provider = new_metered_eth_multi_provider(
+            rpc_urls.clone(),
+            self.eth.eth_rpc_quorum,
+            self.eth.eth_health_check_interval_secs,
+            metrics.clone(),
+        )
+        .await?;
 
         let chain_id = provider.get_chain_id().await?;
         let (

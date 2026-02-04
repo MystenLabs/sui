@@ -893,8 +893,8 @@ pub(crate) async fn start_bridge_cluster(
             run_client: i == 0,
             db_path: Some(db_path),
             eth: EthConfig {
-                eth_rpc_url: Some(eth_environment.rpc_url.clone()),
-                eth_rpc_urls: None,
+                eth_rpc_url: None, // to be deprecated
+                eth_rpc_urls: Some(vec![eth_environment.rpc_url.clone()]),
                 eth_rpc_quorum: 1,
                 eth_health_check_interval_secs: 300,
                 eth_bridge_proxy_address: eth_bridge_contract_address.clone(),

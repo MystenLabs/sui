@@ -424,7 +424,7 @@ dependencies = [
 [[package]]
 name = "alloy-multiprovider-strategy"
 version = "0.1.0"
-source = "git+https://github.com/0xsiddharthks/alloy-multiprovider-strategy?rev=d94800292ffd393b7776817d01bca0c4f2533087#d94800292ffd393b7776817d01bca0c4f2533087"
+source = "git+https://github.com/0xsiddharthks/alloy-multiprovider-strategy?rev=0f8d034e679631a715f9eed104089430ae57283a#0f8d034e679631a715f9eed104089430ae57283a"
 dependencies = [
  "alloy-json-rpc",
  "alloy-network",
