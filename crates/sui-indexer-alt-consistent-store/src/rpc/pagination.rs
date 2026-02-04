@@ -156,7 +156,8 @@ impl<'r> Page<'r> {
         self.is_from_front
     }
 
-    /// Fully-qualified prefix to exclude from results
+    /// Paginate through the iterator, filtering out results that do not match `pred` and skipping
+    /// directly past entries with `exclude_prefix`.
     fn paginate_from_front<K, V, E>(
         &self,
         mut iter: FwdIter<'_, K, V>,
@@ -230,6 +231,8 @@ impl<'r> Page<'r> {
         })
     }
 
+    /// Paginate through the iterator, filtering out results that do not match `pred` and skipping
+    /// directly past entries with `exclude_prefix`.
     fn paginate_from_back<K, V, E>(
         &self,
         mut iter: RevIter<'_, K, V>,
