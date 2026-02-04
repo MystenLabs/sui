@@ -1562,9 +1562,7 @@ impl SuiNode {
         consensus_adapter: Arc<ConsensusAdapter>,
         prometheus_registry: &Registry,
     ) -> Result<SpawnOnce> {
-        use sui_config::dynamic_rpc_validator_config::{
-            ValidatorInfo, get_validator_library_path,
-        };
+        use sui_config::dynamic_rpc_validator_config::{ValidatorInfo, get_validator_library_path};
         use sui_core::dynamic_rpc_validator::{DynamicRpcValidator, DynamicValidatorMetrics};
 
         // Get validator info for the callback
@@ -1582,10 +1580,8 @@ impl SuiNode {
         };
 
         // Get library path (may come from config or test callback)
-        let library_path = get_validator_library_path(
-            &config.dynamic_rpc_validator_config,
-            Some(&validator_info),
-        );
+        let library_path =
+            get_validator_library_path(&config.dynamic_rpc_validator_config, Some(&validator_info));
 
         // Create dynamic RPC validator if a library path is configured
         let dynamic_validator = if library_path.is_some() {
