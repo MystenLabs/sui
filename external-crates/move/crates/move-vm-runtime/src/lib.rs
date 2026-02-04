@@ -9,6 +9,8 @@
 //! soon.
 
 #![deny(unsafe_code)]
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
 
 // #[macro_use]
 // mod tracing;

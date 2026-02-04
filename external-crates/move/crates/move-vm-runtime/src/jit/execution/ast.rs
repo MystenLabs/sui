@@ -20,7 +20,7 @@ use crate::{
 
 use indexmap::IndexMap;
 use move_binary_format::{
-    errors::{PartialVMError, PartialVMResult},
+    errors::{HCFResult, PartialVMError, PartialVMResult},
     file_format::{
         AbilitySet, CodeOffset, DatatypeTyParameter, FunctionDefinitionIndex, LocalIndex,
         SignatureToken, VariantTag, Visibility,
@@ -851,12 +851,10 @@ impl Function {
         self.file_format_version
     }
 
-    pub fn module_id(&self, interner: &IdentifierInterner) -> PartialVMResult<ModuleId> {
+    pub fn module_id(&self, interner: &IdentifierInterner) -> HCFResult<ModuleId> {
         // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
         // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name.module_id(interner).map_err(|e| {
-            e.append_message_with_separator('.', "Failed to get module id".to_string())
-        })
+        self.name.module_id(interner)
     }
 
     pub fn index(&self) -> FunctionDefinitionIndex {
@@ -875,20 +873,12 @@ impl Function {
         self.return_.len()
     }
 
-    pub fn name_str(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
-        self.name(interner)
-            .map(|name| name.to_string())
-            .map_err(|e| {
-                e.append_message_with_separator('.', "Failed to get name string".to_string())
-            })
+    pub fn name_str(&self, interner: &IdentifierInterner) -> HCFResult<String> {
+        self.name(interner).map(|name| name.to_string())
     }
 
-    pub fn name(&self, interner: &IdentifierInterner) -> PartialVMResult<Identifier> {
-        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
-        // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name
-            .member_name(interner)
-            .map_err(|e| e.append_message_with_separator('.', "Failed to get name".to_string()))
+    pub fn name(&self, interner: &IdentifierInterner) -> HCFResult<Identifier> {
+        self.name.member_name(interner)
     }
 
     pub(crate) fn code(&self) -> &[Bytecode] {
@@ -903,20 +893,12 @@ impl Function {
         &self.type_parameters
     }
 
-    pub fn pretty_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
-        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
-        // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name
-            .to_string(interner)
-            .map_err(|e| e.append_message_with_separator('.', "Failed to get name".to_string()))
+    pub fn pretty_string(&self, interner: &IdentifierInterner) -> HCFResult<String> {
+        self.name.to_string(interner)
     }
 
-    pub fn pretty_short_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
-        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
-        // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name.to_short_string(interner).map_err(|e| {
-            e.append_message_with_separator('.', "Failed to get short name".to_string())
-        })
+    pub fn pretty_short_string(&self, interner: &IdentifierInterner) -> HCFResult<String> {
+        self.name.to_short_string(interner)
     }
 
     pub fn is_native(&self) -> bool {
@@ -1027,13 +1009,7 @@ impl ModuleIdKey {
     }
 
     pub fn name(&self, interner: &IdentifierInterner) -> PartialVMResult<Identifier> {
-        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
-        // should never happen in a well-formed module. This is as good a time to panic as any.
-        interner
-            .resolve_ident(&self.name, "module name")
-            .map_err(|e| {
-                e.append_message_with_separator('.', "Failed to get module name".to_string())
-            })
+        Ok(interner.resolve_ident(&self.name, "module name")?)
     }
 }
 

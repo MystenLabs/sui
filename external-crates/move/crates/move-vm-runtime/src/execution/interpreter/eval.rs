@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::identifier_interner::IdentifierInterner,
     dbg_println,
     execution::{
         dispatch_tables::VMDispatchTables,
@@ -11,7 +10,6 @@ use crate::{
                 instantiate_enum_type, instantiate_generic_function, instantiate_single_type,
                 instantiate_struct_type,
             },
-            set_err_info,
             state::{CallStack, MachineState, ResolvableType},
         },
         tracing::{trace, tracer::VMTracer},
@@ -23,6 +21,7 @@ use crate::{
     jit::execution::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     shared::{
+        errors::ErrorLocationInformation,
         gas::{GasMeter, SimpleInstruction},
         vm_pointer::VMPointer,
     },
@@ -53,12 +52,6 @@ pub(super) struct RunContext<'vm_cache, 'native, 'native_lifetimes, 'tracer, 'tr
     pub(super) extensions: &'native mut NativeContextExtensions<'native_lifetimes>,
     // TODO: consider making this `Option<&mut VMTracer<'_>>` and passing it like that everywhere?
     pub(super) tracer: &'tracer mut Option<VMTracer<'trace_builder>>,
-}
-
-impl RunContext<'_, '_, '_, '_, '_> {
-    pub fn interner(&self) -> &IdentifierInterner {
-        &self.vtables.interner
-    }
 }
 
 /// Main loop for the execution of a function.
@@ -137,23 +130,24 @@ fn step(
     let instructions = fun_ref.code();
     let pc = state.call_stack.current_frame.pc as usize;
     if pc >= instructions.len() {
-        return Err(
-            state.set_location(
-                PartialVMError::new(StatusCode::PC_OVERFLOW).with_message(format!(
-                    "PC {} out of bounds for function {} with {} instructions",
-                    pc,
-                    fun_ref.name(&run_context.vtables.interner),
-                    instructions.len()
-                )),
-            ),
+        let fuction_name = fun_ref.name(&run_context.vtables.interner)?;
+        let msg = format!(
+            "PC {} out of bounds for function {} with {} instructions",
+            pc,
+            fuction_name,
+            instructions.len()
         );
+        return Err(PartialVMError::new(StatusCode::PC_OVERFLOW)
+            .with_message(msg)
+            .finish_with_location_info(&*state));
     }
     let instruction = &instructions[pc];
     fail_point!("move_vm::interpreter_loop", |_| {
-        Err(state.set_location(
+        Err(
             PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
-                .with_message("Injected move_vm::interpreter verifier failure".to_owned()),
-        ))
+                .with_message("Injected move_vm::interpreter verifier failure".to_owned())
+                .finish_with_location_info(&*state),
+        )
     });
 
     trace!(run_context.tracer, |tracer| {
@@ -185,7 +179,7 @@ fn step(
             // TODO: Check if the error location is set correctly.
             gas_meter
                 .charge_drop_frame(non_ref_vals.into_iter())
-                .map_err(|e| state.set_location(e))?;
+                .map_err(|e| e.finish_with_location_info(&*state))?;
 
             trace!(run_context.tracer, |tracer| {
                 tracer.exit_frame(
@@ -219,13 +213,10 @@ fn step(
                 fun_inst_ptr,
                 state.call_stack.current_frame.ty_args(),
             )
-            .map_err(|e| {
-                set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
-            })?;
+            .map_err(|e| e.finish_with_location_info(&*state))?;
             let call_type = &fun_inst_ptr.handle;
-            let function = call_type_to_function(run_context, call_type).map_err(|err| {
-                set_err_info!(run_context.interner(), state.call_stack.current_frame, err)
-            })?;
+            let function = call_type_to_function(run_context, call_type)
+                .map_err(|e| e.finish_with_location_info(&*state))?;
             call_function(state, run_context, gas_meter, function, ty_args)?;
             Ok(StepStatus::Running)
         }
@@ -241,9 +232,7 @@ fn step(
             let function = run_context
                 .vtables
                 .resolve_function(vtable_key)
-                .map_err(|err| {
-                    set_err_info!(run_context.interner(), state.call_stack.current_frame, err)
-                })?;
+                .map_err(|e| e.finish_with_location_info(&*state))?;
             call_function(state, run_context, gas_meter, function, vec![])?;
             Ok(StepStatus::Running)
         }
@@ -672,17 +661,18 @@ fn op_step_impl(
         Bytecode::Abort => {
             gas_meter.charge_simple_instr(S::Abort)?;
             let error_code = state.pop_operand_as::<u64>()?;
+            let fn_name = state
+                .call_stack
+                .current_frame
+                .function()
+                .pretty_string(&run_context.vtables.interner)?;
+            let msg = format!(
+                "{} at offset {}",
+                fn_name, state.call_stack.current_frame.pc
+            );
             let error = PartialVMError::new(StatusCode::ABORTED)
                 .with_sub_status(error_code)
-                .with_message(format!(
-                    "{} at offset {}",
-                    state
-                        .call_stack
-                        .current_frame
-                        .function()
-                        .pretty_string(&run_context.vtables.interner),
-                    state.call_stack.current_frame.pc,
-                ));
+                .with_message(msg);
             return Err(error);
         }
         Bytecode::Eq => {
@@ -873,29 +863,29 @@ fn call_function(
     });
 
     // Charge gas
-    let module_id = function.module_id(&run_context.vtables.interner);
+    let module_id = function.module_id(&run_context.vtables.interner)?;
     let last_n_operands = state
         .last_n_operands(function.arg_count())
-        .map_err(|e| set_err_info!(run_context.interner(), state.call_stack.current_frame, e))?;
+        .map_err(|e| e.finish_with_location_info(&*state))?;
+
+    let function_name = &function.name_str(&run_context.vtables.interner)?;
 
     if ty_args.is_empty() {
         // Charge for a non-generic call
         gas_meter
             .charge_call(
                 &module_id,
-                &function.name_str(&run_context.vtables.interner),
+                function_name,
                 last_n_operands,
                 (function.local_count() as u64).into(),
             )
-            .map_err(|e| {
-                set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
-            })?;
+            .map_err(|e| e.finish_with_location_info(&*state))?;
     } else {
         // Charge for a generic call
         gas_meter
             .charge_call_generic(
                 &module_id,
-                &function.name_str(&run_context.vtables.interner),
+                function_name,
                 ty_args.iter().map(|ty| ResolvableType {
                     ty,
                     vtables: run_context.vtables,
@@ -903,9 +893,7 @@ fn call_function(
                 last_n_operands,
                 (function.local_count() as u64).into(),
             )
-            .map_err(|e| {
-                set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
-            })?;
+            .map_err(|e| e.finish_with_location_info(&*state))?;
     }
 
     if function.is_native() {
@@ -941,15 +929,16 @@ fn call_native(
     ty_args: Vec<Type>,
 ) -> VMResult<StepStatus> {
     // Note: refactor if native functions push a frame on the stack
-    call_native_impl(state, run_context, gas_meter, function, ty_args).map_err(|e| {
-        let id = function.module_id(&run_context.vtables.interner);
+    call_native_impl(state, run_context, gas_meter, function, ty_args).or_else(|e| {
+        let id = function.module_id(&run_context.vtables.interner)?;
         let e = if run_context.vm_config.error_execution_state {
-            e.with_exec_state(state.get_internal_state())
+            e.with_exec_state(state.get_internal_state()?)
         } else {
             e
         };
-        e.at_code_offset(function.index(), 0)
-            .finish(Location::Module(id.clone()))
+        Err(e
+            .at_code_offset(function.index(), 0)
+            .finish(Location::Module(id.clone())))
     })?;
     Ok(StepStatus::Running)
 }
@@ -1095,14 +1084,14 @@ where
 
 fn push_call_frame(
     state: &mut MachineState,
-    run_context: &mut RunContext,
+    _run_context: &mut RunContext,
     function: VMPointer<Function>,
     ty_args: Vec<Type>,
 ) -> VMResult<()> {
     let fun_ref = function.ptr_clone().to_ref();
     let args = state
         .pop_n_operands(fun_ref.arg_count() as u16)
-        .map_err(|e| set_err_info!(run_context.interner(), &state.call_stack.current_frame, e))?;
+        .map_err(|e| e.finish_with_location_info(&*state))?;
     state.push_call(function, ty_args, args)
 }
 
@@ -1111,17 +1100,14 @@ fn partial_error_to_error<T>(
     run_context: &RunContext,
     result: PartialVMResult<T>,
 ) -> VMResult<T> {
-    result.map_err(|err| {
+    result.or_else(|err| {
         let err = if run_context.vm_config.error_execution_state {
-            err.with_exec_state(state.get_internal_state())
+            err.with_exec_state(state.get_internal_state()?)
         } else {
             err
         };
-        let err = state.set_location(err.at_code_offset(
-            state.call_stack.current_frame.function().index(),
-            state.call_stack.current_frame.pc,
-        ));
-        finalize_execution_error(err)
+        let err = err.finish_with_location_info(state);
+        Err(finalize_execution_error(err))
     })
 }
 

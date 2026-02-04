@@ -216,8 +216,14 @@ impl Adapter {
             .calculate_depth_of_type(&VirtualTableKey {
                 package_key: *module_id.address(),
                 inner_pkg_key: IntraPackageKey {
-                    module_name: session.interner.intern_ident_str(module_id.name()),
-                    member_name: session.interner.intern_ident_str(struct_name),
+                    module_name: session
+                        .interner
+                        .intern_ident_str(module_id.name())
+                        .expect("Interner failed"),
+                    member_name: session
+                        .interner
+                        .intern_ident_str(struct_name)
+                        .expect("Interner failed"),
                 },
             })
             .expect("computing depth of datatype should succeed")

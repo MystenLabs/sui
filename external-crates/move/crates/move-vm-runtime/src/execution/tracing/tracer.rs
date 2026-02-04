@@ -693,16 +693,15 @@ impl VMTracer<'_> {
             },
         );
 
-        let Ok(version_id) = get_version_id(vtables, &function.module_id(&self.interner)) else {
-            self.report_error("Failed to get version id");
-            return None;
-        };
+        let module_id = function.module_id(&self.interner).ok()?;
+        let version_id = get_version_id(vtables, &module_id).ok()?;
+        let function_name = function.name(&self.interner).ok()?;
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
-            function.name(&self.interner).to_string(),
-            function.module_id(&self.interner).clone(),
+            function_name.to_string(),
+            module_id,
             version_id,
             call_args
                 .into_iter()
@@ -824,16 +823,15 @@ impl VMTracer<'_> {
             },
         );
 
-        let Ok(version_id) = get_version_id(vtables, &function.module_id(&self.interner)) else {
-            self.report_error("Failed to get version id");
-            return None;
-        };
+        let module_id = function.module_id(&self.interner).ok()?;
+        let function_name = function.name(&self.interner).ok()?;
+        let version_id = get_version_id(vtables, &module_id).ok()?;
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
-            function.name(&self.interner).to_string(),
-            function.module_id(&self.interner).clone(),
+            function_name.to_string(),
+            module_id,
             version_id,
             call_args,
             function_type_info.ty_args,
@@ -920,7 +918,8 @@ impl VMTracer<'_> {
                 .current_frame
                 .function
                 .to_ref()
-                .name(&self.interner),
+                .name(&self.interner)
+                .ok()?,
             pc,
         );
 

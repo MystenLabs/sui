@@ -406,7 +406,6 @@ pub enum StatusCode {
     // "Halt and catch fire" errors from the Move Runtime, indicating that the Move Runtime is in
     // an inexecutable state for some reason; this is essentially the underlying runtime panicking.
     INVALID_MOVE_RUNTIME_ERROR = 8000,
-    VTABLE_KEY_LOOKUP_ERROR = 8001,
 
     // A reserved status to represent an unknown vm status.
     // this is std::u64::MAX, but we can't pattern match on that, so put the hardcoded value in

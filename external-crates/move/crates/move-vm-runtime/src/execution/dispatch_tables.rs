@@ -26,7 +26,7 @@ use crate::{
 };
 
 use move_binary_format::{
-    errors::{Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{HCFResult, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
@@ -186,7 +186,7 @@ impl VMDispatchTables {
 
     pub fn get_package(&self, id: &OriginalId) -> PartialVMResult<Arc<Package>> {
         self.loaded_packages.get(id).cloned().ok_or_else(|| {
-            PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                 .with_message(format!("Package {} not found", id))
         })
     }
@@ -197,7 +197,7 @@ impl VMDispatchTables {
     ) -> PartialVMResult<VMPointer<Module>> {
         let (package, module_id) = original_id.into();
         let package = self.loaded_packages.get(package).ok_or_else(|| {
-            PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                 .with_message(format!("Package {} not found", package))
         })?;
 
@@ -208,7 +208,7 @@ impl VMDispatchTables {
             .get(&interned)
             .map(VMPointer::from_ref)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message(format!("Module {} not found", module_id))
             })
     }
@@ -218,17 +218,21 @@ impl VMDispatchTables {
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<Function>> {
         let Some(pkg) = self.loaded_packages.get(&vtable_key.package_key) else {
-            return Err(PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
-                .with_message(format!("Could not find package {}", vtable_key.package_key)));
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Could not find package {}", vtable_key.package_key)),
+            );
         };
         if let Some(function_) = pkg.vtable.functions.get(&vtable_key.inner_pkg_key) {
             Ok(function_.ptr_clone())
         } else {
             Err(
-                PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR).with_message(format!(
-                    "Could not find function {}",
-                    vtable_key.to_string(&self.interner)?
-                )),
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                        "Could not find function {}",
+                        vtable_key.to_string(&self.interner)?
+                    ),
+                ),
             )
         }
     }
@@ -238,17 +242,21 @@ impl VMDispatchTables {
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<DatatypeDescriptor>> {
         let Some(pkg) = self.loaded_packages.get(&vtable_key.package_key) else {
-            return Err(PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
-                .with_message(format!("Could not find package {}", vtable_key.package_key)));
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Could not find package {}", vtable_key.package_key)),
+            );
         };
         if let Some(type_) = pkg.vtable.types.get(&vtable_key.inner_pkg_key) {
             Ok(type_.ptr_clone())
         } else {
             Err(
-                PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR).with_message(format!(
-                    "Could not find type {}",
-                    vtable_key.to_string(&self.interner)?
-                )),
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                        "Could not find type {}",
+                        vtable_key.to_string(&self.interner)?
+                    ),
+                ),
             )
         }
     }
@@ -288,14 +296,8 @@ impl VMDispatchTables {
                         ))
                         .finish(Location::Undefined)
                 })?;
-                let module_name = self
-                    .interner
-                    .intern_identifier(&struct_tag.module)
-                    .map_err(|e| e.finish(Location::Package(defining_id)))?;
-                let member_name = self
-                    .interner
-                    .intern_identifier(&struct_tag.name)
-                    .map_err(|e| e.finish(Location::Package(defining_id)))?;
+                let module_name = self.interner.intern_identifier(&struct_tag.module)?;
+                let member_name = self.interner.intern_identifier(&struct_tag.name)?;
                 let key = VirtualTableKey {
                     package_key,
                     inner_pkg_key: IntraPackageKey {
@@ -433,7 +435,7 @@ impl VMDispatchTables {
                 Some(DatatypeInfo {
                     original_id: *descriptor.original_id.address(),
                     defining_id: *descriptor.defining_id.address(),
-                    module_name: descriptor.defining_id.name(&self.interner),
+                    module_name: descriptor.defining_id.name(&self.interner)?,
                     type_name: self.interner.resolve_ident(&descriptor.name, "type name")?,
                 })
             }
@@ -443,7 +445,7 @@ impl VMDispatchTables {
                 Some(DatatypeInfo {
                     original_id: *descriptor.original_id.address(),
                     defining_id: *descriptor.defining_id.address(),
-                    module_name: descriptor.defining_id.name(&self.interner),
+                    module_name: descriptor.defining_id.name(&self.interner)?,
                     type_name: self.interner.resolve_ident(&descriptor.name, "type name")?,
                 })
             }
@@ -565,12 +567,12 @@ impl VMDispatchTables {
         let (address, module) = match tag_type {
             DatatypeTagType::Runtime => (
                 *datatype.original_id.address(),
-                datatype.original_id.name(&self.interner).to_owned(),
+                datatype.original_id.name(&self.interner)?.to_owned(),
             ),
 
             DatatypeTagType::Defining => (
                 *datatype.defining_id.address(),
-                datatype.defining_id.name(&self.interner).to_owned(),
+                datatype.defining_id.name(&self.interner)?.to_owned(),
             ),
         };
         let name = self
@@ -1105,21 +1107,21 @@ impl VirtualTableKey {
         }
     }
 
-    pub fn module_id(&self, interner: &IdentifierInterner) -> PartialVMResult<ModuleId> {
+    pub fn module_id(&self, interner: &IdentifierInterner) -> HCFResult<ModuleId> {
         let module_name = interner.resolve_ident(&self.inner_pkg_key.module_name, "module name")?;
         Ok(ModuleId::new(self.package_key, module_name))
     }
 
-    pub fn member_name(&self, interner: &IdentifierInterner) -> PartialVMResult<Identifier> {
+    pub fn member_name(&self, interner: &IdentifierInterner) -> HCFResult<Identifier> {
         interner.resolve_ident(&self.inner_pkg_key.member_name, "member name")
     }
 
-    pub fn to_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
+    pub fn to_string(&self, interner: &IdentifierInterner) -> HCFResult<String> {
         let inner_name = self.inner_pkg_key.to_string(interner)?;
         Ok(format!("{}::{}", self.package_key, inner_name))
     }
 
-    pub fn to_short_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
+    pub fn to_short_string(&self, interner: &IdentifierInterner) -> HCFResult<String> {
         let inner_name = self.inner_pkg_key.to_string(interner)?;
         Ok(format!(
             "0x{}::{}",
@@ -1130,7 +1132,7 @@ impl VirtualTableKey {
 }
 
 impl IntraPackageKey {
-    pub fn to_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
+    pub fn to_string(&self, interner: &IdentifierInterner) -> HCFResult<String> {
         let module_name = interner.resolve_ident(&self.module_name, "module name")?;
         let member_name = interner.resolve_ident(&self.member_name, "member name")?;
         Ok(format!("{}::{}", module_name, member_name))

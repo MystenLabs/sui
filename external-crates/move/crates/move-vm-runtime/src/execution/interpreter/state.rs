@@ -5,15 +5,13 @@ use crate::{
     cache::identifier_interner::IdentifierInterner,
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::{
-            locals::{MachineHeap, StackFrame},
-            set_err_info,
-        },
+        interpreter::locals::{MachineHeap, StackFrame},
         values::values_impl::{self as values, VMValueCast, Value},
     },
     jit::execution::ast::{Function, InternedDisplay, Type},
     shared::{
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
+        errors::ErrorLocationInformation,
         views::TypeView,
         vm_pointer::VMPointer,
     },
@@ -182,10 +180,10 @@ impl MachineState {
         let func = frame.function();
 
         debug_write!(buf, "    [{}] ", idx)?;
-        let module = func.module_id(&vtables.interner);
+        let module = func.module_id(&vtables.interner)?;
         debug_write!(buf, "{}::{}::", module.address(), module.name())?;
 
-        debug_write!(buf, "{}", func.name(&vtables.interner))?;
+        debug_write!(buf, "{}", func.name(&vtables.interner)?)?;
         let ty_args = frame.ty_args();
         let mut ty_tags = vec![];
         for ty in ty_args {
@@ -278,16 +276,16 @@ impl MachineState {
         Ok(())
     }
 
-    pub(super) fn set_location(&self, err: PartialVMError) -> VMError {
-        err.finish(self.call_stack.current_frame.location(&self.interner))
-    }
-
-    pub(super) fn get_internal_state(&self) -> ExecutionState {
+    pub(super) fn get_internal_state(&self) -> HCFResult<ExecutionState> {
         self.get_stack_frames(&self.interner, usize::MAX)
     }
 
     /// Get count stack frames starting from the top of the stack.
-    pub fn get_stack_frames(&self, interner: &IdentifierInterner, count: usize) -> ExecutionState {
+    pub fn get_stack_frames(
+        &self,
+        interner: &IdentifierInterner,
+        count: usize,
+    ) -> HCFResult<ExecutionState> {
         // collect frames in the reverse order as this is what is
         // normally expected from the stack trace (outermost frame
         // is the last one)
@@ -299,10 +297,10 @@ impl MachineState {
             .take(count)
             .map(|frame| {
                 let fun = frame.function();
-                (fun.module_id(interner).clone(), fun.index(), frame.pc)
+                Ok((fun.module_id(interner)?.clone(), fun.index(), frame.pc))
             })
-            .collect();
-        ExecutionState::new(stack_trace)
+            .collect::<HCFResult<_>>()?;
+        Ok(ExecutionState::new(stack_trace))
     }
 }
 
@@ -404,7 +402,7 @@ impl CallStack {
         let stack_frame = self
             .heap
             .allocate_stack_frame(args, function.local_count())
-            .map_err(|err| set_err_info!(interner, &self.current_frame, err))?;
+            .map_err(|err| err.finish_with_location_info((&*self, interner)))?;
         let new_frame = CallFrame {
             pc: 0,
             stack_frame,
@@ -416,9 +414,8 @@ impl CallStack {
             self.frames.push(prev_frame);
             Ok(())
         } else {
-            let err = PartialVMError::new(StatusCode::CALL_STACK_OVERFLOW);
-            let err = set_err_info!(interner, new_frame, err);
-            Err(err)
+            Err(PartialVMError::new(StatusCode::CALL_STACK_OVERFLOW)
+                .finish_with_location_info((&*self, interner)))
         }
     }
 
@@ -427,22 +424,23 @@ impl CallStack {
     #[inline]
     fn pop_frame(&mut self, interner: &IdentifierInterner) -> VMResult<()> {
         let Some(return_frame) = self.frames.pop() else {
-            let err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
-            let err = set_err_info!(interner, self.current_frame, err);
-            return Err(err);
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .finish_with_location_info((&*self, interner)),
+            );
         };
         let frame = std::mem::replace(&mut self.current_frame, return_frame);
         let index = frame.function().index();
+        let location = frame.location(interner)?;
         let pc = frame.pc;
-        let loc = frame.location(interner);
         self.heap
             .free_stack_frame(frame.stack_frame)
-            .map_err(|e| e.at_code_offset(index, pc).finish(loc))
+            .map_err(|e| e.at_code_offset(index, pc).finish(location))
     }
 }
 
 impl CallFrame {
-    pub(super) fn function<'a>(&self) -> &'a Function {
+    pub(crate) fn function<'a>(&self) -> &'a Function {
         self.function.to_ref()
     }
 
@@ -450,8 +448,8 @@ impl CallFrame {
         &self.ty_args
     }
 
-    pub(super) fn location(&self, interner: &IdentifierInterner) -> Location {
-        Location::Module(self.function().module_id(interner).clone())
+    pub(super) fn location(&self, interner: &IdentifierInterner) -> HCFResult<Location> {
+        self.function().module_id(interner).map(Location::Module)
     }
 }
 
@@ -474,7 +472,8 @@ impl std::fmt::Display for MachineState {
                 f,
                 " frame #{}: {} [pc = {}]",
                 i,
-                fun.pretty_string(&self.interner),
+                fun.pretty_string(&self.interner)
+                    .map_err(|_| std::fmt::Error)?,
                 frame.pc
             )?;
         }
@@ -485,7 +484,8 @@ impl std::fmt::Display for MachineState {
             self.call_stack
                 .current_frame
                 .function()
-                .pretty_string(&self.interner),
+                .pretty_string(&self.interner)
+                .map_err(|_| std::fmt::Error)?,
             self.call_stack.current_frame.pc
         )?;
 

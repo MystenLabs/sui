@@ -336,7 +336,7 @@ impl<'extensions> MoveVM<'extensions> {
                     return Err(PartialVMError::new(
                         StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
                     )
-                    .finish(Location::Module(function.module_id(&self.interner))));
+                    .finish(Location::Module(function.module_id(&self.interner)?)));
                 }
 
                 // execute the function
@@ -367,14 +367,8 @@ impl<'extensions> MoveVM<'extensions> {
         ty_args: &[Type],
     ) -> VMResult<MoveVMFunction> {
         let (package_key, module_id) = original_id.clone().into();
-        let module_name = self
-            .interner
-            .intern_identifier(&module_id)
-            .map_err(|err| err.finish(Location::Module(original_id.clone())))?;
-        let member_name = self
-            .interner
-            .intern_ident_str(function_name)
-            .map_err(|err| err.finish(Location::Module(original_id.clone())))?;
+        let module_name = self.interner.intern_identifier(&module_id)?;
+        let member_name = self.interner.intern_ident_str(function_name)?;
         let vtable_key = VirtualTableKey {
             package_key,
             inner_pkg_key: IntraPackageKey {

@@ -2,6 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// We can use `unwrap` and `expect` in unit tests.
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+
 mod bad_entry_point_tests;
 mod bad_storage_tests;
 mod basic_block_tests;
