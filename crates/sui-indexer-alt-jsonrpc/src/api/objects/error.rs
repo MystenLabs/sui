@@ -14,4 +14,7 @@ pub(crate) enum Error {
 
     #[error("Requested {requested} keys, exceeding maximum {max}")]
     TooManyKeys { requested: usize, max: usize },
+
+    #[error("Multiple exclusions unsupported")]
+    MultipleExclusions,
 }
