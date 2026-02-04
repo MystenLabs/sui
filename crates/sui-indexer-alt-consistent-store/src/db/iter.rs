@@ -45,6 +45,7 @@ impl<'d, K, V> FwdIter<'d, K, V> {
         if let Some(inner) = &mut self.inner {
             let mut end = prefix.as_ref().to_vec();
             if key::next(&mut end) {
+                // With the exclusive key calculated, we can seek to it directly
                 inner.seek(end);
             } else {
                 // Overflow from computed next key - invalidate the iterator
@@ -95,7 +96,8 @@ impl<'d, K, V> RevIter<'d, K, V> {
         if let Some(inner) = &mut self.inner {
             let end = prefix.as_ref();
             inner.seek_for_prev(end);
-            // Only need to check exact match, not starts_with
+            // The only way to land on something in the prefix range is if the prefix itself is an
+            // exact key, so an exact match check is sufficient.
             if inner.key() == Some(end) {
                 inner.prev();
             }
