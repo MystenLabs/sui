@@ -131,7 +131,6 @@ public(package) fun encrypted_amount_2_u_32_zero_verify_non_negative(
 ): bool {
     // TODO: No need to also add decryption handles here
     let value = ea.l0.add(&ea.l1.shift_left(32));
-    std::debug::print(&value);
     ristretto255::verify_range_proof(proof, 64, &vector[value.ciphertext])
 }
 
