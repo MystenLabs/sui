@@ -114,7 +114,7 @@ impl Connection for BigTableConnection<'_> {
             .await?;
 
         // TODO(migration): Remove this dual-write once GraphQL reads per-pipeline watermarks.
-        if let Some(ref tracker) = self.legacy_watermark_tracker { 
+        if let Some(ref tracker) = self.legacy_watermark_tracker {
             // Strip the task suffix (e.g. "pipeline@task" -> "pipeline") so
             // the tracker matches on the bare pipeline name.
             let pipeline_name = pipeline_task
