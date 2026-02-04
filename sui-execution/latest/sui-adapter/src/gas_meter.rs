@@ -10,7 +10,7 @@ use move_vm_runtime::{
     execution::Type,
     shared::{
         gas::{GasMeter, SimpleInstruction},
-        views::{SizeConfig, TypeView, ValueView},
+        views::{SizeConfig, ValueView},
     },
 };
 use sui_types::gas_model::{
@@ -122,7 +122,6 @@ impl GasMeter for SuiGasMeter<'_> {
 
     fn charge_native_function_before_execution(
         &mut self,
-        _ty_args: impl ExactSizeIterator<Item = impl TypeView>,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         // Determine the number of pops that are going to be needed for this function call, and
@@ -161,7 +160,6 @@ impl GasMeter for SuiGasMeter<'_> {
         &mut self,
         _module_id: &ModuleId,
         _func_name: &str,
-        _ty_args: impl ExactSizeIterator<Item = impl TypeView>,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
@@ -301,7 +299,6 @@ impl GasMeter for SuiGasMeter<'_> {
 
     fn charge_vec_pack<'a>(
         &mut self,
-        _ty: impl TypeView + 'a,
         args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         // We will perform `num_args` number of pops.
@@ -311,17 +308,12 @@ impl GasMeter for SuiGasMeter<'_> {
         self.0.charge(1, 1, num_args, VEC_SIZE.into(), 0)
     }
 
-    fn charge_vec_len(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
+    fn charge_vec_len(&mut self) -> PartialVMResult<()> {
         self.0
             .charge(1, 1, 1, Type::U64.size().into(), REFERENCE_SIZE.into())
     }
 
-    fn charge_vec_borrow(
-        &mut self,
-        _is_mut: bool,
-        _ty: impl TypeView,
-        _is_success: bool,
-    ) -> PartialVMResult<()> {
+    fn charge_vec_borrow(&mut self, _is_mut: bool, _is_success: bool) -> PartialVMResult<()> {
         self.0.charge(
             1,
             1,
@@ -331,26 +323,17 @@ impl GasMeter for SuiGasMeter<'_> {
         )
     }
 
-    fn charge_vec_push_back(
-        &mut self,
-        _ty: impl TypeView,
-        _val: impl ValueView,
-    ) -> PartialVMResult<()> {
+    fn charge_vec_push_back(&mut self, _val: impl ValueView) -> PartialVMResult<()> {
         // The value was already on the stack, so we aren't increasing the number of bytes on the stack.
         self.0.charge(1, 0, 2, 0, REFERENCE_SIZE.into())
     }
 
-    fn charge_vec_pop_back(
-        &mut self,
-        _ty: impl TypeView,
-        _val: Option<impl ValueView>,
-    ) -> PartialVMResult<()> {
+    fn charge_vec_pop_back(&mut self, _val: Option<impl ValueView>) -> PartialVMResult<()> {
         self.0.charge(1, 1, 1, 0, REFERENCE_SIZE.into())
     }
 
     fn charge_vec_unpack(
         &mut self,
-        _ty: impl TypeView,
         expect_num_elements: NumArgs,
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
@@ -360,7 +343,7 @@ impl GasMeter for SuiGasMeter<'_> {
         self.0.charge(1, pushes, 1, 0, VEC_SIZE.into())
     }
 
-    fn charge_vec_swap(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
+    fn charge_vec_swap(&mut self) -> PartialVMResult<()> {
         let size_decrease = REFERENCE_SIZE + Type::U64.size() + Type::U64.size();
         let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
             (0, 3)

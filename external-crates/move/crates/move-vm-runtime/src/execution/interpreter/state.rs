@@ -16,12 +16,10 @@ use crate::{
     shared::{
         SafeIndex as _,
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
-        views::TypeView,
         vm_pointer::VMPointer,
     },
 };
 use move_binary_format::errors::*;
-use move_core_types::language_storage::TypeTag;
 
 use std::{fmt::Write, sync::Arc};
 
@@ -80,11 +78,6 @@ pub(crate) struct CallFrame {
     pub(crate) function: VMPointer<Function>,
     pub(crate) stack_frame: StackFrame,
     pub(crate) ty_args: Vec<Type>,
-}
-
-pub(super) struct ResolvableType<'a, 'b> {
-    pub(super) ty: &'a Type,
-    pub(super) vtables: &'b VMDispatchTables,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -454,74 +447,6 @@ impl CallFrame {
 
     pub(super) fn location(&self, interner: &IdentifierInterner) -> Location {
         Location::Module(self.function().module_id(interner).clone())
-    }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Other impls
-// -------------------------------------------------------------------------------------------------
-
-impl TypeView for ResolvableType<'_, '_> {
-    fn to_type_tag(&self) -> TypeTag {
-        self.vtables.type_to_type_tag(self.ty).unwrap()
-    }
-}
-
-impl std::fmt::Display for MachineState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Call stack:")?;
-        for (i, frame) in self.call_stack.frames.iter().enumerate() {
-            let fun = frame.function();
-            writeln!(
-                f,
-                " frame #{}: {} [pc = {}]",
-                i,
-                fun.pretty_string(&self.interner),
-                frame.pc
-            )?;
-        }
-        writeln!(
-            f,
-            "*frame #{}: {} [pc = {}]:",
-            self.call_stack.frames.len(),
-            self.call_stack
-                .current_frame
-                .function()
-                .pretty_string(&self.interner),
-            self.call_stack.current_frame.pc
-        )?;
-
-        let code = self.call_stack.current_frame.function().code();
-        let pc = self.call_stack.current_frame.pc as usize;
-
-        if pc < code.len() {
-            let interner = &self.interner;
-
-            for (i, bytecode) in code
-                .safe_get(..pc)
-                .map_err(|_| std::fmt::Error)?
-                .iter()
-                .enumerate()
-            {
-                // prefix "i> " then the formatted instruction
-                write!(f, "{}> ", i)?;
-                bytecode.fmt(f, interner)?;
-                writeln!(f)?;
-            }
-
-            write!(f, "{}* ", pc)?;
-            code.safe_get(pc)
-                .map_err(|_| std::fmt::Error)?
-                .fmt(f, interner)?;
-            writeln!(f)?;
-        }
-
-        writeln!(f, "Locals:\n{}", self.call_stack.current_frame.stack_frame)?;
-        writeln!(f, "Operand Stack:")?;
-        for value in &self.operand_stack.value {
-            writeln!(f, "{}", value)?;
-        }
-        Ok(())
     }
 }
 

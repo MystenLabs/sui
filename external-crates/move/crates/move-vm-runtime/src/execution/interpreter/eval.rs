@@ -12,7 +12,7 @@ use crate::{
                 instantiate_struct_type,
             },
             set_err_info,
-            state::{CallStack, MachineState, ResolvableType},
+            state::{CallStack, MachineState},
         },
         tracing::{trace, tracer::VMTracer},
         values::{
@@ -367,15 +367,6 @@ fn op_step_impl(
 ) -> PartialVMResult<()> {
     use SimpleInstruction as S;
 
-    macro_rules! make_ty {
-        ($ty: expr) => {
-            ResolvableType {
-                ty: $ty,
-                vtables: run_context.vtables,
-            }
-        };
-    }
-
     match instruction {
         // -- CALL/RETURN OPERATIONS -------------
         // These should have been handled in `step` above.
@@ -712,7 +703,7 @@ fn op_step_impl(
         Bytecode::VecPack(ty_ptr, num) => {
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             check_depth_of_type(run_context, &ty)?;
-            gas_meter.charge_vec_pack(make_ty!(&ty), state.last_n_operands(*num as usize)?)?;
+            gas_meter.charge_vec_pack(state.last_n_operands(*num as usize)?)?;
             let elements = state.pop_n_operands(*num as u16)?;
             let specialization: VectorSpecialization = (&ty).try_into()?;
             let value = Vector::pack(specialization, elements)?;
@@ -721,10 +712,7 @@ fn op_step_impl(
         Bytecode::VecLen(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
-            gas_meter.charge_vec_len(ResolvableType {
-                ty: &ty,
-                vtables: run_context.vtables,
-            })?;
+            gas_meter.charge_vec_len()?;
             let value = vec_ref.len(&ty)?;
             state.push_operand(value)?;
         }
@@ -733,7 +721,7 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, &ty);
-            gas_meter.charge_vec_borrow(false, make_ty!(&ty), res.is_ok())?;
+            gas_meter.charge_vec_borrow(false, res.is_ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecMutBorrow(ty_ptr) => {
@@ -741,14 +729,14 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, &ty);
-            gas_meter.charge_vec_borrow(true, make_ty!(&ty), res.is_ok())?;
+            gas_meter.charge_vec_borrow(true, res.is_ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecPushBack(ty_ptr) => {
             let elem = state.pop_operand()?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
-            gas_meter.charge_vec_push_back(make_ty!(&ty), &elem)?;
+            gas_meter.charge_vec_push_back(&elem)?;
             vec_ref.push_back(
                 elem,
                 &ty,
@@ -759,13 +747,13 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.pop(&ty);
-            gas_meter.charge_vec_pop_back(make_ty!(&ty), res.as_ref().ok())?;
+            gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecUnpack(ty_ptr, num) => {
             let vec_val = state.pop_operand_as::<Vector>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
-            gas_meter.charge_vec_unpack(make_ty!(&ty), NumArgs::new(*num), vec_val.elem_views())?;
+            gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views())?;
             let elements = vec_val.unpack(&ty, *num)?;
             for value in elements {
                 state.push_operand(value)?;
@@ -777,7 +765,7 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty =
                 instantiate_single_type(ty_ptr.to_ref(), state.call_stack.current_frame.ty_args())?;
-            gas_meter.charge_vec_swap(make_ty!(&ty))?;
+            gas_meter.charge_vec_swap()?;
             vec_ref.swap(idx1, idx2, &ty)?;
         }
         Bytecode::PackVariant(variant_def_ptr) => {
@@ -895,10 +883,6 @@ fn call_function(
             .charge_call_generic(
                 &module_id,
                 &function.name_str(&run_context.vtables.interner),
-                ty_args.iter().map(|ty| ResolvableType {
-                    ty,
-                    vtables: run_context.vtables,
-                }),
                 last_n_operands,
                 (function.local_count() as u64).into(),
             )
@@ -1021,10 +1005,7 @@ pub(super) fn call_native_with_args(
     );
     let native_function = function.get_native(&vtables.interner)?;
 
-    gas_meter.charge_native_function_before_execution(
-        ty_args.iter().map(|ty| ResolvableType { ty, vtables }),
-        args.iter(),
-    )?;
+    gas_meter.charge_native_function_before_execution(args.iter())?;
 
     let result = native_function(&mut native_context, ty_args.to_vec(), args)?;
 
