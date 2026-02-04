@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 """
 Script to kick off Antithesis tests via the sui-operations repo.
