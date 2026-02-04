@@ -12,7 +12,7 @@ use move_binary_format::{
     errors::{Location, VMError, VMResult},
     file_format::{EnumDefinitionIndex, FieldHandleIndex, LocalIndex, MemberCount, VariantTag},
 };
-use move_bytecode_source_map::source_map::FunctionSourceMap;
+use move_bytecode_source_map::source_map::{FunctionSourceMap, SourceMap};
 use move_bytecode_verifier::absint::FunctionContext;
 use move_bytecode_verifier::regex_reference_safety::abstract_state::StateSerializer;
 use move_bytecode_verifier_meter::dummy::DummyMeter;
@@ -37,7 +37,7 @@ use move_vm_runtime::{
 };
 use move_vm_test_utils::{InMemoryStorage, gas_schedule::GasStatus};
 
-use anyhow::{Error, Result, anyhow};
+use anyhow::{Error, Result, anyhow, bail};
 use async_trait::async_trait;
 use clap::Parser;
 use std::{
@@ -132,7 +132,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
 
         adapter
             .perform_session_action(None, |session, gas_status| {
-                for module in &*MOVE_STDLIB_COMPILED {
+                for (module, _) in &*MOVE_STDLIB_COMPILED {
                     let mut module_bytes = vec![];
                     module
                         .serialize_with_version(module.version, &mut module_bytes)
@@ -152,14 +152,14 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
             let prev = addr_to_name_mapping.insert(addr, Symbol::from(name));
             assert!(prev.is_none());
         }
-        for module in MOVE_STDLIB_COMPILED
+        for (module, source_map) in MOVE_STDLIB_COMPILED
             .iter()
-            .filter(|module| !adapter.compiled_state.is_precompiled_dep(&module.self_id()))
+            .filter(|(module, _)| !adapter.compiled_state.is_precompiled_dep(&module.self_id()))
             .collect::<Vec<_>>()
         {
             adapter
                 .compiled_state
-                .add_and_generate_interface_file(module.clone());
+                .add_and_generate_interface_file(module.clone(), Some(source_map.clone()));
         }
         (adapter, None)
     }
@@ -245,13 +245,13 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
     ) -> Result<Option<String>> {
         let TaskInput {
             command,
-            name,
-            number,
-            start_line,
-            command_lines_stop,
-            stop_line,
-            data,
-            task_text,
+            name: _,
+            number: _,
+            start_line: _,
+            command_lines_stop: _,
+            stop_line: _,
+            data: _,
+            task_text: _,
         } = task;
         match command {
             Subcommand::ViewAbstractState(view_abstract_state_command) => {
@@ -269,15 +269,15 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
                 let module_id = ModuleId::new(addr, module);
                 let vm = self.new_vm();
                 let Ok(module) = vm.load_module(&module_id, &self.storage) else {
-                    return Err(anyhow!("Module '{}' not found", module_id));
+                    bail!("Module '{}' not found", module_id);
                 };
                 let Some((fdef_idx, fdef)) = module.find_function_def_by_name(function.as_str())
                 else {
-                    return Err(anyhow!(
+                    bail!(
                         "Function '{}' not found in module '{}'",
                         function,
                         module_id
-                    ));
+                    );
                 };
                 let fhandle = module.function_handle_at(fdef.function);
                 let Some(code) = &fdef.code else {
@@ -295,7 +295,33 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
                         &function_context,
                         &mut DummyMeter,
                     )?;
-                Ok(None)
+
+                // Create a dummy source map for the module to get local/field names
+                let Some(source_map) = self.compiled_state.source_map(&module_id) else {
+                    bail!("Source map not found for module '{}'", module_id);
+                };
+                let Ok(function_source_map) = source_map.get_function_source_map(fdef_idx) else {
+                    bail!(
+                        "Function source map not found for function '{}::{}'",
+                        module_id,
+                        function
+                    )
+                };
+
+                // Serialize each state
+                let mut serializer =
+                    SourceMapRegexStateSerializer::new(module.as_ref(), function_source_map);
+                let serializable_states: BTreeMap<_, _> = states
+                    .into_iter()
+                    .map(|(offset, state)| {
+                        // TODO get label for offset for mvir
+                        (offset, state.pre.to_serializable(&mut serializer))
+                    })
+                    .collect();
+
+                let json = serde_json::to_string_pretty(&serializable_states)
+                    .map_err(|e| anyhow!("Failed to serialize states: {}", e))?;
+                Ok(Some(json))
             }
         }
     }
@@ -413,7 +439,7 @@ pub static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock:
     }
 });
 
-static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
+static MOVE_STDLIB_COMPILED: LazyLock<Vec<(CompiledModule, SourceMap)>> = LazyLock::new(|| {
     let (files, units_res) = move_compiler::Compiler::from_files(
         None,
         move_stdlib::source_files(),
@@ -433,7 +459,12 @@ static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
         }
         Ok((units, _warnings)) => units
             .into_iter()
-            .map(|annot_module| annot_module.named_module.module)
+            .map(|annot_module| {
+                (
+                    annot_module.named_module.module,
+                    annot_module.named_module.source_map,
+                )
+            })
             .collect(),
     }
 });
@@ -473,12 +504,12 @@ pub async fn run_test_with_regex_reference_safety(
 // StateSerializer Implementation
 //**************************************************************************************************
 
-pub struct SourceMapStateSerializer<'a> {
+pub struct SourceMapRegexStateSerializer<'a> {
     module: &'a CompiledModule,
     function_source_map: &'a FunctionSourceMap,
 }
 
-impl<'a> SourceMapStateSerializer<'a> {
+impl<'a> SourceMapRegexStateSerializer<'a> {
     pub fn new(module: &'a CompiledModule, function_source_map: &'a FunctionSourceMap) -> Self {
         Self {
             module,
@@ -487,7 +518,7 @@ impl<'a> SourceMapStateSerializer<'a> {
     }
 }
 
-impl StateSerializer for SourceMapStateSerializer<'_> {
+impl StateSerializer for SourceMapRegexStateSerializer<'_> {
     fn local_root(&mut self, _: Ref) -> String {
         format!("ROOT")
     }

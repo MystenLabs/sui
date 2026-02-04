@@ -14,6 +14,7 @@ use move_binary_format::{
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use move_regex_borrow_graph::references::Ref;
+use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
     collections::{BTreeMap, BTreeSet},
@@ -768,27 +769,27 @@ pub trait StateSerializer {
     ) -> String;
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SerializableState {
     pub local_root: String,
     pub locals: BTreeMap<String, SerializableValue>,
     pub graph: SerializableGraph,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum SerializableValue {
     Reference(String),
     NonReference,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SerializableGraph {
     pub nodes: BTreeMap<String, /* is_mut */ bool>,
     /// Skips self epsilon edges
     pub outgoing: BTreeMap<String, BTreeMap<String, BTreeSet<SerializableEdge>>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct SerializableEdge {
     pub labels: Vec<String>,
     pub ends_in_dot_star: bool,

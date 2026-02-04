@@ -8553,6 +8553,7 @@ dependencies = [
  "move-regex-borrow-graph",
  "move-vm-config",
  "petgraph 0.8.1",
+ "serde",
 ]
 
 [[package]]
@@ -9202,6 +9203,7 @@ dependencies = [
  "move-vm-types",
  "rayon",
  "regex",
+ "serde_json",
  "tempfile",
  "tokio",
 ]

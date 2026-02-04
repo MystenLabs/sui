@@ -12,6 +12,7 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 regex.workspace = true
+serde_json.workspace = true
 rayon.workspace = true
 clap.workspace = true
 tempfile.workspace = true
