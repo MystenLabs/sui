@@ -3871,6 +3871,7 @@ pub type TrustedTransactionWithAliases = WithAliases<TrustedTransaction>;
 /// Deprecated version of WithAliases that uses SuiAddress instead of u8.
 /// This is needed to read data from deferred_transactions_with_aliases_v2 table
 /// which was written with the old format before the type was changed.
+// TODO: Delete this after all production networks are on the latest table.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DeprecatedWithAliases<T>(
     T,
