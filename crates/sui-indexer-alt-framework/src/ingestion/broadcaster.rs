@@ -10,7 +10,6 @@ use anyhow::Context;
 use anyhow::anyhow;
 use futures::Stream;
 use futures::future::try_join_all;
-use futures::stream;
 use sui_concurrency_limiter::AimdLimit;
 use sui_concurrency_limiter::Limit;
 use sui_concurrency_limiter::Outcome;
@@ -195,9 +194,27 @@ where
     })
 }
 
+/// Wraps a checkpoint range in an async stream gated by `ingest_hi`. Items are only yielded
+/// when the backpressure window allows, preventing spawned tasks from piling up while blocked.
+fn backpressured_checkpoint_stream(
+    start: u64,
+    end: u64,
+    ingest_hi_rx: watch::Receiver<Option<u64>>,
+) -> impl Stream<Item = u64> {
+    futures::stream::unfold((start, ingest_hi_rx), move |(cp, mut rx)| async move {
+        if cp >= end {
+            return None;
+        }
+        if rx.wait_for(|hi| hi.is_none_or(|hi| cp < hi)).await.is_err() {
+            return None;
+        }
+        Some((cp, (cp + 1, rx)))
+    })
+}
+
 /// Fetch and broadcasts checkpoints from a range [start..end) to subscribers. This task is
-/// ingest_hi-aware and will wait if it encounters a checkpoint beyond the current ingest_hi,
-/// resuming when ingest_hi advances to currently ingesting checkpoints.
+/// ingest_hi-aware via the backpressured stream that gates checkpoint yielding based on
+/// the current ingest_hi, resuming when ingest_hi advances.
 fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
@@ -213,7 +230,6 @@ fn ingest_and_broadcast_range(
         let limiter = aimd.as_ref().map(|(l, _)| l.clone());
 
         let make_task = |cp: u64| {
-            let mut ingest_hi_rx = ingest_hi_rx.clone();
             let client = client.clone();
             let subscribers = subscribers.clone();
             let limiter = limiter.clone();
@@ -225,20 +241,6 @@ fn ingest_and_broadcast_range(
                 }
 
                 let result = async {
-                    // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                    // Wait until ingest_hi allows processing this checkpoint.
-                    // None means no backpressure limit. If we get Some(hi) we wait until cp < hi.
-                    // wait_for only errors if the sender is dropped (main broadcaster shut down) so
-                    // we treat an error returned here as a shutdown signal.
-                    if ingest_hi_rx
-                        .wait_for(|hi| hi.is_none_or(|hi| cp < hi))
-                        .await
-                        .is_err()
-                    {
-                        return Err(Break::Break);
-                    }
-                    // docs::/#bound
-
                     // Fetch the checkpoint or stop if cancelled.
                     let checkpoint = client.wait_for(cp, retry_interval).await?;
 
@@ -275,12 +277,18 @@ fn ingest_and_broadcast_range(
             }
         };
 
+        // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
+        // Backpressure is enforced at the stream level: checkpoints are only yielded when
+        // ingest_hi allows, preventing spawned tasks from piling up while blocked.
+        let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
+        // docs::/#bound
+
         if let Some((_, limit_rx)) = aimd {
-            stream::iter(start..end)
+            checkpoints
                 .try_for_each_spawned_dynamic(limit_rx, make_task)
                 .await
         } else {
-            stream::iter(start..end)
+            checkpoints
                 .try_for_each_spawned(ingest_concurrency, make_task)
                 .await
         }
