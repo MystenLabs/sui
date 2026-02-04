@@ -20,7 +20,6 @@ use crate::{
     },
 };
 use indexmap::{IndexMap, IndexSet};
-use lru::LruCache;
 use move_binary_format::{
     CompiledModule,
     compatibility::{Compatibility, InclusionCheck},
@@ -49,12 +48,12 @@ use move_vm_runtime::{
 };
 use mysten_common::debug_fatal;
 use nonempty::nonempty;
+use quick_cache::unsync::Cache as QCache;
 use serde::{Deserialize, de::DeserializeSeed};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     fmt,
-    num::NonZero,
     rc::Rc,
     sync::Arc,
 };
@@ -140,11 +139,13 @@ macro_rules! charge_gas {
     ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
 }
 
+// Helper macro to manage Move VM cache for different linkage contexts. If the given linkage is
+// found the VM is reused, otherwise a new VM is created and inserted into the cache.
 macro_rules! with_vm {
     ($self:ident, $linkage:expr, $body:expr) => {{
         let link_context = $linkage.linkage_context();
         let linkage_hash = link_context.to_linkage_hash();
-        let mut vm = if let Some(vm) = $self.tearoffs.pop(&linkage_hash) {
+        let mut vm = if let Some((_, vm)) = $self.executable_vm_cache.remove(&linkage_hash) {
             vm
         } else {
             let data_store = &$self.env.linkable_store.package_store;
@@ -159,7 +160,7 @@ macro_rules! with_vm {
                 .map_err(|e| $self.env.convert_linked_vm_error(e, $linkage))?
         };
         let result = $body(&mut vm)?;
-        $self.tearoffs.put(linkage_hash, vm);
+        $self.executable_vm_cache.insert(linkage_hash, vm);
         Ok(result)
     }};
 }
@@ -234,8 +235,8 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension> {
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
     locations: Locations,
-    // LRU cache of Move VMs created this transaction for different linkage contexts so that we can reuse them.
-    tearoffs: lru::LruCache<LinkageHash, MoveVM<'env>>,
+    // cache of Move VMs created this transaction for different linkage contexts so that we can reuse them.
+    executable_vm_cache: QCache<LinkageHash, MoveVM<'env>>,
 }
 
 impl Locations {
@@ -373,7 +374,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 receiving_inputs,
                 results: vec![],
             },
-            tearoffs: LruCache::new(NonZero::new(1024).unwrap()),
+            executable_vm_cache: QCache::new(1024),
         })
     }
 
@@ -479,6 +480,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
 
         let (writeout_vm, ty_linkage) =
             Self::make_writeout_vm(env, writes.values().map(|(_, ty, _)| ty.clone()))?;
+
         for (id, (recipient, ty, value)) in writes {
             let (ty, layout) = Self::load_type_and_layout_from_struct_for_writeout(
                 env,
@@ -613,7 +615,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     /// therefore will not be present in the `resolution_vm`.
     fn load_type_and_layout_from_struct_for_writeout(
         env: &Env,
-        vm: &MoveVM<'extension>,
+        vm: &MoveVM,
         linkage: &ExecutableLinkage,
         tag: StructTag,
     ) -> Result<(Type, move_core_types::runtime_value::MoveTypeLayout), ExecutionError> {

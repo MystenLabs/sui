@@ -277,8 +277,8 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
     }
 
     pub fn load_type_tag(&self, idx: usize, ty: &TypeTag) -> Result<Type, ExecutionError> {
-        let (runtime_type, vm_opt) = self.load_vm_type_from_type_tag(Some(idx), ty)?;
-        self.adapter_type_from_vm_type(&vm_opt, &runtime_type)
+        let vm_type = self.load_vm_type_from_type_tag(Some(idx), ty)?;
+        self.adapter_type_from_vm_type(self.input_type_resolution_vm, &vm_type)
     }
 
     /// We verify that all types in the `StructTag` are defining ID-based types.

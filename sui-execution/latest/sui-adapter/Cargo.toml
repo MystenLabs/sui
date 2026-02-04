@@ -18,7 +18,7 @@ tracing.workspace = true
 serde.workspace = true
 indexmap.workspace = true
 serde_json.workspace = true
-lru.workspace = true
+quick_cache.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
