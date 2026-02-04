@@ -136,9 +136,6 @@ jobs:
     steps:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
-    - name: Get sui commit
-      run: echo "sui_sha=$(git rev-parse HEAD)" >> $GITHUB_ENV
-
     - name: Dispatch to sui-operations for notification
       uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
       with:
@@ -147,7 +144,7 @@ jobs:
         event-type: simtest-failure
         client-payload: |-
           {
-            "commit_sha": "${{ env.sui_sha }}",
+            "commit_sha": "${{ github.sha }}",
             "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
             "run_id": "${{ github.run_id }}",
             "workflow_name": "${{ github.workflow }}",
