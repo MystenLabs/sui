@@ -341,7 +341,9 @@ impl VMTracer<'_> {
         machine: &MachineState,
         stack_idx: usize,
     ) -> Option<TraceValue> {
+        // TODO: Add an assertion establishing that operand_stack and type_stack are in sync.
         if stack_idx >= machine.operand_stack.len() {
+            // TODO: Should we emit a trace error here?
             return None;
         }
         let offset = self.type_stack.len() - 1;
@@ -419,6 +421,7 @@ impl VMTracer<'_> {
         stack_idx: usize,
         local_index: usize,
     ) -> Option<()> {
+        // TODO: Add an assertion establishing that operand_stack and type_stack are in sync.
         if stack_idx >= machine.operand_stack.value.len() {
             return None;
         }
@@ -1590,7 +1593,7 @@ impl VMTracer<'_> {
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::PackVariantGeneric(variant_inst_ptr) => {
-                let field_count = variant_inst_ptr.variant.variant_tag;
+                let field_count = variant_inst_ptr.variant.field_count();
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count as usize);
                 let ty = vtables
