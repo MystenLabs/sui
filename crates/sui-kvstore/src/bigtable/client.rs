@@ -193,6 +193,13 @@ impl BigTableClient {
             return Ok(Some(wm));
         }
 
+        // Don't fall back to legacy watermark when legacy mode is disabled.
+        // This prevents tasked backfill pipelines from inheriting the main
+        // pipeline's watermark from the legacy [0] row.
+        if !crate::write_legacy_data() {
+            return Ok(None);
+        }
+
         Ok(legacy_checkpoint.map(|cp| Watermark {
             epoch_hi_inclusive: 0,
             checkpoint_hi_inclusive: cp,
