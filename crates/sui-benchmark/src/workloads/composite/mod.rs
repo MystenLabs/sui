@@ -4,6 +4,7 @@
 mod operations;
 
 use derive_more::Add;
+use mysten_common::debug_fatal;
 use mysten_common::random::get_rng;
 pub use operations::{
     ALL_OPERATIONS, AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw,
@@ -659,7 +660,11 @@ impl AccountState {
         }
         // If this panic happens in practice, we could just return a zero balance,
         // it wouldn't hurt the test suite overall unles it is happening every time
-        panic!("Failed to get sui balance for address {sender} - return zero balance");
+        debug_fatal!("Failed to get sui balance for address {sender} - return zero balance");
+        Self {
+            sender,
+            sui_balance: 0,
+        }
     }
 }
 
