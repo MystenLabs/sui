@@ -97,6 +97,10 @@ struct Args {
     #[arg(long)]
     aimd_backoff_ratio: Option<f64>,
 
+    /// AIMD consecutive successes required before increasing the limit by 1 (default: 1)
+    #[arg(long)]
+    aimd_successes_per_increase: Option<usize>,
+
     /// Enable AIMD dynamic ingestion concurrency with this initial limit.
     /// When set, --ingest-concurrency is ignored.
     #[arg(long)]
@@ -113,6 +117,10 @@ struct Args {
     /// Ingestion AIMD backoff ratio on failure, in [0.5, 1.0) (default: 0.9)
     #[arg(long)]
     ingest_aimd_backoff_ratio: Option<f64>,
+
+    /// Ingestion AIMD consecutive successes required before increasing the limit by 1 (default: 1)
+    #[arg(long)]
+    ingest_aimd_successes_per_increase: Option<usize>,
 
     #[command(flatten)]
     metrics_args: MetricsArgs,
@@ -209,6 +217,9 @@ async fn main() -> anyhow::Result<()> {
         if let Some(v) = args.aimd_backoff_ratio {
             aimd.backoff_ratio = v;
         }
+        if let Some(v) = args.aimd_successes_per_increase {
+            aimd.successes_per_increase = v;
+        }
         config.committer.aimd = Some(aimd);
     }
 
@@ -231,6 +242,9 @@ async fn main() -> anyhow::Result<()> {
         }
         if let Some(v) = args.ingest_aimd_backoff_ratio {
             aimd.backoff_ratio = v;
+        }
+        if let Some(v) = args.ingest_aimd_successes_per_increase {
+            aimd.successes_per_increase = v;
         }
         ingestion_config.aimd = Some(aimd);
     }
