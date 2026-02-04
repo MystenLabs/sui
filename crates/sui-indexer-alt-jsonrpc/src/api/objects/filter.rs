@@ -8,13 +8,11 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
 use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
-use sui_indexer_alt_schema::objects::StoredObjInfo;
 use sui_indexer_alt_schema::objects::StoredOwnerKind;
 use sui_json_rpc_types::Page as PageResponse;
 use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_types::Identifier;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::dynamic_field::DYNAMIC_FIELD_FIELD_STRUCT_NAME;
@@ -62,12 +60,6 @@ pub(crate) enum SuiObjectDataFilter {
     ),
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub(crate) struct ObjectCursor {
-    object_id: Vec<u8>,
-    cp_sequence_number: u64,
-}
-
 pub(crate) type Cursor = BcsCursor<Vec<u8>>;
 pub(crate) type ObjectIDs = PageResponse<ObjectID, String>;
 
@@ -83,7 +75,7 @@ pub(super) async fn owned_objects(
 ) -> Result<ObjectIDs, RpcError<Error>> {
     match filter {
         Some(SuiObjectDataFilter::MatchNone(exclusions)) if exclusions.len() == 1 => {
-            by_type(
+            by_type_exclude(
                 ctx,
                 owner,
                 StoredOwnerKind::Address,
@@ -200,8 +192,8 @@ async fn query_objects(
             Some(owner.to_string()),
             object_type,
             exclude_object_type, // NEW parameter
-            Some((page.limit + 1) as u32),
-            page.cursor.as_ref().map(|c| BcsCursor
+            Some(page.limit as u32),
+            page.cursor.as_ref().map(|c| c.0.clone()),
             None,
             true,
         )
@@ -217,13 +209,7 @@ async fn query_objects(
     let next_cursor = results
         .results
         .last()
-        .map(|edge| {
-            BcsCursor(ObjectCursor {
-                object_id: edge.token.clone(),
-                cp_sequence_number: edge.value.1.into(),
-            })
-            .encode()
-        })
+        .map(|edge| BcsCursor(edge.token.clone()).encode())
         .transpose()
         .context("Failed to encode cursor")?;
 
