@@ -520,7 +520,7 @@ impl<'a> SourceMapRegexStateSerializer<'a> {
 
 impl StateSerializer for SourceMapRegexStateSerializer<'_> {
     fn local_root(&mut self, _: Ref) -> String {
-        format!("ROOT")
+        "ROOT".to_owned()
     }
 
     fn ref_(&mut self, idx: LocalIndex, _: Ref) -> String {
