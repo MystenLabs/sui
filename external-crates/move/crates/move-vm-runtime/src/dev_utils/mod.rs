@@ -3,11 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::new_without_default)]
-
 // We can use `unwrap` and `expect` in the developer testing harnesses.
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
-
 
 pub(crate) mod dbg_print;
 pub mod in_memory_test_adapter;

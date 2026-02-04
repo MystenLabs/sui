@@ -459,6 +459,8 @@ impl CallFrame {
 
 impl TypeView for ResolvableType<'_, '_> {
     fn to_type_tag(&self) -> TypeTag {
+        // Allow here since this code will be deleted soon.
+        #[allow(clippy::unwrap_used)]
         self.vtables.type_to_type_tag(self.ty).unwrap()
     }
 }

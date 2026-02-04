@@ -258,7 +258,7 @@ impl PartialVMError {
     pub fn new(major_status: StatusCode) -> Self {
         debug_assert!(
             major_status != StatusCode::INVALID_MOVE_RUNTIME_ERROR,
-            "Use MoveRuntimeError for runtime errors"
+            "Use HCFError for runtime errors"
         );
         #[cfg(debug_assertions)]
         let backtrace = {

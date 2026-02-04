@@ -381,7 +381,7 @@ impl ValueImpl {
 impl Container {
     fn copy_value(&self) -> PartialVMResult<Self> {
         let copy_rc_ref_vec_val = |r: &Rc<RefCell<Vec<ValueImpl>>>| {
-            Ok(Rc::new(RefCell::new(
+            Ok::<_, PartialVMError>(Rc::new(RefCell::new(
                 r.borrow()
                     .iter()
                     .map(|v| v.copy_value())

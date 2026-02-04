@@ -26,7 +26,10 @@ use crate::{
 };
 
 use move_binary_format::{
-    errors::{HCFResult, Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{
+        HCFError, HCFResult, Location, PartialVMError, PartialVMErrorImpl, PartialVMResult,
+        VMResult,
+    },
     file_format::{AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
@@ -313,26 +316,20 @@ impl VMDispatchTables {
                 // The computed runtime ID should match the runtime ID of the datatype that we have
                 // loaded.
                 if datatype.original_id.address() != &package_key {
-                    return Err(
-                        PartialVMError::new(StatusCode::INVALID_MOVE_RUNTIME_ERROR)
-                            .with_message(format!(
-                                "Runtime ID resolution of {defining_id} => {package_key} does not match runtime ID of loaded type: {}",
-                                datatype.original_id.address()
-
-                            ))
-                            .finish(Location::Undefined),
+                    let msg = format!(
+                        "Runtime ID resolution of {defining_id} => {package_key} does not match runtime ID of loaded type: {}",
+                        datatype.original_id.address()
                     );
+                    return Err(HCFError::new().with_message(msg).into());
                 }
                 // The defining ID should match the defining ID of the datatype that we
                 // have loaded.
                 if datatype.defining_id.address() != &defining_id {
-                    return Err(
-                        PartialVMError::new(StatusCode::INVALID_MOVE_RUNTIME_ERROR)
-                            .with_message(format!(
-                                "Defining ID {defining_id} does not match defining ID of loaded type: {}", datatype.defining_id.address()
-                            ))
-                            .finish(Location::Package(defining_id)),
+                    let msg = format!(
+                        "Defining ID {defining_id} does not match defining ID of loaded type: {}",
+                        datatype.defining_id.address()
                     );
+                    return Err(HCFError::new().with_message(msg).into());
                 }
                 if datatype.type_parameters().is_empty() && struct_tag.type_params.is_empty() {
                     Type::Datatype(key)
