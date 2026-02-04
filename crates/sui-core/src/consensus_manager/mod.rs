@@ -400,7 +400,7 @@ impl ConsensusManager {
 
 // Implementing the interface so we can update the consensus peer addresses when requested.
 impl ConsensusAddressUpdater for ConsensusManager {
-    fn update(
+    fn update_address(
         &self,
         network_pubkey: NetworkPublicKey,
         source: sui_network::endpoint_manager::AddressSource,

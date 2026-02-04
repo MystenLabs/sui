@@ -25,7 +25,7 @@ struct Inner {
 }
 
 pub trait ConsensusAddressUpdater: Send + Sync + 'static {
-    fn update(
+    fn update_address(
         &self,
         network_pubkey: NetworkPublicKey,
         source: AddressSource,
@@ -85,7 +85,7 @@ impl EndpointManager {
             EndpointId::Consensus(network_pubkey) => {
                 if let Some(updater) = self.inner.consensus_address_updater.load_full() {
                     updater
-                        .update(network_pubkey.clone(), source, addresses)
+                        .update_address(network_pubkey.clone(), source, addresses)
                         .map_err(|e| {
                             warn!(?network_pubkey, "Error updating consensus address: {e:?}");
                             e
@@ -140,7 +140,7 @@ mod tests {
     }
 
     impl ConsensusAddressUpdater for MockConsensusAddressUpdater {
-        fn update(
+        fn update_address(
             &self,
             network_pubkey: NetworkPublicKey,
             _source: AddressSource,

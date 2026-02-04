@@ -1246,8 +1246,8 @@ mod tests {
         (context, client)
     }
 
-    #[test]
-    fn test_update_peer_address() {
+    #[tokio::test]
+    async fn test_update_peer_address() {
         let (context, client) = create_test_context_and_client();
 
         let peer = context.committee.to_authority_index(1).unwrap();
@@ -1278,8 +1278,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_clear_peer_address() {
+    #[tokio::test]
+    async fn test_clear_peer_address() {
         let (context, client) = create_test_context_and_client();
 
         let peer = context.committee.to_authority_index(1).unwrap();
@@ -1304,8 +1304,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_different_peers_independent() {
+    #[tokio::test]
+    async fn test_different_peers_independent() {
         let (context, client) = create_test_context_and_client();
 
         let peer1 = context.committee.to_authority_index(1).unwrap();
