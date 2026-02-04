@@ -26,6 +26,27 @@
 //!
 //! The shared object can signal that no validation is needed, allowing the validator
 //! to skip the validation step entirely for performance.
+//!
+//! # Implementing a Validator
+//!
+//! Use the [`sidecar`] module to implement validators in safe Rust:
+//!
+//! ```ignore
+//! use sui_dynamic_rpc_validator::sidecar::{RpcValidator, implement_validator_exports};
+//!
+//! #[derive(Default)]
+//! struct MyValidator;
+//!
+//! impl RpcValidator for MyValidator {
+//!     fn validate_submit_transaction(&self, message: &[u8]) -> bool {
+//!         !message.is_empty()
+//!     }
+//! }
+//!
+//! implement_validator_exports!(MyValidator);
+//! ```
+
+pub mod sidecar;
 
 use libloading::{Library, Symbol};
 use parking_lot::RwLock;
