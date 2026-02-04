@@ -4,24 +4,26 @@
 
 use crate::{
     framework::{CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, run_test_impl},
-    tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
+    tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput, parse_qualified_module_access},
 };
 
 use move_binary_format::{
     CompiledModule,
     errors::{Location, VMError, VMResult},
 };
+use move_bytecode_verifier::absint::FunctionContext;
+use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_command_line_common::{
     files::verify_and_create_named_address_mapping, testing::InstaOptions,
 };
 use move_compiler::{PreCompiledProgramInfo, editions::Edition, shared::PackagePaths};
-use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     runtime_value::MoveValue,
 };
+use move_core_types::{identifier::Identifier, parsing::address::ParsedAddress};
 use move_stdlib::named_addresses as move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
 use move_vm_config::runtime::VMConfig;
@@ -57,13 +59,24 @@ pub struct AdapterInitArgs {
     pub edition: Option<Edition>,
 }
 
+#[derive(Debug, Parser)]
+pub enum Subcommand {
+    ViewAbstractState(ViewAbstractStateCommand),
+}
+
+#[derive(Debug, Parser)]
+pub struct ViewAbstractStateCommand {
+    #[clap(name = "NAME", value_parser = parse_qualified_module_access)]
+    pub name: (ParsedAddress, Identifier, Identifier),
+}
+
 #[async_trait]
 impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
     type ExtraInitArgs = AdapterInitArgs;
     type ExtraPublishArgs = EmptyCommand;
     type ExtraValueArgs = ();
     type ExtraRunArgs = EmptyCommand;
-    type Subcommand = EmptyCommand;
+    type Subcommand = Subcommand;
 
     fn compiled_state(&mut self) -> &mut CompiledState {
         &mut self.compiled_state
@@ -222,12 +235,65 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         Ok((None, serialized_return_values))
     }
 
-    #[allow(clippy::diverging_sub_expression)]
     async fn handle_subcommand(
         &mut self,
-        _: TaskInput<Self::Subcommand>,
+        task: TaskInput<Self::Subcommand>,
     ) -> Result<Option<String>> {
-        unimplemented!()
+        let TaskInput {
+            command,
+            name,
+            number,
+            start_line,
+            command_lines_stop,
+            stop_line,
+            data,
+            task_text,
+        } = task;
+        match command {
+            Subcommand::ViewAbstractState(view_abstract_state_command) => {
+                if !self.switch_to_regex_reference_safety {
+                    return Ok(Some(
+                        "view-abstract-state subcommand is only available with regex \
+                         reference safety"
+                            .to_string(),
+                    ));
+                }
+                let ViewAbstractStateCommand {
+                    name: (raw_addr, module, function),
+                } = view_abstract_state_command;
+                let addr = self.compiled_state().resolve_address(&raw_addr);
+                let module_id = ModuleId::new(addr, module);
+                let vm = self.new_vm();
+                let Ok(module) = vm.load_module(&module_id, &self.storage) else {
+                    return Err(anyhow!("Module '{}' not found", module_id));
+                };
+                let Some((fdef_idx, fdef)) = module.find_function_def_by_name(function.as_str())
+                else {
+                    return Err(anyhow!(
+                        "Function '{}' not found in module '{}'",
+                        function,
+                        module_id
+                    ));
+                };
+                let fhandle = module.function_handle_at(fdef.function);
+                let Some(code) = &fdef.code else {
+                    return Err(anyhow!(
+                        "Cannot analyze native function '{module_id}::{function}'",
+                    ));
+                };
+                let function_context = FunctionContext::new(&module, fdef_idx, code, fhandle);
+
+                let verifier_config = &vm.config().verifier;
+                let states =
+                    move_bytecode_verifier::regex_reference_safety::verify_and_return_states(
+                        verifier_config,
+                        module.as_ref(),
+                        &function_context,
+                        &mut DummyMeter,
+                    )?;
+                Ok(None)
+            }
+        }
     }
 
     async fn process_error(&self, err: Error) -> Error {
@@ -258,13 +324,8 @@ pub fn format_vm_error(e: &VMError) -> String {
 }
 
 impl SimpleVMTestAdapter {
-    fn perform_session_action<Ret>(
-        &mut self,
-        gas_budget: Option<u64>,
-        f: impl FnOnce(&mut Session<&InMemoryStorage>, &mut GasStatus) -> VMResult<Ret>,
-    ) -> VMResult<Ret> {
-        // start session
-        let vm = MoveVM::new_with_config(
+    fn new_vm(&self) -> MoveVM {
+        MoveVM::new_with_config(
             move_stdlib_natives::all_natives(
                 STD_ADDR,
                 // TODO: come up with a suitable gas schedule
@@ -273,7 +334,16 @@ impl SimpleVMTestAdapter {
             ),
             self.vm_config(),
         )
-        .unwrap();
+        .unwrap()
+    }
+
+    fn perform_session_action<Ret>(
+        &mut self,
+        gas_budget: Option<u64>,
+        f: impl FnOnce(&mut Session<&InMemoryStorage>, &mut GasStatus) -> VMResult<Ret>,
+    ) -> VMResult<Ret> {
+        // start session
+        let vm = self.new_vm();
         let (mut session, mut gas_status) = {
             let gas_status = move_cli::sandbox::utils::get_gas_status(
                 &move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE,

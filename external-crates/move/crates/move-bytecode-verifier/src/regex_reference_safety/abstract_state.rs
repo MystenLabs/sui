@@ -122,7 +122,7 @@ pub(crate) const JOIN_ITEM_COST: u128 = 4;
 
 /// AbstractState is the analysis state over which abstract interpretation is performed.
 #[derive(Clone, Debug)]
-pub(crate) struct AbstractState {
+pub struct AbstractState {
     current_function: Option<FunctionDefinitionIndex>,
     local_root: Ref,
     locals: BTreeMap<LocalIndex, Ref>,
@@ -321,14 +321,14 @@ impl AbstractState {
     //**********************************************************************************************
 
     /// destroys local@idx
-    pub fn release_value(&mut self, value: AbstractValue) -> PartialVMResult<()> {
+    pub(crate) fn release_value(&mut self, value: AbstractValue) -> PartialVMResult<()> {
         match value {
             AbstractValue::Reference(r) => Ok(self.graph.release(r)?),
             AbstractValue::NonReference => Ok(()),
         }
     }
 
-    pub fn copy_loc(
+    pub(crate) fn copy_loc(
         &mut self,
         _offset: CodeOffset,
         local: LocalIndex,
@@ -344,7 +344,7 @@ impl AbstractState {
         }
     }
 
-    pub fn move_loc(
+    pub(crate) fn move_loc(
         &mut self,
         offset: CodeOffset,
         local: LocalIndex,
@@ -359,7 +359,7 @@ impl AbstractState {
         }
     }
 
-    pub fn st_loc(
+    pub(crate) fn st_loc(
         &mut self,
         offset: CodeOffset,
         local: LocalIndex,
@@ -380,7 +380,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn freeze_ref(
+    pub(crate) fn freeze_ref(
         &mut self,
         _offset: CodeOffset,
         r: Ref,
@@ -391,7 +391,7 @@ impl AbstractState {
         Ok(AbstractValue::Reference(frozen))
     }
 
-    pub fn comparison(
+    pub(crate) fn comparison(
         &mut self,
         _offset: CodeOffset,
         v1: AbstractValue,
@@ -402,12 +402,16 @@ impl AbstractState {
         Ok(AbstractValue::NonReference)
     }
 
-    pub fn read_ref(&mut self, _offset: CodeOffset, r: Ref) -> PartialVMResult<AbstractValue> {
+    pub(crate) fn read_ref(
+        &mut self,
+        _offset: CodeOffset,
+        r: Ref,
+    ) -> PartialVMResult<AbstractValue> {
         self.graph.release(r)?;
         Ok(AbstractValue::NonReference)
     }
 
-    pub fn write_ref(
+    pub(crate) fn write_ref(
         &mut self,
         offset: CodeOffset,
         r: Ref,
@@ -421,7 +425,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn borrow_loc(
+    pub(crate) fn borrow_loc(
         &mut self,
         _offset: CodeOffset,
         mut_: bool,
@@ -433,7 +437,7 @@ impl AbstractState {
         Ok(AbstractValue::Reference(new_r))
     }
 
-    pub fn borrow_field(
+    pub(crate) fn borrow_field(
         &mut self,
         _offset: CodeOffset,
         mut_: bool,
@@ -446,7 +450,7 @@ impl AbstractState {
         Ok(AbstractValue::Reference(new_r))
     }
 
-    pub fn unpack_enum_variant_ref(
+    pub(crate) fn unpack_enum_variant_ref(
         &mut self,
         _offset: CodeOffset,
         enum_def_idx: EnumDefinitionIndex,
@@ -478,7 +482,7 @@ impl AbstractState {
         Ok(field_borrows)
     }
 
-    pub fn vector_op(
+    pub(crate) fn vector_op(
         &mut self,
         offset: CodeOffset,
         vector: AbstractValue,
@@ -493,7 +497,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn call(
+    pub(crate) fn call(
         &mut self,
         offset: CodeOffset,
         arguments: Vec<AbstractValue>,
@@ -545,7 +549,7 @@ impl AbstractState {
         Ok(return_values)
     }
 
-    pub fn ret(
+    pub(crate) fn ret(
         &mut self,
         offset: CodeOffset,
         values: Vec<AbstractValue>,
@@ -576,7 +580,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn abort(&mut self) {
+    pub(crate) fn abort(&mut self) {
         // release all references
         self.locals.clear();
         self.graph.release_all()
@@ -586,7 +590,7 @@ impl AbstractState {
     // Abstract Interpreter Entry Points
     //**********************************************************************************************
 
-    pub fn canonicalize(&mut self) -> PartialVMResult<()> {
+    pub(crate) fn canonicalize(&mut self) -> PartialVMResult<()> {
         self.check_invariants();
         let mut old_to_new = BTreeMap::new();
         old_to_new.insert(self.local_root, 0);
@@ -604,7 +608,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn refresh(&mut self) -> PartialVMResult<()> {
+    pub(crate) fn refresh(&mut self) -> PartialVMResult<()> {
         self.check_invariants();
         self.local_root = self.local_root.refresh()?;
         for old in self.locals.values_mut() {
@@ -615,19 +619,19 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn is_canonical(&self) -> bool {
+    pub(crate) fn is_canonical(&self) -> bool {
         self.local_root.is_canonical()
             && self.locals.values().copied().all(|r| r.is_canonical())
             && self.graph.is_canonical()
     }
 
-    pub fn is_fresh(&self) -> bool {
+    pub(crate) fn is_fresh(&self) -> bool {
         self.local_root.is_fresh()
             && self.locals.values().copied().all(|r| r.is_fresh())
             && self.graph.is_fresh()
     }
 
-    pub fn check_invariants(&self) {
+    pub(crate) fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {
             self.graph.check_invariants();
@@ -657,7 +661,7 @@ impl AbstractState {
         }
     }
 
-    pub fn join_(&mut self, other: &Self) -> PartialVMResult</* changed */ bool> {
+    pub(crate) fn join_(&mut self, other: &Self) -> PartialVMResult</* changed */ bool> {
         let mut changed = false;
         safe_assert!(self.current_function == other.current_function);
         safe_assert!(self.local_root == other.local_root);
@@ -744,4 +748,139 @@ fn borrowed_by_size(paths_map: &BTreeMap<Ref, Paths>) -> usize {
         .iter()
         .flat_map(|(_, paths)| paths)
         .fold(0, |acc, path| acc.saturating_add(path.abstract_size()))
+}
+
+//**************************************************************************************************
+// Serializable Abs Int
+//**************************************************************************************************
+
+pub trait StateSerializer {
+    fn local_root(&mut self, r: Ref) -> String;
+    fn ref_(&mut self, r: Ref) -> String;
+    fn local(&mut self, idx: LocalIndex) -> String;
+    fn label_local(&mut self, idx: LocalIndex) -> String;
+    fn label_field(&mut self, idx: FieldHandleIndex) -> String;
+    fn label_variant_field(
+        &mut self,
+        enum_def_idx: EnumDefinitionIndex,
+        tag: VariantTag,
+        field_idx: MemberCount,
+    ) -> String;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SerializableState {
+    pub local_root: String,
+    pub locals: BTreeMap<String, SerializableValue>,
+    pub graph: SerializableGraph,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum SerializableValue {
+    Reference(String),
+    NonReference,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SerializableGraph {
+    pub nodes: BTreeMap<String, /* is_mut */ bool>,
+    /// Skips self epsilon edges
+    pub outgoing: BTreeMap<String, BTreeMap<String, BTreeSet<SerializableEdge>>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct SerializableEdge {
+    pub labels: Vec<String>,
+    pub ends_in_dot_star: bool,
+}
+
+impl AbstractState {
+    pub fn to_serializable(&self, serializer: &mut impl StateSerializer) -> SerializableState {
+        let local_root = serializer.local_root(self.local_root);
+        let locals = locals_to_serializable(&self.locals, serializer);
+        let graph = graph_to_serializable(&self.graph, serializer);
+        SerializableState {
+            local_root,
+            locals,
+            graph,
+        }
+    }
+}
+
+fn locals_to_serializable(
+    locals: &BTreeMap<LocalIndex, Ref>,
+    serializer: &mut impl StateSerializer,
+) -> BTreeMap<String, SerializableValue> {
+    locals
+        .iter()
+        .map(|(idx, r)| {
+            let key = serializer.local(*idx);
+            let value = SerializableValue::Reference(serializer.ref_(*r));
+            (key, value)
+        })
+        .collect()
+}
+
+fn graph_to_serializable(
+    graph: &Graph,
+    serializer: &mut impl StateSerializer,
+) -> SerializableGraph {
+    let nodes = graph
+        .keys()
+        .map(|r| {
+            let key = serializer.ref_(r);
+            let is_mut = graph.is_mutable(r).unwrap();
+            (key, is_mut)
+        })
+        .collect();
+
+    let outgoing = graph
+        .keys()
+        .filter_map(|source| {
+            let borrowed_by = graph.borrowed_by(source).unwrap();
+            if borrowed_by.is_empty() {
+                return None;
+            }
+            let source_key = serializer.ref_(source);
+            let targets: BTreeMap<String, BTreeSet<SerializableEdge>> = borrowed_by
+                .into_iter()
+                .map(|(target, paths)| {
+                    let target_key = serializer.ref_(target);
+                    let edges: BTreeSet<SerializableEdge> = paths
+                        .into_iter()
+                        .map(|path| path_to_serializable_edge(path, serializer))
+                        .collect();
+                    (target_key, edges)
+                })
+                .collect();
+            Some((source_key, targets))
+        })
+        .collect();
+
+    SerializableGraph { nodes, outgoing }
+}
+
+fn path_to_serializable_edge(
+    path: move_regex_borrow_graph::collections::Path<(), Label>,
+    serializer: &mut impl StateSerializer,
+) -> SerializableEdge {
+    let labels = path
+        .labels
+        .into_iter()
+        .map(|lbl| label_to_string(lbl, serializer))
+        .collect();
+    SerializableEdge {
+        labels,
+        ends_in_dot_star: path.ends_in_dot_star,
+    }
+}
+
+fn label_to_string(label: Label, serializer: &mut impl StateSerializer) -> String {
+    match label {
+        Label::Local(idx) => serializer.label_local(idx),
+        Label::Field(idx) => serializer.label_field(idx),
+        Label::VariantField(enum_def_idx, tag, field_idx) => {
+            serializer.label_variant_field(enum_def_idx, tag, field_idx)
+        }
+    }
 }

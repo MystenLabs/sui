@@ -12,6 +12,7 @@ mod abstract_state;
 use crate::absint::{FunctionContext, TransferFunctions, analyze_function};
 use crate::regex_reference_safety::abstract_state::STEP_BASE_COST;
 use abstract_state::{AbstractState, AbstractValue};
+use move_abstract_interpreter::absint::BlockInvariant;
 use move_abstract_stack::{AbsStackError, AbstractStack};
 use move_binary_format::{
     CompiledModule,
@@ -25,6 +26,7 @@ use move_binary_format::{
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
+use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 
 use self::abstract_state::ValueKind;
@@ -67,6 +69,16 @@ pub fn verify(
     function_context: &FunctionContext,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
+    verify_and_return_states(config, module, function_context, meter)?;
+    Ok(())
+}
+
+pub fn verify_and_return_states(
+    config: &VerifierConfig,
+    module: &CompiledModule,
+    function_context: &FunctionContext,
+    meter: &mut (impl Meter + ?Sized),
+) -> PartialVMResult<BTreeMap<CodeOffset, BlockInvariant<AbstractState>>> {
     let initial_state = AbstractState::new(function_context)?;
 
     let mut verifier = ReferenceSafetyAnalysis::new(config, module, function_context);

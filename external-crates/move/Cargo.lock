@@ -2864,6 +2864,8 @@ dependencies = [
  "datatest-stable",
  "move-binary-format",
  "move-bytecode-source-map",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
  "move-cli",
  "move-command-line-common",
  "move-compiler",

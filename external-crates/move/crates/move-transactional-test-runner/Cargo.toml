@@ -19,6 +19,8 @@ async-trait.workspace = true
 tokio.workspace = true
 
 move-bytecode-source-map.workspace = true
+move-bytecode-verifier.workspace = true
+move-bytecode-verifier-meter.workspace = true
 move-disassembler.workspace = true
 move-binary-format.workspace = true
 move-cli.workspace = true

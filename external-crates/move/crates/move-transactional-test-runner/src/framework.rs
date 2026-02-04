@@ -12,7 +12,10 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::file_format::CompiledModule;
-use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
+use move_bytecode_source_map::{
+    mapping::SourceMapping,
+    source_map::SourceMap,
+};
 use move_command_line_common::{
     env::read_bool_env_var,
     files::{MOVE_EXTENSION, MOVE_IR_EXTENSION},
@@ -37,7 +40,6 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
 };
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
-use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
 use move_vm_runtime::session::SerializedReturnValues;
 use std::{
@@ -214,14 +216,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                     let MaybeNamedCompiledModule {
                         module, source_map, ..
                     } = m;
-                    let source_mapping = match source_map {
-                        Some(m) => SourceMapping::new(m, &module),
-                        None => SourceMapping::new_without_source_map(
-                            &module,
-                            Spanned::unsafe_no_loc(()).loc,
-                        )
-                        .expect("Unable to build dummy source mapping"),
-                    };
+                    let source_mapping = SourceMapping::new(source_map, &module);
                     let disassembler =
                         Disassembler::new(source_mapping, DisassemblerOptions::new());
                     merge_output(output, Some(disassembler.disassemble().unwrap()))
@@ -546,7 +541,7 @@ impl CompiledState {
 pub struct MaybeNamedCompiledModule {
     pub named_address: Option<Symbol>,
     pub module: CompiledModule,
-    pub source_map: Option<SourceMap>,
+    pub source_map: SourceMap,
 }
 
 pub async fn compile_any<'state, 'adapter: 'result, 'result, F, A, R>(
@@ -588,7 +583,7 @@ where
                     let (named_addr_opt, _id) = unit.module_id();
                     let named_addr_opt = named_addr_opt.map(|n| n.value);
                     let module = unit.named_module.module;
-                    let source_map = Some(unit.named_module.source_map);
+                    let source_map = unit.named_module.source_map;
                     MaybeNamedCompiledModule {
                         named_address: named_addr_opt,
                         module,
@@ -599,12 +594,12 @@ where
             (modules, warnings_opt)
         }
         SyntaxChoice::IR => {
-            let module = compile_ir_module(state, data.path())?;
+            let (module, source_map) = compile_ir_module(state, data.path())?;
             (
                 vec![MaybeNamedCompiledModule {
                     named_address: None,
                     module,
-                    source_map: None,
+                    source_map,
                 }],
                 None,
             )
@@ -690,7 +685,7 @@ pub fn compile_source_units(
 pub fn compile_ir_module(
     state: &CompiledState,
     file_name: impl AsRef<Path>,
-) -> Result<CompiledModule> {
+) -> Result<(CompiledModule, SourceMap)> {
     use move_ir_compiler::Compiler as IRCompiler;
     let code = std::fs::read_to_string(file_name).unwrap();
     let named_addresses = state
@@ -701,7 +696,7 @@ pub fn compile_ir_module(
     // TODO this mapping does not work well with upgrades since they have the same original ID
     IRCompiler::new(state.dep_modules().collect())
         .with_named_addresses(named_addresses)
-        .into_compiled_module(&code)
+        .into_compiled_module_with_source_map(&code)
 }
 
 /// Creates an adapter for the given tasks, using the first task command to initialize the adapter
