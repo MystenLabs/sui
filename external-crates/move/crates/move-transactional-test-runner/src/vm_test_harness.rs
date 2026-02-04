@@ -10,8 +10,11 @@ use crate::{
 use move_binary_format::{
     CompiledModule,
     errors::{Location, VMError, VMResult},
+    file_format::{EnumDefinitionIndex, FieldHandleIndex, LocalIndex, MemberCount, VariantTag},
 };
+use move_bytecode_source_map::source_map::FunctionSourceMap;
 use move_bytecode_verifier::absint::FunctionContext;
+use move_bytecode_verifier::regex_reference_safety::abstract_state::StateSerializer;
 use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_command_line_common::{
     files::verify_and_create_named_address_mapping, testing::InstaOptions,
@@ -24,6 +27,7 @@ use move_core_types::{
     runtime_value::MoveValue,
 };
 use move_core_types::{identifier::Identifier, parsing::address::ParsedAddress};
+use move_regex_borrow_graph::references::Ref;
 use move_stdlib::named_addresses as move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
 use move_vm_config::runtime::VMConfig;
@@ -463,4 +467,77 @@ pub async fn run_test_with_regex_reference_safety(
         Some(options),
     )
     .await
+}
+
+//**************************************************************************************************
+// StateSerializer Implementation
+//**************************************************************************************************
+
+pub struct SourceMapStateSerializer<'a> {
+    module: &'a CompiledModule,
+    function_source_map: &'a FunctionSourceMap,
+}
+
+impl<'a> SourceMapStateSerializer<'a> {
+    pub fn new(module: &'a CompiledModule, function_source_map: &'a FunctionSourceMap) -> Self {
+        Self {
+            module,
+            function_source_map,
+        }
+    }
+}
+
+impl StateSerializer for SourceMapStateSerializer<'_> {
+    fn local_root(&mut self, _: Ref) -> String {
+        format!("ROOT")
+    }
+
+    fn ref_(&mut self, idx: LocalIndex, _: Ref) -> String {
+        format!("r#{}", self.local(idx))
+    }
+
+    fn local(&mut self, idx: LocalIndex) -> String {
+        self.function_source_map
+            .get_parameter_or_local_name(idx as u64)
+            .map(|(name, _)| name)
+            .unwrap_or_else(|| format!("local#{}", idx))
+    }
+
+    fn label_local(&mut self, idx: LocalIndex) -> String {
+        self.function_source_map
+            .get_parameter_or_local_name(idx as u64)
+            .map(|(name, _)| name)
+            .unwrap_or_else(|| format!("local#{}", idx))
+    }
+
+    fn label_field(&mut self, idx: FieldHandleIndex) -> String {
+        let field_handle = self.module.field_handle_at(idx);
+        let struct_def = self.module.struct_def_at(field_handle.owner);
+        let struct_handle = self.module.datatype_handle_at(struct_def.struct_handle);
+        let struct_name = self.module.identifier_at(struct_handle.name);
+        let field_name = struct_def
+            .field(field_handle.field as usize)
+            .map(|field_def| self.module.identifier_at(field_def.name).to_string())
+            .unwrap_or_else(|| format!("field#{}", field_handle.field));
+        format!("{}.{}", struct_name, field_name)
+    }
+
+    fn label_variant_field(
+        &mut self,
+        enum_def_idx: EnumDefinitionIndex,
+        tag: VariantTag,
+        field_idx: MemberCount,
+    ) -> String {
+        let enum_def = self.module.enum_def_at(enum_def_idx);
+        let enum_handle = self.module.datatype_handle_at(enum_def.enum_handle);
+        let enum_name = self.module.identifier_at(enum_handle.name);
+        let variant_def = self.module.variant_def_at(enum_def_idx, tag);
+        let variant_name = self.module.identifier_at(variant_def.variant_name);
+        let field_name = variant_def
+            .fields
+            .get(field_idx as usize)
+            .map(|field_def| self.module.identifier_at(field_def.name).to_string())
+            .unwrap_or_else(|| format!("field#{}", field_idx));
+        format!("{}::{}.{}", enum_name, variant_name, field_name)
+    }
 }

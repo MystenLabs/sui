@@ -2873,6 +2873,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-compiler",
  "move-ir-types",
+ "move-regex-borrow-graph",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",

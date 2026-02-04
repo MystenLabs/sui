@@ -756,7 +756,7 @@ fn borrowed_by_size(paths_map: &BTreeMap<Ref, Paths>) -> usize {
 
 pub trait StateSerializer {
     fn local_root(&mut self, r: Ref) -> String;
-    fn ref_(&mut self, r: Ref) -> String;
+    fn ref_(&mut self, idx: LocalIndex, r: Ref) -> String;
     fn local(&mut self, idx: LocalIndex) -> String;
     fn label_local(&mut self, idx: LocalIndex) -> String;
     fn label_field(&mut self, idx: FieldHandleIndex) -> String;
@@ -796,9 +796,11 @@ pub struct SerializableEdge {
 
 impl AbstractState {
     pub fn to_serializable(&self, serializer: &mut impl StateSerializer) -> SerializableState {
+        let mut refs = BTreeMap::new();
         let local_root = serializer.local_root(self.local_root);
-        let locals = locals_to_serializable(&self.locals, serializer);
-        let graph = graph_to_serializable(&self.graph, serializer);
+        refs.insert(self.local_root, local_root.clone());
+        let locals = locals_to_serializable(&self.locals, &mut refs, serializer);
+        let graph = graph_to_serializable(&self.graph, &refs, serializer);
         SerializableState {
             local_root,
             locals,
@@ -809,26 +811,30 @@ impl AbstractState {
 
 fn locals_to_serializable(
     locals: &BTreeMap<LocalIndex, Ref>,
+    acc: &mut BTreeMap<Ref, String>,
     serializer: &mut impl StateSerializer,
 ) -> BTreeMap<String, SerializableValue> {
     locals
         .iter()
         .map(|(idx, r)| {
             let key = serializer.local(*idx);
-            let value = SerializableValue::Reference(serializer.ref_(*r));
-            (key, value)
+            let value = serializer.ref_(*idx, *r);
+            acc.insert(*r, value.clone());
+            // TODO support non-reference locals
+            (key, SerializableValue::Reference(value))
         })
         .collect()
 }
 
 fn graph_to_serializable(
     graph: &Graph,
+    refs: &BTreeMap<Ref, String>,
     serializer: &mut impl StateSerializer,
 ) -> SerializableGraph {
     let nodes = graph
         .keys()
         .map(|r| {
-            let key = serializer.ref_(r);
+            let key = refs.get(&r).unwrap().clone();
             let is_mut = graph.is_mutable(r).unwrap();
             (key, is_mut)
         })
@@ -841,11 +847,11 @@ fn graph_to_serializable(
             if borrowed_by.is_empty() {
                 return None;
             }
-            let source_key = serializer.ref_(source);
+            let source_key = refs.get(&source).unwrap().clone();
             let targets: BTreeMap<String, BTreeSet<SerializableEdge>> = borrowed_by
                 .into_iter()
                 .map(|(target, paths)| {
-                    let target_key = serializer.ref_(target);
+                    let target_key = refs.get(&target).unwrap().clone();
                     let edges: BTreeSet<SerializableEdge> = paths
                         .into_iter()
                         .map(|path| path_to_serializable_edge(path, serializer))

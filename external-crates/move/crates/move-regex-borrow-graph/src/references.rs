@@ -48,13 +48,6 @@ impl Ref {
     pub(crate) fn fresh(id: usize) -> Self {
         Self(Ref_::Fresh(id))
     }
-
-    pub fn canonical_number(&self) -> Result<usize> {
-        match self.0 {
-            Ref_::Canonical(id) => Ok(id),
-            Ref_::Fresh(_) => bail!("ref is not canonical"),
-        }
-    }
 }
 
 impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
