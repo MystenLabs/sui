@@ -200,6 +200,20 @@ impl WatermarkTask {
                     }
                 };
 
+                let previous = watermarks.read().await.clone();
+                for (pipeline, next) in &w.per_pipeline {
+                    if let Some(prev) = previous.per_pipeline().get(pipeline)
+                        && next.hi.checkpoint < prev.hi.checkpoint
+                    {
+                        warn!(
+                            pipeline,
+                            prev = prev.hi.checkpoint,
+                            next = next.hi.checkpoint,
+                            "Watermark rollback"
+                        );
+                    }
+                }
+
                 debug!(
                     epoch = w.global_hi.epoch,
                     checkpoint = w.global_hi.checkpoint,
