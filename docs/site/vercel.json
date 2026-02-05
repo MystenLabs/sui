@@ -746,5 +746,30 @@
       { "source": "/guides/developer/transactions/working-with-ptbs", "destination": "/guides/developer/transactions/prog-txn-blocks" },
       { "source": "/concepts/transactions/sponsored-transactions", "destination": "/guides/developer/transactions/sponsor-txn" },
       { "source": "/guides/developer/accessing-data/custom-indexer ", "destination": "/guides/developer/accessing-data/custom-indexing-framework" }
+    ],
+    "rewrites": [
+      {
+        "source": "/(.+)\\.md",
+        "destination": "/markdown/$1.md"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/markdown/(.*).md",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "text/markdown; charset=utf-8"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "inline"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, s-maxage=3600"
+          }
+        ]
+      }
     ]
 }

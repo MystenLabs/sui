@@ -350,7 +350,7 @@ async fn peers_are_added_from_endpoint_manager() -> Result<()> {
     let peer2_addr: Multiaddr = format!("/dns/localhost/udp/{}", network_2.local_addr().port())
         .parse()
         .unwrap();
-    endpoint_manager_1.update_endpoint(
+    let _ = endpoint_manager_1.update_endpoint(
         EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
         AddressSource::Committee,
         vec![peer2_addr],
@@ -891,11 +891,13 @@ async fn test_address_source_priority() -> Result<()> {
     let admin_addr: Multiaddr = "/dns/admin.example.com/udp/9090".parse().unwrap();
 
     // First, set Committee source address
-    endpoint_manager_1.update_endpoint(
-        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
-        AddressSource::Committee,
-        vec![committee_addr.clone()],
-    );
+    endpoint_manager_1
+        .update_endpoint(
+            EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+            AddressSource::Committee,
+            vec![committee_addr.clone()],
+        )
+        .unwrap();
 
     // Allow discovery to process the message
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -908,11 +910,13 @@ async fn test_address_source_priority() -> Result<()> {
     assert!(addrs[0].to_string().contains("committee"));
 
     // Now set Admin source address (should take priority)
-    endpoint_manager_1.update_endpoint(
-        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
-        AddressSource::Admin,
-        vec![admin_addr.clone()],
-    );
+    endpoint_manager_1
+        .update_endpoint(
+            EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+            AddressSource::Admin,
+            vec![admin_addr.clone()],
+        )
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -958,16 +962,20 @@ async fn test_address_source_clear() -> Result<()> {
     let admin_addr: Multiaddr = "/dns/admin.example.com/udp/9090".parse().unwrap();
 
     // Set both sources
-    endpoint_manager_1.update_endpoint(
-        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
-        AddressSource::Committee,
-        vec![committee_addr.clone()],
-    );
-    endpoint_manager_1.update_endpoint(
-        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
-        AddressSource::Admin,
-        vec![admin_addr.clone()],
-    );
+    endpoint_manager_1
+        .update_endpoint(
+            EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+            AddressSource::Committee,
+            vec![committee_addr.clone()],
+        )
+        .unwrap();
+    endpoint_manager_1
+        .update_endpoint(
+            EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+            AddressSource::Admin,
+            vec![admin_addr.clone()],
+        )
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -978,11 +986,13 @@ async fn test_address_source_clear() -> Result<()> {
     assert!(addrs[0].to_string().contains("admin"));
 
     // Clear Admin source by sending empty addresses
-    endpoint_manager_1.update_endpoint(
-        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
-        AddressSource::Admin,
-        vec![],
-    );
+    endpoint_manager_1
+        .update_endpoint(
+            EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+            AddressSource::Admin,
+            vec![],
+        )
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -1025,11 +1035,13 @@ async fn test_address_source_clear_all() -> Result<()> {
     let committee_addr: Multiaddr = "/dns/committee.example.com/udp/8080".parse().unwrap();
 
     // Set Committee source
-    endpoint_manager_1.update_endpoint(
-        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
-        AddressSource::Committee,
-        vec![committee_addr.clone()],
-    );
+    endpoint_manager_1
+        .update_endpoint(
+            EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+            AddressSource::Committee,
+            vec![committee_addr.clone()],
+        )
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -1037,11 +1049,13 @@ async fn test_address_source_clear_all() -> Result<()> {
     assert!(network_1.known_peers().get(&peer_id_2).is_some());
 
     // Clear Committee source
-    endpoint_manager_1.update_endpoint(
-        EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
-        AddressSource::Committee,
-        vec![],
-    );
+    endpoint_manager_1
+        .update_endpoint(
+            EndpointId::P2p(PeerId(peer_2_network_pubkey.0.to_bytes())),
+            AddressSource::Committee,
+            vec![],
+        )
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 

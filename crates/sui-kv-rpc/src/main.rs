@@ -29,6 +29,9 @@ struct App {
     tls_cert: String,
     #[clap(long = "tls-key", default_value = "")]
     tls_key: String,
+    /// GCP project ID for the BigTable instance (defaults to the token provider's project)
+    #[clap(long = "bigtable-project")]
+    bigtable_project: Option<String>,
     #[clap(long = "app-profile-id")]
     app_profile_id: Option<String>,
     #[clap(long = "checkpoint-bucket")]
@@ -42,6 +45,9 @@ async fn health_check() -> &'static str {
 #[tokio::main]
 async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install CryptoProvider");
     let app = App::parse();
     unsafe {
         std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", app.credentials.clone());
@@ -54,6 +60,7 @@ async fn main() -> Result<()> {
     mysten_metrics::init_metrics(&registry);
     let server = KvRpcServer::new(
         app.instance_id,
+        app.bigtable_project,
         app.app_profile_id,
         app.checkpoint_bucket,
         server_version,

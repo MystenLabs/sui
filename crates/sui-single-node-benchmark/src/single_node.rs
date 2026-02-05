@@ -170,16 +170,14 @@ impl SingleValidator {
                     .0
             }
             Component::WithTxManager => {
-                if executable.is_consensus_tx() {
-                    // For shared objects transactions, we manually enqueue since we don't have consensus.
-                    self.get_validator().execution_scheduler().enqueue(
-                        vec![(
-                            executable.clone().into(),
-                            ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
-                        )],
-                        &self.epoch_store,
-                    );
-                }
+                // Manually enqueue since we don't have consensus.
+                self.get_validator().execution_scheduler().enqueue(
+                    vec![(
+                        executable.clone().into(),
+                        ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
+                    )],
+                    &self.epoch_store,
+                );
                 self.get_validator()
                     .wait_for_transaction_execution(&executable, &self.epoch_store)
                     .await

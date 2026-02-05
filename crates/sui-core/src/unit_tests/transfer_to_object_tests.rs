@@ -3,7 +3,6 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
@@ -227,12 +226,9 @@ impl TestRunner {
     pub async fn execute_executable(
         &mut self,
         executable: VerifiedExecutableTransaction,
-        shared: bool,
     ) -> TransactionEffects {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
-        if shared {
-            assign_versions_and_schedule(&self.authority_state, &executable).await;
-        }
+        assign_versions_and_schedule(&self.authority_state, &executable).await;
         let effects = self
             .authority_state
             .wait_for_transaction_execution(&executable, &epoch_store)
@@ -981,16 +977,12 @@ async fn verify_tto_not_locked(
     // The order of the execution of these transactions is flipped depending on the value of
     // flipper. However, the result should be the same in either case.
     let (valid_effects, invalid_effects) = if flipper {
-        let invalid_effects = runner
-            .execute_executable(executable_for_fake_parent, false)
-            .await;
-        let valid_effects = runner.execute_executable(valid_executable, false).await;
+        let invalid_effects = runner.execute_executable(executable_for_fake_parent).await;
+        let valid_effects = runner.execute_executable(valid_executable).await;
         (valid_effects, invalid_effects)
     } else {
-        let valid_effects = runner.execute_executable(valid_executable, false).await;
-        let invalid_effects = runner
-            .execute_executable(executable_for_fake_parent, false)
-            .await;
+        let valid_effects = runner.execute_executable(valid_executable).await;
+        let invalid_effects = runner.execute_executable(executable_for_fake_parent).await;
         (valid_effects, invalid_effects)
     };
 
@@ -1028,14 +1020,6 @@ fn assert_effects_equivalent(ef1: &TransactionEffects, ef2: &TransactionEffects)
 
 #[tokio::test]
 async fn test_tto_not_locked() {
-    // This test uses certify_transaction (QD path) which requires
-    // disable_preconsensus_locking=false for signed transaction storage.
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config.set_address_aliases_for_testing(false);
-        config
-    });
-
     for aggressive_pruning_enabled in [true, false] {
         // The transaction effects for the valid and invalid transactions should be the same regardless
         // of the order in which they are run.
@@ -1723,7 +1707,7 @@ async fn receive_and_dof_interleave() {
 
         assert!(dof_effects.status().is_ok());
 
-        let recv_effects = runner.execute_executable(executable, true).await;
+        let recv_effects = runner.execute_executable(executable).await;
         assert!(recv_effects.status().is_ok());
         // The recv_effects should not contain the dependency on the initial transaction since we
         // didn't actually receive the object -- it was loaded via the dynamic field instead.

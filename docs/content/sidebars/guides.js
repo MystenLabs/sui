@@ -234,6 +234,13 @@ const guides = [
   },
   {
     type: 'category',
+    label: 'Wallets',
+    items: [
+      'guides/developer/wallets/suilink',
+    ],
+  },
+  {
+    type: 'category',
     label: 'App Examples',
     link: {
       type: 'doc',

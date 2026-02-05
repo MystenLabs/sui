@@ -309,13 +309,7 @@ impl CommitFinalizer {
         let pending_blocks = std::mem::take(&mut commit_state.pending_blocks);
 
         for (block_ref, num_transactions) in pending_blocks {
-            if self
-                .context
-                .protocol_config
-                .consensus_skip_gced_blocks_in_direct_finalization()
-                && block_ref.round <= vote_gc_round
-                && num_transactions > 0
-            {
+            if block_ref.round <= vote_gc_round && num_transactions > 0 {
                 // The block is outside of GC bound.
                 let transactions =
                     (0..(num_transactions as TransactionIndex)).collect::<BTreeSet<_>>();

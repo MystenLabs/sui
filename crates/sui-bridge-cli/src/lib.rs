@@ -31,13 +31,15 @@ use sui_bridge::types::{
 };
 use sui_bridge::utils::{EthSignerProvider, get_eth_signer_provider};
 use sui_config::Config;
-use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_keys::keypair_file::read_key;
-use sui_sdk::SuiClientBuilder;
+use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
+use sui_rpc_api::Client;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::bridge::{BRIDGE_MODULE_NAME, BridgeChainId};
 use sui_types::crypto::{Signature, SuiKeyPair};
+use sui_types::gas_coin::{GAS, GasCoin};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, Transaction, TransactionData};
 use sui_types::{BRIDGE_PACKAGE_ID, TypeTag};
@@ -488,24 +490,30 @@ impl LoadedBridgeCliConfig {
     ) -> anyhow::Result<(SuiKeyPair, SuiAddress, ObjectRef)> {
         let pubkey = self.sui_key.public();
         let sui_client_address = SuiAddress::from(&pubkey);
-        let sui_sdk_client = SuiClientBuilder::default()
-            .build(self.sui_rpc_url.clone())
-            .await?;
-        let gases = sui_sdk_client
-            .coin_read_api()
-            .get_coins(sui_client_address, None, None, None)
+        let sui_client = Client::new(&self.sui_rpc_url)?;
+        let gases = sui_client
+            .get_owned_objects(sui_client_address, Some(GasCoin::type_()), None, None)
             .await?
-            .data;
+            .items;
         // TODO: is 5 Sui a good number?
         let gas = gases
             .into_iter()
-            .find(|coin| coin.balance >= 5_000_000_000)
+            .find(|coin| {
+                GasCoin::try_from(coin)
+                    .ok()
+                    .map(|coin| coin.value() >= 5_000_000_000)
+                    .unwrap_or(false)
+            })
             .ok_or(anyhow!(
                 "Did not find gas object with enough balance for {}",
                 sui_client_address
             ))?;
-        println!("Using Gas object: {}", gas.coin_object_id);
-        Ok((self.sui_key.copy(), sui_client_address, gas.object_ref()))
+        println!("Using Gas object: {}", gas.id());
+        Ok((
+            self.sui_key.copy(),
+            sui_client_address,
+            gas.compute_object_reference(),
+        ))
     }
 }
 #[derive(Parser)]
@@ -609,30 +617,42 @@ async fn deposit_on_sui(
     sui_bridge_client: SuiBridgeClient,
 ) -> anyhow::Result<()> {
     let target_chain = target_chain as u8;
-    let sui_client = sui_bridge_client.jsonrpc_client();
+    let mut sui_client = sui_bridge_client.grpc_client().clone();
     let bridge_object_arg = sui_bridge_client
         .get_mutable_bridge_object_arg_must_succeed()
         .await;
-    let rgp = sui_client
-        .governance_api()
-        .get_reference_gas_price()
-        .await
-        .unwrap();
+    let rgp = sui_client.get_reference_gas_price().await.unwrap();
     let sender = SuiAddress::from(&config.sui_key.public());
+    let gas_type = sui_sdk_types::TypeTag::from_str(&GAS::type_().to_canonical_string(true))?;
     let gas_obj_ref = sui_client
-        .coin_read_api()
-        .select_coins(sender, None, 1_000_000_000, vec![])
+        .inner_mut()
+        .select_coins(&sender.into(), &gas_type, 1_000_000_000, &[])
         .await?
-        .first()
-        .ok_or(anyhow!("No coin found for address {}", sender))?
-        .object_ref();
-    let coin_obj_ref = sui_client
-        .read_api()
-        .get_object_with_options(coin_object_id, SuiObjectDataOptions::default())
+        .into_iter()
+        .map(|coin| {
+            (
+                coin.object_id().parse().unwrap(),
+                coin.version().into(),
+                coin.digest().parse().unwrap(),
+            )
+        })
+        .collect();
+    let coin_obj = sui_client
+        .inner_mut()
+        .ledger_client()
+        .get_object(
+            GetObjectRequest::new(&(coin_object_id.into()))
+                .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"])),
+        )
         .await?
-        .data
-        .unwrap()
-        .object_ref();
+        .into_inner()
+        .object
+        .unwrap_or_default();
+    let coin_obj_ref = (
+        coin_obj.object_id().parse()?,
+        coin_obj.version().into(),
+        coin_obj.digest().parse()?,
+    );
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let arg_target_chain = builder.pure(target_chain).unwrap();
@@ -650,8 +670,7 @@ async fn deposit_on_sui(
         vec![arg_bridge, arg_target_chain, arg_target_address, arg_token],
     );
     let pt = builder.finish();
-    let tx_data =
-        TransactionData::new_programmable(sender, vec![gas_obj_ref], pt, 500_000_000, rgp);
+    let tx_data = TransactionData::new_programmable(sender, gas_obj_ref, pt, 500_000_000, rgp);
     let sig = Signature::new_secure(
         &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
         &config.sui_key,

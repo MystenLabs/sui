@@ -10,7 +10,6 @@ use crate::abi::EthBridgeEvent;
 use crate::action_executor::{
     BridgeActionExecutionWrapper, BridgeActionExecutorTrait, submit_to_executor,
 };
-use crate::error::BridgeError;
 use crate::events::SuiBridgeEvent;
 use crate::metrics::BridgeMetrics;
 use crate::storage::BridgeOrchestratorTables;
@@ -20,18 +19,14 @@ use crate::types::EthLog;
 use alloy::primitives::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::sync::Arc;
-use sui_json_rpc_types::SuiEvent;
-use sui_types::Identifier;
 use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 pub struct BridgeOrchestrator<C> {
     _sui_client: Arc<SuiClient<C>>,
-    sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
     sui_grpc_events_rx: mysten_metrics::metered_channel::Receiver<(u64, Vec<SuiBridgeEvent>)>,
     eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
     store: Arc<BridgeOrchestratorTables>,
-    sui_monitor_tx: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
     eth_monitor_tx: mysten_metrics::metered_channel::Sender<EthBridgeEvent>,
     metrics: Arc<BridgeMetrics>,
 }
@@ -42,69 +37,20 @@ where
 {
     pub fn new(
         sui_client: Arc<SuiClient<C>>,
-        sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
         sui_grpc_events_rx: mysten_metrics::metered_channel::Receiver<(u64, Vec<SuiBridgeEvent>)>,
         eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
         store: Arc<BridgeOrchestratorTables>,
-        sui_monitor_tx: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
         eth_monitor_tx: mysten_metrics::metered_channel::Sender<EthBridgeEvent>,
         metrics: Arc<BridgeMetrics>,
     ) -> Self {
         Self {
             _sui_client: sui_client,
-            sui_events_rx,
             sui_grpc_events_rx,
             eth_events_rx,
             store,
-            sui_monitor_tx,
             eth_monitor_tx,
             metrics,
         }
-    }
-
-    pub async fn run(
-        self,
-        bridge_action_executor: impl BridgeActionExecutorTrait,
-    ) -> Vec<JoinHandle<()>> {
-        tracing::info!("Starting BridgeOrchestrator");
-        let mut task_handles = vec![];
-        let store_clone = self.store.clone();
-
-        // Spawn BridgeActionExecutor
-        let (handles, executor_sender) = bridge_action_executor.run();
-        task_handles.extend(handles);
-        let executor_sender_clone = executor_sender.clone();
-        let metrics_clone = self.metrics.clone();
-        task_handles.push(spawn_logged_monitored_task!(Self::run_sui_watcher(
-            store_clone,
-            executor_sender_clone,
-            self.sui_events_rx,
-            self.sui_monitor_tx,
-            metrics_clone,
-        )));
-        let store_clone = self.store.clone();
-
-        // Re-submit pending actions to executor
-        let actions = store_clone
-            .get_all_pending_actions()
-            .into_values()
-            .collect::<Vec<_>>();
-        for action in actions {
-            submit_to_executor(&executor_sender, action)
-                .await
-                .expect("Submit to executor should not fail");
-        }
-
-        let metrics_clone = self.metrics.clone();
-        task_handles.push(spawn_logged_monitored_task!(Self::run_eth_watcher(
-            store_clone,
-            executor_sender,
-            self.eth_events_rx,
-            self.eth_monitor_tx,
-            metrics_clone,
-        )));
-
-        task_handles
     }
 
     pub async fn run_with_grpc(
@@ -125,7 +71,6 @@ where
             store_clone,
             executor_sender_clone,
             self.sui_grpc_events_rx,
-            self.sui_monitor_tx,
             metrics_clone,
         )));
         let store_clone = self.store.clone();
@@ -153,102 +98,10 @@ where
         task_handles
     }
 
-    async fn run_sui_watcher(
-        store: Arc<BridgeOrchestratorTables>,
-        executor_tx: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
-        mut sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
-        monitor_tx: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
-        metrics: Arc<BridgeMetrics>,
-    ) {
-        info!("Starting sui watcher task");
-        while let Some((identifier, events)) = sui_events_rx.recv().await {
-            if events.is_empty() {
-                continue;
-            }
-            info!("Received {} Sui events: {:?}", events.len(), events);
-            metrics
-                .sui_watcher_received_events
-                .inc_by(events.len() as u64);
-            let bridge_events = events
-                .iter()
-                .filter_map(|sui_event| {
-                    match SuiBridgeEvent::try_from_sui_event(sui_event) {
-                        Ok(bridge_event) => Some(bridge_event),
-                        // On testnet some early bridge transactions could have zero value (before we disallow it in Move)
-                        Err(BridgeError::ZeroValueBridgeTransfer(_)) => {
-                            error!("Zero value bridge transfer: {:?}", sui_event);
-                            None
-                        }
-                        Err(e) => {
-                            panic!(
-                                "Sui Event could not be deserialzed to SuiBridgeEvent: {:?}",
-                                e
-                            );
-                        }
-                    }
-                })
-                .collect::<Vec<_>>();
-
-            let mut actions = vec![];
-            for (sui_event, opt_bridge_event) in events.iter().zip(bridge_events) {
-                if opt_bridge_event.is_none() {
-                    // TODO: we probably should not miss any events, log for now.
-                    metrics.sui_watcher_unrecognized_events.inc();
-                    error!("Sui event not recognized: {:?}", sui_event);
-                    continue;
-                }
-                // Unwrap safe: checked above
-                let bridge_event: SuiBridgeEvent = opt_bridge_event.unwrap();
-                info!("Observed Sui bridge event: {:?}", bridge_event);
-
-                // Send event to monitor
-                monitor_tx
-                    .send(bridge_event.clone())
-                    .await
-                    .expect("Sending event to monitor channel should not fail");
-
-                if let Some(mut action) = bridge_event.try_into_bridge_action() {
-                    metrics.last_observed_actions_seq_num.with_label_values(&[
-                        action.chain_id().to_string().as_str(),
-                        action.action_type().to_string().as_str(),
-                    ]);
-
-                    action = action.update_to_token_transfer();
-
-                    actions.push(action);
-                }
-            }
-
-            if !actions.is_empty() {
-                info!("Received {} actions from Sui: {:?}", actions.len(), actions);
-                metrics
-                    .sui_watcher_received_actions
-                    .inc_by(actions.len() as u64);
-                // Write action to pending WAL
-                store
-                    .insert_pending_actions(&actions)
-                    .expect("Store operation should not fail");
-                for action in actions {
-                    submit_to_executor(&executor_tx, action)
-                        .await
-                        .expect("Submit to executor should not fail");
-                }
-            }
-
-            // Unwrap safe: in the beginning of the loop we checked that events is not empty
-            let cursor = events.last().unwrap().id;
-            store
-                .update_sui_event_cursor(identifier, cursor)
-                .expect("Store operation should not fail");
-        }
-        panic!("Sui event channel was closed unexpectedly");
-    }
-
     pub async fn run_sui_grpc_watcher(
         store: Arc<BridgeOrchestratorTables>,
         executor_tx: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
         mut sui_grpc_events_rx: mysten_metrics::metered_channel::Receiver<GrpcSyncedEvents>,
-        monitor_tx: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
         metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting sui gRPC watcher task");
@@ -268,12 +121,6 @@ where
             let mut actions = vec![];
             for bridge_event in events {
                 info!("Observed Sui bridge event (gRPC): {:?}", bridge_event);
-
-                // Send event to monitor
-                monitor_tx
-                    .send(bridge_event.clone())
-                    .await
-                    .expect("Sending event to monitor channel should not fail");
 
                 // Convert to action using the same flow as JSON-RPC watcher
                 if let Some(mut action) = bridge_event.try_into_bridge_action() {
@@ -411,6 +258,7 @@ mod tests {
     use alloy::primitives::TxHash;
     use prometheus::Registry;
     use std::str::FromStr;
+    use sui_types::Identifier;
 
     use super::*;
     use crate::events::SuiBridgeEvent;
@@ -419,90 +267,16 @@ mod tests {
     use crate::{events::tests::get_test_sui_event_and_action, sui_mock_client::SuiMockClient};
 
     #[tokio::test]
-    async fn test_sui_watcher_task() {
-        // Note: this test may fail because of the following reasons:
-        // the SuiEvent's struct tag does not match the ones in events.rs
-
-        let (
-            sui_events_tx,
-            sui_events_rx,
-            _sui_grpc_events_tx,
-            sui_grpc_events_rx,
-            _eth_events_tx,
-            eth_events_rx,
-            sui_monitor_tx,
-            _sui_monitor_rx,
-            eth_monitor_tx,
-            _eth_monitor_rx,
-            sui_client,
-            store,
-        ) = setup();
-        let (executor, mut executor_requested_action_rx) = MockExecutor::new();
-        // start orchestrator
-        let registry = Registry::new();
-        let metrics = Arc::new(BridgeMetrics::new(&registry));
-        let _handles = BridgeOrchestrator::new(
-            Arc::new(sui_client),
-            sui_events_rx,
-            sui_grpc_events_rx,
-            eth_events_rx,
-            store.clone(),
-            sui_monitor_tx,
-            eth_monitor_tx,
-            metrics,
-        )
-        .run(executor)
-        .await;
-
-        let identifier = Identifier::from_str("test_sui_watcher_task").unwrap();
-        let (sui_event, mut bridge_action) = get_test_sui_event_and_action(identifier.clone());
-        bridge_action = bridge_action.update_to_token_transfer();
-        sui_events_tx
-            .send((identifier.clone(), vec![sui_event.clone()]))
-            .await
-            .unwrap();
-
-        let start = std::time::Instant::now();
-        // Executor should have received the action
-        assert_eq!(
-            executor_requested_action_rx.recv().await.unwrap(),
-            bridge_action.digest()
-        );
-        loop {
-            let actions = store.get_all_pending_actions();
-            if actions.is_empty() {
-                if start.elapsed().as_secs() > 5 {
-                    panic!("Timed out waiting for action to be written to WAL");
-                }
-                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                continue;
-            }
-            assert_eq!(actions.len(), 1);
-            let action = actions.get(&bridge_action.digest()).unwrap();
-            assert_eq!(action, &bridge_action);
-            assert_eq!(
-                store.get_sui_event_cursors(&[identifier]).unwrap()[0].unwrap(),
-                sui_event.id,
-            );
-            break;
-        }
-    }
-
-    #[tokio::test]
     async fn test_eth_watcher_task() {
         // Note: this test may fail because of the following reasons:
         // 1. Log and BridgeAction returned from `get_test_log_and_action` are not in sync
         // 2. Log returned from `get_test_log_and_action` is not parseable log (not abigen!, check abi.rs)
 
         let (
-            _sui_events_tx,
-            sui_events_rx,
             _sui_grpc_events_tx,
             sui_grpc_events_rx,
             eth_events_tx,
             eth_events_rx,
-            sui_monitor_tx,
-            _sui_monitor_rx,
             eth_monitor_tx,
             _eth_monitor_rx,
             sui_client,
@@ -514,15 +288,13 @@ mod tests {
         let metrics = Arc::new(BridgeMetrics::new(&registry));
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
-            sui_events_rx,
             sui_grpc_events_rx,
             eth_events_rx,
             store.clone(),
-            sui_monitor_tx,
             eth_monitor_tx,
             metrics,
         )
-        .run(executor)
+        .run_with_grpc(executor)
         .await;
         let address = EthAddress::random();
         let (log, bridge_action) = get_test_log_and_action(address, TxHash::random(), 10);
@@ -570,14 +342,10 @@ mod tests {
     #[tokio::test]
     async fn test_sui_grpc_watcher_task() {
         let (
-            _sui_events_tx,
-            sui_events_rx,
             sui_grpc_events_tx,
             sui_grpc_events_rx,
             _eth_events_tx,
             eth_events_rx,
-            sui_monitor_tx,
-            _sui_monitor_rx,
             eth_monitor_tx,
             _eth_monitor_rx,
             sui_client,
@@ -589,11 +357,9 @@ mod tests {
         let metrics = Arc::new(BridgeMetrics::new(&registry));
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
-            sui_events_rx,
             sui_grpc_events_rx,
             eth_events_rx,
             store.clone(),
-            sui_monitor_tx,
             eth_monitor_tx,
             metrics,
         )
@@ -646,14 +412,10 @@ mod tests {
     /// Test that when orchestrator starts with gRPC, all pending actions are sent to executor
     async fn test_resume_actions_in_pending_logs_with_grpc() {
         let (
-            _sui_events_tx,
-            sui_events_rx,
             _sui_grpc_events_tx,
             sui_grpc_events_rx,
             _eth_events_tx,
             eth_events_rx,
-            sui_monitor_tx,
-            _sui_monitor_rx,
             eth_monitor_tx,
             _eth_monitor_rx,
             sui_client,
@@ -681,11 +443,9 @@ mod tests {
         let metrics = Arc::new(BridgeMetrics::new(&registry));
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
-            sui_events_rx,
             sui_grpc_events_rx,
             eth_events_rx,
             store.clone(),
-            sui_monitor_tx,
             eth_monitor_tx,
             metrics,
         )
@@ -705,14 +465,10 @@ mod tests {
     /// Test that when orchestrator starts, all pending actions are sent to executor
     async fn test_resume_actions_in_pending_logs() {
         let (
-            _sui_events_tx,
-            sui_events_rx,
             _sui_grpc_events_tx,
             sui_grpc_events_rx,
             _eth_events_tx,
             eth_events_rx,
-            sui_monitor_tx,
-            _sui_monitor_rx,
             eth_monitor_tx,
             _eth_monitor_rx,
             sui_client,
@@ -740,15 +496,13 @@ mod tests {
         let metrics = Arc::new(BridgeMetrics::new(&registry));
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
-            sui_events_rx,
             sui_grpc_events_rx,
             eth_events_rx,
             store.clone(),
-            sui_monitor_tx,
             eth_monitor_tx,
             metrics,
         )
-        .run(executor)
+        .run_with_grpc(executor)
         .await;
 
         // Executor should have received the action
@@ -762,14 +516,10 @@ mod tests {
 
     #[allow(clippy::type_complexity)]
     fn setup() -> (
-        mysten_metrics::metered_channel::Sender<(Identifier, Vec<SuiEvent>)>,
-        mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
         mysten_metrics::metered_channel::Sender<(u64, Vec<SuiBridgeEvent>)>,
         mysten_metrics::metered_channel::Receiver<(u64, Vec<SuiBridgeEvent>)>,
         mysten_metrics::metered_channel::Sender<(EthAddress, u64, Vec<EthLog>)>,
         mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
-        mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
-        mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
         mysten_metrics::metered_channel::Sender<EthBridgeEvent>,
         mysten_metrics::metered_channel::Receiver<EthBridgeEvent>,
         SuiClient<SuiMockClient>,
@@ -795,26 +545,12 @@ mod tests {
                 .with_label_values(&["unit_test_eth_events_queue"]),
         );
 
-        let (sui_events_tx, sui_events_rx) = mysten_metrics::metered_channel::channel(
-            100,
-            &mysten_metrics::get_metrics()
-                .unwrap()
-                .channel_inflight
-                .with_label_values(&["unit_test_legacy_sui_events_queue"]),
-        );
         let (sui_grpc_events_tx, sui_grpc_events_rx) = mysten_metrics::metered_channel::channel(
             100,
             &mysten_metrics::get_metrics()
                 .unwrap()
                 .channel_inflight
                 .with_label_values(&["unit_test_sui_events_queue"]),
-        );
-        let (sui_monitor_tx, sui_monitor_rx) = mysten_metrics::metered_channel::channel(
-            10000,
-            &mysten_metrics::get_metrics()
-                .unwrap()
-                .channel_inflight
-                .with_label_values(&["sui_monitor_queue"]),
         );
         let (eth_monitor_tx, eth_monitor_rx) = mysten_metrics::metered_channel::channel(
             10000,
@@ -824,14 +560,10 @@ mod tests {
                 .with_label_values(&["eth_monitor_queue"]),
         );
         (
-            sui_events_tx,
-            sui_events_rx,
             sui_grpc_events_tx,
             sui_grpc_events_rx,
             eth_events_tx,
             eth_events_rx,
-            sui_monitor_tx,
-            sui_monitor_rx,
             eth_monitor_tx,
             eth_monitor_rx,
             sui_client,

@@ -27,6 +27,10 @@ pub struct BigtableArgs {
     #[arg(long)]
     pub bigtable_statement_timeout_ms: Option<u64>,
 
+    /// GCP project ID for the BigTable instance (defaults to the token provider's project).
+    #[arg(long)]
+    pub bigtable_project: Option<String>,
+
     /// App profile ID to use for Bigtable client. If not provided, the default profile will be used.
     #[arg(long)]
     pub bigtable_app_profile_id: Option<String>,
@@ -63,11 +67,13 @@ impl BigtableReader {
             bail!("Environment variable GOOGLE_APPLICATION_CREDENTIALS is not set");
         }
 
+        let timeout = bigtable_args.statement_timeout();
         Ok(Self(
             BigTableClient::new_remote(
                 instance_id,
+                bigtable_args.bigtable_project,
                 true,
-                bigtable_args.statement_timeout(),
+                timeout,
                 client_name,
                 Some(registry),
                 bigtable_args.bigtable_app_profile_id,

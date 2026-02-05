@@ -116,6 +116,7 @@ impl BigTableClient {
 
     pub async fn new_remote(
         instance_id: String,
+        project_id: Option<String>,
         is_read_only: bool,
         timeout: Option<Duration>,
         client_name: String,
@@ -138,11 +139,11 @@ impl BigTableClient {
         if let Some(timeout) = timeout {
             endpoint = endpoint.timeout(timeout);
         }
-        let table_prefix = format!(
-            "projects/{}/instances/{}/tables/",
-            token_provider.project_id().await?,
-            instance_id
-        );
+        let project_id = match project_id {
+            Some(p) => p,
+            None => token_provider.project_id().await?.to_string(),
+        };
+        let table_prefix = format!("projects/{}/instances/{}/tables/", project_id, instance_id);
         let auth_channel = AuthChannel {
             channel: endpoint.connect_lazy(),
             policy: policy.to_string(),
@@ -191,6 +192,13 @@ impl BigTableClient {
 
         if let Some(wm) = pipeline_wm {
             return Ok(Some(wm));
+        }
+
+        // Don't fall back to legacy watermark when legacy mode is disabled.
+        // This prevents tasked backfill pipelines from inheriting the main
+        // pipeline's watermark from the legacy [0] row.
+        if !crate::write_legacy_data() {
+            return Ok(None);
         }
 
         Ok(legacy_checkpoint.map(|cp| Watermark {

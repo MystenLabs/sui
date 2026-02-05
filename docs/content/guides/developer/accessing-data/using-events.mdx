@@ -4,40 +4,65 @@ description: Use events to notify on-chain assets of activity your smart contrac
 keywords: [ using events, notify events, notify assets, notify on-chain assets, activity events, events for activities, move events, events in move, query events, sui RPC, graphql, move, filter events, rust, typescript ]
 ---
 
-The Sui network stores countless objects on chain where Move code can perform actions using those objects. Tracking this activity is often desired, for example, to discover how many times a module mints an NFT or to tally the amount of SUI in transactions that a smart contract generates.
+Move code can interact with objects stored on Sui. Some applications might want to track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates. 
 
-To support activity monitoring, Move provides a structure to emit events on the Sui network. You can then leverage a custom indexer to process checkpoint data that includes events that have been emitted. See the [custom indexer](/guides/developer/accessing-data/custom-indexing-framework.mdx) topic in the Advanced section to learn how to stream checkpoints and filter events continuously.
+Move supports activity monitoring through emitting events. Emitting events consists of 3 steps:
 
-If you don't want to run a custom indexer, you can poll the Sui network to query for emitted events instead. This approach typically includes a database to store the data retrieved from these calls. The [Poll events](#poll-events) section provides an example of using this method.
+1. Defining an event struct in your Move module that captures the data you want to track.
 
-## Move event structure
+1. Using the `emit` function to emit events when relevant actions occur.
 
-An event object in Sui consists of the following attributes:
+1. Processing events using either a custom indexer or by polling the network.
+
+## Defining event struct
+
+Event structs have the `copy` and `drop` abilities. In the event, define the fields you need to capture relevant data about the action.
+
+<ImportContent source="crates/sui-indexer-alt-e2e-tests/packages/emit_event/sources/emit_event.move" mode="code" struct="TestEvent" noComments />
+
+## Using the `emit` function
+
+Use the `sui::event::emit` function to emit an event when the action you want to monitor occurs:
+
+<ImportContent source="crates/sui-indexer-alt-e2e-tests/packages/emit_event/sources/emit_event.move" mode="code" struct="TestEvent" noComments />
+
+## Processing events
+
+After your Move code emits events, you need to process them. There are 2 approaches:
+
+- **Custom indexer**: Stream checkpoints and filter events continuously for real-time processing. 
+
+- **Polling**: Query the Sui network periodically for emitted events. This approach requires a database to store retrieved data.
+
+### Event object structure
+
+When you process events, each event object contains the following attributes:
 
 - `id`: JSON object containing the transaction digest ID and event sequence.
+
 - `packageId`: The object ID of the package that emits the event.
+
 - `transactionModule`: The module that performs the transaction.
+
 - `sender`: The Sui network address that triggered the event.
+
 - `type`: The type of event being emitted.
+
 - `parsedJson`: JSON object describing the event.
+
 - `bcs`: Binary canonical serialization value.
+
 - `timestampMs`: Unix epoch timestamp in milliseconds.
-
-## Emit events in Move
-
-To create an event in your Move modules, add the `sui::event` dependency.
-
-```move
-use sui::event;
-```
-
-With the dependency added, you can use the `emit` function to trigger an event whenever the action you want to monitor fires. For example, the following code is part of an example application that enables the locking of objects. The `lock` function handles the locking of objects and emits an event whenever the function is called.
 
 <ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" fun="lock" noComments />
 
-### Query events with RPC
+### Using custom indexers
 
-The Sui RPC provides a [queryEvents](/sui-api-ref#suix_queryEvents) method to query on-chain packages and return available events. As an example, the following `curl` command queries the Deepbook package on Mainnet for a specific type of event:
+[Learn more about custom indexers](/guides/developer/accessing-data/custom-indexing-framework).
+
+### Querying events with RPC
+
+The Sui RPC provides a [`queryEvents`](/sui-api-ref#suix_queryEvents) method to query on-chain packages and return available events. As an example, the following `curl` command queries the DeepBookV3 package on Mainnet for a specific type of event:
 
 ```sh
 $ curl -X POST https://fullnode.mainnet.sui.io:443 \
@@ -64,7 +89,7 @@ $ curl -X POST https://fullnode.mainnet.sui.io:443 \
 <details>
 <summary>
 
-A successful `curl` return
+Successful response
 
 </summary>
 
@@ -180,12 +205,154 @@ async function getEventsForTransaction(digest: string) {
 }
 ```
 
-For more complex queries like filtering events by type, use the GraphQL client:
+### Querying events with GraphQL
+
+<BetaTag beta="true" slim="true"/>
+
+You can use GraphQL to query events instead of JSON RPC.
+
+<details>
+
+<summary>
+
+Event connection
+
+</summary>
+
+```graphql
+{
+  events(
+    filter: {type: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"}
+  ) {
+    nodes {
+      transactionModule {
+        name
+        package {
+          digest
+        }
+      }
+      sender {
+        address
+      }
+      timestamp
+      contents {
+        type {
+          repr
+        }
+        json
+      }
+      eventBcs
+    }
+  }
+}
+```
+
+</details>
+
+### Querying events in Rust
+
+The [Sui by Example](https://github.com/gdanezis/sui-by-example/blob/main/src/05_reading_events/bin/main.rs) repo on GitHub contains a code sample that demonstrates how to query events using the `query_events` function. The package that `PACKAGE_ID_CONST` points to exists on Mainnet, so you can test this code using Cargo. To do so, clone the `sui-by-example` repo locally and follow the [Example 05 directions](https://github.com/gdanezis/sui-by-example/tree/main/src/05_reading_events).
+
+```rust
+use sui_sdk::{rpc_types::EventFilter, types::Identifier, SuiClientBuilder};
+
+const PACKAGE_ID_CONST: &str = "0x279525274aa623ef31a25ad90e3b99f27c8dbbad636a6454918855c81d625abc";
+
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    let sui_mainnet = SuiClientBuilder::default()
+        .build("https://fullnode.mainnet.sui.io:443")
+        .await?;
+
+    let events = sui_mainnet
+        .event_api()
+        .query_events(
+            EventFilter::MoveModule {
+                package: PACKAGE_ID_CONST.parse()?,
+                module: Identifier::new("dev_trophy")?,
+            },
+            None,
+            None,
+            false,
+        )
+        .await?;
+
+    for event in events.data {
+        println!("Event: {:?}", event.parsed_json);
+    }
+
+    Ok(())
+}
+```
+
+## Filtering event queries
+
+To filter the events returned from your queries, use the following data structures. 
+
+### RPC
+
+| **Query**         | **Description**                                          | **JSON-RPC parameter example**                                                                        |
+| :---------------- | :------------------------------------------------------- | :---------------------------------------------------------------------------------------------------- |
+| `All`             | All events                                               | `{"All": []}`                                                                                         |
+| `Any`             | Events emitted from any of the given filter              | `{"Any": SuiEventFilter[]}`                                                                           |
+| `Transaction`     | Events emitted from the specified transaction            | `{"Transaction":"DGUe2TXiJdN3FI6MH1FwghYbiHw+NKu8Nh579zdFtUk="}`                                      |
+| `MoveModule`      | Events emitted from the specified Move module            | `{"MoveModule":{"package":"<PACKAGE-ID>", "module":"nft"}}`                                           |
+| `MoveEventModule` | Events emitted, defined on the specified Move module     | `{"MoveEventModule": {"package": "<DEFINING-PACKAGE-ID>", "module": "nft"}}`                          |
+| `MoveEventType`   | Move struct name of the event                            | `{"MoveEventType":"::nft::MintNFTEvent"}`                                                             |
+| `Sender`          | Query by sender address                                  | `{"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`                     |
+| `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  |
+
+### GraphQL 
+
+To filter events queried using GraphQL, use one of the following workflows. 
 
 <details>
 <summary>
 
-TypeScript SDK GraphQL events example
+Filter events by sender using a GraphQL query
+
+</summary>
+
+```graphql
+query ByTxSender {
+  events(
+    first: 1
+    filter: {
+      sender: "0xdff57c401e125a7e0e06606380560b459a179aacd08ed396d0162d57dbbdadfb"
+    }
+  ) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      transactionModule {
+        name
+      }
+      contents {
+        type {
+          repr
+        }
+        json
+      }
+      sender {
+        address
+      }
+      timestamp
+      eventBcs
+    }
+  }
+}
+```
+
+</details>
+
+The [TypeScript SDK](https://sdk.mystenlabs.com/typedoc/modules/_mysten_sui.graphql.html) also can be used to interact with the Sui GraphQL service and filter events.
+
+<details>
+<summary>
+
+Filter events using the TypeScript SDK
 
 </summary>
 
@@ -230,183 +397,6 @@ async function getEventsByType(eventType: string, first: number = 10) {
 ```
 </details>
 
-
-#### Filtering event queries
-
-To filter the events returned from your queries, use the following data structures.
-
-| Query             | Description                                              | JSON-RPC Parameter Example                                                                            |
-| ----------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `All`             | All events                                               | `{"All": []}`                                                                                         |
-| `Any`             | Events emitted from any of the given filter              | `{"Any": SuiEventFilter[]}`                                                                           |
-| `Transaction`     | Events emitted from the specified transaction            | `{"Transaction":"DGUe2TXiJdN3FI6MH1FwghYbiHw+NKu8Nh579zdFtUk="}`                                      |
-| `MoveModule`      | Events emitted from the specified Move module            | `{"MoveModule":{"package":"<PACKAGE-ID>", "module":"nft"}}`                                           |
-| `MoveEventModule` | Events emitted, defined on the specified Move module.    | `{"MoveEventModule": {"package": "<DEFINING-PACKAGE-ID>", "module": "nft"}}`                          |
-| `MoveEventType`   | Move struct name of the event                            | `{"MoveEventType":"::nft::MintNFTEvent"}`                                                             |
-| `Sender`          | Query by sender address                                  | `{"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`                     |
-| `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  |
-
-### Query events in Rust
-
-The [Sui by Example](https://github.com/gdanezis/sui-by-example/blob/main/src/05_reading_events/bin/main.rs) repo on GitHub contains a code sample that demonstrates how to query events using the `query_events` function. The package that `PACKAGE_ID_CONST` points to exists on Mainnet, so you can test this code using Cargo. To do so, clone the `sui-by-example` repo locally and follow the [Example 05 directions](https://github.com/gdanezis/sui-by-example/tree/main/src/05_reading_events).
-
-```rust
-use sui_sdk::{rpc_types::EventFilter, types::Identifier, SuiClientBuilder};
-
-const PACKAGE_ID_CONST: &str = "0x279525274aa623ef31a25ad90e3b99f27c8dbbad636a6454918855c81d625abc";
-
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let sui_mainnet = SuiClientBuilder::default()
-        .build("https://fullnode.mainnet.sui.io:443")
-        .await?;
-
-    let events = sui_mainnet
-        .event_api()
-        .query_events(
-            EventFilter::MoveModule {
-                package: PACKAGE_ID_CONST.parse()?,
-                module: Identifier::new("dev_trophy")?,
-            },
-            None,
-            None,
-            false,
-        )
-        .await?;
-
-    for event in events.data {
-        println!("Event: {:?}", event.parsed_json);
-    }
-
-    Ok(())
-}
-```
-
-### Query events with GraphQL
-
-<BetaTag beta="true" slim="true"/>
-
-You can use GraphQL to query events instead of JSON RPC.
-
-<details>
-
-<summary>
-
-Event connection
-
-</summary>
-
-```graphql
-{
-  events(
-    filter: {type: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"}
-  ) {
-    nodes {
-      transactionModule {
-        name
-        package {
-          digest
-        }
-      }
-      sender {
-        address
-      }
-      timestamp
-      contents {
-        type {
-          repr
-        }
-        json
-      }
-      eventBcs
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-
-<summary>
-
-Filter events by sender
-
-</summary>
-
-```graphql
-query ByTxSender {
-  events(
-    first: 1
-    filter: {
-      sender: "0xdff57c401e125a7e0e06606380560b459a179aacd08ed396d0162d57dbbdadfb"
-    }
-  ) {
-    pageInfo {
-      hasNextPage
-      endCursor
-    }
-    nodes {
-      transactionModule {
-        name
-      }
-      contents {
-        type {
-          repr
-        }
-        json
-      }
-      sender {
-        address
-      }
-      timestamp
-      eventBcs
-    }
-  }
-}
-```
-
-</details>
-
-The [TypeScript SDK](https://sdk.mystenlabs.com/typedoc/modules/_mysten_sui.graphql.html) provides functionality to interact with the Sui GraphQL service.
-
-## Monitoring events
-
-Firing events is not very useful in a vacuum. You also need the ability to respond to those events. There are 2 methods from which to choose when you need to monitor on-chain events:
-- Incorporate a [custom indexer](/guides/developer/accessing-data/custom-indexing-framework.mdx) to take advantage of Sui's micro-data ingestion framework.
-- Poll the Sui network on a schedule to query events.
-
-Using a custom indexer provides a near-real time monitoring of events, so is most useful when your project requires immediate reaction to the firing of events. Polling the network is most useful when the events you're monitoring don't fire often or the need to act on those events are not immediate. The following section provides a polling example.
-
-### Poll events {#poll-events}
-
-To monitor events, you need a database to store checkpoint data. The [Trustless Swap](/guides/developer/app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events.
-
-<details>
-
-<summary>
-
-`event-indexer.ts` from Trustless Swap
-
-</summary>
-
-<ImportContent source="examples/trading/api/indexer/event-indexer.ts" mode="code" noComments />
-
-</details>
-
-Trustless Swap incorporates handlers to process each event type that triggers. For the `locked` event, the handler in `locked-handler.ts` fires and updates the Prisma database accordingly.
-
-<details>
-
-<summary>
-
-`locked-handler.ts` from Trustless Swap
-
-</summary>
-
-<ImportContent source="examples/trading/api/indexer/locked-handler.ts" mode="code" />
-
-</details>
 
 ## Related links
 

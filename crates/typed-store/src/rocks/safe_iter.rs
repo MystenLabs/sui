@@ -3,6 +3,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use bincode::Options;
+use mysten_common::debug_fatal;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::{DBWithThreadMode, Direction, MultiThreaded};
 
@@ -78,13 +79,23 @@ impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeIter<'_, K, V> {
                 .expect("Valid iterator failed to get value");
             self.bytes_scanned_counter += raw_key.len() + raw_value.len();
             self.keys_returned_counter += 1;
-            let key = config.deserialize(raw_key).ok();
-            let value = bcs::from_bytes(raw_value).ok();
+
+            let key = config.deserialize(raw_key);
+            let value = bcs::from_bytes(raw_value);
+
             match self.direction {
                 Direction::Forward => self.db_iter.next(),
                 Direction::Reverse => self.db_iter.prev(),
             }
-            key.and_then(|k| value.map(|v| Ok((k, v))))
+
+            if let Err(e) = &key {
+                debug_fatal!("Failed to deserialize key in cf {}: {e}", self.cf_name);
+            }
+            if let Err(e) = &value {
+                debug_fatal!("Failed to deserialize value in cf {}: {e}", self.cf_name);
+            }
+
+            key.ok().and_then(|k| value.ok().map(|v| Ok((k, v))))
         } else {
             match self.db_iter.status() {
                 Ok(_) => None,

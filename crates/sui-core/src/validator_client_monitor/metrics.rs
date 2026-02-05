@@ -3,8 +3,9 @@
 
 use mysten_metrics::{COUNT_BUCKETS, SUBSECOND_LATENCY_SEC_BUCKETS};
 use prometheus::{
-    GaugeVec, HistogramVec, IntCounterVec, Registry, register_gauge_vec_with_registry,
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    GaugeVec, Histogram, HistogramVec, IntCounterVec, Registry, register_gauge_vec_with_registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry,
 };
 
 #[derive(Clone)]
@@ -23,7 +24,7 @@ pub struct ValidatorClientMetrics {
     pub performance: GaugeVec,
 
     /// Number of low latency validators that got shuffled.
-    pub shuffled_validators: HistogramVec,
+    pub shuffled_validators: Histogram,
 }
 
 impl ValidatorClientMetrics {
@@ -58,15 +59,14 @@ impl ValidatorClientMetrics {
                 "validator_client_observed_performance",
                 "Current client-observed performance per validator. The performance is the average latency of the validator
                 weighted by the reliability of the validator.",
-                &["validator", "tx_type"],
+                &["validator"],
                 registry,
             )
             .unwrap(),
 
-            shuffled_validators: register_histogram_vec_with_registry!(
+            shuffled_validators: register_histogram_with_registry!(
                 "validator_client_shuffled_validators",
                 "Number of low latency validators that got shuffled",
-                &["tx_type"],
                 COUNT_BUCKETS.to_vec(),
                 registry,
             )
