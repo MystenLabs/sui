@@ -3313,42 +3313,49 @@ impl AuthorityState {
         let inner_temporary_store = inner_temporary_store.clone();
         let epoch_store = epoch_store.clone();
 
-        // Acquire a semaphore permit, blocking the caller if all permits are held.
-        // This provides backpressure: if post-processing can't keep up with
-        // execution, execution slows down rather than accumulating unbounded work.
-        let permit = {
-            let _scope = monitored_scope("Execution::post_process_one_tx::semaphore_acquire");
-            semaphore
-                .acquire_blocking()
-                .expect("post-processing semaphore should not be closed")
-        };
+        // Spawn an async task that acquires a semaphore permit before spawning
+        // the blocking work. The semaphore limits concurrent post-processing tasks
+        // to avoid overwhelming the blocking thread pool (default: num_cpus permits).
+        // If all permits are held, this task waits asynchronously until one frees up,
+        // providing backpressure without blocking the executor thread.
+        tokio::spawn(async move {
+            let permit = {
+                let _scope =
+                    monitored_scope("Execution::post_process_one_tx::semaphore_acquire");
+                semaphore
+                    .acquire_owned()
+                    .await
+                    .expect("post-processing semaphore should not be closed")
+            };
 
-        tokio::task::spawn_blocking(move || {
-            // Move the permit into the closure so it is held for the duration
-            // of the work and released when the closure completes.
-            let _permit = permit;
+            let _ = tokio::task::spawn_blocking(move || {
+                // Move the permit into the closure so it is held for the duration
+                // of the work and released when the closure completes.
+                let _permit = permit;
 
-            let result = Self::post_process_one_tx_impl(
-                &indexes,
-                &subscription_handler,
-                &metrics,
-                name,
-                &backing_package_store,
-                &object_store,
-                &certificate,
-                &effects,
-                &inner_temporary_store,
-                &epoch_store,
-            );
+                let result = Self::post_process_one_tx_impl(
+                    &indexes,
+                    &subscription_handler,
+                    &metrics,
+                    name,
+                    &backing_package_store,
+                    &object_store,
+                    &certificate,
+                    &effects,
+                    &inner_temporary_store,
+                    &epoch_store,
+                );
 
-            if let Err(e) = &result {
-                metrics.post_processing_total_failures.inc();
-                error!(?tx_digest, "tx post processing failed: {e}");
-            }
+                if let Err(e) = &result {
+                    metrics.post_processing_total_failures.inc();
+                    error!(?tx_digest, "tx post processing failed: {e}");
+                }
 
-            // Signal completion and remove from pending map.
-            let _ = done_tx.send(());
-            pending_map.remove(&tx_digest);
+                // Signal completion and remove from pending map.
+                let _ = done_tx.send(());
+                pending_map.remove(&tx_digest);
+            })
+            .await;
         });
 
         Ok(())
@@ -3900,7 +3907,8 @@ impl AuthorityState {
                 }
                 Owner::ObjectOwner(object_id) => {
                     let id = o.id();
-                    let Some(info) = self.try_create_dynamic_field_info(
+                    let Some(info) = Self::try_create_dynamic_field_info(
+                        &self.get_object_store(),
                         o,
                         &BTreeMap::new(),
                         layout_resolver.as_mut(),
