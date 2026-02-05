@@ -19,12 +19,14 @@ const DEMO_NAME_KEY: vector<u8> = b"name";
 const DEMO_NAME_VALUE: vector<u8> = b"{name}";
 
 #[test]
-fun test_modern_creation_and_operations() {
+fun create_modern_and_do_operations_e2e() {
     test_tx!(|registry, scenario| {
         let cap = new_display<MyPotato>(registry, scenario);
         scenario.next_tx(@0x1);
         let mut display = scenario.take_shared<Display<MyPotato>>();
         assert_eq!(display.fields().length(), 0);
+
+        assert!(display.cap_id().is_some_and!(|cap_id| cap_id == object::id(&cap)));
 
         display.set(&cap, DEMO_NAME_KEY.to_string(), DEMO_NAME_VALUE.to_string());
         test_scenario::return_shared(display);
@@ -57,7 +59,7 @@ fun test_modern_creation_and_operations() {
 }
 
 #[test]
-fun test_legacy_claim() {
+fun claim_legacy() {
     test_tx!(|registry, scenario| {
         let publisher = new_publisher(scenario);
         let legacy_display = display::new<MyKeyOnlyType>(&publisher, scenario.ctx());
@@ -76,6 +78,7 @@ fun test_legacy_claim() {
 
         // Claim the display using our legacy display obj.
         let mut display = scenario.take_shared<Display<MyKeyOnlyType>>();
+        assert!(display.cap_id().is_none());
         let new_cap = display.claim(legacy_display, scenario.ctx());
 
         // use the cap to edit display!
@@ -92,7 +95,29 @@ fun test_legacy_claim() {
 }
 
 #[test]
-fun test_legacy_claim_with_publisher() {
+fun migrate_legacy() {
+    test_tx!(|registry, scenario| {
+        let publisher = new_publisher(scenario);
+        let mut legacy_display = display::new<MyKeyOnlyType>(&publisher, scenario.ctx());
+
+        legacy_display.add(DEMO_NAME_KEY.to_string(), DEMO_NAME_VALUE.to_string());
+
+        // Migrate Display using v1 to v2 successfully
+        let (display, cap) = registry.migrate_v1_to_v2(legacy_display, scenario.ctx());
+
+        assert!(display.cap_id().is_some_and!(|cap_id| cap_id == object::id(&cap)));
+        assert_eq!(display.fields().length(), 1);
+        assert_eq!(*display.fields().get(&DEMO_NAME_KEY.to_string()), DEMO_NAME_VALUE.to_string());
+
+        display.share();
+        transfer::public_transfer(cap, @0x1);
+
+        publisher.burn();
+    });
+}
+
+#[test]
+fun claim_with_publisher() {
     test_tx!(|registry, scenario| {
         let mut publisher = package::test_claim(MY_OTW {}, scenario.ctx());
         let cap = take_migration_cap(scenario);
@@ -104,6 +129,7 @@ fun test_legacy_claim_with_publisher() {
         scenario.next_tx(@0x1);
 
         let mut display = scenario.take_shared<Display<MyKeyOnlyType>>();
+        assert!(display.cap_id().is_none());
         let new_cap = display.claim_with_publisher(&mut publisher, scenario.ctx());
         display.set(&new_cap, DEMO_NAME_KEY.to_string(), DEMO_NAME_VALUE.to_string());
         test_scenario::return_shared(display);
@@ -115,7 +141,7 @@ fun test_legacy_claim_with_publisher() {
 }
 
 #[test]
-fun test_update_field() {
+fun update_field() {
     test_tx!(|registry, scenario| {
         let cap = new_display<MyKeyOnlyType>(registry, scenario);
         scenario.next_tx(@0x1);
@@ -139,7 +165,7 @@ fun test_update_field() {
 }
 
 #[test, expected_failure(abort_code = display_registry::EDisplayAlreadyExists), allow(dead_code)]
-fun test_display_already_exists() {
+fun create_display_twice_fails() {
     test_tx!(|registry, scenario| {
         let pub = new_publisher(scenario);
         let (_display, _cap) = registry.new_with_publisher<MyKeyOnlyType>(
@@ -155,7 +181,7 @@ fun test_display_already_exists() {
 }
 
 #[test, expected_failure(abort_code = display_registry::EDisplayAlreadyExists), allow(dead_code)]
-fun test_migrate_twice() {
+fun migrate_twice_fails() {
     test_tx!(|registry, scenario| {
         let cap = take_migration_cap(scenario);
         registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
@@ -173,7 +199,7 @@ fun test_migrate_twice() {
 }
 
 #[test, expected_failure(abort_code = display_registry::ECapAlreadyClaimed), allow(dead_code)]
-fun test_claim_cap_twice() {
+fun claim_cap_twice_fails() {
     test_tx!(|registry, scenario| {
         let mut publisher = package::test_claim(MY_OTW {}, scenario.ctx());
         let cap = take_migration_cap(scenario);
@@ -194,7 +220,7 @@ fun test_claim_cap_twice() {
 }
 
 #[test, expected_failure(abort_code = display_registry::ECapNotClaimed), allow(dead_code)]
-fun test_delete_legacy_before_migration() {
+fun delete_legacy_before_migration_fails() {
     test_tx!(|registry, scenario| {
         let cap = take_migration_cap(scenario);
         registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
@@ -213,7 +239,7 @@ fun test_delete_legacy_before_migration() {
 }
 
 #[test, expected_failure(abort_code = display_registry::EFieldDoesNotExist), allow(dead_code)]
-fun test_remove_non_existing_field() {
+fun remove_non_existing_field_fails() {
     test_tx!(|registry, scenario| {
         let cap = new_display<MyKeyOnlyType>(registry, scenario);
         scenario.next_tx(@0x1);
@@ -225,10 +251,28 @@ fun test_remove_non_existing_field() {
 }
 
 #[test, expected_failure(abort_code = display_registry::ENotValidPublisher), allow(dead_code)]
-fun test_invalid_publisher() {
+fun use_invalid_publisher() {
     test_tx!(|registry, scenario| {
         // Try claim display for `std` (external package) using `sui`'s publisher.
         let _cap = new_display<std::string::String>(registry, scenario);
+        abort
+    });
+}
+
+#[test, expected_failure(abort_code = display_registry::EDisplayAlreadyExists), allow(dead_code)]
+fun fails_when_migrating_twice() {
+    test_tx!(|registry, scenario| {
+        let publisher = new_publisher(scenario);
+        let legacy_display = display::new<MyKeyOnlyType>(&publisher, scenario.ctx());
+        let another_legacy_display = display::new<MyKeyOnlyType>(&publisher, scenario.ctx());
+
+        // Migrate Display using v1 to v2 successfully
+        let (_display, _cap) = registry.migrate_v1_to_v2(legacy_display, scenario.ctx());
+        let (_another_display, _another_cap) = registry.migrate_v1_to_v2(
+            another_legacy_display,
+            scenario.ctx(),
+        );
+
         abort
     });
 }

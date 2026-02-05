@@ -61,12 +61,8 @@ public fun new<T>(
 ): (Display<T>, DisplayCap<T>) {
     let key = DisplayKey<T>();
     assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
-    let display = Display<T> {
-        id: derived_object::claim(&mut registry.id, key),
-        fields: vec_map::empty(),
-        cap_id: option::none(),
-    };
-    let cap = DisplayCap<T> { id: object::new(ctx) };
+
+    let (display, cap) = new_display!<T>(registry, ctx);
     (display, cap)
 }
 
@@ -80,12 +76,7 @@ public fun new_with_publisher<T>(
 
     assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
     assert!(publisher.from_package<T>(), ENotValidPublisher);
-    let cap = DisplayCap<T> { id: object::new(ctx) };
-    let display = Display<T> {
-        id: derived_object::claim(&mut registry.id, key),
-        fields: vec_map::empty(),
-        cap_id: option::some(cap.id.to_inner()),
-    };
+    let (display, cap) = new_display!<T>(registry, ctx);
     (display, cap)
 }
 
@@ -162,8 +153,22 @@ public fun migrate_v1_to_v2_with_system_migration_cap<T: key>(
     });
 }
 
-// TODO: decide on whether to keep this function or not.
-public fun migrate_v1_to_v2<T: key>(_: LegacyDisplay<T>): (Display<T>, DisplayCap<T>) { abort }
+/// Enables migrating legacy display into the new one,
+/// if a new one has not yet been created.
+public fun migrate_v1_to_v2<T: key>(
+    registry: &mut DisplayRegistry,
+    legacy: LegacyDisplay<T>,
+    ctx: &mut TxContext,
+): (Display<T>, DisplayCap<T>) {
+    let key = DisplayKey<T>();
+    assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
+
+    let (mut display, cap) = new_display!<T>(registry, ctx);
+    display.fields = *legacy.fields();
+    legacy.destroy();
+
+    (display, cap)
+}
 
 /// Destroy the `SystemMigrationCap` after successfully migrating all V1 instances.
 entry fun destroy_system_migration_cap(cap: SystemMigrationCap) {
@@ -182,6 +187,11 @@ public fun fields<T>(display: &Display<T>): &VecMap<String, String> {
     &display.fields
 }
 
+/// Get the cap ID for the display.
+public fun cap_id<T>(display: &Display<T>): Option<ID> {
+    display.cap_id
+}
+
 public(package) fun create_internal(ctx: &mut TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
@@ -192,6 +202,23 @@ public(package) fun create_internal(ctx: &mut TxContext) {
 
 public(package) fun migration_cap_receiver(): address {
     SYSTEM_MIGRATION_ADDRESS
+}
+
+macro fun new_display<$T>(
+    $registry: &mut DisplayRegistry,
+    $ctx: &mut TxContext,
+): (Display<$T>, DisplayCap<$T>) {
+    let registry = $registry;
+    let ctx = $ctx;
+    let key = DisplayKey<$T>();
+    assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
+    let cap = DisplayCap<$T> { id: object::new(ctx) };
+    let display = Display<$T> {
+        id: derived_object::claim(&mut registry.id, key),
+        fields: vec_map::empty(),
+        cap_id: option::some(cap.id.to_inner()),
+    };
+    (display, cap)
 }
 
 // Create a new display registry object callable only from 0x0 (end of epoch)
