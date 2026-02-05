@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 11 tasks
+processed 10 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -78,7 +78,7 @@ Response: {
         }
       }
     ],
-    "nextCursor": "IBbXQvmjVU47eBi8ZebGnyvR2Iesz6FyRaD7bfgWHYsrAQAAAAAAAAA=",
+    "nextCursor": "fQD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkKJeWd/QJiwMxrR7RnxLOq3lsJBx9vuinugVthYftJ8AAAAAAAAAAFNAAAAAAAAAAJPMgAAAAAAAAAAABbXQvmjVU47eBi8ZebGnyvR2Iesz6FyRaD7bfgWHYsr",
     "hasNextPage": false
   }
 }
@@ -99,7 +99,7 @@ Response: {
         }
       }
     ],
-    "nextCursor": "IGSa5PsYOZynE0sYYYk7QoxkNhbSa/yLxyw1FV6gvyviAQAAAAAAAAA=",
+    "nextCursor": "fQD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkKJeWd/QJiwMxrR7RnxLOq3lsJBx9vuinugVthYftJ8AAAAAAAAAAFOAAAAAAAAAAJPMQAAAAAAAAAAAGSa5PsYOZynE0sYYYk7QoxkNhbSa/yLxyw1FV6gvyvi",
     "hasNextPage": false
   }
 }
@@ -120,28 +120,7 @@ Response: {
         }
       }
     ],
-    "nextCursor": "IIr1vhYSWMw/lYjJHjQ9Qi79dCwoF1uQXiMeQ3U8cfefAgAAAAAAAAA=",
-    "hasNextPage": true
-  }
-}
-
-task 10, lines 96-108:
-//# run-jsonrpc --cursors bcs(bcs(@{obj_5_0}),2)
-Response: {
-  "jsonrpc": "2.0",
-  "id": 3,
-  "result": {
-    "data": [
-      {
-        "data": {
-          "objectId": "0x9983ce1bace8b8a35c9775681f84172611d09eedf1bf82df82c817ddbf206ad8",
-          "version": "2",
-          "digest": "GcMob8ZvTcMa5aT6HSxd2YkxaDky8zEZJQq46wW2uw7B",
-          "type": "0x428979677f4098b0331ad1ed19f12ceab796c241c7dbee8a7ba056d8587ed27c::M::O1"
-        }
-      }
-    ],
-    "nextCursor": "IJmDzhus6LijXJd1aB+EFyYR0J7t8b+C34LIF92/IGrYAQAAAAAAAAA=",
+    "nextCursor": "fQD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkKJeWd/QJiwMxrR7RnxLOq3lsJBx9vuinugVthYftJ8AAAAAAAAAAFNAAAAAAAAAAJPMQAAAAAAAAAAAIr1vhYSWMw/lYjJHjQ9Qi79dCwoF1uQXiMeQ3U8cfef",
     "hasNextPage": true
   }
 }
