@@ -687,3 +687,127 @@ fn open_rocksdb<P: AsRef<Path>>(path: P, opt_cfs: &[&str]) -> Arc<Database> {
     )
     .expect("failed to open rocksdb")
 }
+
+/// Two types that have different BCS serialization formats
+mod type_mismatch_types {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    pub struct OriginalValue {
+        pub field_a: u64,
+        pub field_b: String,
+        pub field_c: Vec<u8>,
+    }
+
+    /// A different type with an incompatible layout - BCS is position-based,
+    /// so even with the same field names, different types will fail to deserialize
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    pub struct IncompatibleValue {
+        pub field_a: String, // Changed from u64 to String - will fail to deserialize
+        pub field_b: u64,    // Changed from String to u64
+    }
+}
+
+#[tokio::test]
+async fn test_safe_iter_returns_error_on_deserialization_failure() {
+    use type_mismatch_types::{IncompatibleValue, OriginalValue};
+
+    let path = temp_dir();
+    let cf_name = "test_cf";
+
+    // Step 1: Create a database and insert values with OriginalValue type
+    let rocks = open_rocksdb(path.clone(), &[cf_name]);
+
+    let db_original: DBMap<i32, OriginalValue> =
+        DBMap::reopen(&rocks, Some(cf_name), &ReadWriteOptions::default(), false)
+            .expect("Failed to open storage");
+
+    // Insert multiple values
+    let original_values = vec![
+        (
+            1,
+            OriginalValue {
+                field_a: 100,
+                field_b: "hello".to_string(),
+                field_c: vec![1, 2, 3],
+            },
+        ),
+        (
+            2,
+            OriginalValue {
+                field_a: 200,
+                field_b: "world".to_string(),
+                field_c: vec![4, 5, 6],
+            },
+        ),
+        (
+            3,
+            OriginalValue {
+                field_a: 300,
+                field_b: "test".to_string(),
+                field_c: vec![7, 8, 9],
+            },
+        ),
+    ];
+
+    for (key, value) in &original_values {
+        db_original
+            .insert(key, value)
+            .expect("Failed to insert value");
+    }
+
+    // Verify the values were inserted correctly with the original type
+    let original_count = db_original.safe_iter().count();
+    assert_eq!(
+        original_count, 3,
+        "Should have 3 values when reading with correct type"
+    );
+
+    // Step 2: Reopen the same column family with a different, incompatible value type
+    let db_incompatible: DBMap<i32, IncompatibleValue> =
+        DBMap::reopen(&rocks, Some(cf_name), &ReadWriteOptions::default(), false)
+            .expect("Failed to reopen storage with different type");
+
+    // Step 3: Iterate using safe_iter with the incompatible type
+    // The values should fail to deserialize and return Err for each entry
+    let results: Vec<_> = db_incompatible.safe_iter().collect();
+
+    // EXPECTED BEHAVIOR:
+    // - We inserted 3 values into the database
+    // - When we iterate with an incompatible type, deserialization fails
+    // - safe_iter should return an Err for each entry that fails to deserialize
+    // - This allows callers to detect and handle deserialization failures
+
+    // We should get exactly 3 results - one for each entry in the database
+    assert_eq!(
+        results.len(),
+        3,
+        "safe_iter should yield one result per database entry"
+    );
+
+    // Count how many Ok results we got (should be 0 - all fail to deserialize)
+    let ok_count = results.iter().filter(|r| r.is_ok()).count();
+    assert_eq!(
+        ok_count, 0,
+        "No values should deserialize successfully with incompatible type"
+    );
+
+    // Count how many Err results we got (should be 3 - all entries fail)
+    let err_count = results.iter().filter(|r| r.is_err()).count();
+    assert_eq!(
+        err_count, 3,
+        "All entries should return Err when deserialization fails"
+    );
+
+    // Verify each result is an error
+    for (i, result) in results.iter().enumerate() {
+        assert!(result.is_err(), "Entry {} should be an Err, got Ok", i);
+    }
+
+    // Verify the data is still there by reading with the correct type
+    let verification_count = db_original.safe_iter().count();
+    assert_eq!(
+        verification_count, 3,
+        "Data should still exist in the database"
+    );
+}

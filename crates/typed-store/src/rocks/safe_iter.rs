@@ -78,13 +78,25 @@ impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeIter<'_, K, V> {
                 .expect("Valid iterator failed to get value");
             self.bytes_scanned_counter += raw_key.len() + raw_value.len();
             self.keys_returned_counter += 1;
-            let key = config.deserialize(raw_key).ok();
-            let value = bcs::from_bytes(raw_value).ok();
+
+            // Deserialize key and value, returning errors if deserialization fails
+            let key_res: Result<K, _> = config.deserialize(raw_key);
+            let value_res: Result<V, _> = bcs::from_bytes(raw_value);
+
             match self.direction {
                 Direction::Forward => self.db_iter.next(),
                 Direction::Reverse => self.db_iter.prev(),
             }
-            key.and_then(|k| value.map(|v| Ok((k, v))))
+
+            match (key_res, value_res) {
+                (Ok(key), Ok(value)) => Some(Ok((key, value))),
+                (Err(e), _) => Some(Err(TypedStoreError::SerializationError(format!(
+                    "Failed to deserialize key: {e}"
+                )))),
+                (_, Err(e)) => Some(Err(TypedStoreError::SerializationError(format!(
+                    "Failed to deserialize value: {e}"
+                )))),
+            }
         } else {
             match self.db_iter.status() {
                 Ok(_) => None,
