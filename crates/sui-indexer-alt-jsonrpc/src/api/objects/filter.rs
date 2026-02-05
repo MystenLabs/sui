@@ -74,7 +74,11 @@ pub(super) async fn owned_objects(
     limit: Option<usize>,
 ) -> Result<ObjectIDs, RpcError<Error>> {
     match filter {
-        Some(SuiObjectDataFilter::MatchNone(exclusions)) if exclusions.len() == 1 => {
+        // Limit filter to a single exclusion
+        Some(SuiObjectDataFilter::MatchNone(exclusions))
+            if exclusions.len() == 1
+                && !matches!(&exclusions[0], SuiObjectDataFilter::MatchNone(_)) =>
+        {
             query_objects(
                 ctx,
                 owner,
