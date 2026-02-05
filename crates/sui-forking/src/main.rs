@@ -3,6 +3,7 @@
 
 mod cli;
 mod context;
+mod data_layer;
 mod execution;
 mod graphql;
 mod grpc;
