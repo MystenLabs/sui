@@ -95,9 +95,9 @@ def main():
         help="Tidehunter repo sha (if unset, rocksdb will be used)",
     )
     parser.add_argument(
-        "-c", "--config-commit",
+        "-c", "--cli-commit",
         type=str,
-        help="Sha for config image",
+        help="Sha for cli image",
     )
     parser.add_argument(
         "-S", "--stress-commit",
@@ -193,8 +193,8 @@ def main():
     if args.tidehunter_commit:
         cmd.extend(["-f", f"tidehunter_commit={args.tidehunter_commit}"])
 
-    if args.config_commit:
-        cmd.extend(["-f", f"config_commit={args.config_commit}"])
+    if args.cli_commit:
+        cmd.extend(["-f", f"sui_cli_commit={args.cli_commit}"])
 
     if args.stress_commit:
         cmd.extend(["-f", f"stress_commit={args.stress_commit}"])
