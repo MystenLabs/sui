@@ -194,26 +194,10 @@ pub(crate) struct ObserverBlockStreamItem {
 #[allow(dead_code)]
 pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send>>;
 
-/// A stream item for observer commit streaming that includes batched commits and highest commit index.
-#[allow(dead_code)]
-pub(crate) struct ObserverCommitStreamItem {
-    pub(crate) commits: Vec<crate::network::observer_network::Commit>,
-    pub(crate) highest_commit_index: u32,
-}
-
-/// Observer commit stream type.
-#[allow(dead_code)]
-pub(crate) type ObserverCommitStream = Pin<Box<dyn Stream<Item = ObserverCommitStreamItem> + Send>>;
-
 /// Observer block request stream type for bidirectional streaming.
 #[allow(dead_code)]
 pub(crate) type BlockRequestStream =
     Pin<Box<dyn Stream<Item = crate::network::observer_network::BlockStreamRequest> + Send>>;
-
-/// Observer commit request stream type for bidirectional streaming.
-#[allow(dead_code)]
-pub(crate) type CommitRequestStream =
-    Pin<Box<dyn Stream<Item = crate::network::observer_network::CommitStreamRequest> + Send>>;
 
 /// Observer network service for handling requests from observer nodes.
 /// Unlike NetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
@@ -229,15 +213,6 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
         peer: NodeId,
         request_stream: BlockRequestStream,
     ) -> ConsensusResult<ObserverBlockStream>;
-
-    /// Handles the bidirectional commit streaming request from an observer peer.
-    /// Returns a stream of batched commits with the highest commit index.
-    /// The input stream contains CommitStreamRequest items with Start/Stop commands for flow control.
-    async fn handle_stream_commits(
-        &self,
-        peer: NodeId,
-        request_stream: CommitRequestStream,
-    ) -> ConsensusResult<ObserverCommitStream>;
 
     /// Handles the request to fetch blocks by references from an observer peer.
     /// Returns serialized blocks.
@@ -271,16 +246,6 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
         request_stream: BlockRequestStream,
         timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream>;
-
-    /// Initiates bidirectional commit streaming with a peer (validator or observer).
-    /// Returns a stream of batched commits with the highest commit index.
-    /// The request_stream contains CommitStreamRequest items with Start/Stop commands for flow control.
-    async fn stream_commits(
-        &self,
-        peer: NodeId,
-        request_stream: CommitRequestStream,
-        timeout: Duration,
-    ) -> ConsensusResult<ObserverCommitStream>;
 
     /// Fetches serialized blocks by references from a peer.
     async fn fetch_blocks(

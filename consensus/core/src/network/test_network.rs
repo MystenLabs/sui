@@ -13,8 +13,8 @@ use crate::{
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{
-        BlockRequestStream, BlockStream, CommitRequestStream, NetworkService, NodeId,
-        ObserverBlockStream, ObserverCommitStream, ObserverNetworkService,
+        BlockRequestStream, BlockStream, NetworkService, NodeId, ObserverBlockStream,
+        ObserverNetworkService,
     },
 };
 
@@ -117,14 +117,6 @@ impl ObserverNetworkService for Mutex<TestService> {
         _peer: NodeId,
         _request_stream: BlockRequestStream,
     ) -> ConsensusResult<ObserverBlockStream> {
-        unimplemented!("ObserverNetworkService not implemented for TestService")
-    }
-
-    async fn handle_stream_commits(
-        &self,
-        _peer: NodeId,
-        _request_stream: CommitRequestStream,
-    ) -> ConsensusResult<ObserverCommitStream> {
         unimplemented!("ObserverNetworkService not implemented for TestService")
     }
 

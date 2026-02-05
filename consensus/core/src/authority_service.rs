@@ -33,8 +33,8 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
-        BlockRequestStream, BlockStream, CommitRequestStream, ExtendedSerializedBlock,
-        NetworkService, NodeId, ObserverBlockStream, ObserverCommitStream, ObserverNetworkService,
+        BlockRequestStream, BlockStream, ExtendedSerializedBlock, NetworkService, NodeId,
+        ObserverBlockStream, ObserverNetworkService,
     },
     round_tracker::PeerRoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
@@ -639,15 +639,6 @@ impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
     ) -> ConsensusResult<ObserverBlockStream> {
         // TODO: Implement observer block streaming
         todo!("Observer block streaming not yet implemented")
-    }
-
-    async fn handle_stream_commits(
-        &self,
-        _peer: NodeId,
-        _request_stream: CommitRequestStream,
-    ) -> ConsensusResult<ObserverCommitStream> {
-        // TODO: Implement observer commit streaming
-        todo!("Observer commit streaming not yet implemented")
     }
 
     async fn handle_fetch_blocks(

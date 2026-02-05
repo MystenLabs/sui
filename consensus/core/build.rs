@@ -105,17 +105,6 @@ fn build_tonic_services(out_dir: &Path) {
         )
         .method(
             tonic_build::manual::Method::builder()
-                .name("stream_commits")
-                .route_name("StreamCommits")
-                .input_type("crate::network::observer_network::CommitStreamRequest")
-                .output_type("crate::network::observer_network::CommitStreamResponse")
-                .codec_path(codec_path)
-                .server_streaming()
-                .client_streaming()
-                .build(),
-        )
-        .method(
-            tonic_build::manual::Method::builder()
                 .name("fetch_blocks")
                 .route_name("FetchBlocks")
                 .input_type("crate::network::observer_network::FetchBlocksRequest")

@@ -12,8 +12,8 @@ use tokio_stream::Iter;
 use tonic::{Request, Response, Streaming};
 
 use super::{
-    NodeId, ObserverBlockStream, ObserverCommitStream, ObserverNetworkClient,
-    ObserverNetworkService, tonic_gen::observer_consensus_service_server::ObserverConsensusService,
+    NodeId, ObserverBlockStream, ObserverNetworkClient, ObserverNetworkService,
+    tonic_gen::observer_consensus_service_server::ObserverConsensusService,
 };
 use crate::{
     commit::CommitRange,
@@ -53,52 +53,6 @@ pub(crate) struct BlockStreamResponse {
     pub(crate) block: Bytes,
     #[prost(uint64, tag = "2")]
     pub(crate) highest_commit_index: u64,
-}
-
-// Observer commit streaming messages
-#[derive(Clone, prost::Message)]
-pub(crate) struct CommitStreamRequest {
-    #[prost(oneof = "commit_stream_request::Command", tags = "1, 2")]
-    pub(crate) command: Option<commit_stream_request::Command>,
-}
-
-pub(crate) mod commit_stream_request {
-    #[derive(Clone, PartialEq, prost::Oneof)]
-    pub(crate) enum Command {
-        #[prost(message, tag = "1")]
-        Start(super::StartCommitStream),
-        #[prost(message, tag = "2")]
-        Stop(super::StopCommitStream),
-    }
-}
-
-#[derive(Clone, PartialEq, prost::Message)]
-pub(crate) struct StartCommitStream {
-    #[prost(uint32, tag = "1")]
-    pub(crate) highest_commit_index: u32,
-    #[prost(uint32, tag = "2")]
-    pub(crate) batch_size: u32,
-}
-
-#[derive(Clone, PartialEq, prost::Message)]
-pub(crate) struct StopCommitStream {}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct CommitStreamResponse {
-    #[prost(message, repeated, tag = "1")]
-    pub(crate) commits: Vec<Commit>,
-    #[prost(uint32, tag = "2")]
-    pub(crate) highest_commit_index: u32,
-}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct Commit {
-    #[prost(bytes = "bytes", tag = "1")]
-    pub(crate) commit: Bytes,
-    #[prost(bytes = "bytes", repeated, tag = "2")]
-    pub(crate) certifier_blocks: Vec<Bytes>,
-    #[prost(bytes = "bytes", repeated, tag = "3")]
-    pub(crate) committed_blocks: Vec<Bytes>,
 }
 
 // Observer fetch messages
@@ -161,18 +115,6 @@ impl ObserverNetworkClient for TonicObserverClient {
         ))
     }
 
-    async fn stream_commits(
-        &self,
-        _peer: NodeId,
-        _request_stream: super::CommitRequestStream,
-        _timeout: Duration,
-    ) -> ConsensusResult<ObserverCommitStream> {
-        // TODO: Implement bidirectional commit streaming for observers
-        Err(ConsensusError::NetworkRequest(
-            "stream_commits not yet implemented".to_string(),
-        ))
-    }
-
     async fn fetch_blocks(
         &self,
         _peer: NodeId,
@@ -224,19 +166,6 @@ impl<S: ObserverNetworkService> ObserverConsensusService for ObserverServiceProx
         // TODO: Implement stream_blocks for observer nodes
         Err(tonic::Status::unimplemented(
             "stream_blocks not yet implemented for observers",
-        ))
-    }
-
-    type StreamCommitsStream =
-        Pin<Box<dyn Stream<Item = Result<CommitStreamResponse, tonic::Status>> + Send>>;
-
-    async fn stream_commits(
-        &self,
-        _request: Request<Streaming<CommitStreamRequest>>,
-    ) -> Result<Response<Self::StreamCommitsStream>, tonic::Status> {
-        // TODO: Implement stream_commits for observer nodes
-        Err(tonic::Status::unimplemented(
-            "stream_commits not yet implemented for observers",
         ))
     }
 
