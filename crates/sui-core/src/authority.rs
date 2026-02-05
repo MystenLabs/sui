@@ -4183,12 +4183,16 @@ impl AuthorityState {
         if expensive_safety_check_config.enable_secondary_index_checks()
             && let Some(indexes) = self.indexes.clone()
         {
-            verify_indexes(self.get_global_state_hash_store().as_ref(), indexes.clone())
+            verify_indexes(self.get_global_state_hash_store().as_ref(), indexes)
                 .expect("secondary indexes are inconsistent");
+        }
 
-            // Verify all checkpointed transactions are present in transactions_seq.
-            // This catches any post-processing gaps that could occur if async
-            // post-processing failed to complete before persistence.
+        // Verify all checkpointed transactions are present in transactions_seq.
+        // This catches any post-processing gaps that could occur if async
+        // post-processing failed to complete before persistence.
+        // This runs whenever indexes are enabled (not gated on enable_secondary_index_checks)
+        // because it is cheap and critical for async post-processing correctness.
+        if let Some(indexes) = self.indexes.clone() {
             info!("Verifying all checkpointed transactions are in transactions_seq");
             let highest_executed = self
                 .checkpoint_store

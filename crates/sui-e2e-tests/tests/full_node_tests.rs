@@ -26,8 +26,8 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_test_transaction_builder::{
     TestTransactionBuilder, batch_make_transfer_transactions, create_nft, delete_nft,
-    increment_counter, publish_basics_package, publish_basics_package_and_make_counter,
-    publish_nfts_package,
+    increment_counter, make_transfer_sui_transaction, publish_basics_package,
+    publish_basics_package_and_make_counter, publish_nfts_package,
 };
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{FullObjectRef, ObjectID, SuiAddress, TransactionDigest};
@@ -1449,39 +1449,38 @@ async fn publish_init_events_without_local_execution() {
 /// Verifies that async post-processing produces the same index results as synchronous
 /// post-processing. Spawns two fullnodes (one async, one sync), executes a workload,
 /// restarts the async fullnode, and triggers reconfiguration which runs
-/// check_system_consistency with secondary index checks enabled.
+/// check_system_consistency (including the transactions_seq verification).
 #[sim_test]
 async fn test_async_post_processing_index_consistency() -> Result<(), anyhow::Error> {
-    let safety_config =
-        sui_config::node::ExpensiveSafetyCheckConfig::new_enable_all_with_secondary_index_checks();
-
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     // Spawn async fullnode (default behavior)
     let async_fn_config = test_cluster
         .fullnode_config_builder()
-        .with_expensive_safety_check_config(safety_config.clone())
         .build(&mut OsRng, test_cluster.swarm.config());
     let async_fullnode = test_cluster
         .start_fullnode_from_config(async_fn_config)
         .await;
     let async_fn_name = async_fullnode.sui_node.state().name;
+    // Drop the handle so we don't hold a reference to the Arc<SuiNode> across restarts
+    drop(async_fullnode);
 
     // Spawn sync fullnode
     let sync_fn_config = test_cluster
         .fullnode_config_builder()
-        .with_expensive_safety_check_config(safety_config)
         .with_sync_post_process_one_tx(true)
         .build(&mut OsRng, test_cluster.swarm.config());
     let sync_fullnode = test_cluster
         .start_fullnode_from_config(sync_fn_config)
         .await;
-    let _sync_fn_name = sync_fullnode.sui_node.state().name;
+    let sync_fn_name = sync_fullnode.sui_node.state().name;
+    drop(sync_fullnode);
 
-    // Execute some transactions
+    // Execute some transactions (TransferSui to self, never runs out of objects)
     let context = &test_cluster.wallet;
     for _ in 0..5 {
-        transfer_coin(context).await?;
+        let txn = make_transfer_sui_transaction(context, None, None).await;
+        context.execute_transaction_must_succeed(txn).await;
     }
 
     // Wait for fullnodes to catch up
@@ -1495,21 +1494,24 @@ async fn test_async_post_processing_index_consistency() -> Result<(), anyhow::Er
 
     // Execute more transactions after restart
     for _ in 0..5 {
-        transfer_coin(context).await?;
+        let txn = make_transfer_sui_transaction(context, None, None).await;
+        context.execute_transaction_must_succeed(txn).await;
     }
 
     // Wait for fullnodes to catch up
     sleep(Duration::from_secs(5)).await;
 
-    // Trigger reconfiguration which calls check_system_consistency with
-    // enable_secondary_index_checks on both fullnodes. This verifies that every
-    // checkpointed transaction has a corresponding entry in transactions_seq.
+    // Trigger reconfiguration which calls check_system_consistency on all nodes.
+    // This runs our transactions_seq verification, asserting that every
+    // checkpointed transaction is present in the index.
     test_cluster.trigger_reconfiguration().await;
 
     // Compare sequence numbers between the two fullnodes to verify they indexed
     // the same number of transactions.
-    let async_state = async_fullnode.sui_node.state();
-    let sync_state = sync_fullnode.sui_node.state();
+    let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
+    let sync_node = test_cluster.swarm.node(&sync_fn_name).unwrap();
+    let async_state = async_node.get_node_handle().unwrap().state();
+    let sync_state = sync_node.get_node_handle().unwrap().state();
     let async_next_seq = async_state
         .indexes
         .as_ref()
@@ -1534,15 +1536,18 @@ async fn test_async_post_processing_index_consistency() -> Result<(), anyhow::Er
     test_cluster.start_node(&async_fn_name).await;
 
     for _ in 0..3 {
-        transfer_coin(context).await?;
+        let txn = make_transfer_sui_transaction(context, None, None).await;
+        context.execute_transaction_must_succeed(txn).await;
     }
 
     sleep(Duration::from_secs(5)).await;
     test_cluster.trigger_reconfiguration().await;
 
     // Verify index counts still match after second restart+reconfiguration
-    let async_state = async_fullnode.sui_node.state();
-    let sync_state = sync_fullnode.sui_node.state();
+    let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
+    let sync_node = test_cluster.swarm.node(&sync_fn_name).unwrap();
+    let async_state = async_node.get_node_handle().unwrap().state();
+    let sync_state = sync_node.get_node_handle().unwrap().state();
     let async_next_seq = async_state
         .indexes
         .as_ref()
