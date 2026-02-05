@@ -138,9 +138,14 @@ impl BigTableClient {
         if let Some(timeout) = timeout {
             endpoint = endpoint.timeout(timeout);
         }
+        // Prefer GOOGLE_CLOUD_PROJECT env var (needed for cross-project workload identity)
+        // Fall back to token provider's project (from metadata server or SA JSON)
+        let project_id = std::env::var("GOOGLE_CLOUD_PROJECT")
+            .ok()
+            .unwrap_or(token_provider.project_id().await?.to_string());
         let table_prefix = format!(
             "projects/{}/instances/{}/tables/",
-            token_provider.project_id().await?,
+            project_id,
             instance_id
         );
         let auth_channel = AuthChannel {
