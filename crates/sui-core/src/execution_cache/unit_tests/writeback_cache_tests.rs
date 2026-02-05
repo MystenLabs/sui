@@ -992,12 +992,13 @@ async fn test_concurrent_readers() {
 #[tokio::test]
 async fn latest_object_cache_race_test() {
     telemetry_subscribers::init_for_testing();
-    let authority = TestAuthorityBuilder::new().build().await;
-
-    let store = authority.database_for_testing().clone();
 
     static METRICS: once_cell::sync::Lazy<Arc<ExecutionCacheMetrics>> =
         once_cell::sync::Lazy::new(|| Arc::new(ExecutionCacheMetrics::new(default_registry())));
+
+    let authority = TestAuthorityBuilder::new().build().await;
+
+    let store = authority.database_for_testing().clone();
 
     let cache = Arc::new(WritebackCache::new(
         &Default::default(),
