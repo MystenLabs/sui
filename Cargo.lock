@@ -422,6 +422,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-multiprovider-strategy"
+version = "0.1.0"
+source = "git+https://github.com/0xsiddharthks/alloy-multiprovider-strategy?rev=0f8d034e679631a715f9eed104089430ae57283a#0f8d034e679631a715f9eed104089430ae57283a"
+dependencies = [
+ "alloy-json-rpc",
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-client",
+ "alloy-transport",
+ "alloy-transport-http",
+ "futures",
+ "parking_lot 0.12.3",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower 0.5.2",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "alloy-network"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14337,6 +14361,7 @@ name = "sui-bridge"
 version = "1.66.0"
 dependencies = [
  "alloy",
+ "alloy-multiprovider-strategy",
  "anyhow",
  "arc-swap",
  "async-trait",
