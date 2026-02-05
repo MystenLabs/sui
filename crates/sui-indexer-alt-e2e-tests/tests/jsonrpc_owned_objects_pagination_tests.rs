@@ -67,6 +67,54 @@ async fn test_owned_objects_pagination_limit_and_cursor() {
     assert!(!has_next_page);
 }
 
+/// Simple test combining filtering by type params with cursors.
+#[tokio::test]
+async fn test_owned_objects_pagination_by_type_params() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (owner, _) = get_account_key_pair();
+
+    for i in 0..5 {
+        create_bag(&mut cluster, owner, i);
+        create_coin(&mut cluster, owner, i);
+        create_coin(&mut cluster, owner, i + 1);
+    }
+
+    cluster.create_checkpoint().await;
+
+    let Response {
+        result: Page {
+            data, next_cursor, ..
+        },
+    } = owned_objects(
+        &cluster,
+        owner,
+        json!({"StructType": "0x2::coin::Coin<0x2::sui::SUI>"}),
+        None,
+        2,
+    )
+    .await;
+
+    assert_eq!(data.len(), 2);
+
+    let Response {
+        result: Page {
+            data,
+            has_next_page,
+            ..
+        },
+    } = owned_objects(
+        &cluster,
+        owner,
+        json!({"StructType": "0x2::coin::Coin<0x2::sui::SUI>"}),
+        next_cursor,
+        8,
+    )
+    .await;
+
+    assert_eq!(data.len(), 8);
+    assert!(!has_next_page);
+}
+
 // /// Paginate through owned objects with a type filter using cursors from responses.
 // #[tokio::test]
 // async fn test_owned_objects_pagination_with_type_filter() {
