@@ -133,24 +133,6 @@ impl BigtableReader {
         measure("objects", &keys, self.0.clone().get_objects(keys)).await
     }
 
-    /// Get the latest version of a single object by ID.
-    pub(crate) async fn latest_object(&self, id: &ObjectID) -> anyhow::Result<Option<Object>> {
-        measure("latest_object", id, self.0.clone().get_latest_object(id)).await
-    }
-
-    /// Multi-get latest objects by object ID.
-    /// Note: This calls get_latest_object for each ID sequentially since the underlying
-    /// BigTable client doesn't have a batch method for latest objects.
-    pub(crate) async fn latest_objects(&self, ids: &[ObjectID]) -> anyhow::Result<Vec<Object>> {
-        let mut results = Vec::with_capacity(ids.len());
-        for id in ids {
-            if let Some(obj) = self.latest_object(id).await? {
-                results.push(obj);
-            }
-        }
-        Ok(results)
-    }
-
     // Multi-get events from transactions.
     pub(crate) async fn transactions_events(
         &self,
