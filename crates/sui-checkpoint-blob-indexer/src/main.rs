@@ -151,6 +151,11 @@ struct Args {
     #[arg(long)]
     gradient2_long_window: Option<usize>,
 
+    /// Gradient2 multiplicative backoff on drops, in [0.5, 1.0] (default: 0.9).
+    /// Set to 1.0 to disable.
+    #[arg(long)]
+    gradient2_backoff_ratio: Option<f64>,
+
     /// Enable Gradient2 dynamic ingestion concurrency with this initial limit.
     /// When set, takes priority over both --ingest-concurrency and --ingest-aimd-*.
     #[arg(long)]
@@ -179,6 +184,11 @@ struct Args {
     /// Ingestion Gradient2 long-term RTT EMA window size (default: 600)
     #[arg(long)]
     ingest_gradient2_long_window: Option<usize>,
+
+    /// Ingestion Gradient2 multiplicative backoff on drops (default: 0.9).
+    /// Set to 1.0 to disable.
+    #[arg(long)]
+    ingest_gradient2_backoff_ratio: Option<f64>,
 
     #[command(flatten)]
     metrics_args: MetricsArgs,
@@ -309,6 +319,9 @@ async fn main() -> anyhow::Result<()> {
         if let Some(v) = args.gradient2_long_window {
             g2.long_window = v;
         }
+        if let Some(v) = args.gradient2_backoff_ratio {
+            g2.backoff_ratio = v;
+        }
         config.committer.gradient2 = Some(g2);
     }
 
@@ -360,6 +373,9 @@ async fn main() -> anyhow::Result<()> {
         }
         if let Some(v) = args.ingest_gradient2_long_window {
             g2.long_window = v;
+        }
+        if let Some(v) = args.ingest_gradient2_backoff_ratio {
+            g2.backoff_ratio = v;
         }
         ingestion_config.gradient2 = Some(g2);
     }

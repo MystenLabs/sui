@@ -171,6 +171,11 @@ pub struct Gradient2Config {
     pub tolerance: f64,
     /// Window size for the long-term RTT exponential moving average.
     pub long_window: usize,
+    /// Multiplicative decrease factor on drops, in `[0.5, 1.0]`. Protects against fast-throttle
+    /// scenarios (e.g. HTTP 429) where the server rejects quickly, producing low RTT that the
+    /// gradient would misinterpret as healthy. Set to `1.0` to disable and use pure
+    /// Netflix-style gradient-only behavior.
+    pub backoff_ratio: f64,
 }
 
 impl Default for Gradient2Config {
@@ -183,6 +188,7 @@ impl Default for Gradient2Config {
             queue_size: 4,
             tolerance: 1.5,
             long_window: 600,
+            backoff_ratio: 0.9,
         }
     }
 }
@@ -281,6 +287,19 @@ impl Limit for Gradient2Limit {
 
     fn on_sample(&self, outcome: Outcome, rtt: Duration) {
         if matches!(outcome, Outcome::Ignore) {
+            return;
+        }
+
+        // On drops, apply multiplicative backoff instead of the gradient. This avoids
+        // contaminating the long RTT EMA with artificially low RTTs from fast throttle
+        // responses (e.g. HTTP 429), which the gradient would misread as healthy.
+        if matches!(outcome, Outcome::Dropped) && self.config.backoff_ratio < 1.0 {
+            let mut state = self.inner.lock().unwrap();
+            state.estimated_limit = (state.estimated_limit * self.config.backoff_ratio)
+                .max(self.config.min_limit as f64);
+            let clamped = (state.estimated_limit as usize)
+                .clamp(self.config.min_limit, self.config.max_limit);
+            let _ = self.tx.send(clamped);
             return;
         }
 
@@ -572,6 +591,7 @@ mod tests {
             queue_size: 4,
             tolerance: 1.5,
             long_window: 600,
+            backoff_ratio: 0.9,
         }
     }
 
@@ -594,10 +614,7 @@ mod tests {
             initial_limit: 100,
             min_limit: 5,
             max_limit: 200,
-            smoothing: 0.2,
-            queue_size: 4,
-            tolerance: 1.5,
-            long_window: 600,
+            ..default_g2_config()
         };
         let (limiter, _rx) = Gradient2Limit::new(config);
         simulate_inflight(&limiter, 100);
@@ -640,8 +657,8 @@ mod tests {
             max_limit: 15,
             smoothing: 1.0, // aggressive smoothing to hit bounds fast
             queue_size: 10,
-            tolerance: 1.5,
             long_window: 10,
+            ..default_g2_config()
         };
         let (limiter, _rx) = Gradient2Limit::new(config);
         simulate_inflight(&limiter, 15);
@@ -674,6 +691,60 @@ mod tests {
 
         limiter.on_sample(Outcome::Ignore, Duration::from_millis(50));
         assert_eq!(limiter.current(), initial);
+    }
+
+    #[test]
+    fn gradient2_drop_backoff_reduces_limit() {
+        let (limiter, _rx) = Gradient2Limit::new(default_g2_config());
+        simulate_inflight(&limiter, 20);
+        assert_eq!(limiter.current(), 20);
+
+        // A drop should reduce limit by backoff_ratio (0.9)
+        limiter.on_sample(Outcome::Dropped, Duration::from_millis(1));
+        // floor(20 * 0.9) = 18
+        assert_eq!(limiter.current(), 18);
+
+        limiter.on_sample(Outcome::Dropped, Duration::from_millis(1));
+        // floor(18 * 0.9) = 16
+        assert_eq!(limiter.current(), 16);
+    }
+
+    #[test]
+    fn gradient2_drop_backoff_respects_min() {
+        let config = Gradient2Config {
+            initial_limit: 6,
+            min_limit: 5,
+            ..default_g2_config()
+        };
+        let (limiter, _rx) = Gradient2Limit::new(config);
+
+        // floor(6 * 0.9) = 5, at min
+        limiter.on_sample(Outcome::Dropped, Duration::from_millis(1));
+        assert_eq!(limiter.current(), 5);
+
+        // Should not go below min
+        limiter.on_sample(Outcome::Dropped, Duration::from_millis(1));
+        assert_eq!(limiter.current(), 5);
+    }
+
+    #[test]
+    fn gradient2_drop_backoff_disabled_at_1() {
+        let config = Gradient2Config {
+            backoff_ratio: 1.0,
+            ..default_g2_config()
+        };
+        let (limiter, _rx) = Gradient2Limit::new(config);
+        simulate_inflight(&limiter, 20);
+
+        // With backoff_ratio=1.0, drops fall through to the gradient calculation.
+        // A very fast drop RTT with tolerance=1.5 gives gradient clamped to 1.0,
+        // so the limit should not decrease.
+        let initial = limiter.current();
+        limiter.on_sample(Outcome::Dropped, Duration::from_millis(1));
+        assert!(
+            limiter.current() >= initial,
+            "With backoff disabled, fast drop should not decrease limit"
+        );
     }
 
     #[test]
