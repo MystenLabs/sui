@@ -405,6 +405,16 @@ impl CheckpointExecutor {
 
         let seq = ckpt_state.data.checkpoint.sequence_number;
 
+        // Wait for all post-processing to complete before persisting transaction outputs.
+        // This ensures that if we crash after persistence, post-processing is guaranteed
+        // complete — so on restart, skipping re-execution of already-persisted transactions
+        // does not lose post-processing work.
+        for tx_digest in &ckpt_state.data.tx_digests {
+            if let Some((_, rx)) = self.state.pending_post_processing().remove(tx_digest) {
+                let _ = rx.await;
+            }
+        }
+
         let batch = self
             .state
             .get_cache_commit()
