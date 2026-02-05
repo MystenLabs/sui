@@ -79,6 +79,13 @@ pub struct NodeConfig {
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
 
+    /// When true, post-processing (JSON-RPC indexing and event emission) runs
+    /// synchronously on the execution path instead of being spawned to a
+    /// background thread. This is the legacy behavior and can be used as a
+    /// rollback mechanism or for testing.
+    #[serde(default)]
+    pub sync_post_process_one_tx: bool,
+
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub remove_deprecated_tables: bool,
 

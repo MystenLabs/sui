@@ -221,6 +221,7 @@ impl ValidatorConfigBuilder {
             consensus_config: Some(consensus_config),
             remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
+            sync_post_process_one_tx: false,
             genesis: sui_config::node::Genesis::new(genesis),
             grpc_load_shed: None,
             grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
@@ -305,6 +306,7 @@ pub struct FullnodeConfigBuilder {
     fw_config: Option<RemoteFirewallConfig>,
     data_ingestion_dir: Option<PathBuf>,
     disable_pruning: bool,
+    sync_post_process_one_tx: bool,
     chain_override: Option<Chain>,
     transaction_driver_config: Option<TransactionDriverConfig>,
     rpc_config: Option<sui_config::RpcConfig>,
@@ -364,6 +366,11 @@ impl FullnodeConfigBuilder {
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Self {
         self.expensive_safety_check_config = Some(expensive_safety_check_config);
+        self
+    }
+
+    pub fn with_sync_post_process_one_tx(mut self, sync: bool) -> Self {
+        self.sync_post_process_one_tx = sync;
         self
     }
 
@@ -556,6 +563,7 @@ impl FullnodeConfigBuilder {
             consensus_config: None,
             remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
+            sync_post_process_one_tx: self.sync_post_process_one_tx,
             genesis: self.genesis.unwrap_or(sui_config::node::Genesis::new(
                 network_config.genesis.clone(),
             )),
