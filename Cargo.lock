@@ -422,6 +422,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-multiprovider-strategy"
+version = "0.1.0"
+source = "git+https://github.com/0xsiddharthks/alloy-multiprovider-strategy?rev=0f8d034e679631a715f9eed104089430ae57283a#0f8d034e679631a715f9eed104089430ae57283a"
+dependencies = [
+ "alloy-json-rpc",
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-client",
+ "alloy-transport",
+ "alloy-transport-http",
+ "futures",
+ "parking_lot 0.12.3",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower 0.5.2",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "alloy-network"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3552,6 +3576,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5a2d6eec27fce550d708b2be5d798797e5a55b246b323ef36924a0001996352"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3788,7 +3821,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.18",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-build",
  "tonic-prost",
  "tonic-rustls",
@@ -6096,7 +6129,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-build",
  "tonic-prost",
  "tonic-prost-build",
@@ -8348,7 +8381,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=dd686f055375aa8fa2145618301bdfd5170a2a6b#dd686f055375aa8fa2145618301bdfd5170a2a6b"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=220d41cd1134316337c0e2228d45805f7d0dea7e#220d41cd1134316337c0e2228d45805f7d0dea7e"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -9545,7 +9578,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.2",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-health",
  "tower 0.5.2",
  "tower-http 0.5.2",
@@ -13933,6 +13966,7 @@ dependencies = [
  "bip32",
  "camino",
  "clap",
+ "clap_complete",
  "codespan-reporting",
  "colored",
  "csv",
@@ -14323,6 +14357,7 @@ name = "sui-bridge"
 version = "1.66.0"
 dependencies = [
  "alloy",
+ "alloy-multiprovider-strategy",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -14369,7 +14404,7 @@ dependencies = [
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tower 0.5.2",
  "tracing",
  "typed-store",
@@ -14395,7 +14430,9 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-sdk",
+ "sui-rpc",
+ "sui-rpc-api",
+ "sui-sdk-types",
  "sui-types",
  "telemetry-subscribers",
  "tokio",
@@ -14874,7 +14911,7 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
  "url",
 ]
@@ -14960,7 +14997,7 @@ dependencies = [
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tower 0.5.2",
  "tower-http 0.5.2",
  "tracing",
@@ -15152,7 +15189,7 @@ dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
  "protox",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-prost",
  "tonic-prost-build",
  "walkdir",
@@ -15200,7 +15237,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "toml 0.7.4",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-health",
  "tonic-reflection",
  "tower 0.5.2",
@@ -15260,7 +15297,7 @@ dependencies = [
  "tempfile",
  "test-cluster",
  "tokio",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
  "url",
  "zstd 0.12.3+zstd.1.5.2",
@@ -15308,7 +15345,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -15359,6 +15396,7 @@ dependencies = [
  "prometheus",
  "prost-types 0.14.1",
  "reqwest",
+ "rustls 0.23.31",
  "serde",
  "serde_json",
  "shared-crypto",
@@ -15381,7 +15419,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml 0.7.4",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tower-http 0.5.2",
  "tracing",
  "url",
@@ -15412,6 +15450,7 @@ dependencies = [
  "pin-project-lite",
  "prometheus",
  "reqwest",
+ "rustls 0.23.31",
  "schemars 0.8.21",
  "serde",
  "serde_json",
@@ -15504,7 +15543,7 @@ dependencies = [
  "sui-types",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
  "url",
 ]
@@ -15770,7 +15809,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tokio",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-reflection",
  "tracing",
 ]
@@ -15783,7 +15822,9 @@ dependencies = [
  "async-trait",
  "base64 0.21.7",
  "bcs",
+ "bytes",
  "clap",
+ "futures",
  "gcp_auth",
  "http 1.3.1",
  "humantime",
@@ -15795,12 +15836,17 @@ dependencies = [
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
+ "sui-keys",
+ "sui-rpc",
  "sui-types",
  "telemetry-subscribers",
+ "test-cluster",
  "tokio",
- "tonic 0.14.2",
+ "tokio-stream",
+ "tonic 0.14.3",
  "tonic-prost",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -15839,7 +15885,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
  "url",
 ]
@@ -15915,6 +15961,7 @@ dependencies = [
  "move-package-alt",
  "move-package-alt-compilation",
  "move-unit-test",
+ "move-vm-config",
  "move-vm-runtime",
  "mysten-metrics",
  "once_cell",
@@ -16117,7 +16164,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-rustls 0.26.2",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-build",
  "tonic-health",
  "tonic-prost",
@@ -16144,6 +16191,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
+ "http 1.3.1",
  "humantime",
  "move-vm-config",
  "mysten-common",
@@ -16176,6 +16224,7 @@ dependencies = [
  "tikv-jemallocator",
  "tokio",
  "tower 0.5.2",
+ "tower-http 0.5.2",
  "tracing",
  "typed-store",
  "url",
@@ -16575,7 +16624,7 @@ dependencies = [
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
 ]
 
@@ -16596,7 +16645,7 @@ dependencies = [
  "sui-sdk-types",
  "tap",
  "tokio",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-prost",
 ]
 
@@ -16642,7 +16691,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-health",
  "tonic-prost",
  "tonic-prost-build",
@@ -16702,7 +16751,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tokio",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
 ]
 
@@ -16941,7 +16990,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml 0.7.4",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
  "ureq",
 ]
@@ -17370,7 +17419,7 @@ dependencies = [
  "tap",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
  "typed-store-error",
  "url",
@@ -17775,7 +17824,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-util 0.7.18",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tracing",
 ]
 
@@ -17928,21 +17977,27 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=dd686f055375aa8fa2145618301bdfd5170a2a6b#dd686f055375aa8fa2145618301bdfd5170a2a6b"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=220d41cd1134316337c0e2228d45805f7d0dea7e#220d41cd1134316337c0e2228d45805f7d0dea7e"
 dependencies = [
+ "arc-swap",
  "bincode 1.3.3",
+ "blake2",
  "bloom",
  "bytes",
  "crc32fast",
+ "libc",
  "lru 0.12.3",
  "memmap2 0.7.1",
  "minibytes",
  "parking_lot 0.12.3",
  "prometheus",
  "rand 0.8.5",
+ "rayon",
  "serde",
+ "serde_yaml 0.9.21",
  "smallvec",
- "tokio",
+ "strum 0.26.3",
+ "typenum",
 ]
 
 [[package]]
@@ -18377,9 +18432,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.14.2"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb7613188ce9f7df5bfe185db26c5814347d110db17920415cf2fbcad85e7203"
+checksum = "a286e33f82f8a1ee2df63f4fa35c0becf4a85a0cb03091a15fd7bf0b402dc94a"
 dependencies = [
  "async-trait",
  "axum 0.8.3",
@@ -18430,7 +18485,7 @@ dependencies = [
  "prost 0.14.1",
  "tokio",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-prost",
 ]
 
@@ -18442,7 +18497,7 @@ checksum = "66bd50ad6ce1252d87ef024b3d64fe4c3cf54a86fb9ef4c631fdd0ded7aeaa67"
 dependencies = [
  "bytes",
  "prost 0.14.1",
- "tonic 0.14.2",
+ "tonic 0.14.3",
 ]
 
 [[package]]
@@ -18471,7 +18526,7 @@ dependencies = [
  "prost-types 0.14.1",
  "tokio",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tonic-prost",
 ]
 
@@ -18495,7 +18550,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.2",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
@@ -18514,7 +18569,7 @@ dependencies = [
  "http-body 1.0.1",
  "pin-project",
  "tokio-stream",
- "tonic 0.14.2",
+ "tonic 0.14.3",
  "tower-layer",
  "tower-service",
  "tracing",

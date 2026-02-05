@@ -35,7 +35,7 @@ use sui_types::storage::{
     ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
+use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
     object::Owner,
@@ -608,18 +608,8 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// from consensus or checkpoints.
     fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>);
 
-    /// Attempt to acquire object locks for all of the owned input locks.
-    fn acquire_transaction_locks(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
-        signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult;
-
     /// Validate owned object versions and digests without acquiring locks.
-    /// Used when preconsensus locking is disabled to validate objects without locking,
-    /// since locking happens post-consensus in that mode.
+    /// Used to validate transaction input before submitting or voting to accept the transaction.
     fn validate_owned_object_versions(&self, owned_input_objects: &[ObjectRef]) -> SuiResult;
 
     /// Write an object entry directly to the cache for testing.

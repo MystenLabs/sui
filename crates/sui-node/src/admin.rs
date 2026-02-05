@@ -10,6 +10,7 @@ use axum::{
 };
 use base64::Engine;
 use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::traits::ToFromBytes;
 use humantime::parse_duration;
 use mysten_network::Multiaddr;
 use serde::Deserialize;
@@ -21,7 +22,7 @@ use std::{
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_types::{
     base_types::AuthorityName,
-    crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
+    crypto::{NetworkPublicKey, RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
     digests::TransactionDigest,
     error::SuiErrorKind,
     traffic_control::TrafficControlReconfigParams,
@@ -84,7 +85,9 @@ use tracing::info;
 // Update endpoint address(es) for a peer
 //
 //  $ curl -X POST 'http://127.0.0.1:1337/update-endpoint?endpoint_type=p2p&id=<hex_encoded_peer_id>&addresses=<multiaddr1>,<multiaddr2>'
+//  $ curl -X POST 'http://127.0.0.1:1337/update-endpoint?endpoint_type=consensus&id=<hex_encoded_network_pubkey>&addresses=<multiaddr1>,<multiaddr2>'
 
+const NO_TRACING_HANDLE: &str = "tracing handle not available";
 const LOGGING_ROUTE: &str = "/logging";
 const TRACING_ROUTE: &str = "/enable-tracing";
 const TRACING_RESET_ROUTE: &str = "/reset-tracing";
@@ -103,11 +106,18 @@ const UPDATE_ENDPOINT: &str = "/update-endpoint";
 
 struct AppState {
     node: Arc<SuiNode>,
-    tracing_handle: TracingHandle,
+    tracing_handle: Option<TracingHandle>,
 }
 
-pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: TracingHandle) {
-    let filter = tracing_handle.get_log().unwrap();
+pub async fn run_admin_server(
+    node: Arc<SuiNode>,
+    port: u16,
+    tracing_handle: Option<TracingHandle>,
+) {
+    let filter = tracing_handle
+        .as_ref()
+        .and_then(|h| h.get_log().ok())
+        .unwrap_or_else(|| NO_TRACING_HANDLE.to_string());
 
     let app_state = AppState {
         node,
@@ -183,6 +193,10 @@ async fn enable_tracing(
     State(state): State<Arc<AppState>>,
     query: Query<EnableTracing>,
 ) -> (StatusCode, String) {
+    let Some(tracing_handle) = &state.tracing_handle else {
+        return (StatusCode::UNPROCESSABLE_ENTITY, NO_TRACING_HANDLE.into());
+    };
+
     let Query(EnableTracing {
         filter,
         duration,
@@ -193,12 +207,12 @@ async fn enable_tracing(
     let mut response = Vec::new();
 
     if let Some(sample_rate) = sample_rate {
-        state.tracing_handle.update_sampling_rate(sample_rate);
+        tracing_handle.update_sampling_rate(sample_rate);
         response.push(format!("sample rate set to {:?}", sample_rate));
     }
 
     if let Some(trace_file) = trace_file {
-        if let Err(err) = state.tracing_handle.update_trace_file(&trace_file) {
+        if let Err(err) = tracing_handle.update_trace_file(&trace_file) {
             response.push(format!("can't update trace file: {:?}", err));
             return (StatusCode::BAD_REQUEST, response.join("\n"));
         } else {
@@ -221,7 +235,7 @@ async fn enable_tracing(
         return (StatusCode::BAD_REQUEST, response.join("\n"));
     };
 
-    match state.tracing_handle.update_trace_filter(&filter, duration) {
+    match tracing_handle.update_trace_filter(&filter, duration) {
         Ok(()) => {
             response.push(format!("filter set to {:?}", filter));
             response.push(format!("filter will be reset after {:?}", duration));
@@ -235,7 +249,10 @@ async fn enable_tracing(
 }
 
 async fn reset_tracing(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
-    state.tracing_handle.reset_trace();
+    let Some(tracing_handle) = &state.tracing_handle else {
+        return (StatusCode::UNPROCESSABLE_ENTITY, NO_TRACING_HANDLE.into());
+    };
+    tracing_handle.reset_trace();
     (
         StatusCode::OK,
         "tracing filter reset to TRACE_FILTER env var".into(),
@@ -243,7 +260,10 @@ async fn reset_tracing(State(state): State<Arc<AppState>>) -> (StatusCode, Strin
 }
 
 async fn get_filter(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
-    match state.tracing_handle.get_log() {
+    let Some(tracing_handle) = &state.tracing_handle else {
+        return (StatusCode::UNPROCESSABLE_ENTITY, NO_TRACING_HANDLE.into());
+    };
+    match tracing_handle.get_log() {
         Ok(filter) => (StatusCode::OK, filter),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
@@ -253,7 +273,10 @@ async fn set_filter(
     State(state): State<Arc<AppState>>,
     new_filter: String,
 ) -> (StatusCode, String) {
-    match state.tracing_handle.update_log(&new_filter) {
+    let Some(tracing_handle) = &state.tracing_handle else {
+        return (StatusCode::UNPROCESSABLE_ENTITY, NO_TRACING_HANDLE.into());
+    };
+    match tracing_handle.update_log(&new_filter) {
         Ok(()) => {
             info!(filter =% new_filter, "Log filter updated");
             (StatusCode::OK, "".into())
@@ -568,6 +591,29 @@ async fn update_endpoint(
 
             EndpointId::P2p(anemo::PeerId(peer_id_bytes))
         }
+        "consensus" => {
+            let network_pubkey_bytes = match Hex::decode(&id) {
+                Ok(bytes) => bytes,
+                Err(err) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        format!("Invalid id hex encoding: {err}"),
+                    );
+                }
+            };
+
+            let network_pubkey = match NetworkPublicKey::from_bytes(&network_pubkey_bytes) {
+                Ok(key) => key,
+                Err(err) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        format!("Invalid network public key: {err:?}"),
+                    );
+                }
+            };
+
+            EndpointId::Consensus(network_pubkey)
+        }
         _ => {
             return (
                 StatusCode::BAD_REQUEST,
@@ -592,11 +638,14 @@ async fn update_endpoint(
             }
         }
     }
-    state.node.endpoint_manager().update_endpoint(
+
+    if let Err(e) = state.node.endpoint_manager().update_endpoint(
         endpoint_id,
         AddressSource::Admin,
         parsed_addresses.clone(),
-    );
+    ) {
+        return (StatusCode::BAD_REQUEST, e.to_string());
+    }
 
     (
         StatusCode::OK,

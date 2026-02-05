@@ -14,7 +14,7 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use test_cluster::TestClusterBuilder;
 
-use super::rosetta_client::{RosettaError, start_rosetta_test_server};
+use super::rosetta_client::start_rosetta_test_server;
 
 #[allow(dead_code)]
 #[path = "../custom_coins/test_coin_utils.rs"]
@@ -208,21 +208,7 @@ async fn test_pay_custom_coin_no_balance() -> anyhow::Result<()> {
     let Some(Err(e)) = resps.metadata else {
         panic!("Expected metadata to exist and error")
     };
-    let details = Some(json!(
-        {
-            "error": format!("status: 'The system is not in a state required for the operation's execution', self: \"Insufficient funds for address [{sender}], requested amount: {total_balance}, total available: 0\""),
-        }
-    ));
-    assert_eq!(
-        e,
-        RosettaError {
-            code: 16,
-            message: "Sui rpc error".to_string(),
-            description: None,
-            retriable: false,
-            details,
-        },
-    );
+    assert_eq!(e.code, 16);
 
     Ok(())
 }

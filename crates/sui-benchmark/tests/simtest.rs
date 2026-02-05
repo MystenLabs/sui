@@ -1161,9 +1161,13 @@ mod test {
 
         // Create fullnode proxy for RPC reads
         let fullnode_proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &metrics)
-                .await
-                .unwrap(),
+            FullNodeProxy::from_url(
+                &test_cluster.fullnode_handle.rpc_url,
+                &genesis.committee(),
+                &metrics,
+            )
+            .await
+            .unwrap(),
         );
         let fullnode_proxies = vec![fullnode_proxy.clone()];
 

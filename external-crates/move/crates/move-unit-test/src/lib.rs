@@ -6,8 +6,9 @@ pub mod cargo_runner;
 pub mod extensions;
 pub mod test_reporter;
 pub mod test_runner;
+pub mod vm_test_setup;
 
-use crate::test_runner::TestRunner;
+use crate::{test_runner::TestRunner, vm_test_setup::VMTestSetup};
 use anyhow::{Result, bail};
 use clap::*;
 use move_binary_format::CompiledModule;
@@ -20,9 +21,6 @@ use move_compiler::{
     unit_test::{self, TestPlan},
 };
 use move_core_types::language_storage::ModuleId;
-use move_vm_runtime::{
-    dev_utils::gas_schedule::CostTable, natives::functions::NativeFunctionTable,
-};
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex};
 
 /// The default value bounding the amount of gas consumed in a test.
@@ -227,11 +225,10 @@ impl UnitTestingConfig {
 
     /// Public entry point to Move unit testing as a library
     /// Returns `true` if all unit tests passed. Otherwise, returns `false`.
-    pub fn run_and_report_unit_tests<W: Write + Send>(
+    pub fn run_and_report_unit_tests<V: VMTestSetup + Sync, W: Write + Send>(
         &self,
         test_plan: TestPlan,
-        native_function_table: Option<NativeFunctionTable>,
-        cost_table: Option<CostTable>,
+        vm_test_setup: V,
         writer: W,
     ) -> Result<(W, bool)> {
         let shared_writer = Mutex::new(writer);
@@ -283,8 +280,7 @@ impl UnitTestingConfig {
             self.deterministic_generation,
             trace_location,
             test_plan,
-            native_function_table,
-            cost_table,
+            vm_test_setup,
         )
         .unwrap();
 

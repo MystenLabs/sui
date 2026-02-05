@@ -2,12 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    NativeFunctionRecord,
-    sandbox::utils::{
-        contains_module, explain_execution_error, get_gas_status, is_bytecode_file,
-        on_disk_state_view::OnDiskStateView,
-    },
+use crate::sandbox::utils::{
+    contains_module, explain_execution_error, is_bytecode_file, on_disk_state_view::OnDiskStateView,
 };
 use anyhow::{Result, anyhow, bail};
 use move_binary_format::file_format::CompiledModule;
@@ -18,16 +14,14 @@ use move_core_types::{
     runtime_value::{MoveValue, serialize_values},
 };
 use move_package_alt_compilation::compiled_package::CompiledPackage;
+use move_unit_test::vm_test_setup::VMTestSetup;
 use move_vm_runtime::{
-    dev_utils::{gas_schedule::CostTable, vm_arguments::ValueFrame},
-    natives::functions::NativeFunctions,
-    runtime::MoveRuntime,
+    dev_utils::vm_arguments::ValueFrame, natives::functions::NativeFunctions, runtime::MoveRuntime,
 };
 use std::{fs, path::Path};
 
-pub fn run(
-    natives: impl IntoIterator<Item = NativeFunctionRecord>,
-    cost_table: &CostTable,
+pub fn run<V: VMTestSetup>(
+    vm_test_setup: V,
     state: &OnDiskStateView,
     _package: &CompiledPackage,
     module_file: &Path,
@@ -50,10 +44,10 @@ pub fn run(
     );
     let bytecode = fs::read(module_file)?;
 
-    let natives = NativeFunctions::new(natives)?;
+    let natives = NativeFunctions::new(vm_test_setup.native_function_table())?;
     let runtime = MoveRuntime::new_with_default_config(natives);
 
-    let mut gas_status = get_gas_status(cost_table, gas_budget)?;
+    let mut gas_status = vm_test_setup.new_meter(gas_budget);
 
     let script_type_parameters = vec![];
     let script_parameters = vec![];

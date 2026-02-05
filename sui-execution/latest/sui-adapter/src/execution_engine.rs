@@ -14,6 +14,7 @@ mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
     use mysten_common::debug_fatal;
+    use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
@@ -303,7 +304,7 @@ mod checked {
         )
         .map_err(|(e, _)| e)?;
         temporary_store.update_object_version_and_prev_tx();
-        Ok(temporary_store.into_inner())
+        Ok(temporary_store.into_inner(BTreeMap::new()))
     }
 
     #[instrument(name = "tx_execute", level = "debug", skip_all)]

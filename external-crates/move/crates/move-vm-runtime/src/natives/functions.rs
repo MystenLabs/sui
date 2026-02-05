@@ -260,30 +260,12 @@ impl<'b> NativeContext<'_, 'b, '_> {
         self.vtables.type_to_runtime_type_tag(ty)
     }
 
-    pub fn type_tag_to_type_layout(
-        &self,
-        ty: &TypeTag,
-    ) -> PartialVMResult<Option<R::MoveTypeLayout>> {
-        match self.vtables.get_type_layout(ty) {
-            Ok(ty_layout) => Ok(Some(ty_layout)),
-            Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => {
-                Err(e.to_partial())
-            }
-            Err(_) => Ok(None),
-        }
+    pub fn type_tag_to_type_layout(&self, ty: &TypeTag) -> Option<R::MoveTypeLayout> {
+        self.vtables.get_type_layout(ty).ok()
     }
 
-    pub fn type_tag_to_annotated_type_layout(
-        &self,
-        ty: &TypeTag,
-    ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
-        match self.vtables.get_fully_annotated_type_layout(ty) {
-            Ok(ty_layout) => Ok(Some(ty_layout)),
-            Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => {
-                Err(e.to_partial())
-            }
-            Err(_) => Ok(None),
-        }
+    pub fn type_tag_to_annotated_type_layout(&self, ty: &TypeTag) -> Option<A::MoveTypeLayout> {
+        self.vtables.get_fully_annotated_type_layout(ty).ok()
     }
 
     pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<R::MoveTypeLayout>> {

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    DEFAULT_BUILD_DIR, Move, NativeFunctionRecord,
+    DEFAULT_BUILD_DIR, Move,
     sandbox::{
         self,
         utils::{PackageContext, on_disk_state_view::OnDiskStateView},
@@ -15,7 +15,8 @@ use move_core_types::parsing::values::ParsedValue;
 use move_core_types::{language_storage::TypeTag, runtime_value::MoveValue};
 use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::layout::CompiledPackageLayout;
-use move_vm_runtime::{dev_utils::gas_schedule::CostTable, shared::types::VersionId};
+use move_unit_test::vm_test_setup::VMTestSetup;
+use move_vm_runtime::shared::types::VersionId;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -158,10 +159,9 @@ pub struct StructLayoutOptions {
 }
 
 impl SandboxCommand {
-    pub async fn handle_command<F: MoveFlavor>(
+    pub async fn handle_command<F: MoveFlavor, V: VMTestSetup>(
         &self,
-        natives: Vec<NativeFunctionRecord>,
-        cost_table: &CostTable,
+        vm_test_setup: V,
         move_args: &Move,
         storage_dir: &Path,
     ) -> Result<()> {
@@ -172,8 +172,7 @@ impl SandboxCommand {
                         .await?;
                 let state = context.prepare_state(storage_dir)?;
                 sandbox::commands::publish(
-                    natives,
-                    cost_table,
+                    vm_test_setup,
                     &state,
                     context.package(),
                     at,
@@ -193,8 +192,7 @@ impl SandboxCommand {
                         .await?;
                 let state = context.prepare_state(storage_dir)?;
                 sandbox::commands::run(
-                    natives,
-                    cost_table,
+                    vm_test_setup,
                     &state,
                     context.package(),
                     module_file,

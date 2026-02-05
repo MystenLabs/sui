@@ -2,20 +2,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{UnitTestingConfig, vm_test_setup::VMTestSetup};
 use move_command_line_common::files::find_filenames;
-use move_vm_runtime::{
-    dev_utils::gas_schedule::CostTable, natives::functions::NativeFunctionTable,
-};
 
-use crate::UnitTestingConfig;
-
-pub fn run_tests_with_config_and_filter(
+pub fn run_tests_with_config_and_filter<V: VMTestSetup + Sync>(
     mut config: UnitTestingConfig,
     root_path: &str,
     source_pattern: &str,
     dep_root: Option<&str>,
-    native_function_table: Option<NativeFunctionTable>,
-    cost_table: Option<CostTable>,
+    vm_test_setup: V,
 ) {
     let get_files = |root_path, pat| {
         let source_re = regex::Regex::new(pat)
@@ -36,12 +31,7 @@ pub fn run_tests_with_config_and_filter(
     let test_plan = config.build_test_plan().expect("Unable to build test plan");
 
     let (_, all_tests_passed) = config
-        .run_and_report_unit_tests(
-            test_plan,
-            native_function_table,
-            cost_table,
-            std::io::stdout(),
-        )
+        .run_and_report_unit_tests(test_plan, vm_test_setup, std::io::stdout())
         .expect("Failed to execute tests");
 
     // If all tests passed, exit with 0 otherwise with a non-zero exit code.

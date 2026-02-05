@@ -65,7 +65,7 @@ pub struct VMError(Box<VMError_>);
 struct VMError_ {
     major_status: StatusCode,
     sub_status: Option<u64>,
-    message: Option<String>,
+    message: Option<Box<str>>,
     exec_state: Option<ExecutionState>,
     location: Location,
     indices: Vec<(IndexKind, TableIndex)>,
@@ -83,8 +83,8 @@ impl VMError {
         self.0.sub_status
     }
 
-    pub fn message(&self) -> Option<&String> {
-        self.0.message.as_ref()
+    pub fn message(&self) -> Option<&str> {
+        self.0.message.as_ref().map(|s| s.as_ref())
     }
 
     pub fn exec_state(&self) -> Option<&ExecutionState> {
@@ -117,7 +117,7 @@ impl VMError {
     ) -> (
         StatusCode,
         Option<u64>,
-        Option<String>,
+        Option<Box<str>>,
         Option<ExecutionState>,
         Location,
         Vec<(IndexKind, TableIndex)>,
@@ -143,30 +143,6 @@ impl VMError {
             indices,
             offsets,
         )
-    }
-
-    pub fn to_partial(self) -> PartialVMError {
-        let VMError_ {
-            major_status,
-            sub_status,
-            message,
-            exec_state,
-            indices,
-            offsets,
-            #[cfg(debug_assertions)]
-            backtrace,
-            ..
-        } = *self.0;
-        PartialVMError(Box::new(PartialVMError_ {
-            major_status,
-            sub_status,
-            message,
-            exec_state,
-            indices,
-            offsets,
-            #[cfg(debug_assertions)]
-            backtrace,
-        }))
     }
 }
 
@@ -218,7 +194,7 @@ pub struct PartialVMError(Box<PartialVMError_>);
 struct PartialVMError_ {
     major_status: StatusCode,
     sub_status: Option<u64>,
-    message: Option<String>,
+    message: Option<Box<str>>,
     exec_state: Option<ExecutionState>,
     indices: Vec<(IndexKind, TableIndex)>,
     offsets: Vec<(FunctionDefinitionIndex, CodeOffset)>,
@@ -233,7 +209,7 @@ impl PartialVMError {
     ) -> (
         StatusCode,
         Option<u64>,
-        Option<String>,
+        Option<Box<str>>,
         Option<ExecutionState>,
         Vec<(IndexKind, TableIndex)>,
         Vec<(FunctionDefinitionIndex, CodeOffset)>,
@@ -318,9 +294,9 @@ impl PartialVMError {
         self
     }
 
-    pub fn with_message(mut self, message: String) -> Self {
+    pub fn with_message(mut self, message: impl Into<Box<str>>) -> Self {
         debug_assert!(self.0.message.is_none());
-        self.0.message = Some(message);
+        self.0.message = Some(message.into());
         self
     }
 
@@ -358,14 +334,16 @@ impl PartialVMError {
     pub fn append_message_with_separator(
         mut self,
         separator: char,
-        additional_message: String,
+        additional_message: impl Into<Box<str>>,
     ) -> Self {
+        let additional_message = additional_message.into();
         match self.0.message.as_mut() {
             Some(msg) => {
                 if !msg.is_empty() {
-                    msg.push(separator);
+                    *msg = format!("{msg}{separator}{additional_message}").into();
+                } else {
+                    *msg = additional_message;
                 }
-                msg.push_str(&additional_message);
             }
             None => self.0.message = Some(additional_message),
         };

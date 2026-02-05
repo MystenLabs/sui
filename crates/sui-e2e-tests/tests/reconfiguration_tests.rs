@@ -24,9 +24,7 @@ use sui_types::sui_system_state::{
     SuiSystemStateTrait, get_validator_from_table,
     sui_system_state_summary::get_validator_by_pool_id,
 };
-use sui_types::transaction::{
-    Command, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
-};
+use sui_types::transaction::{Command, TransactionDataAPI, TransactionExpiration};
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::time::sleep;
 
@@ -144,74 +142,6 @@ async fn do_test_passive_reconfig(chain: Option<Chain>) {
                 .unwrap();
             assert_eq!(commitments.len(), 1);
         });
-}
-
-// Test that transaction locks from previous epochs could be overridden.
-#[sim_test]
-async fn test_expired_locks() {
-    // This test verifies preconsensus lock conflict detection and epoch-based lock expiry,
-    // which only applies when disable_preconsensus_locking=false.
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config.set_address_aliases_for_testing(false);
-        config
-    });
-
-    let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(10000)
-        .build()
-        .await;
-
-    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
-    let accounts_and_objs = test_cluster
-        .wallet
-        .get_all_accounts_and_gas_objects()
-        .await
-        .unwrap();
-    let sender = accounts_and_objs[0].0;
-    let receiver = accounts_and_objs[1].0;
-    let gas_object = accounts_and_objs[0].1[0];
-
-    let transfer_sui = |amount| {
-        TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .transfer_sui(Some(amount), receiver)
-            .build()
-    };
-
-    let t1 = test_cluster.wallet.sign_transaction(&transfer_sui(1)).await;
-    // attempt to equivocate
-    let t2 = test_cluster.wallet.sign_transaction(&transfer_sui(2)).await;
-
-    // Acquire locks for t1 on all validators to simulate a locked transaction
-    // that was never executed (e.g., didn't make it through consensus).
-    for validator in test_cluster.all_validator_handles().into_iter() {
-        let state = validator.state();
-        let epoch_store = state.epoch_store_for_testing();
-        validator
-            .state()
-            .handle_vote_transaction(&epoch_store, VerifiedTransaction::new_unchecked(t1.clone()))
-            .unwrap();
-    }
-
-    // t2 should fail because all validators have locks for t1
-    test_cluster
-        .submit_and_execute(t2.clone(), None)
-        .await
-        .unwrap_err();
-
-    test_cluster.wait_for_epoch_all_nodes(1).await;
-
-    // Old locks can be overridden in new epoch - t2 should now succeed
-    test_cluster
-        .submit_and_execute(t2.clone(), None)
-        .await
-        .unwrap();
-
-    // t1 should now fail because t2 has executed and consumed the object
-    test_cluster
-        .submit_and_execute(t1.clone(), None)
-        .await
-        .unwrap_err();
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.

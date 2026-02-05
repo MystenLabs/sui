@@ -48,6 +48,7 @@ impl TransactionOutputs {
             binary_config: _,
             runtime_packages_loaded_from_db: _,
             lamport_version,
+            accumulator_running_max_withdraws: _,
         } = inner_temporary_store;
 
         let tx_digest = *transaction.digest();

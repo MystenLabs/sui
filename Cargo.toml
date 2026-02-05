@@ -336,6 +336,7 @@ camino = "1.1.1"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.39", features = ["clock", "serde"] }
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
+clap_complete = "4.4"
 codespan-reporting = "0.11.1"
 collectable = "0.0.2"
 colored = "2.0.0"
@@ -548,7 +549,7 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.18"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.14.2", features = [
+tonic = { version = "0.14.3", features = [
   "zstd",
   "transport",
   "tls-webpki-roots",

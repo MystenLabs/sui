@@ -26,6 +26,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::effects::{InputConsensusObject, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::transaction::PlainTransactionWithClaims;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::transaction::{ObjectArg, SharedObjectMutability};
 use sui_types::{
@@ -309,9 +310,9 @@ async fn test_congestion_control_execution_cancellation() {
     .await
     .unwrap();
 
-    let consensus_transactions = vec![ConsensusTransaction::new_user_transaction_message(
+    let consensus_transactions = vec![ConsensusTransaction::new_user_transaction_v2_message(
         &authority_state.name,
-        congested_tx.clone(),
+        PlainTransactionWithClaims::no_aliases(congested_tx.clone()),
     )];
     let commit = TestConsensusCommit::new(consensus_transactions, 1, 0, 0);
 

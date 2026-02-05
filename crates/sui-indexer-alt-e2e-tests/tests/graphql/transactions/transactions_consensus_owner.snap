@@ -1,0 +1,72 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 7-12:
+//# programmable --sender A --inputs 1000 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::party::single_owner(Input(1));
+//> 2: sui::transfer::public_party_transfer<sui::coin::Coin<sui::sui::SUI>>(Result(0), Result(1));
+// Create a regular address-owned object sent to C by A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-15:
+//# programmable --sender A --inputs 2000 @C
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 17:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 19-36:
+//# run-graphql
+Response: {
+  "data": {
+    "sentByA": {
+      "edges": [
+        {
+          "cursor": "MQ==",
+          "node": {
+            "digest": "FT42es4ZJobrXXLf5oVGtFtk69AaydrtHKR34hzUsQLk"
+          }
+        },
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "61uSLPFvHtzYKpe9P51cYYv2n6dGuJvoj1RUFC1Evxr6"
+          }
+        }
+      ]
+    },
+    "affectedB": {
+      "edges": [
+        {
+          "cursor": "MQ==",
+          "node": {
+            "digest": "FT42es4ZJobrXXLf5oVGtFtk69AaydrtHKR34hzUsQLk"
+          }
+        }
+      ]
+    },
+    "affectedC": {
+      "edges": [
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "61uSLPFvHtzYKpe9P51cYYv2n6dGuJvoj1RUFC1Evxr6"
+          }
+        }
+      ]
+    }
+  }
+}

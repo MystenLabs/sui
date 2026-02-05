@@ -748,6 +748,7 @@ pub struct FullNodeProxy {
 impl FullNodeProxy {
     pub async fn from_url(
         http_url: &str,
+        genesis_committee: &Committee,
         metrics: &BenchmarkProxyMetrics,
     ) -> Result<Self, anyhow::Error> {
         let http_url = if http_url.starts_with("http://") || http_url.starts_with("https://") {
@@ -772,7 +773,10 @@ impl FullNodeProxy {
         // Build AuthorityAggregator and TransactionDriver for soft bundle support
         let sui_system_state = sui_client.get_system_state_summary(None).await?;
         let new_committee = sui_system_state.get_sui_committee_for_benchmarking();
-        let committee_store = Arc::new(CommitteeStore::new_for_testing(new_committee.committee()));
+        let committee_store = Arc::new(CommitteeStore::new_for_testing(genesis_committee));
+        if new_committee.committee().epoch > 0 {
+            committee_store.insert_new_committee(new_committee.committee())?;
+        }
 
         let aggregator = AuthorityAggregator::new_from_committee(
             new_committee,

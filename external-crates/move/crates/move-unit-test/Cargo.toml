@@ -29,7 +29,7 @@ move-ir-types.workspace = true
 move-symbol-pool.workspace = true
 move-vm-runtime = { workspace = true, features = ["testing"] }
 move-vm-config.workspace = true
-move-binary-format.workspace = true
+move-binary-format = { workspace = true, features = ["testing"] }
 move-model.workspace = true
 move-bytecode-utils.workspace = true
 move-trace-format.workspace = true

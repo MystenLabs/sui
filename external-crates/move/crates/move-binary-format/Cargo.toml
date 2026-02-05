@@ -34,5 +34,6 @@ serde_json.workspace = true
 
 [features]
 default = []
+testing = []
 fuzzing = ["proptest", "proptest-derive", "arbitrary", "move-core-types/fuzzing"]
 wasm = ["getrandom"]

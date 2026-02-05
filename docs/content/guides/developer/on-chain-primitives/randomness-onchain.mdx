@@ -4,7 +4,7 @@ description: Randomness is a valuable tool to simulate chance on chain, but can 
 keywords: [ raffle, randomness, random, RandomGenerator, ProtocolConfig, PTB, dice ]
 ---
 
-Generating pseudo-random values in Move is similar to solutions in other languages. A Move function can create a new instance of `RandomGenerator` and use it for generating random values of different types, for example, `generate_u128(&mut generator), generate_u8_in_range(&mut generator, 1, 6)`, or,
+A Move function can create a new instance of `RandomGenerator` and use it for generating random values of different types. For example, `generate_u128(&mut generator), generate_u8_in_range(&mut generator, 1, 6)` or the following example:
 
 ```move
 entry fun roll_dice(r: &Random, ctx: &mut TxContext): Dice {
@@ -13,58 +13,29 @@ entry fun roll_dice(r: &Random, ctx: &mut TxContext): Dice {
 }
 ```
 
-`Random` has a reserved address `0x8`. See <UnsafeLink href="/references/framework/sui-framework/sui_sui/random">random.move</UnsafeLink> for the Move APIs for accessing randomness on Sui.
+`Random` has a reserved address `0x8`. See <UnsafeLink href="/references/framework/sui-framework/sui_sui/random">`random.move`</UnsafeLink> for the Move APIs that access randomness on Sui.
 
 :::info
 
-Although `Random` is a shared object, it is inaccessible for mutable operations, and any transaction attempting to modify it fails.
+Although `Random` is a shared object, it is inaccessible for mutable operations. Any transaction attempting to modify it fails.
 
 :::
 
-Having access to random numbers is only one part of designing secure applications, you should also pay careful attention to how you use that randomness.
-To securely access randomness:
-
-- Define your function as (private) `entry`.
-- Prefer generating randomness using function-local `RandomGenerator`.
-- Make sure that the "unhappy path" of your function does not consume more resources than the "happy path".
 
 ## Limited resources and `Random` dependent flows
 
-Be aware that some resources that are available to transactions are limited.
-If you are not careful, an attacker can break or exploit your application by deliberately controlling the point where your function runs out of resources.
-
-Concretely, gas is such a resource.
-Consider the following vulnerable code:
-
-```move
-// Insecure implementation, do not use!
-entry fun insecure_play(r: &Random, payment: Coin<SUI>, ...) {
-  ...
-  let mut generator = new_generator(r, ctx);
-  let win = generator.generate_bool();
-  if (win) { // happy flow
-    ... cheap computation ...
-  } else {
-    ... very expensive computation ...
-  }
-}
-```
-
-Observe that the gas costs of a transaction that calls `insecure_play` depends on the value of `win`.
-An attacker could call this function with a gas budget that is sufficient for the "happy flow" but not the "unhappy one", resulting in it either winning or reverting the transaction (but never losing the payment).
-
-:::warning
+Be aware that some resources that are available to transactions are limited. If you are not careful, an attacker can break or exploit your application by deliberately controlling the point where your function runs out of resources. Concretely, gas is such a resource.
 
 The `Random` API does not automatically prevent this kind of attack, and you must be aware of this subtlety when designing your contracts.
-
-:::
-
 
 Other limited resources per transaction that you should consider are:
 
 - The number of new objects.
-- The number of objects that can be used (including dynamic fields).
+
+- The number of objects that can be used, including dynamic fields.
+
 - Number of events emitted.
+
 - Number of UIDs generated, deleted, or transferred.
 
 <details>
@@ -79,24 +50,25 @@ Complete list of `ProtocolConfig` limits.
 
 </details>
 
-For many use cases, like when selecting a raffle winner or lottery numbers, this attack is not an issue as the code running is independent of the randomness. However, in other use cases where this attack can be problematic, consider using one of the following approaches:
+For many use cases, like when selecting a raffle winner or lottery numbers, this attack is not an issue as the code running is independent of the randomness. However, in other use cases where this attack can be problematic, consider using one of the following approaches.
 
-### Option 1: Divide logic
+### Divide logic
 
 Split the logic into 2 functions that different transactions must call.
 
-1. The first transaction, `tx1`, calls the first function, which fetches a random value and stores it in an object that is unreadable by other commands in `tx1`. For example, the function might transfer the object to the caller or store the transaction digest and check that it's different on read.
+1. The first transaction, `tx1`, calls the first function, which fetches a random value and stores it in an object that is unreadable by other commands in `tx1`. For example, the function might transfer the object to the caller or store the transaction digest and check that it is different on read.
 
-2. The second transaction, `tx2`, calls a second function, which reads the stored value and completes the operation. `tx2` might fail, but now the random value is fixed and cannot be modified using repeated calls.
-It's important that the inputs to the second function are fixed and cannot be modified after `tx1`, otherwise an attacker can modify them after seeing the randomness committed by `tx1`.
+1. The second transaction, `tx2`, calls a second function, which reads the stored value and completes the operation. `tx2` might fail, but now the random value is fixed and cannot be modified using repeated calls.
 
-Gracefully handle the case in which the second step is never completed. You could accomplish this, for example, by charging a fee in the first step.
+It is important that the inputs to the second function are fixed and cannot be modified after `tx1`, otherwise an attacker can modify them after seeing the randomness committed by `tx1`.
+
+Gracefully handle the case in which the second step is never completed. For example, you could accomplish this by charging a fee in the first step.
 
 <details>
 
 <summary>
 
-Example implementation.
+Example
 
 </summary>
 
@@ -104,13 +76,15 @@ Example implementation.
 
 </details>
 
-### Option 2: Resource usage
+### Resource usage
 
-Write the function so the main processing path does the heavy work, while early-exit paths return quickly. Keep the following in mind:
+Write the function such that the main processing path does the heavy work, while early-exit paths return quickly. Keep the following in mind:
 
-  - Both external or native functions can change in the future, potentially resulting in different costs compared to when you conducted your tests.
-  - [Profile the transaction](../../../references/cli/trace-analysis.mdx#profile-a-transaction) to benchmark the costs of a transaction.
-  - UIDs generated and deleted on the same transaction do not count towards the limit on generated or deleted UIDs. 
+- Both external or native functions can change in the future, potentially resulting in different costs compared to when you conducted your tests.
+
+- [Profile the transaction](/references/cli/trace-analysis.mdx#profile-a-transaction) to benchmark the costs of a transaction.
+
+- UIDs generated and deleted on the same transaction do not count towards the limit on generated or deleted UIDs. 
 
 ## Use (non-public) `entry` functions
 
@@ -163,20 +137,14 @@ public fun attack(guess: u8, r: &Random, ctx: &mut TxContext): Ticket {
 }
 ```
 
-The attacker can now call `attack` with a guess and always revert the fee transfer if the guess is incorrect.
-
-To protect against composition attacks, define your function as a private `entry` function so functions from other modules cannot call it.
-
-:::tip
+The attacker can now call `attack` with a guess and always revert the fee transfer if the guess is incorrect. To protect against composition attacks, define your function as a private `entry` function so functions from other modules cannot call it.
 
 The Move compiler enforces this behavior by rejecting `public` functions with `Random` as an argument.
 
-:::
-
 ## Programmable transaction block (PTB) restrictions
 
-A similar attack to the one previously described involves PTBs even when `play_dice` is defined as a private `entry` function.
-For example, consider the `entry play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Ticket { … }` function defined earlier, the attacker can publish the function
+A similar attack to the one previously described involves PTBs even when `play_dice` is defined as a private `entry` function. For example, consider the `entry play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Ticket { … }` function defined earlier, the attacker can publish the following function and send a PTB with commands `play_dice(...), attack(Result(0))` where `Result(0)` is the output of the first command:
+
 
 ```move
 public fun attack(t: Ticket): Ticket {
@@ -185,9 +153,7 @@ public fun attack(t: Ticket): Ticket {
 }
 ```
 
-and send a PTB with commands `play_dice(...), attack(Result(0))` where `Result(0)` is the output of the first command.
-
-As before, the attack takes advantage of the atomic nature of PTBs and always reverts the entire transaction if the guess was incorrect, without paying the fee. Sending multiple transactions can repeat the attack, each one executed with different randomness and reverted if the guess is incorrect.
+The attack takes advantage of the atomic nature of PTBs and always reverts the entire transaction if the guess was incorrect without paying the fee. Sending multiple transactions can repeat the attack, each one executed with different randomness and reverted if the guess is incorrect.
 
 :::tip
 
@@ -197,17 +163,13 @@ To protect against PTB-based composition attacks, Sui rejects PTBs that have com
 
 ## Instantiating `RandomGenerator`
 
-`RandomGenerator` is secure as long as it's created by the consuming module. If passed as an argument, the caller might be able to predict the outputs of that `RandomGenerator` instance (for example, by calling `bcs::to_bytes(&generator)` and parsing its internal state).
-
-:::tip
+`RandomGenerator` is secure as long as it is created by the consuming module. If passed as an argument, the caller might be able to predict the outputs of that `RandomGenerator` instance, for example, by calling `bcs::to_bytes(&generator)` and parsing its internal state.
 
 The Move compiler enforces this behavior by rejecting `public` functions with `RandomGenerator` as an argument.
 
-:::
-
 ## Accessing `Random` from TypeScript
 
-If you want to call `roll_dice(r: &Random, ctx: &mut TxContext)` in module `example`, use the following code snippet:
+If you want to call `roll_dice(r: &Random, ctx: &mut TxContext)` in module `example`, use the following code:
 
 ```typescript
 const tx = new Transaction();
@@ -218,7 +180,17 @@ tx.moveCall({
 ...
 ```
 
-## Related Links
+## Best practices 
+
+Having access to random numbers is only one part of designing secure applications. You should also pay careful attention to how you use that randomness.
+
+To securely access randomness:
+
+- Define your function as (private) `entry`.
+
+- Prefer generating randomness using function-local `RandomGenerator`.
+
+## Related links
 
 <RelatedLink to="/references/framework" />
 <RelatedLink href="https://docs.sui.io/references/framework/sui_sui/random" label="random.move" desc="Documentation for the `random` module." />

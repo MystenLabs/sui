@@ -4524,6 +4524,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.fix_checkpoint_signature_mapping = true;
                     cfg.feature_flags
                         .consensus_always_accept_system_transactions = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_object_funds_withdraw = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -4799,10 +4802,6 @@ impl ProtocolConfig {
 
     pub fn set_mysticeti_fastpath_for_testing(&mut self, val: bool) {
         self.feature_flags.mysticeti_fastpath = val;
-    }
-
-    pub fn set_disable_preconsensus_locking_for_testing(&mut self, val: bool) {
-        self.feature_flags.disable_preconsensus_locking = val;
     }
 
     pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {

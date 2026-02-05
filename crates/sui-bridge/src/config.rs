@@ -5,7 +5,7 @@ use crate::abi::EthBridgeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::error::BridgeError;
 use crate::eth_client::EthClient;
-use crate::metered_eth_provider::new_metered_eth_provider;
+use crate::metered_eth_provider::new_metered_eth_multi_provider;
 use crate::metrics::BridgeMetrics;
 use crate::sui_client::SuiBridgeClient;
 use crate::types::{BridgeAction, is_route_valid};
@@ -22,10 +22,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::Config;
-use sui_json_rpc_types::Coin;
 use sui_keys::keypair_file::read_key;
-use sui_sdk::SuiClientBuilder;
-use sui_sdk::apis::CoinReadApi;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::bridge::BridgeChainId;
@@ -33,6 +30,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 use sui_types::digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier};
 use sui_types::event::EventID;
+use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use tracing::info;
 
@@ -41,7 +39,19 @@ use tracing::info;
 #[serde(rename_all = "kebab-case")]
 pub struct EthConfig {
     /// Rpc url for Eth fullnode, used for query stuff.
-    pub eth_rpc_url: String,
+    /// @deprecated (use eth_rpc_urls instead)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eth_rpc_url: Option<String>,
+    /// Multiple RPC URLs for Eth fullnodes.
+    /// Quorum-based consensus is used across providers for redundancy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eth_rpc_urls: Option<Vec<String>>,
+    /// Quorum size for multi-provider consensus. Must be <= number of URLs.
+    #[serde(default = "default_quorum")]
+    pub eth_rpc_quorum: usize,
+    /// Health check interval in seconds for multi-provider.
+    #[serde(default = "default_health_check_interval_secs")]
+    pub eth_health_check_interval_secs: u64,
     /// The proxy address of SuiBridge
     pub eth_bridge_proxy_address: String,
     /// The expected BridgeChainId on Eth side.
@@ -61,6 +71,27 @@ pub struct EthConfig {
     /// reprocess the events from this block number every time it starts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eth_contracts_start_block_override: Option<u64>,
+}
+
+fn default_quorum() -> usize {
+    1
+}
+
+fn default_health_check_interval_secs() -> u64 {
+    300 // 5 minutes
+}
+
+impl EthConfig {
+    /// Backwards compatible function to get list of RPC URLs
+    pub fn rpc_urls(&self) -> Vec<String> {
+        if let Some(ref urls) = self.eth_rpc_urls {
+            urls.clone()
+        } else if let Some(ref url) = self.eth_rpc_url {
+            vec![url.clone()]
+        } else {
+            vec![]
+        }
+    }
 }
 
 #[serde_as]
@@ -266,7 +297,20 @@ impl BridgeNodeConfig {
     ) -> anyhow::Result<(Arc<EthClient>, Vec<EthAddress>)> {
         info!("Creating Ethereum client provider");
         let bridge_proxy_address = EthAddress::from_str(&self.eth.eth_bridge_proxy_address)?;
-        let provider = new_metered_eth_provider(&self.eth.eth_rpc_url, metrics.clone()).unwrap();
+        let rpc_urls = self.eth.rpc_urls();
+        anyhow::ensure!(
+            !rpc_urls.is_empty(),
+            "At least one Ethereum RPC URL must be provided"
+        );
+
+        let provider = new_metered_eth_multi_provider(
+            rpc_urls.clone(),
+            self.eth.eth_rpc_quorum,
+            self.eth.eth_health_check_interval_secs,
+            metrics.clone(),
+        )
+        .await?;
+
         let chain_id = provider.get_chain_id().await?;
         let (
             committee_address,
@@ -310,29 +354,32 @@ impl BridgeNodeConfig {
             chain_id, bridge_chain_id,
         );
 
-        let eth_client = Arc::new(
-            EthClient::new(
-                &self.eth.eth_rpc_url,
-                HashSet::from_iter(vec![
-                    bridge_proxy_address,
-                    committee_address,
-                    config_address,
-                    limiter_address,
-                    vault_address,
-                ]),
-                metrics,
-            )
-            .await?,
-        );
-        let contract_addresses = vec![
+        // Filter out zero addresses (can happen due to storage layout mismatch during upgrades)
+        let all_addresses = vec![
             bridge_proxy_address,
             committee_address,
             config_address,
             limiter_address,
             vault_address,
         ];
+        let valid_addresses: Vec<_> = all_addresses
+            .into_iter()
+            .filter(|addr| !addr.is_zero())
+            .collect();
+
+        if valid_addresses.len() < 5 {
+            tracing::warn!(
+                "Some contract addresses are zero - likely storage layout mismatch. \
+                Event watching will be limited. Valid addresses: {:?}",
+                valid_addresses
+            );
+        }
+
+        let eth_client = Arc::new(
+            EthClient::from_provider(provider, HashSet::from_iter(valid_addresses.clone())).await?,
+        );
         info!("Ethereum client setup complete");
-        Ok((eth_client, contract_addresses))
+        Ok((eth_client, valid_addresses))
     }
 
     async fn prepare_for_sui(
@@ -380,14 +427,9 @@ impl BridgeNodeConfig {
             Some(id) => id,
             None => {
                 info!("No gas object configured, finding gas object with highest balance");
-                let sui_client = SuiClientBuilder::default()
-                    .build(&self.sui.sui_rpc_url)
-                    .await?;
-                let coin =
-                    // Minimum balance for gas object is 10 SUI
-                    pick_highest_balance_coin(sui_client.coin_read_api(), client_sui_address, 10_000_000_000)
-                        .await?;
-                coin.coin_object_id
+                let sui_client = sui_rpc_api::Client::new(&self.sui.sui_rpc_url)?;
+                // Minimum balance for gas object is 10 SUI
+                pick_highest_balance_coin(sui_client, client_sui_address, 10_000_000_000).await?
             }
         };
         let (gas_coin, gas_object_ref, owner) = sui_client
@@ -448,33 +490,38 @@ pub struct BridgeCommitteeConfig {
 impl Config for BridgeCommitteeConfig {}
 
 pub async fn pick_highest_balance_coin(
-    coin_read_api: &CoinReadApi,
+    client: sui_rpc_api::Client,
     address: SuiAddress,
     minimal_amount: u64,
-) -> anyhow::Result<Coin> {
+) -> anyhow::Result<ObjectID> {
     info!("Looking for a suitable gas coin for address {:?}", address);
 
     // Only look at SUI coins specifically
-    let mut stream = coin_read_api
-        .get_coins_stream(address, Some("0x2::sui::SUI".to_string()))
+    let mut stream = client
+        .list_owned_objects(address, Some(GasCoin::type_()))
         .boxed();
 
     let mut coins_checked = 0;
 
-    while let Some(coin) = stream.next().await {
+    while let Some(Ok(object)) = stream.next().await {
+        let Ok(coin) = GasCoin::try_from(&object) else {
+            continue;
+        };
         info!(
             "Checking coin: {:?}, balance: {}",
-            coin.coin_object_id, coin.balance
+            object.id(),
+            coin.value()
         );
         coins_checked += 1;
 
         // Take the first coin with a sufficient balance
-        if coin.balance >= minimal_amount {
+        if coin.value() >= minimal_amount {
             info!(
                 "Found suitable gas coin with {} mist (object ID: {:?})",
-                coin.balance, coin.coin_object_id
+                coin.value(),
+                object.id(),
             );
-            return Ok(coin);
+            return Ok(object.id());
         }
 
         // Only check a small number of coins before giving up

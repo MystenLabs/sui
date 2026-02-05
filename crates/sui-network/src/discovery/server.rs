@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Discovery, MAX_PEERS_TO_SEND, SignedNodeInfo, State};
-use anemo::{Request, Response};
+use anemo::{PeerId, Request, Response, types::PeerInfo};
 use rand::seq::IteratorRandom;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, OnceLock, RwLock},
 };
 use sui_config::p2p::AccessType;
 
@@ -19,13 +19,14 @@ pub struct GetKnownPeersResponseV2 {
 
 pub(super) struct Server {
     pub(super) state: Arc<RwLock<State>>,
+    pub(super) configured_peers: Arc<OnceLock<HashMap<PeerId, PeerInfo>>>,
 }
 
 #[anemo::async_trait]
 impl Discovery for Server {
     async fn get_known_peers_v2(
         &self,
-        _request: Request<()>,
+        request: Request<()>,
     ) -> Result<Response<GetKnownPeersResponseV2>, anemo::rpc::Status> {
         let state = self.state.read().unwrap();
         let own_info = state
@@ -33,16 +34,27 @@ impl Discovery for Server {
             .clone()
             .ok_or_else(|| anemo::rpc::Status::internal("own_info has not been initialized yet"))?;
 
-        let is_public = |info: &super::VerifiedSignedNodeInfo| match info.access_type {
+        let should_share = |info: &super::VerifiedSignedNodeInfo| match info.access_type {
             AccessType::Public => true,
             AccessType::Private => false,
+            AccessType::Trusted => {
+                // Share Trusted peers only with other preconfigured peers.
+                self.configured_peers
+                    .get()
+                    .and_then(|configured_peers| {
+                        request
+                            .peer_id()
+                            .map(|id| configured_peers.contains_key(id))
+                    })
+                    .unwrap_or(false)
+            }
         };
 
         let known_peers = if state.known_peers.len() < MAX_PEERS_TO_SEND {
             state
                 .known_peers
                 .values()
-                .filter(|e| is_public(e))
+                .filter(|e| should_share(e))
                 .map(|e| e.inner())
                 .cloned()
                 .collect()
@@ -53,7 +65,7 @@ impl Discovery for Server {
                 .connected_peers
                 .keys()
                 .filter_map(|peer_id| state.known_peers.get(peer_id))
-                .filter(|info| is_public(info))
+                .filter(|info| should_share(info))
                 .map(|info| (info.peer_id, info))
                 .choose_multiple(&mut rng, MAX_PEERS_TO_SEND)
                 .into_iter()
@@ -64,7 +76,7 @@ impl Discovery for Server {
                 for info in state
                     .known_peers
                     .values()
-                    .filter(|info| is_public(info))
+                    .filter(|info| should_share(info))
                     // This randomly samples the iterator stream but the order of elements after
                     // sampling may not be random, this is ok though since we're just trying to do
                     // best-effort on sharing info of peers we haven't connected with ourselves.

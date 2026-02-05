@@ -70,9 +70,9 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
 };
 use sui_types::sui_system_state::{self, SuiSystemState};
 use sui_types::transaction::{
-    AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, ProgrammableTransaction,
-    SenderSignedData, StoredExecutionTimeObservations, Transaction, TransactionData,
-    TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
+    AuthenticatorStateUpdate, CertifiedTransaction, DeprecatedWithAliases, InputObjectKind,
+    ProgrammableTransaction, SenderSignedData, StoredExecutionTimeObservations, Transaction,
+    TransactionData, TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
     VerifiedSignedTransaction, VerifiedTransaction, VerifiedTransactionWithAliases, WithAliases,
 };
 use tap::TapOptional;
@@ -595,6 +595,8 @@ pub struct AuthorityEpochTables {
     pub(crate) execution_time_observations:
         DBMap<(u64, AuthorityIndex), Vec<(ExecutionTimeObservationKey, Duration)>>,
     deferred_transactions_with_aliases_v2:
+        DBMap<DeferralKey, Vec<DeprecatedWithAliases<TrustedExecutableTransaction>>>,
+    deferred_transactions_with_aliases_v3:
         DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
 }
 
@@ -835,6 +837,10 @@ impl AuthorityEpochTables {
                 ThConfig::new_with_indexing(KeyIndexing::Hash, mutexes, uniform_key),
             ),
             (
+                "deferred_transactions_with_aliases_v3".to_string(),
+                ThConfig::new_with_indexing(KeyIndexing::Hash, mutexes, uniform_key),
+            ),
+            (
                 "dkg_processed_messages_v2".to_string(),
                 ThConfig::new(2, 1, KeyType::uniform(1)),
             ),
@@ -992,6 +998,39 @@ impl AuthorityEpochTables {
             })
             .chain(
                 self.deferred_transactions_with_aliases_v2
+                    .safe_iter()
+                    // The v2 table contains the deprecated format with SuiAddress instead of u8.
+                    // We convert by preserving the sequence numbers, but using 0 for the indexes.
+                    // This is safe because as long as the fix_checkpoint_signature_mapping flag is
+                    // false (which it must be for all builds that write to the v2 table),
+                    // the indexes will be thrown out when mapping signatures to alias config
+                    // versions.
+                    .map(
+                        |item: Result<
+                            (
+                                DeferralKey,
+                                Vec<DeprecatedWithAliases<TrustedExecutableTransaction>>,
+                            ),
+                            _,
+                        >| {
+                            item.map(|(key, txs)| {
+                                (
+                                    key,
+                                    txs.into_iter()
+                                        .map(|tx| {
+                                            let (inner, aliases) = tx.into_inner();
+                                            let new_aliases =
+                                                aliases.map(|(_addr, seq)| (0u8, seq));
+                                            WithAliases::new(inner, new_aliases).into()
+                                        })
+                                        .collect(),
+                                )
+                            })
+                        },
+                    ),
+            )
+            .chain(
+                self.deferred_transactions_with_aliases_v3
                     .safe_iter()
                     .map(|item| {
                         item.map(|(key, txs)| (key, txs.into_iter().map(Into::into).collect()))

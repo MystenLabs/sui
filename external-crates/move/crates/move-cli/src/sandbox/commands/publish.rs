@@ -2,23 +2,20 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    NativeFunctionRecord,
-    sandbox::utils::{get_gas_status, on_disk_state_view::OnDiskStateView},
-};
+use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
 use anyhow::{Result, bail};
 use move_package_alt_compilation::compiled_package::CompiledPackage;
+use move_unit_test::vm_test_setup::VMTestSetup;
 use move_vm_runtime::{
-    dev_utils::{gas_schedule::CostTable, storage::StoredPackage},
+    dev_utils::storage::StoredPackage,
     natives::{extensions::NativeExtensions, functions::NativeFunctions},
     runtime::MoveRuntime,
     shared::{linkage_context::LinkageContext, types::VersionId},
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-pub fn publish(
-    natives: impl IntoIterator<Item = NativeFunctionRecord>,
-    cost_table: &CostTable,
+pub fn publish<V: VMTestSetup>(
+    vm_test_setup: V,
     state: &OnDiskStateView,
     package: &CompiledPackage,
     package_version_id: &Option<VersionId>,
@@ -74,10 +71,10 @@ pub fn publish(
     dependency_map.insert(package_original_id, package_version_id);
 
     // use the publish_module API from the VM since we don't allow breaking changes
-    let natives = NativeFunctions::new(natives)?;
+    let natives = NativeFunctions::new(vm_test_setup.native_function_table())?;
     let runtime = MoveRuntime::new_with_default_config(natives);
 
-    let mut gas_status = get_gas_status(cost_table, None)?;
+    let mut gas_status = vm_test_setup.new_meter(None);
 
     // Create a `LinkageContext`
     let linkage_context = LinkageContext::new(dependency_map);

@@ -1099,60 +1099,6 @@ impl AuthorityState {
         Ok(())
     }
 
-    /// This is a private method and should be kept that way. It doesn't check whether
-    /// the provided transaction is a system transaction, and hence can only be called internally.
-    #[instrument(level = "trace", skip_all)]
-    fn handle_transaction_impl(
-        &self,
-        transaction: VerifiedTransaction,
-        sign: bool,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
-        // Ensure that validator cannot reconfigure while we are signing the tx
-        let _execution_lock = self.execution_lock_for_signing()?;
-
-        let checked_input_objects =
-            self.handle_transaction_deny_checks(&transaction, epoch_store)?;
-
-        let owned_objects = checked_input_objects.inner().filter_owned_objects();
-
-        let tx_digest = *transaction.digest();
-        let signed_transaction = if sign {
-            Some(VerifiedSignedTransaction::new(
-                epoch_store.epoch(),
-                transaction,
-                self.name,
-                &*self.secret,
-            ))
-        } else {
-            None
-        };
-
-        if epoch_store.protocol_config().disable_preconsensus_locking() {
-            // When preconsensus locking is disabled, validate owned object versions without
-            // acquiring locks. Locking happens post-consensus in the consensus handler. Validation
-            // still runs to prevent spam transactions with invalid object versions, and is necessary
-            // to handle recently created objects.
-            //
-            // Note: No signed transaction or locks are stored, unlike acquire_transaction_locks().
-            self.get_cache_writer()
-                .validate_owned_object_versions(&owned_objects)?;
-        } else {
-            // Check and write locks and signed transaction, into the epoch store.
-            // The call to acquire_transaction_locks() checks that the locks are not conflicting,
-            // and returns ObjectLockConflict error in case there is a lock from a different
-            // transaction on an object.
-            self.get_cache_writer().acquire_transaction_locks(
-                epoch_store,
-                &owned_objects,
-                tx_digest,
-                signed_transaction.clone(),
-            )?;
-        }
-
-        Ok(signed_transaction)
-    }
-
     /// Vote for a transaction, either when validator receives a submit_transaction request,
     /// or sees a transaction from consensus. Performs the same types of checks as
     /// transaction signing, but does not explicitly sign the transaction.
@@ -1209,13 +1155,19 @@ impl AuthorityState {
             .into());
         }
 
-        let result =
-            self.handle_transaction_impl(transaction, false /* sign */, epoch_store)?;
-        assert!(
-            result.is_none(),
-            "handle_transaction_impl should not return a signed transaction when sign is false"
-        );
-        Ok(())
+        // Ensure that validator cannot reconfigure while we are validating the transaction.
+        let _execution_lock = self.execution_lock_for_validation()?;
+
+        let checked_input_objects =
+            self.handle_transaction_deny_checks(&transaction, epoch_store)?;
+
+        let owned_objects = checked_input_objects.inner().filter_owned_objects();
+
+        // Validate owned object versions without acquiring locks. Locking happens post-consensus
+        // in the consensus handler. Validation still runs to prevent spam transactions with
+        // invalid object versions, and is necessary to handle recently created objects.
+        self.get_cache_writer()
+            .validate_owned_object_versions(&owned_objects)
     }
 
     /// Used for early client validation check for transactions before submission to server.
@@ -1245,7 +1197,6 @@ impl AuthorityState {
             self.handle_transaction_deny_checks(transaction, epoch_store)?;
 
         // Check that owned object versions match live objects
-        // This closely mimics verify_live_object logic from acquire_transaction_locks
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
         let cache_reader = self.get_object_cache_reader();
 
@@ -1486,25 +1437,6 @@ impl AuthorityState {
         trace!("execute_transaction");
 
         self.metrics.total_cert_attempts.inc();
-
-        if !transaction.is_consensus_tx()
-            && !epoch_store.protocol_config().disable_preconsensus_locking()
-        {
-            // Shared object transactions need to be sequenced by the consensus before enqueueing
-            // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
-            //
-            // For owned object transactions, they can be enqueued for execution immediately
-            // ONLY when disable_preconsensus_locking is false (QD/original fastpath mode).
-            // When disable_preconsensus_locking is true (MFP mode), all transactions including
-            // owned object transactions must go through consensus before enqueuing for execution.
-            self.execution_scheduler.enqueue(
-                vec![(
-                    Schedulable::Transaction(transaction.clone()),
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-                )],
-                epoch_store,
-            );
-        }
 
         // tx could be reverted when epoch ends, so we must be careful not to return a result
         // here after the epoch ends.
@@ -2100,11 +2032,11 @@ impl AuthorityState {
             );
 
         let object_funds_checker = self.object_funds_checker.load();
-        // FIXME: effects contain merged funds changes. But we need the sum of all the withdraws per account.
         if let Some(object_funds_checker) = object_funds_checker.as_ref()
             && !object_funds_checker.should_commit_object_funds_withdraws(
                 certificate,
-                &effects,
+                effects.status(),
+                &inner_temp_store.accumulator_running_max_withdraws,
                 &execution_env,
                 self.get_account_funds_read(),
                 &self.execution_scheduler,
@@ -3890,11 +3822,9 @@ impl AuthorityState {
         }
     }
 
-    /// Acquires the execution lock for the duration of a transaction signing request.
-    /// This prevents reconfiguration from starting until we are finished handling the signing request.
-    /// Otherwise, in-memory lock state could be cleared (by `ObjectLocks::clear_cached_locks`)
-    /// while we are attempting to acquire locks for the transaction.
-    pub fn execution_lock_for_signing(&self) -> SuiResult<ExecutionLockReadGuard<'_>> {
+    /// Acquires the execution lock for the duration of transaction validation.
+    /// This prevents reconfiguration from starting until we are finished validating the transaction.
+    fn execution_lock_for_validation(&self) -> SuiResult<ExecutionLockReadGuard<'_>> {
         self.execution_lock
             .try_read()
             .map_err(|_| SuiErrorKind::ValidatorHaltedAtEpochEnd.into())

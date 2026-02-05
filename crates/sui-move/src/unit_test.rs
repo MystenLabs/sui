@@ -7,10 +7,21 @@ use move_cli::base::{
     test::{self, UnitTestResult},
 };
 use move_package_alt_compilation::build_config::BuildConfig;
-use move_unit_test::{UnitTestingConfig, extensions::set_extension_hook};
+use move_unit_test::{
+    UnitTestingConfig, extensions::set_extension_hook, vm_test_setup::VMTestSetup,
+};
+use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::natives::extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
-use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+    path::Path,
+    rc::Rc,
+    sync::{Arc, LazyLock},
+};
+use sui_adapter::gas_meter::SuiGasMeter;
 use sui_move_build::decorate_warnings;
 use sui_move_natives::{
     NativesCostTable, object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
@@ -22,27 +33,18 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
     digests::TransactionDigest,
-    gas_model::tables::initial_cost_schedule_v5,
+    gas::{SuiGasStatus, SuiGasStatusAPI},
+    gas_model::{tables::GasStatus, units_types::Gas},
     in_memory_storage::InMemoryStorage,
     metrics::LimitsMetrics,
 };
 
-// Convert from our representation of gas costs to the type that the MoveVM expects for unit tests.
-// We don't want our gas depending on the MoveVM test utils and we don't want to fix our
-// representation to whatever is there, so instead we perform this translation from our gas units
-// and cost schedule to the one expected by the Move unit tests.
-pub fn initial_cost_schedule_for_unit_tests() -> move_vm_runtime::dev_utils::gas_schedule::CostTable
-{
-    let table = initial_cost_schedule_v5();
-    move_vm_runtime::dev_utils::gas_schedule::CostTable {
-        instruction_tiers: table.instruction_tiers.into_iter().collect(),
-        stack_height_tiers: table.stack_height_tiers.into_iter().collect(),
-        stack_size_tiers: table.stack_size_tiers.into_iter().collect(),
-    }
-}
-
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
-const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
+pub static MAX_UNIT_TEST_INSTRUCTIONS: LazyLock<u64> =
+    LazyLock::new(|| ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas());
+
+/// Gas price used for the meter during Move unit tests.
+const TEST_GAS_PRICE: u64 = 500;
 
 #[derive(Parser)]
 #[group(id = "sui-move-test")]
@@ -116,21 +118,18 @@ pub async fn run_move_unit_tests(
     // bind the extension hook if it has not yet been done
     Lazy::force(&SET_EXTENSION_HOOK);
 
-    let config = config
-        .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
+    let config = config.unwrap_or_else(|| {
+        UnitTestingConfig::default_with_bound(Some(*MAX_UNIT_TEST_INSTRUCTIONS))
+    });
 
-    let result = move_cli::base::test::run_move_unit_tests::<sui_package_alt::SuiFlavor, _>(
+    let result = move_cli::base::test::run_move_unit_tests::<sui_package_alt::SuiFlavor, _, _>(
         path,
         build_config,
         UnitTestingConfig {
             report_stacktrace_on_abort: true,
             ..config
         },
-        sui_move_natives::all_natives(
-            /* silent */ false,
-            &ProtocolConfig::get_for_max_version_UNSAFE(),
-        ),
-        Some(initial_cost_schedule_for_unit_tests()),
+        SuiVMTestSetup::new(),
         compute_coverage,
         save_disassembly,
         &mut std::io::stdout(),
@@ -178,4 +177,84 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         tx_context,
     ))));
     ext.add(store);
+}
+
+pub struct SuiVMTestSetup {
+    gas_price: u64,
+    reference_gas_price: u64,
+    protocol_config: ProtocolConfig,
+    native_function_table: move_vm_runtime::natives::functions::NativeFunctionTable,
+}
+
+impl Default for SuiVMTestSetup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SuiVMTestSetup {
+    pub fn new() -> Self {
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let native_function_table =
+            sui_move_natives::all_natives(/* silent */ false, &protocol_config);
+        Self {
+            gas_price: TEST_GAS_PRICE,
+            reference_gas_price: TEST_GAS_PRICE,
+            protocol_config,
+            native_function_table,
+        }
+    }
+
+    pub fn max_gas_budget(&self) -> u64 {
+        self.protocol_config.max_tx_gas()
+    }
+}
+
+impl VMTestSetup for SuiVMTestSetup {
+    type Meter<'a> = SuiGasMeter<SuiGasStatusTestWrapper>;
+
+    fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a> {
+        SuiGasMeter(SuiGasStatusTestWrapper(
+            SuiGasStatus::new(
+                execution_bound.unwrap_or(*MAX_UNIT_TEST_INSTRUCTIONS),
+                self.gas_price,
+                self.reference_gas_price,
+                &self.protocol_config,
+            )
+            .unwrap(),
+        ))
+    }
+
+    fn used_gas<'a>(&'a self, execution_bound: u64, meter: Self::Meter<'a>) -> u64 {
+        let gas_status = &meter.0;
+        Gas::new(execution_bound)
+            .checked_sub(gas_status.remaining_gas())
+            .unwrap()
+            .into()
+    }
+
+    fn vm_config(&self) -> VMConfig {
+        sui_adapter::adapter::vm_config(&self.protocol_config)
+    }
+
+    fn native_function_table(&self) -> move_vm_runtime::natives::functions::NativeFunctionTable {
+        self.native_function_table.clone()
+    }
+}
+
+// Massaging to get traits to line up.
+pub struct SuiGasStatusTestWrapper(SuiGasStatus);
+
+impl Deref for SuiGasStatusTestWrapper {
+    type Target = GasStatus;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.move_gas_status()
+    }
+}
+
+impl DerefMut for SuiGasStatusTestWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.move_gas_status_mut()
+    }
 }

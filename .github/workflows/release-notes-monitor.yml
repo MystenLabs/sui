@@ -100,13 +100,6 @@ jobs:
           echo "${delimiter}"
         } >> "$GITHUB_OUTPUT"
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-west-2
-
     - name: Get PR author and title
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -119,33 +112,23 @@ jobs:
         # Escape special characters for Slack mrkdwn format (& < > must be escaped)
         pr_title=$(echo "$pr_title" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-        # Fetch employees.json once and reuse
-        employees=$(aws s3 cp s3://mysten-employees-dir/employees.json -)
-        slack_id=$(echo "$employees" | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
-
-        # if we don't have the slack id or the author is not part of Mysten org, get the reviewer instead
-        if [ -z "$slack_id" ]; then
-          reviewer=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}/reviews --jq ".[0].user.login")
-          slack_id=$(echo "$employees" | jq --arg AUTHOR "${reviewer}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
-        fi
-
-        # Store slack_id, author, and title for use in Slack message
-        echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
         echo "author=${author}" >> $GITHUB_ENV
         echo "pr_title=${pr_title}" >> $GITHUB_ENV
 
-    - name: Post to a Slack channel
-      uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
+    - name: Dispatch to sui-operations for notification
+      uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
       with:
-        method: chat.postMessage
-        token: ${{ secrets.SLACK_BOT_TOKEN }}
-        payload: |
-          channel: "#ext-mysten-release-notes"
-          text: |
-            ${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS || '' }}${{ vars.RELEASE_NOTES_REVIEWERS_SLACK_MENTIONS && ', please' || 'Please' }} review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
-            *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|#${{ matrix.pr }}: ${{ env.pr_title }}> by ${{ env.slack_id && format('<@{0}>', env.slack_id) || format('`{0}` (external contributor)', env.author) }}
-            *Release Notes:*
-            ${{ steps.read-notes.outputs.release_notes }}
+        token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+        repository: MystenLabs/sui-operations
+        event-type: release-notes-review
+        client-payload: |-
+          {
+            "pr_number": "${{ matrix.pr }}",
+            "pr_title": "${{ env.pr_title }}",
+            "author": "${{ env.author }}",
+            "release_notes": ${{ toJSON(steps.read-notes.outputs.release_notes) }},
+            "sui_version": "${{ needs.get-list-of-prs.outputs.sui_version }}"
+          }
 
   update-last-processed-commit:
     name: Update last processed commit

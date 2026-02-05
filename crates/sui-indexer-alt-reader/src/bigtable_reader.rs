@@ -10,13 +10,13 @@ use anyhow::bail;
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_kvstore::BigTableClient;
-use sui_kvstore::Checkpoint;
+use sui_kvstore::CheckpointData;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TransactionEventsData;
+use sui_kvstore::Watermark;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::warn;
@@ -82,12 +82,20 @@ impl BigtableReader {
         DataLoader::new(self.clone(), tokio::spawn)
     }
 
-    /// Get the summary for the latest checkpoint known to Bigtable.
-    pub async fn checkpoint_watermark(&self) -> anyhow::Result<Option<CheckpointSummary>> {
+    /// Get the watermark representing the minimum across all pipeline watermarks.
+    pub async fn watermark(&self) -> anyhow::Result<Option<Watermark>> {
+        measure("watermark", &(), self.0.clone().get_watermark()).await
+    }
+
+    /// Get the minimum watermark across the specified pipelines.
+    pub async fn watermark_for_pipeline(
+        &self,
+        pipelines: &[&str],
+    ) -> anyhow::Result<Option<Watermark>> {
         measure(
             "watermark",
             &(),
-            self.0.clone().get_latest_checkpoint_summary(),
+            self.0.clone().get_watermark_for_pipelines(pipelines),
         )
         .await
     }
@@ -96,7 +104,7 @@ impl BigtableReader {
     pub(crate) async fn checkpoints(
         &self,
         keys: &[CheckpointSequenceNumber],
-    ) -> anyhow::Result<Vec<Checkpoint>> {
+    ) -> anyhow::Result<Vec<CheckpointData>> {
         measure("checkpoints", &keys, self.0.clone().get_checkpoints(keys)).await
     }
 

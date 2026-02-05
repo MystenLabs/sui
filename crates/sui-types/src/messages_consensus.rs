@@ -21,6 +21,7 @@ use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
+use mysten_common::debug_fatal;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -253,6 +254,8 @@ pub enum ConsensusTransactionKey {
     ExecutionTimeObservation(AuthorityName, u64 /* generation */),
     // V2: dedup by authority + sequence + digest
     CheckpointSignatureV2(AuthorityName, CheckpointSequenceNumber, CheckpointDigest),
+    // Deprecated.
+    RandomnessStateUpdate,
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -298,6 +301,9 @@ impl Debug for ConsensusTransactionKey {
                     "ExecutionTimeObservation({:?}, {generation:?})",
                     name.concise()
                 )
+            }
+            Self::RandomnessStateUpdate => {
+                write!(f, "RandomnessStateUpdate")
             }
         }
     }
@@ -568,33 +574,6 @@ impl VersionedDkgConfirmation {
 }
 
 impl ConsensusTransaction {
-    pub fn new_certificate_message(
-        authority: &AuthorityName,
-        certificate: CertifiedTransaction,
-    ) -> Self {
-        let mut hasher = DefaultHasher::new();
-        let tx_digest = certificate.digest();
-        tx_digest.hash(&mut hasher);
-        authority.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
-        }
-    }
-
-    pub fn new_user_transaction_message(authority: &AuthorityName, tx: Transaction) -> Self {
-        let mut hasher = DefaultHasher::new();
-        let tx_digest = tx.digest();
-        tx_digest.hash(&mut hasher);
-        authority.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::UserTransaction(Box::new(tx)),
-        }
-    }
-
     pub fn new_user_transaction_v2_message(
         authority: &AuthorityName,
         tx: PlainTransactionWithClaims,
@@ -747,9 +726,10 @@ impl ConsensusTransaction {
                 )))
             }
             ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
-                unreachable!(
+                debug_fatal!(
                     "there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External"
-                )
+                );
+                ConsensusTransactionKey::RandomnessStateUpdate
             }
             ConsensusTransactionKind::RandomnessDkgMessage(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgMessage(*authority)
