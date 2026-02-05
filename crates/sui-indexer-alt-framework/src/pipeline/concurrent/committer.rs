@@ -5,7 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
-use sui_concurrency_limiter::{AimdLimit, Limit, Outcome};
+use std::time::Instant;
+
+use sui_concurrency_limiter::{Limit, Outcome};
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
@@ -47,7 +49,7 @@ pub(super) fn committer<H: Handler + 'static>(
     tx: mpsc::Sender<Vec<WatermarkPart>>,
     db: H::Store,
     metrics: Arc<IndexerMetrics>,
-    aimd: Option<(Arc<AimdLimit>, watch::Receiver<usize>)>,
+    limiter: Option<(Arc<dyn Limit>, watch::Receiver<usize>)>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = H::NAME, "Starting committer");
@@ -57,7 +59,7 @@ pub(super) fn committer<H: Handler + 'static>(
             &metrics.latest_partially_committed_checkpoint,
         );
 
-        let limiter = aimd.as_ref().map(|(l, _)| l.clone());
+        let lim = limiter.as_ref().map(|(l, _)| l.clone());
 
         let make_task = |BatchedRows {
                              batch,
@@ -70,7 +72,7 @@ pub(super) fn committer<H: Handler + 'static>(
             let db = db.clone();
             let metrics = metrics.clone();
             let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
-            let limiter = limiter.clone();
+            let lim = lim.clone();
 
             // Repeatedly try to get a connection to the DB and write the batch. Use an
             // exponential backoff in case the failure is due to contention over the DB
@@ -87,14 +89,14 @@ pub(super) fn committer<H: Handler + 'static>(
             let highest_checkpoint_timestamp = watermark.iter().map(|w| w.timestamp_ms()).max();
 
             use backoff::Error as BE;
-            let outer_limiter = limiter.clone();
+            let outer_lim = lim.clone();
             let commit = move || {
                 let batch = batch.clone();
                 let handler = handler.clone();
                 let db = db.clone();
                 let metrics = metrics.clone();
                 let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
-                let limiter = limiter.clone();
+                let lim = lim.clone();
                 async move {
                     if batch_len == 0 {
                         return Ok(());
@@ -105,6 +107,7 @@ pub(super) fn committer<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .inc();
 
+                    let start = Instant::now();
                     let guard = metrics
                         .committer_commit_latency
                         .with_label_values(&[H::NAME])
@@ -121,12 +124,12 @@ pub(super) fn committer<H: Handler + 'static>(
                             .with_label_values(&[H::NAME])
                             .inc();
 
-                        if let Some(ref limiter) = limiter {
-                            limiter.on_sample(Outcome::Dropped);
+                        if let Some(ref lim) = lim {
+                            lim.on_sample(Outcome::Dropped, start.elapsed());
                             metrics
                                 .committer_write_concurrency
                                 .with_label_values(&[H::NAME])
-                                .set(limiter.current() as i64);
+                                .set(lim.current() as i64);
                         }
 
                         BE::transient(Break::Err(e))
@@ -171,12 +174,12 @@ pub(super) fn committer<H: Handler + 'static>(
                                 .with_label_values(&[H::NAME])
                                 .observe(affected as f64);
 
-                            if let Some(ref limiter) = limiter {
-                                limiter.on_sample(Outcome::Success);
+                            if let Some(ref lim) = lim {
+                                lim.on_sample(Outcome::Success, start.elapsed());
                                 metrics
                                     .committer_write_concurrency
                                     .with_label_values(&[H::NAME])
-                                    .set(limiter.current() as i64);
+                                    .set(lim.current() as i64);
                             }
 
                             Ok(())
@@ -195,8 +198,8 @@ pub(super) fn committer<H: Handler + 'static>(
                                 .with_label_values(&[H::NAME])
                                 .inc();
 
-                            if let Some(ref limiter) = limiter {
-                                limiter.on_sample(Outcome::Dropped);
+                            if let Some(ref lim) = lim {
+                                lim.on_sample(Outcome::Dropped, start.elapsed());
                             }
 
                             Err(BE::transient(Break::Err(e)))
@@ -206,8 +209,8 @@ pub(super) fn committer<H: Handler + 'static>(
             };
 
             async move {
-                if let Some(ref limiter) = outer_limiter {
-                    limiter.acquire();
+                if let Some(ref lim) = outer_lim {
+                    lim.acquire();
                 }
 
                 let result = async {
@@ -224,15 +227,15 @@ pub(super) fn committer<H: Handler + 'static>(
                 }
                 .await;
 
-                if let Some(ref limiter) = outer_limiter {
-                    limiter.release();
+                if let Some(ref lim) = outer_lim {
+                    lim.release();
                 }
 
                 result
             }
         };
 
-        let result = if let Some((_, limit_rx)) = aimd {
+        let result = if let Some((_, limit_rx)) = limiter {
             ReceiverStream::new(rx)
                 .try_for_each_spawned_dynamic(limit_rx, make_task)
                 .await

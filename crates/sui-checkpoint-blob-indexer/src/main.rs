@@ -11,7 +11,7 @@ use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
 use object_store::{BackoffConfig, ClientOptions, RetryConfig};
-use sui_concurrency_limiter::AimdConfig;
+use sui_concurrency_limiter::{AimdConfig, Gradient2Config};
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -122,6 +122,64 @@ struct Args {
     #[arg(long)]
     ingest_aimd_successes_per_increase: Option<usize>,
 
+    /// Enable Gradient2 dynamic write concurrency with this initial limit.
+    /// When set, takes priority over both --write-concurrency and --aimd-*.
+    #[arg(long)]
+    gradient2_initial_limit: Option<usize>,
+
+    /// Gradient2 minimum concurrency limit (default: 20)
+    #[arg(long)]
+    gradient2_min_limit: Option<usize>,
+
+    /// Gradient2 maximum concurrency limit (default: 200)
+    #[arg(long)]
+    gradient2_max_limit: Option<usize>,
+
+    /// Gradient2 smoothing factor in (0.0, 1.0] (default: 0.2)
+    #[arg(long)]
+    gradient2_smoothing: Option<f64>,
+
+    /// Gradient2 additive growth per update (default: 4)
+    #[arg(long)]
+    gradient2_queue_size: Option<usize>,
+
+    /// Gradient2 tolerance multiplier on RTT ratio (default: 1.5)
+    #[arg(long)]
+    gradient2_tolerance: Option<f64>,
+
+    /// Gradient2 long-term RTT EMA window size (default: 600)
+    #[arg(long)]
+    gradient2_long_window: Option<usize>,
+
+    /// Enable Gradient2 dynamic ingestion concurrency with this initial limit.
+    /// When set, takes priority over both --ingest-concurrency and --ingest-aimd-*.
+    #[arg(long)]
+    ingest_gradient2_initial_limit: Option<usize>,
+
+    /// Ingestion Gradient2 minimum concurrency limit (default: 20)
+    #[arg(long)]
+    ingest_gradient2_min_limit: Option<usize>,
+
+    /// Ingestion Gradient2 maximum concurrency limit (default: 200)
+    #[arg(long)]
+    ingest_gradient2_max_limit: Option<usize>,
+
+    /// Ingestion Gradient2 smoothing factor (default: 0.2)
+    #[arg(long)]
+    ingest_gradient2_smoothing: Option<f64>,
+
+    /// Ingestion Gradient2 additive growth per update (default: 4)
+    #[arg(long)]
+    ingest_gradient2_queue_size: Option<usize>,
+
+    /// Ingestion Gradient2 tolerance multiplier (default: 1.5)
+    #[arg(long)]
+    ingest_gradient2_tolerance: Option<f64>,
+
+    /// Ingestion Gradient2 long-term RTT EMA window size (default: 600)
+    #[arg(long)]
+    ingest_gradient2_long_window: Option<usize>,
+
     #[command(flatten)]
     metrics_args: MetricsArgs,
 
@@ -228,6 +286,32 @@ async fn main() -> anyhow::Result<()> {
         config.committer.aimd = Some(aimd);
     }
 
+    if let Some(initial_limit) = args.gradient2_initial_limit {
+        let mut g2 = Gradient2Config {
+            initial_limit,
+            ..Gradient2Config::default()
+        };
+        if let Some(v) = args.gradient2_min_limit {
+            g2.min_limit = v;
+        }
+        if let Some(v) = args.gradient2_max_limit {
+            g2.max_limit = v;
+        }
+        if let Some(v) = args.gradient2_smoothing {
+            g2.smoothing = v;
+        }
+        if let Some(v) = args.gradient2_queue_size {
+            g2.queue_size = v;
+        }
+        if let Some(v) = args.gradient2_tolerance {
+            g2.tolerance = v;
+        }
+        if let Some(v) = args.gradient2_long_window {
+            g2.long_window = v;
+        }
+        config.committer.gradient2 = Some(g2);
+    }
+
     let mut ingestion_config = IngestionConfig {
         ingest_concurrency: args.ingest_concurrency,
         checkpoint_buffer_size: args.checkpoint_buffer_size,
@@ -252,6 +336,32 @@ async fn main() -> anyhow::Result<()> {
             aimd.successes_per_increase = v;
         }
         ingestion_config.aimd = Some(aimd);
+    }
+
+    if let Some(initial_limit) = args.ingest_gradient2_initial_limit {
+        let mut g2 = Gradient2Config {
+            initial_limit,
+            ..ingestion_config.default_gradient2()
+        };
+        if let Some(v) = args.ingest_gradient2_min_limit {
+            g2.min_limit = v;
+        }
+        if let Some(v) = args.ingest_gradient2_max_limit {
+            g2.max_limit = v;
+        }
+        if let Some(v) = args.ingest_gradient2_smoothing {
+            g2.smoothing = v;
+        }
+        if let Some(v) = args.ingest_gradient2_queue_size {
+            g2.queue_size = v;
+        }
+        if let Some(v) = args.ingest_gradient2_tolerance {
+            g2.tolerance = v;
+        }
+        if let Some(v) = args.ingest_gradient2_long_window {
+            g2.long_window = v;
+        }
+        ingestion_config.gradient2 = Some(g2);
     }
 
     let mut indexer = Indexer::new(

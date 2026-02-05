@@ -7,10 +7,11 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde::Serialize;
-use sui_concurrency_limiter::AimdLimit;
+use sui_concurrency_limiter::{AimdLimit, Gradient2Limit, Limit};
 use sui_futures::service::Service;
 use tokio::sync::SetOnce;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tracing::info;
 
 use crate::Task;
@@ -232,11 +233,14 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner: pruner_config,
     } = config;
 
-    // When AIMD is configured, size channels for the max possible concurrency.
-    let effective_concurrency = committer_config
-        .aimd
-        .as_ref()
-        .map_or(committer_config.write_concurrency, |a| a.max_limit);
+    // When dynamic limiting is configured, size channels for the max possible concurrency.
+    let effective_concurrency = if let Some(ref g2) = committer_config.gradient2 {
+        g2.max_limit
+    } else if let Some(ref aimd) = committer_config.aimd {
+        aimd.max_limit
+    } else {
+        committer_config.write_concurrency
+    };
 
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
     //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
@@ -247,10 +251,16 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let handler = Arc::new(handler);
 
-    let aimd = committer_config.aimd.as_ref().map(|aimd_config| {
-        let (limiter, rx) = AimdLimit::new(aimd_config.clone());
-        (Arc::new(limiter), rx)
-    });
+    let limiter: Option<(Arc<dyn Limit>, watch::Receiver<usize>)> =
+        if let Some(g2_config) = &committer_config.gradient2 {
+            let (lim, rx) = Gradient2Limit::new(g2_config.clone());
+            Some((Arc::new(lim), rx))
+        } else if let Some(aimd_config) = &committer_config.aimd {
+            let (lim, rx) = AimdLimit::new(aimd_config.clone());
+            Some((Arc::new(lim), rx))
+        } else {
+            None
+        };
 
     let s_processor = processor(
         handler.clone(),
@@ -275,7 +285,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_tx,
         store.clone(),
         metrics.clone(),
-        aimd,
+        limiter,
     );
 
     let s_commit_watermark = commit_watermark::<H>(

@@ -12,7 +12,7 @@ use std::time::Duration;
 use prometheus::Registry;
 use serde::Deserialize;
 use serde::Serialize;
-use sui_concurrency_limiter::AimdConfig;
+use sui_concurrency_limiter::{AimdConfig, Gradient2Config};
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
 
@@ -75,6 +75,10 @@ pub struct IngestionConfig {
     /// `ingest_concurrency` is ignored and the limit is adjusted automatically based on
     /// fetch outcomes.
     pub aimd: Option<AimdConfig>,
+
+    /// Optional Gradient2 configuration for latency-based dynamic ingestion concurrency.
+    /// When set, takes priority over both `ingest_concurrency` and `aimd`.
+    pub gradient2: Option<Gradient2Config>,
 }
 
 pub struct IngestionService {
@@ -95,6 +99,13 @@ impl IngestionConfig {
         AimdConfig {
             initial_limit: self.ingest_concurrency,
             ..AimdConfig::default()
+        }
+    }
+
+    pub fn default_gradient2(&self) -> Gradient2Config {
+        Gradient2Config {
+            initial_limit: self.ingest_concurrency,
+            ..Gradient2Config::default()
         }
     }
 
@@ -233,6 +244,7 @@ impl Default for IngestionConfig {
             streaming_connection_timeout_ms: 5000,    // 5 seconds
             streaming_statement_timeout_ms: 5000,     // 5 seconds
             aimd: None,
+            gradient2: None,
         }
     }
 }

@@ -10,9 +10,7 @@ use anyhow::Context;
 use anyhow::anyhow;
 use futures::Stream;
 use futures::future::try_join_all;
-use sui_concurrency_limiter::AimdLimit;
-use sui_concurrency_limiter::Limit;
-use sui_concurrency_limiter::Outcome;
+use sui_concurrency_limiter::{AimdLimit, Gradient2Limit, Limit, Outcome};
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
@@ -101,10 +99,16 @@ where
         // This value is updated every outer loop iteration after both streaming and broadcasting complete.
         let mut checkpoint_hi = start_cp;
 
-        let aimd = config.aimd.as_ref().map(|aimd_config| {
-            let (limiter, rx) = AimdLimit::new(aimd_config.clone());
-            (Arc::new(limiter), rx)
-        });
+        let limiter: Option<(Arc<dyn Limit>, watch::Receiver<usize>)> =
+            if let Some(g2_config) = &config.gradient2 {
+                let (lim, rx) = Gradient2Limit::new(g2_config.clone());
+                Some((Arc::new(lim), rx))
+            } else if let Some(aimd_config) = &config.aimd {
+                let (lim, rx) = AimdLimit::new(aimd_config.clone());
+                Some((Arc::new(lim), rx))
+            } else {
+                None
+            };
 
         'outer: while checkpoint_hi < end_cp {
             // Set up the streaming task for the current range [checkpoint_hi, end_cp). This function
@@ -135,7 +139,7 @@ where
                 ingest_hi_watch_rx.clone(),
                 client.clone(),
                 subscribers.clone(),
-                aimd.as_ref().map(|(l, rx)| (l.clone(), rx.clone())),
+                limiter.as_ref().map(|(l, rx)| (l.clone(), rx.clone())),
                 metrics.clone(),
             );
 
@@ -223,23 +227,24 @@ fn ingest_and_broadcast_range(
     ingest_hi_rx: watch::Receiver<Option<u64>>,
     client: IngestionClient,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
-    aimd: Option<(Arc<AimdLimit>, watch::Receiver<usize>)>,
+    limiter: Option<(Arc<dyn Limit>, watch::Receiver<usize>)>,
     metrics: Arc<IngestionMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
-        let limiter = aimd.as_ref().map(|(l, _)| l.clone());
+        let lim = limiter.as_ref().map(|(l, _)| l.clone());
 
         let make_task = |cp: u64| {
             let client = client.clone();
             let subscribers = subscribers.clone();
-            let limiter = limiter.clone();
+            let lim = lim.clone();
             let metrics = metrics.clone();
 
             async move {
-                if let Some(ref limiter) = limiter {
-                    limiter.acquire();
+                if let Some(ref lim) = lim {
+                    lim.acquire();
                 }
 
+                let start = std::time::Instant::now();
                 let result = async {
                     // Fetch the checkpoint or stop if cancelled.
                     let checkpoint = client.wait_for(cp, retry_interval).await?;
@@ -247,30 +252,30 @@ fn ingest_and_broadcast_range(
                     // Send checkpoint to all subscribers.
                     if send_checkpoint(checkpoint, &subscribers).await.is_ok() {
                         debug!(checkpoint = cp, "Broadcasted checkpoint");
-                        if let Some(ref limiter) = limiter {
-                            limiter.on_sample(Outcome::Success);
-                            metrics.ingestion_concurrency.set(limiter.current() as i64);
+                        if let Some(ref lim) = lim {
+                            lim.on_sample(Outcome::Success, start.elapsed());
+                            metrics.ingestion_concurrency.set(lim.current() as i64);
                         }
                         Ok(())
                     } else {
-                        if let Some(ref limiter) = limiter {
-                            limiter.on_sample(Outcome::Ignore);
+                        if let Some(ref lim) = lim {
+                            lim.on_sample(Outcome::Ignore, start.elapsed());
                         }
                         Err(Break::Break)
                     }
                 }
                 .await;
 
-                if let Some(ref limiter) = limiter {
-                    limiter.release();
+                if let Some(ref lim) = lim {
+                    lim.release();
                 }
 
                 // Signal Dropped for fetch errors.
                 if let Err(Break::Err(_)) = &result
-                    && let Some(ref limiter) = limiter
+                    && let Some(ref lim) = lim
                 {
-                    limiter.on_sample(Outcome::Dropped);
-                    metrics.ingestion_concurrency.set(limiter.current() as i64);
+                    lim.on_sample(Outcome::Dropped, start.elapsed());
+                    metrics.ingestion_concurrency.set(lim.current() as i64);
                 }
 
                 result
@@ -283,7 +288,7 @@ fn ingest_and_broadcast_range(
         let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
         // docs::/#bound
 
-        if let Some((_, limit_rx)) = aimd {
+        if let Some((_, limit_rx)) = limiter {
             checkpoints
                 .try_for_each_spawned_dynamic(limit_rx, make_task)
                 .await
@@ -523,6 +528,7 @@ mod tests {
             streaming_connection_timeout_ms: 100,
             streaming_statement_timeout_ms: 100,
             aimd: None,
+            gradient2: None,
         }
     }
 
