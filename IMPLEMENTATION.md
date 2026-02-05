@@ -8,6 +8,64 @@ post-processing is still in flight.
 
 ---
 
+## Correctness Argument
+
+Transaction execution is only persisted to disk right before `CheckpointExecutor`
+advances the highest-executed-checkpoint watermark (via `commit_transaction_outputs`
+followed by `bump_highest_executed_checkpoint`). Since we now also block the watermark
+on post-processing completion, the watermark cannot advance unless all post-processing
+for the checkpoint's transactions is complete.
+
+On crash and restart, there are three scenarios:
+
+1. **No transactions were persisted before the restart.** All transactions will be
+   re-executed, which will call `post_process_one_tx` again, spawning post-processing
+   for all of them. `CheckpointExecutor` will wait for post-processing to finish before
+   advancing the watermark.
+
+2. **Transactions were persisted and post-processing completed, but the watermark was
+   not yet advanced.** On restart, the checkpoint is re-processed from the watermark.
+   `schedule_transaction_execution` detects that effects already exist (via
+   `executed_fx_digests`) and skips re-execution. Post-processing is already done, so
+   no work is lost.
+
+3. **The watermark was advanced before the restart.** All work (execution,
+   post-processing, watermark) completed successfully. Nothing to redo.
+
+### Analysis of the Argument
+
+There is a **gap between scenarios 1 and 2**: transactions may be persisted to disk
+(`commit_transaction_outputs`) but post-processing may NOT have completed yet when the
+crash occurs. On restart:
+
+- The checkpoint is re-processed from the watermark.
+- `schedule_transaction_execution` (line 858 of `checkpoint_executor/mod.rs`) checks
+  `executed_fx_digests` for each transaction. If effects are already persisted, the
+  transaction is **filtered out** and not re-enqueued for execution.
+- Since `execute_certificate` is not called for these transactions,
+  `post_process_one_tx` is not called either.
+- **Post-processing data (index writes, event emissions) for these transactions is
+  lost.**
+
+This is the same behavior as today — `post_process_one_tx` currently runs synchronously
+before `commit_transaction_outputs`, but after that persistence step, a crash would
+still lose the in-memory index/subscription state. The index data written by
+`post_process_one_tx` is written to `IndexStore` (a separate DB), and its persistence
+is not atomic with `commit_transaction_outputs`. So the crash window already exists in
+the current code.
+
+Furthermore, the data written by `post_process_one_tx` is used exclusively for
+JSON-RPC query serving (transaction lookups by sender, input object, etc.) and
+WebSocket event subscriptions. Subscription state is inherently transient (subscribers
+disconnect on crash). Index data, if lost, results in missing query results but does
+not affect consensus, execution, or state correctness.
+
+**Conclusion:** The gap between scenarios 1 and 2 represents a pre-existing condition,
+not a regression introduced by this change. The change does not widen the crash window
+for post-processing data loss — it merely makes the concurrent execution explicit.
+
+---
+
 ## Phase 1: Spawn `post_process_one_tx` on a Blocking Thread
 
 ### 1.1 Add new fields to `AuthorityState`
