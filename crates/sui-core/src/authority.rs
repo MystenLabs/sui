@@ -3815,7 +3815,7 @@ impl AuthorityState {
                 Owner::ObjectOwner(object_id) => {
                     let id = o.id();
                     let Some(info) = Self::try_create_dynamic_field_info(
-                        &self.get_object_store(),
+                        self.get_object_store(),
                         o,
                         &BTreeMap::new(),
                         layout_resolver.as_mut(),
