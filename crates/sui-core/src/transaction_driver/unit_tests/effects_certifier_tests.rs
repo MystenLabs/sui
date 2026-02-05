@@ -213,13 +213,11 @@ async fn test_successful_certified_effects() {
     let executed_response_full = WaitForEffectsResponse::Executed {
         effects_digest,
         details: Some(Box::new(executed_data.clone())),
-        fast_path: false,
     };
 
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
-        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -268,7 +266,6 @@ async fn test_successful_certified_effects() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
-        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -280,7 +277,6 @@ async fn test_successful_certified_effects() {
     let submit_tx_result = SubmitTxResult::Executed {
         effects_digest,
         details: Some(Box::new(executed_data.clone())),
-        fast_path: false,
     };
     let result = certifier
         .get_certified_finalized_effects(
@@ -1048,14 +1044,12 @@ async fn test_forked_execution() {
         let response = WaitForEffectsResponse::Executed {
             effects_digest: digest,
             details: None,
-            fast_path: false,
         };
         client.set_ack_response(tx_digest, response);
 
         let executed_response_full = WaitForEffectsResponse::Executed {
             effects_digest: digest,
             details: Some(Box::new(executed_data.clone())),
-            fast_path: false,
         };
         client.set_full_response(tx_digest, executed_response_full.clone());
     }
@@ -1130,12 +1124,10 @@ async fn test_aborted_with_multiple_effects() {
             0 => WaitForEffectsResponse::Executed {
                 effects_digest: effects_digest_1, // from fastpath
                 details: None,
-                fast_path: false,
             },
             1 => WaitForEffectsResponse::Executed {
                 effects_digest: effects_digest_2, // from fastpath
                 details: None,
-                fast_path: false,
             },
             2 => WaitForEffectsResponse::Rejected {
                 error: Some(
@@ -1200,7 +1192,6 @@ async fn test_full_effects_retry_loop() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
-        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -1236,7 +1227,6 @@ async fn test_full_effects_retry_loop() {
             let successful_response = WaitForEffectsResponse::Executed {
                 effects_digest,
                 details: Some(Box::new(executed_data.clone())),
-                fast_path: false,
             };
             client.set_full_response(tx_digest, successful_response);
         }
@@ -1293,7 +1283,6 @@ async fn test_full_effects_digest_mismatch() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest: certified_digest,
         details: None,
-        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -1315,7 +1304,6 @@ async fn test_full_effects_digest_mismatch() {
             let mismatched_response = WaitForEffectsResponse::Executed {
                 effects_digest: mismatched_digest,
                 details: Some(Box::new(executed_data.clone())),
-                fast_path: false,
             };
             client.set_full_response(tx_digest, mismatched_response);
         } else {
@@ -1323,7 +1311,6 @@ async fn test_full_effects_digest_mismatch() {
             let correct_response = WaitForEffectsResponse::Executed {
                 effects_digest: certified_digest,
                 details: Some(Box::new(executed_data.clone())),
-                fast_path: false,
             };
             client.set_full_response(tx_digest, correct_response);
         }
@@ -1378,7 +1365,6 @@ async fn test_request_retrier_exhaustion() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
-        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {

@@ -728,14 +728,12 @@ async fn execute_soft_bundle_with_retries(
                 SubmitTxResult::Executed {
                     effects_digest,
                     details,
-                    fast_path,
                 } => {
                     // Transaction was already executed - return the effects directly
                     outcomes.push(SubmissionOutcome::ImmediateResponse(
                         WaitForEffectsResponse::Executed {
                             effects_digest,
                             details,
-                            fast_path,
                         },
                     ));
                 }

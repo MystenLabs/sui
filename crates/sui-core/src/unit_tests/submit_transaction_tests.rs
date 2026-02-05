@@ -238,7 +238,6 @@ async fn test_submit_transaction_already_executed() {
         SubmitTxResult::Executed {
             effects_digest,
             details,
-            fast_path: _,
         } => {
             let details = details.as_ref().unwrap();
             assert_eq!(*effects_digest, details.effects.digest());
