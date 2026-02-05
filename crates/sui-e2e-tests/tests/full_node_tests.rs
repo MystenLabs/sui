@@ -1442,3 +1442,118 @@ async fn publish_init_events_without_local_execution() {
         .unwrap();
     assert_eq!(response.events.unwrap().data.len(), 1);
 }
+
+/// Verifies that async post-processing produces the same index results as synchronous
+/// post-processing. Spawns two fullnodes (one async, one sync), executes a workload,
+/// restarts the async fullnode, and triggers reconfiguration which runs
+/// check_system_consistency with secondary index checks enabled.
+#[sim_test]
+async fn test_async_post_processing_index_consistency() -> Result<(), anyhow::Error> {
+    let safety_config =
+        sui_config::node::ExpensiveSafetyCheckConfig::new_enable_all_with_secondary_index_checks();
+
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+
+    // Spawn async fullnode (default behavior)
+    let async_fn_config = test_cluster
+        .fullnode_config_builder()
+        .with_expensive_safety_check_config(safety_config.clone())
+        .build(&mut OsRng, test_cluster.swarm.config());
+    let async_fullnode = test_cluster
+        .start_fullnode_from_config(async_fn_config)
+        .await;
+    let async_fn_name = async_fullnode.sui_node.state().name;
+
+    // Spawn sync fullnode
+    let sync_fn_config = test_cluster
+        .fullnode_config_builder()
+        .with_expensive_safety_check_config(safety_config)
+        .with_sync_post_process_one_tx(true)
+        .build(&mut OsRng, test_cluster.swarm.config());
+    let sync_fullnode = test_cluster
+        .start_fullnode_from_config(sync_fn_config)
+        .await;
+    let _sync_fn_name = sync_fullnode.sui_node.state().name;
+
+    // Execute some transactions
+    let context = &test_cluster.wallet;
+    for _ in 0..5 {
+        transfer_coin(context).await?;
+    }
+
+    // Wait for fullnodes to catch up
+    sleep(Duration::from_secs(5)).await;
+
+    // Restart the async fullnode to test crash recovery
+    info!("Restarting async fullnode");
+    test_cluster.stop_node(&async_fn_name);
+    sleep(Duration::from_secs(2)).await;
+    test_cluster.start_node(&async_fn_name).await;
+
+    // Execute more transactions after restart
+    for _ in 0..5 {
+        transfer_coin(context).await?;
+    }
+
+    // Wait for fullnodes to catch up
+    sleep(Duration::from_secs(5)).await;
+
+    // Trigger reconfiguration which calls check_system_consistency with
+    // enable_secondary_index_checks on both fullnodes. This verifies that every
+    // checkpointed transaction has a corresponding entry in transactions_seq.
+    test_cluster.trigger_reconfiguration().await;
+
+    // Compare sequence numbers between the two fullnodes to verify they indexed
+    // the same number of transactions.
+    let async_state = async_fullnode.sui_node.state();
+    let sync_state = sync_fullnode.sui_node.state();
+    let async_next_seq = async_state
+        .indexes
+        .as_ref()
+        .expect("async fullnode should have indexes")
+        .next_sequence_number();
+    let sync_next_seq = sync_state
+        .indexes
+        .as_ref()
+        .expect("sync fullnode should have indexes")
+        .next_sequence_number();
+    assert_eq!(
+        async_next_seq, sync_next_seq,
+        "async and sync fullnodes should have indexed the same number of transactions"
+    );
+    drop(async_state);
+    drop(sync_state);
+
+    // Restart async fullnode one more time and trigger another reconfiguration
+    info!("Restarting async fullnode again");
+    test_cluster.stop_node(&async_fn_name);
+    sleep(Duration::from_secs(2)).await;
+    test_cluster.start_node(&async_fn_name).await;
+
+    for _ in 0..3 {
+        transfer_coin(context).await?;
+    }
+
+    sleep(Duration::from_secs(5)).await;
+    test_cluster.trigger_reconfiguration().await;
+
+    // Verify index counts still match after second restart+reconfiguration
+    let async_state = async_fullnode.sui_node.state();
+    let sync_state = sync_fullnode.sui_node.state();
+    let async_next_seq = async_state
+        .indexes
+        .as_ref()
+        .unwrap()
+        .next_sequence_number();
+    let sync_next_seq = sync_state
+        .indexes
+        .as_ref()
+        .unwrap()
+        .next_sequence_number();
+    assert_eq!(
+        async_next_seq, sync_next_seq,
+        "async and sync fullnodes should still match after second reconfiguration"
+    );
+
+    Ok(())
+}
