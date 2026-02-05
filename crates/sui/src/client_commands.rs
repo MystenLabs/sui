@@ -3213,7 +3213,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     } else if tx_digest {
         Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
-        let mut signatures = if forking_mode {
+        let signatures = if forking_mode {
             vec![]
         } else {
             let mut signatures = vec![
@@ -3356,7 +3356,6 @@ async fn fetch_move_packages(
                 pkg_id_to_name
                     .get(&id)
                     .map_or("of unknown name", |x| x.as_str()),
-                id
             )
         })?;
         packages.push(package);
