@@ -37,6 +37,10 @@ struct Args {
     /// BigTable instance ID
     instance_id: String,
 
+    /// GCP project ID for the BigTable instance (defaults to the token provider's project)
+    #[arg(long)]
+    bigtable_project: Option<String>,
+
     /// BigTable app profile ID
     #[arg(long)]
     app_profile_id: Option<String>,
@@ -98,6 +102,7 @@ async fn main() -> Result<()> {
 
     let client = BigTableClient::new_remote(
         args.instance_id,
+        args.bigtable_project,
         false,
         None,
         "sui-kvstore-alt".to_string(),

@@ -25,6 +25,10 @@ pub struct KvArgs {
     #[arg(long, group = "kv_source")]
     pub bigtable_instance: Option<String>,
 
+    /// GCP project ID for the BigTable instance (defaults to the token provider's project).
+    #[arg(long)]
+    pub bigtable_project: Option<String>,
+
     /// App profile ID to use for Bigtable client. If not provided, the default profile will be used.
     #[arg(long)]
     pub bigtable_app_profile_id: Option<String>,
@@ -43,6 +47,7 @@ impl KvArgs {
     pub fn bigtable_args(&self) -> BigtableArgs {
         BigtableArgs {
             bigtable_statement_timeout_ms: self.kv_statement_timeout_ms,
+            bigtable_project: self.bigtable_project.clone(),
             bigtable_app_profile_id: self.bigtable_app_profile_id.clone(),
         }
     }
