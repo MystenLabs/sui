@@ -42,7 +42,6 @@ pub(super) async fn live_object(
     object_id: ObjectID,
     options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectResponse, RpcError> {
-    println!("Fetching live object for ID: {}", object_id);
     let Some(object) = load_live(ctx, object_id)
         .await
         .context("Failed to load latest object")?

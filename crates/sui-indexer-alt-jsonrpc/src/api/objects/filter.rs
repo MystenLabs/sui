@@ -29,7 +29,7 @@ use crate::paginate::Page;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase", rename = "ObjectResponseQuery", default)]
-pub struct SuiObjectResponseQuery {
+pub(crate) struct SuiObjectResponseQuery {
     /// If None, no filter will be applied
     pub filter: Option<SuiObjectDataFilter>,
     /// config which fields to include in the response, by default only digest is included
@@ -38,7 +38,7 @@ pub struct SuiObjectResponseQuery {
 
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub enum SuiObjectDataFilter {
+pub(crate) enum SuiObjectDataFilter {
     /// Query for object's that don't match any of these filters.
     MatchNone(Vec<SuiObjectDataFilter>),
 
