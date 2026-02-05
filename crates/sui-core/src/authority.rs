@@ -3178,6 +3178,33 @@ impl AuthorityState {
         let (done_tx, done_rx) = tokio::sync::oneshot::channel();
         self.pending_post_processing.insert(tx_digest, done_rx);
 
+        if self.config.sync_post_process_one_tx {
+            // Synchronous mode: run post-processing inline on the calling thread.
+            // Used as a rollback mechanism and for testing correctness against async mode.
+            let result = Self::post_process_one_tx_impl(
+                &self.indexes,
+                &self.subscription_handler,
+                &self.metrics,
+                self.name,
+                self.get_backing_package_store(),
+                self.get_object_store(),
+                certificate,
+                effects,
+                inner_temporary_store,
+                epoch_store,
+            );
+
+            if let Err(e) = &result {
+                self.metrics.post_processing_total_failures.inc();
+                error!(?tx_digest, "tx post processing failed: {e}");
+            }
+
+            let _ = done_tx.send(());
+            self.pending_post_processing.remove(&tx_digest);
+
+            return result;
+        }
+
         // Clone the individual Arc fields needed by the spawned task
         let indexes = self.indexes.clone();
         let subscription_handler = self.subscription_handler.clone();
