@@ -439,7 +439,29 @@ This check runs at epoch boundaries when expensive safety checks are enabled,
 providing ongoing verification that async post-processing hasn't dropped any
 transactions.
 
+### Phase 4: Simtest with Crash Injection
+
+Added `fail_point!("crash-after-post-process-one-tx")` in the async `spawn_blocking`
+closure of `post_process_one_tx`, between `post_process_one_tx_impl` completion and
+`done_tx.send()`. This is the most interesting crash point: indexing work is done but
+the checkpoint executor hasn't been notified.
+
+Added `test_simulated_load_async_post_processing_consistency` in
+`crates/sui-benchmark/tests/simtest.rs` that:
+1. Spawns an async fullnode and a sync fullnode alongside validators
+2. Registers the fail point to randomly crash the async fullnode after indexing
+3. Runs load for 60 seconds with crash injection
+4. Clears the fail point and allows catch-up
+5. Triggers reconfiguration (which runs `check_system_consistency` including
+   the `transactions_seq` verification on all nodes)
+6. Verifies the async fullnode indexed at least as many transactions as the sync one
+
+Removed the original `test_async_post_processing_index_consistency` from
+`crates/sui-e2e-tests/tests/full_node_tests.rs` since the simtest provides
+stronger coverage with crash injection under load.
+
 ### Baseline testing
 
 - Existing tests should pass without modification (behavior is preserved).
 - Run `cargo simtest -p sui-e2e-tests` for full integration coverage.
+- Run `cargo simtest -p sui-benchmark -- test_simulated_load_async_post_processing_consistency` for crash injection test.
