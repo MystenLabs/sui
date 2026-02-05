@@ -28,6 +28,8 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 
+use crate::grpc::consistent_store::ForkingConsistentStore;
+use crate::grpc::ledger_service::ForkingLedgerService;
 use crate::rpc::object_provider::ObjectProvider;
 use async_trait::async_trait;
 use sui_data_store::ObjectStore as _;
@@ -35,6 +37,8 @@ use sui_data_store::stores::{DataStore, FileSystemStore, LruMemoryStore, ReadThr
 use sui_types::storage::ReadStore;
 use tracing::info;
 
+pub mod checkpoint_store;
+pub mod object_store;
 pub mod rpc_data_store;
 
 #[derive(Clone)]
@@ -53,6 +57,7 @@ pub struct ForkingStore {
     epoch_to_committee: Vec<Committee>,
 
     // Object data
+    // for object versions and other data, we need the normal indexer grpc reader
     live_objects: HashMap<ObjectID, SequenceNumber>,
     objects: HashMap<ObjectID, BTreeMap<SequenceNumber, Object>>,
 
