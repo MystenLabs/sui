@@ -7,9 +7,12 @@ use std::collections::btree_map::Entry;
 
 use anyhow::Context;
 use sui_indexer_alt_framework::types::base_types::ObjectID;
+use sui_indexer_alt_framework::types::base_types::SuiAddress;
+use sui_indexer_alt_framework::types::effects::TransactionEffects;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::object::Object;
+use sui_indexer_alt_framework::types::object::Owner;
 
 pub(crate) mod coin_balance_buckets;
 pub(crate) mod cp_bloom_blocks;
@@ -87,6 +90,21 @@ pub(crate) fn checkpoint_input_objects(
     }
 
     Ok(checkpoint_input_objects)
+}
+
+/// The recipient addresses from changed objects in a transaction's effects.
+///
+/// Returns addresses from `AddressOwner` and `ConsensusAddressOwner` owners,
+/// skipping other owner types.
+pub(crate) fn affected_addresses(effects: &TransactionEffects) -> impl Iterator<Item = SuiAddress> {
+    effects
+        .all_changed_objects()
+        .into_iter()
+        .filter_map(|(_, owner, _)| match owner {
+            Owner::AddressOwner(address) => Some(address),
+            Owner::ConsensusAddressOwner { owner, .. } => Some(owner),
+            _ => None,
+        })
 }
 
 #[cfg(test)]
