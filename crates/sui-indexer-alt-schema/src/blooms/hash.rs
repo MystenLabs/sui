@@ -52,7 +52,7 @@ impl DoubleHasher {
     }
 
     /// Generate a new hash value from the current h1 and h2 with:
-    /// - modulo addition of two independent hashes with well distributed bits to ensure inputs diverge into uncorrelated bits.
+    /// - modulo addition of two hashes with well distributed bits to ensure inputs diverge into uncorrelated bits.
     /// - circular left shift by 5 (coprime to 64) to avoid evenly spaced distributions by mixing high and low bits after the addition.
     pub fn next_hash(&mut self) -> u64 {
         self.h1 = self.h1.wrapping_add(self.h2).rotate_left(5);

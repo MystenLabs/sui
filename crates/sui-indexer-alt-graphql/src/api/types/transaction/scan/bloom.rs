@@ -48,11 +48,11 @@ pub(super) async fn candidate_cps(
         .context("Failed to connect to database for bloom filter scan")?;
 
     let cp_block_lo = cp_block_index(cp_lo);
-    let cp_block_hi = cp_block_index(cp_hi_inclusive);
+    let cp_block_hi_inclusive = cp_block_index(cp_hi_inclusive);
 
     // Block index and probe for each block in the range. Seeds vary per block, so we must
     // construct probes for each block.
-    let probes_by_block = (cp_block_lo..=cp_block_hi).flat_map(|id| {
+    let probes_by_block = (cp_block_lo..=cp_block_hi_inclusive).flat_map(|id| {
         CpBlockedBloomFilter::probe(id as u128, filter_values)
             .into_iter()
             .map(move |probe| (id, probe))
@@ -64,31 +64,38 @@ pub(super) async fn candidate_cps(
     let block_size = CP_BLOCK_SIZE as i64;
     let adjusted_limit = (page.limit_with_overhead() as f64 * OVERFETCH_MULTIPLIER) as i64;
 
-    // Find a page of checkpoint blocks where all bit probes matched.
-    //
-    // The double NOT EXISTS expresses:
-    //   "keep cp_block_index where every individual bit probe has a matching bloom block."
-    // Outer NOT EXISTS: true when all probes passed for this cp_block_index.
-    // Inner NOT EXISTS: true when a single bit probe has no bloom block with
-    //   the required bit set.
+    // Keep cp blocks where no probe fails. A probe fails if the bloom block row
+    // is missing or the required bit is not set.
     let matched_blocks = query!(
-        r#"SELECT
-                bp.cp_block_index,
-                bp.cp_block_index * {BigInt} as cp_lo,
-                bp.cp_block_index * {BigInt} + {BigInt} - 1 as cp_hi
-            FROM (SELECT DISTINCT cp_block_index FROM block_bit_probes) bp
-            WHERE NOT EXISTS (
-                SELECT 1 FROM block_bit_probes p
-                WHERE p.cp_block_index = bp.cp_block_index
-                  AND NOT EXISTS (
-                      SELECT 1 FROM cp_bloom_blocks bb
-                      WHERE bb.cp_block_index = p.cp_block_index
-                        AND bb.bloom_block_index = p.bloom_idx
-                        AND (get_byte(bb.bloom_filter, p.byte_pos % length(bb.bloom_filter)) & p.bit_mask) = p.bit_mask
-                  )
-            )
-            ORDER BY cp_lo {}
-            LIMIT {BigInt}"#,
+        r#"
+        -- Pre-fetch each bloom block once, so the NOT EXISTS check
+        -- doesn't re-lookup the same row for every bit probe.
+        WITH block_lookup AS MATERIALIZED (
+            SELECT p.cp_block_index, p.bloom_idx, bb.bloom_filter
+            FROM (SELECT DISTINCT cp_block_index, bloom_idx FROM block_bit_probes) p
+            LEFT JOIN cp_bloom_blocks bb
+              ON bb.cp_block_index = p.cp_block_index
+             AND bb.bloom_block_index = p.bloom_idx
+        )
+
+        SELECT bp.cp_block_index,
+            bp.cp_block_index * {BigInt} as cp_lo,
+            bp.cp_block_index * {BigInt} + {BigInt} - 1 as cp_hi_inclusive
+        FROM (SELECT DISTINCT cp_block_index FROM block_bit_probes) bp
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM block_bit_probes p
+            JOIN block_lookup bl
+              ON bl.cp_block_index = p.cp_block_index
+             AND bl.bloom_idx = p.bloom_idx
+            WHERE p.cp_block_index = bp.cp_block_index
+              AND (bl.bloom_filter IS NULL
+                OR (get_byte(bl.bloom_filter, p.byte_pos % length(bl.bloom_filter))
+                    & p.bit_mask) != p.bit_mask)
+        )
+        ORDER BY cp_lo {}
+        LIMIT {BigInt}
+        "#,
         block_size,
         block_size,
         block_size,
@@ -98,12 +105,14 @@ pub(super) async fn candidate_cps(
 
     // Expand matched blocks into individual checkpoint sequences.
     let candidate_cps = query!(
-        r#"SELECT DISTINCT gs.cp AS cp_sequence_number
-            FROM matched_blocks mb
-            CROSS JOIN LATERAL generate_series(
-                GREATEST(mb.cp_lo, {BigInt}),
-                LEAST(mb.cp_hi, {BigInt})
-            ) AS gs(cp)"#,
+        r#"
+        SELECT gs.cp AS cp_sequence_number
+        FROM matched_blocks mb
+        CROSS JOIN LATERAL generate_series(
+            GREATEST(mb.cp_lo, {BigInt}),
+            LEAST(mb.cp_hi_inclusive, {BigInt})
+        ) AS gs(cp)
+        "#,
         cp_lo as i64,
         cp_hi_inclusive as i64,
     );
@@ -113,7 +122,7 @@ pub(super) async fn candidate_cps(
         r#"
         WITH block_bit_probes AS ({})
         , matched_blocks AS ({})
-        , candidate_cps AS ({})
+        , candidate_cps AS MATERIALIZED ({})
         SELECT cb.cp_sequence_number::BIGINT
         FROM cp_blooms cb
         JOIN candidate_cps cc ON cb.cp_sequence_number = cc.cp_sequence_number
@@ -156,11 +165,13 @@ fn cp_block_probes(probes: impl Iterator<Item = (i64, BlockedBloomProbe)>) -> Qu
     }
 
     query!(
-        r#"SELECT
+        r#"
+        SELECT
             UNNEST({Array<BigInt>}) cp_block_index,
             UNNEST({Array<SmallInt>}) bloom_idx,
             UNNEST({Array<Integer>}) byte_pos,
-            UNNEST({Array<Integer>}) bit_mask"#,
+            UNNEST({Array<Integer>}) bit_mask
+        "#,
         cp_block_indices,
         bloom_idxs,
         byte_offsets,
