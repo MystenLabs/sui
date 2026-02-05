@@ -5,12 +5,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use object_store::ClientOptions;
 use object_store::aws::{AmazonS3Builder, S3ConditionalPut};
 use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
+use object_store::{BackoffConfig, ClientOptions, RetryConfig};
 use sui_concurrency_limiter::AimdConfig;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
@@ -164,6 +164,11 @@ async fn main() -> anyhow::Result<()> {
         GoogleCloudStorageBuilder::from_env()
             .with_client_options(client_options)
             .with_bucket_name(bucket)
+            .with_retry(RetryConfig {
+                backoff: BackoffConfig::default(),
+                max_retries: 0,
+                ..Default::default()
+            })
             .build()
             .map(Arc::new)?
     } else if let Some(container) = args.azure {
