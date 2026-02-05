@@ -408,33 +408,33 @@ pub async fn start_server(
     let uri = format!("http://{}", grpc_listen_address).parse().unwrap();
     let grpc_reader = LedgerGrpcReader::new(uri, LedgerGrpcArgs::default()).await?;
 
-    let rpc = RpcService::new(rpc_args, &registry)
-        .context("Failed to create RPC service")
-        .unwrap();
+    // let rpc = RpcService::new(rpc_args, &registry)
+    //     .context("Failed to create RPC service")
+    //     .unwrap();
 
-    println!("RPC listening on {}", rpc_listen_address);
+    // println!("RPC listening on {}", rpc_listen_address);
 
-    let mut jsonrpc_context = sui_indexer_alt_jsonrpc::context::Context::new(
-        Some(database_url.clone()),
-        None,
-        DbArgs::default(),
-        BigtableArgs::default(),
-        RpcConfig::default(),
-        rpc.metrics(),
-        &registry,
-    )
-    .await
-    .expect("Failed to create JSONRPC context");
-    jsonrpc_context.with_grpc_kv_loader(grpc_reader);
+    // let mut jsonrpc_context = sui_indexer_alt_jsonrpc::context::Context::new(
+    //     Some(database_url.clone()),
+    //     None,
+    //     DbArgs::default(),
+    //     BigtableArgs::default(),
+    //     RpcConfig::default(),
+    //     rpc.metrics(),
+    //     &registry,
+    // )
+    // .await
+    // .expect("Failed to create JSONRPC context");
+    // jsonrpc_context.with_grpc_kv_loader(grpc_reader);
 
-    let context = crate::context::Context {
-        pg_context: jsonrpc_context,
-        simulacrum: simulacrum.clone(),
-        db_writer,
-        at_checkpoint,
-        chain,
-        protocol_version,
-    };
+    // let context = crate::context::Context {
+    //     pg_context: jsonrpc_context,
+    //     simulacrum: simulacrum.clone(),
+    //     db_writer,
+    //     at_checkpoint,
+    //     chain,
+    //     protocol_version,
+    // };
 
     let ledger_service = ForkingLedgerService::new(simulacrum.clone(), ChainIdentifier::random());
     let tx_execution_service = ForkingTransactionExecutionService::new(context.clone());
@@ -446,22 +446,22 @@ pub async fn start_server(
     // here we need to add the consistent store service, once it's implemented.
     let grpc_service = grpc.run().await?;
 
-    let state =
-        Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
+    // let state =
+    //     Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
 
-    let ctx = context.clone();
-    accounts
-        .process(&ctx.clone(), graphql_endpoint, at_checkpoint)
-        .await?;
-
-    let rpc_handle = tokio::spawn(async move {
-        start_rpc(context.clone(), rpc, metrics).await.unwrap();
-    });
-
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    let update_objects_handle = tokio::spawn(async move {
-        update_system_objects(ctx.clone()).await.unwrap();
-    });
+    // let ctx = context.clone();
+    // accounts
+    //     .process(&ctx.clone(), graphql_endpoint, at_checkpoint)
+    //     .await?;
+    //
+    // let rpc_handle = tokio::spawn(async move {
+    //     start_rpc(context.clone(), rpc, metrics).await.unwrap();
+    // });
+    //
+    // tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    // let update_objects_handle = tokio::spawn(async move {
+    //     update_system_objects(ctx.clone()).await.unwrap();
+    // });
 
     println!("Ready to accept requests");
 
