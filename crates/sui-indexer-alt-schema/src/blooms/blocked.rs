@@ -103,10 +103,8 @@ impl<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>
         (block_idx, bit_iter)
     }
 
-    /// Probes for membership checks, returning block index and (byte_offset, bit_mask) pairs.
-    ///
-    /// For each pair, verifies `(bloom_filter[byte_offset] & bit_mask) != 0`.
-    /// Probes sharing the same byte offset within a block are grouped by ORing their bit masks.
+    /// Probes for use bloom filter membership checks, probes from different values that hash to the
+    /// same block are merged together.
     pub fn probe(
         seed: u128,
         values: impl IntoIterator<Item = impl AsRef<[u8]>>,
