@@ -67,6 +67,52 @@ async fn test_owned_objects_pagination_limit_and_cursor() {
     assert!(!has_next_page);
 }
 
+#[tokio::test]
+async fn test_owned_objects_pagination_by_module() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (owner, _) = get_account_key_pair();
+
+    for i in 0..5 {
+        create_bag(&mut cluster, owner, i);
+        create_coin(&mut cluster, owner, i);
+    }
+
+    cluster.create_checkpoint().await;
+
+    let Response {
+        result: Page {
+            data, next_cursor, ..
+        },
+    } = owned_objects(
+        &cluster,
+        owner,
+        json!({"MoveModule": {"package": "0x2", "module": "coin"}}),
+        None,
+        2,
+    )
+    .await;
+
+    assert_eq!(data.len(), 2);
+
+    let Response {
+        result: Page {
+            data,
+            has_next_page,
+            ..
+        },
+    } = owned_objects(
+        &cluster,
+        owner,
+        json!({"MoveModule": {"package": "0x2", "module": "coin"}}),
+        next_cursor,
+        10,
+    )
+    .await;
+
+    assert_eq!(data.len(), 3);
+    assert!(!has_next_page);
+}
+
 /// Simple test combining filtering by type params with cursors.
 #[tokio::test]
 async fn test_owned_objects_pagination_by_type_params() {
