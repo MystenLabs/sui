@@ -1,18 +1,18 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 29 tasks
+processed 27 tasks
 
 init:
 A: object(0,0)
 
-task 1, lines 14-52:
+task 1, lines 12-50:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7524000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 54-56:
+task 2, lines 52-54:
 //# programmable --sender A --inputs @A
 //> 0: P::M::object();
 //> 1: TransferObjects([Result(0)], Input(0))
@@ -20,7 +20,7 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 58-60:
+task 3, lines 56-58:
 //# programmable --sender A --inputs object(2,0) 42 43u32 44
 //> 0: P::M::name(Input(1), Input(2));
 //> 1: P::M::dfield<P::M::Name, u64>(Input(0), Result(0), Input(3))
@@ -28,11 +28,11 @@ created: object(3,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 4035600,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 4, line 62:
+task 4, line 60:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 64-66:
+task 5, lines 62-64:
 //# programmable --sender A --inputs @A
 //> 0: P::M::object();
 //> 1: TransferObjects([Result(0)], Input(0))
@@ -40,51 +40,51 @@ created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, lines 68-69:
+task 6, lines 66-67:
 //# programmable --sender A --inputs object(2,0) 45 object(5,0)
 //> 0: P::M::ofield<u64, P::M::Object>(Input(0), Input(1), Input(2))
 created: object(6,0)
 mutated: object(0,0), object(2,0), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 5935600,  storage_rebate: 3445992, non_refundable_storage_fee: 34808
 
-task 7, line 71:
+task 7, line 69:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 8, lines 73-74:
+task 8, lines 71-72:
 //# programmable --sender A --inputs object(2,0) 46 47
 //> 0: P::M::dfield<u64, u64>(Input(0), Input(1), Input(2))
 created: object(8,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 3701200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 9, line 76:
+task 9, line 74:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 10, lines 78-79:
+task 10, lines 76-77:
 //# programmable --sender A --inputs object(2,0) true 48
 //> 0: P::M::dfield<bool, u64>(Input(0), Input(1), Input(2))
 created: object(10,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 3648000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 11, line 81:
+task 11, line 79:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 12, lines 83-84:
+task 12, lines 81-82:
 //# programmable --sender A --inputs object(2,0) false 49
 //> 0: P::M::dfield<bool, u64>(Input(0), Input(1), Input(2))
 created: object(12,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 3648000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 13, line 86:
+task 13, line 84:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 14, lines 88-106:
+task 14, lines 86-104:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -240,7 +240,7 @@ Response: {
   ]
 }
 
-task 15, lines 108-112:
+task 15, lines 106-110:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -316,12 +316,12 @@ Response: {
         "digest": "2XerdDhpZmSwV8aFm1ZvXo8Rpirrbi29yMtmB2wLk2Pr"
       }
     ],
-    "nextCursor": "IIrC75sHTn3AMz+BPYnjHXRqimp0USW45ANMVmTNdNBLAQAAAAAAAAA=",
+    "nextCursor": "0QEBfBk4G/y0Yu+/WoiEtiAtjQ1umQwBm9BM2prj5fjTtAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAANZHluYW1pY19maWVsZAAAAAAAAAAFRmllbGQAAAAAAAAAAgAAAAegTYtzgzuKE/ruySRbrbjZoC2dqIOvPzMjZWPeHqCB2QAAAAAAAAABTQAAAAAAAAAETmFtZQAAAAAAAAAAAAAAAgCKwu+bB059wDM/gT2J4x10aopqdFEluOQDTFZkzXTQSw==",
     "hasNextPage": false
   }
 }
 
-task 16, lines 114-118:
+task 16, lines 112-116:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -355,136 +355,29 @@ Response: {
         "digest": "AFdp6LArkXdQ5tKox7ygfCSBnY8B7vkQn2FsPfcGCJoj"
       }
     ],
-    "nextCursor": "IMkoD1+MSixggmqnQ0VDsGBuLTCyDXxhl2zo7SFFLN3jBAAAAAAAAAA=",
+    "nextCursor": "lAEBfBk4G/y0Yu+/WoiEtiAtjQ1umQwBm9BM2prj5fjTtAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAANZHluYW1pY19maWVsZAAAAAAAAAAFRmllbGQAAAAAAAAAAgAAAAAAAAACAMkoD1+MSixggmqnQ0VDsGBuLTCyDXxhl2zo7SFFLN3j",
     "hasNextPage": true
   }
 }
 
-task 17, lines 120-124:
-//# run-jsonrpc --cursors bcs(bcs(@{obj_10_0}),4)
+task 17, lines 118-119:
+//# programmable --sender A --inputs object(2,0) 51 52
+//> 0: P::M::dfield<u64, u64>(Input(0), Input(1), Input(2))
+created: object(17,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 3701200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 18, line 121:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 19, lines 123-127:
+//# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
   "id": 3,
   "result": {
     "data": [
-      {
-        "name": {
-          "type": "u64",
-          "value": "46"
-        },
-        "bcsEncoding": "base64",
-        "bcsName": "LgAAAAAAAAA=",
-        "type": "DynamicField",
-        "objectType": "u64",
-        "objectId": "0x7a89ce8850a97705b5f2f6bc855692a5df861c3692cedccfe7292ff4d208cf9d",
-        "version": 6,
-        "digest": "HfSyC5siqgRW2pQW6vskFpcTXTM7sDa2QkuYrYpWsry"
-      },
-      {
-        "name": {
-          "type": "u64",
-          "value": "45"
-        },
-        "bcsEncoding": "base64",
-        "bcsName": "LQAAAAAAAAA=",
-        "type": "DynamicObject",
-        "objectType": "0xa04d8b73833b8a13faeec9245badb8d9a02d9da883af3f33236563de1ea081d9::M::Object",
-        "objectId": "0x66047390a2550dfffabfcfeba07b5cdb094e343ac460c0a6c318bf1dd5a3bd12",
-        "version": 5,
-        "digest": "3VhCnnM5u5eCgw7tUD7LZ1mVBE3Fdshbe4nz6fJKFKfC"
-      }
-    ],
-    "nextCursor": "IHKeRIkbnrV5psOMvO+DOpECo6crZL34RZamo+Fjs2lJAgAAAAAAAAA=",
-    "hasNextPage": true
-  }
-}
-
-task 18, lines 126-130:
-//# run-jsonrpc --cursors bcs(bcs(@{obj_10_0}),4)
-Response: {
-  "jsonrpc": "2.0",
-  "id": 4,
-  "result": {
-    "data": [
-      {
-        "name": {
-          "type": "u64",
-          "value": "46"
-        },
-        "bcsEncoding": "base64",
-        "bcsName": "LgAAAAAAAAA=",
-        "type": "DynamicField",
-        "objectType": "u64",
-        "objectId": "0x7a89ce8850a97705b5f2f6bc855692a5df861c3692cedccfe7292ff4d208cf9d",
-        "version": 6,
-        "digest": "HfSyC5siqgRW2pQW6vskFpcTXTM7sDa2QkuYrYpWsry"
-      },
-      {
-        "name": {
-          "type": "u64",
-          "value": "45"
-        },
-        "bcsEncoding": "base64",
-        "bcsName": "LQAAAAAAAAA=",
-        "type": "DynamicObject",
-        "objectType": "0xa04d8b73833b8a13faeec9245badb8d9a02d9da883af3f33236563de1ea081d9::M::Object",
-        "objectId": "0x66047390a2550dfffabfcfeba07b5cdb094e343ac460c0a6c318bf1dd5a3bd12",
-        "version": 5,
-        "digest": "3VhCnnM5u5eCgw7tUD7LZ1mVBE3Fdshbe4nz6fJKFKfC"
-      },
-      {
-        "name": {
-          "type": "0xa04d8b73833b8a13faeec9245badb8d9a02d9da883af3f33236563de1ea081d9::M::Name",
-          "value": {
-            "x": "42",
-            "y": 43
-          }
-        },
-        "bcsEncoding": "base64",
-        "bcsName": "KgAAAAAAAAArAAAA",
-        "type": "DynamicField",
-        "objectType": "u64",
-        "objectId": "0x8ac2ef9b074e7dc0333f813d89e31d746a8a6a745125b8e4034c5664cd74d04b",
-        "version": 3,
-        "digest": "2XerdDhpZmSwV8aFm1ZvXo8Rpirrbi29yMtmB2wLk2Pr"
-      }
-    ],
-    "nextCursor": "IIrC75sHTn3AMz+BPYnjHXRqimp0USW45ANMVmTNdNBLAQAAAAAAAAA=",
-    "hasNextPage": false
-  }
-}
-
-task 19, lines 132-133:
-//# programmable --sender A --inputs object(2,0) 51 52
-//> 0: P::M::dfield<u64, u64>(Input(0), Input(1), Input(2))
-created: object(19,0)
-mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 3701200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
-
-task 20, line 135:
-//# create-checkpoint
-Checkpoint created: 6
-
-task 21, lines 137-141:
-//# run-jsonrpc
-Response: {
-  "jsonrpc": "2.0",
-  "id": 5,
-  "result": {
-    "data": [
-      {
-        "name": {
-          "type": "u64",
-          "value": "51"
-        },
-        "bcsEncoding": "base64",
-        "bcsName": "MwAAAAAAAAA=",
-        "type": "DynamicField",
-        "objectType": "u64",
-        "objectId": "0xeeb0b95bec4e4dff33e08f3296decceb53d1ae25463189dbac18d797dbfecd3b",
-        "version": 9,
-        "digest": "5jmjm24CeohSdkptWnN1eAmSv4eC82g1AsmgcqpTFdg4"
-      },
       {
         "name": {
           "type": "bool",
@@ -527,6 +420,19 @@ Response: {
       {
         "name": {
           "type": "u64",
+          "value": "51"
+        },
+        "bcsEncoding": "base64",
+        "bcsName": "MwAAAAAAAAA=",
+        "type": "DynamicField",
+        "objectType": "u64",
+        "objectId": "0xeeb0b95bec4e4dff33e08f3296decceb53d1ae25463189dbac18d797dbfecd3b",
+        "version": 9,
+        "digest": "5jmjm24CeohSdkptWnN1eAmSv4eC82g1AsmgcqpTFdg4"
+      },
+      {
+        "name": {
+          "type": "u64",
           "value": "45"
         },
         "bcsEncoding": "base64",
@@ -554,42 +460,29 @@ Response: {
         "digest": "2XerdDhpZmSwV8aFm1ZvXo8Rpirrbi29yMtmB2wLk2Pr"
       }
     ],
-    "nextCursor": "IIrC75sHTn3AMz+BPYnjHXRqimp0USW45ANMVmTNdNBLAQAAAAAAAAA=",
+    "nextCursor": "0QEBfBk4G/y0Yu+/WoiEtiAtjQ1umQwBm9BM2prj5fjTtAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAANZHluYW1pY19maWVsZAAAAAAAAAAFRmllbGQAAAAAAAAAAgAAAAegTYtzgzuKE/ruySRbrbjZoC2dqIOvPzMjZWPeHqCB2QAAAAAAAAABTQAAAAAAAAAETmFtZQAAAAAAAAAAAAAAAgCKwu+bB059wDM/gT2J4x10aopqdFEluOQDTFZkzXTQSw==",
     "hasNextPage": false
   }
 }
 
-task 22, lines 143-144:
+task 20, lines 129-130:
 //# programmable --sender A --inputs object(2,0) true
 //> 0: P::M::dremove<bool, u64>(Input(0), Input(1))
 mutated: object(0,0), object(2,0)
 deleted: object(10,0)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3611520, non_refundable_storage_fee: 36480
 
-task 23, line 146:
+task 21, line 132:
 //# create-checkpoint
 Checkpoint created: 7
 
-task 24, lines 148-152:
+task 22, lines 134-138:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
-  "id": 6,
+  "id": 4,
   "result": {
     "data": [
-      {
-        "name": {
-          "type": "u64",
-          "value": "51"
-        },
-        "bcsEncoding": "base64",
-        "bcsName": "MwAAAAAAAAA=",
-        "type": "DynamicField",
-        "objectType": "u64",
-        "objectId": "0xeeb0b95bec4e4dff33e08f3296decceb53d1ae25463189dbac18d797dbfecd3b",
-        "version": 9,
-        "digest": "5jmjm24CeohSdkptWnN1eAmSv4eC82g1AsmgcqpTFdg4"
-      },
       {
         "name": {
           "type": "bool",
@@ -619,6 +512,19 @@ Response: {
       {
         "name": {
           "type": "u64",
+          "value": "51"
+        },
+        "bcsEncoding": "base64",
+        "bcsName": "MwAAAAAAAAA=",
+        "type": "DynamicField",
+        "objectType": "u64",
+        "objectId": "0xeeb0b95bec4e4dff33e08f3296decceb53d1ae25463189dbac18d797dbfecd3b",
+        "version": 9,
+        "digest": "5jmjm24CeohSdkptWnN1eAmSv4eC82g1AsmgcqpTFdg4"
+      },
+      {
+        "name": {
+          "type": "u64",
           "value": "45"
         },
         "bcsEncoding": "base64",
@@ -646,41 +552,28 @@ Response: {
         "digest": "2XerdDhpZmSwV8aFm1ZvXo8Rpirrbi29yMtmB2wLk2Pr"
       }
     ],
-    "nextCursor": "IIrC75sHTn3AMz+BPYnjHXRqimp0USW45ANMVmTNdNBLAQAAAAAAAAA=",
+    "nextCursor": "0QEBfBk4G/y0Yu+/WoiEtiAtjQ1umQwBm9BM2prj5fjTtAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAANZHluYW1pY19maWVsZAAAAAAAAAAFRmllbGQAAAAAAAAAAgAAAAegTYtzgzuKE/ruySRbrbjZoC2dqIOvPzMjZWPeHqCB2QAAAAAAAAABTQAAAAAAAAAETmFtZQAAAAAAAAAAAAAAAgCKwu+bB059wDM/gT2J4x10aopqdFEluOQDTFZkzXTQSw==",
     "hasNextPage": false
   }
 }
 
-task 25, lines 154-155:
+task 23, lines 140-141:
 //# programmable --sender A --inputs object(2,0) false
 //> 0: P::M::dmodify<bool>(Input(0), Input(1))
 mutated: object(0,0), object(2,0), object(12,0)
 gas summary: computation_cost: 1000000, storage_cost: 3648000,  storage_rebate: 3611520, non_refundable_storage_fee: 36480
 
-task 26, line 157:
+task 24, line 143:
 //# create-checkpoint
 Checkpoint created: 8
 
-task 27, lines 159-163:
+task 25, lines 145-149:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
-  "id": 7,
+  "id": 5,
   "result": {
     "data": [
-      {
-        "name": {
-          "type": "u64",
-          "value": "51"
-        },
-        "bcsEncoding": "base64",
-        "bcsName": "MwAAAAAAAAA=",
-        "type": "DynamicField",
-        "objectType": "u64",
-        "objectId": "0xeeb0b95bec4e4dff33e08f3296decceb53d1ae25463189dbac18d797dbfecd3b",
-        "version": 9,
-        "digest": "5jmjm24CeohSdkptWnN1eAmSv4eC82g1AsmgcqpTFdg4"
-      },
       {
         "name": {
           "type": "bool",
@@ -710,6 +603,19 @@ Response: {
       {
         "name": {
           "type": "u64",
+          "value": "51"
+        },
+        "bcsEncoding": "base64",
+        "bcsName": "MwAAAAAAAAA=",
+        "type": "DynamicField",
+        "objectType": "u64",
+        "objectId": "0xeeb0b95bec4e4dff33e08f3296decceb53d1ae25463189dbac18d797dbfecd3b",
+        "version": 9,
+        "digest": "5jmjm24CeohSdkptWnN1eAmSv4eC82g1AsmgcqpTFdg4"
+      },
+      {
+        "name": {
+          "type": "u64",
           "value": "45"
         },
         "bcsEncoding": "base64",
@@ -737,16 +643,16 @@ Response: {
         "digest": "2XerdDhpZmSwV8aFm1ZvXo8Rpirrbi29yMtmB2wLk2Pr"
       }
     ],
-    "nextCursor": "IIrC75sHTn3AMz+BPYnjHXRqimp0USW45ANMVmTNdNBLAQAAAAAAAAA=",
+    "nextCursor": "0QEBfBk4G/y0Yu+/WoiEtiAtjQ1umQwBm9BM2prj5fjTtAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAANZHluYW1pY19maWVsZAAAAAAAAAAFRmllbGQAAAAAAAAAAgAAAAegTYtzgzuKE/ruySRbrbjZoC2dqIOvPzMjZWPeHqCB2QAAAAAAAAABTQAAAAAAAAAETmFtZQAAAAAAAAAAAAAAAgCKwu+bB059wDM/gT2J4x10aopqdFEluOQDTFZkzXTQSw==",
     "hasNextPage": false
   }
 }
 
-task 28, lines 165-179:
+task 26, lines 151-165:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
-  "id": 8,
+  "id": 6,
   "result": [
     {
       "data": {
