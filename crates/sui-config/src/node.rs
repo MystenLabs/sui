@@ -1047,6 +1047,13 @@ impl ExpensiveSafetyCheckConfig {
         }
     }
 
+    pub fn new_enable_all_with_secondary_index_checks() -> Self {
+        Self {
+            enable_secondary_index_checks: true,
+            ..Self::new_enable_all()
+        }
+    }
+
     pub fn new_disable_all() -> Self {
         Self {
             enable_epoch_sui_conservation_check: false,
