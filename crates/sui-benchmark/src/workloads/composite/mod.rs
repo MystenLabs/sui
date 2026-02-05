@@ -7,9 +7,9 @@ use derive_more::Add;
 use mysten_common::random::get_rng;
 pub use operations::{
     ALL_OPERATIONS, AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw,
-    ObjectBalanceDeposit, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw, describe_flags,
+    ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor,
+    RandomnessRead, SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit,
+    TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw, describe_flags,
 };
 use rand::seq::SliceRandom;
 
@@ -279,6 +279,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(TestCoinAddressWithdraw::FLAG, 0.1);
         probabilities.insert(TestCoinObjectWithdraw::FLAG, 0.1);
         probabilities.insert(AddressBalanceOverdraw::FLAG, 0.1);
+        probabilities.insert(ObjectBalanceOverdraw::FLAG, 0.1);
         Self {
             probabilities,
             ..Default::default()
@@ -538,7 +539,8 @@ impl Payload for CompositePayload {
         self.current_batch_op_sets.clear();
         let mut transactions = Vec::with_capacity(batch_size);
 
-        let account_state = AccountState::new(sender, &self.fullnode_proxies).await;
+        let account_state =
+            AccountState::new(sender, &self.fullnode_proxies, self.pool.balance_pool).await;
 
         let mut used_gas = vec![];
 
@@ -670,12 +672,14 @@ impl Payload for CompositePayload {
 pub struct AccountState {
     pub sender: SuiAddress,
     pub sui_balance: u64,
+    pub pool_balance: u64,
 }
 
 impl AccountState {
     pub async fn new(
         sender: SuiAddress,
         fullnode_proxies: &Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
+        balance_pool: Option<(ObjectID, SequenceNumber)>,
     ) -> Self {
         let mut retries = 0;
         while retries < 3 {
@@ -686,14 +690,22 @@ impl AccountState {
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             };
+            let pool_balance = if let Some((pool_id, _)) = balance_pool {
+                let pool_address: SuiAddress = pool_id.into();
+                proxy
+                    .get_sui_address_balance(pool_address)
+                    .await
+                    .unwrap_or(0)
+            } else {
+                0
+            };
             return Self {
                 sender,
                 sui_balance,
+                pool_balance,
             };
         }
-        // If this panic happens in practice, we could just return a zero balance,
-        // it wouldn't hurt the test suite overall unles it is happening every time
-        panic!("Failed to get sui balance for address {sender} - return zero balance");
+        panic!("Failed to get sui balance for address {sender}");
     }
 }
 
