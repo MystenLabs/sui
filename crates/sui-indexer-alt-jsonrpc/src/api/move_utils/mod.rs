@@ -26,7 +26,7 @@ trait MoveApi {
     ) -> RpcResult<SuiMoveNormalizedFunction>;
 }
 
-pub struct MoveUtils(pub Context);
+pub(crate) struct MoveUtils(pub Context);
 
 #[async_trait::async_trait]
 impl MoveApiServer for MoveUtils {

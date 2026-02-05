@@ -27,7 +27,7 @@ trait CheckpointsApi {
     ) -> RpcResult<Checkpoint>;
 }
 
-pub struct Checkpoints(pub Context);
+pub(crate) struct Checkpoints(pub Context);
 
 #[derive(thiserror::Error, Debug, Clone)]
 enum Error {

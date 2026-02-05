@@ -65,7 +65,7 @@ trait DelegationGovernanceApi {
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys>;
 }
 
-pub struct Governance(pub Context);
+pub(crate) struct Governance(pub Context);
 pub(crate) struct DelegationGovernance(HttpClient);
 
 impl DelegationGovernance {

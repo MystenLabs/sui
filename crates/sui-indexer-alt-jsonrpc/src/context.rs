@@ -10,12 +10,10 @@ use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
-
 use sui_package_resolver::Resolver;
 use url::Url;
 
@@ -56,7 +54,7 @@ impl Context {
     /// `bigtable_instance` is set, KV lookups will be sent to it, otherwise they will be sent to
     /// the `database. If `database_url` is `None`, the interfaces will be set-up but will fail to
     /// accept any connections.
-    pub async fn new(
+    pub(crate) async fn new(
         database_url: Option<Url>,
         bigtable_instance: Option<String>,
         db_args: DbArgs,
@@ -110,12 +108,12 @@ impl Context {
     }
 
     /// For performing arbitrary SQL queries on the Postgres db.
-    pub fn pg_reader(&self) -> &PgReader {
+    pub(crate) fn pg_reader(&self) -> &PgReader {
         &self.pg_reader
     }
 
     /// For performing point look-ups on the Postgres db only.
-    pub fn pg_loader(&self) -> &Arc<DataLoader<PgReader>> {
+    pub(crate) fn pg_loader(&self) -> &Arc<DataLoader<PgReader>> {
         &self.pg_loader
     }
 
@@ -126,23 +124,17 @@ impl Context {
     }
 
     /// For querying type and function signature information.
-    pub fn package_resolver(&self) -> &Resolver<Arc<PackageCache>> {
+    pub(crate) fn package_resolver(&self) -> &Resolver<Arc<PackageCache>> {
         self.package_resolver.as_ref()
     }
 
     /// Access to the RPC metrics.
-    pub fn metrics(&self) -> &RpcMetrics {
+    pub(crate) fn metrics(&self) -> &RpcMetrics {
         self.metrics.as_ref()
     }
 
     /// Access to the RPC configuration.
-    pub fn config(&self) -> &RpcConfig {
+    pub(crate) fn config(&self) -> &RpcConfig {
         self.config.as_ref()
-    }
-
-    /// Replace the current kv loader with one backed by gRPC LedgerService.
-    pub fn with_grpc_kv_loader(&mut self, ledger_grpc_reader: LedgerGrpcReader) {
-        self.kv_loader =
-            KvLoader::new_with_ledger_grpc(Arc::new(ledger_grpc_reader.as_data_loader()))
     }
 }
