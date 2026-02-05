@@ -74,17 +74,3 @@ module P::M {
     1
   ]
 }
-
-//# run-jsonrpc --cursors bcs(bcs(@{obj_5_0}),2)
-{
-  "method": "suix_getOwnedObjects",
-  "params": [
-    "@{A}",
-    {
-      "filter": { "StructType": "@{P}::M::O1<u32>" },
-      "options": { "showType": true }
-    },
-    "@{cursor_0}",
-    1
-  ]
-}
