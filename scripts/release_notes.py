@@ -613,8 +613,32 @@ def do_generate(from_, to):
     root = git("rev-parse", "--show-toplevel")
     os.chdir(root)
 
-    from_protocol_version = extract_protocol_version(from_)
-    to_protocol_version = extract_protocol_version(to) or "XX"
+    protocol_version = extract_protocol_version(to) or "XX"
+
+    # Find the PR that bumped MAX_PROTOCOL_VERSION to the current version
+    protocol_bump_commits = git(
+        "log",
+        "--pretty=format:%H",
+        "-S", f"MAX_PROTOCOL_VERSION: u64 = {protocol_version};",
+        f"{from_}..{to}",
+        "--",
+        PROTOCOL_CONFIG_PATH,
+    ).strip()
+
+    version_bump_prs = set()
+    if protocol_bump_commits:
+        for start in range(0, len(protocol_bump_commits.split("\n")), BATCH_SIZE):
+            chunk = protocol_bump_commits.split("\n")[start : start + BATCH_SIZE]
+            variables = {"owner": "MystenLabs", "name": "sui"}
+            for i, sha in enumerate(chunk):
+                variables[f"sha{i}"] = sha
+            data = gql(COMMIT_QUERY, variables)
+            repo = data.get("data", {}).get("repository", {})
+            for index, sha in enumerate(chunk):
+                key = f"commit{index}"
+                nodes = repo.get(key, {}).get("associatedPullRequests", {}).get("nodes", [])
+                if nodes:
+                    version_bump_prs.add(nodes[0].get("number"))
 
     commits = git(
         "log",
@@ -638,10 +662,29 @@ def do_generate(from_, to):
         print(f"## {impact_area}")
 
         if impact_area == "Protocol":
-            if from_protocol_version and from_protocol_version != to_protocol_version:
-                print(f"#### Sui Protocol Versions in this release: `{from_protocol_version}` to `{to_protocol_version}`")
-            else:
-                print(f"#### Sui Protocol Version in this release: `{to_protocol_version}`")
+            print(f"#### Sui Protocol Version in this release: `{protocol_version}`")
+
+            # Split into version bump PRs and other protocol PRs
+            bump_prs = [(pr, note) for pr, note in reversed(notes) if pr in version_bump_prs]
+            other_prs = [(pr, note) for pr, note in reversed(notes) if pr not in version_bump_prs]
+
+            # Also include bump PRs that didn't have Protocol checked
+            seen = {pr for pr, _ in notes}
+            for bump_pr in version_bump_prs:
+                if bump_pr not in seen:
+                    bump_prs.append((bump_pr, None))
+
+            print()
+            for pr, note in bump_prs:
+                print_changelog(pr, note or "Bump protocol version")
+                print()
+
+            if other_prs:
+                for pr, note in other_prs:
+                    print_changelog(pr, note)
+                    print()
+            continue
+
         print()
 
         for pr, note in reversed(notes):

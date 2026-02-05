@@ -743,43 +743,45 @@ Just a description, no release notes section.
 
 
 class TestDoGenerateProtocolVersionDisplay(unittest.TestCase):
-    """Tests for protocol version range display in do_generate."""
+    """Tests for protocol version bump detection in do_generate."""
 
+    def _mock_git_side_effect(self, bump_commit_sha=None):
+        """Create a git mock that handles rev-parse, -S log, and commit log calls."""
+        def side_effect(*args):
+            if "rev-parse" in args:
+                return "/repo"
+            # The -S call for finding version bump commits
+            if "-S" in args:
+                return bump_commit_sha or ""
+            # The main commit log call
+            return "abc123"
+        return side_effect
+
+    @patch("release_notes.gql")
     @patch("release_notes.fetch_release_notes_for_commits")
     @patch("release_notes.git")
     @patch("release_notes.extract_protocol_version")
-    def test_shows_range_when_versions_differ(self, mock_extract_pv, mock_git, mock_fetch):
-        """Should show version range when from and to protocol versions differ."""
-        from release_notes import do_generate
-
-        mock_extract_pv.side_effect = lambda commit: "109" if commit == "from_sha" else "110"
-        mock_git.side_effect = lambda *args: (
-            "/repo" if "rev-parse" in args else "abc123"
-        )
-        mock_fetch.return_value = {
-            "Protocol": [(24957, "Enable feature in version 109.")],
-        }
-
-        with patch("sys.stdout", new=StringIO()) as mock_stdout, \
-             patch("os.chdir"):
-            do_generate("from_sha", "to_sha")
-            output = mock_stdout.getvalue()
-
-        self.assertIn("Sui Protocol Versions in this release: `109` to `110`", output)
-
-    @patch("release_notes.fetch_release_notes_for_commits")
-    @patch("release_notes.git")
-    @patch("release_notes.extract_protocol_version")
-    def test_shows_single_version_when_same(self, mock_extract_pv, mock_git, mock_fetch):
-        """Should show single version when from and to protocol versions are the same."""
+    def test_includes_bump_pr_not_in_release_notes(self, mock_extract_pv, mock_git,
+                                                    mock_fetch, mock_gql):
+        """Should auto-include the version bump PR even if it didn't check Protocol."""
         from release_notes import do_generate
 
         mock_extract_pv.return_value = "110"
-        mock_git.side_effect = lambda *args: (
-            "/repo" if "rev-parse" in args else "abc123"
-        )
+        mock_git.side_effect = self._mock_git_side_effect(bump_commit_sha="bump_sha")
         mock_fetch.return_value = {
-            "Protocol": [(25000, "Some protocol change.")],
+            "Protocol": [(24957, "Enable feature in version 109.")],
+        }
+        # GQL returns PR 24736 for the bump commit
+        mock_gql.return_value = {
+            "data": {
+                "repository": {
+                    "commit0": {
+                        "associatedPullRequests": {
+                            "nodes": [{"number": 24736}]
+                        }
+                    }
+                }
+            }
         }
 
         with patch("sys.stdout", new=StringIO()) as mock_stdout, \
@@ -788,19 +790,57 @@ class TestDoGenerateProtocolVersionDisplay(unittest.TestCase):
             output = mock_stdout.getvalue()
 
         self.assertIn("Sui Protocol Version in this release: `110`", output)
-        self.assertNotIn("to", output.split("Protocol Version")[1].split("\n")[0])
+        # The bump PR should be listed with fallback note
+        self.assertIn("pull/24736: Bump protocol version", output)
+        # The other protocol PR should still be listed
+        self.assertIn("pull/24957: Enable feature in version 109.", output)
 
+    @patch("release_notes.gql")
     @patch("release_notes.fetch_release_notes_for_commits")
     @patch("release_notes.git")
     @patch("release_notes.extract_protocol_version")
-    def test_shows_single_version_when_from_is_none(self, mock_extract_pv, mock_git, mock_fetch):
-        """Should show single version when from protocol version can't be determined."""
+    def test_bump_pr_with_protocol_note_uses_original_note(self, mock_extract_pv, mock_git,
+                                                            mock_fetch, mock_gql):
+        """When the bump PR has a Protocol release note, should use the original note."""
         from release_notes import do_generate
 
-        mock_extract_pv.side_effect = lambda commit: None if commit == "from_sha" else "110"
-        mock_git.side_effect = lambda *args: (
-            "/repo" if "rev-parse" in args else "abc123"
-        )
+        mock_extract_pv.return_value = "110"
+        mock_git.side_effect = self._mock_git_side_effect(bump_commit_sha="bump_sha")
+        mock_fetch.return_value = {
+            "Protocol": [(24736, "Bump protocol version to 110 with new feature")],
+        }
+        # GQL returns PR 24736 for the bump commit
+        mock_gql.return_value = {
+            "data": {
+                "repository": {
+                    "commit0": {
+                        "associatedPullRequests": {
+                            "nodes": [{"number": 24736}]
+                        }
+                    }
+                }
+            }
+        }
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout, \
+             patch("os.chdir"):
+            do_generate("from_sha", "to_sha")
+            output = mock_stdout.getvalue()
+
+        # Should use the original note, not the fallback
+        self.assertIn("pull/24736: Bump protocol version to 110 with new feature", output)
+
+    @patch("release_notes.gql")
+    @patch("release_notes.fetch_release_notes_for_commits")
+    @patch("release_notes.git")
+    @patch("release_notes.extract_protocol_version")
+    def test_no_bump_commits_shows_version_normally(self, mock_extract_pv, mock_git,
+                                                     mock_fetch, mock_gql):
+        """When no version bump commits found, should display protocol section normally."""
+        from release_notes import do_generate
+
+        mock_extract_pv.return_value = "110"
+        mock_git.side_effect = self._mock_git_side_effect(bump_commit_sha="")
         mock_fetch.return_value = {
             "Protocol": [(25000, "Some protocol change.")],
         }
@@ -811,6 +851,9 @@ class TestDoGenerateProtocolVersionDisplay(unittest.TestCase):
             output = mock_stdout.getvalue()
 
         self.assertIn("Sui Protocol Version in this release: `110`", output)
+        self.assertIn("pull/25000: Some protocol change.", output)
+        # gql should not be called since no bump commits
+        mock_gql.assert_not_called()
 
 
 if __name__ == "__main__":
