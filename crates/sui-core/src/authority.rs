@@ -3378,6 +3378,8 @@ impl AuthorityState {
                     error!(?tx_digest, "tx post processing failed: {e}");
                 }
 
+                fail_point!("crash-after-post-process-one-tx");
+
                 // Signal completion and remove from pending map.
                 let _ = done_tx.send(());
                 pending_map.remove(&tx_digest);

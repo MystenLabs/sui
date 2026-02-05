@@ -4,7 +4,7 @@
 #[cfg(msim)]
 mod test {
     use mysten_common::register_debug_fatal_handler;
-    use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
+    use rand::{distributions::uniform::SampleRange, rngs::OsRng, thread_rng, Rng};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
@@ -23,16 +23,16 @@ mod test {
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
     };
     use sui_benchmark::{
-        FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
-        drivers::{Interval, bench_driver::BenchDriver, driver::Driver},
+        drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
+        FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::ExecutionCacheConfig;
     use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
+    use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
-    use sui_core::authority::AuthorityState;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
+    use sui_core::authority::AuthorityState;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
@@ -44,7 +44,7 @@ mod test {
         ProtocolVersion,
     };
     use sui_simulator::tempfile::TempDir;
-    use sui_simulator::{SimConfig, configs::*};
+    use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
@@ -1619,5 +1619,126 @@ mod test {
 
         assert!(shared_plus_randomness_txns > 0);
         assert!(shared_plus_randomness_cancellations > 0);
+    }
+
+    /// Tests that async post-processing produces consistent indexes even when
+    /// the node crashes after indexing but before notifying the checkpoint executor.
+    /// Uses a fail point to simulate this crash scenario under load, then verifies
+    /// that the async fullnode recovers and matches a sync fullnode's index state.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_async_post_processing_consistency() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let mut test_cluster = init_test_cluster_builder(4, 10_000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_submit_delay_step_override_millis(3000)
+            .build()
+            .await;
+
+        // Spawn async fullnode (default config)
+        let async_fn_config = test_cluster
+            .fullnode_config_builder()
+            .build(&mut OsRng, test_cluster.swarm.config());
+        let async_fullnode = test_cluster
+            .start_fullnode_from_config(async_fn_config)
+            .await;
+        let async_fn_name = async_fullnode.sui_node.state().name;
+        let async_fn_sim_id = async_fullnode.sui_node.with(|n| n.get_sim_node_id());
+        drop(async_fullnode);
+
+        // Spawn sync fullnode
+        let sync_fn_config = test_cluster
+            .fullnode_config_builder()
+            .with_sync_post_process_one_tx(true)
+            .build(&mut OsRng, test_cluster.swarm.config());
+        let sync_fullnode = test_cluster
+            .start_fullnode_from_config(sync_fn_config)
+            .await;
+        let sync_fn_name = sync_fullnode.sui_node.state().name;
+        drop(sync_fullnode);
+
+        let test_cluster: Arc<TestCluster> = test_cluster.into();
+
+        // Only crash the async fullnode. Grace period prevents rapid re-crashing
+        // after restart.
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
+        let grace_period_clone = grace_period.clone();
+        register_fail_point("crash-after-post-process-one-tx", move || {
+            let cur_node = sui_simulator::current_simnode_id();
+            if cur_node != async_fn_sim_id {
+                return;
+            }
+
+            let mut grace_period = grace_period_clone.lock().unwrap();
+            if let Some(t) = *grace_period {
+                if t < Instant::now() {
+                    *grace_period = None;
+                } else {
+                    return;
+                }
+            }
+
+            let mut rng = thread_rng();
+            if rng.gen_range(0.0..1.0) < 0.02 {
+                let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
+                let alive_until = Instant::now()
+                    + restart_after
+                    + Duration::from_millis(rng.gen_range(5000..30000));
+                *grace_period = Some(alive_until);
+
+                error!(?cur_node, "killing async fullnode");
+                drop(grace_period);
+                sui_simulator::task::kill_current_node(Some(restart_after));
+            }
+        });
+
+        test_simulated_load_with_test_config(
+            test_cluster.clone(),
+            60,
+            SimulatedLoadConfig::default(),
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+
+        clear_fail_point("crash-after-post-process-one-tx");
+
+        // Allow time for the async fullnode to catch up after fail point is cleared
+        tokio::time::sleep(Duration::from_secs(15)).await;
+
+        // Trigger reconfiguration which calls check_system_consistency on all nodes,
+        // including the transactions_seq verification
+        test_cluster.trigger_reconfiguration().await;
+
+        // Compare sequence numbers between async and sync fullnodes.
+        // The async fullnode may have a higher sequence number because crash recovery
+        // can cause double-indexing (indexed before crash, re-indexed after restart).
+        // The critical correctness check is check_system_consistency above which
+        // verifies all checkpointed transactions are in the index.
+        let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
+        let sync_node = test_cluster.swarm.node(&sync_fn_name).unwrap();
+        let async_state = async_node.get_node_handle().unwrap().state();
+        let sync_state = sync_node.get_node_handle().unwrap().state();
+        let async_next_seq = async_state
+            .indexes
+            .as_ref()
+            .expect("async fullnode should have indexes")
+            .next_sequence_number();
+        let sync_next_seq = sync_state
+            .indexes
+            .as_ref()
+            .expect("sync fullnode should have indexes")
+            .next_sequence_number();
+        assert!(
+            async_next_seq >= sync_next_seq,
+            "async fullnode should have indexed at least as many transactions as sync \
+             (async={async_next_seq}, sync={sync_next_seq})"
+        );
     }
 }
