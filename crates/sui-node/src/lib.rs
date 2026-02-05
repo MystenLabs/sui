@@ -2514,7 +2514,8 @@ async fn build_http_servers(
             tower_http::cors::CorsLayer::new()
                 .allow_methods([http::Method::GET, http::Method::POST])
                 .allow_origin(tower_http::cors::Any)
-                .allow_headers(tower_http::cors::Any),
+                .allow_headers(tower_http::cors::Any)
+                .expose_headers(tower_http::cors::Any),
         );
 
     router = router.merge(rpc_router).layer(layers);
