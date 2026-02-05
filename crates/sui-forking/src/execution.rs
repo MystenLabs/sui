@@ -5,6 +5,7 @@
 
 use sui_rpc_api::RpcError;
 use sui_types::{
+    base_types::ObjectID,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::ExecutionError,
     inner_temporary_store::InnerTemporaryStore,
@@ -128,7 +129,8 @@ pub async fn fetch_input_objects(
             InputObjectKind::SharedMoveObject { id, .. } => id,
         };
 
-        crate::rpc::fetch_and_cache_object_from_rpc(data_store, context, &object_id)
+        // crate::rpc::fetch_and_cache_object_from_rpc(data_store, context, &object_id)
+        fetch_and_cache_object_from_rpc(data_store, context, &object_id)
             .await
             .map_err(|e| {
                 RpcError::new(
@@ -139,4 +141,12 @@ pub async fn fetch_input_objects(
     }
 
     Ok(())
+}
+
+async fn fetch_and_cache_object_from_rpc(
+    data_store: &mut ForkingStore,
+    context: &Context,
+    object_id: &ObjectID,
+) -> Result<(), anyhow::Error> {
+    todo!()
 }

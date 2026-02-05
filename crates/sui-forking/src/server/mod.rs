@@ -48,21 +48,22 @@ use sui_types::{
     transaction::Transaction,
 };
 
-use crate::grpc::RpcService as GrpcRpcService;
 use crate::grpc::TlsArgs as GrpcTlsArgs;
 use crate::grpc::transaction_execution_service::ForkingTransactionExecutionService;
 use crate::grpc::{RpcArgs as GrpcArgs, ledger_service::ForkingLedgerService};
-use crate::seeds::InitialAccounts;
+use crate::grpc::{RpcService as GrpcRpcService, consistent_store::ForkingConsistentStore};
+// use crate::seeds::InitialAccounts;
 use crate::{
     graphql::GraphQLClient,
-    indexers::{
-        consistent_store::{ConsistentStoreConfig, start_consistent_store},
-        indexer::{IndexerConfig, start_indexer},
-    },
-    rpc::start_rpc,
+    // indexers::{
+    //     consistent_store::{ConsistentStoreConfig, start_consistent_store},
+    //     indexer::{IndexerConfig, start_indexer},
+    // },
+    // rpc::start_rpc,
     store::ForkingStore,
 };
 // use diesel_async::RunQueryDsl;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
@@ -316,7 +317,7 @@ async fn faucet(
 
 /// Start the forking server
 pub async fn start_server(
-    accounts: InitialAccounts,
+    // accounts: InitialAccounts,
     chain: Chain,
     checkpoint: Option<u64>,
     host: String,
@@ -348,11 +349,11 @@ pub async fn start_server(
     let db_writer = Db::for_write(database_url.clone(), DbArgs::default())
         .await
         .expect("Failed to create DB writer");
-
-    let ingestion_path = data_ingestion_path.clone();
-    let indexer_handle = tokio::spawn(async move {
-        start_indexers(ingestion_path, version).await.unwrap();
-    });
+    //
+    // let ingestion_path = data_ingestion_path.clone();
+    // let indexer_handle = tokio::spawn(async move {
+    //     start_indexers(ingestion_path, version).await.unwrap();
+    // });
 
     let node = match chain {
         Chain::Mainnet => Node::Mainnet,
@@ -378,12 +379,12 @@ pub async fn start_server(
     simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
     println!("Data ingestion path: {:?}", data_ingestion_path);
 
-    // Process initial accounts: fetch objects, extract package dependencies, insert into DB
-    let graphql_endpoint = match node {
-        Node::Mainnet => &crate::seeds::Network::Mainnet,
-        Node::Testnet => &crate::seeds::Network::Testnet,
-        Node::Custom(_) => todo!(),
-    };
+    // // Process initial accounts: fetch objects, extract package dependencies, insert into DB
+    // let graphql_endpoint = match node {
+    //     Node::Mainnet => &crate::seeds::Network::Mainnet,
+    //     Node::Testnet => &crate::seeds::Network::Testnet,
+    //     Node::Custom(_) => todo!(),
+    // };
 
     let simulacrum = Arc::new(RwLock::new(simulacrum));
 
@@ -394,19 +395,17 @@ pub async fn start_server(
     let metrics_args = sui_indexer_alt_metrics::MetricsArgs::default();
     let metrics = MetricsService::new(metrics_args, registry.clone());
     let rpc_listen_address = SocketAddr::from(([127, 0, 0, 1], 3000));
-    let rpc_args = RpcArgs {
-        rpc_listen_address,
-        ..Default::default()
-    };
+    println!("RPC listening on {}", rpc_listen_address);
 
     let grpc_listen_address = SocketAddr::from(([127, 0, 0, 1], 3005));
     let grpc_args = GrpcArgs {
-        rpc_listen_address: grpc_listen_address,
+        rpc_listen_address,
         tls: GrpcTlsArgs::default(),
     };
 
     let uri = format!("http://{}", grpc_listen_address).parse().unwrap();
-    let grpc_reader = LedgerGrpcReader::new(uri, LedgerGrpcArgs::default()).await?;
+    let grpc_reader =
+        LedgerGrpcReader::new(uri, LedgerGrpcArgs::default(), None, &registry).await?;
 
     // let rpc = RpcService::new(rpc_args, &registry)
     //     .context("Failed to create RPC service")
@@ -427,27 +426,28 @@ pub async fn start_server(
     // .expect("Failed to create JSONRPC context");
     // jsonrpc_context.with_grpc_kv_loader(grpc_reader);
 
-    // let context = crate::context::Context {
-    //     pg_context: jsonrpc_context,
-    //     simulacrum: simulacrum.clone(),
-    //     db_writer,
-    //     at_checkpoint,
-    //     chain,
-    //     protocol_version,
-    // };
+    let context = crate::context::Context {
+        // pg_context: jsonrpc_context,
+        simulacrum: simulacrum.clone(),
+        db_writer,
+        at_checkpoint,
+        chain,
+        protocol_version,
+    };
 
+    let consistent_store = ForkingConsistentStore::new(context.clone());
     let ledger_service = ForkingLedgerService::new(simulacrum.clone(), ChainIdentifier::random());
     let tx_execution_service = ForkingTransactionExecutionService::new(context.clone());
     let grpc = GrpcRpcService::new(grpc_args, version, &registry)
         .await?
         .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
+        .add_service(ConsistentServiceServer::new(consistent_store))
         .add_service(LedgerServiceServer::new(ledger_service))
         .add_service(TransactionExecutionServiceServer::new(tx_execution_service));
-    // here we need to add the consistent store service, once it's implemented.
     let grpc_service = grpc.run().await?;
 
-    // let state =
-    //     Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
+    let state =
+        Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
 
     // let ctx = context.clone();
     // accounts
@@ -459,9 +459,9 @@ pub async fn start_server(
     // });
     //
     // tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    // let update_objects_handle = tokio::spawn(async move {
-    //     update_system_objects(ctx.clone()).await.unwrap();
-    // });
+    let update_objects_handle = tokio::spawn(async move {
+        update_system_objects(context.clone()).await.unwrap();
+    });
 
     println!("Ready to accept requests");
 
@@ -495,9 +495,9 @@ pub async fn start_server(
         .await?;
 
     // Abort the spawned tasks when the server shuts down
-    rpc_handle.abort();
-    indexer_handle.abort();
-    update_objects_handle.abort();
+    // rpc_handle.abort();
+    // indexer_handle.abort();
+    // update_objects_handle.abort();
 
     info!("Server shutdown complete");
 
@@ -505,36 +505,36 @@ pub async fn start_server(
 }
 
 /// Start the indexers: both the main indexer and the consistent store
-async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> Result<()> {
-    let registry = prometheus::Registry::new();
-    let rocksdb_db_path = tempdir().unwrap().keep();
-    let db_url_str = "postgres://postgres:postgrespw@localhost:5432";
-    let db_url = Url::parse(&format!("{db_url_str}/sui_indexer_alt")).unwrap();
-    // drop_and_recreate_db(db_url_str).unwrap();
-    let indexer_config = IndexerConfig::new(db_url, data_ingestion_path.clone());
-    let consistent_store_config = ConsistentStoreConfig::new(
-        rocksdb_db_path.clone(),
-        indexer_config.indexer_args.clone(),
-        indexer_config.client_args.clone(),
-    );
-    let indexer = start_indexer(indexer_config, &registry).await?;
-    let consistent_store =
-        start_consistent_store(consistent_store_config, &registry, version).await?;
-
-    match indexer.attach(consistent_store).main().await {
-        Ok(()) | Err(sui_futures::service::Error::Terminated) => {}
-
-        Err(sui_futures::service::Error::Aborted) => {
-            std::process::exit(1);
-        }
-
-        Err(sui_futures::service::Error::Task(_)) => {
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
-}
+// async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> Result<()> {
+//     let registry = prometheus::Registry::new();
+//     let rocksdb_db_path = tempdir().unwrap().keep();
+//     let db_url_str = "postgres://postgres:postgrespw@localhost:5432";
+//     let db_url = Url::parse(&format!("{db_url_str}/sui_indexer_alt")).unwrap();
+//     // drop_and_recreate_db(db_url_str).unwrap();
+//     let indexer_config = IndexerConfig::new(db_url, data_ingestion_path.clone());
+//     let consistent_store_config = ConsistentStoreConfig::new(
+//         rocksdb_db_path.clone(),
+//         indexer_config.indexer_args.clone(),
+//         indexer_config.client_args.clone(),
+//     );
+//     let indexer = start_indexer(indexer_config, &registry).await?;
+//     let consistent_store =
+//         start_consistent_store(consistent_store_config, &registry, version).await?;
+//
+//     match indexer.attach(consistent_store).main().await {
+//         Ok(()) | Err(sui_futures::service::Error::Terminated) => {}
+//
+//         Err(sui_futures::service::Error::Aborted) => {
+//             std::process::exit(1);
+//         }
+//
+//         Err(sui_futures::service::Error::Task(_)) => {
+//             std::process::exit(2);
+//         }
+//     }
+//
+//     Ok(())
+// }
 
 // fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> {
 //     // Connect to the 'postgres' database (not your target database)
@@ -564,10 +564,14 @@ async fn update_system_objects(context: crate::context::Context) -> anyhow::Resu
     let x2 = ObjectID::from_hex_literal("0x2").unwrap();
     let x3 = ObjectID::from_hex_literal("0x3").unwrap();
     let x6 = ObjectID::from_hex_literal("0x6").unwrap();
+    let acc = ObjectID::from_hex_literal(
+        "0x0000000000000000000000000000000000000000000000000000000000000acc",
+    )
+    .unwrap();
     let objs: HashMap<ObjectID, _> = data_store
         .get_objects()
         .iter()
-        .filter(|x| x.0 == &x1 || x.0 == &x2 || x.0 == &x3 || x.0 == &x6)
+        .filter(|x| x.0 == &x1 || x.0 == &x2 || x.0 == &x3 || x.0 == &x6 || x.0 == &acc)
         .map(|(obj_id, map)| (*obj_id, map.clone()))
         .collect();
     info!(
@@ -593,6 +597,10 @@ async fn update_system_objects(context: crate::context::Context) -> anyhow::Resu
                 object_id: x6,
                 version_query: VersionQuery::AtCheckpoint(at_checkpoint),
             },
+            ObjectKey {
+                object_id: acc,
+                version_query: VersionQuery::AtCheckpoint(at_checkpoint),
+            },
         ])
         .unwrap();
 
@@ -610,32 +618,32 @@ async fn update_system_objects(context: crate::context::Context) -> anyhow::Resu
             vec![(object.id(), 1.into(), old_obj_digest)],
         );
 
-        // Insert into obj_versions table so that the jsonrpc layer can find the latest version
-        if let Err(e) = insert_obj_version_into_db(&db_writer, object, at_checkpoint as i64).await {
-            eprintln!("Failed to insert obj_version into DB: {:?}", e);
-        }
-
-        // Insert into kv_objects table so that the jsonrpc layer can fetch the object data
-        if let Err(e) = insert_kv_object_into_db(&db_writer, object).await {
-            eprintln!("Failed to insert kv_object into DB: {:?}", e);
-        }
-
-        // Insert into obj_info table so that the jsonrpc layer can find objects by owner
-        if let Err(e) = insert_obj_info_into_db(&db_writer, object, at_checkpoint as i64).await {
-            eprintln!("Failed to insert obj_info into DB: {:?}", e);
-        }
-
-        // If this is a package, insert it into kv_packages table
-        if object.is_package()
-            && let Err(e) = crate::rpc::objects::insert_package_into_db(
-                &db_writer,
-                std::slice::from_ref(object),
-                at_checkpoint,
-            )
-            .await
-        {
-            eprintln!("Failed to insert package into DB: {:?}", e);
-        }
+        // // Insert into obj_versions table so that the jsonrpc layer can find the latest version
+        // if let Err(e) = insert_obj_version_into_db(&db_writer, object, at_checkpoint as i64).await {
+        //     eprintln!("Failed to insert obj_version into DB: {:?}", e);
+        // }
+        //
+        // // Insert into kv_objects table so that the jsonrpc layer can fetch the object data
+        // if let Err(e) = insert_kv_object_into_db(&db_writer, object).await {
+        //     eprintln!("Failed to insert kv_object into DB: {:?}", e);
+        // }
+        //
+        // // Insert into obj_info table so that the jsonrpc layer can find objects by owner
+        // if let Err(e) = insert_obj_info_into_db(&db_writer, object, at_checkpoint as i64).await {
+        //     eprintln!("Failed to insert obj_info into DB: {:?}", e);
+        // }
+        //
+        // // If this is a package, insert it into kv_packages table
+        // if object.is_package()
+        //     && let Err(e) = crate::rpc::objects::insert_package_into_db(
+        //         &db_writer,
+        //         std::slice::from_ref(object),
+        //         at_checkpoint,
+        //     )
+        //     .await
+        // {
+        //     eprintln!("Failed to insert package into DB: {:?}", e);
+        // }
     }
 
     Ok(())

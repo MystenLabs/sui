@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::seeds::InitialAccounts;
+// use crate::seeds::InitialAccounts;
 use clap::{Parser, Subcommand};
 use sui_types::base_types::SuiAddress;
 
@@ -40,9 +40,9 @@ pub enum Commands {
         /// Optional data directory for storing forked data
         #[clap(long)]
         data_dir: Option<String>,
-        /// Initial accounts to restore with their owned objects
-        #[clap(flatten)]
-        accounts: InitialAccounts,
+        // /// Initial accounts to restore with their owned objects
+        // #[clap(flatten)]
+        // accounts: InitialAccounts,
     },
     /// Advance checkpoint by 1
     AdvanceCheckpoint {

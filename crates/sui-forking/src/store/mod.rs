@@ -28,17 +28,17 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 
-use crate::grpc::consistent_store::ForkingConsistentStore;
+// use crate::grpc::consistent_store::ForkingConsistentStore;
 use crate::grpc::ledger_service::ForkingLedgerService;
-use crate::rpc::object_provider::ObjectProvider;
+// use crate::rpc::object_provider::ObjectProvider;
 use async_trait::async_trait;
 use sui_data_store::ObjectStore as _;
 use sui_data_store::stores::{DataStore, FileSystemStore, LruMemoryStore, ReadThroughStore};
 use sui_types::storage::ReadStore;
 use tracing::info;
 
-pub mod checkpoint_store;
-pub mod object_store;
+// pub mod checkpoint_store;
+// pub mod object_store;
 pub mod rpc_data_store;
 
 #[derive(Clone)]
@@ -377,6 +377,12 @@ impl ChildObjectResolver for ForkingStore {
             .into());
         }
 
+        println!(
+            "Child object version: {:?}, upper bound: {:?}",
+            child_object.version(),
+            child_version_upper_bound
+        );
+
         if child_object.version() > child_version_upper_bound {
             return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
@@ -572,35 +578,35 @@ impl SimulatorStore for ForkingStore {
     }
 }
 
-#[async_trait]
-impl ObjectProvider for ForkingStore {
-    type Error = anyhow::Error;
-    async fn get_object(
-        &self,
-        id: &ObjectID,
-        version: &SequenceNumber,
-    ) -> Result<Object, Self::Error> {
-        match self.get_object_at_version(id, *version) {
-            Some(obj) => Ok(obj.clone()),
-            None => Err(anyhow::anyhow!(
-                "Object {:?} at version {:?} not found",
-                id,
-                version
-            )),
-        }
-    }
-
-    async fn find_object_lt_or_eq_version(
-        &self,
-        id: &ObjectID,
-        version: &SequenceNumber,
-    ) -> Result<Option<Object>, Self::Error> {
-        match self.get_object(id) {
-            Some(obj) if obj.version() <= *version => Ok(Some(obj.clone())),
-            _ => Ok(None),
-        }
-    }
-}
+// #[async_trait]
+// impl ObjectProvider for ForkingStore {
+//     type Error = anyhow::Error;
+//     async fn get_object(
+//         &self,
+//         id: &ObjectID,
+//         version: &SequenceNumber,
+//     ) -> Result<Object, Self::Error> {
+//         match self.get_object_at_version(id, *version) {
+//             Some(obj) => Ok(obj.clone()),
+//             None => Err(anyhow::anyhow!(
+//                 "Object {:?} at version {:?} not found",
+//                 id,
+//                 version
+//             )),
+//         }
+//     }
+//
+//     async fn find_object_lt_or_eq_version(
+//         &self,
+//         id: &ObjectID,
+//         version: &SequenceNumber,
+//     ) -> Result<Option<Object>, Self::Error> {
+//         match self.get_object(id) {
+//             Some(obj) if obj.version() <= *version => Ok(Some(obj.clone())),
+//             _ => Ok(None),
+//         }
+//     }
+// }
 
 impl ReadStore for ForkingStore {
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {

@@ -3,13 +3,13 @@
 
 mod cli;
 mod context;
-mod data_layer;
+// mod data_layer;
 mod execution;
 mod graphql;
 mod grpc;
-mod indexers;
-mod rpc;
-mod seeds;
+// mod indexers;
+// mod rpc;
+// mod seeds;
 mod server;
 mod store;
 
@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
             port,
             network,
             data_dir,
-            accounts,
+            // accounts,
         } => {
             let chain = match network.as_str() {
                 "mainnet" => Chain::Mainnet,
@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
                 mysten_common::tempdir().unwrap().keep()
             };
             start_server(
-                accounts,
+                // accounts,
                 chain,
                 checkpoint,
                 host,

@@ -24,6 +24,7 @@ use tonic::server::NamedService;
 use tonic_health::ServingStatus;
 use tracing::info;
 
+pub mod consistent_store;
 mod error;
 pub mod ledger_service;
 mod metrics;
