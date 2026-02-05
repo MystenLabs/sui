@@ -313,6 +313,9 @@ for observability. This is optional but recommended for monitoring.
 | `crates/sui-core/src/authority.rs` | Extract `post_process_one_tx_impl` static method with explicit dependency params |
 | `crates/sui-core/src/authority.rs` | Refactor `fullnode_only_get_tx_coins_for_indexing`, `index_tx`/`process_object_index`, and `make_transaction_block_events` to accept explicit deps instead of `&self` (or create static variants) |
 | `crates/sui-core/src/checkpoints/checkpoint_executor/mod.rs` | Before `commit_transaction_outputs`, iterate checkpoint tx digests, remove from DashMap, and await any pending oneshot receivers |
+| `crates/sui-core/src/authority.rs` | Add sync post-processing config flag; when set, run `post_process_one_tx` inline instead of spawning |
+| `crates/sui-core/src/authority.rs` | In `check_system_consistency`: when `enable_secondary_index_checks` and indexes enabled, verify all checkpointed txns are in `transactions_seq` |
+| `crates/sui-e2e-tests/tests/` | New simtest: dual-fullnode index comparison with rolling restarts and reconfiguration |
 
 ---
 
@@ -368,11 +371,19 @@ fullnodes. Specifically, verify that the following tables are identical:
 - `transactions_from_addr` (sender → transactions)
 - `transactions_to_addr` (recipient → transactions)
 
+Periodically restart the async post-processing fullnode at random intervals during the test.
+See `test_simulated_load_rolling_restarts_all_validators` for an example of how to do this.
+
+After running the test for some time, call trigger_reconfiguration. This will cause the expensive checks
+to run.
+
 This verifies that async post-processing produces the same index results as
 synchronous post-processing.
 
 Use `TestCluster::spawn_new_fullnode()` to start the two fullnodes with different
-configs.
+configs. Both fullnodes must have `enable_secondary_index_checks: true` in their
+`ExpensiveSafetyCheckConfig` (the default `new_enable_all()` sets it to `false`).
+Use `FullnodeConfigBuilder::with_expensive_safety_check_config()` to set this.
 
 ### Test 2: Consistency check in `check_system_consistency`
 
