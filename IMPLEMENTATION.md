@@ -343,9 +343,90 @@ for observability. This is optional but recommended for monitoring.
 
 ## Testing Strategy
 
+### Prerequisite: Preserve synchronous post-processing mode
+
+Add a configuration flag (e.g., `post_process_one_tx_sync: bool` on `NodeConfig` or
+`AuthorityState`) that, when set, causes `post_process_one_tx` to run the work inline
+(synchronously) instead of spawning a blocking thread. This is the current behavior.
+This flag serves two purposes:
+- Acts as a safety valve / rollback mechanism in production
+- Enables the dual-fullnode comparison test below
+
+### Test 1: Dual-fullnode index comparison
+
+**File:** `crates/sui-e2e-tests/tests/` (new test file or added to `full_node_tests.rs`)
+
+Run a test cluster with two fullnodes:
+- **Fullnode A**: async post-processing (new behavior, the default)
+- **Fullnode B**: sync post-processing (old behavior, via the config flag)
+
+Execute a workload of transactions (transfers, Move calls, etc.) for at least one
+epoch. At the end of the epoch, compare the `IndexStore` state between the two
+fullnodes. Specifically, verify that the following tables are identical:
+- `transactions_seq` (transaction digest → sequence number)
+- `transaction_order` (sequence number → transaction digest)
+- `transactions_from_addr` (sender → transactions)
+- `transactions_to_addr` (recipient → transactions)
+
+This verifies that async post-processing produces the same index results as
+synchronous post-processing.
+
+Use `TestCluster::spawn_new_fullnode()` to start the two fullnodes with different
+configs.
+
+### Test 2: Consistency check in `check_system_consistency`
+
+**File:** `crates/sui-core/src/authority.rs`, in `check_system_consistency` (line 4090)
+
+Add a new check: when `expensive_safety_check_config.enable_secondary_index_checks()`
+is true and `self.indexes` is `Some`, verify that every checkpointed transaction has an
+entry in `transactions_seq`.
+
+Implementation:
+```rust
+if expensive_safety_check_config.enable_secondary_index_checks()
+    && let Some(indexes) = &self.indexes
+{
+    // Existing verify_indexes call...
+
+    // New: verify all checkpointed transactions are indexed
+    info!("Verifying all checkpointed transactions are in transactions_seq");
+    let highest_executed = self
+        .checkpoint_store
+        .get_highest_executed_checkpoint_seq_number()
+        .expect("Failed to get highest executed checkpoint")
+        .expect("No executed checkpoints");
+
+    for seq in 0..=highest_executed {
+        let checkpoint = self
+            .checkpoint_store
+            .get_checkpoint_by_sequence_number(seq)
+            .expect("Failed to get checkpoint")
+            .expect("Checkpoint missing");
+        let contents = self
+            .checkpoint_store
+            .get_checkpoint_contents(&checkpoint.content_digest)
+            .expect("Failed to get checkpoint contents")
+            .expect("Checkpoint contents missing");
+        for digests in contents.iter() {
+            let tx_digest = digests.transaction;
+            assert!(
+                indexes.get_transaction_seq(&tx_digest)
+                    .expect("Failed to read transactions_seq")
+                    .is_some(),
+                "Transaction {tx_digest} from checkpoint {seq} missing from transactions_seq"
+            );
+        }
+    }
+    info!("All checkpointed transactions verified in transactions_seq");
+}
+```
+
+This check runs at epoch boundaries when expensive safety checks are enabled,
+providing ongoing verification that async post-processing hasn't dropped any
+transactions.
+
+### Baseline testing
+
 - Existing tests should pass without modification (behavior is preserved).
-- Add a unit test verifying that a transaction digest appears in
-  `pending_post_processing` during post-processing and is removed after.
-- Verify `CheckpointExecutor` integration tests still pass — they exercise the
-  watermark advancement path.
 - Run `cargo simtest -p sui-e2e-tests` for full integration coverage.
