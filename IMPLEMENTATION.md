@@ -1,5 +1,7 @@
 # Move `post_process_one_tx` Off the Critical Execution Path
 
+## Status: Implementation Complete — Awaiting Test Results
+
 ## Goal
 Move `post_process_one_tx` (JSON-RPC indexing and event emission) off the critical
 transaction execution path by spawning the work on a blocking thread, while ensuring
