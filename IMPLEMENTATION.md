@@ -101,9 +101,12 @@ fn post_process_one_tx(
     // This provides backpressure: if post-processing can't keep up with
     // execution, execution slows down rather than accumulating unbounded work.
     // Under normal conditions the acquire is instant (num_cpus permits available).
-    let permit = semaphore
-        .acquire_blocking()
-        .expect("post-processing semaphore should not be closed");
+    let permit = {
+        let _scope = monitored_scope("Execution::post_process_one_tx::semaphore_acquire");
+        semaphore
+            .acquire_blocking()
+            .expect("post-processing semaphore should not be closed")
+    };
 
     tokio::task::spawn_blocking(move || {
         // Move the permit into the closure so it is held for the duration
