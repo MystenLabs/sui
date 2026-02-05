@@ -12,6 +12,7 @@ use backoff::backoff::Constant;
 use bytes::Bytes;
 use object_store::ClientOptions;
 use object_store::ObjectStore;
+use object_store::RetryConfig;
 use object_store::aws::AmazonS3Builder;
 use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
@@ -133,6 +134,15 @@ impl IngestionClientArgs {
         };
         options
     }
+
+    /// Disable object_store's internal retries so that transient errors (429s, 5xx) propagate
+    /// immediately to the framework's own retry logic.
+    fn retry_config() -> RetryConfig {
+        RetryConfig {
+            max_retries: 0,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -174,16 +184,19 @@ impl IngestionClient {
     /// Construct a new ingestion client. Its source is determined by `args`.
     pub fn new(args: IngestionClientArgs, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
         // TODO: Support stacking multiple ingestion clients for redundancy/failover.
+        let retry = IngestionClientArgs::retry_config();
         let client = if let Some(url) = args.remote_store_url.as_ref() {
             let store = HttpBuilder::new()
                 .with_url(url.to_string())
                 .with_client_options(args.client_options().with_allow_http(true))
+                .with_retry(retry)
                 .build()
                 .map(Arc::new)?;
             IngestionClient::with_store(store, metrics.clone())?
         } else if let Some(bucket) = args.remote_store_s3.as_ref() {
             let store = AmazonS3Builder::from_env()
                 .with_client_options(args.client_options())
+                .with_retry(retry)
                 .with_imdsv1_fallback()
                 .with_bucket_name(bucket)
                 .build()
@@ -192,6 +205,7 @@ impl IngestionClient {
         } else if let Some(bucket) = args.remote_store_gcs.as_ref() {
             let store = GoogleCloudStorageBuilder::from_env()
                 .with_client_options(args.client_options())
+                .with_retry(retry)
                 .with_bucket_name(bucket)
                 .build()
                 .map(Arc::new)?;
@@ -199,6 +213,7 @@ impl IngestionClient {
         } else if let Some(container) = args.remote_store_azure.as_ref() {
             let store = MicrosoftAzureBuilder::from_env()
                 .with_client_options(args.client_options())
+                .with_retry(retry)
                 .with_container_name(container)
                 .build()
                 .map(Arc::new)?;
