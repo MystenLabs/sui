@@ -23,6 +23,7 @@ dag_state_cached_rounds: 500
 commit_sync_parallel_fetches: 8
 commit_sync_batch_size: 100
 commit_sync_batches_ahead: 32
+use_fifo_compaction: true
 tonic:
   keepalive_interval:
     secs: 10
