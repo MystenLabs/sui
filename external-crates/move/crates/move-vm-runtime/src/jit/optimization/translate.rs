@@ -4,7 +4,129 @@
 use crate::{jit::optimization::ast, validation::verification::ast as Input};
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex};
+use move_core_types::gas_algebra::AbstractMemorySize;
 use std::collections::BTreeMap;
+
+/// Accumulated fixed gas costs for a basic block.
+#[derive(Default)]
+struct BlockGasCost {
+    instructions: u64,
+    pushes: u64,
+    pops: u64,
+}
+
+impl BlockGasCost {
+    fn has_fixed_costs(&self) -> bool {
+        self.instructions > 0
+    }
+
+    fn add(&mut self, pops: u64, pushes: u64, _pop_size: AbstractMemorySize, _push_size: AbstractMemorySize) {
+        self.instructions += 1;
+        self.pushes += pushes;
+        self.pops += pops;
+    }
+}
+
+/// Size constants for gas computation (matching the gas meter)
+const REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
+const BOOL_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
+const U8_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
+const U16_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
+const U32_SIZE: AbstractMemorySize = AbstractMemorySize::new(4);
+const U64_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
+const U128_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
+const U256_SIZE: AbstractMemorySize = AbstractMemorySize::new(32);
+
+/// Returns Some((pops, pushes, pop_size, push_size)) for fixed-cost instructions,
+/// None for variable-cost instructions that need runtime charging.
+fn get_fixed_instruction_cost(instr: &ast::Bytecode) -> Option<(u64, u64, AbstractMemorySize, AbstractMemorySize)> {
+    use ast::Bytecode::*;
+    match instr {
+        // No-op instructions
+        Nop | Ret => Some((0, 0, AbstractMemorySize::zero(), AbstractMemorySize::zero())),
+
+        // Branch instructions
+        BrTrue(_) | BrFalse(_) => Some((1, 0, BOOL_SIZE, AbstractMemorySize::zero())),
+        Branch(_) => Some((0, 0, AbstractMemorySize::zero(), AbstractMemorySize::zero())),
+
+        // Load integer constants
+        LdU8(_) => Some((0, 1, AbstractMemorySize::zero(), U8_SIZE)),
+        LdU16(_) => Some((0, 1, AbstractMemorySize::zero(), U16_SIZE)),
+        LdU32(_) => Some((0, 1, AbstractMemorySize::zero(), U32_SIZE)),
+        LdU64(_) => Some((0, 1, AbstractMemorySize::zero(), U64_SIZE)),
+        LdU128(_) => Some((0, 1, AbstractMemorySize::zero(), U128_SIZE)),
+        LdU256(_) => Some((0, 1, AbstractMemorySize::zero(), U256_SIZE)),
+        LdTrue | LdFalse => Some((0, 1, AbstractMemorySize::zero(), BOOL_SIZE)),
+
+        // Reference operations with fixed cost
+        FreezeRef => Some((1, 1, REFERENCE_SIZE, REFERENCE_SIZE)),
+        MutBorrowLoc(_) | ImmBorrowLoc(_) => Some((0, 1, AbstractMemorySize::zero(), REFERENCE_SIZE)),
+        MutBorrowField(_) | ImmBorrowField(_) | MutBorrowFieldGeneric(_) | ImmBorrowFieldGeneric(_) => {
+            Some((1, 1, REFERENCE_SIZE, REFERENCE_SIZE))
+        }
+
+        // Cast operations - conservative estimate: smallest input, actual output
+        CastU8 => Some((1, 1, U8_SIZE, U8_SIZE)),
+        CastU16 => Some((1, 1, U8_SIZE, U16_SIZE)),
+        CastU32 => Some((1, 1, U8_SIZE, U32_SIZE)),
+        CastU64 => Some((1, 1, U8_SIZE, U64_SIZE)),
+        CastU128 => Some((1, 1, U8_SIZE, U128_SIZE)),
+        CastU256 => Some((1, 1, U8_SIZE, U256_SIZE)),
+
+        // Arithmetic operations - conservative: smallest inputs, largest output
+        Add | Sub | Mul | Mod | Div => Some((2, 1, U8_SIZE + U8_SIZE, U256_SIZE)),
+        BitOr | BitAnd | Xor => Some((2, 1, U8_SIZE + U8_SIZE, U256_SIZE)),
+        Shl | Shr => Some((2, 1, U8_SIZE + U8_SIZE, U256_SIZE)),
+
+        // Boolean operations
+        Or | And => Some((2, 1, BOOL_SIZE + BOOL_SIZE, BOOL_SIZE)),
+        Not => Some((1, 1, BOOL_SIZE, BOOL_SIZE)),
+
+        // Comparison operations
+        Lt | Gt | Le | Ge => Some((2, 1, U8_SIZE + U8_SIZE, BOOL_SIZE)),
+
+        // Abort
+        Abort => Some((1, 0, U64_SIZE, AbstractMemorySize::zero())),
+
+        // --- Variable cost instructions (need runtime size info) ---
+        // LdConst: depends on constant size
+        LdConst(_) => None,
+        // CopyLoc, MoveLoc, StLoc: depends on local value size
+        CopyLoc(_) | MoveLoc(_) | StLoc(_) => None,
+        // Pop: depends on value size
+        Pop => None,
+        // ReadRef, WriteRef: depends on referenced value size
+        ReadRef | WriteRef => None,
+        // Eq, Neq: depends on operand sizes
+        Eq | Neq => None,
+        // Pack/Unpack: depends on field count/sizes
+        Pack(_) | PackGeneric(_) | Unpack(_) | UnpackGeneric(_) => None,
+        // Vector operations: depend on element sizes
+        VecPack(_, _) | VecLen(_) | VecImmBorrow(_) | VecMutBorrow(_) |
+        VecPushBack(_) | VecPopBack(_) | VecUnpack(_, _) | VecSwap(_) => None,
+        // Variant operations: depend on field sizes
+        PackVariant(_) | PackVariantGeneric(_) |
+        UnpackVariant(_) | UnpackVariantImmRef(_) | UnpackVariantMutRef(_) |
+        UnpackVariantGeneric(_) | UnpackVariantGenericImmRef(_) | UnpackVariantGenericMutRef(_) => None,
+        // VariantSwitch: depends on value size
+        VariantSwitch(_) => None,
+        // Call operations: handled separately
+        Call(_) | CallGeneric(_) => None,
+        // Charge itself should not be in input
+        Charge { .. } => None,
+    }
+}
+
+/// Compute the total fixed gas costs for a basic block.
+fn compute_block_fixed_costs(code: &[ast::Bytecode]) -> BlockGasCost {
+    let mut cost = BlockGasCost::default();
+    for instr in code {
+        if let Some((pops, pushes, pop_size, push_size)) = get_fixed_instruction_cost(instr) {
+            cost.add(pops, pushes, pop_size, push_size);
+        }
+    }
+    cost
+}
 
 pub(crate) fn package(pkg: Input::Package) -> ast::Package {
     let Input::Package {
@@ -73,8 +195,26 @@ fn generate_basic_blocks(
             let start = cfg.block_start(label) as usize;
             let end = cfg.block_end(label) as usize;
             let label = label as ast::Label;
-            let code = input[start..(end + 1)].iter().map(bytecode).collect();
-            (label, code)
+            let code: Vec<ast::Bytecode> = input[start..(end + 1)].iter().map(bytecode).collect();
+
+            // Compute fixed costs for the block
+            let block_cost = compute_block_fixed_costs(&code);
+
+            // Prepend Charge instruction if there are fixed costs
+            let final_code = if block_cost.has_fixed_costs() {
+                let mut new_code = Vec::with_capacity(code.len() + 1);
+                new_code.push(ast::Bytecode::Charge {
+                    instructions: block_cost.instructions,
+                    pushes: block_cost.pushes,
+                    pops: block_cost.pops,
+                });
+                new_code.extend(code);
+                new_code
+            } else {
+                code
+            };
+
+            (label, final_code)
         })
         .collect::<BTreeMap<ast::Label, Vec<ast::Bytecode>>>()
 }

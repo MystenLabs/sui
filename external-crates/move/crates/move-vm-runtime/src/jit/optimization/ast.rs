@@ -61,6 +61,16 @@ pub struct Code {
 /// Optimized Bytecode
 #[derive(Clone)]
 pub enum Bytecode {
+    /// Pre-computed gas charge for a basic block.
+    /// Charges gas for all fixed-cost instructions in the block at once.
+    Charge {
+        /// Number of fixed-cost instructions in this block
+        instructions: u64,
+        /// Total stack pushes from fixed-cost instructions
+        pushes: u64,
+        /// Total stack pops from fixed-cost instructions
+        pops: u64,
+    },
     Pop,
     Ret,
     BrTrue(Label),
@@ -142,6 +152,15 @@ pub enum Bytecode {
 impl ::std::fmt::Debug for Bytecode {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match self {
+            Bytecode::Charge {
+                instructions,
+                pushes,
+                pops,
+            } => write!(
+                f,
+                "Charge(instrs={}, pushes={}, pops={})",
+                instructions, pushes, pops
+            ),
             Bytecode::Pop => write!(f, "Pop"),
             Bytecode::Ret => write!(f, "Ret"),
             Bytecode::BrTrue(a) => write!(f, "BrTrue({})", a),
@@ -253,7 +272,8 @@ impl Bytecode {
                     }
                 }
             }
-            Bytecode::Pop
+            Bytecode::Charge { .. }
+            | Bytecode::Pop
             | Bytecode::Ret
             | Bytecode::LdU8(_)
             | Bytecode::LdU64(_)
@@ -334,7 +354,8 @@ impl Bytecode {
             Bytecode::Branch(_) | Bytecode::Abort | Bytecode::Ret => true,
             // True because verifier insists these are exhaustive
             Bytecode::VariantSwitch(_) => true,
-            Bytecode::Pop
+            Bytecode::Charge { .. }
+            | Bytecode::Pop
             | Bytecode::BrTrue(_)
             | Bytecode::BrFalse(_)
             | Bytecode::LdU8(_)

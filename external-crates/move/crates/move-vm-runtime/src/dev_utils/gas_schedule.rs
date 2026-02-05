@@ -491,6 +491,17 @@ impl GasMeter for GasStatus<'_> {
         Ok(())
     }
 
+    fn charge_block(
+        &mut self,
+        instructions: u64,
+        _pushes: u64,
+        _pops: u64,
+    ) -> PartialVMResult<()> {
+        // Simple model: charge based on instruction count only
+        let cost = InternalGas::new(instructions);
+        self.deduct_gas(cost)
+    }
+
     /// Returns the gas left
     fn remaining_gas(&self) -> InternalGas {
         self.gas_left

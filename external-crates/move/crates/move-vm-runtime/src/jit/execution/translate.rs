@@ -1351,7 +1351,8 @@ fn compute_renumbered_bytecode(
             | input::Bytecode::UnpackVariantGeneric(..)
             | input::Bytecode::UnpackVariantGenericImmRef(..)
             | input::Bytecode::UnpackVariantGenericMutRef(..)
-            | input::Bytecode::VariantSwitch(..)) => Ok(instr),
+            | input::Bytecode::VariantSwitch(..)
+            | input::Bytecode::Charge { .. }) => Ok(instr),
         }
     }
 
@@ -1367,6 +1368,17 @@ fn bytecode(
     bytecode: input::Bytecode,
 ) -> PartialVMResult<Bytecode> {
     let bytecode = match bytecode {
+        // Gas batching charge instruction - passes through directly
+        input::Bytecode::Charge {
+            instructions,
+            pushes,
+            pops,
+        } => Bytecode::Charge {
+            instructions,
+            pushes,
+            pops,
+        },
+
         // Calls -- these get compiled to something more-direct here
         input::Bytecode::Call(ndx) => {
             let call_type = call(context.package_context, context.module, ndx)?;

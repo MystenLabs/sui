@@ -184,6 +184,20 @@ pub trait GasMeter {
         locals: impl Iterator<Item = impl ValueView>,
     ) -> PartialVMResult<()>;
 
+    /// Charge for a batched set of fixed-cost operations.
+    /// Called once per basic block for all pre-computed fixed costs.
+    ///
+    /// # Arguments
+    /// * `instructions` - Number of fixed-cost instructions in the block
+    /// * `pushes` - Total stack pushes from fixed-cost instructions
+    /// * `pops` - Total stack pops from fixed-cost instructions
+    fn charge_block(
+        &mut self,
+        instructions: u64,
+        pushes: u64,
+        pops: u64,
+    ) -> PartialVMResult<()>;
+
     /// Returns the gas left
     fn remaining_gas(&self) -> InternalGas;
 }
@@ -354,6 +368,15 @@ impl GasMeter for UnmeteredGasMeter {
     fn charge_drop_frame(
         &mut self,
         _locals: impl Iterator<Item = impl ValueView>,
+    ) -> PartialVMResult<()> {
+        Ok(())
+    }
+
+    fn charge_block(
+        &mut self,
+        _instructions: u64,
+        _pushes: u64,
+        _pops: u64,
     ) -> PartialVMResult<()> {
         Ok(())
     }
