@@ -35,6 +35,15 @@ use crate::{
 #[allow(dead_code)]
 pub(crate) type NodeId = NetworkPublicKey;
 
+/// Identifies a peer in the network, which can be either a validator or an observer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PeerId {
+    /// A validator node identified by its authority index.
+    Authority(AuthorityIndex),
+    /// An observer node identified by its network public key.
+    Observer(NodeId),
+}
+
 // Tonic generated RPC stubs.
 mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
@@ -59,6 +68,7 @@ pub(crate) mod tonic_network;
 #[cfg(msim)]
 pub mod tonic_network;
 mod tonic_tls;
+pub(crate) mod unified_client;
 
 /// A stream of serialized filtered blocks returned over the network.
 pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = ExtendedSerializedBlock> + Send>>;
@@ -285,6 +295,57 @@ where
 
     /// Stops the network service.
     async fn stop(&mut self);
+}
+
+/// Client interface for synchronizer operations.
+/// This trait abstracts over both validator and observer network clients,
+/// allowing the synchronizer to fetch blocks from any peer type.
+#[async_trait]
+pub(crate) trait SynchronizerClient: Send + Sync + 'static {
+    /// Fetches serialized `SignedBlock`s from a peer.
+    /// For validator peers, it may return additional ancestor blocks according to
+    /// the provided `highest_accepted_rounds`.
+    async fn fetch_blocks(
+        &self,
+        peer: PeerId,
+        block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>>;
+
+    /// Fetches the latest block from `peer` for the requested `authorities`.
+    /// This is only applicable for validator peers.
+    async fn fetch_latest_blocks(
+        &self,
+        peer: PeerId,
+        authorities: Vec<AuthorityIndex>,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>>;
+
+    /// Gets the latest received & accepted rounds of all authorities from the peer.
+    /// This is only applicable for validator peers.
+    async fn get_latest_rounds(
+        &self,
+        peer: PeerId,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
+}
+
+/// Client interface for commit syncer operations.
+/// This trait abstracts over both validator and observer network clients,
+/// allowing the commit syncer to fetch commits from any peer type.
+#[async_trait]
+pub(crate) trait CommitSyncerClient: Send + Sync + 'static {
+    /// Fetches serialized commits in the commit range from a peer.
+    /// Returns a tuple of both the serialized commits, and serialized blocks that contain
+    /// votes certifying the last commit.
+    async fn fetch_commits(
+        &self,
+        peer: PeerId,
+        commit_range: CommitRange,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
 }
 
 /// Serialized block with extended information from the proposing authority.
