@@ -21,6 +21,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use once_cell::sync::Lazy;
+use serde_json::Value as Json;
 use shared_crypto::intent::{IntentMessage, PersonalMessage};
 use sui_display::v1::Format;
 use sui_json_rpc_types::ZkLoginIntentScope;
@@ -1290,7 +1291,7 @@ async fn get_display_fields(
     for (key, value) in display {
         match value {
             Ok(v) => {
-                fields.insert(key, v);
+                fields.insert(key, Json::String(v));
             }
             Err(e) => {
                 errors.push(e.to_string());

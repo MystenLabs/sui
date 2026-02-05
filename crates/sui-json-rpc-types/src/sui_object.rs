@@ -166,7 +166,7 @@ impl TryFrom<SuiObjectResponse> for ObjectInfo {
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 pub struct DisplayFieldsResponse {
-    pub data: Option<BTreeMap<String, String>>,
+    pub data: Option<BTreeMap<String, Value>>,
     pub error: Option<SuiObjectResponseError>,
 }
 
