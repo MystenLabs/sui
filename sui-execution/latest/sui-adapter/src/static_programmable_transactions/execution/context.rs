@@ -40,11 +40,15 @@ use move_vm_runtime::{
         vm::{LoadedFunctionInformation, MoveVM},
     },
     natives::extensions::NativeExtensions,
-    shared::gas::{GasMeter as _, SimpleInstruction},
+    shared::{
+        gas::{GasMeter as _, SimpleInstruction},
+        linkage_context::LinkageHash,
+    },
     validation::verification::ast::Package as VerifiedPackage,
 };
 use mysten_common::debug_fatal;
 use nonempty::nonempty;
+use quick_cache::unsync::Cache as QCache;
 use serde::{Deserialize, de::DeserializeSeed};
 use std::{
     cell::RefCell,
@@ -135,6 +139,32 @@ macro_rules! charge_gas {
     ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
 }
 
+// Helper macro to manage Move VM cache for different linkage contexts. If the given linkage is
+// found the VM is reused, otherwise a new VM is created and inserted into the cache.
+macro_rules! with_vm {
+    ($self:ident, $linkage:expr, $body:expr) => {{
+        let link_context = $linkage.linkage_context();
+        let linkage_hash = link_context.to_linkage_hash();
+        let mut vm = if let Some((_, vm)) = $self.executable_vm_cache.remove(&linkage_hash) {
+            vm
+        } else {
+            let data_store = &$self.env.linkable_store.package_store;
+            $self
+                .env
+                .vm
+                .make_vm_with_native_extensions(
+                    data_store,
+                    link_context.clone(),
+                    $self.native_extensions.clone(),
+                )
+                .map_err(|e| $self.env.convert_linked_vm_error(e, $linkage))?
+        };
+        let result = $body(&mut vm)?;
+        $self.executable_vm_cache.insert(linkage_hash, vm);
+        Ok(result)
+    }};
+}
+
 /// Type wrapper around Value to ensure safe usage
 #[derive(Debug)]
 pub struct CtxValue(Value);
@@ -191,8 +221,8 @@ enum ResolvedLocation<'a> {
 }
 
 /// Maintains all runtime state specific to programmable transactions
-pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
-    pub env: &'env Env<'pc, 'vm, 'state, 'linkage>,
+pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension> {
+    pub env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
     /// Metrics for reporting exceeded limits
     pub metrics: Arc<LimitsMetrics>,
     pub native_extensions: NativeExtensions<'env>,
@@ -205,6 +235,8 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
     locations: Locations,
+    // cache of Move VMs created this transaction for different linkage contexts so that we can reuse them.
+    executable_vm_cache: QCache<LinkageHash, MoveVM<'env>>,
 }
 
 impl Locations {
@@ -252,10 +284,12 @@ impl Locations {
     }
 }
 
-impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
+impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
+    Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
+{
     #[instrument(name = "Context::new", level = "trace", skip_all)]
     pub fn new(
-        env: &'env Env<'pc, 'vm, 'state, 'linkage>,
+        env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
@@ -340,6 +374,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 receiving_inputs,
                 results: vec![],
             },
+            executable_vm_cache: QCache::new(1024),
         })
     }
 
@@ -443,8 +478,16 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
         let mut written_objects = BTreeMap::new();
 
+        let (writeout_vm, ty_linkage) =
+            Self::make_writeout_vm(env, writes.values().map(|(_, ty, _)| ty.clone()))?;
+
         for (id, (recipient, ty, value)) in writes {
-            let (ty, layout) = env.load_type_and_layout_from_struct(&ty.clone().into())?;
+            let (ty, layout) = Self::load_type_and_layout_from_struct_for_writeout(
+                env,
+                &writeout_vm,
+                &ty_linkage,
+                ty.clone().into(),
+            )?;
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
             let Some(bytes) = value.typed_serialize(&layout) else {
@@ -498,6 +541,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     pub fn take_user_events(
         &mut self,
+        vm: &MoveVM<'_>,
         version_mid: ModuleId,
         function_def_idx: FunctionDefinitionIndex,
         instr_length: u16,
@@ -517,15 +561,73 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let new_events = events
             .into_iter()
             .map(|(tag, value)| {
-                let layout = self.env.type_layout_for_struct(&tag)?;
+                let type_tag = TypeTag::Struct(Box::new(tag));
+                let layout = vm
+                    .runtime_type_layout(&type_tag)
+                    .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
                 let Some(bytes) = value.typed_serialize(&layout) else {
                     invariant_violation!("Failed to serialize Move event");
                 };
-                Ok((version_mid.clone(), tag, bytes))
+                let TypeTag::Struct(tag) = type_tag else {
+                    unreachable!()
+                };
+                Ok((version_mid.clone(), *tag, bytes))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         self.user_events.extend(new_events);
         Ok(())
+    }
+
+    //
+    // Final serialization of written objects
+    //
+
+    /// The writeout VM is used to serialize all written objects at the end of execution. This
+    /// needs access to all types that were written during the transaction [`writes`]. Importantly,
+    /// it needs to be able to create a VM over any newly published packages as the `init`
+    /// functions in those packages may have created objects of types defined in those packages.
+    fn make_writeout_vm<I>(
+        env: &Env,
+        writes: I,
+    ) -> Result<(MoveVM<'extension>, ExecutableLinkage), ExecutionError>
+    where
+        I: IntoIterator<Item = MoveObjectType>,
+    {
+        let tys_addrs = writes
+            .into_iter()
+            .flat_map(|ty| StructTag::from(ty).all_addresses())
+            .map(ObjectID::from)
+            .collect::<BTreeSet<_>>();
+
+        let ty_linkage = ExecutableLinkage::type_linkage(&tys_addrs, env.linkable_store)?;
+        env.vm
+            .make_vm(
+                &env.linkable_store.package_store,
+                ty_linkage.linkage_context(),
+            )
+            .map_err(|e| env.convert_linked_vm_error(e, &ty_linkage))
+            .map(|vm| (vm, ty_linkage))
+    }
+
+    /// Load the type and layout for a struct tag.
+    /// It is important that this use the VM passed in, and not the `resolution_vm` in the `env` as
+    /// the types requested may have only been created during the execution of the transaction and
+    /// therefore will not be present in the `resolution_vm`.
+    fn load_type_and_layout_from_struct_for_writeout(
+        env: &Env,
+        vm: &MoveVM,
+        linkage: &ExecutableLinkage,
+        tag: StructTag,
+    ) -> Result<(Type, move_core_types::runtime_value::MoveTypeLayout), ExecutionError> {
+        let type_tag = TypeTag::Struct(Box::new(tag));
+        let vm_type = vm
+            .load_type(&type_tag)
+            .map_err(|e| env.convert_linked_vm_error(e, linkage))?;
+        let layout = vm
+            .runtime_type_layout(&type_tag)
+            .map_err(|e| env.convert_vm_error(e))?;
+        env.adapter_type_from_vm_type(vm, &vm_type)
+            .map(|ty| (ty, layout))
     }
 
     //
@@ -709,60 +811,38 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         args: Vec<CtxValue>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
-        let result = self.execute_function_bypass_visibility(
-            &function.original_mid,
-            &function.name,
-            &function.type_arguments,
-            args,
-            &function.linkage,
-            trace_builder_opt,
-        )?;
-        self.take_user_events(
-            function.version_mid,
-            function.definition_index,
-            function.instruction_length,
-            &function.linkage,
-        )?;
-        Ok(result)
+        with_vm!(self, &function.linkage, |vm: &mut MoveVM<'env>| {
+            let ty_args = function
+                .type_arguments
+                .iter()
+                .map(|ty| {
+                    let tag: TypeTag = ty.clone().try_into().map_err(|e| {
+                        ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, e)
+                    })?;
+                    vm.load_type(&tag)
+                        .map_err(|e| self.env.convert_linked_vm_error(e, &function.linkage))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let result = self.execute_function_bypass_visibility_with_vm(
+                vm,
+                &function.original_mid,
+                &function.name,
+                ty_args,
+                args,
+                &function.linkage,
+                trace_builder_opt,
+            )?;
+            self.take_user_events(
+                vm,
+                function.version_mid,
+                function.definition_index,
+                function.instruction_length,
+                &function.linkage,
+            )?;
+            Ok::<Vec<CtxValue>, ExecutionError>(result)
+        })
     }
 
-    pub fn execute_function_bypass_visibility(
-        &mut self,
-        original_mid: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: &[Type],
-        args: Vec<CtxValue>,
-        linkage: &ExecutableLinkage,
-        tracer: &mut Option<MoveTraceBuilder>,
-    ) -> Result<Vec<CtxValue>, ExecutionError> {
-        let ty_args = ty_args
-            .iter()
-            .enumerate()
-            .map(|(idx, ty)| self.env.load_vm_type_argument_from_adapter_type(idx, ty))
-            .collect::<Result<Vec<_>, _>>()?;
-        let data_store = &self.env.linkable_store.package_store;
-        let link_context = linkage.linkage_context();
-        let mut vm = self
-            .env
-            .vm
-            .make_vm_with_native_extensions(
-                data_store,
-                link_context,
-                self.native_extensions.clone(),
-            )
-            .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
-        self.execute_function_bypass_visibility_with_vm(
-            &mut vm,
-            original_mid,
-            function_name,
-            ty_args,
-            args,
-            linkage,
-            tracer,
-        )
-    }
-
-    // TODO(vm-rewrite): Need to update the function call to pass deserialized args to the VM.
     fn execute_function_bypass_visibility_with_vm(
         &mut self,
         vm: &mut MoveVM<'env>,
@@ -969,6 +1049,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
             let version_mid = ModuleId::new(package_id.into(), module.self_id().name().to_owned());
             self.take_user_events(
+                &vm,
                 version_mid,
                 fdef_idx,
                 fdef.code.as_ref().map(|c| c.code.len() as u16).unwrap_or(0),

@@ -14055,6 +14055,7 @@ dependencies = [
  "mysten-metrics",
  "nonempty",
  "parking_lot 0.12.3",
+ "quick_cache",
  "serde",
  "serde_json",
  "sui-macros",
