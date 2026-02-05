@@ -13,7 +13,7 @@ use sui_types::supported_protocol_versions::Chain;
 
 #[derive(Clone)]
 pub(crate) struct Context {
-    pub pg_context: sui_indexer_alt_jsonrpc::context::Context,
+    // pub pg_context: sui_indexer_alt_jsonrpc::context::Context,
     pub simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>,
     pub db_writer: Db,
     pub at_checkpoint: u64,

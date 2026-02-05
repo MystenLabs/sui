@@ -23,6 +23,7 @@ use sui_types::digests::ChainIdentifier;
 use tokio::sync::RwLock;
 
 use crate::store::ForkingStore;
+use fastcrypto::encoding::{Base58, Encoding};
 use tracing::info;
 
 const READ_MASK_DEFAULT: &str = "digest";
@@ -57,7 +58,7 @@ impl LedgerService for ForkingLedgerService {
         let checkpoint = store.get_highest_checkpint();
         let mut message = GetServiceInfoResponse::default();
 
-        message.chain_id = Some(self.chain_id.to_string());
+        message.chain_id = Some(Base58::encode(self.chain_id.as_bytes()));
         message.chain = Some(self.chain_id.chain().as_str().into());
 
         if let Some(cp) = checkpoint {
