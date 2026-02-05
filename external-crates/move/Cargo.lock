@@ -2363,10 +2363,8 @@ dependencies = [
 name = "move-dataflow-analysis"
 version = "0.1.0"
 dependencies = [
- "hex",
  "move-binary-format",
  "move-core-types",
- "move-model-2",
  "move-stackless-bytecode-2",
  "move-symbol-pool",
 ]
