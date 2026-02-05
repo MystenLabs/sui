@@ -4148,8 +4148,42 @@ impl AuthorityState {
         if expensive_safety_check_config.enable_secondary_index_checks()
             && let Some(indexes) = self.indexes.clone()
         {
-            verify_indexes(self.get_global_state_hash_store().as_ref(), indexes)
+            verify_indexes(self.get_global_state_hash_store().as_ref(), indexes.clone())
                 .expect("secondary indexes are inconsistent");
+
+            // Verify all checkpointed transactions are present in transactions_seq.
+            // This catches any post-processing gaps that could occur if async
+            // post-processing failed to complete before persistence.
+            info!("Verifying all checkpointed transactions are in transactions_seq");
+            let highest_executed = self
+                .checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("Failed to get highest executed checkpoint")
+                .expect("No executed checkpoints");
+
+            for seq in 0..=highest_executed {
+                let checkpoint = self
+                    .checkpoint_store
+                    .get_checkpoint_by_sequence_number(seq)
+                    .expect("Failed to get checkpoint")
+                    .expect("Checkpoint missing");
+                let contents = self
+                    .checkpoint_store
+                    .get_checkpoint_contents(&checkpoint.content_digest)
+                    .expect("Failed to get checkpoint contents")
+                    .expect("Checkpoint contents missing");
+                for digests in contents.iter() {
+                    let tx_digest = digests.transaction;
+                    assert!(
+                        indexes
+                            .get_transaction_seq(&tx_digest)
+                            .expect("Failed to read transactions_seq")
+                            .is_some(),
+                        "Transaction {tx_digest} from checkpoint {seq} missing from transactions_seq"
+                    );
+                }
+            }
+            info!("All checkpointed transactions verified in transactions_seq");
         }
     }
 
