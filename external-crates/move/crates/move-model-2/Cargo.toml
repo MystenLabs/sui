@@ -16,6 +16,7 @@ move-disassembler.workspace = true
 move-command-line-common.workspace = true
 move-symbol-pool.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
+petgraph.workspace = true
 
 anyhow.workspace = true
 bcs.workspace = true

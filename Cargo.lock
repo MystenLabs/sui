@@ -8939,6 +8939,7 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "num",
+ "petgraph 0.8.1",
  "pretty_simple",
  "serde",
  "vfs",
@@ -16009,6 +16010,18 @@ dependencies = [
  "sui-package-management",
  "tikv-jemalloc-ctl",
  "tikv-jemallocator",
+]
+
+[[package]]
+name = "sui-move-model-tests"
+version = "0.0.0"
+dependencies = [
+ "move-binary-format",
+ "move-core-types",
+ "move-model-2",
+ "move-symbol-pool",
+ "sui-framework",
+ "sui-types",
 ]
 
 [[package]]

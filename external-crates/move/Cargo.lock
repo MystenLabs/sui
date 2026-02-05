@@ -2564,6 +2564,7 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "num",
+ "petgraph",
  "pretty_simple",
  "serde",
  "vfs",

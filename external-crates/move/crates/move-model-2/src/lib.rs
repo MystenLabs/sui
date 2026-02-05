@@ -4,6 +4,7 @@
 #[macro_use(sp)]
 extern crate move_ir_types;
 
+pub mod call_graph;
 pub mod compiled_model;
 pub mod display;
 pub mod model;
@@ -13,6 +14,7 @@ pub mod source_kind;
 pub mod source_model;
 pub mod summary;
 
+pub use call_graph::{CallGraph, FunctionId, TopologicalItem, SCC};
 pub use normalized::ModuleId;
 pub use normalized::QualifiedMemberId;
 pub use normalized::TModuleId;

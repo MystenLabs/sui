@@ -154,6 +154,7 @@ members = [
   "crates/sui-move",
   "crates/sui-move-build",
   "crates/sui-move-lsp",
+  "crates/sui-move-model-tests",
   "crates/sui-name-service",
   "crates/sui-network",
   "crates/sui-node",
@@ -637,6 +638,7 @@ move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
+move-model-2 = { path = "external-crates/move/crates/move-model-2" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-stackless-bytecode-2 = { path = "external-crates/move/crates/move-stackless-bytecode-2" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
@@ -737,6 +739,7 @@ sui-metrics-push-client = { path = "crates/sui-metrics-push-client" }
 sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }
+sui-move-model-tests = { path = "crates/sui-move-model-tests" }
 sui-name-service = { path = "crates/sui-name-service" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
