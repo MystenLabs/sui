@@ -185,6 +185,8 @@ impl IngestionLayer {
             streaming_statement_timeout_ms: self
                 .streaming_statement_timeout_ms
                 .unwrap_or(base.streaming_statement_timeout_ms),
+            aimd: base.aimd,
+            gradient2: base.gradient2,
         })
     }
 }
@@ -229,6 +231,8 @@ impl CommitterLayer {
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
             watermark_interval_jitter_ms: 0,
+            aimd: base.aimd,
+            gradient2: base.gradient2,
         })
     }
 }

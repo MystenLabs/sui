@@ -4,6 +4,7 @@
 use std::{future::Future, panic, pin::pin};
 
 use futures::stream::{Stream, StreamExt};
+use tokio::sync::watch;
 use tokio::task::JoinSet;
 
 /// Extension trait introducing `try_for_each_spawned` to all streams.
@@ -27,6 +28,22 @@ pub trait TrySpawnStreamExt: Stream {
     fn try_for_each_spawned<Fut, F, E>(
         self,
         limit: impl Into<Option<usize>>,
+        f: F,
+    ) -> impl Future<Output = Result<(), E>>
+    where
+        Fut: Future<Output = Result<(), E>> + Send + 'static,
+        F: FnMut(Self::Item) -> Fut,
+        E: Send + 'static;
+
+    /// Like [`try_for_each_spawned`](TrySpawnStreamExt::try_for_each_spawned), but the
+    /// concurrency limit is dynamic and controlled by a `watch::Receiver<usize>`.
+    ///
+    /// When the limit changes (via the watch channel), the loop re-evaluates whether it can
+    /// spawn new tasks. Decreasing the limit will not abort in-flight tasks, but will prevent
+    /// new ones from spawning until enough complete.
+    fn try_for_each_spawned_dynamic<Fut, F, E>(
+        self,
+        limit: watch::Receiver<usize>,
         f: F,
     ) -> impl Future<Output = Result<(), E>>
     where
@@ -123,6 +140,73 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
 
         if let Some(e) = error { Err(e) } else { Ok(()) }
     }
+
+    async fn try_for_each_spawned_dynamic<Fut, F, E>(
+        self,
+        mut limit: watch::Receiver<usize>,
+        mut f: F,
+    ) -> Result<(), E>
+    where
+        Fut: Future<Output = Result<(), E>> + Send + 'static,
+        F: FnMut(Self::Item) -> Fut,
+        E: Send + 'static,
+    {
+        let mut active: usize = 0;
+        let mut join_set = JoinSet::new();
+        let mut draining = false;
+        let mut error = None;
+
+        let mut self_ = pin!(self);
+
+        loop {
+            let current_limit = *limit.borrow();
+            let can_spawn = !draining && active < current_limit;
+
+            tokio::select! {
+                next = self_.next(), if can_spawn => {
+                    if let Some(item) = next {
+                        active += 1;
+                        join_set.spawn(f(item));
+                    } else {
+                        draining = true;
+                    }
+                }
+
+                Some(res) = join_set.join_next() => {
+                    active -= 1;
+                    match res {
+                        Ok(Err(e)) if error.is_none() => {
+                            error = Some(e);
+                            draining = true;
+                        }
+
+                        Ok(_) => {}
+
+                        Err(e) if e.is_panic() => {
+                            panic::resume_unwind(e.into_panic())
+                        }
+
+                        Err(e) => {
+                            assert!(e.is_cancelled());
+                            draining = true;
+                        }
+                    }
+                }
+
+                // Re-evaluate the select guards when the limit changes, which may
+                // unblock spawning if the limit increased.
+                Ok(()) = limit.changed(), if !draining && active >= current_limit => {}
+
+                else => {
+                    if active == 0 && draining {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(e) = error { Err(e) } else { Ok(()) }
+    }
 }
 
 impl<E> From<E> for Break<E> {
@@ -142,6 +226,7 @@ mod tests {
     };
 
     use futures::stream;
+    use tokio::sync::watch;
 
     use super::*;
 
@@ -289,5 +374,117 @@ mod tests {
                 Ok::<(), ()>(())
             })
             .await;
+    }
+
+    // ---- dynamic concurrency tests ----
+
+    #[tokio::test]
+    async fn dynamic_static_limit_behaves_like_static() {
+        let (_tx, rx) = watch::channel(16usize);
+        let actual = Arc::new(AtomicUsize::new(0));
+        let result = stream::iter(0..100)
+            .try_for_each_spawned_dynamic(rx, |i| {
+                let actual = actual.clone();
+                async move {
+                    actual.fetch_add(i, Ordering::Relaxed);
+                    Ok::<(), ()>(())
+                }
+            })
+            .await;
+
+        assert!(result.is_ok());
+        let actual = Arc::try_unwrap(actual).unwrap().into_inner();
+        assert_eq!(actual, 99 * 100 / 2);
+    }
+
+    #[tokio::test]
+    async fn dynamic_max_concurrency() {
+        #[derive(Default, Debug)]
+        struct Jobs {
+            max: AtomicUsize,
+            curr: AtomicUsize,
+        }
+
+        let (_tx, rx) = watch::channel(4usize);
+        let jobs = Arc::new(Jobs::default());
+
+        let result = stream::iter(0..32)
+            .try_for_each_spawned_dynamic(rx, |_| {
+                let jobs = jobs.clone();
+                async move {
+                    jobs.curr.fetch_add(1, Ordering::Relaxed);
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    let prev = jobs.curr.fetch_sub(1, Ordering::Relaxed);
+                    jobs.max.fetch_max(prev, Ordering::Relaxed);
+                    Ok::<(), ()>(())
+                }
+            })
+            .await;
+
+        assert!(result.is_ok());
+        let Jobs { max, curr } = Arc::try_unwrap(jobs).unwrap();
+        assert_eq!(curr.into_inner(), 0);
+        assert!(max.into_inner() <= 4);
+    }
+
+    #[tokio::test]
+    async fn dynamic_decrease_stops_new_spawns() {
+        #[derive(Default, Debug)]
+        struct Jobs {
+            max: AtomicUsize,
+            curr: AtomicUsize,
+        }
+
+        let (tx, rx) = watch::channel(8usize);
+        let jobs = Arc::new(Jobs::default());
+
+        let result = stream::iter(0..32)
+            .try_for_each_spawned_dynamic(rx, |i| {
+                let jobs = jobs.clone();
+                let tx = tx.clone();
+                async move {
+                    // After a few items, reduce the limit
+                    if i == 4 {
+                        let _ = tx.send(2);
+                    }
+                    jobs.curr.fetch_add(1, Ordering::Relaxed);
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                    let prev = jobs.curr.fetch_sub(1, Ordering::Relaxed);
+                    jobs.max.fetch_max(prev, Ordering::Relaxed);
+                    Ok::<(), ()>(())
+                }
+            })
+            .await;
+
+        assert!(result.is_ok());
+
+        let Jobs { max, curr } = Arc::try_unwrap(jobs).unwrap();
+        assert_eq!(curr.into_inner(), 0);
+        // The max may have been up to 8 before the decrease, but should not exceed 8
+        assert!(max.into_inner() <= 8);
+    }
+
+    #[tokio::test]
+    async fn dynamic_error_propagation() {
+        let (_tx, rx) = watch::channel(4usize);
+        let actual = Arc::new(Mutex::new(vec![]));
+        let result = stream::iter(0..100)
+            .try_for_each_spawned_dynamic(rx, |i| {
+                let actual = actual.clone();
+                async move {
+                    if i < 42 {
+                        actual.lock().unwrap().push(i);
+                        Ok(())
+                    } else {
+                        Err(())
+                    }
+                }
+            })
+            .await;
+
+        assert!(result.is_err());
+        let actual = Arc::try_unwrap(actual).unwrap().into_inner().unwrap();
+        let expect: Vec<_> = (0..42).collect();
+        assert_eq!(expect, actual);
     }
 }

@@ -10,6 +10,7 @@ use anyhow::Context;
 use anyhow::anyhow;
 use futures::Stream;
 use futures::future::try_join_all;
+use sui_concurrency_limiter::{AimdLimit, Gradient2Limit, Limit, Outcome};
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
@@ -98,6 +99,17 @@ where
         // This value is updated every outer loop iteration after both streaming and broadcasting complete.
         let mut checkpoint_hi = start_cp;
 
+        let limiter: Option<(Arc<dyn Limit>, watch::Receiver<usize>)> =
+            if let Some(g2_config) = &config.gradient2 {
+                let (lim, rx) = Gradient2Limit::new(g2_config.clone());
+                Some((Arc::new(lim), rx))
+            } else if let Some(aimd_config) = &config.aimd {
+                let (lim, rx) = AimdLimit::new(aimd_config.clone());
+                Some((Arc::new(lim), rx))
+            } else {
+                None
+            };
+
         'outer: while checkpoint_hi < end_cp {
             // Set up the streaming task for the current range [checkpoint_hi, end_cp). This function
             // will return a handle to the streaming task and the end cp of the ingestion task, calculated
@@ -127,6 +139,8 @@ where
                 ingest_hi_watch_rx.clone(),
                 client.clone(),
                 subscribers.clone(),
+                limiter.as_ref().map(|(l, rx)| (l.clone(), rx.clone())),
+                metrics.clone(),
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -213,35 +227,76 @@ fn ingest_and_broadcast_range(
     ingest_hi_rx: watch::Receiver<Option<u64>>,
     client: IngestionClient,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    limiter: Option<(Arc<dyn Limit>, watch::Receiver<usize>)>,
+    metrics: Arc<IngestionMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
-        // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-        // Backpressure is enforced at the stream level: checkpoints are only yielded when
-        // ingest_hi allows, preventing spawned tasks from piling up while blocked.
-        let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
-        // docs::/#bound
+        let lim = limiter.as_ref().map(|(l, _)| l.clone());
 
-        checkpoints
-            .try_for_each_spawned(ingest_concurrency, |cp| {
-                let client = client.clone();
-                let subscribers = subscribers.clone();
+        let make_task = |cp: u64| {
+            let client = client.clone();
+            let subscribers = subscribers.clone();
+            let lim = lim.clone();
+            let metrics = metrics.clone();
 
-                async move {
+            async move {
+                if let Some(ref lim) = lim {
+                    lim.acquire();
+                }
+
+                let start = std::time::Instant::now();
+                let result = async {
                     // Fetch the checkpoint or stop if cancelled.
                     let checkpoint = client.wait_for(cp, retry_interval).await?;
 
                     // Send checkpoint to all subscribers.
                     if send_checkpoint(checkpoint, &subscribers).await.is_ok() {
                         debug!(checkpoint = cp, "Broadcasted checkpoint");
+                        if let Some(ref lim) = lim {
+                            lim.on_sample(Outcome::Success, start.elapsed());
+                            metrics.ingestion_concurrency.set(lim.current() as i64);
+                        }
                         Ok(())
                     } else {
-                        // An error is returned meaning some subscriber channel has closed, which
-                        // we consider a shutdown signal for ingestion.
+                        if let Some(ref lim) = lim {
+                            lim.on_sample(Outcome::Ignore, start.elapsed());
+                        }
                         Err(Break::Break)
                     }
                 }
-            })
-            .await
+                .await;
+
+                if let Some(ref lim) = lim {
+                    lim.release();
+                }
+
+                // Signal Dropped for fetch errors.
+                if let Err(Break::Err(_)) = &result
+                    && let Some(ref lim) = lim
+                {
+                    lim.on_sample(Outcome::Dropped, start.elapsed());
+                    metrics.ingestion_concurrency.set(lim.current() as i64);
+                }
+
+                result
+            }
+        };
+
+        // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
+        // Backpressure is enforced at the stream level: checkpoints are only yielded when
+        // ingest_hi allows, preventing spawned tasks from piling up while blocked.
+        let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
+        // docs::/#bound
+
+        if let Some((_, limit_rx)) = limiter {
+            checkpoints
+                .try_for_each_spawned_dynamic(limit_rx, make_task)
+                .await
+        } else {
+            checkpoints
+                .try_for_each_spawned(ingest_concurrency, make_task)
+                .await
+        }
     }))
 }
 
@@ -472,6 +527,8 @@ mod tests {
             streaming_backoff_max_batch_size: 16,
             streaming_connection_timeout_ms: 100,
             streaming_statement_timeout_ms: 100,
+            aimd: None,
+            gradient2: None,
         }
     }
 

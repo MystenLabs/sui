@@ -14532,6 +14532,7 @@ dependencies = [
  "prost 0.14.1",
  "serde",
  "serde_json",
+ "sui-concurrency-limiter",
  "sui-config",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
@@ -14583,6 +14584,14 @@ dependencies = [
  "tokio-util 0.7.18",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "sui-concurrency-limiter"
+version = "1.66.0"
+dependencies = [
+ "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -15334,6 +15343,7 @@ dependencies = [
  "scoped-futures",
  "serde",
  "serde_json",
+ "sui-concurrency-limiter",
  "sui-field-count",
  "sui-futures",
  "sui-indexer-alt-framework-store-traits",
@@ -15839,6 +15849,7 @@ dependencies = [
  "prost-types 0.14.1",
  "rustls 0.23.31",
  "serde",
+ "sui-concurrency-limiter",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
