@@ -156,9 +156,9 @@ pub struct Indexer<S: Store> {
     /// unless overridden by [Self::default_next_checkpoint].
     first_ingestion_checkpoint: u64,
 
-    /// The minimum next_checkpoint across all sequential pipelines. This is used to initialize
-    /// the regulator to prevent ingestion from running too far ahead of sequential pipelines.
-    next_sequential_checkpoint: Option<u64>,
+    /// The minimum next_checkpoint across all pipelines that participate in commit_hi feedback.
+    /// This is used to initialize the regulator to prevent ingestion from running too far ahead.
+    initial_commit_hi: Option<u64>,
 
     /// The service handles for every pipeline, used to manage lifetimes and graceful shutdown.
     pipelines: Vec<Service>,
@@ -237,7 +237,7 @@ impl<S: Store> Indexer<S> {
             },
             added_pipelines: BTreeSet::new(),
             first_ingestion_checkpoint: u64::MAX,
-            next_sequential_checkpoint: None,
+            initial_commit_hi: None,
             pipelines: vec![],
         })
     }
@@ -271,11 +271,11 @@ impl<S: Store> Indexer<S> {
         })
     }
 
-    /// The minimum next checkpoint across all sequential pipelines. This value is used to
-    /// initialize the ingestion regulator's high watermark to prevent ingestion from running
-    /// too far ahead of sequential pipelines.
-    pub fn next_sequential_checkpoint(&self) -> Option<u64> {
-        self.next_sequential_checkpoint
+    /// The minimum next checkpoint across all pipelines that participate in commit_hi feedback.
+    /// This value is used to initialize the ingestion regulator's high watermark to prevent
+    /// ingestion from running too far ahead.
+    pub fn initial_commit_hi(&self) -> Option<u64> {
+        self.initial_commit_hi
     }
 
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
@@ -296,13 +296,20 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
+        self.initial_commit_hi = Some(
+            self.initial_commit_hi
+                .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
+        );
+
+        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe();
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
             next_checkpoint,
             config,
             self.store.clone(),
             self.task.clone(),
-            self.ingestion_service.subscribe().0,
+            checkpoint_rx,
+            commit_hi_tx,
             self.metrics.clone(),
         ));
 
@@ -331,7 +338,7 @@ impl<S: Store> Indexer<S> {
             .ingestion_service
             .run(
                 self.first_ingestion_checkpoint..=last_checkpoint,
-                self.next_sequential_checkpoint,
+                self.initial_commit_hi,
             )
             .await
             .context("Failed to start ingestion service")?;
@@ -419,9 +426,8 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
-        // Track the minimum next_checkpoint across all sequential pipelines
-        self.next_sequential_checkpoint = Some(
-            self.next_sequential_checkpoint
+        self.initial_commit_hi = Some(
+            self.initial_commit_hi
                 .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
         );
 
@@ -1827,11 +1833,11 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify next_sequential_checkpoint is set correctly (10 + 1 = 11)
+        // Verify initial_commit_hi is set correctly (10 + 1 = 11)
         assert_eq!(
-            indexer.next_sequential_checkpoint(),
+            indexer.initial_commit_hi(),
             Some(11),
-            "next_sequential_checkpoint should be 11"
+            "initial_commit_hi should be 11"
         );
 
         // Add second sequential pipeline
@@ -1845,9 +1851,9 @@ mod tests {
 
         // Should change to 6 (minimum of 6 and 11)
         assert_eq!(
-            indexer.next_sequential_checkpoint(),
+            indexer.initial_commit_hi(),
             Some(6),
-            "next_sequential_checkpoint should still be 6"
+            "initial_commit_hi should still be 6"
         );
 
         // Run indexer to verify it can make progress past the initial hi and finish ingesting.
