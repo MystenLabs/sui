@@ -31,7 +31,7 @@ impl TestStore {
 fn new_rocksdb_teststore() -> TestStore {
     let temp_dir = TempDir::new().unwrap();
     TestStore::RocksDB((
-        RocksDBStore::new(temp_dir.path().to_str().unwrap()),
+        RocksDBStore::new(temp_dir.path().to_str().unwrap(), true),
         temp_dir,
     ))
 }
