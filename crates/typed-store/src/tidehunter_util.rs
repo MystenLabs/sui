@@ -78,7 +78,7 @@ fn thdb_config() -> Config {
         } // 1 Gb for prod
     };
     #[cfg(debug_assertions)]
-    let max_maps = 2;
+    let max_maps = 4;
     #[cfg(not(debug_assertions))]
     let max_maps = 8; // 8Gb of mapped space for prod
     Config {
