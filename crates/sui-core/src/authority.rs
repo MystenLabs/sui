@@ -24,6 +24,7 @@ use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
 use arc_swap::{ArcSwap, ArcSwapOption, Guard};
+use dashmap::DashMap;
 use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
 use fastcrypto::encoding::Base58;
@@ -928,6 +929,15 @@ pub struct AuthorityState {
 
     pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
     object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
+
+    /// Tracks transactions whose post-processing (indexing/events) is still in flight.
+    /// CheckpointExecutor removes entries and awaits the receiver before persisting
+    /// transaction outputs, ensuring crash-safety of post-processing data.
+    pending_post_processing: Arc<DashMap<TransactionDigest, oneshot::Receiver<()>>>,
+
+    /// Limits the number of concurrent post-processing tasks to avoid overwhelming
+    /// the blocking thread pool. Defaults to the number of available CPUs.
+    post_processing_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -2775,7 +2785,8 @@ impl AuthorityState {
 
     #[instrument(level = "debug", skip_all, err(level = "debug"))]
     fn index_tx(
-        &self,
+        backing_package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        object_store: &Arc<dyn ObjectStore + Send + Sync>,
         indexes: &IndexStore,
         digest: &TransactionDigest,
         // TODO: index_tx really just need the transaction data here.
@@ -2788,8 +2799,7 @@ impl AuthorityState {
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<u64> {
-        let changes = self
-            .process_object_index(effects, written, inner_temporary_store, epoch_store)
+        let changes = Self::process_object_index(backing_package_store, object_store, effects, written, inner_temporary_store, epoch_store)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
         indexes.index_tx(
@@ -2906,7 +2916,8 @@ impl AuthorityState {
     }
 
     fn process_object_index(
-        &self,
+        backing_package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        object_store: &Arc<dyn ObjectStore + Send + Sync>,
         effects: &TransactionEffects,
         written: &WrittenObjects,
         inner_temporary_store: &InnerTemporaryStore,
@@ -2917,7 +2928,7 @@ impl AuthorityState {
                 .executor()
                 .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
                     inner_temporary_store,
-                    self.get_backing_package_store(),
+                    backing_package_store,
                 )));
 
         let modified_at_version = effects
@@ -2932,7 +2943,7 @@ impl AuthorityState {
             let old_version = modified_at_version.get(&id).unwrap();
             // When we process the index, the latest object hasn't been written yet so
             // the old object must be present.
-            match self.get_owner_at_version(&id, *old_version).unwrap_or_else(
+            match Self::get_owner_at_version(object_store, &id, *old_version).unwrap_or_else(
                 |e| panic!("tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}. Err: {:?}", tx_digest, id, old_version, e),
             ) {
                 Owner::AddressOwner(addr)
@@ -2959,7 +2970,7 @@ impl AuthorityState {
                 };
                 // When we process the index, the latest object hasn't been written yet so
                 // the old object must be present.
-                let Some(old_object) = self.get_object_store().get_object_by_key(id, *old_version)
+                let Some(old_object) = object_store.get_object_by_key(id, *old_version)
                 else {
                     panic!(
                         "tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}",
@@ -3027,8 +3038,7 @@ impl AuthorityState {
                         oref.1
                     );
 
-                    let Some(df_info) = self
-                        .try_create_dynamic_field_info(new_object, written, layout_resolver.as_mut())
+                    let Some(df_info) = Self::try_create_dynamic_field_info(object_store, new_object, written, layout_resolver.as_mut())
                         .unwrap_or_else(|e| {
                             error!("try_create_dynamic_field_info should not fail, {}, new_object={:?}", e, new_object);
                             None
@@ -3053,7 +3063,7 @@ impl AuthorityState {
     }
 
     fn try_create_dynamic_field_info(
-        &self,
+        object_store: &Arc<dyn ObjectStore + Send + Sync>,
         o: &Object,
         written: &WrittenObjects,
         resolver: &mut dyn LayoutResolver,
@@ -3125,8 +3135,7 @@ impl AuthorityState {
                     (version, digest, object_type)
                 } else {
                     // If not found, try to find it in the database.
-                    let object = self
-                        .get_object_store()
+                    let object = object_store
                         .get_object_by_key(&object_id, o.version())
                         .ok_or_else(|| UserInputError::ObjectNotFound {
                             object_id,
@@ -3163,39 +3172,119 @@ impl AuthorityState {
             return Ok(());
         }
 
+        let tx_digest = *certificate.digest();
+
+        // Create notification channel and register in pending map
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        self.pending_post_processing.insert(tx_digest, done_rx);
+
+        // Clone the individual Arc fields needed by the spawned task
+        let indexes = self.indexes.clone();
+        let subscription_handler = self.subscription_handler.clone();
+        let metrics = self.metrics.clone();
+        let name = self.name;
+        let backing_package_store = self.get_backing_package_store().clone();
+        let object_store = self.get_object_store().clone();
+        let pending_map = self.pending_post_processing.clone();
+        let semaphore = self.post_processing_semaphore.clone();
+
+        // Clone the data arguments
+        let certificate = certificate.clone();
+        let effects = effects.clone();
+        let inner_temporary_store = inner_temporary_store.clone();
+        let epoch_store = epoch_store.clone();
+
+        // Acquire a semaphore permit, blocking the caller if all permits are held.
+        // This provides backpressure: if post-processing can't keep up with
+        // execution, execution slows down rather than accumulating unbounded work.
+        let permit = {
+            let _scope = monitored_scope("Execution::post_process_one_tx::semaphore_acquire");
+            semaphore
+                .acquire_blocking()
+                .expect("post-processing semaphore should not be closed")
+        };
+
+        tokio::task::spawn_blocking(move || {
+            // Move the permit into the closure so it is held for the duration
+            // of the work and released when the closure completes.
+            let _permit = permit;
+
+            let result = Self::post_process_one_tx_impl(
+                &indexes,
+                &subscription_handler,
+                &metrics,
+                name,
+                &backing_package_store,
+                &object_store,
+                &certificate,
+                &effects,
+                &inner_temporary_store,
+                &epoch_store,
+            );
+
+            if let Err(e) = &result {
+                metrics.post_processing_total_failures.inc();
+                error!(?tx_digest, "tx post processing failed: {e}");
+            }
+
+            // Signal completion and remove from pending map.
+            let _ = done_tx.send(());
+            pending_map.remove(&tx_digest);
+        });
+
+        Ok(())
+    }
+
+    fn post_process_one_tx_impl(
+        indexes: &Option<Arc<IndexStore>>,
+        subscription_handler: &Arc<SubscriptionHandler>,
+        metrics: &Arc<AuthorityMetrics>,
+        name: AuthorityName,
+        backing_package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        object_store: &Arc<dyn ObjectStore + Send + Sync>,
+        certificate: &VerifiedExecutableTransaction,
+        effects: &TransactionEffects,
+        inner_temporary_store: &InnerTemporaryStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
         let _scope = monitored_scope("Execution::post_process_one_tx");
 
         let tx_digest = certificate.digest();
         let timestamp_ms = Self::unixtime_now_ms();
         let events = &inner_temporary_store.events;
         let written = &inner_temporary_store.written;
-        let tx_coins = self.fullnode_only_get_tx_coins_for_indexing(
+        let tx_coins = Self::fullnode_only_get_tx_coins_for_indexing(
+            indexes,
+            name,
+            object_store,
             effects,
             inner_temporary_store,
             epoch_store,
         );
 
         // Index tx
-        if let Some(indexes) = &self.indexes {
-            let _ = self
-                .index_tx(
-                    indexes.as_ref(),
-                    tx_digest,
-                    certificate,
-                    effects,
-                    events,
-                    timestamp_ms,
-                    tx_coins,
-                    written,
-                    inner_temporary_store,
-                    epoch_store,
-                )
-                .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
-                .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"))
-                .expect("Indexing tx should not fail");
+        if let Some(indexes) = indexes {
+            let _ = Self::index_tx(
+                backing_package_store,
+                object_store,
+                indexes.as_ref(),
+                tx_digest,
+                certificate,
+                effects,
+                events,
+                timestamp_ms,
+                tx_coins,
+                written,
+                inner_temporary_store,
+                epoch_store,
+            )
+            .tap_ok(|_| metrics.post_processing_total_tx_indexed.inc())
+            .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"))
+            .expect("Indexing tx should not fail");
 
             let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
-            let events = self.make_transaction_block_events(
+            let events = Self::make_transaction_block_events(
+                backing_package_store,
                 events.clone(),
                 *tx_digest,
                 timestamp_ms,
@@ -3203,13 +3292,9 @@ impl AuthorityState {
                 inner_temporary_store,
             )?;
             // Emit events
-            self.subscription_handler
+            subscription_handler
                 .process_tx(certificate.data().transaction_data(), &effects, &events)
-                .tap_ok(|_| {
-                    self.metrics
-                        .post_processing_total_tx_had_event_processed
-                        .inc()
-                })
+                .tap_ok(|_| metrics.post_processing_total_tx_had_event_processed.inc())
                 .tap_err(|e| {
                     warn!(
                         ?tx_digest,
@@ -3217,7 +3302,7 @@ impl AuthorityState {
                     )
                 })?;
 
-            self.metrics
+            metrics
                 .post_processing_total_events_emitted
                 .inc_by(events.data.len() as u64);
         };
@@ -3225,7 +3310,7 @@ impl AuthorityState {
     }
 
     fn make_transaction_block_events(
-        &self,
+        backing_package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
         transaction_events: TransactionEvents,
         digest: TransactionDigest,
         timestamp_ms: u64,
@@ -3237,7 +3322,7 @@ impl AuthorityState {
                 .executor()
                 .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
                     inner_temporary_store,
-                    self.get_backing_package_store(),
+                    backing_package_store,
                 )));
         SuiTransactionBlockEvents::try_from(
             transaction_events,
@@ -3531,6 +3616,8 @@ impl AuthorityState {
             notify_epoch: tokio::sync::watch::channel(epoch).0,
             object_funds_checker: ArcSwapOption::empty(),
             object_funds_checker_metrics,
+            pending_post_processing: Arc::new(DashMap::new()),
+            post_processing_semaphore: Arc::new(tokio::sync::Semaphore::new(num_cpus::get())),
         });
         state.init_object_funds_checker().await;
 
@@ -3630,6 +3717,12 @@ impl AuthorityState {
 
     pub fn get_object_store(&self) -> &Arc<dyn ObjectStore + Send + Sync> {
         &self.execution_cache_trait_pointers.object_store
+    }
+
+    pub fn pending_post_processing(
+        &self,
+    ) -> &Arc<DashMap<TransactionDigest, oneshot::Receiver<()>>> {
+        &self.pending_post_processing
     }
 
     pub fn get_reconfig_api(&self) -> &Arc<dyn ExecutionCacheReconfigAPI> {
@@ -4358,11 +4451,11 @@ impl AuthorityState {
     }
 
     fn get_owner_at_version(
-        &self,
+        object_store: &Arc<dyn ObjectStore + Send + Sync>,
         object_id: &ObjectID,
         version: SequenceNumber,
     ) -> SuiResult<Owner> {
-        self.get_object_store()
+        object_store
             .get_object_by_key(object_id, version)
             .ok_or_else(|| {
                 SuiError::from(UserInputError::ObjectNotFound {
@@ -5044,12 +5137,14 @@ impl AuthorityState {
     // Returns coin objects for indexing for fullnode if indexing is enabled.
     #[instrument(level = "trace", skip_all)]
     fn fullnode_only_get_tx_coins_for_indexing(
-        &self,
+        indexes: &Option<Arc<IndexStore>>,
+        name: AuthorityName,
+        object_store: &Arc<dyn ObjectStore + Send + Sync>,
         effects: &TransactionEffects,
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<TxCoins> {
-        if self.indexes.is_none() || self.is_validator(epoch_store) {
+        if indexes.is_none() || epoch_store.committee().authority_exists(&name) {
             return None;
         }
         let written_coin_objects = inner_temporary_store
@@ -5082,8 +5177,7 @@ impl AuthorityState {
             if inner_temporary_store
                 .loaded_runtime_objects
                 .contains_key(&object_id)
-                && let Some(object) = self
-                    .get_object_store()
+                && let Some(object) = object_store
                     .get_object_by_key(&object_id, version)
                 && object.is_coin()
             {
