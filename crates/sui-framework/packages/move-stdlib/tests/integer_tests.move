@@ -147,7 +147,56 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
     };
 }
 
-public(package) macro fun test_mul_div($max: _, $cases: vector<_>) {
+/// Tests overflow cases where x * y would overflow in the native type,
+/// but the result x * y / z fits. This is the key use case for mul_div.
+public(package) macro fun test_mul_div_overflow<$T>($max: $T) {
+    let max = $max;
+    // x * y overflows, but x * y / z fits (z cancels out y)
+    assert_eq!(max.mul_div(2, 2), max);
+    assert_eq!(max.mul_div(3, 3), max);
+    assert_eq!(max.mul_div(100, 100), max);
+    assert_eq!(max.mul_div(max, max), max);
+
+    // Verify mul_div_ceil also works with overflow
+    assert_eq!(max.mul_div_ceil(2, 2), max);
+    assert_eq!(max.mul_div_ceil(3, 3), max);
+
+    // x * y overflows, result fits but is less than max
+    // (max / 2 + 1) * 2 overflows, but (max / 2 + 1) * 2 / 2 = max / 2 + 1
+    let half_plus_one = max / 2 + 1;
+    assert_eq!(half_plus_one.mul_div(2, 2), half_plus_one);
+    assert_eq!(half_plus_one.mul_div(4, 4), half_plus_one);
+
+    // x * y overflows, and we actually need the division to make result fit
+    // (max / 2 + 1) * 3 / 2 should work and give a result near max * 3/4
+    // This would fail with naive (x * y) / z due to overflow
+    let result = half_plus_one.mul_div(3, 2);
+    // The result should be (max / 2 + 1) * 3 / 2 ≈ max * 3/4
+    assert!(result > max / 2);
+    assert!(result < max);
+
+    // Demonstrate precision advantage over (x / z) * y approach
+    // (x / z) * y loses precision when x is not divisible by z
+    // mul_div(x, y, z) = (x * y) / z preserves more precision
+    let x = max / 3; // not perfectly divisible
+    let y: $T = 2;
+    let z: $T = 2;
+    // mul_div should give exact result: x * 2 / 2 = x
+    assert_eq!(x.mul_div(y, z), x);
+    // Alternative (x / z) * y would give: (x / 2) * 2 which loses the remainder
+    // when x is odd, so (x / 2) * 2 < x
+    let imprecise = (x / z) * y;
+    assert!(imprecise <= x.mul_div(y, z));
+
+    // Another precision test: 5 * 3 / 2 = 7 (rounded down)
+    // vs (5 / 2) * 3 = 2 * 3 = 6 (loses precision)
+    assert_eq!((5: $T).mul_div(3, 2), 7);
+
+    // ceil variant: 5 * 3 / 2 = 8 (rounded up)
+    assert_eq!((5: $T).mul_div_ceil(3, 2), 8);
+}
+
+public(package) macro fun test_mul_div<$T>($max: $T, $cases: vector<$T>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.mul_div(max, max.max(1)), max);
@@ -156,6 +205,8 @@ public(package) macro fun test_mul_div($max: _, $cases: vector<_>) {
         check_mul_div!(max, case_pred, case, case_succ);
     });
     check_mul_div!(max, max, max, max);
+    // Test overflow cases
+    test_mul_div_overflow!<$T>(max);
 }
 
 public(package) macro fun slow_pow($base: _, $exp: u8): _ {
