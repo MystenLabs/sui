@@ -1,17 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-use std::str::FromStr;
-
 use move_core_types::ident_str;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
-use simulacrum::Simulacrum;
-use sui_indexer_alt_jsonrpc::config::ObjectsConfig;
-use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
 use sui_json_rpc_types::Page;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
@@ -25,7 +19,6 @@ use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 
 use sui_indexer_alt_e2e_tests::FullCluster;
-use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 use sui_indexer_alt_e2e_tests::find;
 
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
@@ -64,6 +57,50 @@ async fn test_owned_objects_pagination_limit_and_cursor() {
     } = owned_objects(&cluster, owner, json!(null), next_cursor, 3).await;
 
     assert_eq!(data.len(), 3);
+    assert!(!has_next_page);
+}
+
+#[tokio::test]
+async fn test_owned_objects_pagination_by_package() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (owner, _) = get_account_key_pair();
+
+    for i in 0..5 {
+        create_bag(&mut cluster, owner, i);
+        create_coin(&mut cluster, owner, i);
+    }
+
+    cluster.create_checkpoint().await;
+
+    let Response {
+        result: Page {
+            data, next_cursor, ..
+        },
+    } = owned_objects(&cluster, owner, json!({"Package": "0x2"}), None, 2).await;
+
+    assert_eq!(data.len(), 2);
+
+    let Response {
+        result:
+            Page {
+                data,
+                has_next_page,
+                next_cursor,
+            },
+    } = owned_objects(&cluster, owner, json!({"Package": "0x2"}), next_cursor, 2).await;
+
+    assert_eq!(data.len(), 2);
+    assert!(has_next_page);
+
+    let Response {
+        result: Page {
+            data,
+            has_next_page,
+            ..
+        },
+    } = owned_objects(&cluster, owner, json!({"Package": "0x2"}), next_cursor, 10).await;
+
+    assert_eq!(data.len(), 6);
     assert!(!has_next_page);
 }
 
