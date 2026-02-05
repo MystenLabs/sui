@@ -97,61 +97,55 @@ fn post_process_one_tx(
     let inner_temporary_store = inner_temporary_store.clone();
     let epoch_store = epoch_store.clone();
 
-    // Spawn an async task that acquires the semaphore permit, then
-    // moves the actual work onto a blocking thread. This way:
-    // - The caller is not blocked (tokio::spawn returns immediately)
-    // - The semaphore wait is async, not consuming a blocking thread
-    // - Only tasks that hold a permit enter the blocking thread pool
-    tokio::spawn(async move {
-        // Await a semaphore permit before entering the blocking pool
-        let _permit = semaphore
-            .acquire()
-            .await
-            .expect("post-processing semaphore should not be closed");
+    // Acquire a semaphore permit, blocking the caller if all permits are held.
+    // This provides backpressure: if post-processing can't keep up with
+    // execution, execution slows down rather than accumulating unbounded work.
+    // Under normal conditions the acquire is instant (num_cpus permits available).
+    let permit = semaphore
+        .acquire_blocking()
+        .expect("post-processing semaphore should not be closed");
 
-        let _ = tokio::task::spawn_blocking(move || {
-            let _scope = monitored_scope("Execution::post_process_one_tx");
+    tokio::task::spawn_blocking(move || {
+        // Move the permit into the closure so it is held for the duration
+        // of the work and released when the closure completes.
+        let _permit = permit;
 
-            let result = Self::post_process_one_tx_impl(
-                &indexes,
-                &subscription_handler,
-                &metrics,
-                name,
-                &backing_package_store,
-                &object_store,
-                &certificate,
-                &effects,
-                &inner_temporary_store,
-                &epoch_store,
-            );
+        let _scope = monitored_scope("Execution::post_process_one_tx");
 
-            if let Err(e) = &result {
-                metrics.post_processing_total_failures.inc();
-                error!(?tx_digest, "tx post processing failed: {e}");
-            }
+        let result = Self::post_process_one_tx_impl(
+            &indexes,
+            &subscription_handler,
+            &metrics,
+            name,
+            &backing_package_store,
+            &object_store,
+            &certificate,
+            &effects,
+            &inner_temporary_store,
+            &epoch_store,
+        );
 
-            // Signal completion and remove from pending map.
-            // _permit is moved into this closure and dropped here,
-            // freeing a slot for the next task.
-            let _ = done_tx.send(());
-            pending_map.remove(&tx_digest);
-        })
-        .await;
+        if let Err(e) = &result {
+            metrics.post_processing_total_failures.inc();
+            error!(?tx_digest, "tx post processing failed: {e}");
+        }
+
+        // Signal completion and remove from pending map.
+        let _ = done_tx.send(());
+        pending_map.remove(&tx_digest);
     });
 
     Ok(())
 }
 ```
 
-Note: The semaphore is acquired in the outer `tokio::spawn` async task **before**
-`spawn_blocking`. This means:
-- The caller (`execute_certificate`) is not blocked — `tokio::spawn` returns immediately
-- Tasks waiting for a permit sit on the async runtime (cheap), not on the blocking
-  thread pool
-- Only tasks that hold a permit enter the blocking thread pool, so at most `num_cpus`
-  blocking threads are used for post-processing at any time
-- The `_permit` is moved into the `spawn_blocking` closure so it is held for the
-  duration of the actual work, then dropped when the closure completes
+Note: The semaphore is acquired **synchronously** via `acquire_blocking()` before
+`spawn_blocking`. This provides direct backpressure on the execution path:
+- Under normal load, permits are available and the acquire is instant
+- Under heavy load, the caller blocks until a post-processing task finishes, preventing
+  unbounded accumulation of work
+- The permit is moved into the `spawn_blocking` closure and held for the duration of
+  the actual work, then dropped when the closure completes
 
 ### 1.3 Extract the work into a static helper method
 
@@ -298,11 +292,10 @@ observability. This is optional but recommended for monitoring.
    replaces the much more expensive indexing work that was previously inline.
 
 2. **Spawned task accumulation**: If post-processing is slower than execution, spawned
-   tasks could accumulate. Mitigation: a semaphore (default `num_cpus` permits) limits
-   the number of concurrently executing post-processing tasks. Excess tasks wait
-   asynchronously for a permit (cheap — no blocking thread consumed), and only enter
-   the blocking thread pool once they hold a permit. The `CheckpointExecutor` waiting
-   mechanism provides additional natural backpressure at the checkpoint level.
+   tasks could accumulate. Mitigation: a semaphore (default `num_cpus` permits) is
+   acquired synchronously before spawning. If all permits are held, the caller blocks
+   until one completes, providing direct backpressure on execution. Under normal load
+   permits are available and the acquire is instant.
 
 3. **Epoch boundary**: At end-of-epoch, all post-processing must complete before
    reconfiguration. The existing `bump_highest_executed_checkpoint` gate in
