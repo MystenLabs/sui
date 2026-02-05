@@ -172,12 +172,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             // objects here are of size (limit + 1), where the last one is the cursor for the next page
             let has_next_page = objects.len() > limit;
             objects.truncate(limit);
-
             let next_cursor = objects
                 .last()
                 .cloned()
-                .map(|o_info| Some(base64::encode(&(bcs::to_bytes(&o_info.object_id).unwrap()))))
-                .flatten();
+                .map_or(cursor, |o_info| Some(o_info.object_id));
 
             let data = match options.is_not_in_object_info() {
                 true => {
@@ -198,8 +196,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             self.metrics
                 .get_owned_objects_result_size_total
                 .inc_by(data.len() as u64);
-
-            Ok(ObjectsPage {
+            Ok(Page {
                 data,
                 next_cursor,
                 has_next_page,
