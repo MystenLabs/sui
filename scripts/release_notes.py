@@ -613,7 +613,8 @@ def do_generate(from_, to):
     root = git("rev-parse", "--show-toplevel")
     os.chdir(root)
 
-    protocol_version = extract_protocol_version(to) or "XX"
+    from_protocol_version = extract_protocol_version(from_)
+    to_protocol_version = extract_protocol_version(to) or "XX"
 
     commits = git(
         "log",
@@ -637,7 +638,10 @@ def do_generate(from_, to):
         print(f"## {impact_area}")
 
         if impact_area == "Protocol":
-            print(f"#### Sui Protocol Version in this release: `{protocol_version}`")
+            if from_protocol_version and from_protocol_version != to_protocol_version:
+                print(f"#### Sui Protocol Versions in this release: `{from_protocol_version}` to `{to_protocol_version}`")
+            else:
+                print(f"#### Sui Protocol Version in this release: `{to_protocol_version}`")
         print()
 
         for pr, note in reversed(notes):

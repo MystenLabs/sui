@@ -742,5 +742,76 @@ Just a description, no release notes section.
         self.assertTrue(notes["GraphQL"].checked)
 
 
+class TestDoGenerateProtocolVersionDisplay(unittest.TestCase):
+    """Tests for protocol version range display in do_generate."""
+
+    @patch("release_notes.fetch_release_notes_for_commits")
+    @patch("release_notes.git")
+    @patch("release_notes.extract_protocol_version")
+    def test_shows_range_when_versions_differ(self, mock_extract_pv, mock_git, mock_fetch):
+        """Should show version range when from and to protocol versions differ."""
+        from release_notes import do_generate
+
+        mock_extract_pv.side_effect = lambda commit: "109" if commit == "from_sha" else "110"
+        mock_git.side_effect = lambda *args: (
+            "/repo" if "rev-parse" in args else "abc123"
+        )
+        mock_fetch.return_value = {
+            "Protocol": [(24957, "Enable feature in version 109.")],
+        }
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout, \
+             patch("os.chdir"):
+            do_generate("from_sha", "to_sha")
+            output = mock_stdout.getvalue()
+
+        self.assertIn("Sui Protocol Versions in this release: `109` to `110`", output)
+
+    @patch("release_notes.fetch_release_notes_for_commits")
+    @patch("release_notes.git")
+    @patch("release_notes.extract_protocol_version")
+    def test_shows_single_version_when_same(self, mock_extract_pv, mock_git, mock_fetch):
+        """Should show single version when from and to protocol versions are the same."""
+        from release_notes import do_generate
+
+        mock_extract_pv.return_value = "110"
+        mock_git.side_effect = lambda *args: (
+            "/repo" if "rev-parse" in args else "abc123"
+        )
+        mock_fetch.return_value = {
+            "Protocol": [(25000, "Some protocol change.")],
+        }
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout, \
+             patch("os.chdir"):
+            do_generate("from_sha", "to_sha")
+            output = mock_stdout.getvalue()
+
+        self.assertIn("Sui Protocol Version in this release: `110`", output)
+        self.assertNotIn("to", output.split("Protocol Version")[1].split("\n")[0])
+
+    @patch("release_notes.fetch_release_notes_for_commits")
+    @patch("release_notes.git")
+    @patch("release_notes.extract_protocol_version")
+    def test_shows_single_version_when_from_is_none(self, mock_extract_pv, mock_git, mock_fetch):
+        """Should show single version when from protocol version can't be determined."""
+        from release_notes import do_generate
+
+        mock_extract_pv.side_effect = lambda commit: None if commit == "from_sha" else "110"
+        mock_git.side_effect = lambda *args: (
+            "/repo" if "rev-parse" in args else "abc123"
+        )
+        mock_fetch.return_value = {
+            "Protocol": [(25000, "Some protocol change.")],
+        }
+
+        with patch("sys.stdout", new=StringIO()) as mock_stdout, \
+             patch("os.chdir"):
+            do_generate("from_sha", "to_sha")
+            output = mock_stdout.getvalue()
+
+        self.assertIn("Sui Protocol Version in this release: `110`", output)
+
+
 if __name__ == "__main__":
     unittest.main()
