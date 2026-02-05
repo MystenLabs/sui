@@ -35,6 +35,10 @@ async fn main() -> anyhow::Result<()> {
         .with_env()
         .init();
 
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install CryptoProvider");
+
     match args.command {
         Command::Rpc {
             database_url,
