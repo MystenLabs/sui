@@ -12,7 +12,6 @@ use futures::StreamExt;
 use futures::stream;
 use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
-use serde::Deserialize;
 use sui_json_rpc_api::{
     CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient,
     WriteApiClient,
@@ -44,7 +43,6 @@ use tracing::debug;
 
 use crate::RpcClient;
 use crate::error::{Error, SuiRpcResult};
-use fastcrypto::encoding::Encoding;
 
 const WAIT_FOR_LOCAL_EXECUTION_MIN_INTERVAL: Duration = Duration::from_millis(100);
 const WAIT_FOR_LOCAL_EXECUTION_MAX_INTERVAL: Duration = Duration::from_secs(2);
@@ -53,12 +51,6 @@ const WAIT_FOR_LOCAL_EXECUTION_MAX_INTERVAL: Duration = Duration::from_secs(2);
 #[derive(Debug)]
 pub struct ReadApi {
     api: Arc<RpcClient>,
-}
-
-#[derive(Deserialize)]
-pub struct CursorType {
-    object_id: Vec<u8>,
-    _cp_seq_num: u64,
 }
 
 impl ReadApi {
@@ -92,39 +84,14 @@ impl ReadApi {
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        cursor: Option<String>,
+        cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> SuiRpcResult<ObjectsPage> {
-        let cursor: Option<ObjectID> = match cursor {
-            Some(cursor_str) => {
-                let bytes = Base64::decode(&cursor_str).map_err(|_| {
-                    Error::DataError(format!("Failed to decode cursor string: {}", cursor_str))
-                })?;
-                let decoded: CursorType = bcs::from_bytes(&bytes)?;
-                Some(ObjectID::from_bytes(&decoded.object_id).unwrap())
-            }
-            None => None,
-        };
-
-        let objects = self
+        Ok(self
             .api
             .http
             .get_owned_objects(address, query, cursor, limit)
-            .await;
-
-        if let Ok(ref page) = objects {
-            let next_cursor = page.next_cursor.as_ref().map(|object_id| {
-                let bytes = bcs::to_bytes(&object_id).unwrap();
-                Base64::encode(bytes)
-            });
-            Ok(ObjectsPage {
-                data: page.data.clone(),
-                next_cursor,
-                has_next_page: page.has_next_page,
-            })
-        } else {
-            panic!("Er")
-        }
+            .await?)
     }
 
     /// Return a paginated response with the dynamic fields owned by the given [ObjectID], or an error upon failure.
