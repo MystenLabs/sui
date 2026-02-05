@@ -293,7 +293,8 @@ const MAX_PROTOCOL_VERSION: u64 = 110;
 // Version 109: Update where we set bounds for some binary tables to be a bit more idiomatic.
 // Version 110: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
 //              function on mainnet.
-//              split_checkpoints_in_consensus_handler in devnet
+//              split_checkpoints_in_consensus_handler in testnet
+//              authenticated_events in testnet
 //              Enable additional validation on zkLogin public identifier.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -4517,8 +4518,11 @@ impl ProtocolConfig {
                         .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
                     cfg.feature_flags
                         .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                        cfg.feature_flags.enable_authenticated_event_streams = true;
+                        cfg.feature_flags
+                            .include_checkpoint_artifacts_digest_in_summary = true;
                     }
                     cfg.feature_flags.validate_zklogin_public_identifier = true;
                     cfg.feature_flags.fix_checkpoint_signature_mapping = true;
