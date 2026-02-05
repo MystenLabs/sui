@@ -14,7 +14,7 @@ use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
 use tokio::time;
 use tokio::time::Instant;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone)]
 pub struct SystemState {
@@ -43,10 +43,24 @@ impl SystemStateObserver {
                 interval.tick().await;
                 match proxy.get_latest_system_state_object().await {
                     Ok(result) => {
-                        let p = ProtocolConfig::get_for_version(
-                            ProtocolVersion::new(result.protocol_version),
-                            chain,
-                        );
+                        if result.protocol_version == 0 {
+                            warn!("Received protocol version 0 from network, ignoring");
+                            continue;
+                        }
+
+                        let network_version = ProtocolVersion::new(result.protocol_version);
+                        let version = if network_version > ProtocolVersion::MAX {
+                            warn!(
+                                "Network protocol version {} exceeds maximum supported version {}, capping",
+                                network_version.as_u64(),
+                                ProtocolVersion::MAX.as_u64()
+                            );
+                            ProtocolVersion::MAX
+                        } else {
+                            network_version
+                        };
+
+                        let p = ProtocolConfig::get_for_version(version, chain);
                         if tx
                             .send(SystemState {
                                 reference_gas_price: result.reference_gas_price,
