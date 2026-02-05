@@ -10,59 +10,28 @@ post-processing is still in flight.
 
 ## Correctness Argument
 
-Transaction execution is only persisted to disk right before `CheckpointExecutor`
-advances the highest-executed-checkpoint watermark (via `commit_transaction_outputs`
-followed by `bump_highest_executed_checkpoint`). Since we now also block the watermark
-on post-processing completion, the watermark cannot advance unless all post-processing
-for the checkpoint's transactions is complete.
+Transaction execution is only persisted to disk via `commit_transaction_outputs` in
+`CheckpointExecutor`. We now wait for post-processing to complete **before**
+`commit_transaction_outputs`, so transaction effects are never persisted unless
+post-processing has finished. This means persistence implies post-processing completion.
 
 On crash and restart, there are three scenarios:
 
-1. **No transactions were persisted before the restart.** All transactions will be
-   re-executed, which will call `post_process_one_tx` again, spawning post-processing
-   for all of them. `CheckpointExecutor` will wait for post-processing to finish before
-   advancing the watermark.
+1. **No transactions were persisted before the restart.** Since post-processing
+   completes before persistence, and persistence did not occur, there is nothing to
+   recover. All transactions will be re-executed, which will call `post_process_one_tx`
+   again, spawning post-processing for all of them. `CheckpointExecutor` will wait for
+   post-processing to finish before persisting.
 
-2. **Transactions were persisted and post-processing completed, but the watermark was
-   not yet advanced.** On restart, the checkpoint is re-processed from the watermark.
+2. **Transactions were persisted but the watermark was not yet advanced.** Since we
+   wait for post-processing before persisting, post-processing is guaranteed complete.
+   On restart, the checkpoint is re-processed from the watermark.
    `schedule_transaction_execution` detects that effects already exist (via
    `executed_fx_digests`) and skips re-execution. Post-processing is already done, so
    no work is lost.
 
 3. **The watermark was advanced before the restart.** All work (execution,
-   post-processing, watermark) completed successfully. Nothing to redo.
-
-### Analysis of the Argument
-
-There is a **gap between scenarios 1 and 2**: transactions may be persisted to disk
-(`commit_transaction_outputs`) but post-processing may NOT have completed yet when the
-crash occurs. On restart:
-
-- The checkpoint is re-processed from the watermark.
-- `schedule_transaction_execution` (line 858 of `checkpoint_executor/mod.rs`) checks
-  `executed_fx_digests` for each transaction. If effects are already persisted, the
-  transaction is **filtered out** and not re-enqueued for execution.
-- Since `execute_certificate` is not called for these transactions,
-  `post_process_one_tx` is not called either.
-- **Post-processing data (index writes, event emissions) for these transactions is
-  lost.**
-
-This is the same behavior as today — `post_process_one_tx` currently runs synchronously
-before `commit_transaction_outputs`, but after that persistence step, a crash would
-still lose the in-memory index/subscription state. The index data written by
-`post_process_one_tx` is written to `IndexStore` (a separate DB), and its persistence
-is not atomic with `commit_transaction_outputs`. So the crash window already exists in
-the current code.
-
-Furthermore, the data written by `post_process_one_tx` is used exclusively for
-JSON-RPC query serving (transaction lookups by sender, input object, etc.) and
-WebSocket event subscriptions. Subscription state is inherently transient (subscribers
-disconnect on crash). Index data, if lost, results in missing query results but does
-not affect consensus, execution, or state correctness.
-
-**Conclusion:** The gap between scenarios 1 and 2 represents a pre-existing condition,
-not a regression introduced by this change. The change does not widen the crash window
-for post-processing data loss — it merely makes the concurrent execution explicit.
+   post-processing, persistence, watermark) completed successfully. Nothing to redo.
 
 ---
 
@@ -284,19 +253,21 @@ needed there.
 
 ## Phase 2: Wait for Post-Processing in `CheckpointExecutor`
 
-### 2.1 Before bumping the watermark, wait for all checkpoint transactions
+### 2.1 Before committing transaction outputs, wait for all checkpoint transactions
 
 **File:** `crates/sui-core/src/checkpoints/checkpoint_executor/mod.rs`
 
-In `execute_transactions_from_synced_checkpoint` (around line 491-493), **before**
-`bump_highest_executed_checkpoint`, add a step that waits for all transactions in the
+In `parallel_step` (around line 408-435), **before** `build_db_batch` and
+`commit_transaction_outputs`, add a step that waits for all transactions in the
 checkpoint to finish post-processing:
 
 ```rust
-// Wait for all post-processing to complete before advancing the watermark
+// Wait for all post-processing to complete before persisting transaction outputs.
+// This ensures that if we crash after persistence, post-processing is guaranteed
+// complete — so on restart, skipping re-execution of already-persisted transactions
+// does not lose post-processing work.
 for tx_digest in &ckpt_state.data.tx_digests {
     if let Some((_, rx)) = self.state.pending_post_processing().remove(tx_digest) {
-        // Wait for the spawned post-processing thread to signal completion
         let _ = rx.await;
     }
 }
@@ -326,9 +297,8 @@ typically don't have `self.indexes` set. No changes needed on that path.
 
 ### 2.3 Pipeline stage
 
-Consider adding a new pipeline stage `WaitForPostProcessing` between
-`FinalizeCheckpoint` / `UpdateRpcIndex` and `BumpHighestExecutedCheckpoint` for
-observability. This is optional but recommended for monitoring.
+Consider adding a new pipeline stage `WaitForPostProcessing` before `BuildDbBatch`
+for observability. This is optional but recommended for monitoring.
 
 ---
 
@@ -342,7 +312,7 @@ observability. This is optional but recommended for monitoring.
 | `crates/sui-core/src/authority.rs` | Rewrite `post_process_one_tx` to: check indexes, insert into DashMap, clone fields + args, `spawn_blocking` |
 | `crates/sui-core/src/authority.rs` | Extract `post_process_one_tx_impl` static method with explicit dependency params |
 | `crates/sui-core/src/authority.rs` | Refactor `fullnode_only_get_tx_coins_for_indexing`, `index_tx`/`process_object_index`, and `make_transaction_block_events` to accept explicit deps instead of `&self` (or create static variants) |
-| `crates/sui-core/src/checkpoints/checkpoint_executor/mod.rs` | Before `bump_highest_executed_checkpoint`, iterate checkpoint tx digests, remove from DashMap, and await any pending oneshot receivers |
+| `crates/sui-core/src/checkpoints/checkpoint_executor/mod.rs` | Before `commit_transaction_outputs`, iterate checkpoint tx digests, remove from DashMap, and await any pending oneshot receivers |
 
 ---
 
