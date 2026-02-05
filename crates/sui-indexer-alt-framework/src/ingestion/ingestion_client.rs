@@ -12,6 +12,7 @@ use backoff::backoff::Constant;
 use bytes::Bytes;
 use object_store::ClientOptions;
 use object_store::ObjectStore;
+use object_store::RetryConfig;
 use object_store::aws::AmazonS3Builder;
 use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
@@ -133,6 +134,15 @@ impl IngestionClientArgs {
         };
         options
     }
+
+    /// Disable object_store's internal retries so that transient errors (429s, 5xx) propagate
+    /// immediately to the framework's own retry logic and AIMD concurrency limiter.
+    fn retry_config() -> RetryConfig {
+        RetryConfig {
+            max_retries: 0,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -192,6 +202,7 @@ impl IngestionClient {
         } else if let Some(bucket) = args.remote_store_gcs.as_ref() {
             let store = GoogleCloudStorageBuilder::from_env()
                 .with_client_options(args.client_options())
+                .with_retry(IngestionClientArgs::retry_config())
                 .with_bucket_name(bucket)
                 .build()
                 .map(Arc::new)?;
