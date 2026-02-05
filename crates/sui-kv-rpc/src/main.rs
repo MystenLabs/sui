@@ -42,6 +42,9 @@ async fn health_check() -> &'static str {
 #[tokio::main]
 async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install CryptoProvider");
     let app = App::parse();
     unsafe {
         std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", app.credentials.clone());
