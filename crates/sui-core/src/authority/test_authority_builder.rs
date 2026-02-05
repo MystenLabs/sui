@@ -5,9 +5,9 @@ use super::ExecutionEnv;
 use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_pruner::{ObjectsCompactionFilter, PrunerWatermarks};
+use crate::authority::authority_store_pruner::PrunerWatermarks;
 use crate::authority::authority_store_tables::{
-    AuthorityPerpetualTables, AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
+    AuthorityPerpetualTables, AuthorityPerpetualTablesOptions,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::submitted_transaction_cache::SubmittedTransactionCacheMetrics;
@@ -208,24 +208,11 @@ impl<'a> TestAuthorityBuilder<'a> {
         });
         let mut config = local_network_config.validator_configs()[0].clone();
         let registry = Registry::new();
-        let mut pruner_db = None;
-        if config
-            .authority_store_pruning_config
-            .enable_compaction_filter
-        {
-            pruner_db = Some(Arc::new(AuthorityPrunerTables::open(&path.join("store"))));
-        }
-        let compaction_filter = pruner_db
-            .clone()
-            .map(|db| ObjectsCompactionFilter::new(db, &registry));
 
         let authority_store = match self.store {
             Some(store) => store,
             None => {
-                let perpetual_tables_options = AuthorityPerpetualTablesOptions {
-                    compaction_filter,
-                    ..Default::default()
-                };
+                let perpetual_tables_options = AuthorityPerpetualTablesOptions::default();
                 let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
                     &path.join("store"),
                     Some(perpetual_tables_options),
@@ -383,7 +370,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             &DBCheckpointConfig::default(),
             config.clone(),
             chain_identifier,
-            pruner_db,
             policy_config,
             firewall_config,
             Arc::new(PrunerWatermarks::default()),
