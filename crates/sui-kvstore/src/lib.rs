@@ -79,7 +79,6 @@ pub mod config;
 mod handlers;
 pub mod tables;
 
-pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
 pub use config::IndexerConfig;
 pub use config::IngestionConfig;

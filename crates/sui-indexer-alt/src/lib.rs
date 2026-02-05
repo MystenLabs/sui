@@ -6,8 +6,6 @@ use prometheus::Registry;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
-use sui_indexer_alt_framework::ingestion::IngestionConfig;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
@@ -95,8 +93,8 @@ pub async fn setup_indexer(
         tx_kinds,
     } = pipeline;
 
-    let ingestion = ingestion.finish(IngestionConfig::default())?;
-    let committer = committer.finish(CommitterConfig::default())?;
+    let ingestion = ingestion.finish(&client_args);
+    let committer = committer.finish(&client_args);
     let pruner = pruner.finish(PrunerConfig::default())?;
 
     let retry_interval = ingestion.retry_interval();

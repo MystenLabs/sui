@@ -19,6 +19,7 @@ diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
 futures.workspace = true
+num_cpus.workspace = true
 pin-project-lite.workspace = true
 prometheus.workspace = true
 object_store.workspace = true
@@ -35,6 +36,7 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
 url.workspace = true
 
+sui-concurrency-limiter.workspace = true
 sui-field-count.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true

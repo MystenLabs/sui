@@ -4,6 +4,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
+use prometheus::Gauge;
+use prometheus::GaugeVec;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
 use prometheus::IntCounter;
@@ -11,6 +13,8 @@ use prometheus::IntCounterVec;
 use prometheus::IntGauge;
 use prometheus::IntGaugeVec;
 use prometheus::Registry;
+use prometheus::register_gauge_vec_with_registry;
+use prometheus::register_gauge_with_registry;
 use prometheus::register_histogram_vec_with_registry;
 use prometheus::register_histogram_with_registry;
 use prometheus::register_int_counter_vec_with_registry;
@@ -74,6 +78,14 @@ pub struct IngestionMetrics {
     pub ingested_checkpoint_timestamp_lag: Histogram,
 
     pub ingested_checkpoint_latency: Histogram,
+
+    /// Current dynamic ingestion concurrency limit (only set when AIMD is enabled).
+    pub ingestion_concurrency: IntGauge,
+    pub ingestion_inflight: IntGauge,
+    pub ingestion_peak_inflight: IntGauge,
+
+    pub ingestion_channel_fill: IntGauge,
+    pub ingestion_channel_utilization: Gauge,
 }
 
 #[derive(Clone)]
@@ -148,6 +160,18 @@ pub struct IndexerMetrics {
     pub watermark_timestamp_in_db_ms: IntGaugeVec,
     pub watermark_reader_lo_in_db: IntGaugeVec,
     pub watermark_pruner_hi_in_db: IntGaugeVec,
+
+    pub committer_write_concurrency: IntGaugeVec,
+    pub committer_write_inflight: IntGaugeVec,
+    pub committer_write_peak_inflight: IntGaugeVec,
+
+    pub processor_channel_fill: IntGaugeVec,
+    pub collector_channel_fill: IntGaugeVec,
+    pub committer_watermark_channel_fill: IntGaugeVec,
+
+    pub processor_channel_utilization: GaugeVec,
+    pub collector_channel_utilization: GaugeVec,
+    pub committer_watermark_channel_utilization: GaugeVec,
 }
 
 /// A helper struct to report metrics regarding the checkpoint lag at various points in the indexer.
@@ -271,6 +295,36 @@ impl IngestionMetrics {
                 name("ingested_checkpoint_latency"),
                 "Time taken to fetch a checkpoint from the remote store, including retries",
                 INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            ingestion_concurrency: register_int_gauge_with_registry!(
+                name("ingestion_concurrency"),
+                "Current dynamic ingestion concurrency limit when AIMD is enabled",
+                registry,
+            )
+            .unwrap(),
+            ingestion_inflight: register_int_gauge_with_registry!(
+                name("ingestion_inflight"),
+                "Current number of in-flight ingestion requests",
+                registry,
+            )
+            .unwrap(),
+            ingestion_peak_inflight: register_int_gauge_with_registry!(
+                name("ingestion_peak_inflight"),
+                "Peak number of in-flight ingestion requests since last sample",
+                registry,
+            )
+            .unwrap(),
+            ingestion_channel_fill: register_int_gauge_with_registry!(
+                name("ingestion_channel_fill"),
+                "Max number of items currently buffered across all ingestion subscriber channels",
+                registry,
+            )
+            .unwrap(),
+            ingestion_channel_utilization: register_gauge_with_registry!(
+                name("ingestion_channel_utilization"),
+                "Max utilization ratio (0.0-1.0) across all ingestion subscriber channels",
                 registry,
             )
             .unwrap(),
@@ -667,6 +721,69 @@ impl IndexerMetrics {
             watermark_pruner_hi_in_db: register_int_gauge_vec_with_registry!(
                 name("watermark_pruner_hi_in_db"),
                 "Last pruner high watermark this pruner wrote to the DB",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_write_concurrency: register_int_gauge_vec_with_registry!(
+                name("committer_write_concurrency"),
+                "Current dynamic write concurrency limit for this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_write_inflight: register_int_gauge_vec_with_registry!(
+                name("committer_write_inflight"),
+                "Current number of in-flight write operations for this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_write_peak_inflight: register_int_gauge_vec_with_registry!(
+                name("committer_write_peak_inflight"),
+                "Peak number of in-flight write operations since last sample",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            processor_channel_fill: register_int_gauge_vec_with_registry!(
+                name("processor_channel_fill"),
+                "Number of items currently buffered in the processor to collector/committer channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            collector_channel_fill: register_int_gauge_vec_with_registry!(
+                name("collector_channel_fill"),
+                "Number of items currently buffered in the collector to committer channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_watermark_channel_fill: register_int_gauge_vec_with_registry!(
+                name("committer_watermark_channel_fill"),
+                "Number of items currently buffered in the committer to watermark channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            processor_channel_utilization: register_gauge_vec_with_registry!(
+                name("processor_channel_utilization"),
+                "Utilization ratio (0.0-1.0) of the processor to collector/committer channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            collector_channel_utilization: register_gauge_vec_with_registry!(
+                name("collector_channel_utilization"),
+                "Utilization ratio (0.0-1.0) of the collector to committer channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_watermark_channel_utilization: register_gauge_vec_with_registry!(
+                name("committer_watermark_channel_utilization"),
+                "Utilization ratio (0.0-1.0) of the committer to watermark channel",
                 &["pipeline"],
                 registry,
             )

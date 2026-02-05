@@ -7,7 +7,6 @@ use anyhow::Result;
 use clap::Parser;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_kvstore::BIGTABLE_MAX_MUTATIONS;
@@ -110,7 +109,8 @@ async fn main() -> Result<()> {
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
-    let committer = config.committer.finish(CommitterConfig::default());
+    let committer = config.committer.finish(&args.client_args);
+
     let bigtable_indexer = BigTableIndexer::new(
         store,
         args.indexer_args,

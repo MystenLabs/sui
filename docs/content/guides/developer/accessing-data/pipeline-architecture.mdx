@@ -464,7 +464,7 @@ Each channel has a fixed buffer size that automatically blocks when full:
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="processor_tx" />
     
-**`Collector` to `Committer`**: `write_concurrency + PIPELINE_BUFFER` slots → `Collector` stops accepting.
+**`Collector` to `Committer`**: `COMMITTER_CHANNEL_SIZE` slots (default 10, override via env var) → `Collector` stops accepting.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" tag="buff" /> 
 

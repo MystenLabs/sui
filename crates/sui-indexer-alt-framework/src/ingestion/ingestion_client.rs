@@ -115,7 +115,21 @@ impl Default for IngestionClientArgs {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IngestionMode {
+    RemoteStore,
+    FullNode,
+}
+
 impl IngestionClientArgs {
+    pub(crate) fn ingestion_mode(&self) -> IngestionMode {
+        if self.rpc_api_url.is_some() {
+            IngestionMode::FullNode
+        } else {
+            IngestionMode::RemoteStore
+        }
+    }
+
     fn client_options(&self) -> ClientOptions {
         let mut options = ClientOptions::default();
         options = if self.checkpoint_timeout_ms == 0 {

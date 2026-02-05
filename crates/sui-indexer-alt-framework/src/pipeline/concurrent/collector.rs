@@ -169,6 +169,16 @@ pub(super) fn collector<H: Handler + 'static>(
                         break;
                     }
 
+                    let fill = tx.max_capacity() - tx.capacity();
+                    metrics
+                        .collector_channel_fill
+                        .with_label_values(&[H::NAME])
+                        .set(fill as i64);
+                    metrics
+                        .collector_channel_utilization
+                        .with_label_values(&[H::NAME])
+                        .set(fill as f64 / tx.max_capacity() as f64);
+
                     if pending_rows > 0 {
                         poll.reset_immediately();
                     } else if rx.is_closed() && rx.is_empty() {

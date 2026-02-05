@@ -8,11 +8,12 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::anyhow;
+use backoff::ExponentialBackoff;
 use futures::Stream;
 use futures::future::try_join_all;
+use sui_concurrency_limiter::Limiter;
+use sui_concurrency_limiter::stream::{AdaptiveStreamExt, Break};
 use sui_futures::service::Service;
-use sui_futures::stream::Break;
-use sui_futures::stream::TrySpawnStreamExt;
 use sui_futures::task::TaskGuard;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
@@ -49,6 +50,7 @@ pub(super) fn broadcaster<R, S>(
     mut streaming_client: Option<S>,
     config: IngestionConfig,
     client: IngestionClient,
+    limiter: Limiter,
     mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
     metrics: Arc<IngestionMetrics>,
@@ -122,10 +124,11 @@ where
                 checkpoint_hi,
                 ingestion_end,
                 config.retry_interval(),
-                config.ingest_concurrency,
                 ingest_hi_rx.cloned(),
                 client.clone(),
                 subscribers.clone(),
+                limiter.clone(),
+                metrics.clone(),
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -215,35 +218,73 @@ fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
     retry_interval: Duration,
-    ingest_concurrency: usize,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     client: IngestionClient,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    limiter: Limiter,
+    metrics: Arc<IngestionMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
+        // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
         // Backpressure is enforced at the stream level: checkpoints are only yielded when
         // ingest_hi allows, preventing spawned tasks from piling up while blocked.
-        backpressured_checkpoint_stream(start, end, ingest_hi_rx)
-            .try_for_each_spawned(ingest_concurrency, |cp| {
+        let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
+        // docs::/#bound
+
+        let stream_fut = checkpoints.try_for_each_spawned_adaptive_with_retry(
+            limiter.clone(),
+            ExponentialBackoff {
+                initial_interval: retry_interval,
+                max_interval: retry_interval,
+                max_elapsed_time: None,
+                ..ExponentialBackoff::default()
+            },
+            |cp: u64| {
                 let client = client.clone();
-                let subscribers = subscribers.clone();
-
-                async move {
-                    // Fetch the checkpoint or stop if cancelled.
-                    let checkpoint = client.wait_for(cp, retry_interval).await?;
-
-                    // Send checkpoint to all subscribers.
-                    if send_checkpoint(checkpoint, &subscribers).await.is_ok() {
-                        debug!(checkpoint = cp, "Broadcasted checkpoint");
-                        Ok(())
-                    } else {
-                        // An error is returned meaning some subscriber channel has closed, which
-                        // we consider a shutdown signal for ingestion.
-                        Err(Break::Break)
+                move || {
+                    let client = client.clone();
+                    async move {
+                        client.fetch(cp).await.map_err(|e| match e {
+                            Error::NotFound(_) => Break::Err(e),
+                            _ => Break::Break,
+                        })
                     }
                 }
-            })
-            .await
+            },
+            {
+                let subscribers = subscribers.clone();
+                let metrics = metrics.clone();
+                move |checkpoint: Arc<Checkpoint>| {
+                    let subscribers = subscribers.clone();
+                    let metrics = metrics.clone();
+                    async move {
+                        let cp = *checkpoint.summary.sequence_number();
+                        if send_checkpoint(checkpoint, &subscribers, &metrics)
+                            .await
+                            .is_ok()
+                        {
+                            debug!(checkpoint = cp, "Broadcasted checkpoint");
+                            Ok(())
+                        } else {
+                            Err(Break::Break)
+                        }
+                    }
+                }
+            },
+        );
+
+        tokio::select! {
+            result = stream_fut => result,
+            _ = async {
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                loop {
+                    interval.tick().await;
+                    metrics.ingestion_concurrency.set(limiter.current() as i64);
+                    metrics.ingestion_inflight.set(limiter.inflight() as i64);
+                    metrics.ingestion_peak_inflight.set(limiter.take_peak_inflight() as i64);
+                }
+            } => unreachable!(),
+        }
     }))
 }
 
@@ -391,7 +432,7 @@ async fn stream_and_broadcast_range(
             break;
         }
 
-        if send_checkpoint(Arc::new(checkpoint), &subscribers)
+        if send_checkpoint(Arc::new(checkpoint), &subscribers, &metrics)
             .await
             .is_err()
         {
@@ -415,9 +456,27 @@ async fn stream_and_broadcast_range(
 async fn send_checkpoint(
     checkpoint: Arc<Checkpoint>,
     subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
+    metrics: &IngestionMetrics,
 ) -> Result<Vec<()>, mpsc::error::SendError<Arc<Checkpoint>>> {
     let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
-    try_join_all(futures).await
+    let result = try_join_all(futures).await;
+    if result.is_ok() {
+        let max_fill = subscribers
+            .iter()
+            .map(|s| s.max_capacity() - s.capacity())
+            .max()
+            .unwrap_or(0);
+        let max_cap = subscribers
+            .iter()
+            .map(|s| s.max_capacity())
+            .max()
+            .unwrap_or(1);
+        metrics.ingestion_channel_fill.set(max_fill as i64);
+        metrics
+            .ingestion_channel_utilization
+            .set(max_fill as f64 / max_cap as f64);
+    }
+    result
 }
 
 // A noop streaming task that just returns the provided checkpoint_hi, used to simplify
@@ -466,7 +525,7 @@ mod tests {
     fn test_config() -> IngestionConfig {
         IngestionConfig {
             checkpoint_buffer_size: 5,
-            ingest_concurrency: 2,
+            ingest_concurrency: sui_concurrency_limiter::ConcurrencyLimit::Fixed { limit: 2 },
             retry_interval_ms: 100,
             streaming_backoff_initial_batch_size: 2,
             streaming_backoff_max_batch_size: 16,
@@ -528,6 +587,7 @@ mod tests {
             None,
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics,
@@ -553,6 +613,7 @@ mod tests {
             None,
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics,
@@ -579,6 +640,7 @@ mod tests {
             None,
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics,
@@ -609,6 +671,7 @@ mod tests {
             None,
             config,
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics,
@@ -640,6 +703,7 @@ mod tests {
             None,
             config,
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics,
@@ -671,6 +735,7 @@ mod tests {
             None,
             config,
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics,
@@ -713,6 +778,7 @@ mod tests {
             None,
             config,
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics,
@@ -761,6 +827,7 @@ mod tests {
             None,
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx1, subscriber_tx2],
             metrics,
@@ -801,6 +868,7 @@ mod tests {
             None,
             config,
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics,
@@ -845,6 +913,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -877,6 +946,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -913,6 +983,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -947,6 +1018,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -986,6 +1058,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1022,6 +1095,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1067,6 +1141,7 @@ mod tests {
             Some(streaming_client),
             config,
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1115,6 +1190,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1158,6 +1234,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1195,6 +1272,7 @@ mod tests {
                 ..test_config()
             },
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1238,6 +1316,7 @@ mod tests {
                 ..test_config()
             },
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1278,6 +1357,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1318,6 +1398,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1379,6 +1460,7 @@ mod tests {
             Some(streaming_service),
             config,
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1425,6 +1507,7 @@ mod tests {
             Some(streaming_client),
             config,
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
@@ -1466,6 +1549,7 @@ mod tests {
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
+            test_config().build_limiter(),
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),

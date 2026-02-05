@@ -16,6 +16,7 @@ use object_store::local::LocalFileSystem;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_object_store::ObjectStore;
@@ -26,8 +27,6 @@ use sui_checkpoint_blob_indexer::CheckpointBcsPipeline;
 use sui_checkpoint_blob_indexer::CheckpointBlobPipeline;
 use sui_checkpoint_blob_indexer::EpochsPipeline;
 use sui_checkpoint_blob_indexer::IndexerConfig;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
-use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 
 #[derive(Debug, Parser)]
 #[command(name = "sui-checkpoint-blob-indexer")]
@@ -105,7 +104,6 @@ async fn main() -> anyhow::Result<()> {
         info!(bucket, "Using S3 storage");
         AmazonS3Builder::from_env()
             .with_client_options(client_options)
-            .with_retry(retry_config)
             .with_imdsv1_fallback()
             .with_bucket_name(bucket)
             .with_conditional_put(S3ConditionalPut::ETagMatch)
@@ -115,8 +113,8 @@ async fn main() -> anyhow::Result<()> {
         info!(bucket, "Using GCS storage");
         GoogleCloudStorageBuilder::from_env()
             .with_client_options(client_options)
-            .with_retry(retry_config)
             .with_bucket_name(bucket)
+            .with_retry(retry_config)
             .build()
             .map(Arc::new)?
     } else if let Some(container) = args.azure {
@@ -148,6 +146,8 @@ async fn main() -> anyhow::Result<()> {
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
+    let committer = config.committer.finish(&args.client_args);
+
     let mut indexer = Indexer::new(
         store.clone(),
         args.indexer_args,
@@ -157,8 +157,6 @@ async fn main() -> anyhow::Result<()> {
         &registry,
     )
     .await?;
-
-    let committer = config.committer.finish(CommitterConfig::default());
     let base = ConcurrentConfig {
         committer,
         pruner: None,

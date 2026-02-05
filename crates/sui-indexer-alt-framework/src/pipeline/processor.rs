@@ -147,6 +147,16 @@ pub(super) fn processor<P: Processor>(
                     .await
                     .map_err(|_| Break::Break)?;
 
+                    let fill = tx.max_capacity() - tx.capacity();
+                    metrics
+                        .processor_channel_fill
+                        .with_label_values(&[P::NAME])
+                        .set(fill as i64);
+                    metrics
+                        .processor_channel_utilization
+                        .with_label_values(&[P::NAME])
+                        .set(fill as f64 / tx.max_capacity() as f64);
+
                     Ok(())
                 }
             })

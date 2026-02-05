@@ -12,6 +12,7 @@ use std::time::Duration;
 use prometheus::Registry;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_concurrency_limiter::{ConcurrencyLimit, Limiter};
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
 
@@ -20,6 +21,7 @@ use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
 use crate::ingestion::ingestion_client::IngestionClient;
 use crate::ingestion::ingestion_client::IngestionClientArgs;
+use crate::ingestion::ingestion_client::IngestionMode;
 use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
@@ -48,13 +50,19 @@ pub struct ClientArgs {
     pub streaming: StreamingClientArgs,
 }
 
+impl ClientArgs {
+    pub(crate) fn ingestion_mode(&self) -> IngestionMode {
+        self.ingestion.ingestion_mode()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IngestionConfig {
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     pub checkpoint_buffer_size: usize,
 
-    /// Maximum number of checkpoints to attempt to fetch concurrently.
-    pub ingest_concurrency: usize,
+    /// Concurrency limit for checkpoint ingestion.
+    pub ingest_concurrency: ConcurrencyLimit,
 
     /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
     pub retry_interval_ms: u64,
@@ -83,6 +91,10 @@ pub struct IngestionService {
 }
 
 impl IngestionConfig {
+    pub(crate) fn for_mode(_mode: IngestionMode) -> Self {
+        Self::default()
+    }
+
     pub fn retry_interval(&self) -> Duration {
         Duration::from_millis(self.retry_interval_ms)
     }
@@ -93,6 +105,11 @@ impl IngestionConfig {
 
     pub fn streaming_statement_timeout(&self) -> Duration {
         Duration::from_millis(self.streaming_statement_timeout_ms)
+    }
+
+    /// Build the concurrency limiter from config.
+    pub fn build_limiter(&self) -> Limiter {
+        self.ingest_concurrency.build()
     }
 }
 
@@ -198,12 +215,15 @@ impl IngestionService {
             return Err(Error::NoSubscribers);
         }
 
+        let limiter = config.build_limiter();
+
         Ok(broadcaster(
             checkpoints,
             regulated,
             streaming_client,
             config,
             ingestion_client,
+            limiter,
             commit_hi_rx,
             subscribers,
             metrics,
@@ -215,7 +235,7 @@ impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
             checkpoint_buffer_size: 5000,
-            ingest_concurrency: 200,
+            ingest_concurrency: ConcurrencyLimit::Fixed { limit: 200 },
             retry_interval_ms: 200,
             streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
@@ -257,7 +277,9 @@ mod tests {
             },
             IngestionConfig {
                 checkpoint_buffer_size,
-                ingest_concurrency,
+                ingest_concurrency: ConcurrencyLimit::Fixed {
+                    limit: ingest_concurrency,
+                },
                 ..Default::default()
             },
             None,

@@ -7,7 +7,10 @@ pub use processor::Processor;
 use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
+pub use sui_concurrency_limiter::ConcurrencyLimit;
+use sui_concurrency_limiter::Limiter;
 
+use crate::ingestion::ingestion_client::IngestionMode;
 use crate::store::CommitterWatermark;
 
 pub mod concurrent;
@@ -15,9 +18,56 @@ mod logging;
 mod processor;
 pub mod sequential;
 
-/// Extra buffer added to channels between tasks in a pipeline. There does not need to be a huge
-/// capacity here because tasks already buffer rows to insert internally.
-const PIPELINE_BUFFER: usize = 5;
+/// Small slack buffer added to channels between pipeline stages. Override at runtime with
+/// `CHANNEL_BUFFER` env var. Default: 5.
+fn channel_buffer() -> usize {
+    static CACHED: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *CACHED.get_or_init(|| {
+        std::env::var("CHANNEL_BUFFER")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(5)
+    })
+}
+
+/// Channel size for the processor→collector (concurrent) or processor→committer (sequential)
+/// handoff. Override at runtime with `PROCESSOR_CHANNEL_SIZE` env var.
+/// Default: `Processor::FANOUT + channel_buffer()`.
+fn processor_channel_size(fanout: usize) -> usize {
+    static CACHED: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
+    CACHED
+        .get_or_init(|| {
+            std::env::var("PROCESSOR_CHANNEL_SIZE")
+                .ok()
+                .and_then(|v| v.parse().ok())
+        })
+        .unwrap_or(fanout + channel_buffer())
+}
+
+/// Channel size for the collector→committer handoff, where batched rows wait to be committed.
+/// Override at runtime with `COMMITTER_CHANNEL_SIZE` env var. Default: 10.
+fn committer_channel_size() -> usize {
+    static CACHED: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *CACHED.get_or_init(|| {
+        std::env::var("COMMITTER_CHANNEL_SIZE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10)
+    })
+}
+
+/// Channel size for the committer→watermark handoff in concurrent pipelines.
+/// Override at runtime with `WATERMARK_CHANNEL_SIZE` env var.
+/// Default: `num_cpus::get() + channel_buffer()`.
+fn watermark_channel_size() -> usize {
+    static CACHED: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *CACHED.get_or_init(|| {
+        std::env::var("WATERMARK_CHANNEL_SIZE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(num_cpus::get() + channel_buffer())
+    })
+}
 
 /// Issue a warning every time the number of pending watermarks exceeds this number. This can
 /// happen if the pipeline was started with its initial checkpoint overridden to be strictly
@@ -27,8 +77,8 @@ const WARN_PENDING_WATERMARKS: usize = 10000;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CommitterConfig {
-    /// Number of concurrent writers per pipeline.
-    pub write_concurrency: usize,
+    /// Concurrency limit for writers in this pipeline.
+    pub write_concurrency: ConcurrencyLimit,
 
     /// The collector will check for pending data at least this often, in milliseconds.
     pub collect_interval_ms: u64,
@@ -61,6 +111,11 @@ struct WatermarkPart {
 }
 
 impl CommitterConfig {
+    /// Build the concurrency limiter from config.
+    pub fn build_limiter(&self) -> Limiter {
+        self.write_concurrency.build()
+    }
+
     pub fn collect_interval(&self) -> Duration {
         Duration::from_millis(self.collect_interval_ms)
     }
@@ -147,10 +202,16 @@ impl WatermarkPart {
     }
 }
 
+impl CommitterConfig {
+    pub(crate) fn for_mode(_mode: IngestionMode) -> Self {
+        Self::default()
+    }
+}
+
 impl Default for CommitterConfig {
     fn default() -> Self {
         Self {
-            write_concurrency: 5,
+            write_concurrency: ConcurrencyLimit::Fixed { limit: 10 },
             collect_interval_ms: 500,
             watermark_interval_ms: 500,
             watermark_interval_jitter_ms: 0,

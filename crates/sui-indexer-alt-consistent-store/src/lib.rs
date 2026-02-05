@@ -37,7 +37,6 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_
 use sui_indexer_alt_consistent_api::proto::{self};
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::service::Service;
 
@@ -99,7 +98,7 @@ pub async fn start_service(
         rpc,
     } = config;
 
-    let committer = committer.finish(CommitterConfig::default());
+    let committer = committer.finish(&client_args);
 
     let mut indexer: Indexer<Schema> = Indexer::new(
         path,
@@ -137,7 +136,7 @@ pub async fn start_service(
                     .sequential_pipeline(
                         $handler,
                         SequentialConfig {
-                            committer: layer.finish(committer.clone()),
+                            committer: layer.finish_with_base(committer.clone()),
                             checkpoint_lag: 0,
                         },
                     )

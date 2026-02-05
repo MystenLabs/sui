@@ -1,0 +1,22 @@
+[package]
+name = "sui-concurrency-limiter"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+backoff.workspace = true
+futures.workspace = true
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["rt", "time", "macros"] }
+toml = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
+tokio = { workspace = true, features = ["full", "test-util"] }
+toml.workspace = true
+
+[features]
+toml = ["dep:toml"]

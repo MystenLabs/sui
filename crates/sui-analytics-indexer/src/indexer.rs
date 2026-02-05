@@ -21,8 +21,8 @@ use tracing::info;
 
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::config::CommitterLayer as FrameworkCommitterLayer;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::service::Service;
 
@@ -85,6 +85,10 @@ pub async fn build_analytics_indexer(
 
     let ingestion_config = config.ingestion.clone();
 
+    // Resolve mode-aware defaults before client_args is moved into the indexer.
+    let mode_default = FrameworkCommitterLayer::default().finish(&client_args);
+    let base_committer = config.committer.clone().finish(mode_default);
+
     let mut indexer = Indexer::new(
         store.clone(),
         adjusted_indexer_args,
@@ -94,8 +98,6 @@ pub async fn build_analytics_indexer(
         &registry,
     )
     .await?;
-
-    let base_committer = config.committer.clone().finish(CommitterConfig::default());
     let base_sequential = SequentialConfig {
         committer: base_committer,
         ..Default::default()

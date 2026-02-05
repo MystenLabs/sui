@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::ConcurrencyLimit;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 
 use crate::pipeline::Pipeline;
@@ -94,7 +95,10 @@ pub struct CommitterLayer {
 impl CommitterLayer {
     pub fn finish(self, base: CommitterConfig) -> CommitterConfig {
         CommitterConfig {
-            write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
+            write_concurrency: self
+                .write_concurrency
+                .map(|limit| ConcurrencyLimit::Fixed { limit })
+                .unwrap_or(base.write_concurrency),
             collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
             watermark_interval_ms: self
                 .watermark_interval_ms

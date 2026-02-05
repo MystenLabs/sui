@@ -14332,6 +14332,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-concurrency-limiter"
+version = "1.66.0"
+dependencies = [
+ "backoff",
+ "futures",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml 0.7.4",
+]
+
+[[package]]
 name = "sui-config"
 version = "0.0.0"
 dependencies = [
@@ -14843,6 +14855,7 @@ version = "1.66.0"
 dependencies = [
  "anyhow",
  "futures",
+ "sui-concurrency-limiter",
  "tap",
  "thiserror 1.0.69",
  "tokio",
@@ -15071,6 +15084,7 @@ dependencies = [
  "diesel-async",
  "diesel_migrations",
  "futures",
+ "num_cpus",
  "object_store 0.13.0",
  "pin-project-lite",
  "prometheus",
@@ -15080,6 +15094,7 @@ dependencies = [
  "scoped-futures",
  "serde",
  "serde_json",
+ "sui-concurrency-limiter",
  "sui-field-count",
  "sui-futures",
  "sui-indexer-alt-framework-store-traits",

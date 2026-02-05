@@ -15,9 +15,9 @@ use tracing::info;
 use crate::Task;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
-use crate::pipeline::PIPELINE_BUFFER;
 use crate::pipeline::Processor;
 use crate::pipeline::WatermarkPart;
+use crate::pipeline::committer_channel_size;
 use crate::pipeline::concurrent::collector::collector;
 use crate::pipeline::concurrent::commit_watermark::commit_watermark;
 use crate::pipeline::concurrent::committer::committer;
@@ -25,6 +25,8 @@ use crate::pipeline::concurrent::main_reader_lo::track_main_reader_lo;
 use crate::pipeline::concurrent::pruner::pruner;
 use crate::pipeline::concurrent::reader_watermark::reader_watermark;
 use crate::pipeline::processor::processor;
+use crate::pipeline::processor_channel_size;
+use crate::pipeline::watermark_channel_size;
 use crate::store::Store;
 use crate::types::full_checkpoint_content::Checkpoint;
 
@@ -220,7 +222,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
-) -> Service {
+) -> anyhow::Result<Service> {
     info!(
         pipeline = H::NAME,
         "Starting pipeline with config: {config:#?}",
@@ -231,13 +233,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner: pruner_config,
     } = config;
 
-    let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
+    let limiter = committer_config.build_limiter();
+
+    let (processor_tx, collector_rx) = mpsc::channel(processor_channel_size(H::FANOUT));
     //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-    let (collector_tx, committer_rx) =
-        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
+    let (collector_tx, committer_rx) = mpsc::channel(committer_channel_size());
     //docs::/#buff
-    let (committer_tx, watermark_rx) =
-        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
+    let (committer_tx, watermark_rx) = mpsc::channel(watermark_channel_size());
     let main_reader_lo = Arc::new(SetOnce::new());
 
     let handler = Arc::new(handler);
@@ -260,11 +262,11 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let s_committer = committer::<H>(
         handler.clone(),
-        committer_config.clone(),
         committer_rx,
         committer_tx,
         store.clone(),
         metrics.clone(),
+        limiter,
     );
 
     let s_commit_watermark = commit_watermark::<H>(
@@ -288,13 +290,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let s_pruner = pruner(handler, pruner_config, store, metrics);
 
-    s_processor
+    Ok(s_processor
         .merge(s_collector)
         .merge(s_committer)
         .merge(s_commit_watermark)
         .attach(s_track_reader_lo)
         .attach(s_reader_watermark)
-        .attach(s_pruner)
+        .attach(s_pruner))
 }
 
 #[cfg(test)]
@@ -421,7 +423,8 @@ mod tests {
                 checkpoint_rx,
                 commit_hi_tx,
                 metrics,
-            );
+            )
+            .unwrap();
 
             Self {
                 store,
@@ -651,15 +654,15 @@ mod tests {
         // │   Input    │    │ (FANOUT=2) │    │            │    │            │
         // └────────────┘    └────────────┘    └[BOTTLENECK]┘    └────────────┘
         //                │                 │                 │
-        //              [●●●]           [●●●●●●●]         [●●●●●●]
-        //            buffer: 3         buffer: 7         buffer: 6
+        //              [●●●]           [●●●●●●●]         [●●●●●●●●●●]
+        //            buffer: 3         buffer: 7         buffer: 10
         //
         // BOTTLENECK: Collector stops accepting when pending rows ≥ MAX_PENDING_ROWS (4)
 
         let config = ConcurrentConfig {
             committer: CommitterConfig {
                 collect_interval_ms: 5_000, // Long interval to prevent timer-driven collection
-                write_concurrency: 1,
+                write_concurrency: sui_concurrency_limiter::ConcurrencyLimit::Fixed { limit: 1 },
                 ..Default::default()
             },
             ..Default::default()
@@ -671,12 +674,12 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(200)).await;
 
         // Pipeline capacity analysis with collector back pressure:
-        // Configuration: MAX_PENDING_ROWS=4, FANOUT=2, PIPELINE_BUFFER=5
+        // Configuration: MAX_PENDING_ROWS=4, FANOUT=2, channel_buffer()=5
         //
         // Channel and task breakdown:
         // - Checkpoint->Processor channel: 3 slots (TEST_CHECKPOINT_BUFFER_SIZE)
         // - Processor tasks: 2 tasks (FANOUT=2)
-        // - Processor->Collector channel: 7 slots (FANOUT=2 + PIPELINE_BUFFER=5)
+        // - Processor->Collector channel: 7 slots (FANOUT=2 + channel_buffer()=5)
         // - Collector pending: 2 checkpoints × 2 values = 4 values (hits MAX_PENDING_ROWS=4)
         //
         // Total capacity: 3 + 2 + 7 + 2 = 14 checkpoints
@@ -717,14 +720,14 @@ mod tests {
         // │   Input    │    │ (FANOUT=2) │    │            │    │🐌 10s Delay│
         // └────────────┘    └────────────┘    └────────────┘    └[BOTTLENECK]┘
         //                │                 │                 │
-        //              [●●●]           [●●●●●●●]         [●●●●●●]
-        //            buffer: 3         buffer: 7         buffer: 6
+        //              [●●●]           [●●●●●●●]         [●●●●●●●●●●]
+        //            buffer: 3         buffer: 7         buffer: 10
         //
         // BOTTLENECK: Committer with 10s delay blocks entire pipeline
 
         let config = ConcurrentConfig {
             committer: CommitterConfig {
-                write_concurrency: 1, // Single committer for deterministic blocking
+                write_concurrency: sui_concurrency_limiter::ConcurrencyLimit::Fixed { limit: 1 }, // Single committer for deterministic blocking
                 ..Default::default()
             },
             ..Default::default()
@@ -733,19 +736,19 @@ mod tests {
         let setup = TestSetup::new(config, store, 0).await;
 
         // Pipeline capacity analysis with slow commits:
-        // Configuration: FANOUT=2, write_concurrency=1, PIPELINE_BUFFER=5
+        // Configuration: FANOUT=2, concurrency=1, channel_buffer()=5, committer_channel_size()=10
         //
         // Channel and task breakdown:
         // - Checkpoint->Processor channel: 3 slots (TEST_CHECKPOINT_BUFFER_SIZE)
         // - Processor tasks: 2 tasks (FANOUT=2)
-        // - Processor->Collector channel: 7 slots (FANOUT=2 + PIPELINE_BUFFER=5)
-        // - Collector->Committer channel: 6 slots (write_concurrency=1 + PIPELINE_BUFFER=5)
+        // - Processor->Collector channel: 7 slots (FANOUT=2 + channel_buffer()=5)
+        // - Collector->Committer channel: 10 slots (committer_channel_size()=10)
         // - Committer task: 1 task (blocked by slow commit)
         //
-        // Total theoretical capacity: 3 + 2 + 7 + 6 + 1 = 19 checkpoints
+        // Total theoretical capacity: 3 + 2 + 7 + 10 + 1 = 23 checkpoints
 
         // Fill pipeline to theoretical capacity - these should all succeed
-        for i in 0..19 {
+        for i in 0..23 {
             setup
                 .send_checkpoint_with_timeout(i, Duration::from_millis(100))
                 .await
@@ -755,9 +758,9 @@ mod tests {
         // Find the actual back pressure point
         // Due to non-determinism in collector's tokio::select!, the collector may consume
         // up to 2 checkpoints (filling MAX_PENDING_ROWS=4) before applying back pressure.
-        // This means back pressure occurs somewhere in range 19-21.
+        // This means back pressure occurs somewhere in range 23-25.
         let mut back_pressure_checkpoint = None;
-        for checkpoint in 19..22 {
+        for checkpoint in 23..26 {
             if setup
                 .send_checkpoint_with_timeout(checkpoint, Duration::from_millis(100))
                 .await
@@ -769,7 +772,7 @@ mod tests {
         }
         assert!(
             back_pressure_checkpoint.is_some(),
-            "Back pressure should occur between checkpoints 19-21"
+            "Back pressure should occur between checkpoints 23-25"
         );
 
         // Verify that some data has been processed (pipeline is working)

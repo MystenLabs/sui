@@ -12,9 +12,9 @@ use tracing::info;
 
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
-use crate::pipeline::PIPELINE_BUFFER;
 use crate::pipeline::Processor;
 use crate::pipeline::processor::processor;
+use crate::pipeline::processor_channel_size;
 use crate::pipeline::sequential::committer::committer;
 use crate::store::Store;
 use crate::store::TransactionalStore;
@@ -125,7 +125,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         "Starting pipeline with config: {config:#?}",
     );
 
-    let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
+    let (processor_tx, committer_rx) = mpsc::channel(processor_channel_size(H::FANOUT));
 
     let handler = Arc::new(handler);
 

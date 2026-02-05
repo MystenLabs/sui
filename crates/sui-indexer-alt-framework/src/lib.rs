@@ -38,6 +38,7 @@ pub use sui_types as types;
 
 #[cfg(feature = "cluster")]
 pub mod cluster;
+pub mod config;
 pub mod ingestion;
 pub mod metrics;
 pub mod pipeline;
@@ -294,7 +295,7 @@ impl<S: Store> Indexer<S> {
             checkpoint_rx,
             commit_hi_tx,
             self.metrics.clone(),
-        ));
+        )?);
 
         Ok(())
     }

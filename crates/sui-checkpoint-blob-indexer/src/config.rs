@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::config::CommitterLayer;
+use sui_indexer_alt_framework::pipeline::ConcurrencyLimit;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::{self as framework};
 
@@ -16,30 +17,6 @@ pub struct IndexerConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
-pub struct CommitterLayer {
-    pub write_concurrency: Option<usize>,
-    pub collect_interval_ms: Option<u64>,
-    pub watermark_interval_ms: Option<u64>,
-    pub watermark_interval_jitter_ms: Option<u64>,
-}
-
-impl CommitterLayer {
-    pub fn finish(self, base: CommitterConfig) -> CommitterConfig {
-        CommitterConfig {
-            write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
-            collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
-            watermark_interval_ms: self
-                .watermark_interval_ms
-                .unwrap_or(base.watermark_interval_ms),
-            watermark_interval_jitter_ms: self
-                .watermark_interval_jitter_ms
-                .unwrap_or(base.watermark_interval_jitter_ms),
-        }
-    }
-}
-
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
 }
@@ -48,7 +25,7 @@ impl ConcurrentLayer {
     pub fn finish(self, base: ConcurrentConfig) -> ConcurrentConfig {
         ConcurrentConfig {
             committer: if let Some(c) = self.committer {
-                c.finish(base.committer)
+                c.finish_with_base(base.committer)
             } else {
                 base.committer
             },
@@ -72,7 +49,7 @@ pub struct PipelineLayer {
 #[serde(deny_unknown_fields)]
 pub struct IngestionConfig {
     pub checkpoint_buffer_size: usize,
-    pub ingest_concurrency: usize,
+    pub ingest_concurrency: ConcurrencyLimit,
     pub retry_interval_ms: u64,
     pub streaming_backoff_initial_batch_size: usize,
     pub streaming_backoff_max_batch_size: usize,

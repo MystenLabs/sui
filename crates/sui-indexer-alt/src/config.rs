@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
+use sui_indexer_alt_framework::config::CommitterLayer;
+use sui_indexer_alt_framework::config::IngestionLayer;
+pub use sui_indexer_alt_framework::config::Merge;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::ConcurrencyLimit;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
-
-/// Trait for merging configuration structs together.
-pub trait Merge: Sized {
-    fn merge(self, other: Self) -> anyhow::Result<Self>;
-}
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
@@ -46,19 +45,6 @@ pub struct IndexerConfig {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct IngestionLayer {
-    pub checkpoint_buffer_size: Option<usize>,
-    pub ingest_concurrency: Option<usize>,
-    pub retry_interval_ms: Option<u64>,
-    pub streaming_backoff_initial_batch_size: Option<usize>,
-    pub streaming_backoff_max_batch_size: Option<usize>,
-    pub streaming_connection_timeout_ms: Option<u64>,
-    pub streaming_statement_timeout_ms: Option<u64>,
-}
-
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub checkpoint_lag: Option<u64>,
@@ -70,15 +56,6 @@ pub struct SequentialLayer {
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub pruner: Option<PrunerLayer>,
-}
-
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct CommitterLayer {
-    pub write_concurrency: Option<usize>,
-    pub collect_interval_ms: Option<u64>,
-    pub watermark_interval_ms: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -146,13 +123,14 @@ impl IndexerConfig {
             .merge(IndexerConfig {
                 ingestion: IngestionLayer {
                     retry_interval_ms: Some(10),
-                    ingest_concurrency: Some(1),
+                    ingest_concurrency: Some(ConcurrencyLimit::Fixed { limit: 1 }),
                     ..Default::default()
                 },
                 committer: CommitterLayer {
                     collect_interval_ms: Some(50),
                     watermark_interval_ms: Some(50),
-                    write_concurrency: Some(1),
+                    write_concurrency: Some(ConcurrencyLimit::Fixed { limit: 1 }),
+                    ..Default::default()
                 },
                 pruner: PrunerLayer {
                     interval_ms: Some(50),
@@ -165,35 +143,11 @@ impl IndexerConfig {
     }
 }
 
-impl IngestionLayer {
-    pub fn finish(self, base: IngestionConfig) -> anyhow::Result<IngestionConfig> {
-        Ok(IngestionConfig {
-            checkpoint_buffer_size: self
-                .checkpoint_buffer_size
-                .unwrap_or(base.checkpoint_buffer_size),
-            ingest_concurrency: self.ingest_concurrency.unwrap_or(base.ingest_concurrency),
-            retry_interval_ms: self.retry_interval_ms.unwrap_or(base.retry_interval_ms),
-            streaming_backoff_initial_batch_size: self
-                .streaming_backoff_initial_batch_size
-                .unwrap_or(base.streaming_backoff_initial_batch_size),
-            streaming_backoff_max_batch_size: self
-                .streaming_backoff_max_batch_size
-                .unwrap_or(base.streaming_backoff_max_batch_size),
-            streaming_connection_timeout_ms: self
-                .streaming_connection_timeout_ms
-                .unwrap_or(base.streaming_connection_timeout_ms),
-            streaming_statement_timeout_ms: self
-                .streaming_statement_timeout_ms
-                .unwrap_or(base.streaming_statement_timeout_ms),
-        })
-    }
-}
-
 impl SequentialLayer {
     pub fn finish(self, base: SequentialConfig) -> anyhow::Result<SequentialConfig> {
         Ok(SequentialConfig {
             committer: if let Some(committer) = self.committer {
-                committer.finish(base.committer)?
+                committer.finish_with_base(base.committer)
             } else {
                 base.committer
             },
@@ -208,7 +162,7 @@ impl ConcurrentLayer {
     pub fn finish(self, base: ConcurrentConfig) -> anyhow::Result<ConcurrentConfig> {
         Ok(ConcurrentConfig {
             committer: if let Some(committer) = self.committer {
-                committer.finish(base.committer)?
+                committer.finish_with_base(base.committer)
             } else {
                 base.committer
             },
@@ -216,19 +170,6 @@ impl ConcurrentLayer {
                 (None, _) | (_, None) => None,
                 (Some(pruner), Some(base)) => Some(pruner.finish(base)?),
             },
-        })
-    }
-}
-
-impl CommitterLayer {
-    pub fn finish(self, base: CommitterConfig) -> anyhow::Result<CommitterConfig> {
-        Ok(CommitterConfig {
-            write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
-            collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
-            watermark_interval_ms: self
-                .watermark_interval_ms
-                .unwrap_or(base.watermark_interval_ms),
-            watermark_interval_jitter_ms: 0,
         })
     }
 }
@@ -288,28 +229,6 @@ impl Merge for IndexerConfig {
     }
 }
 
-impl Merge for IngestionLayer {
-    fn merge(self, other: IngestionLayer) -> anyhow::Result<IngestionLayer> {
-        Ok(IngestionLayer {
-            checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
-            ingest_concurrency: other.ingest_concurrency.or(self.ingest_concurrency),
-            retry_interval_ms: other.retry_interval_ms.or(self.retry_interval_ms),
-            streaming_backoff_initial_batch_size: other
-                .streaming_backoff_initial_batch_size
-                .or(self.streaming_backoff_initial_batch_size),
-            streaming_backoff_max_batch_size: other
-                .streaming_backoff_max_batch_size
-                .or(self.streaming_backoff_max_batch_size),
-            streaming_connection_timeout_ms: other
-                .streaming_connection_timeout_ms
-                .or(self.streaming_connection_timeout_ms),
-            streaming_statement_timeout_ms: other
-                .streaming_statement_timeout_ms
-                .or(self.streaming_statement_timeout_ms),
-        })
-    }
-}
-
 impl Merge for SequentialLayer {
     fn merge(self, other: SequentialLayer) -> anyhow::Result<SequentialLayer> {
         Ok(SequentialLayer {
@@ -324,16 +243,6 @@ impl Merge for ConcurrentLayer {
         Ok(ConcurrentLayer {
             committer: self.committer.merge(other.committer)?,
             pruner: self.pruner.merge(other.pruner)?,
-        })
-    }
-}
-
-impl Merge for CommitterLayer {
-    fn merge(self, other: CommitterLayer) -> anyhow::Result<CommitterLayer> {
-        Ok(CommitterLayer {
-            write_concurrency: other.write_concurrency.or(self.write_concurrency),
-            collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
-            watermark_interval_ms: other.watermark_interval_ms.or(self.watermark_interval_ms),
         })
     }
 }
@@ -390,30 +299,6 @@ impl Merge for PipelineLayer {
     }
 }
 
-impl<T: Merge> Merge for Option<T> {
-    fn merge(self, other: Option<T>) -> anyhow::Result<Option<T>> {
-        Ok(match (self, other) {
-            (Some(a), Some(b)) => Some(a.merge(b)?),
-            (Some(a), _) | (_, Some(a)) => Some(a),
-            (None, None) => None,
-        })
-    }
-}
-
-impl From<IngestionConfig> for IngestionLayer {
-    fn from(config: IngestionConfig) -> Self {
-        Self {
-            checkpoint_buffer_size: Some(config.checkpoint_buffer_size),
-            ingest_concurrency: Some(config.ingest_concurrency),
-            retry_interval_ms: Some(config.retry_interval_ms),
-            streaming_backoff_initial_batch_size: Some(config.streaming_backoff_initial_batch_size),
-            streaming_backoff_max_batch_size: Some(config.streaming_backoff_max_batch_size),
-            streaming_connection_timeout_ms: Some(config.streaming_connection_timeout_ms),
-            streaming_statement_timeout_ms: Some(config.streaming_statement_timeout_ms),
-        }
-    }
-}
-
 impl From<SequentialConfig> for SequentialLayer {
     fn from(config: SequentialConfig) -> Self {
         Self {
@@ -428,16 +313,6 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
         Self {
             committer: Some(config.committer.into()),
             pruner: config.pruner.map(Into::into),
-        }
-    }
-}
-
-impl From<CommitterConfig> for CommitterLayer {
-    fn from(config: CommitterConfig) -> Self {
-        Self {
-            write_concurrency: Some(config.write_concurrency),
-            collect_interval_ms: Some(config.collect_interval_ms),
-            watermark_interval_ms: Some(config.watermark_interval_ms),
         }
     }
 }
@@ -474,17 +349,19 @@ mod tests {
         let this = PipelineLayer {
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
-                    write_concurrency: Some(10),
+                    write_concurrency: None,
                     collect_interval_ms: Some(1000),
                     watermark_interval_ms: None,
+                    ..Default::default()
                 }),
                 checkpoint_lag: Some(100),
             }),
             ev_emit_mod: Some(ConcurrentLayer {
                 committer: Some(CommitterLayer {
-                    write_concurrency: Some(5),
+                    write_concurrency: None,
                     collect_interval_ms: Some(500),
                     watermark_interval_ms: None,
+                    ..Default::default()
                 }),
                 ..Default::default()
             }),
@@ -494,9 +371,10 @@ mod tests {
         let that = PipelineLayer {
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
-                    write_concurrency: Some(5),
+                    write_concurrency: None,
                     collect_interval_ms: None,
                     watermark_interval_ms: Some(500),
+                    ..Default::default()
                 }),
                 checkpoint_lag: Some(200),
             }),
@@ -512,17 +390,17 @@ mod tests {
             PipelineLayer {
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
-                        write_concurrency: Some(5),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
+                        ..
                     }),
                     checkpoint_lag: Some(200),
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
-                        write_concurrency: Some(5),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
+                        ..
                     }),
                     pruner: None,
                 }),
@@ -535,17 +413,17 @@ mod tests {
             PipelineLayer {
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
-                        write_concurrency: Some(10),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
+                        ..
                     }),
                     checkpoint_lag: Some(100),
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
-                        write_concurrency: Some(5),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
+                        ..
                     }),
                     pruner: None,
                 }),
@@ -607,7 +485,7 @@ mod tests {
 
         let base = ConcurrentConfig {
             committer: CommitterConfig {
-                write_concurrency: 5,
+                write_concurrency: ConcurrencyLimit::Fixed { limit: 5 },
                 collect_interval_ms: 50,
                 watermark_interval_ms: 500,
                 ..Default::default()
@@ -619,7 +497,6 @@ mod tests {
             layer.finish(base).unwrap(),
             ConcurrentConfig {
                 committer: CommitterConfig {
-                    write_concurrency: 5,
                     collect_interval_ms: 50,
                     watermark_interval_ms: 500,
                     ..
@@ -638,7 +515,7 @@ mod tests {
 
         let base = ConcurrentConfig {
             committer: CommitterConfig {
-                write_concurrency: 5,
+                write_concurrency: ConcurrencyLimit::Fixed { limit: 5 },
                 collect_interval_ms: 50,
                 watermark_interval_ms: 500,
                 ..Default::default()
@@ -650,7 +527,6 @@ mod tests {
             layer.finish(base).unwrap(),
             ConcurrentConfig {
                 committer: CommitterConfig {
-                    write_concurrency: 5,
                     collect_interval_ms: 50,
                     watermark_interval_ms: 500,
                     ..
@@ -672,7 +548,7 @@ mod tests {
 
         let base = ConcurrentConfig {
             committer: CommitterConfig {
-                write_concurrency: 5,
+                write_concurrency: ConcurrencyLimit::Fixed { limit: 5 },
                 collect_interval_ms: 50,
                 watermark_interval_ms: 500,
                 ..Default::default()
@@ -690,7 +566,6 @@ mod tests {
             layer.finish(base).unwrap(),
             ConcurrentConfig {
                 committer: CommitterConfig {
-                    write_concurrency: 5,
                     collect_interval_ms: 50,
                     watermark_interval_ms: 500,
                     ..

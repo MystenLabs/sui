@@ -4,7 +4,6 @@
 pub mod config;
 mod handlers;
 
-pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
 pub use config::IndexerConfig;
 pub use config::IngestionConfig;
