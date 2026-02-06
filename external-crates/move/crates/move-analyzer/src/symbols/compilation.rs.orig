@@ -10,7 +10,7 @@ use crate::{
     symbols::{
         def_info::DefInfo,
         mod_defs::ModuleDefs,
-        mod_extensions::collect_extensions_info,
+        mod_extensions::detect_extended_dependency_modules,
         use_def::{UseDefMap, UseLoc},
     },
 };
@@ -204,8 +204,6 @@ struct CachingResult {
     dep_files_to_compile_fully: BTreeSet<Symbol>,
     /// Packages containing files to compile fully (kept in dependencies)
     packages_to_keep: BTreeSet<Symbol>,
-    /// User files containing extended modules that need full compilation
-    user_files_to_compile_fully: BTreeSet<PathBuf>,
 }
 
 impl CachedPackages {
@@ -304,7 +302,6 @@ impl CachingResult {
         src_deps: BTreeMap<Symbol, PackagePaths>,
         dep_files_to_compile_fully: BTreeSet<Symbol>,
         packages_to_keep: BTreeSet<Symbol>,
-        user_files_to_compile_fully: BTreeSet<PathBuf>,
     ) -> Self {
         Self {
             pkg_deps,
@@ -312,7 +309,6 @@ impl CachingResult {
             src_deps,
             dep_files_to_compile_fully,
             packages_to_keep,
-            user_files_to_compile_fully,
         }
     }
 
@@ -323,7 +319,6 @@ impl CachingResult {
             src_deps: BTreeMap::new(),
             dep_files_to_compile_fully: BTreeSet::new(),
             packages_to_keep: BTreeSet::new(),
-            user_files_to_compile_fully: BTreeSet::new(),
         }
     }
 
@@ -361,17 +356,6 @@ impl CachingResult {
                     .collect::<BTreeSet<_>>()
             })
             .collect()
-    }
-
-    /// Returns all files (dependency + user) that need full compilation as PathBuf.
-    fn get_all_files_to_compile_fully(&self) -> BTreeSet<PathBuf> {
-        let mut all_files: BTreeSet<PathBuf> = self
-            .dep_files_to_compile_fully
-            .iter()
-            .map(|s| PathBuf::from(s.as_str()))
-            .collect();
-        all_files.extend(self.user_files_to_compile_fully.clone());
-        all_files
     }
 }
 
@@ -506,19 +490,17 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
 
         let caching_result = match cached_pkg_info_opt {
             Some(cached_pkg_info) => {
-                // Detect all extended modules (both dependency and user-space)
-                let extended = collect_extensions_info(
+                // Detect modules needing full compilation (extended dependency modules)
+                let extended_modules = detect_extended_dependency_modules(
                     &mapped_files_data.root_source_files,
                     &overlay_fs_root,
                     mapped_files_data.root_edition,
                     mapped_files_data.root_named_addresses.clone(),
                     &cached_pkg_info.deps,
                 );
-
-                // Get file paths for extended dependency modules
                 let dep_files_to_compile_fully = cached_pkg_info
                     .deps
-                    .get_file_paths_for_modules(&extended.extended_dep_modules);
+                    .get_file_paths_for_modules(&extended_modules);
 
                 // Compute packages containing files to compile fully
                 let packages_to_keep: BTreeSet<Symbol> = dep_files_to_compile_fully
@@ -545,17 +527,12 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                     cached_pkg_info.dep_hashes.clone(),
                 );
 
-                // Combine extended module files and extension files for full compilation
-                let mut user_files_to_compile = extended.extended_user_files;
-                user_files_to_compile.extend(extended.extension_files);
-
                 CachingResult::new(
                     Some(analyzed_pkg_info),
                     cached_pkg_info.compiler_analysis_info.clone(),
                     src_deps.clone(),
                     dep_files_to_compile_fully,
                     packages_to_keep,
-                    user_files_to_compile,
                 )
             }
             None => {
@@ -577,17 +554,16 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                     compiler_flags,
                     overlay_fs_root.clone(),
                 ) {
-                    // Detect all extended modules (both dependency and user-space)
-                    let extended = collect_extensions_info(
+                    // Detect extended dependency modules
+                    let extended_modules = detect_extended_dependency_modules(
                         &mapped_files_data.root_source_files,
                         &overlay_fs_root,
                         mapped_files_data.root_edition,
                         mapped_files_data.root_named_addresses.clone(),
                         &program_deps,
                     );
-
                     let dep_files_to_compile_fully =
-                        program_deps.get_file_paths_for_modules(&extended.extended_dep_modules);
+                        program_deps.get_file_paths_for_modules(&extended_modules);
                     let packages_to_keep: BTreeSet<Symbol> = dep_files_to_compile_fully
                         .iter()
                         .filter_map(|f| file_to_package.get(f).copied())
@@ -598,14 +574,12 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         dep_names,
                         mapped_files_data.dep_hashes.clone(),
                     );
-                    // On first compilation, user_files is empty since full compilation happens anyway
                     CachingResult::new(
                         Some(analyzed_pkg_info),
                         CompilerAnalysisInfo::new(),
                         src_deps,
                         dep_files_to_compile_fully,
                         packages_to_keep,
-                        BTreeSet::new(),
                     )
                 } else {
                     CachingResult::empty()
@@ -647,10 +621,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 modified_files.insert(cursor_file.clone());
             }
 
-            // Add user files that contain extended modules to ensure their function bodies
-            // are preserved during compilation
-            modified_files.extend(caching_result.user_files_to_compile_fully.clone());
-
             (false, modified_files)
         } else {
             (true, BTreeSet::new())
@@ -679,11 +649,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                     .set_files_to_compile(if full_compilation {
                         None
                     } else {
-                        // Include both modified user files and files containing extended modules
-                        // (both dependency and user-space) to ensure function bodies are preserved
-                        let mut all_files = files_to_compile.clone();
-                        all_files.extend(caching_result.get_all_files_to_compile_fully());
-                        Some(all_files)
+                        Some(files_to_compile.clone())
                     })
                     .run::<PASS_PARSER>()?;
                 let compiler = match compilation_result {

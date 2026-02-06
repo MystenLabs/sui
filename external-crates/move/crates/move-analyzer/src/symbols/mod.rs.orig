@@ -485,10 +485,10 @@ fn update_file_use_defs(
     file_use_defs: &mut FileUseDefs,
 ) {
     for (fhash, use_defs) in &computation_data.use_defs {
-        let Some(fpath) = mapped_files.file_name_mapping().get(fhash) else {
-            continue;
+        let fpath = match mapped_files.file_name_mapping().get(fhash) {
+            Some(p) => p.as_path().to_string_lossy().to_string(),
+            None => return,
         };
-        let fpath = fpath.as_path().to_string_lossy().to_string();
 
         let fpath_buffer =
             dunce::canonicalize(fpath.clone()).unwrap_or_else(|_| PathBuf::from(fpath.as_str()));

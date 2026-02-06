@@ -952,7 +952,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             T::FunctionBody_::Defined(seq) => {
                 self.visit_seq(fdef.body.loc, seq);
             }
-            T::FunctionBody_::Macro | T::FunctionBody_::Native => {}
+            T::FunctionBody_::Macro | T::FunctionBody_::Native => (),
         }
         // process return types
         self.visit_type(None, &fdef.signature.return_type);

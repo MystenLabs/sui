@@ -1,0 +1,9 @@
+@@ -10,7 +10,7 @@
+     symbols::{
+         def_info::DefInfo,
+         mod_defs::{ModuleDefs, ModuleParsingInfo},
+-        mod_extensions::detect_extended_dependency_modules,
++        mod_extensions::collect_extensions_info,
+         use_def::{UseDefMap, UseLoc},
+     },
+ };

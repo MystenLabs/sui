@@ -1,16 +1,50 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Module extension detection for incremental dependency compilation.
-//!
 //! This module contains code supporting handling of module extensions.
-//! The general ides for module extension handling is that we detect
-//! which dependent modules are extended in user code, and then we
-//! force re-compilation of these modules so that the extension members
-//! are inlined into the extended module. We may end up recompiling more
-//! modules than necessary if extended dependent module resides in a file
-//! that contains another (not extended) dependent module.
-use std::{collections::BTreeSet, io::Read, sync::Arc};
+//! The main problem we are trying to solve is that extensions are defined
+//! in user code but the compiler "inlines" them into ad AST at expansion.
+//! This causes two different, though related, problems: one for extended
+//! dependency modules, and one for extended user-space modules.
+//!
+//! Let's consider dependency modules first. When there are no extensions,
+//! we cache dependencies as pre-compiled libraries (shared between different packages),
+//! and also cache analysis results for these modules. Imagine a developer
+//! creating and then modifying an extension for one of these modules.
+//! This extension must be compiled along with the extended module for
+//! the definitions introduced in the extension to be available for analysis
+//! at typing. When compiling with pre-compiled libs, however, this will
+//! not happen as pre-compiled libs to not actually contain ASTs for dependency
+//! modules. We could of course invalidate the cache and do full compilation
+//! in this case, but this would likely make the experience of developing extensions
+//! unacceptable from the performance perspective (this is why we introduced
+//! caching after all). Instead, we identify which dependency modules are extended,
+//! exclude them from pre-compiled libs (which can still be shared between packages),
+//! add them to the set of fully compiled modules, and re-analyze them on each run.
+//! This retains most of the benefits of caching while providing correct support
+//! for extensions. In reality, we have to be a bit more conservative here
+//! as the compiler can only compile individual files and not individual modules.
+//! As a result, we may exclude more modules from pre-compiled libs than necessary
+//! (and recompile more modules than necessary), if multiple modules are defined
+//! in the same file.
+//!
+//! For user-space extended modules, the problem is similar but subtly different.
+//! Similarly to dependency modules, we need to identify which user-space modules are extended,
+//! and include them in full compilation. However, we also need to include actual extensions
+//! in full compilation. This is to ensure that both sides of the extension are fully
+//! compiled and analyzed regardless of which was modified. Otherwise, we may have
+//! a situation when user-level extended module is modified (and fully compiled),
+//! but the extension is not. While extension's ASTs would be cached, they would
+//! not be used during compilation (only during analysis), resulting in extended
+//! module "inlining" extension's functions without their bodies (due to incremental
+//! compilation only fully compiling modified code).
+
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::Read,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
@@ -26,44 +60,95 @@ use vfs::VfsPath;
 
 use super::parsed_address;
 
-/// Detects module extensions in user source files that extend dependency modules.
-/// Returns the set of extended modules as E::ModuleIdent values.
-pub fn detect_extended_dependency_modules(
+/// Information about modules found in a parsed file.
+struct FileModuleInfo {
+    /// Non-extension module definitions: (module_ident, file_path)
+    module_defs: Vec<(E::ModuleIdent, Symbol)>,
+    /// Extension targets (modules being extended by extensions in this file)
+    extension_targets: Vec<E::ModuleIdent>,
+}
+
+/// Information about extensions in an package.
+pub struct ExtensionsInfo {
+    /// File paths for the user package containing module extensions
+    pub extension_files: BTreeSet<PathBuf>,
+    /// File paths of user modules that are extended
+    pub extended_user_files: BTreeSet<PathBuf>,
+    /// Module identifiers of dependency modules that are extended
+    pub extended_dep_modules: BTreeSet<E::ModuleIdent>,
+}
+
+/// Collects module extensions info
+///
+/// This function parses all root source files to:
+/// - collect file paths for user package modules that contain extensions
+/// - collect file paths for user package modules that are extended
+/// - collect module identifiers of dependency modules that are extended
+pub fn collect_extensions_info(
     root_source_files: &[Symbol],
     overlay_fs_root: &VfsPath,
     edition: Edition,
     named_address_map: Arc<NamedAddressMap>,
     pre_compiled_deps: &PreCompiledProgramInfo,
-) -> BTreeSet<E::ModuleIdent> {
-    let mut extended_dep_modules = BTreeSet::new();
+) -> ExtensionsInfo {
+    // Build user module map and collect extension targets in one pass
+    let mut user_module_to_file: BTreeMap<(E::Address, P::ModuleName), PathBuf> = BTreeMap::new();
+    let mut all_extension_targets: Vec<E::ModuleIdent> = Vec::new();
+    let mut extension_files: BTreeSet<PathBuf> = BTreeSet::new();
 
-    // Parse each file and find extensions
     for file_path in root_source_files {
-        if let Some(extended) = parse_file_for_extensions(
+        if let Some(info) = parse_file_for_modules(
             file_path.as_str(),
             overlay_fs_root,
             edition,
             named_address_map.clone(),
         ) {
-            for mident in extended {
-                // Only include if the module exists in pre-compiled dependencies
-                if pre_compiled_deps.module_info(&mident).is_some() {
-                    extended_dep_modules.insert(mident);
-                }
+            // Record non-extension module definitions
+            for (mident, fpath) in info.module_defs {
+                user_module_to_file.insert(
+                    (mident.value.address, mident.value.module),
+                    PathBuf::from(fpath.as_str()),
+                );
             }
+            // Collect extension targets and track files containing extensions
+            if !info.extension_targets.is_empty() {
+                extension_files.insert(PathBuf::from(file_path.as_str()));
+            }
+            all_extension_targets.extend(info.extension_targets);
         }
     }
 
-    extended_dep_modules
+    // Categorize extension targets
+    let mut extended_user_files = BTreeSet::new();
+    let mut extended_dep_modules = BTreeSet::new();
+
+    for target in all_extension_targets {
+        if pre_compiled_deps.module_info(&target).is_some() {
+            // Target is a dependency module
+            extended_dep_modules.insert(target);
+        } else if let Some(file_path) =
+            user_module_to_file.get(&(target.value.address, target.value.module))
+        {
+            // Target is a user module
+            extended_user_files.insert(file_path.clone());
+        }
+        // If target is neither, it might be an error or forward reference - ignore
+    }
+
+    ExtensionsInfo {
+        extension_files,
+        extended_user_files,
+        extended_dep_modules,
+    }
 }
 
-/// Parse a single file to find extension target modules using the compiler's parser.
-fn parse_file_for_extensions(
+/// Parse a single file to find module definitions and extension targets.
+fn parse_file_for_modules(
     file_path: &str,
     overlay_fs_root: &VfsPath,
     edition: Edition,
     named_address_map: Arc<NamedAddressMap>,
-) -> Option<Vec<E::ModuleIdent>> {
+) -> Option<FileModuleInfo> {
     // Read file contents
     let vfs_path = overlay_fs_root.join(file_path).ok()?;
     let mut file = vfs_path.open_file().ok()?;
@@ -88,43 +173,64 @@ fn parse_file_for_extensions(
     // Parse file using the compiler's parser
     let definitions = parse_file_string(&env, file_hash, &contents, None).ok()?;
 
-    // Extract extension targets
-    let mut result = Vec::new();
+    // Extract module info
+    let mut module_defs = Vec::new();
+    let mut extension_targets = Vec::new();
+    let file_symbol = Symbol::from(file_path);
+
     for def in definitions {
-        extract_extension_targets(&def, None, named_address_map.clone(), &mut result);
+        extract_module_info(
+            &def,
+            None,
+            named_address_map.clone(),
+            file_symbol,
+            &mut module_defs,
+            &mut extension_targets,
+        );
     }
 
-    Some(result)
+    Some(FileModuleInfo {
+        module_defs,
+        extension_targets,
+    })
 }
 
-/// Extract target module identifiers from extension definitions.
-/// Handles both top-level module extensions and those inside address blocks.
-fn extract_extension_targets(
+/// Extract module definitions and extension targets from a definition.
+/// Handles both top-level modules and those inside address blocks.
+fn extract_module_info(
     def: &P::Definition,
     inherited_addr: Option<&P::LeadingNameAccess>,
     named_address_map: Arc<NamedAddressMap>,
-    result: &mut Vec<E::ModuleIdent>,
+    file_path: Symbol,
+    module_defs: &mut Vec<(E::ModuleIdent, Symbol)>,
+    extension_targets: &mut Vec<E::ModuleIdent>,
 ) {
     match def {
-        P::Definition::Module(mdef) if mdef.is_extension => {
+        P::Definition::Module(mdef) => {
             if let Some(addr) = mdef.address.as_ref().or(inherited_addr) {
-                let e_address = parsed_address(*addr, named_address_map);
-                result.push(sp(
-                    mdef.name_loc,
-                    E::ModuleIdent_::new(e_address, mdef.name),
-                ));
+                let e_address = parsed_address(*addr, named_address_map.clone());
+                let mident = sp(mdef.name_loc, E::ModuleIdent_::new(e_address, mdef.name));
+
+                if mdef.is_extension {
+                    // This is an extension - record what it extends
+                    extension_targets.push(mident);
+                } else {
+                    // This is a regular module definition - record it
+                    module_defs.push((mident, file_path));
+                }
             }
         }
         P::Definition::Address(adef) => {
             for mdef in &adef.modules {
-                extract_extension_targets(
+                extract_module_info(
                     &P::Definition::Module(mdef.clone()),
                     Some(&adef.addr),
                     named_address_map.clone(),
-                    result,
+                    file_path,
+                    module_defs,
+                    extension_targets,
                 );
             }
         }
-        _ => {}
     }
 }
