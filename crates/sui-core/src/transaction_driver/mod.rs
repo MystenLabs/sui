@@ -245,18 +245,20 @@ where
                                 .observe(attempts as f64);
                             if request.transaction.is_some() {
                                 tracing::info!(
-                                    "User transaction failed to finalize (attempt {}), with non-retriable error: {}",
+                                    "User transaction failed to finalize (attempt {}), with non-retriable error: {} ({})",
                                     attempts,
-                                    e
+                                    e,
+                                    Into::<&str>::into(e.categorize())
                                 );
                             }
                             return Err(e);
                         }
                         if request.transaction.is_some() {
                             tracing::info!(
-                                "User transaction failed to finalize (attempt {}): {}. Retrying ...",
+                                "User transaction failed to finalize (attempt {}): {} ({}). Retrying ...",
                                 attempts,
-                                e
+                                e,
+                                Into::<&str>::into(e.categorize())
                             );
                         }
                         // Buffer the latest retriable error to be returned in case of timeout
@@ -276,6 +278,8 @@ where
                 } else {
                     backoff.next().unwrap()
                 };
+
+                tracing::debug!("Retrying after {:.3}s", delay.as_secs_f32());
                 sleep(delay).await;
 
                 attempts += 1;
