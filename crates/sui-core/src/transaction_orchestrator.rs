@@ -423,6 +423,7 @@ where
                             );
                         }
                     };
+                    tracing::debug!("Wait for {:.3}s before next retry", delay.as_secs_f32());
                     sleep(delay).await;
                 }
             });
