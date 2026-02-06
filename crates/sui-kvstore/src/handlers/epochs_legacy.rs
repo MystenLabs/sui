@@ -9,7 +9,6 @@ use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework_store_traits::Store;
 use sui_types::full_checkpoint_content::Checkpoint;
-use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::storage::EpochInfo;
 
 use crate::KeyValueStoreReader as _;
@@ -40,9 +39,7 @@ impl Processor for EpochLegacyPipeline {
     type Value = EpochLegacyBatch;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
-        let checkpoint_data: CheckpointData = checkpoint.as_ref().clone().into();
-
-        match checkpoint_data.epoch_info()? {
+        match checkpoint.epoch_info()? {
             Some(epoch_info) => {
                 let prev_epoch_update = if epoch_info.epoch > 0 {
                     Some(PrevEpochUpdate {
