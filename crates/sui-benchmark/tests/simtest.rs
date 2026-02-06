@@ -1765,29 +1765,23 @@ mod test {
         // complete reconfiguration, so no separate delay is needed.
         test_cluster.trigger_reconfiguration().await;
 
-        // Compare sequence numbers between async and sync fullnodes.
-        // The async fullnode may have a higher sequence number because crash recovery
-        // can cause double-indexing (indexed before crash, re-indexed after restart).
-        // The critical correctness check is check_system_consistency above which
-        // verifies all checkpointed transactions are in the index.
+        // Exhaustively compare the owner_index and coin_index_2 tables between the
+        // async and sync fullnodes. Both have processed the same set of checkpoints, so
+        // the indexes should be identical.
         let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
         let sync_node = test_cluster.swarm.node(&sync_fn_name).unwrap();
         let async_state = async_node.get_node_handle().unwrap().state();
         let sync_state = sync_node.get_node_handle().unwrap().state();
-        let async_next_seq = async_state
+        let async_indexes = async_state
             .indexes
             .as_ref()
-            .expect("async fullnode should have indexes")
-            .next_sequence_number();
-        let sync_next_seq = sync_state
+            .expect("async fullnode should have indexes");
+        let sync_indexes = sync_state
             .indexes
             .as_ref()
-            .expect("sync fullnode should have indexes")
-            .next_sequence_number();
-        assert!(
-            async_next_seq >= sync_next_seq,
-            "async fullnode should have indexed at least as many transactions as sync \
-             (async={async_next_seq}, sync={sync_next_seq})"
-        );
+            .expect("sync fullnode should have indexes");
+        async_indexes
+            .tables()
+            .check_databases_equal(sync_indexes.tables());
     }
 }

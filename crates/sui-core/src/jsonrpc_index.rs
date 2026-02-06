@@ -269,6 +269,48 @@ impl IndexStoreTables {
         &self.coin_index_2
     }
 
+    /// Asserts that the `owner_index` and `coin_index_2` tables of `self` and `other` are
+    /// identical by tandem-iterating both sorted tables in lockstep.
+    pub fn check_databases_equal(&self, other: &IndexStoreTables) {
+        fn assert_tables_equal<K, V>(name: &str, table_a: &DBMap<K, V>, table_b: &DBMap<K, V>)
+        where
+            K: Serialize + DeserializeOwned + PartialEq + std::fmt::Debug,
+            V: Serialize + DeserializeOwned + PartialEq + std::fmt::Debug,
+        {
+            let mut iter_a = table_a.safe_iter();
+            let mut iter_b = table_b.safe_iter();
+            let mut count = 0u64;
+            loop {
+                match (iter_a.next(), iter_b.next()) {
+                    (Some(a), Some(b)) => {
+                        let (ka, va): (K, V) = a.expect("failed to read from table_a");
+                        let (kb, vb): (K, V) = b.expect("failed to read from table_b");
+                        assert!(
+                            ka == kb && va == vb,
+                            "{name}: mismatch at entry {count}:\n  a=({ka:?}, {va:?})\n  b=({kb:?}, {vb:?})"
+                        );
+                        count += 1;
+                    }
+                    (None, None) => break,
+                    (Some(_), None) => {
+                        panic!(
+                            "{name}: table_a has more entries than table_b (diverged after {count} entries)"
+                        );
+                    }
+                    (None, Some(_)) => {
+                        panic!(
+                            "{name}: table_b has more entries than table_a (diverged after {count} entries)"
+                        );
+                    }
+                }
+            }
+            info!("{name}: verified {count} entries are identical");
+        }
+
+        assert_tables_equal("owner_index", &self.owner_index, &other.owner_index);
+        assert_tables_equal("coin_index_2", &self.coin_index_2, &other.coin_index_2);
+    }
+
     #[allow(deprecated)]
     fn init(&mut self) -> Result<(), StorageError> {
         let metadata = {
