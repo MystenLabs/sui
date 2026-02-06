@@ -3,10 +3,7 @@ use indoc::indoc;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::{
-    flavor::MoveFlavor,
-    schema::{LocalDepInfo, LockfileGitDepInfo, OnChainDepInfo},
-};
+use crate::{flavor::MoveFlavor, schema::LocalDepInfo};
 
 use super::{
     EnvironmentID, EnvironmentName, PublishAddresses, RenderToml,
@@ -47,12 +44,7 @@ pub struct LocalPub<F: MoveFlavor> {
 /// in a single filesystem (but can't be used if packages are moved to a different path)
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(bound = "", rename_all = "kebab-case")]
-#[serde(untagged)]
-pub enum EphemeralDependencyInfo {
-    Local(LocalDepInfo),
-    OnChain(OnChainDepInfo),
-    Git(LockfileGitDepInfo),
-}
+pub struct EphemeralDependencyInfo(pub LocalDepInfo);
 
 impl<F: MoveFlavor> RenderToml for ParsedEphemeralPubs<F> {
     /// Pretty-print `self` as TOML

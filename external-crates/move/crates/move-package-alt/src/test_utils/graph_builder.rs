@@ -661,7 +661,7 @@ impl PackageSpec {
         self
     }
 
-    /// Change this package to a legacy package. Legacy packages will produce manfests with
+    /// Change this package to a legacy package. Legacy packages will produce manifests with
     /// upper-cased names for the package and the dependency, and will contain an `[addresses]`
     /// section with a single variable given by the package name.
     ///
@@ -851,14 +851,14 @@ impl Scenario {
         std::fs::write(&path, &file_contents).unwrap();
     }
 
-    /// Return an ephemeral entry for the given package with the given addreses
+    /// Return an ephemeral entry for the given package with the given addresses
     pub fn ephemeral_for(
         &self,
         package: impl AsRef<str>,
         original_id: OriginalID,
         published_at: PublishedID,
     ) -> (EphemeralDependencyInfo, Publication<Vanilla>) {
-        let source = EphemeralDependencyInfo::Local(crate::schema::LocalDepInfo {
+        let source = EphemeralDependencyInfo(crate::schema::LocalDepInfo {
             local: self
                 .root_path
                 .join(package.as_ref())
