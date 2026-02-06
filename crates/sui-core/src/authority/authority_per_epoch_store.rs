@@ -3363,22 +3363,11 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    /// If reconfig state is RejectUserCerts, and there is no fastpath transaction left to be
-    /// finalized, send EndOfPublish to signal to other authorities that this authority is
-    /// not voting for or executing more transactions in this epoch.
+    /// If reconfig state is RejectUserCerts, send EndOfPublish to signal
+    /// to other authorities that this authority is not voting for more transactions in this epoch.
     pub(crate) fn should_send_end_of_publish(&self) -> bool {
         let reconfig_state = self.get_reconfig_state_read_lock_guard();
-        if !reconfig_state.is_reject_user_certs() {
-            // Still accepting user transactions, or already received 2f+1 EOP messages.
-            // Either way EOP cannot or does not need to be sent.
-            return false;
-        }
-
-        // EOP can only be sent after finalizing remaining transactions.
-        self
-            .consensus_tx_status_cache
-            .as_ref()
-            .is_none_or(|c| c.get_num_fastpath_certified() == 0)
+        reconfig_state.is_reject_user_certs()
     }
 
     pub(crate) fn write_pending_checkpoint(
