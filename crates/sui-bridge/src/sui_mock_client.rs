@@ -6,18 +6,16 @@
 use crate::error::{BridgeError, BridgeResult};
 use crate::test_utils::DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
 use async_trait::async_trait;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
-use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
-use sui_types::Identifier;
+use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::bridge::{
     BridgeCommitteeSummary, BridgeSummary, MoveTypeBridgeRecord, MoveTypeParsedTokenTransferMessage,
 };
 use sui_types::digests::TransactionDigest;
-use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::transaction::ObjectArg;
@@ -33,8 +31,6 @@ pub struct SuiMockClient {
     // the top two fields do not change during tests so we don't need them to be Arc<Mutex>>
     chain_identifier: String,
     latest_checkpoint_sequence_number: Arc<AtomicU64>,
-    events: Arc<Mutex<HashMap<(ObjectID, Identifier, Option<EventID>), EventPage>>>,
-    past_event_query_params: Arc<Mutex<VecDeque<(ObjectID, Identifier, Option<EventID>)>>>,
     events_by_tx_digest:
         Arc<Mutex<HashMap<TransactionDigest, Result<Vec<SuiEvent>, sui_sdk::error::Error>>>>,
     transaction_responses:
@@ -55,8 +51,6 @@ impl SuiMockClient {
         Self {
             chain_identifier: "".to_string(),
             latest_checkpoint_sequence_number: Arc::new(AtomicU64::new(0)),
-            events: Default::default(),
-            past_event_query_params: Default::default(),
             events_by_tx_digest: Default::default(),
             transaction_responses: Default::default(),
             wildcard_transaction_response: Default::default(),
@@ -68,19 +62,6 @@ impl SuiMockClient {
             bridge_records: Default::default(),
             next_seq_nums: Default::default(),
         }
-    }
-
-    pub fn add_event_response(
-        &self,
-        package: ObjectID,
-        module: Identifier,
-        cursor: EventID,
-        events: EventPage,
-    ) {
-        self.events
-            .lock()
-            .unwrap()
-            .insert((package, module, Some(cursor)), events);
     }
 
     pub fn add_events_by_tx_digest(&self, tx_digest: TransactionDigest, events: Vec<SuiEvent>) {
@@ -175,35 +156,6 @@ impl SuiMockClient {
 
 #[async_trait]
 impl SuiClientInner for SuiMockClient {
-    // Unwraps in this function: We assume the responses are pre-populated
-    // by the test before calling into this function.
-    async fn query_events(
-        &self,
-        query: EventFilter,
-        cursor: Option<EventID>,
-    ) -> Result<EventPage, BridgeError> {
-        let events = self.events.lock().unwrap();
-        match query {
-            EventFilter::MoveEventModule { package, module } => {
-                self.past_event_query_params.lock().unwrap().push_back((
-                    package,
-                    module.clone(),
-                    cursor,
-                ));
-                Ok(events
-                    .get(&(package, module.clone(), cursor))
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "No preset events found for package: {:?}, module: {:?}, cursor: {:?}",
-                            package, module, cursor
-                        )
-                    }))
-            }
-            _ => unimplemented!(),
-        }
-    }
-
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,

@@ -7,10 +7,14 @@ use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
+use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
-use sui_types::effects::{AccumulatorWriteV1, TransactionEffects, TransactionEvents};
+use sui_types::effects::{
+    AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
+    TransactionEvents,
+};
 use sui_types::error::ExecutionErrorKind;
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
@@ -156,15 +160,47 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    fn merge_accumulator_events(
-        accumulator_events: &[AccumulatorEvent],
-    ) -> impl Iterator<Item = (ObjectID, EffectsObjectChange)> + '_ {
-        accumulator_events
+    fn calculate_accumulator_running_max_withdraws(&self) -> BTreeMap<AccumulatorObjId, u128> {
+        let mut running_net_withdraws: BTreeMap<AccumulatorObjId, i128> = BTreeMap::new();
+        let mut running_max_withdraws: BTreeMap<AccumulatorObjId, u128> = BTreeMap::new();
+        for event in &self.execution_results.accumulator_events {
+            match &event.write.value {
+                AccumulatorValue::Integer(amount) => match event.write.operation {
+                    AccumulatorOperation::Split => {
+                        let entry = running_net_withdraws
+                            .entry(event.accumulator_obj)
+                            .or_default();
+                        *entry += *amount as i128;
+                        if *entry > 0 {
+                            let max_entry = running_max_withdraws
+                                .entry(event.accumulator_obj)
+                                .or_default();
+                            *max_entry = (*max_entry).max(*entry as u128);
+                        }
+                    }
+                    AccumulatorOperation::Merge => {
+                        let entry = running_net_withdraws
+                            .entry(event.accumulator_obj)
+                            .or_default();
+                        *entry -= *amount as i128;
+                    }
+                },
+                AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {}
+            }
+        }
+        running_max_withdraws
+    }
+
+    /// Ensure that there is one entry for each accumulator object in the accumulator events.
+    fn merge_accumulator_events(&mut self) {
+        self.execution_results.accumulator_events = self
+            .execution_results
+            .accumulator_events
             .iter()
             .fold(
-                BTreeMap::<ObjectID, Vec<AccumulatorWriteV1>>::new(),
+                BTreeMap::<AccumulatorObjId, Vec<AccumulatorWriteV1>>::new(),
                 |mut map, event| {
-                    map.entry(*event.accumulator_obj.inner())
+                    map.entry(event.accumulator_obj)
                         .or_default()
                         .push(event.write.clone());
                     map
@@ -172,17 +208,16 @@ impl<'backing> TemporaryStore<'backing> {
             )
             .into_iter()
             .map(|(obj_id, writes)| {
-                (
-                    obj_id,
-                    EffectsObjectChange::new_from_accumulator_write(AccumulatorWriteV1::merge(
-                        writes,
-                    )),
-                )
+                AccumulatorEvent::new(obj_id, AccumulatorWriteV1::merge(writes))
             })
+            .collect();
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
-    pub fn into_inner(self) -> InnerTemporaryStore {
+    pub fn into_inner(
+        self,
+        accumulator_running_max_withdraws: BTreeMap<AccumulatorObjId, u128>,
+    ) -> InnerTemporaryStore {
         let results = self.execution_results;
         InnerTemporaryStore {
             input_objects: self.input_objects,
@@ -197,6 +232,7 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
+            accumulator_running_max_withdraws,
         }
     }
 
@@ -243,7 +279,17 @@ impl<'backing> TemporaryStore<'backing> {
                     ),
                 )
             })
-            .chain(Self::merge_accumulator_events(&results.accumulator_events))
+            .chain(results.accumulator_events.iter().cloned().map(
+                |AccumulatorEvent {
+                     accumulator_obj,
+                     write,
+                 }| {
+                    (
+                        *accumulator_obj.inner(),
+                        EffectsObjectChange::new_from_accumulator_write(write),
+                    )
+                },
+            ))
             .collect()
     }
 
@@ -258,6 +304,9 @@ impl<'backing> TemporaryStore<'backing> {
         epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         self.update_object_version_and_prev_tx();
+        // This must happens before merge_accumulator_events.
+        let accumulator_running_max_withdraws = self.calculate_accumulator_running_max_withdraws();
+        self.merge_accumulator_events();
 
         // Regardless of execution status (including aborts), we insert the previous transaction
         // for any successfully received objects during the transaction.
@@ -291,7 +340,7 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
-        let inner = self.into_inner();
+        let inner = self.into_inner(accumulator_running_max_withdraws);
 
         let effects = TransactionEffects::new_from_execution_v2(
             status,
@@ -528,7 +577,7 @@ impl<'backing> TemporaryStore<'backing> {
         self.mutate_input_object(system_state_wrapper);
     }
 
-    /// Add an accumulator event to the execution results
+    /// Add an accumulator event to the execution results.
     pub fn add_accumulator_event(&mut self, event: AccumulatorEvent) {
         self.execution_results.accumulator_events.push(event);
     }
@@ -589,7 +638,7 @@ impl TemporaryStore<'_> {
         mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
-        let gas_objs: HashSet<&ObjectID> = gas_charger.gas_coins().iter().map(|g| &g.0).collect();
+        let gas_objs: HashSet<&ObjectID> = gas_charger.gas_coins().map(|g| &g.0).collect();
         let gas_owner = sponsor.as_ref().unwrap_or(sender);
 
         // mark input objects as authenticated

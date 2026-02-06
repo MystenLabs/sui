@@ -17,7 +17,6 @@ codespan-reporting.workspace = true
 colored.workspace = true
 rayon.workspace = true
 regex.workspace = true
-once_cell.workspace = true
 itertools.workspace = true
 
 move-command-line-common.workspace = true
@@ -32,7 +31,7 @@ move-vm-types.workspace = true
 move-vm-runtime = { workspace = true, features = ["testing"] }
 move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
-move-binary-format.workspace = true
+move-binary-format = { workspace = true, features = ["testing"] }
 move-model.workspace = true
 move-bytecode-utils.workspace = true
 move-trace-format.workspace = true

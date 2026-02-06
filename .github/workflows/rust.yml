@@ -56,7 +56,7 @@ jobs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Detect Changes
@@ -67,7 +67,7 @@ jobs:
     name: license-check
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Run license check
@@ -91,7 +91,47 @@ jobs:
           - [ ubuntu-ghcloud ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+      - name: Install BigTable emulator
+        run: |
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+          curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+          sudo apt-get update -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/google-cloud-sdk.list -o Dir::Etc::sourceparts=/dev/null
+          sudo apt-get install -y google-cloud-cli-cbt google-cloud-cli-bigtable-emulator
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
+        with:
+          swap-size-gb: 256
+      - name: cargo test
+        run: |
+          cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
+        shell: bash
+
+  test-tidehunter:
+    needs: [diff, rustfmt, clippy]
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ ubuntu-ghcloud ]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
@@ -99,12 +139,12 @@ jobs:
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
-      - name: cargo test
+      - name: cargo test with tidehunter
         run: |
-          cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
+          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo test -p sui-core --features typed-store/tidehunter
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -125,7 +165,7 @@ jobs:
           - [ ubuntu-ghcloud ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
@@ -133,12 +173,12 @@ jobs:
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
       - name: cargo test (sui-graphql staging)
         run: |
-          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)' -E 'package(sui-indexer-alt-graphql)'
+          cargo nextest run --profile ci --features staging -E 'package(sui-indexer-alt-graphql)'
       # TODO: run stress against a local Sui network.
       # - name: benchmark (smoke)
       #   run: |
@@ -160,16 +200,13 @@ jobs:
         run: |
           ./scripts/execution_layer.py generate-lib
       - name: Install diesel CLI
-        uses: baptiste0928/cargo-install@v3
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:
           crate: diesel_cli
           version: '=2.2.6'
           locked: true
           args: --no-default-features
           features: postgres
-      - name: Indexer schema
-        run: |
-          ./scripts/generate_indexer_schema.sh
       - name: Indexer Alt schema
         run: |
           ./crates/sui-indexer-alt-schema/generate_schema.sh
@@ -187,7 +224,7 @@ jobs:
     timeout-minutes: 45
     runs-on: [ windows-ghcloud-128 ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
@@ -199,7 +236,7 @@ jobs:
           cargo build --all-features
 
   windows-cli-tests:
-    needs: [diff, windows-build]
+    needs: [diff]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: [ windows-ghcloud-128 ]
@@ -209,7 +246,7 @@ jobs:
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
@@ -218,7 +255,8 @@ jobs:
       - name: cargo test Sui CLI
         shell: bash
         run: |
-          cargo nextest run -p sui --no-fail-fast --profile ci
+          # We have temporarily disabled the network tests on windows, until we triage + fix the performance issues.
+          cargo nextest run -p sui --no-fail-fast --profile ci --filter-expr "not test(shell_tests::with_network)"
 
   simtest:
     needs: [diff, rustfmt, clippy]
@@ -228,7 +266,7 @@ jobs:
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
@@ -236,7 +274,7 @@ jobs:
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
       - name: cargo simtest
@@ -255,7 +293,7 @@ jobs:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
       SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
@@ -263,7 +301,7 @@ jobs:
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
       - name: cargo simtest
@@ -282,7 +320,7 @@ jobs:
     timeout-minutes: 10
     runs-on: [ ubuntu-ghcloud ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
@@ -373,7 +411,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: rustup component add clippy
@@ -393,7 +431,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - run: rustup component add rustfmt
@@ -405,7 +443,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@cargo-deny
@@ -417,7 +455,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@cargo-deny
@@ -429,7 +467,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Install cargo-hakari, and cache the binary
@@ -437,7 +475,7 @@ jobs:
         with:
           crate: cargo-hakari
           locked: true
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - name: Make cut

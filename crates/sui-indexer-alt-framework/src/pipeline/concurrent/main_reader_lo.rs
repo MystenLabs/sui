@@ -1,24 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::Duration,
-};
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use sui_futures::service::Service;
-use tokio::{
-    sync::SetOnce,
-    time::{MissedTickBehavior, interval},
-};
-use tracing::{info, warn};
+use tokio::sync::SetOnce;
+use tokio::time::MissedTickBehavior;
+use tokio::time::interval;
+use tracing::info;
+use tracing::warn;
 
-use crate::store::{Connection, Store};
-
-use super::Handler;
+use crate::pipeline::concurrent::Handler;
+use crate::store::Connection;
+use crate::store::Store;
 
 /// Starts a task for a tasked pipeline to track the main reader lo. The existence of
 /// `reader_interval` indicates whether the indexer was tasked, necessitating this task, or not.

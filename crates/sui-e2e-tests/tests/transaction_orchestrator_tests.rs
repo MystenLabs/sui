@@ -4,6 +4,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_core::test_utils::wait_for_tx;
 use sui_core::transaction_driver::SubmitTransactionOptions;
 use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_macros::sim_test;
@@ -16,11 +17,11 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::ErrorCategory;
 use sui_types::messages_grpc::SubmitTxRequest;
 use sui_types::object::PastObjectRead;
-use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
-    FinalizedEffects, IsTransactionExecutedLocally, QuorumDriverError,
-};
 use sui_types::transaction::Transaction;
+use sui_types::transaction_driver_types::{
+    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
+    FinalizedEffects, IsTransactionExecutedLocally, TransactionSubmissionError,
+};
 use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tracing::info;
@@ -142,45 +143,45 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     // Stop 2 validators and we lose quorum
     test_cluster.stop_node(&validator_addresses[0]);
     test_cluster.stop_node(&validator_addresses[1]);
+    // TODO: stop the fullnode as well, after we fix releasing the DB handles when stopping the fullnode.
 
     let txn = txns.swap_remove(0);
-    // Expect tx to fail
-    execute_with_orchestrator(
-        &orchestrator,
-        txn.clone(),
-        ExecuteTransactionRequestType::WaitForLocalExecution,
+    // Expect tx to timeout.
+    let result = timeout(
+        Duration::from_secs(10),
+        execute_with_orchestrator(
+            &orchestrator,
+            txn.clone(),
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        ),
     )
-    .await
-    .unwrap_err();
+    .await;
+    assert!(result.is_err());
 
-    // Because the tx did not go through, we expect to see it in the WAL log if it
-    // was submitted via quorum driver. Transaction driver submitted tx would have
-    // been removed from wal on timeout/error.
+    // Because the tx was inflight, we expect to see it in the WAL log.
     let pending_txes: Vec<_> = orchestrator
         .load_all_pending_transactions_in_test()?
         .into_iter()
         .map(|t| t.into_inner())
         .collect();
-    if !pending_txes.is_empty() {
-        assert_eq!(pending_txes, vec![txn.clone()]);
-    }
+    assert_eq!(pending_txes, vec![txn.clone()]);
 
-    // Bring up 1 validator, we obtain quorum again and tx should succeed
+    // Bring back both validators so there's quorum again.
+    // TODO: investigate why only starting one validator can prevent the txn from
+    // being executed for > 120s.
     test_cluster.start_node(&validator_addresses[0]).await;
+    test_cluster.start_node(&validator_addresses[1]).await;
     tokio::task::yield_now().await;
-    execute_with_orchestrator(
-        &orchestrator,
-        txn,
-        ExecuteTransactionRequestType::WaitForLocalExecution,
-    )
-    .await
-    .unwrap();
 
-    // TODO: wal erasing is done in the loop handling effects, so may have some delay.
-    // However, once the refactoring is completed the wal removal will be done before
-    // response is returned and we will not need the sleep.
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-    // The tx should be erased in wal log.
+    // The transaction should eventually be retried and succeed now that quorum is restored.
+    // Wait for txn to be executed.
+    wait_for_tx(
+        *txn.digest(),
+        orchestrator.authority_state().clone(),
+        Duration::from_secs(120),
+    )
+    .await;
+
     let pending_txes = orchestrator.load_all_pending_transactions_in_test()?;
     assert!(pending_txes.is_empty());
     assert!(orchestrator.empty_pending_tx_log_in_test());
@@ -274,7 +275,7 @@ async fn test_tx_across_epoch_boundaries() {
                 info!(?tx_digest, "tx result: ok");
                 result_tx.send(response.effects).await.unwrap();
             }
-            Err(QuorumDriverError::TimeoutBeforeFinality) => {
+            Err(TransactionSubmissionError::TimeoutBeforeFinality) => {
                 info!(?tx_digest, "tx result: timeout and will retry")
             }
             Err(other) => panic!("unexpected error: {:?}", other),
@@ -312,7 +313,8 @@ async fn execute_with_orchestrator(
     orchestrator: &TransactionOrchestrator<NetworkAuthorityClient>,
     txn: Transaction,
     request_type: ExecuteTransactionRequestType,
-) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), QuorumDriverError> {
+) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), TransactionSubmissionError>
+{
     orchestrator
         .execute_transaction_block(ExecuteTransactionRequestV3::new_v2(txn), request_type, None)
         .await
@@ -384,15 +386,15 @@ async fn execute_transaction_v3_staking_transaction() -> Result<(), anyhow::Erro
     let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let validator_address = context
-        .get_client()
+        .grpc_client()?
+        .get_system_state(None)
         .await?
-        .governance_api()
-        .get_latest_sui_system_state()
-        .await?
-        .active_validators
+        .validators()
+        .active_validators()
         .first()
         .unwrap()
-        .sui_address;
+        .address()
+        .parse()?;
     let transaction = make_staking_transaction(context, validator_address).await;
 
     let request = ExecuteTransactionRequestV3 {
@@ -512,7 +514,7 @@ async fn test_early_validation_with_old_object_version() -> Result<(), anyhow::E
 
     let err = result.unwrap_err();
     match err {
-        QuorumDriverError::TransactionFailed { category, details } => {
+        TransactionSubmissionError::TransactionFailed { category, details } => {
             // Should be non-retriable
             assert_eq!(category, ErrorCategory::InvalidTransaction);
             assert!(!category.is_submission_retriable());

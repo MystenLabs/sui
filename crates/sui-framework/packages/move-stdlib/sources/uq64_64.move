@@ -122,7 +122,7 @@ public fun int_div(val: u128, divisor: UQ64_64): u128 {
     )
 }
 
-/// Less than or equal to. Returns `true` if and only if `a <= a`.
+/// Less than or equal to. Returns `true` if and only if `a <= b`.
 public fun le(a: UQ64_64, b: UQ64_64): bool {
     a.0 <= b.0
 }

@@ -435,6 +435,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         true,
         Some(30),
         true,
+        true, // enable zklogin pk validation
     );
     let res = multisig
         .verify_claims(
@@ -518,4 +519,103 @@ fn test_derive_multisig_address() {
         SuiAddress::from_str("0x77a9fbf3c695d78dd83449a81a9e70aa79a77dbfd6fb72037bf09201c12052cd")
             .unwrap()
     );
+}
+
+#[test]
+fn test_zklogin_public_identifier_additional_validation() {
+    let ed25519_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let ed25519_pk = ed25519_kp.public();
+
+    // Craft a malformed zkLogin pk.
+    let iss = OIDCProvider::Twitch.get_config().iss;
+    let iss_bytes = iss.as_bytes();
+    let mut malformed_bytes = Vec::new();
+    malformed_bytes.push(iss_bytes.len() as u8);
+    malformed_bytes.extend_from_slice(iss_bytes);
+    malformed_bytes.extend_from_slice(
+        Bn254FrElement::from_str(DEFAULT_ADDRESS_SEED)
+            .unwrap()
+            .padded(),
+    );
+    malformed_bytes.extend_from_slice(&[0x01, 0x00]); // Add extra bytes: weight=1, flag=0x00 (Ed25519)
+    let malformed_zklogin_pk = PublicKey::ZkLogin(ZkLoginPublicIdentifier(malformed_bytes));
+
+    // Create a multisig t=1 for malformed zkLogin pk and Ed25519 pk.
+    let multisig_pk = MultiSigPublicKey::new(
+        vec![malformed_zklogin_pk, ed25519_pk.clone()],
+        vec![1, 1],
+        1,
+    )
+    .unwrap();
+    let multisig_address = SuiAddress::from(&multisig_pk);
+
+    // Create a transaction and sign with Ed25519.
+    let intent_msg = IntentMessage::new(
+        Intent::sui_transaction(),
+        make_transaction_data(multisig_address),
+    );
+    let ed25519_sig = Signature::new_secure(&intent_msg, &ed25519_kp);
+    let generic_sig = GenericSignature::Signature(ed25519_sig);
+
+    // Create multisig signature.
+    let multisig = MultiSig::insecure_new(
+        vec![generic_sig.to_compressed().unwrap()],
+        0b10, // bitmap: use second key (Ed25519)
+        multisig_pk,
+    );
+
+    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch, true)
+        .unwrap()
+        .into_iter()
+        .collect();
+
+    // Validation enabled, rejected.
+    let verify_params_with_validation = VerifyParams::new(
+        parsed.clone(),
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        true,
+        Some(30),
+        true,
+        true,
+    );
+
+    let res_with_validation = multisig.verify_claims(
+        &intent_msg,
+        multisig_address,
+        &verify_params_with_validation,
+        Arc::new(VerifiedDigestCache::new_empty()),
+    );
+
+    assert!(res_with_validation.is_err());
+    let err = res_with_validation.unwrap_err().into_inner();
+    match &err {
+        crate::error::SuiErrorKind::InvalidSignature { error } => {
+            assert!(error.contains("address seed must be at most 32 bytes"),);
+        }
+        _ => panic!("Expected InvalidSignature, got: {:?}", err),
+    }
+
+    // Without valiation should pass.
+    let verify_params_without_validation = VerifyParams::new(
+        parsed,
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        true,
+        Some(30),
+        true,
+        false, // Disable validation
+    );
+
+    let res_without_validation = multisig.verify_claims(
+        &intent_msg,
+        multisig_address,
+        &verify_params_without_validation,
+        Arc::new(VerifiedDigestCache::new_empty()),
+    );
+    assert!(res_without_validation.is_ok());
 }

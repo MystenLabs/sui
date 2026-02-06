@@ -3,14 +3,19 @@
 
 use std::path::PathBuf;
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_rpc::Client;
+use sui_rpc::proto::sui::rpc::v2::Balance;
 use sui_rpc::proto::sui::rpc::v2::{ExecutedTransaction, GasCostSummary};
 use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, ListBalancesRequest};
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::coin::Coin;
+use sui_types::gas_coin::GasCoin;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
 use sui_types::{Identifier, base_types::SuiAddress};
 use test_cluster::TestClusterBuilder;
+
 const SUI_COIN_TYPE: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
 const INITIAL_SUI_BALANCE: u64 = 150000000000000000;
@@ -25,7 +30,10 @@ async fn test_balance_apis() {
     verify_balances(
         &mut grpc_client,
         address,
-        &[(SUI_COIN_TYPE, INITIAL_SUI_BALANCE)],
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(INITIAL_SUI_BALANCE)
+            .with_coin_balance(INITIAL_SUI_BALANCE)],
     )
     .await;
 }
@@ -52,17 +60,113 @@ async fn test_balance_changes_on_transfer() {
     verify_balances(
         &mut grpc_client,
         sender,
-        &[(
-            SUI_COIN_TYPE,
-            INITIAL_SUI_BALANCE - transfer_amount - gas_used,
-        )],
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(INITIAL_SUI_BALANCE - transfer_amount - gas_used)
+            .with_coin_balance(INITIAL_SUI_BALANCE - transfer_amount - gas_used)],
     )
     .await;
 
     verify_balances(
         &mut grpc_client,
         receiver,
-        &[(SUI_COIN_TYPE, INITIAL_SUI_BALANCE + transfer_amount)],
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(INITIAL_SUI_BALANCE + transfer_amount)
+            .with_coin_balance(INITIAL_SUI_BALANCE + transfer_amount)],
+    )
+    .await;
+}
+
+#[sim_test]
+async fn test_address_balance() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
+
+    let sender = test_cluster.get_address_0();
+    let receiver = test_cluster.get_address_1();
+
+    // Transfer some SUI
+    let transfer_amount = 1000000;
+    let txn = sui_test_transaction_builder::make_transfer_sui_address_balance_transaction(
+        &test_cluster.wallet,
+        Some(receiver),
+        transfer_amount,
+    )
+    .await;
+
+    let (_, gas_used) = execute_transaction(&test_cluster, &txn).await;
+
+    verify_balances(
+        &mut grpc_client,
+        sender,
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(INITIAL_SUI_BALANCE - transfer_amount - gas_used)
+            .with_coin_balance(INITIAL_SUI_BALANCE - transfer_amount - gas_used)],
+    )
+    .await;
+
+    verify_balances(
+        &mut grpc_client,
+        receiver,
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(INITIAL_SUI_BALANCE + transfer_amount)
+            .with_coin_balance(INITIAL_SUI_BALANCE)
+            .with_address_balance(transfer_amount)],
+    )
+    .await;
+}
+
+#[sim_test]
+async fn test_address_balance_account_with_only_address_balance() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
+
+    let sender = test_cluster.get_address_0();
+    let receiver = SuiAddress::ZERO;
+
+    // Transfer some SUI
+    let transfer_amount = 1000000;
+    let txn = sui_test_transaction_builder::make_transfer_sui_address_balance_transaction(
+        &test_cluster.wallet,
+        Some(receiver),
+        transfer_amount,
+    )
+    .await;
+
+    let (_, gas_used) = execute_transaction(&test_cluster, &txn).await;
+
+    verify_balances(
+        &mut grpc_client,
+        sender,
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(INITIAL_SUI_BALANCE - transfer_amount - gas_used)
+            .with_coin_balance(INITIAL_SUI_BALANCE - transfer_amount - gas_used)],
+    )
+    .await;
+
+    verify_balances(
+        &mut grpc_client,
+        receiver,
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(transfer_amount)
+            .with_address_balance(transfer_amount)],
     )
     .await;
 }
@@ -151,11 +255,14 @@ async fn test_custom_coin_balance() {
         &mut grpc_client,
         address,
         &[
-            (
-                SUI_COIN_TYPE,
-                INITIAL_SUI_BALANCE - publish_gas_used - mint_gas_used,
-            ),
-            (&coin_type, mint_amount),
+            Balance::default()
+                .with_coin_type(SUI_COIN_TYPE)
+                .with_balance(INITIAL_SUI_BALANCE - publish_gas_used - mint_gas_used)
+                .with_coin_balance(INITIAL_SUI_BALANCE - publish_gas_used - mint_gas_used),
+            Balance::default()
+                .with_coin_type(&coin_type)
+                .with_balance(mint_amount)
+                .with_coin_balance(mint_amount),
         ],
     )
     .await;
@@ -165,20 +272,24 @@ async fn test_custom_coin_balance() {
     let transfer_amount = 300_000;
 
     // Query for the minted coin owned by address_0
-    let sui_client = test_cluster.sui_client();
+    let sui_client = test_cluster.grpc_client();
     let coins = sui_client
-        .coin_read_api()
-        .get_coins(address, Some(coin_type.clone()), None, Some(1))
+        .get_owned_objects(
+            address,
+            Some(Coin::type_(coin_type.parse().unwrap())),
+            Some(1),
+            None,
+        )
         .await
         .unwrap();
 
     assert_eq!(
-        coins.data.len(),
+        coins.items.len(),
         1,
         "Expected exactly 1 coin, found {}",
-        coins.data.len()
+        coins.items.len()
     );
-    let coin = &coins.data[0];
+    let coin = &coins.items[0];
 
     // Build and execute split-and-transfer transaction
     let gas_object = test_cluster
@@ -193,7 +304,7 @@ async fn test_custom_coin_balance() {
         address,
         address_1,
         (gas_object.0, gas_object.1, gas_object.2),
-        (coin.coin_object_id, coin.version, coin.digest),
+        coin.compute_object_reference(),
         transfer_amount,
         gas_price,
     )
@@ -204,11 +315,18 @@ async fn test_custom_coin_balance() {
         &mut grpc_client,
         address,
         &[
-            (
-                SUI_COIN_TYPE,
-                INITIAL_SUI_BALANCE - publish_gas_used - mint_gas_used - transfer_gas_used,
-            ),
-            (&coin_type, mint_amount - transfer_amount),
+            Balance::default()
+                .with_coin_type(SUI_COIN_TYPE)
+                .with_balance(
+                    INITIAL_SUI_BALANCE - publish_gas_used - mint_gas_used - transfer_gas_used,
+                )
+                .with_coin_balance(
+                    INITIAL_SUI_BALANCE - publish_gas_used - mint_gas_used - transfer_gas_used,
+                ),
+            Balance::default()
+                .with_coin_type(&coin_type)
+                .with_balance(mint_amount - transfer_amount)
+                .with_coin_balance(mint_amount - transfer_amount),
         ],
     )
     .await;
@@ -217,8 +335,14 @@ async fn test_custom_coin_balance() {
         &mut grpc_client,
         address_1,
         &[
-            (SUI_COIN_TYPE, INITIAL_SUI_BALANCE),
-            (&coin_type, transfer_amount),
+            Balance::default()
+                .with_coin_type(SUI_COIN_TYPE)
+                .with_balance(INITIAL_SUI_BALANCE)
+                .with_coin_balance(INITIAL_SUI_BALANCE),
+            Balance::default()
+                .with_coin_type(&coin_type)
+                .with_balance(transfer_amount)
+                .with_coin_balance(transfer_amount),
         ],
     )
     .await;
@@ -321,10 +445,10 @@ async fn test_multiple_concurrent_balance_changes() {
     verify_balances(
         &mut grpc_client,
         address_0,
-        &[(
-            SUI_COIN_TYPE,
-            INITIAL_SUI_BALANCE - transfer_0_to_1 - gas_used_0,
-        )],
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(INITIAL_SUI_BALANCE - transfer_0_to_1 - gas_used_0)
+            .with_coin_balance(INITIAL_SUI_BALANCE - transfer_0_to_1 - gas_used_0)],
     )
     .await;
 
@@ -333,10 +457,16 @@ async fn test_multiple_concurrent_balance_changes() {
     verify_balances(
         &mut grpc_client,
         address_1,
-        &[(
-            SUI_COIN_TYPE,
-            INITIAL_SUI_BALANCE + transfer_0_to_1 - transfer_1_to_2 + transfer_2_to_1 - gas_used_1,
-        )],
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(
+                INITIAL_SUI_BALANCE + transfer_0_to_1 - transfer_1_to_2 + transfer_2_to_1
+                    - gas_used_1,
+            )
+            .with_coin_balance(
+                INITIAL_SUI_BALANCE + transfer_0_to_1 - transfer_1_to_2 + transfer_2_to_1
+                    - gas_used_1,
+            )],
     )
     .await;
 
@@ -345,10 +475,12 @@ async fn test_multiple_concurrent_balance_changes() {
     verify_balances(
         &mut grpc_client,
         address_2,
-        &[(
-            SUI_COIN_TYPE,
-            INITIAL_SUI_BALANCE + transfer_1_to_2 - transfer_2_to_1 - gas_used_2,
-        )],
+        &[Balance::default()
+            .with_coin_type(SUI_COIN_TYPE)
+            .with_balance(INITIAL_SUI_BALANCE + transfer_1_to_2 - transfer_2_to_1 - gas_used_2)
+            .with_coin_balance(
+                INITIAL_SUI_BALANCE + transfer_1_to_2 - transfer_2_to_1 - gas_used_2,
+            )],
     )
     .await;
 }
@@ -536,26 +668,21 @@ async fn build_split_and_transfer_transaction(
     amount: u64,
 ) -> TransactionData {
     let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
-    let sui_client = test_cluster.sui_client();
+    let sui_client = test_cluster.grpc_client();
 
     // Get coins (one for gas, one to split)
     let coins = sui_client
-        .coin_read_api()
-        .get_coins(sender, Some(SUI_COIN_TYPE.to_string()), None, None)
+        .get_owned_objects(sender, Some(GasCoin::type_()), None, None)
         .await
         .unwrap();
 
     // Use first coin as gas
-    let gas_coin = &coins.data[0];
-    let gas_object = (gas_coin.coin_object_id, gas_coin.version, gas_coin.digest);
+    let gas_coin = &coins.items[0];
+    let gas_object = gas_coin.compute_object_reference();
 
     // Use second coin to split from
-    let transfer_coin = &coins.data[1];
-    let coin = (
-        transfer_coin.coin_object_id,
-        transfer_coin.version,
-        transfer_coin.digest,
-    );
+    let transfer_coin = &coins.items[1];
+    let coin = transfer_coin.compute_object_reference();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let coin_arg = builder.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap();
@@ -610,30 +737,32 @@ async fn split_and_transfer_coin(
 async fn verify_balances(
     grpc_client: &mut Client,
     address: SuiAddress,
-    expected_balances: &[(&str, u64)],
+    expected_balances: &[Balance],
 ) {
     // Verify each balance using get_balance
-    for (coin_type, expected_balance) in expected_balances {
+    for expected_balance in expected_balances {
         let balance = grpc_client
             .state_client()
             .get_balance({
                 let mut message = GetBalanceRequest::default();
                 message.owner = Some(address.to_string());
-                message.coin_type = Some(coin_type.to_string());
+                message.coin_type = Some(expected_balance.coin_type().to_owned());
                 message
             })
             .await
             .unwrap()
             .into_inner()
             .balance
-            .unwrap()
-            .balance
             .unwrap();
 
         assert_eq!(
-            balance, *expected_balance,
-            "Balance mismatch for {} at address {}: expected {}, got {}",
-            coin_type, address, expected_balance, balance
+            balance,
+            *expected_balance,
+            "Balance mismatch for {} at address {}: expected {:?}, got {:?}",
+            expected_balance.coin_type(),
+            address,
+            expected_balance,
+            balance
         );
     }
 
@@ -657,19 +786,26 @@ async fn verify_balances(
         list_response.balances.len()
     );
 
-    for (coin_type, expected_balance) in expected_balances {
+    for expected_balance in expected_balances {
         let found = list_response
             .balances
             .iter()
-            .find(|b| b.coin_type.as_ref() == Some(&coin_type.to_string()))
-            .unwrap_or_else(|| panic!("Coin type {} not found in list_balances", coin_type));
+            .find(|b| b.coin_type() == expected_balance.coin_type())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Coin type {} not found in list_balances",
+                    expected_balance.coin_type()
+                )
+            });
 
         assert_eq!(
-            found.balance,
-            Some(*expected_balance),
-            "Balance mismatch in list_balances for {} at address {}",
-            coin_type,
-            address
+            found,
+            expected_balance,
+            "Balance mismatch for {} at address {}: expected {:?}, got {:?}",
+            expected_balance.coin_type(),
+            address,
+            expected_balance,
+            found,
         );
     }
 }

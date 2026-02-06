@@ -2,12 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    NativeFunctionRecord,
-    sandbox::utils::{
-        contains_module, explain_execution_error, get_gas_status, is_bytecode_file,
-        on_disk_state_view::OnDiskStateView,
-    },
+use crate::sandbox::utils::{
+    contains_module, explain_execution_error, is_bytecode_file, on_disk_state_view::OnDiskStateView,
 };
 use anyhow::{Result, anyhow, bail};
 use move_binary_format::file_format::CompiledModule;
@@ -17,13 +13,12 @@ use move_core_types::{
     runtime_value::MoveValue,
 };
 use move_package_alt_compilation::compiled_package::CompiledPackage;
+use move_unit_test::vm_test_setup::VMTestSetup;
 use move_vm_runtime::move_vm::MoveVM;
-use move_vm_test_utils::gas_schedule::CostTable;
 use std::{fs, path::Path};
 
-pub fn run(
-    natives: impl IntoIterator<Item = NativeFunctionRecord>,
-    cost_table: &CostTable,
+pub fn run<V: VMTestSetup>(
+    vm_test_setup: V,
     state: &OnDiskStateView,
     _package: &CompiledPackage,
     module_file: &Path,
@@ -59,8 +54,8 @@ pub fn run(
         })
         .collect();
 
-    let vm = MoveVM::new(natives).unwrap();
-    let mut gas_status = get_gas_status(cost_table, gas_budget)?;
+    let vm = MoveVM::new(vm_test_setup.native_function_table()).unwrap();
+    let mut gas_status = vm_test_setup.new_meter(gas_budget);
     let mut session = vm.new_session(state);
 
     let script_type_parameters = vec![];

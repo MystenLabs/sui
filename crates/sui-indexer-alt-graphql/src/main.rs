@@ -5,12 +5,13 @@ use anyhow::Context;
 use clap::Parser;
 use prometheus::Registry;
 use sui_futures::service::Error;
-use sui_indexer_alt_graphql::{
-    args::{Args, Command},
-    config::{IndexerConfig, RpcLayer},
-    start_rpc,
-};
-use sui_indexer_alt_metrics::{MetricsService, uptime};
+use sui_indexer_alt_graphql::args::Args;
+use sui_indexer_alt_graphql::args::Command;
+use sui_indexer_alt_graphql::config::IndexerConfig;
+use sui_indexer_alt_graphql::config::RpcLayer;
+use sui_indexer_alt_graphql::start_rpc;
+use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_metrics::uptime;
 use tokio::fs;
 
 // Define the `GIT_REVISION` const
@@ -34,6 +35,10 @@ async fn main() -> anyhow::Result<()> {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
+
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install CryptoProvider");
 
     match args.command {
         Command::Rpc {

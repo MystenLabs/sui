@@ -6,10 +6,14 @@
 //! This provides a convenient way to resolve package types
 //! by fetching package data directly from the network.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
-use std::sync::Arc;
-use sui_package_resolver::{Package, PackageStore, PackageStoreWithLruCache, error::Error};
+use sui_package_resolver::Package;
+use sui_package_resolver::PackageStore;
+use sui_package_resolver::PackageStoreWithLruCache;
+use sui_package_resolver::error::Error;
 use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
 

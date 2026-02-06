@@ -7,4 +7,4 @@ expression: "strands(r#\"{\n                0x1::option::Option<0x2::coin::Coin<
           balance: 100u64,
       },
   )
-}
+}@0

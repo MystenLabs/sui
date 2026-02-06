@@ -23,7 +23,7 @@ keywords:
   ]
 ---
 
-Pools are shared objects that represent a market. See [Query the Pool](../deepbookv3/query-the-pool.mdx) for more information on pools.
+Pools are shared objects that represent a market. See [Query the Pool](../deepbookv3/contract-information/query-the-pool.mdx) for more information on pools.
 
 ## Pool functions
 
@@ -371,16 +371,6 @@ Use `updatePoolAllowedVersions` to update the allowed package versions for a poo
 - `poolKey`: String that identifies the pool.
 
 <ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="updatePoolAllowedVersions" signatureOnly />
-
-### `burnDeep`
-
-Use `burnDeep` to burn DEEP tokens from a pool. The call returns a function that takes a `Transaction` object.
-
-**Parameters**
-
-- `poolKey`: String that identifies the pool.
-
-<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="burnDeep" signatureOnly />
 
 ### `createPermissionlessPool`
 

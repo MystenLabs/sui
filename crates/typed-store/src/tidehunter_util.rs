@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::DBMetrics;
+use crate::{DBMetrics, StorageType, util::ensure_database_type};
 use bincode::Options;
+use mysten_metrics::RegistryID;
 use prometheus::{HistogramTimer, Registry};
 use serde::de::DeserializeOwned;
 use std::env;
@@ -14,7 +15,7 @@ use tidehunter::iterators::db_iterator::DbIterator;
 use tidehunter::key_shape::{KeyShape, KeySpace};
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
-    Decision, IndexWalPosition, WalPosition,
+    Decision, WalPosition,
     key_shape::{KeyIndexing, KeyShapeBuilder, KeySpaceConfig, KeyType},
     minibytes::Bytes,
 };
@@ -29,16 +30,17 @@ pub struct ThConfig {
     pub prefix: Option<Vec<u8>>,
 }
 
-pub fn open(path: &Path, key_shape: KeyShape, db_name: String) -> Arc<Db> {
+pub fn open(path: &Path, key_shape: KeyShape, db_name: String) -> (Arc<Db>, RegistryID) {
     std::fs::create_dir_all(path).expect("failed to open tidehunter db");
     let registry_service = &DBMetrics::get().registry_serivce;
     let registry = new_db_registry(db_name);
-    registry_service.add(registry.clone());
+    let registry_id = registry_service.add(registry.clone());
     let metrics = Metrics::new_in(&registry);
+    ensure_database_type(path, StorageType::TideHunter).expect("failed to open tidehunter db");
     let db = Db::open(path, key_shape, Arc::new(thdb_config()), metrics)
         .expect("failed to open tidehunter db");
     db.start_periodic_snapshot();
-    db
+    (db, registry_id)
 }
 
 fn new_db_registry(name: String) -> Registry {
@@ -66,8 +68,19 @@ fn thdb_config() -> Config {
         println!("Using frag size from env variable {frag_size}");
         frag_size
     } else {
-        1024 * 1024 * 1024
+        #[cfg(debug_assertions)]
+        {
+            32 * 1024 * 1024
+        } // 32 Mb for tests
+        #[cfg(not(debug_assertions))]
+        {
+            1024 * 1024 * 1024
+        } // 1 Gb for prod
     };
+    #[cfg(debug_assertions)]
+    let max_maps = 4;
+    #[cfg(not(debug_assertions))]
+    let max_maps = 8; // 8Gb of mapped space for prod
     Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
@@ -76,13 +89,19 @@ fn thdb_config() -> Config {
         snapshot_unload_threshold: 128 * 1024 * 1024 * 1024,
         unload_jitter_pct: 30,
         max_dirty_keys: 1024,
-        max_maps: 8, // 8Gb of mapped space
+        max_maps,
         ..Config::default()
     }
 }
 
+#[cfg(not(debug_assertions))]
 pub fn default_mutex_count() -> usize {
     1024
+}
+
+#[cfg(debug_assertions)]
+pub fn default_mutex_count() -> usize {
+    16
 }
 
 pub fn default_value_cache_size() -> usize {

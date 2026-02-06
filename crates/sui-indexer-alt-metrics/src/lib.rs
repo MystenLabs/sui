@@ -1,14 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, time::Instant};
+use std::net::SocketAddr;
+use std::time::Instant;
 
 use anyhow::Context;
-use axum::{Extension, Router, http::StatusCode, routing::get};
-use prometheus::{Registry, TextEncoder, core::Collector};
-use prometheus_closure_metric::{ClosureMetric, ValueType};
+use axum::Extension;
+use axum::Router;
+use axum::http::StatusCode;
+use axum::routing::get;
+use prometheus::Registry;
+use prometheus::TextEncoder;
+use prometheus::core::Collector;
+use prometheus_closure_metric::ClosureMetric;
+use prometheus_closure_metric::ValueType;
 use sui_futures::service::Service;
-use tokio::{net::TcpListener, sync::oneshot};
+use tokio::net::TcpListener;
+use tokio::sync::oneshot;
 use tracing::info;
 
 pub mod db;

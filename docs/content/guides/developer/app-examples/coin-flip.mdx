@@ -1,10 +1,10 @@
 ---
 title: Coin Flip
-description: Learn Sui through a coin flip dApp that covers the full end-to-end flow of building a Sui Move module and connecting it to a React Sui dApp.
-keywords: [ react app, react dApp, react example, verifiable random functions, vrfs, randomness, shared objects, one-time witness, assets, address-owned objects, events, storage rebates, mev attack protection, mev attacks, example app, example dApp ] 
+description: Learn Sui through a coin flip app that covers the full end-to-end flow of building a Sui Move module and connecting it to a React Sui app.
+keywords: [ react app, react app, react example, verifiable random functions, vrfs, randomness, shared objects, one-time witness, assets, address-owned objects, events, storage rebates, mev attack protection, mev attacks, example app, example app ] 
 ---
 
-This example walks you through building a Coin Flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This Coin Flip dApp utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
+This example walks you through building a Coin Flip app, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui app. This Coin Flip app utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
 
 The guide is split into two parts:
 
@@ -23,11 +23,11 @@ Source code locations for the smart contracts and frontend:
 
 ## What the guide teaches
 
-- **Shared objects:** The guide teaches you how to use [shared objects](/guides/developer/objects/object-ownership/shared), in this case to create a globally accessible `HouseData` object.
-- **One-time witnesses:** The guide teaches you how to use [one-time witnesses](concepts/sui-move-concepts.mdx#one-time-witness) to ensure only a single instance of the `HouseData` object ever exists.
+- **Shared objects:** The guide teaches you how to use [shared objects](/guides/developer/objects/object-ownership/shared.mdx), in this case to create a globally accessible `HouseData` object.
+- **One-time witnesses:** The guide teaches you how to use [one-time witnesses](concepts/sui-move-concepts.mdx) to ensure only a single instance of the `HouseData` object ever exists.
 - **Asserts:** The guide teaches you how to use [asserts](https://move-book.com/move-basics/assert-and-abort.html?highlight=asserts#assert) to abort functions due to certain conditions not being met.
 - **Address-owned objects:** The guide teaches you how to use [address-owned objects](/guides/developer/objects/object-ownership/address-owned) when necessary.
-- **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](../sui-101/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
+- **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](/guides/developer/accessing-data/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
 - **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics.mdx#storage-fund-rewards).
 - **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
 
@@ -677,11 +677,11 @@ In this case, the `PackageID` is `0x4120b39e5d94845aa539d4b830743a7433fd8511bdcf
 
 Well done. You have written and deployed the Move package. 🎉 
 
-To turn this into a complete dApp, you need to [create a frontend](#frontend).
+To turn this into a complete app, you need to [create a frontend](#frontend).
 
 ## Frontend {#frontend}
 
-In this final part of the dApp example, you build a frontend (UI) that allows end users to place bets and take profits, and lets the admin manage the house.
+In this final part of the app example, you build a frontend (UI) that allows end users to place bets and take profits, and lets the admin manage the house.
 
 :::info
 
@@ -705,8 +705,8 @@ To skip building the frontend and test out your newly deployed package, use the 
 :::tip Additional resources
 
 - [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui using TypeScript.
-- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
-- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui dApp.
+- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing an app in the Sui ecosystem with React.js.
+- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui app.
 
 :::
 
@@ -750,7 +750,7 @@ export const HOUSECAP_ID =
 
 ### Exploring the code
 
-The UI interacts with the [Single Player smart contract](guides/developer/app-examples/coin-flip.mdx#game-module) variant of the game. This section walks you through each step in the smart contract flow and the corresponding frontend code.
+The UI interacts with the [Single Player smart contract](guides/developer/app-examples/coin-flip.mdx) variant of the game. This section walks you through each step in the smart contract flow and the corresponding frontend code.
 
 :::info
 
@@ -761,7 +761,7 @@ The following frontend code snippets include only the most relevant sections. Re
 As is common in other React projects, `App.tsx` is where you implement the outer layout:
 
 ```typescript title='App.tsx'
-import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
+import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit-react';
 import { InfoCircledIcon } from '@radix-ui/react-icons';
 import { Box, Callout, Container, Flex, Grid, Heading } from '@radix-ui/themes';
 
@@ -825,7 +825,7 @@ function App() {
 export default App;
 ```
 
-Like other dApps, you need a "connect wallet" button to enable connecting users' wallets. dApp Kit contains a pre-made `ConnectButton` React component that you can reuse to help users onboard.
+Like other apps, you need a "connect wallet" button to enable connecting users' wallets. dApp Kit contains a pre-made `ConnectButton` React component that you can reuse to help users onboard.
 
 `useCurrentAccount()` is a React hook the dApp Kit also provides to query the current connected wallet; returning `null` if there isn't a wallet connection. Leverage this behavior to prevent a user from proceeding further if they haven't connected their wallet yet.
 
@@ -895,7 +895,7 @@ Okay, that's a good start to have an overview of the project. Time to move to in
   }}
 ```
 
-To use a [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) in Sui, create a `Transaction`. To initiate a Move call, you must know the global identifier of a public function in your smart contract. The global identifier usually takes the following form:
+To use a [programmable transaction block](/guides/developer/transactions/prog-txn-blocks.mdx) (PTB) in Sui, create a `Transaction`. To initiate a Move call, you must know the global identifier of a public function in your smart contract. The global identifier usually takes the following form:
 
 ```
 ${PACKAGE_ID}::${MODULE_NAME}::${FUNCTION_NAME}
@@ -913,56 +913,40 @@ There are a few parameters that you need to pass into `initialize_house_data()` 
 - Use `Transaction::splitCoin` for the House stake to create a new coin with a defined amount split from the Gas Coin `txb.gas`. Think of the gas coin as one singular coin available for gas payment from your account (which might cover the entire remaining balance of your account). This is useful for Sui payments - instead of manually selecting the coins for gas payment or manually splitting/merging to have the coin with correct amount for your Move call, the gas coin is the single entry point for this, with all the heavy lifting delegated to the SDK behind the scenes.
 - Pass the BLS public key as bytes `vector<u8>`. When providing inputs that are not on-chain objects, serialize them as BCS using a combination of `txb.pure` and `bcs` imported from `@mysten/sui/bcs`.
 
-Now sign and execute the transaction block. dApp Kit provides a React hook `useSignAndExecuteTransaction()` to streamline this process. This hook, when executed, prompts the UI for you to approve, sign, and execute the transaction block. You can configure the hook with the `showObjectChanges` option to return the newly-created `HouseData` shared object as the result of the transaction block. This `HouseData` object is important as you use it as input for later Move calls, so save its ID somewhere.
+Now sign and execute the transaction. dApp Kit provides the `signAndExecuteTransaction` method on the dAppKit instance (accessed via `useDAppKit()`) to streamline this process. When called, it prompts the UI for you to approve, sign, and execute the transaction. The `HouseData` object is important as you use it as input for later Move calls, so save its ID somewhere.
 
 Great, now you know how to initialize the `HouseData` shared object. Move to the next function call.
 
 In this game, the users must create a `Counter` object to start the game. So there should be a place in the Player column UI to list the existing `Counter` object information for the player to choose. It seems likely that you will reuse the fetching logic for the `Counter` object in several places in your UI, so it's good practice to isolate this logic into a React hook, which you call `useFetchCounterNft()` in `useFetchCounterNft.ts`:
 
 ```typescript title='containers/Player/useFetchCounterNft.ts'
-import { useCurrentAccount, useSuiClientQuery } from '@mysten/dapp-kit';
-
-import 'react';
+import { useCurrentAccount, useCurrentClient } from '@mysten/dapp-kit-react';
+import { useQuery } from '@tanstack/react-query';
 
 import { PACKAGE_ID } from '../../constants';
 
 // React hook to fetch CounterNFT owned by connected wallet
-// This hook is to demonstrate how to use `@mysten/dapp-kit` React hook to query data
-// besides using SuiClient directly
+// This hook demonstrates how to use `@mysten/dapp-kit-react` hooks with TanStack Query
 export function useFetchCounterNft() {
   const account = useCurrentAccount();
+  const client = useCurrentClient();
+
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['CounterNFT', account?.address],
+    queryFn: () => client.core.listOwnedObjects({
+      owner: account!.address,
+      limit: 1,
+      type: `${PACKAGE_ID}::counter_nft::Counter`,
+    }),
+    enabled: !!account,
+  });
 
   if (!account) {
     return { data: [] };
   }
 
-  // Fetch CounterNFT owned by current connected wallet
-  // Only fetch the 1st one
-  const { data, isLoading, isError, error, refetch } = useSuiClientQuery(
-    'getOwnedObjects',
-    {
-      owner: account.address,
-      limit: 1,
-      filter: {
-        MatchAll: [
-          {
-            StructType: `${PACKAGE_ID}::counter_nft::Counter`,
-          },
-          {
-            AddressOwner: account.address,
-          },
-        ],
-      },
-      options: {
-        showOwner: true,
-        showType: true,
-      },
-    },
-    { queryKey: ['CounterNFT'] },
-  );
-
   return {
-    data: data && data.data.length > 0 ? data?.data : [],
+    data: data && data.objects.length > 0 ? data.objects : [],
     isLoading,
     isError,
     error,
@@ -971,7 +955,7 @@ export function useFetchCounterNft() {
 }
 ```
 
-This hook logic is very basic: if there is no current connected wallet, return empty data; otherwise, fetch the `Counter` object and return it. dApp Kit provides a React hook, `useSuiClientQuery()`, that enables interaction with [Sui RPC](references/sui-api.mdx) methods. Different RPC methods require different parameters. To fetch the object owned by a known address, use the [`getOwnedObjects` query](/sui-api-ref#suix_getownedobjects).
+This hook logic is very basic: if there is no current connected wallet, return empty data; otherwise, fetch the `Counter` object and return it. Use the `useCurrentClient` hook to get the Sui client, combined with TanStack Query's `useQuery` hook to query data. Different client methods require different parameters. To fetch objects owned by a known address, use the `listOwnedObjects` method.
 
 Now, pass the address of the connected wallet, as well as the global identifier for the `Counter`. This is in similar format to the global identifier type for function calls:
 
@@ -982,7 +966,7 @@ That's it, now put the hook into the UI component `PlayerListCounterNft.tsx` and
 ```typescript title='containers/Player/PlayerListCounterNft.tsx'
 export function PlayerListCounterNft() {
   const { data, isLoading, error, refetch } = useFetchCounterNft();
-  const { mutate: execCreateCounterNFT } = useSignAndExecuteTransaction();
+  const dAppKit = useDAppKit();
 
   return (
     <Container mb={'4'}>
@@ -996,15 +980,15 @@ export function PlayerListCounterNft() {
         {data.length > 0 ? (
           data.map((it) => {
             return (
-              <Box key={it.data?.objectId}>
+              <Box key={it.objectId}>
                 <Text as="div" weight="bold">
                   Object ID:
                 </Text>
-                <Text as="div">{it.data?.objectId}</Text>
+                <Text as="div">{it.objectId}</Text>
                 <Text as="div" weight="bold">
                   Object Type:
                 </Text>
-                <Text as="div">{it.data?.type}</Text>
+                <Text as="div">{it.type}</Text>
               </Box>
             );
           })
@@ -1017,7 +1001,7 @@ export function PlayerListCounterNft() {
 }
 ```
 
-For the case when there is no existing `Counter` object, mint a new `Counter` for the connected wallet. Also add the minting logic into `PlayerListCounterNft.tsx` when the user clicks the button. You already know how to build and execute a Move call with `TransactionBlock` and `initialize_house_data()`, you can implement a similar call here.
+For the case when there is no existing `Counter` object, mint a new `Counter` for the connected wallet. Also add the minting logic into `PlayerListCounterNft.tsx` when the user clicks the button. You already know how to build and execute a Move call with `Transaction` and `initialize_house_data()`, you can implement a similar call here.
 
 As you might recall with `Transaction`, outputs from the transaction can be inputs for the next transaction. Call `counter_nft::mint()`, which returns the newly created `Counter` object, and use it as input for `counter_nft::transfer_to_sender()` to transfer the `Counter` object to the caller wallet:
 
@@ -1031,25 +1015,27 @@ txb.moveCall({
   arguments: [counterNft],
 });
 
-execCreateCounterNFT(
-  {
+try {
+  const result = await dAppKit.signAndExecuteTransaction({
     transaction: txb,
-  },
-  {
-    onError: (err) => {
-      toast.error(err.message);
-    },
-    onSuccess: (result) => {
-      toast.success(`Digest: ${result.digest}`);
-      refetch?.();
-    },
-  },
-);
+  });
+
+  if (result.$kind === 'FailedTransaction') {
+    toast.error('Transaction failed');
+  } else {
+    toast.success(`Digest: ${result.Transaction?.digest}`);
+    refetch?.();
+  }
+} catch (err: any) {
+  toast.error(err.message);
+}
 ```
 
 Great, now you can create the game with the created `Counter` object. Isolate the game creation logic into `PlayerCreateGame.tsx`. There is one more thing to keep in mind - to flag an input as an on-chain object, you should use `txb.object()` with the corresponding object ID.
 
 ```typescript title='containers/Player/PlayerCreateGame.tsx'
+const dAppKit = useDAppKit();
+
 // Create new transaction
 const txb = new Transaction();
 
@@ -1061,118 +1047,163 @@ txb.moveCall({
   target: `${PACKAGE_ID}::single_player_satoshi::start_game`,
   arguments: [
     txb.pure.string(guess),
-    txb.object(counterNFTData[0].data?.objectId!),
+    txb.object(counterNFTData[0]?.objectId!),
     stakeCoin,
     txb.object(houseDataId),
   ],
 });
 
-execCreateGame(
-  {
+try {
+  const result = await dAppKit.signAndExecuteTransaction({
     transaction: txb,
-  },
-  {
-    onError: (err) => {
-      toast.error(err.message);
-    },
-    onSuccess: (result: SuiTransactionBlockResponse) => {
-      toast.success(`Digest: ${result.digest}`);
-    },
-  },
-);
+  });
+
+  if (result.$kind === 'FailedTransaction') {
+    toast.error('Transaction failed');
+  } else {
+    toast.success(`Digest: ${result.Transaction?.digest}`);
+  }
+} catch (err: any) {
+  toast.error(err.message);
+}
 ```
 
-One final step remains: settle the game. There are a couple of ways you can use the UI to settle the game:
-
-1. Create a Settle Game button and pass all the necessary arguments to the `single_player_satoshi::finish_game()` Move call.
-1. Settle the game automatically through an events subscription. This example uses this path to teach good practices on events and how to subscribe to them.
+One final step remains: settle the game. To do this, poll for new `NewGame` events using the GraphQL API, then automatically call `single_player_satoshi::finish_game()` for each new game.
 
 :::info
 
-Event subscriptions are deprecated. To learn future-safe methods to work with events, see [Using Events](../sui-101/using-events.mdx).
+For more information on how to work with events in your dApp, see [Using Events](/guides/developer/accessing-data/using-events.mdx).
 
 :::
 
-All of this logic is in `HouseFinishGame.tsx`:
+All of this logic is in `HouseFinishGame.tsx`, which polls the GraphQL API for new game events:
 
 ```typescript title='containers/House/HouseFinishGame.tsx'
-// This component will help the House to automatically finish the game whenever new game is started
 export function HouseFinishGame() {
-  const suiClient = useSuiClient();
-  const { mutate: execFinishGame } = useSignAndExecuteTransactionBlock();
+  const dAppKit = useDAppKit();
 
   const [housePrivHex] = useContext(HouseKeypairContext);
   const [houseDataId] = useContext(HouseDataContext);
 
   useEffect(() => {
-    // Subscribe to NewGame event
-    const unsub = suiClient.subscribeEvent({
-      filter: {
-        MoveEventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
-      },
-      onMessage(event) {
-        console.log(event);
-        const { game_id, vrf_input } = event.parsedJson as {
-          game_id: string;
-          vrf_input: number[];
-        };
-
-        toast.info(`NewGame started ID: ${game_id}`);
-
-        console.log(housePrivHex);
-
-        try {
-          const houseSignedInput = bls.sign(
-            new Uint8Array(vrf_input),
-            curveUtils.hexToBytes(housePrivHex),
-          );
-
-          // Finish the game immediately after new game started
-          const txb = new Transaction();
-          txb.moveCall({
-            target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
-            arguments: [
-              txb.pure.id(game_id),
-              txb.pure(bcs.vector(bcs.U8).serialize(houseSignedInput)),
-              txb.object(houseDataId),
-            ],
-          });
-          execFinishGame(
-            {
-              transaction: txb,
-            },
-            {
-              onError: (err) => {
-                toast.error(err.message);
-              },
-              onSuccess: (result: SuiTransactionBlockResponse) => {
-                toast.success(`Digest: ${result.digest}`);
-              },
-            },
-          );
-        } catch (err) {
-          console.error(err);
-        }
-      },
+    const gqlClient = new SuiGraphQLClient({
+      url: 'https://graphql.mainnet.sui.io/graphql',
+      network: 'mainnet',
     });
 
+    const queryNewGames = graphql(`
+      query NewGames($eventType: String!, $after: String) {
+        events(filter: { eventType: $eventType }, after: $after) {
+          nodes {
+            contents { json }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `);
+
+    const queryCursor = graphql(`
+      query LatestCursor($eventType: String!) {
+        events(filter: { eventType: $eventType }, last: 1) {
+          pageInfo {
+            endCursor
+          }
+        }
+      }
+    `);
+
+    let cursor: string | null = null;
+    let cancelled = false;
+
+    async function pollForGames() {
+      // Capture the current end cursor so we only process new games
+      const initial = await gqlClient.query({
+        query: queryCursor,
+        variables: {
+          eventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
+        },
+      });
+      cursor = initial.data?.events?.pageInfo.endCursor ?? null;
+
+      while (!cancelled) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        try {
+          const result = await gqlClient.query({
+            query: queryNewGames,
+            variables: {
+              eventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
+              after: cursor,
+            },
+          });
+
+          const events = result.data?.events;
+          if (events?.pageInfo.endCursor) {
+            cursor = events.pageInfo.endCursor;
+          }
+
+          for (const node of events?.nodes ?? []) {
+            const { game_id, vrf_input } = node.contents?.json as {
+              game_id: string;
+              vrf_input: number[];
+            };
+
+            toast.info(`NewGame started ID: ${game_id}`);
+
+            try {
+              const houseSignedInput = bls.sign(
+                new Uint8Array(vrf_input),
+                curveUtils.hexToBytes(housePrivHex),
+              );
+
+              const txb = new Transaction();
+              txb.moveCall({
+                target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
+                arguments: [
+                  txb.pure.id(game_id),
+                  txb.pure(bcs.vector(bcs.U8).serialize(houseSignedInput)),
+                  txb.object(houseDataId),
+                ],
+              });
+
+              const result = await dAppKit.signAndExecuteTransaction({
+                transaction: txb,
+              });
+
+              if (result.$kind === 'FailedTransaction') {
+                toast.error('Transaction failed');
+              } else {
+                toast.success(`Digest: ${result.Transaction?.digest}`);
+              }
+            } catch (err: any) {
+              console.error(err);
+              toast.error(err.message);
+            }
+          }
+        } catch (err: any) {
+          console.error('Polling error:', err);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
+
+    pollForGames();
+
     return () => {
-      (async () => (await unsub)())();
+      cancelled = true;
     };
-  }, [housePrivHex, houseDataId, suiClient]);
+  }, [housePrivHex, houseDataId, dAppKit]);
 
   return null;
 }
 ```
 
-To get the underlying `SuiClient` instance from the SDK, use `useSuiClient()`. You want to subscribe to events whenever the `HouseFinishGame` component loads. To do this, use the React hook `useEffect()` from the core React library.
+The component uses `SuiGraphQLClient` to poll for `NewGame` events every 5 seconds, tracking the cursor to only process new events. When a new game is detected, it signs the VRF input with the BLS private key and calls `single_player_satoshi::finish_game()` to settle the game.
 
-`SuiClient` exposes a method called `subscribeEvent()` that enables you to subscribe to a variety of event types. `SuiClient::subscribeEvent()` is actually a thin wrapper around the RPC method [`suix_subscribeEvent`](/sui-api-ref#suix_subscribeevent).
-
-The logic is that whenever a new game starts, you want to settle the game immediately. The necessary event to achieve this is the Move event type called `single_player_satoshi::NewGame`. If you inspect the parsed payload of the event through `event.parsedJson`, you can see the corresponding event fields declared in the smart contract. In this case, you just need to use two fields, the Game ID and the VRF input.
-
-The next steps are similar to the previous Move calls, but you have to use the BLS private key to sign the VRF input and then pass the Game ID, signed VRF input and `HouseData` ID to the `single_player_satoshi::finish_game()` Move call.
-
-Last but not least, remember to unsubscribe from the event whenever the `HouseFinishGame` component dismounts. This is important as you might not want to subscribe to the same event multiple times.
+The cleanup function sets `cancelled = true` to stop polling when the component unmounts.
 
 Congratulations, you completed the frontend. You can carry the lessons learned here forward when using the dApp Kit to build your next Sui project.

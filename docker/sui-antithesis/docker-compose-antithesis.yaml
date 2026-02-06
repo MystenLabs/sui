@@ -17,6 +17,7 @@ services:
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
+      - SUI_DB_SYNC_TO_DISK=true
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator1-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -47,6 +48,7 @@ services:
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
+      - SUI_DB_SYNC_TO_DISK=true
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -77,6 +79,7 @@ services:
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
+      - SUI_DB_SYNC_TO_DISK=true
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator3-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -107,6 +110,7 @@ services:
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
+      - SUI_DB_SYNC_TO_DISK=true
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator4-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -166,15 +170,17 @@ services:
       - PRIMARY_GAS_OWNER=0xd59d79516a4ed5b6825e80826c075a12bdd2759aaeb901df2f427f5f880c8f60
       - GENESIS_BLOB_PATH=/opt/sui/config/genesis.blob
       - KEYSTORE_PATH=/opt/sui/config/sui.keystore
-      - STRESS_TARGET_QPS=11
-      - STRESS_SHARED_COUNTER=5
-      - STRESS_TRANSFER_OBJECT=5
+      - STRESS_TARGET_QPS=15
+      - STRESS_SHARED_COUNTER=2
+      - STRESS_TRANSFER_OBJECT=2
       - STRESS_RANDOMNESS=5
       - STRESS_DELEGATION=0
+      - STRESS_RANDOMIZED_TRANSACTION=5
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - BATCH_PAYMENT=1
       - BATCH_PAYMENT_SIZE=15
       - STRESS_ADVERSARIAL=0
+      - STRESS_COMPOSITE=5
       - TRANSACTION_DRIVER=${TRANSACTION_DRIVER:-0}
     volumes:
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro

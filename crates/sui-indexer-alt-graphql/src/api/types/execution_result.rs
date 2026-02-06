@@ -3,7 +3,7 @@
 
 use async_graphql::SimpleObject;
 
-use super::transaction_effects::TransactionEffects;
+use crate::api::types::transaction_effects::TransactionEffects;
 
 /// The execution result of a transaction, including the transaction effects and any potential errors due to signing or quorum-driving.
 #[derive(Clone, SimpleObject)]

@@ -6,33 +6,43 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
-use api::checkpoints::Checkpoints;
-use api::coin::{Coins, DelegationCoins};
-use api::dynamic_fields::DynamicFields;
-use api::move_utils::MoveUtils;
-use api::name_service::NameService;
-use api::objects::{Objects, QueryObjects};
-use api::rpc_module::RpcModule;
-use api::transactions::{QueryTransactions, Transactions};
-use api::write::Write;
-use config::RpcConfig;
-use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
-use metrics::RpcMetrics;
-use metrics::middleware::MetricsLayer;
+use jsonrpsee::server::BatchRequestConfig;
+use jsonrpsee::server::RpcServiceBuilder;
+use jsonrpsee::server::ServerBuilder;
 use prometheus::Registry;
 use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
-use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
+use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
+use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_open_rpc::Project;
-use timeout::TimeoutLayer;
+use tower_http::catch_panic;
 use tower_layer::Identity;
-use tracing::{info, warn};
+use tracing::info;
+use tracing::warn;
 use url::Url;
 
-use crate::api::governance::{DelegationGovernance, Governance};
+use crate::api::checkpoints::Checkpoints;
+use crate::api::coin::Coins;
+use crate::api::dynamic_fields::DynamicFields;
+use crate::api::governance::DelegationGovernance;
+use crate::api::governance::Governance;
+use crate::api::move_utils::MoveUtils;
+use crate::api::name_service::NameService;
+use crate::api::objects::Objects;
+use crate::api::objects::QueryObjects;
+use crate::api::rpc_module::RpcModule;
+use crate::api::transactions::QueryTransactions;
+use crate::api::transactions::Transactions;
+use crate::api::write::Write;
+use crate::config::RpcConfig;
 use crate::context::Context;
+use crate::error::PanicHandler;
+use crate::metrics::RpcMetrics;
+use crate::metrics::middleware::MetricsLayer;
+use crate::timeout::TimeoutLayer;
 
 pub mod api;
 pub mod args;
@@ -176,7 +186,7 @@ impl RpcService {
         let middleware = RpcServiceBuilder::new()
             .layer(TimeoutLayer::new(request_timeout))
             .layer(MetricsLayer::new(
-                metrics,
+                metrics.clone(),
                 modules.method_names().map(|n| n.to_owned()).collect(),
                 slow_request_threshold,
             ));
@@ -184,12 +194,16 @@ impl RpcService {
         let handle = server
             .set_rpc_middleware(middleware)
             .set_http_middleware(
-                tower::builder::ServiceBuilder::new().layer(
-                    tower_http::cors::CorsLayer::new()
-                        .allow_methods([http::Method::GET, http::Method::POST])
-                        .allow_origin(tower_http::cors::Any)
-                        .allow_headers(tower_http::cors::Any),
-                ),
+                tower::builder::ServiceBuilder::new()
+                    .layer(
+                        tower_http::cors::CorsLayer::new()
+                            .allow_methods([http::Method::GET, http::Method::POST])
+                            .allow_origin(tower_http::cors::Any)
+                            .allow_headers(tower_http::cors::Any),
+                    )
+                    .layer(catch_panic::CatchPanicLayer::custom(PanicHandler::new(
+                        metrics,
+                    ))),
             )
             .build(rpc_listen_address)
             .await
@@ -230,16 +244,16 @@ pub struct NodeArgs {
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line).
 ///
-/// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not work.
-/// The only exceptions are the `DelegationCoins` and `DelegationGovernance` modules, which are controlled
-/// by `node_args.fullnode_rpc_url`, which can be omitted to disable reads from this RPC.
+/// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not
+/// work. The only exception is the `DelegationGovernance` module, which is controlled by
+/// `node_args.fullnode_rpc_url`, which can be omitted to disable reads from this RPC.
 ///
 /// KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is provided.
 /// Otherwise these requests are served by the database. If a `bigtable_instance` is provided, the
 /// `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the credentials JSON file.
 ///
-/// Access to writes (executing and dry-running transactions) is controlled by `node_args.fullnode_rpc_url`,
-/// which can be omitted to disable writes from this RPC.
+/// Access to writes (executing and dry-running transactions) is controlled by
+/// `node_args.fullnode_rpc_url`, which can be omitted to disable writes from this RPC.
 ///
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
@@ -248,6 +262,7 @@ pub async fn start_rpc(
     bigtable_instance: Option<String>,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
+    consistent_reader_args: ConsistentReaderArgs,
     rpc_args: RpcArgs,
     node_args: NodeArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -261,6 +276,7 @@ pub async fn start_rpc(
         bigtable_instance,
         db_args,
         bigtable_args,
+        consistent_reader_args,
         rpc_config,
         rpc.metrics(),
         registry,
@@ -286,12 +302,11 @@ pub async fn start_rpc(
 
     if let Some(fullnode_rpc_url) = node_args.fullnode_rpc_url {
         let client = context.config().node.client(fullnode_rpc_url)?;
-        rpc.add_module(DelegationCoins::new(client.clone()))?;
         rpc.add_module(DelegationGovernance::new(client.clone()))?;
         rpc.add_module(Write::new(client))?;
     } else {
         warn!(
-            "No fullnode rpc url provided, DelegationCoins, DelegationGovernance, and Write modules will not be added."
+            "No fullnode rpc url provided, DelegationGovernance and Write modules will not be added."
         );
     }
 
@@ -303,15 +318,19 @@ pub async fn start_rpc(
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::BTreeSet,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-        time::Duration,
-    };
+    use std::collections::BTreeSet;
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
+    use std::time::Duration;
 
-    use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::METHOD_NOT_FOUND_CODE};
+    use jsonrpsee::core::RpcResult;
+    use jsonrpsee::proc_macros::rpc;
+    use jsonrpsee::types::error::INTERNAL_ERROR_CODE;
+    use jsonrpsee::types::error::METHOD_NOT_FOUND_CODE;
     use reqwest::Client;
-    use serde_json::{Value, json};
+    use serde_json::Value;
+    use serde_json::json;
     use sui_open_rpc::Module;
     use sui_open_rpc_macros::open_rpc;
     use sui_pg_db::temp::get_available_port;
@@ -541,6 +560,53 @@ mod tests {
             .expect("Shutdown should succeed");
     }
 
+    #[tokio::test]
+    async fn test_panic_handling() {
+        let rpc_listen_address = test_listen_address();
+        let mut rpc = RpcService::new(
+            RpcArgs {
+                rpc_listen_address,
+                ..Default::default()
+            },
+            &Registry::new(),
+        )
+        .unwrap();
+
+        rpc.add_module(Panic).unwrap();
+
+        let metrics = rpc.metrics();
+        let svc = rpc.run().await.unwrap();
+
+        let url = format!("http://{rpc_listen_address}/");
+        let client = Client::new();
+
+        let resp = client
+            .post(&url)
+            .json(&json!({
+                "jsonrpc": "2.0",
+                "method": "test_panic",
+                "id": 1,
+            }))
+            .send()
+            .await
+            .expect("Request should succeed");
+
+        let body: Value = resp.json().await.expect("Response should be JSON");
+
+        // Verify the response is a JSON-RPC error
+        assert_eq!(body["jsonrpc"], "2.0");
+        assert_eq!(body["error"]["code"], INTERNAL_ERROR_CODE);
+        assert!(body["error"]["message"].as_str().unwrap().contains("Boom!"));
+
+        // Verify the panic is recorded in metrics
+        assert_eq!(metrics.requests_panicked.get(), 1);
+
+        tokio::time::timeout(Duration::from_millis(500), svc.shutdown())
+            .await
+            .expect("Shutdown should not timeout")
+            .expect("Shutdown should succeed");
+    }
+
     // Test Helpers
 
     #[open_rpc(namespace = "test", tag = "Test API")]
@@ -567,9 +633,17 @@ mod tests {
         fn baz(&self) -> RpcResult<u64>;
     }
 
+    #[open_rpc(namespace = "test", tag = "Test API")]
+    #[rpc(server, namespace = "test")]
+    trait PanicApi {
+        #[method(name = "panic")]
+        fn panic(&self) -> RpcResult<u64>;
+    }
+
     struct Foo;
     struct Bar;
     struct Baz;
+    struct Panic;
 
     impl FooApiServer for Foo {
         fn bar(&self) -> RpcResult<u64> {
@@ -590,6 +664,12 @@ mod tests {
     impl BazApiServer for Baz {
         fn baz(&self) -> RpcResult<u64> {
             Ok(45)
+        }
+    }
+
+    impl PanicApiServer for Panic {
+        fn panic(&self) -> RpcResult<u64> {
+            panic!("Boom!");
         }
     }
 
@@ -616,6 +696,16 @@ mod tests {
     impl RpcModule for Baz {
         fn schema(&self) -> Module {
             BazApiOpenRpc::module_doc()
+        }
+
+        fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
+            self.into_rpc()
+        }
+    }
+
+    impl RpcModule for Panic {
+        fn schema(&self) -> Module {
+            PanicApiOpenRpc::module_doc()
         }
 
         fn into_impl(self) -> jsonrpsee::RpcModule<Self> {

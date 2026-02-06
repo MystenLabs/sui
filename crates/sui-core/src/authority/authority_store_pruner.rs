@@ -1188,6 +1188,7 @@ mod tests {
     }
 
     // Tests pruning old version of live objects.
+    #[cfg(not(tidehunter))]
     #[tokio::test]
     async fn test_pruning_objects() {
         let path = tempfile::tempdir().unwrap().keep();
@@ -1200,6 +1201,7 @@ mod tests {
     }
 
     // Tests pruning deleted objects (object tombstones).
+    #[cfg(not(tidehunter))]
     #[tokio::test]
     async fn test_pruning_tombstones() {
         let path = tempfile::tempdir().unwrap().keep();

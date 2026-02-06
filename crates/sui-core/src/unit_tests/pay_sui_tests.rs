@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-use crate::authority::authority_tests::{init_state_with_committee, send_and_confirm_transaction};
+use crate::authority::authority_tests::{init_state_with_committee, submit_and_execute};
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use futures::future::join_all;
 use std::collections::HashMap;
@@ -416,7 +416,7 @@ async fn execute_pay_sui(
     let pt = builder.finish();
     let data = TransactionData::new_programmable(sender, input_coin_refs, pt, gas_budget, rgp);
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let txn_result = send_and_confirm_transaction(&authority_state, tx)
+    let txn_result = submit_and_execute(&authority_state, tx)
         .await
         .map(|(_, effects)| effects);
 
@@ -466,7 +466,7 @@ async fn execute_pay_all_sui(
     let pt = builder.finish();
     let data = TransactionData::new_programmable(sender, input_coins, pt, gas_budget, rgp);
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let txn_result = send_and_confirm_transaction(&authority_state, tx)
+    let txn_result = submit_and_execute(&authority_state, tx)
         .await
         .map(|(_, effects)| effects);
     PaySuiTransactionBlockExecutionResult {

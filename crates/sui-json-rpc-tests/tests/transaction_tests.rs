@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(deprecated)]
+
 #[cfg(not(msim))]
 use std::str::FromStr;
 
@@ -20,10 +22,10 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::Command;
 use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionData;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use test_cluster::TestClusterBuilder;
 
 use sui_json_rpc_api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
@@ -168,11 +170,9 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
 async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await;
 
-    let context = &cluster.wallet;
-
     let mut tx_responses: Vec<SuiTransactionBlockResponse> = Vec::new();
 
-    let client = context.get_client().await.unwrap();
+    let client = cluster.sui_client().clone();
 
     for address in cluster.get_addresses() {
         let objects = client
@@ -346,8 +346,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_query_transaction_blocks() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await;
-    let context = &cluster.wallet;
-    let client = context.get_client().await.unwrap();
+    let client = cluster.sui_client().clone();
 
     let address = cluster.get_address_0();
     let objects = client

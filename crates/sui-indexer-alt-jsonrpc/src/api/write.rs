@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::Base64;
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
-use sui_json_rpc_types::{
-    DryRunTransactionBlockResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
+use jsonrpsee::core::RpcResult;
+use jsonrpsee::http_client::HttpClient;
+use jsonrpsee::proc_macros::rpc;
+use sui_json_rpc_types::DryRunTransactionBlockResponse;
+use sui_json_rpc_types::SuiTransactionBlockResponse;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 
-use crate::error::{client_error_to_error_object, invalid_params};
-
-use super::rpc_module::RpcModule;
+use crate::api::rpc_module::RpcModule;
+use crate::error::client_error_to_error_object;
+use crate::error::invalid_params;
 
 #[open_rpc(namespace = "sui", tag = "Write API")]
 #[rpc(server, client, namespace = "sui")]

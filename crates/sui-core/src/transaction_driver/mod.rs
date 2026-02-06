@@ -39,11 +39,21 @@ use transaction_submitter::*;
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
-    quorum_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
     validator_client_monitor::{
         OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
+
+pub mod reconfig_observer;
+pub use reconfig_observer::ReconfigObserver;
+
+/// Trait for components that can update their AuthorityAggregator during reconfiguration.
+/// Used by ReconfigObserver to notify components of epoch changes.
+pub trait AuthorityAggregatorUpdatable<A: Clone>: Send + Sync + 'static {
+    fn epoch(&self) -> EpochId;
+    fn authority_aggregator(&self) -> Arc<AuthorityAggregator<A>>;
+    fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>);
+}
 use sui_config::NodeConfig;
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
@@ -63,8 +73,7 @@ pub struct SubmitTransactionOptions {
 
 #[derive(Clone, Debug)]
 pub struct QuorumTransactionResponse {
-    // TODO(fastpath): Stop using QD types
-    pub effects: sui_types::quorum_driver_types::FinalizedEffects,
+    pub effects: sui_types::transaction_driver_types::FinalizedEffects,
 
     pub events: Option<sui_types::effects::TransactionEvents>,
     // Input objects will only be populated in the happy path
@@ -204,6 +213,14 @@ where
                             .settlement_finality_latency
                             .with_label_values(&[tx_type.as_str(), ping_label])
                             .observe(settlement_finality_latency);
+                        let is_out_of_expected_range = settlement_finality_latency >= 8.0
+                            || settlement_finality_latency <= 0.1;
+                        tracing::debug!(
+                            ?tx_type,
+                            ?is_out_of_expected_range,
+                            "Settlement finality latency: {:.3} seconds",
+                            settlement_finality_latency
+                        );
                         // Record the number of retries for successful transaction
                         self.metrics
                             .transaction_retries
@@ -356,7 +373,7 @@ where
         result
     }
 
-    // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
+    // Runs a background task to send ping transactions to all validators to perform latency checks for the consensus path.
     async fn run_latency_checks(self: Arc<Self>) {
         const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(15);
         const MAX_JITTER: Duration = Duration::from_secs(10);
@@ -368,16 +385,57 @@ where
         loop {
             interval.tick().await;
 
+            // Only run latency checks for shared object transactions since single writer
+            // transactions no longer use a separate fast path and go through consensus.
+            let auth_agg = self.authority_aggregator.load().clone();
+            let validators = auth_agg.committee.names().cloned().collect::<Vec<_>>();
+
+            self.metrics.latency_check_runs.inc();
+
             let mut tasks = JoinSet::new();
 
-            for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
-                Self::ping_for_tx_type(
-                    self.clone(),
-                    &mut tasks,
-                    tx_type,
-                    MAX_JITTER,
-                    PING_REQUEST_TIMEOUT,
-                );
+            for name in validators {
+                let display_name = auth_agg.get_display_name(&name);
+                let delay_ms = rand::thread_rng().gen_range(0..MAX_JITTER.as_millis()) as u64;
+                let self_clone = self.clone();
+
+                let task = async move {
+                    // Add some random delay to the task to avoid all tasks running at the same time
+                    if delay_ms > 0 {
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    }
+                    let start_time = Instant::now();
+
+                    // Send a consensus ping transaction to the validator
+                    match self_clone
+                        .drive_transaction(
+                            SubmitTxRequest::new_ping(PingType::Consensus),
+                            SubmitTransactionOptions {
+                                allowed_validators: vec![display_name.clone()],
+                                ..Default::default()
+                            },
+                            Some(PING_REQUEST_TIMEOUT),
+                        )
+                        .await
+                    {
+                        Ok(_) => {
+                            tracing::debug!(
+                                "Ping transaction to validator {} completed end to end in {} seconds",
+                                display_name,
+                                start_time.elapsed().as_secs_f64()
+                            );
+                        }
+                        Err(err) => {
+                            tracing::debug!(
+                                "Failed to get certified finalized effects for ping transaction to validator {}: {}",
+                                display_name,
+                                err
+                            );
+                        }
+                    }
+                };
+
+                tasks.spawn(task);
             }
 
             while let Some(result) = tasks.join_next().await {
@@ -385,76 +443,6 @@ where
                     tracing::debug!("Error while driving ping transaction: {}", e);
                 }
             }
-        }
-    }
-
-    /// Pings all validators for e2e latency with the provided transaction type.
-    fn ping_for_tx_type(
-        self: Arc<Self>,
-        tasks: &mut JoinSet<()>,
-        tx_type: TxType,
-        max_jitter: Duration,
-        ping_timeout: Duration,
-    ) {
-        // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
-        let auth_agg = self.authority_aggregator.load().clone();
-        let validators = auth_agg.committee.names().cloned().collect::<Vec<_>>();
-
-        self.metrics
-            .latency_check_runs
-            .with_label_values(&[tx_type.as_str()])
-            .inc();
-
-        for name in validators {
-            let display_name = auth_agg.get_display_name(&name);
-            let delay_ms = rand::thread_rng().gen_range(0..max_jitter.as_millis()) as u64;
-            let self_clone = self.clone();
-
-            let task = async move {
-                // Add some random delay to the task to avoid all tasks running at the same time
-                if delay_ms > 0 {
-                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
-                }
-                let start_time = Instant::now();
-
-                let ping_type = if tx_type == TxType::SingleWriter {
-                    PingType::FastPath
-                } else {
-                    PingType::Consensus
-                };
-
-                // Now send a ping transaction to the chosen validator for the provided tx type
-                match self_clone
-                    .drive_transaction(
-                        SubmitTxRequest::new_ping(ping_type),
-                        SubmitTransactionOptions {
-                            allowed_validators: vec![display_name.clone()],
-                            ..Default::default()
-                        },
-                        Some(ping_timeout),
-                    )
-                    .await
-                {
-                    Ok(_) => {
-                        tracing::debug!(
-                            "Ping transaction to validator {} for tx type {} completed end to end in {} seconds",
-                            display_name,
-                            tx_type.as_str(),
-                            start_time.elapsed().as_secs_f64()
-                        );
-                    }
-                    Err(err) => {
-                        tracing::debug!(
-                            "Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}",
-                            tx_type.as_str(),
-                            display_name,
-                            err
-                        );
-                    }
-                }
-            };
-
-            tasks.spawn(task);
         }
     }
 

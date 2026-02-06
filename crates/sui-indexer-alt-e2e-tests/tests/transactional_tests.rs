@@ -1,29 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    error::Error,
-    path::Path,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-    time::Duration,
-};
+use std::error::Error;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use anyhow::Context;
-use reqwest::{Client, header::HeaderName};
-use serde_json::{Value, json};
-use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, Merge, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_e2e_tests::{OffchainCluster, OffchainClusterConfig};
-use sui_indexer_alt_framework::ingestion::{ClientArgs, ingestion_client::IngestionClientArgs};
-use sui_transactional_test_runner::{
-    create_adapter,
-    offchain_state::{OffchainStateReader, TestResponse},
-    run_tasks_with_adapter,
-    test_adapter::{OffChainConfig, PRE_COMPILED, SuiTestAdapter},
-};
+use reqwest::Client;
+use reqwest::header::HeaderName;
+use serde_json::Value;
+use serde_json::json;
+use sui_indexer_alt::config::ConcurrentLayer;
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::config::Merge;
+use sui_indexer_alt::config::PipelineLayer;
+use sui_indexer_alt::config::PrunerLayer;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
+use sui_transactional_test_runner::create_adapter;
+use sui_transactional_test_runner::offchain_state::OffchainStateReader;
+use sui_transactional_test_runner::offchain_state::TestResponse;
+use sui_transactional_test_runner::run_tasks_with_adapter;
+use sui_transactional_test_runner::test_adapter::OffChainConfig;
+use sui_transactional_test_runner::test_adapter::PRE_COMPILED;
+use sui_transactional_test_runner::test_adapter::SuiTestAdapter;
 use tokio::join;
+
+use sui_indexer_alt_e2e_tests::OffchainCluster;
+use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 
 struct OffchainReader {
     cluster: Arc<OffchainCluster>,
@@ -142,7 +149,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
     // The test config includes every pipeline, we configure its consistent range using the
     // off-chain config that was passed in.
     let pruner = PrunerLayer {
-        retention: Some(config.snapshot_config.snapshot_min_lag as u64),
+        retention: Some(config.consistent_range as u64),
         ..Default::default()
     };
 

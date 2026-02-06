@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::reroot_path;
-use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
 
@@ -14,14 +13,13 @@ use move_compiler::{
     unit_test::{TestPlan, plan_builder::construct_test_plan},
 };
 use move_coverage::coverage_map::{CoverageMap, output_map_to_file};
-use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
+use move_package_alt::{MoveFlavor, RootPackage};
 use move_package_alt_compilation::{
     build_config::BuildConfig, build_plan::BuildPlan, compiled_package::BuildNamedAddresses,
     find_env,
 };
 use move_symbol_pool::Symbol;
-use move_unit_test::UnitTestingConfig;
-use move_vm_test_utils::gas_schedule::CostTable;
+use move_unit_test::{UnitTestingConfig, vm_test_setup::VMTestSetup};
 // if windows
 #[cfg(target_family = "windows")]
 use std::os::windows::process::ExitStatusExt;
@@ -84,23 +82,21 @@ pub struct Test {
 }
 
 impl Test {
-    pub async fn execute<F: MoveFlavor>(
+    pub async fn execute<F: MoveFlavor, V: VMTestSetup + Sync>(
         self,
         path: Option<&Path>,
         config: BuildConfig,
-        natives: Vec<NativeFunctionRecord>,
-        cost_table: Option<CostTable>,
+        vm_test_setup: V,
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
         let compute_coverage = self.compute_coverage;
         // save disassembly if trace execution is enabled
         let save_disassembly = self.trace;
-        let result = run_move_unit_tests::<F, Stdout>(
+        let result = run_move_unit_tests::<F, V, Stdout>(
             &rerooted_path,
             config,
             self.unit_test_config(),
-            natives,
-            cost_table,
+            vm_test_setup,
             compute_coverage,
             save_disassembly,
             &mut std::io::stdout(),
@@ -149,12 +145,11 @@ pub enum UnitTestResult {
     Failure,
 }
 
-pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
+pub async fn run_move_unit_tests<F: MoveFlavor, V: VMTestSetup + Sync, W: Write + Send>(
     pkg_path: &Path,
     mut build_config: move_package_alt_compilation::build_config::BuildConfig,
     mut unit_test_config: UnitTestingConfig,
-    natives: Vec<NativeFunctionRecord>,
-    cost_table: Option<CostTable>,
+    vm_test_setup: V,
     compute_coverage: bool,
     save_disassembly: bool,
     writer: &mut W,
@@ -166,8 +161,7 @@ pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     // Load the package (package graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer)
     let env = find_env::<F>(pkg_path, &build_config)?;
-    let root_pkg =
-        RootPackage::<F>::load(pkg_path.to_path_buf(), env, build_config.mode_set()).await?;
+    let root_pkg: RootPackage<F> = build_config.package_loader(pkg_path, &env).load().await?;
     let root_pkg_name = Symbol::from(root_pkg.name().as_str());
 
     let mut addresses: Vec<(String, NumericalAddress)> = vec![];
@@ -236,7 +230,7 @@ pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
     if !unit_test_config
-        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)?
+        .run_and_report_unit_tests(test_plan, vm_test_setup, writer)?
         .1
     {
         cleanup_trace();

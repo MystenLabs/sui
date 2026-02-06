@@ -6,7 +6,7 @@ processed 2 tasks
 init:
 A: object(0,0), validator_0: object(0,1), validator_1: object(0,2)
 
-task 1, lines 6-24:
+task 1, lines 6-30:
 //# run-graphql
 Response: {
   "data": {
@@ -16,13 +16,17 @@ Response: {
         "activeValidators": {
           "nodes": [
             {
-              "name": "validator-0",
+              "contents": {
+                "name": "validator-0"
+              },
               "reportRecords": {
                 "nodes": []
               }
             },
             {
-              "name": "validator-1",
+              "contents": {
+                "name": "validator-1"
+              },
               "reportRecords": {
                 "nodes": []
               }

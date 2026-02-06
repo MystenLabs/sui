@@ -4,8 +4,8 @@ expression: "strands(r#\"foo {{{bar} {baz}}}\"#)"
 ---
 "foo {"
 { bar
-}
+}@6
 " "
 { baz
-}
+}@12
 "}"

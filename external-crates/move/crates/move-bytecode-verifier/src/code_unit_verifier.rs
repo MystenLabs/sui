@@ -179,6 +179,32 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             meter,
         )?;
         locals_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
+        if verifier_config.switch_to_regex_reference_safety {
+            regex_reference_safety::verify(
+                verifier_config,
+                self.module,
+                &self.function_context,
+                meter,
+            )
+        } else {
+            self.reference_safety_with_optional_regex_sanity_check(
+                verifier_config,
+                meter,
+                regex_reference_safety_meter,
+            )
+        }
+    }
+
+    /// The reference safety check, and then if the flag is enabled (and the graph based approach
+    /// did not "time out"), also runs the regex based approach and checks that the results are
+    /// consistent. Consistent here meaning that the regex based approach should be strictly more
+    /// permissive, so if it fails, the graph based one should also fail.
+    fn reference_safety_with_optional_regex_sanity_check(
+        &self,
+        verifier_config: &'env VerifierConfig,
+        meter: &mut (impl Meter + ?Sized),
+        regex_reference_safety_meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<()> {
         let reference_safety_res = reference_safety::verify(
             verifier_config,
             self.module,
@@ -215,7 +241,6 @@ impl<'env> CodeUnitVerifier<'env, '_> {
                             .unwrap_err()
                             .finish(Location::Undefined)
                             .message()
-                            .cloned()
                             .unwrap_or_default(),
                     ),
                 );

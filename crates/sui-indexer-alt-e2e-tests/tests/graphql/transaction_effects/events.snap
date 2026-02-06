@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 11 tasks
+processed 12 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -53,10 +53,10 @@ Response: {
             },
             "sequenceNumber": 0,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAeFUhlbGxvIGZyb20gdGVzdCBldmVudCoAAAAAAAAA",
+            "eventBcs": "kJckGlICpXmrlZwk5MQnzIbzO1yHTql8q7eTfj6SO6gLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHpCXJBpSAqV5q5WcJOTEJ8yG8ztch06pfKu3k34+kjuoC2V2ZW50c190ZXN0CVRlc3RFdmVudAAeFUhlbGxvIGZyb20gdGVzdCBldmVudCoAAAAAAAAA",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8::events_test::TestEvent"
               },
               "json": {
                 "message": "Hello from test event",
@@ -64,11 +64,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "3QXGQcUWzKsiqfcdrZwMXp6jFZDErSc59PyvJ7osufCf"
+              "digest": "EZ5gA6xNU1vg7nRRtNQhX9zAcS9cSkykygdSWQp2Ke9a"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8"
               },
               "name": "events_test"
             }
@@ -96,10 +96,10 @@ Response: {
             },
             "sequenceNumber": 0,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
+            "eventBcs": "kJckGlICpXmrlZwk5MQnzIbzO1yHTql8q7eTfj6SO6gLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHpCXJBpSAqV5q5WcJOTEJ8yG8ztch06pfKu3k34+kjuoC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8::events_test::TestEvent"
               },
               "json": {
                 "message": "First event",
@@ -107,11 +107,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+              "digest": "2sKjDmPw43QPF5BLaPVFpe5mtDvcV5GVcmvwNHjQysu5"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8"
               },
               "name": "events_test"
             }
@@ -122,10 +122,10 @@ Response: {
             },
             "sequenceNumber": 1,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
+            "eventBcs": "kJckGlICpXmrlZwk5MQnzIbzO1yHTql8q7eTfj6SO6gLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHpCXJBpSAqV5q5WcJOTEJ8yG8ztch06pfKu3k34+kjuoC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8::events_test::TestEvent"
               },
               "json": {
                 "message": "Second event",
@@ -133,11 +133,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+              "digest": "2sKjDmPw43QPF5BLaPVFpe5mtDvcV5GVcmvwNHjQysu5"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8"
               },
               "name": "events_test"
             }
@@ -165,10 +165,10 @@ Response: {
             },
             "sequenceNumber": 0,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
+            "eventBcs": "kJckGlICpXmrlZwk5MQnzIbzO1yHTql8q7eTfj6SO6gLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHpCXJBpSAqV5q5WcJOTEJ8yG8ztch06pfKu3k34+kjuoC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8::events_test::TestEvent"
               },
               "json": {
                 "message": "First event",
@@ -176,11 +176,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+              "digest": "2sKjDmPw43QPF5BLaPVFpe5mtDvcV5GVcmvwNHjQysu5"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8"
               },
               "name": "events_test"
             }
@@ -208,10 +208,10 @@ Response: {
             },
             "sequenceNumber": 1,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
+            "eventBcs": "kJckGlICpXmrlZwk5MQnzIbzO1yHTql8q7eTfj6SO6gLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHpCXJBpSAqV5q5WcJOTEJ8yG8ztch06pfKu3k34+kjuoC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8::events_test::TestEvent"
               },
               "json": {
                 "message": "Second event",
@@ -219,11 +219,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+              "digest": "2sKjDmPw43QPF5BLaPVFpe5mtDvcV5GVcmvwNHjQysu5"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x9097241a5202a579ab959c24e4c427cc86f33b5c874ea97cabb7937e3e923ba8"
               },
               "name": "events_test"
             }
@@ -239,6 +239,22 @@ task 10, lines 173-202:
 Response: {
   "data": {
     "noEventsTransaction": {
+      "events": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "hasPreviousPage": false
+        },
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 11, lines 204-217:
+//# run-graphql --cursors 1000 2000
+Response: {
+  "data": {
+    "outOfBounds": {
       "events": {
         "pageInfo": {
           "hasNextPage": false,

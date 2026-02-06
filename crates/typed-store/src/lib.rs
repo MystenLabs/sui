@@ -20,10 +20,16 @@ pub mod rocks;
 pub mod tidehunter_util;
 mod util;
 pub use metrics::DBMetrics;
+pub use rocks::init_write_sync;
 pub use typed_store_error::TypedStoreError;
 pub use util::be_fix_int_ser;
 
 pub type StoreError = typed_store_error::TypedStoreError;
+#[derive(Debug, PartialEq)]
+pub(crate) enum StorageType {
+    Rocks,
+    TideHunter,
+}
 
 /// A helper macro to simplify common operations for opening and debugging TypedStore (currently internally structs of DBMaps)
 /// It operates on a struct where all the members are DBMap<K, V>

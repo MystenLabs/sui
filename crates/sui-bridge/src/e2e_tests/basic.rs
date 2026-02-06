@@ -4,11 +4,10 @@
 use crate::abi::{EthSuiBridge, eth_sui_bridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::crypto::BridgeAuthorityKeyPair;
-use crate::e2e_tests::test_utils::TestClusterWrapperBuilder;
 use crate::e2e_tests::test_utils::{
-    BridgeTestClusterBuilder, get_signatures, initiate_bridge_erc20_to_sui,
-    initiate_bridge_eth_to_sui, initiate_bridge_eth_to_sui_v2, initiate_bridge_sui_to_eth,
-    initiate_bridge_sui_to_eth_v2, send_eth_tx_and_get_tx_receipt,
+    BridgeTestClusterBuilder, TestClusterWrapperBuilder, get_signatures,
+    initiate_bridge_erc20_to_sui, initiate_bridge_eth_to_sui, initiate_bridge_eth_to_sui_v2,
+    initiate_bridge_sui_to_eth, initiate_bridge_sui_to_eth_v2, send_eth_tx_and_get_tx_receipt,
 };
 use crate::encoding::TOKEN_TRANSFER_MESSAGE_VERSION_V2;
 use crate::eth_transaction_builder::build_eth_transaction;
@@ -19,18 +18,17 @@ use crate::events::{
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::types::{AddTokensOnEvmAction, BridgeAction};
 use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
-use ethers::prelude::*;
-use ethers::types::Address as EthAddress;
+use alloy::primitives::{Address as EthAddress, U256};
+use alloy::providers::Provider;
 use std::collections::HashSet;
-use sui_types::crypto::get_key_pair;
-
 use std::path::Path;
-
 use std::sync::Arc;
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_types::bridge::{
     BridgeChainId, BridgeTokenMetadata, BridgeTrait, TOKEN_ID_ETH, get_bridge,
 };
+use sui_types::coin::Coin;
+use sui_types::crypto::get_key_pair;
+use sui_types::effects::TransactionEffectsAPI;
 use tracing::info;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
@@ -51,10 +49,6 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         timer.elapsed()
     );
     let timer = std::time::Instant::now();
-    let (eth_signer, _) = bridge_test_cluster
-        .get_eth_signer_and_address()
-        .await
-        .unwrap();
 
     let sui_address = bridge_test_cluster.sui_user_address();
     let amount = 42;
@@ -64,29 +58,31 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         .await
         .unwrap();
     let events = bridge_test_cluster
-        .new_bridge_events(
-            HashSet::from_iter([
-                TokenTransferApproved.get().unwrap().clone(),
-                TokenTransferClaimed.get().unwrap().clone(),
-            ]),
-            true,
-        )
+        .new_bridge_events(HashSet::from_iter([
+            TokenTransferApproved.get().unwrap().clone(),
+            TokenTransferClaimed.get().unwrap().clone(),
+        ]))
         .await;
     // There are exactly 1 approved and 1 claimed event
     assert_eq!(events.len(), 2);
 
     let eth_coin = bridge_test_cluster
-        .sui_client()
-        .coin_read_api()
-        .get_all_coins(sui_address, None, None)
+        .grpc_client()
+        .get_owned_objects(sui_address, None, None, None)
         .await
         .unwrap()
-        .data
+        .items
         .iter()
-        .find(|c| c.coin_type.contains("ETH"))
+        .find(|o| {
+            o.struct_tag()
+                .unwrap()
+                .to_canonical_string(true)
+                .contains("ETH")
+        })
         .expect("Recipient should have received ETH coin now")
         .clone();
-    assert_eq!(eth_coin.balance, sui_amount);
+    let (_ty, balance) = Coin::extract_balance_if_coin(&eth_coin).unwrap().unwrap();
+    assert_eq!(balance, sui_amount);
     info!(
         "[Timer] Eth to Sui bridge transfer finished in {:?}",
         timer.elapsed()
@@ -100,21 +96,18 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     let sui_to_eth_bridge_action = initiate_bridge_sui_to_eth(
         &bridge_test_cluster,
         eth_address_1,
-        eth_coin.object_ref(),
+        eth_coin.compute_object_reference(),
         nonce,
         sui_amount,
     )
     .await
     .unwrap();
     let events = bridge_test_cluster
-        .new_bridge_events(
-            HashSet::from_iter([
-                SuiToEthTokenBridgeV1.get().unwrap().clone(),
-                TokenTransferApproved.get().unwrap().clone(),
-                TokenTransferClaimed.get().unwrap().clone(),
-            ]),
-            true,
-        )
+        .new_bridge_events(HashSet::from_iter([
+            SuiToEthTokenBridgeV1.get().unwrap().clone(),
+            TokenTransferApproved.get().unwrap().clone(),
+            TokenTransferClaimed.get().unwrap().clone(),
+        ]))
         .await;
     // There are exactly 1 deposit and 1 approved event
     assert_eq!(events.len(), 2);
@@ -139,30 +132,34 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     );
     assert_eq!(
         &parsed_msg.parsed_payload.target_address,
-        eth_address_1.as_bytes()
+        eth_address_1.as_slice()
     );
     assert_eq!(parsed_msg.parsed_payload.target_chain, eth_chain_id);
     assert_eq!(parsed_msg.parsed_payload.token_type, TOKEN_ID_ETH);
     assert_eq!(parsed_msg.parsed_payload.amount, sui_amount);
 
-    let message: eth_sui_bridge::Message = sui_to_eth_bridge_action.try_into().unwrap();
+    let message: eth_sui_bridge::BridgeUtils::Message =
+        sui_to_eth_bridge_action.try_into().unwrap();
     let signatures = get_signatures(bridge_test_cluster.bridge_client(), nonce, sui_chain_id).await;
+
+    let (eth_signer, _) = bridge_test_cluster.get_eth_signer_and_address().unwrap();
 
     let eth_sui_bridge = EthSuiBridge::new(
         bridge_test_cluster.contracts().sui_bridge,
-        eth_signer.clone().into(),
+        eth_signer.clone(),
     );
-    let call = eth_sui_bridge.transfer_bridged_tokens_with_signatures(signatures, message);
-    let eth_claim_tx_receipt = send_eth_tx_and_get_tx_receipt(call).await;
-    assert_eq!(eth_claim_tx_receipt.status.unwrap().as_u64(), 1);
+    let call = eth_sui_bridge.transferBridgedTokensWithSignatures(signatures, message);
+    let eth_claim_tx_receipt =
+        send_eth_tx_and_get_tx_receipt(eth_signer.clone(), call.into_transaction_request()).await;
+    assert!(eth_claim_tx_receipt.status());
     info!(
         "[Timer] Sui to Eth bridge transfer claimed in {:?}",
         timer.elapsed()
     );
     // Assert eth_address_1 has received ETH
     assert_eq!(
-        eth_signer.get_balance(eth_address_1, None).await.unwrap(),
-        U256::from(amount) * U256::exp10(18)
+        eth_signer.get_balance(eth_address_1).await.unwrap(),
+        U256::from(amount) * U256::from(10).pow(U256::from(18))
     );
 }
 
@@ -193,10 +190,7 @@ async fn test_bridge_from_eth_to_sui_to_eth_v2() {
     info!("[Timer] Bridge upgraded to V2 in {:?}", timer.elapsed());
 
     let timer = std::time::Instant::now();
-    let (eth_signer, _) = bridge_test_cluster
-        .get_eth_signer_and_address()
-        .await
-        .unwrap();
+    let (eth_signer, _) = bridge_test_cluster.get_eth_signer_and_address().unwrap();
 
     let sui_address = bridge_test_cluster.sui_user_address();
     let amount = 24;
@@ -206,28 +200,30 @@ async fn test_bridge_from_eth_to_sui_to_eth_v2() {
         .await
         .unwrap();
     let events = bridge_test_cluster
-        .new_bridge_events(
-            HashSet::from_iter([
-                TokenTransferApproved.get().unwrap().clone(),
-                TokenTransferClaimed.get().unwrap().clone(),
-            ]),
-            true,
-        )
+        .new_bridge_events(HashSet::from_iter([
+            TokenTransferApproved.get().unwrap().clone(),
+            TokenTransferClaimed.get().unwrap().clone(),
+        ]))
         .await;
     assert_eq!(events.len(), 2);
 
     let eth_coin = bridge_test_cluster
-        .sui_client()
-        .coin_read_api()
-        .get_all_coins(sui_address, None, None)
+        .grpc_client()
+        .get_owned_objects(sui_address, None, None, None)
         .await
         .unwrap()
-        .data
+        .items
         .iter()
-        .find(|c| c.coin_type.contains("ETH"))
+        .find(|o| {
+            o.struct_tag()
+                .unwrap()
+                .to_canonical_string(true)
+                .contains("ETH")
+        })
         .expect("Recipient should have received ETH coin now")
         .clone();
-    assert_eq!(eth_coin.balance, sui_amount);
+    let (_ty, balance) = Coin::extract_balance_if_coin(&eth_coin).unwrap().unwrap();
+    assert_eq!(balance, sui_amount);
     info!(
         "[Timer] Eth to Sui bridge transfer v2 finished in {:?}",
         timer.elapsed()
@@ -240,21 +236,18 @@ async fn test_bridge_from_eth_to_sui_to_eth_v2() {
     let sui_to_eth_bridge_action = initiate_bridge_sui_to_eth_v2(
         &bridge_test_cluster,
         eth_address_1,
-        eth_coin.object_ref(),
+        eth_coin.compute_object_reference(),
         nonce,
         sui_amount,
     )
     .await
     .unwrap();
     let events = bridge_test_cluster
-        .new_bridge_events(
-            HashSet::from_iter([
-                SuiToEthTokenBridgeV2.get().unwrap().clone(),
-                TokenTransferApproved.get().unwrap().clone(),
-                TokenTransferClaimed.get().unwrap().clone(),
-            ]),
-            true,
-        )
+        .new_bridge_events(HashSet::from_iter([
+            SuiToEthTokenBridgeV2.get().unwrap().clone(),
+            TokenTransferApproved.get().unwrap().clone(),
+            TokenTransferClaimed.get().unwrap().clone(),
+        ]))
         .await;
     assert_eq!(events.len(), 2);
     info!(
@@ -276,8 +269,8 @@ async fn test_bridge_from_eth_to_sui_to_eth_v2() {
         sui_address.to_vec()
     );
     assert_eq!(
-        &parsed_msg.parsed_payload.target_address,
-        eth_address_1.as_bytes()
+        parsed_msg.parsed_payload.target_address,
+        eth_address_1.to_vec()
     );
     assert_eq!(parsed_msg.parsed_payload.target_chain, eth_chain_id);
     assert_eq!(parsed_msg.parsed_payload.token_type, TOKEN_ID_ETH);
@@ -287,23 +280,25 @@ async fn test_bridge_from_eth_to_sui_to_eth_v2() {
         TOKEN_TRANSFER_MESSAGE_VERSION_V2
     );
 
-    let message: eth_sui_bridge::Message = sui_to_eth_bridge_action.try_into().unwrap();
+    let message: eth_sui_bridge::BridgeUtils::Message =
+        sui_to_eth_bridge_action.try_into().unwrap();
     let signatures = get_signatures(bridge_test_cluster.bridge_client(), nonce, sui_chain_id).await;
 
     let eth_sui_bridge = EthSuiBridge::new(
         bridge_test_cluster.contracts().sui_bridge,
-        eth_signer.clone().into(),
+        eth_signer.clone(),
     );
-    let call = eth_sui_bridge.transfer_bridged_tokens_with_signatures_v2(signatures, message);
-    let eth_claim_tx_receipt = send_eth_tx_and_get_tx_receipt(call).await;
-    assert_eq!(eth_claim_tx_receipt.status.unwrap().as_u64(), 1);
+    let call = eth_sui_bridge.transferBridgedTokensWithSignaturesV2(signatures, message);
+    let eth_claim_tx_receipt =
+        send_eth_tx_and_get_tx_receipt(eth_signer.clone(), call.into_transaction_request()).await;
+    assert!(eth_claim_tx_receipt.status());
     info!(
         "[Timer] Sui to Eth bridge transfer v2 claimed in {:?}",
         timer.elapsed()
     );
     assert_eq!(
-        eth_signer.get_balance(eth_address_1, None).await.unwrap(),
-        U256::from(amount) * U256::exp10(18)
+        eth_signer.get_balance(eth_address_1).await.unwrap(),
+        U256::from(amount) * U256::from(10).pow(U256::from(18))
     );
 }
 
@@ -391,10 +386,10 @@ async fn test_add_new_coins_on_sui_and_eth() {
     .unwrap();
 
     let response = bridge_test_cluster.sign_and_execute_transaction(&tx).await;
-    let effects = response.effects.unwrap();
-    assert_eq!(effects.status(), &SuiExecutionStatus::Success);
+    let effects = response.effects;
+    assert!(effects.status().is_ok());
     assert!(response.events.unwrap().data.iter().any(|e| {
-        let sui_bridge_event = SuiBridgeEvent::try_from_sui_event(e).unwrap().unwrap();
+        let sui_bridge_event = SuiBridgeEvent::try_from_event(e).unwrap().unwrap();
         match sui_bridge_event {
             SuiBridgeEvent::NewTokenEvent(e) => {
                 assert_eq!(e.token_id, token_id);
@@ -434,12 +429,12 @@ async fn test_add_new_coins_on_sui_and_eth() {
 
     // Add new token on EVM
     let config_address = bridge_test_cluster.contracts().bridge_config;
-    let eth_signer = bridge_test_cluster.get_eth_signer().await;
-    let eth_call = build_eth_transaction(config_address, eth_signer, certified_eth_action)
+    let eth_signer = bridge_test_cluster.get_eth_signer();
+    let eth_call = build_eth_transaction(config_address, certified_eth_action)
         .await
         .unwrap();
-    let eth_receipt = send_eth_tx_and_get_tx_receipt(eth_call).await;
-    assert_eq!(eth_receipt.status.unwrap().as_u64(), 1);
+    let eth_receipt = send_eth_tx_and_get_tx_receipt(eth_signer.clone(), eth_call).await;
+    assert!(eth_receipt.status());
 
     // Verify new tokens are added on EVM
     let (address, dp, price) = bridge_test_cluster

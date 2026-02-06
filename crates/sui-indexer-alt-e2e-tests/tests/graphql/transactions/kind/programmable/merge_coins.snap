@@ -24,7 +24,7 @@ task 3, lines 13-15:
 //> 0: SplitCoins(Gas, [Input(0), Input(1)]);
 //> 1: MergeCoins(NestedResult(0, 0), [NestedResult(0, 1)]);
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: None, command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: Some("Unused value without drop"), command: None } }
 
 task 4, line 17:
 //# create-checkpoint

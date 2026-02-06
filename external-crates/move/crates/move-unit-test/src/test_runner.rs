@@ -7,12 +7,12 @@ use crate::{
     test_reporter::{
         FailureReason, MoveError, TestFailure, TestResults, TestRunInfo, TestStatistics,
     },
+    vm_test_setup::VMTestSetup,
 };
 use anyhow::Result;
 use colored::*;
 
 use move_binary_format::{
-    binary_config::BinaryConfig,
     errors::{Location, VMResult},
     file_format::CompiledModule,
 };
@@ -32,11 +32,8 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_trace_format::format::{MoveTraceBuilder, TRACE_FILE_EXTENSION};
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use move_vm_test_utils::{
-    InMemoryStorage,
-    gas_schedule::{CostTable, Gas, GasStatus, unit_cost_schedule},
-};
+use move_vm_runtime::move_vm::MoveVM;
+use move_vm_test_utils::InMemoryStorage;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 use regex::Regex;
@@ -45,11 +42,10 @@ use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Ins
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 
 /// Test state common to all tests
-pub struct SharedTestingConfig {
+pub struct SharedTestingConfig<V: VMTestSetup> {
     report_stacktrace_on_abort: bool,
     execution_bound: u64,
-    cost_table: CostTable,
-    native_function_table: NativeFunctionTable,
+    vm_test_setup: V,
     starting_storage_state: InMemoryStorage,
     prng_seed: Option<u64>,
     num_iters: u64,
@@ -57,9 +53,9 @@ pub struct SharedTestingConfig {
     trace_location: Option<String>,
 }
 
-pub struct TestRunner {
+pub struct TestRunner<V: VMTestSetup> {
     num_threads: usize,
-    testing_config: SharedTestingConfig,
+    testing_config: SharedTestingConfig<V>,
     tests: TestPlan,
 }
 
@@ -108,7 +104,7 @@ fn convert_clever_move_abort_error(
     }
 }
 
-impl TestRunner {
+impl<V: VMTestSetup + Sync> TestRunner<V> {
     pub fn new(
         execution_bound: u64,
         num_threads: usize,
@@ -118,10 +114,7 @@ impl TestRunner {
         deterministic_generation: bool,
         trace_location: Option<String>,
         tests: TestPlan,
-        // TODO: maybe we should require the clients to always pass in a list of native functions so
-        // we don't have to make assumptions about their gas parameters.
-        native_function_table: Option<NativeFunctionTable>,
-        cost_table: Option<CostTable>,
+        vm_test_setup: V,
     ) -> Result<Self> {
         // If we want to trace the execution, check that the tracing compilation feature is
         // enabled, otherwise we won't generate a trace.
@@ -137,25 +130,12 @@ impl TestRunner {
         let modules = tests.module_info.values().map(|info| &info.module);
         let starting_storage_state =
             setup_test_storage(modules, tests.bytecode_deps_modules.iter())?;
-        let native_function_table = native_function_table.unwrap_or_else(|| {
-            move_stdlib_natives::all_natives(
-                AccountAddress::from_hex_literal("0x1").unwrap(),
-                move_stdlib_natives::GasParameters::zeros(),
-                /* silent */ false,
-            )
-        });
         Ok(Self {
             testing_config: SharedTestingConfig {
                 report_stacktrace_on_abort,
                 starting_storage_state,
                 execution_bound,
-                native_function_table,
-                // TODO: our current implementation uses a unit cost table to prevent programs from
-                // running indefinitely. This should probably be done in a different way, like halting
-                // after executing a certain number of instructions or setting a timer.
-                //
-                // From the API standpoint, we should let the client specify the cost table.
-                cost_table: cost_table.unwrap_or_else(unit_cost_schedule),
+                vm_test_setup,
                 prng_seed,
                 num_iters,
                 deterministic_generation,
@@ -255,7 +235,7 @@ impl<W: Write> TestOutput<'_, '_, W> {
     }
 }
 
-impl SharedTestingConfig {
+impl<V: VMTestSetup> SharedTestingConfig<V> {
     fn execute_via_move_vm(
         &self,
         test_plan: &ModuleTestPlan,
@@ -268,11 +248,14 @@ impl SharedTestingConfig {
         TestRunInfo,
     ) {
         // Allow loading of unpublishable modules for the purpose of running tests.
-        let vm_config = move_vm_config::runtime::VMConfig {
-            binary_config: BinaryConfig::new_unpublishable(),
-            ..Default::default()
+        let vm_config = {
+            let mut vm_config = self.vm_test_setup.vm_config();
+            vm_config
+                .binary_config
+                .allow_unpublishable_for_move_unit_testing();
+            vm_config
         };
-        let natives = self.native_function_table.clone();
+        let natives = self.vm_test_setup.native_function_table();
         let move_vm = MoveVM::new_with_config(natives, vm_config).unwrap();
         let extensions = extensions::new_extensions();
 
@@ -285,7 +268,7 @@ impl SharedTestingConfig {
 
         let mut session =
             move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
-        let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
+        let mut gas_meter = self.vm_test_setup.new_meter(Some(self.execution_bound));
 
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
         let now = Instant::now();
@@ -315,12 +298,7 @@ impl SharedTestingConfig {
         };
         let test_run_info = TestRunInfo::new(
             now.elapsed(),
-            // TODO(Gas): This doesn't look quite right...
-            //            We're not computing the number of instructions executed even with a unit gas schedule.
-            Gas::new(self.execution_bound)
-                .checked_sub(gas_meter.remaining_gas())
-                .unwrap()
-                .into(),
+            self.vm_test_setup.used_gas(self.execution_bound, gas_meter),
             trace,
         );
         match session.finish_with_extensions().0 {

@@ -3,7 +3,7 @@
 
 use crate::base::reroot_path;
 use clap::*;
-use move_package_alt::flavor::MoveFlavor;
+use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 use std::path::Path;
 

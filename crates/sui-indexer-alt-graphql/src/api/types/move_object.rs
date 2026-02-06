@@ -4,31 +4,46 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Interface, Object, connection::Connection};
+use async_graphql::Context;
+use async_graphql::Interface;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
 use futures::future::try_join_all;
-use sui_types::{dynamic_field::DynamicFieldType, object::MoveObject as NativeMoveObject};
+use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::object::MoveObject as NativeMoveObject;
 use tokio::sync::OnceCell;
 
-use crate::{
-    api::scalars::{
-        base64::Base64, big_int::BigInt, sui_address::SuiAddress, type_filter::TypeInput,
-        uint53::UInt53,
-    },
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-};
-
-use super::{
-    balance::{self, Balance},
-    coin_metadata::CoinMetadata,
-    dynamic_field::{DynamicField, DynamicFieldName},
-    move_type::MoveType,
-    move_value::MoveValue,
-    object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-    owner::Owner,
-    transaction::{CTransaction, Transaction, filter::TransactionFilter},
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address;
+use crate::api::types::address::Address;
+use crate::api::types::balance;
+use crate::api::types::balance::Balance;
+use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field;
+use crate::api::types::dynamic_field::DynamicField;
+use crate::api::types::dynamic_field::DynamicFieldName;
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
+use crate::api::types::name_record::NameRecord;
+use crate::api::types::object;
+use crate::api::types::object::CLive;
+use crate::api::types::object::CVersion;
+use crate::api::types::object::Object;
+use crate::api::types::object::VersionFilter;
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::owner::Owner;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
 
 #[derive(Clone)]
 pub(crate) struct MoveObject {
@@ -46,24 +61,24 @@ pub(crate) struct MoveObject {
     name = "IMoveObject",
     field(
         name = "contents",
-        ty = "Result<Option<MoveValue>, RpcError>",
+        ty = "Option<Result<MoveValue, RpcError>>",
         desc = "The structured representation of the object's contents."
     ),
     field(
         name = "dynamic_field",
         arg(name = "name", ty = "DynamicFieldName"),
-        ty = "Result<Option<DynamicField>, RpcError<object::Error>>",
+        ty = "Option<Result<DynamicField, RpcError<dynamic_field::Error>>>",
         desc = "Access a dynamic field on an object using its type and BCS-encoded name.\n\nReturns `null` if a dynamic field with that name could not be found attached to this object.",
     ),
     field(
         name = "dynamic_object_field",
         arg(name = "name", ty = "DynamicFieldName"),
-        ty = "Result<Option<DynamicField>, RpcError<object::Error>>",
+        ty = "Option<Result<DynamicField, RpcError<dynamic_field::Error>>>",
         desc = "Access a dynamic object field on an object using its type and BCS-encoded name.\n\nReturns `null` if a dynamic object field with that name could not be found attached to this object.",
     ),
     field(
         name = "has_public_transfer",
-        ty = "Result<Option<bool>, RpcError>",
+        ty = "Option<Result<bool, RpcError>>",
         desc = "Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.\n\nBoth these operations require the object to have both the `key` and `store` abilities.",
     ),
     field(
@@ -84,12 +99,12 @@ pub(crate) struct MoveObject {
         arg(name = "after", ty = "Option<object::CLive>"),
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<object::CLive>"),
-        ty = "Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>>",
+        ty = "Option<Result<Connection<String, DynamicField>, RpcError<object::Error>>>",
         desc = "Dynamic fields and dynamic object fields owned by this object.\n\nDynamic fields on wrapped objects can be accessed using `Address.dynamicFields`."
     ),
     field(
         name = "move_object_bcs",
-        ty = "Result<Option<Base64>, RpcError<object::Error>>",
+        ty = "Option<Result<Base64, RpcError>>",
         desc = "The Base64-encoded BCS serialize of this object, as a `MoveObject`."
     )
 )]
@@ -102,9 +117,34 @@ pub(crate) enum IMoveObject {
 /// A MoveObject is a kind of Object that reprsents data stored on-chain.
 #[Object]
 impl MoveObject {
+    /// The Move object's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        let a = self.super_.super_.address;
+        if let Some((v, d)) = self.super_.version_digest {
+            Id::MoveObjectByRef(a, v, d)
+        } else {
+            Id::MoveObjectByAddress(a)
+        }
+    }
+
     /// The MoveObject's ID.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
         self.super_.address(ctx).await
+    }
+
+    /// Fetch the address as it was at a different root version, or checkpoint.
+    ///
+    /// If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+    pub(crate) async fn address_at(
+        &self,
+        ctx: &Context<'_>,
+        root_version: Option<UInt53>,
+        checkpoint: Option<UInt53>,
+    ) -> Option<Result<Address, RpcError<address::Error>>> {
+        self.super_
+            .address_at(ctx, root_version, checkpoint)
+            .await
+            .ok()?
     }
 
     /// The version of this object that this content comes from.
@@ -140,8 +180,8 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        self.super_.balance(ctx, coin_type).await
+    ) -> Option<Result<Balance, RpcError<balance::Error>>> {
+        self.super_.balance(ctx, coin_type).await.ok()?
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -152,30 +192,33 @@ impl MoveObject {
         after: Option<balance::Cursor>,
         last: Option<u64>,
         before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        self.super_.balances(ctx, first, after, last, before).await
+    ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
+        self.super_
+            .balances(ctx, first, after, last, before)
+            .await
+            .ok()?
     }
 
     /// The structured representation of the object's contents.
-    pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
-        let Some(native) = self.native(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
-
-        let type_ = MoveType::from_native(
-            native.type_().clone().into(),
-            self.super_.super_.scope.clone(),
-        );
-
-        Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
+    pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Option<Result<MoveValue, RpcError>> {
+        let native = self.native(ctx).await.map(Option::as_ref).transpose()?;
+        Some(native.map(|n| {
+            let scope = self
+                .super_
+                .super_
+                .scope
+                .with_root_version(n.version().value());
+            let type_ = MoveType::from_native(n.type_().clone().into(), scope);
+            MoveValue::new(type_, n.contents().to_owned())
+        }))
     }
 
-    /// The domain explicitly configured as the default SuiNS name for this address.
-    pub(crate) async fn default_suins_name(
+    /// The domain explicitly configured as the default Name Service name for this address.
+    pub(crate) async fn default_name_record(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError> {
-        self.super_.default_suins_name(ctx).await
+    ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
+        self.super_.default_name_record(ctx).await.ok()?
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -185,7 +228,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Option<Result<DynamicField, RpcError<dynamic_field::Error>>> {
         let scope = &self.super_.super_.scope;
         DynamicField::by_name(
             ctx,
@@ -195,6 +238,7 @@ impl MoveObject {
             name,
         )
         .await
+        .transpose()
     }
 
     /// Dynamic fields owned by this object.
@@ -207,20 +251,25 @@ impl MoveObject {
         after: Option<CLive>,
         last: Option<u64>,
         before: Option<CLive>,
-    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("IMoveObject", "dynamicFields");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, DynamicField>, RpcError<object::Error>>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("IMoveObject", "dynamicFields");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        let dynamic_fields = DynamicField::paginate(
-            ctx,
-            self.super_.super_.scope.clone(),
-            self.super_.super_.address.into(),
-            page,
+                let dynamic_fields = DynamicField::paginate(
+                    ctx,
+                    self.super_.super_.scope.clone(),
+                    self.super_.super_.address.into(),
+                    page,
+                )
+                .await?;
+
+                Ok(dynamic_fields)
+            }
+            .await,
         )
-        .await?;
-
-        Ok(Some(dynamic_fields))
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
@@ -230,7 +279,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Option<Result<DynamicField, RpcError<dynamic_field::Error>>> {
         let scope = &self.super_.super_.scope;
         DynamicField::by_name(
             ctx,
@@ -240,6 +289,7 @@ impl MoveObject {
             name,
         )
         .await
+        .transpose()
     }
 
     /// Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
@@ -248,20 +298,24 @@ impl MoveObject {
     pub(crate) async fn has_public_transfer(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<bool>, RpcError> {
-        let Some(native) = self.native(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+    ) -> Option<Result<bool, RpcError>> {
+        async {
+            let Some(native) = self.native(ctx).await?.as_ref() else {
+                return Ok(None);
+            };
 
-        let type_ = MoveType::from_native(
-            native.type_().clone().into(),
-            self.super_.super_.scope.clone(),
-        );
+            let type_ = MoveType::from_native(
+                native.type_().clone().into(),
+                self.super_.super_.scope.clone(),
+            );
 
-        Ok(type_
-            .abilities_impl()
-            .await?
-            .map(|s| s.has_key() && s.has_store()))
+            Ok(type_
+                .abilities_impl()
+                .await?
+                .map(|s| s.has_key() && s.has_store()))
+        }
+        .await
+        .transpose()
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -271,7 +325,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
@@ -292,8 +346,8 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
-        self.super_.multi_get_balances(ctx, keys).await
+    ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
+        self.super_.multi_get_balances(ctx, keys).await.ok()?
     }
 
     /// Access dynamic object fields on an object using their types and BCS-encoded names.
@@ -303,7 +357,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
@@ -321,13 +375,17 @@ impl MoveObject {
     pub(crate) async fn move_object_bcs(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError> {
-        let Some(native) = self.native(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+    ) -> Option<Result<Base64, RpcError>> {
+        async {
+            let Some(native) = self.native(ctx).await?.as_ref() else {
+                return Ok(None);
+            };
 
-        let bytes = bcs::to_bytes(native).context("Failed to serialize MoveObject")?;
-        Ok(Some(Base64(bytes)))
+            let bytes = bcs::to_bytes(native).context("Failed to serialize MoveObject")?;
+            Ok(Some(Base64(bytes)))
+        }
+        .await
+        .transpose()
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -392,10 +450,11 @@ impl MoveObject {
         last: Option<u64>,
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+    ) -> Option<Result<Connection<String, MoveObject>, RpcError<object::Error>>> {
         self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// The object's owner kind.

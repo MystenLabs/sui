@@ -1,5 +1,17 @@
 # @mysten/prettier-plugin-move
 
+## 0.3.5
+
+### Patch Changes
+
+- adds support for string literals
+
+## 0.3.4
+
+### Patch Changes
+
+- fix issue with `spec` being treated as a keyword in a function body
+
 ## 0.3.3
 
 ### Patch Changes

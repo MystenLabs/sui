@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use tracing::{debug, error};
+use tracing::debug;
 
 use crate::git::get_cache_path;
 use crate::logging::user_error;
@@ -55,10 +55,6 @@ impl PackageSystemLock {
             lock: project_lock_path,
             source,
         })
-    }
-
-    pub fn file_mut(&mut self) -> &mut File {
-        &mut self.file
     }
 
     fn new_for_path(path: &Path, should_truncate: bool) -> std::io::Result<Self> {

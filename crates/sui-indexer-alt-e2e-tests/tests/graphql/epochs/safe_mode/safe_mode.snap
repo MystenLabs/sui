@@ -6,19 +6,17 @@ processed 2 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-19:
+task 1, lines 6-17:
 //# run-graphql
 Response: {
   "data": {
     "e0": {
-      "safeMode": {
-        "enabled": false,
-        "gasSummary": {
-          "computationCost": 0,
-          "storageCost": 0,
-          "storageRebate": 0,
-          "nonRefundableStorageFee": 0
-        }
+      "systemState": {
+        "safeMode": false,
+        "safeModeComputationRewards": "0",
+        "safeModeStorageRewards": "0",
+        "safeModeStorageRebates": "0",
+        "safeModeNonRefundableStorageFee": "0"
       }
     }
   }

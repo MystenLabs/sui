@@ -12,7 +12,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 env:
-  FORMATTER_VERSION: 0.3.3
+  FORMATTER_VERSION: 0.3.5
 
 jobs:
   tree-sitter:
@@ -22,11 +22,9 @@ jobs:
       run:
         working-directory: external-crates/move/tooling/tree-sitter
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3
-        with:
-          command: install
-          args: tree-sitter-cli
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+      - name: Install tree-sitter-cli
+        run: cargo install tree-sitter-cli
       - run: ./run-tests.sh
 
   prettier-move:
@@ -44,8 +42,8 @@ jobs:
       run:
         working-directory: ${{ matrix.working-directory }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # pin@v6.2.0
       - run: npm install --no-warnings @mysten/prettier-plugin-move@${{ env.FORMATTER_VERSION }}
       - run: npx prettier-move -c **/*.move

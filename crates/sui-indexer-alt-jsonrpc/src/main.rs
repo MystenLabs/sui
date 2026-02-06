@@ -5,12 +5,12 @@ use anyhow::Context;
 use clap::Parser;
 use prometheus::Registry;
 use sui_futures::service::Error;
-use sui_indexer_alt_jsonrpc::{
-    args::{Args, Command},
-    config::RpcLayer,
-    start_rpc,
-};
-use sui_indexer_alt_metrics::{MetricsService, uptime};
+use sui_indexer_alt_jsonrpc::args::Args;
+use sui_indexer_alt_jsonrpc::args::Command;
+use sui_indexer_alt_jsonrpc::config::RpcLayer;
+use sui_indexer_alt_jsonrpc::start_rpc;
+use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_metrics::uptime;
 use tokio::fs;
 
 // Define the `GIT_REVISION` const
@@ -35,12 +35,17 @@ async fn main() -> anyhow::Result<()> {
         .with_env()
         .init();
 
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install CryptoProvider");
+
     match args.command {
         Command::Rpc {
             database_url,
             bigtable_instance,
             db_args,
             bigtable_args,
+            consistent_reader_args,
             rpc_args,
             system_package_task_args,
             metrics_args,
@@ -73,6 +78,7 @@ async fn main() -> anyhow::Result<()> {
                 bigtable_instance,
                 db_args,
                 bigtable_args,
+                consistent_reader_args,
                 rpc_args,
                 node_args,
                 system_package_task_args,

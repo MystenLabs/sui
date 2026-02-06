@@ -21,7 +21,6 @@ use tracing::debug;
 
 use crate::{
     dependency::combine::Combined,
-    flavor::MoveFlavor,
     logging::user_info,
     package::{EnvironmentID, EnvironmentName},
     schema::{
@@ -87,7 +86,7 @@ impl ResolvedDependency {
     /// resolvers.
     ///
     /// Precondition: there are no `System` dependencies (TODO: this needs better design)
-    pub async fn resolve<F: MoveFlavor>(
+    pub async fn resolve(
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
     ) -> ResolverResult<Vec<ResolvedDependency>> {

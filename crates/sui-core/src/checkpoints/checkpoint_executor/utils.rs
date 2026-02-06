@@ -15,7 +15,7 @@ use sui_types::{
     messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary, VerifiedCheckpoint},
 };
 use tokio::sync::watch;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, instrument, warn};
 
 use super::metrics::CheckpointExecutorMetrics;
 
@@ -58,7 +58,7 @@ pub(super) fn stream_synced_checkpoints(
                     state.panic_timeout,
                 )
                 .await;
-                info!(
+                debug!(
                     "received synced checkpoint: {:?}",
                     checkpoint.sequence_number
                 );

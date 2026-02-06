@@ -4,13 +4,12 @@
 
 use std::path::PathBuf;
 
-use crate::{
-    flavor::Vanilla,
-    package::RootPackage,
-    schema::{Environment, EnvironmentName, ModeName},
-};
 use anyhow::bail;
 use clap::{ArgAction, Parser};
+use move_package_alt::{
+    PackageLoader, RootPackage, Vanilla,
+    schema::{Environment, EnvironmentName, ModeName},
+};
 
 /// Build the package
 #[derive(Debug, Clone, Parser)]
@@ -45,8 +44,10 @@ impl Build {
 
         let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(&path, environment, self.modes.clone()).await?;
+        let mut root_pkg: RootPackage<Vanilla> = PackageLoader::new(&path, environment)
+            .modes(self.modes.clone())
+            .load()
+            .await?;
 
         for pkg in root_pkg.packages() {
             println!("Package {}", pkg.name());

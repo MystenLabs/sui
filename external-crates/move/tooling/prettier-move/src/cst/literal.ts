@@ -9,6 +9,7 @@ import { treeFn } from '../printer';
  * Node: `_literal_value` in the grammar.json.
  */
 export enum Literal {
+    StringLiteral = 'string_literal',
     AddressLiteral = 'address_literal',
     BoolLiteral = 'bool_literal',
     NumLiteral = 'num_literal',
@@ -28,6 +29,8 @@ export default function (path: AstPath<Node>): treeFn | null {
             return printHexStringLiteral;
         case Literal.ByteStringLiteral:
             return printByteStringLiteral;
+        case Literal.StringLiteral:
+            return printStringLiteral;
     }
 
     return null;
@@ -37,6 +40,13 @@ export default function (path: AstPath<Node>): treeFn | null {
  * Print `byte_string_literal` node.
  */
 export function printByteStringLiteral(path: AstPath<Node>): Doc {
+    return path.node.text;
+}
+
+/**
+ * Print `string_literal` node.
+ */
+export function printStringLiteral(path: AstPath<Node>): Doc {
     return path.node.text;
 }
 

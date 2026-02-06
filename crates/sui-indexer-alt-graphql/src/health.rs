@@ -1,21 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
-use anyhow::{anyhow, bail};
-use axum::{
-    Extension, Json,
-    extract::Query,
-    http::StatusCode,
-    response::{IntoResponse, Response as AxumResponse},
-};
+use anyhow::anyhow;
+use async_graphql::indexmap::IndexMap;
+use axum::Extension;
+use axum::Json;
+use axum::extract::Query;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::response::Response as AxumResponse;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::net::TcpStream;
 use url::Url;
 
-use crate::{WatermarksLock, config::HealthConfig};
+use crate::WatermarksLock;
+use crate::config::HealthConfig;
 
 /// Extension that holds a DB URL to probe as part of health checks.
 #[derive(Clone)]
@@ -35,6 +36,9 @@ pub(crate) struct Response {
     #[serde(skip_serializing_if = "Option::is_none")]
     checkpoint_lag_ms: Option<u64>,
 
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pipelines: IndexMap<String, u64>,
+
     #[serde(skip_serializing_if = "Vec::is_empty")]
     errors: Vec<String>,
 }
@@ -50,14 +54,7 @@ pub(crate) async fn check(
 ) -> Response {
     let mut errors = vec![];
 
-    let lag = match check_watermarks(&watermarks).await {
-        Ok(lag) => Some(lag),
-
-        Err(e) => {
-            errors.push(e.to_string());
-            None
-        }
-    };
+    let (lag, pipelines) = check_watermarks(&watermarks).await;
 
     if let Err(e) = check_connection(&db_url).await {
         errors.push(format!("DB probe failed: {e}"));
@@ -65,27 +62,35 @@ pub(crate) async fn check(
 
     let max_lag = params
         .max_checkpoint_lag_ms
-        .map(Duration::from_millis)
-        .unwrap_or(config.max_checkpoint_lag);
+        .unwrap_or(config.max_checkpoint_lag.as_millis() as u64);
 
-    if lag.is_some_and(|l| l > max_lag) {
+    if lag > max_lag {
         errors.push("Watermark lag is too high".to_owned());
     }
 
     Response {
-        checkpoint_lag_ms: lag.map(|l| l.as_millis() as u64),
+        checkpoint_lag_ms: Some(lag),
+        pipelines,
         errors,
     }
 }
 
 /// Returns the lag between the latest checkpoint the indexer is aware of and the current time.
-async fn check_watermarks(watermarks: &WatermarksLock) -> anyhow::Result<Duration> {
+async fn check_watermarks(watermarks: &WatermarksLock) -> (u64, IndexMap<String, u64>) {
     let now = Utc::now();
-    let Some(then) = watermarks.read().await.timestamp_hi() else {
-        bail!("Invalid watermark timestamp");
-    };
+    let watermarks = watermarks.read().await;
 
-    Ok((now - then).to_std().unwrap_or_default())
+    let mut pipeline_lags: Vec<(String, u64)> = watermarks
+        .per_pipeline()
+        .iter()
+        .map(|(pipeline, watermark)| (pipeline.clone(), watermark.lag_ms(now)))
+        .collect();
+    pipeline_lags.sort_by(|(name_a, lag_a), (name_b, lag_b)| {
+        lag_b.cmp(lag_a).then_with(|| name_a.cmp(name_b))
+    });
+
+    let pipelines = pipeline_lags.into_iter().collect();
+    (watermarks.lag_ms(now), pipelines)
 }
 
 /// Checks that the service can talk to the database.

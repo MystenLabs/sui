@@ -4,13 +4,13 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_core::{
-    authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
+    authority_aggregator::AuthorityAggregator,
     authority_client::NetworkAuthorityClient,
     epoch::committee_store::CommitteeStore,
-    quorum_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
     safe_client::SafeClientMetricsBase,
+    transaction_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
 };
-use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_rpc_api::Client;
 use tracing::{debug, error, trace};
 
 /// A ReconfigObserver that polls FullNode periodically
@@ -20,10 +20,9 @@ use tracing::{debug, error, trace};
 /// as stress, but may not be suitable in some other cases.
 #[derive(Clone)]
 pub struct FullNodeReconfigObserver {
-    pub fullnode_client: SuiClient,
+    pub fullnode_client: Client,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
-    auth_agg_metrics: Arc<AuthAggMetrics>,
 }
 
 impl FullNodeReconfigObserver {
@@ -31,21 +30,16 @@ impl FullNodeReconfigObserver {
         fullnode_rpc_url: &str,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: Arc<AuthAggMetrics>,
     ) -> Self {
         Self {
-            fullnode_client: SuiClientBuilder::default()
-                .build(fullnode_rpc_url)
-                .await
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "Can't create SuiClient with rpc url {fullnode_rpc_url}: {:?}",
-                        e
-                    )
-                }),
+            fullnode_client: Client::new(fullnode_rpc_url).unwrap_or_else(|e| {
+                panic!(
+                    "Can't create SuiClient with rpc url {fullnode_rpc_url}: {:?}",
+                    e
+                )
+            }),
             committee_store,
             safe_client_metrics_base,
-            auth_agg_metrics,
         }
     }
 }
@@ -59,12 +53,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
     async fn run(&mut self, driver: Arc<dyn AuthorityAggregatorUpdatable<NetworkAuthorityClient>>) {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-            match self
-                .fullnode_client
-                .governance_api()
-                .get_latest_sui_system_state()
-                .await
-            {
+            match self.fullnode_client.get_system_state_summary(None).await {
                 Ok(sui_system_state) => {
                     let epoch_id = sui_system_state.epoch;
                     if epoch_id > driver.epoch() {
@@ -79,7 +68,6 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                             sui_system_state.reference_gas_price,
                             &self.committee_store,
                             self.safe_client_metrics_base.clone(),
-                            self.auth_agg_metrics.clone(),
                         );
                         driver.update_authority_aggregator(Arc::new(auth_agg));
                     } else {

@@ -126,7 +126,7 @@ public fun prev<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: 
 }
 
 /// Borrows the key for the next entry of the specified key `k: K` in the table
-/// `table: &LinkedTable<K, V>`. Returns None if the entry does not have a predecessor.
+/// `table: &LinkedTable<K, V>`. Returns None if the entry does not have a successor.
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
 /// that key `k: K`
 public fun next<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: K): &Option<K> {

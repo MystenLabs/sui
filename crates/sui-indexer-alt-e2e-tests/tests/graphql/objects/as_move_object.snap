@@ -22,16 +22,16 @@ task 3, lines 12-27:
 Response: {
   "data": {
     "object": {
-      "objectBcs": "AAEBAgAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHpgalAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiAJXmDaTN9/8Me8Ls9qOM7J6Xg4QCrKcwjLGSUh7RlNrGATDwAAAAAA",
+      "objectBcs": "AAEBAgAAAAAAAAAosNgmeGrTdLnm552kotbI1fI8QTrrdvoLB+VjbRc6So9galAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiA6FRkwQZSZpOiqyn60vqQr3FF9jxMCc5e4igsyAUCtkWATDwAAAAAA",
       "asMoveObject": {
-        "objectBcs": "AAEBAgAAAAAAAAAov/XpakpcD3NIJZx6v9/ZmUBcArnpwNDVnsZppTsQTHpgalAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiAJXmDaTN9/8Me8Ls9qOM7J6Xg4QCrKcwjLGSUh7RlNrGATDwAAAAAA",
-        "moveObjectBcs": "AQECAAAAAAAAACi/9elqSlwPc0glnHq/39mZQFwCuenA0NWexmmlOxBMemBqUDHZEAEA",
+        "objectBcs": "AAEBAgAAAAAAAAAosNgmeGrTdLnm552kotbI1fI8QTrrdvoLB+VjbRc6So9galAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiA6FRkwQZSZpOiqyn60vqQr3FF9jxMCc5e4igsyAUCtkWATDwAAAAAA",
+        "moveObjectBcs": "AQECAAAAAAAAACiw2CZ4atN0uebnnaSi1sjV8jxBOut2+gsH5WNtFzpKj2BqUDHZEAEA",
         "contents": {
           "type": {
             "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
           },
           "json": {
-            "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+            "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
             "balance": "299999998012000"
           }
         }

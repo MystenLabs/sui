@@ -5,21 +5,24 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use anyhow::Result;
-use diesel::{ExpressionMethods, QueryDsl};
+use async_trait::async_trait;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
-use sui_indexer_alt_framework::{
-    pipeline::Processor,
-    postgres::{Connection, handler::Handler},
-    types::{full_checkpoint_content::Checkpoint, object::Owner},
-};
-use sui_indexer_alt_schema::{
-    schema::tx_affected_addresses, transactions::StoredTxAffectedAddress,
-};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_schema::schema::tx_affected_addresses;
+use sui_indexer_alt_schema::transactions::StoredTxAffectedAddress;
+use sui_types::balance::Balance;
+use sui_types::effects::AccumulatorValue;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::TransactionDataAPI;
 
+use crate::handlers::affected_addresses;
 use crate::handlers::cp_sequence_numbers::tx_interval;
-use async_trait::async_trait;
 
 pub(crate) struct TxAffectedAddresses;
 
@@ -43,14 +46,26 @@ impl Processor for TxAffectedAddresses {
             let tx_sequence_number = (first_tx + i) as i64;
             let sender = tx.transaction.sender();
             let payer = tx.transaction.gas_data().owner;
-            let recipients = tx.effects.all_changed_objects().into_iter().filter_map(
-                |(_object_ref, owner, _write_kind)| match owner {
-                    Owner::AddressOwner(address) => Some(address),
-                    _ => None,
-                },
-            );
+            let recipients = affected_addresses(&tx.effects);
 
-            let affected_addresses: Vec<StoredTxAffectedAddress> = recipients
+            let accumulator_addresses =
+                tx.effects
+                    .accumulator_events()
+                    .into_iter()
+                    .filter_map(|event| {
+                        let ty = &event.write.address.ty;
+                        if Balance::is_balance_type(ty)
+                            && matches!(&event.write.value, AccumulatorValue::Integer(_))
+                        {
+                            // Other types and variants are not used for balance changes
+                            Some(event.write.address.address)
+                        } else {
+                            None
+                        }
+                    });
+
+            let affected_addresses: Vec<StoredTxAffectedAddress> = accumulator_addresses
+                .chain(recipients)
                 .chain(vec![sender, payer])
                 .unique()
                 .map(|a| StoredTxAffectedAddress {
@@ -99,14 +114,14 @@ impl Handler for TxAffectedAddresses {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use diesel_async::RunQueryDsl;
-    use sui_indexer_alt_framework::{
-        Indexer, types::test_checkpoint_data_builder::TestCheckpointBuilder,
-    };
+    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_indexer_alt_schema::MIGRATIONS;
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
+
+    use super::*;
 
     async fn get_all_tx_affected_addresses(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_affected_addresses::table

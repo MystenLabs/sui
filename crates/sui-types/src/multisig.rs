@@ -109,6 +109,19 @@ impl AuthenticatorTrait for MultiSig {
                 error: "Invalid multisig pubkey".to_string(),
             })?;
 
+        // Additional validation on zkLogin public identifier struct if flag is enabled.
+        if verify_params.validate_zklogin_public_identifier {
+            for (pk, _weight) in &self.multisig_pk.pk_map {
+                if let PublicKey::ZkLogin(zklogin_pk) = pk {
+                    zklogin_pk
+                        .validate()
+                        .map_err(|e| SuiErrorKind::InvalidSignature {
+                            error: format!("Invalid zkLogin pk in multisig: {}", e),
+                        })?;
+                }
+            }
+        }
+
         if SuiAddress::from(&self.multisig_pk) != multisig_address {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid address derived from pks".to_string(),

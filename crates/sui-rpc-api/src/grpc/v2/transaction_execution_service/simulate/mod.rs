@@ -5,7 +5,6 @@ use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
-use crate::reader::StateReader;
 use itertools::Itertools;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMaskTree;
@@ -20,9 +19,6 @@ use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_types::balance_change::derive_balance_changes_2;
-use sui_types::base_types::ObjectID;
-use sui_types::base_types::ObjectRef;
-use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction_executor::SimulateTransactionResult;
@@ -117,7 +113,11 @@ pub fn simulate_transaction(
             estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
 
             let simulation_result = executor
-                .simulate_transaction(estimation_transaction, TransactionChecks::Enabled)
+                .simulate_transaction(
+                    estimation_transaction,
+                    TransactionChecks::Enabled,
+                    true, /* allow mock gas coin */
+                )
                 .map_err(anyhow::Error::from)?;
 
             if !simulation_result.effects.status().is_ok() {
@@ -155,38 +155,34 @@ pub fn simulate_transaction(
         }
 
         if transaction.gas_data().payment.is_empty() {
-            let input_objects = transaction
-                .input_objects()
-                .map_err(anyhow::Error::from)?
-                .iter()
-                .flat_map(|obj| match obj {
-                    sui_types::transaction::InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                        Some(*id)
-                    }
-                    _ => None,
-                })
-                .collect_vec();
-            let gas_coins = select_gas(
-                &service.reader,
-                transaction.gas_data().owner,
-                transaction.gas_data().budget,
+            select_gas(
+                service,
+                &mut transaction,
                 protocol_config.max_gas_payment_objects(),
-                &input_objects,
             )?;
-            transaction.gas_data_mut().payment = gas_coins;
         }
     }
+
+    let allow_mock_gas_coin = checks.disabled() || !request.do_gas_selection();
 
     let SimulateTransactionResult {
         effects,
         events,
         objects,
         execution_result,
-        mock_gas_id: _,
+        mock_gas_id,
         unchanged_loaded_runtime_objects,
     } = executor
-        .simulate_transaction(transaction.clone(), checks)
+        .simulate_transaction(transaction.clone(), checks, allow_mock_gas_coin)
         .map_err(anyhow::Error::from)?;
+
+    if !allow_mock_gas_coin && mock_gas_id.is_some() {
+        // If we don't allow for using a mock coin, but we still did, return a server error
+        return Err(RpcError::new(
+            tonic::Code::Internal,
+            "unexpected mock gas coin used",
+        ));
+    }
 
     let transaction = if let Some(submask) = read_mask.subtree("transaction") {
         let mut message = ExecutedTransaction::default();
@@ -374,49 +370,133 @@ fn round_up_to_nearest(value: u64, step: u64) -> u64 {
 }
 
 fn select_gas(
-    reader: &StateReader,
-    owner: SuiAddress,
-    budget: u64,
+    service: &RpcService,
+    transaction: &mut sui_types::transaction::TransactionData,
     max_gas_payment_objects: u32,
-    input_objects: &[ObjectID],
-) -> Result<Vec<ObjectRef>> {
+) -> Result<()> {
+    use sui_types::gas_coin::GAS;
     use sui_types::gas_coin::GasCoin;
+    use sui_types::transaction::Command;
+    use sui_types::transaction::Reservation;
+    use sui_types::transaction::TransactionDataAPI;
+    use sui_types::transaction::TransactionExpiration;
+    use sui_types::transaction::WithdrawalTypeArg;
 
-    let gas_coins = reader
-        .inner()
-        .indexes()
-        .ok_or_else(RpcError::not_found)?
-        .owned_objects_iter(owner, Some(GasCoin::type_()), None)?
-        .filter_ok(|info| !input_objects.contains(&info.object_id))
-        .filter_map_ok(|info| reader.inner().get_object(&info.object_id))
-        // filter for objects which are not ConsensusAddress owned,
-        // since only Address owned can be used for gas payments today
-        .filter_ok(|object| !object.is_consensus())
-        .filter_map_ok(|object| {
-            GasCoin::try_from(&object)
-                .ok()
-                .map(|coin| (object.compute_object_reference(), coin.value()))
-        })
-        .take(max_gas_payment_objects as usize);
+    let reader = &service.reader;
 
-    let mut selected_gas = vec![];
-    let mut selected_gas_value = 0;
+    let owner = transaction.gas_data().owner;
+    let budget = transaction.gas_data().budget;
 
-    for maybe_coin in gas_coins {
-        let (object_ref, value) =
-            maybe_coin.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
-        selected_gas.push(object_ref);
-        selected_gas_value += value;
-    }
+    let gas_coin_used = transaction
+        .kind()
+        .iter_commands()
+        .any(Command::is_gas_coin_used);
+    let address_balance = reader
+        .lookup_address_balance(owner, GAS::type_())
+        .map(|balance| {
+            // Sum up the total SUI reservations for the `owner` so that we can deduct that from the
+            // available address balance for determining if an account as sufficient funds.
+            let reserved_sui = transaction
+                .get_funds_withdrawals()
+                .into_iter()
+                .filter_map(|w| {
+                    // Skip if this withdrawal isn't for the gas owner
+                    if w.owner_for_withdrawal(&*transaction) != owner {
+                        return None;
+                    }
+
+                    // Skip if this withdrawal isn't for SUI
+                    let WithdrawalTypeArg::Balance(coin_type) = &w.type_arg;
+                    if !GAS::is_gas_type(coin_type) {
+                        return None;
+                    }
+
+                    match w.reservation {
+                        Reservation::MaxAmountU64(value) => Some(value),
+                    }
+                })
+                .sum::<u64>();
+
+            balance.saturating_sub(reserved_sui)
+        });
+
+    // If the gas coin isn't used and there is sufficient address balance budget to satisfy the
+    // required budget then we will use the `owner`s address balance to pay for gas. Otherwise we
+    // fallback to doing coin selection
+    let selected_gas_value = if !gas_coin_used
+        && let Some(address_balance) = address_balance
+        && address_balance >= budget
+    {
+        // We probably don't need to do this, but explicitly clear out the payment to force using
+        // Address balance
+        transaction.gas_data_mut().payment.clear();
+
+        let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+
+        *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
+            min_epoch: Some(current_epoch),
+            max_epoch: Some(current_epoch.saturating_add(1)),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: service.chain_id,
+            nonce: rand::random(), // generate a random nonce to use
+        };
+
+        budget
+    } else {
+        let input_objects = transaction
+            .input_objects()
+            .map_err(anyhow::Error::from)?
+            .iter()
+            .flat_map(|obj| match obj {
+                sui_types::transaction::InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .collect_vec();
+
+        let gas_coins = reader
+            .inner()
+            .indexes()
+            .ok_or_else(RpcError::not_found)?
+            .owned_objects_iter(owner, Some(GasCoin::type_()), None)?
+            .filter_ok(|info| !input_objects.contains(&info.object_id))
+            .filter_map_ok(|info| reader.inner().get_object(&info.object_id))
+            // filter for objects which are not ConsensusAddress owned,
+            // since only Address owned can be used for gas payments today
+            .filter_ok(|object| !object.is_consensus())
+            .filter_map_ok(|object| {
+                GasCoin::try_from(&object)
+                    .ok()
+                    .map(|coin| (object.compute_object_reference(), coin.value()))
+            })
+            .take(max_gas_payment_objects as usize);
+
+        let mut selected_gas = vec![];
+        let mut selected_gas_value = 0;
+
+        for maybe_coin in gas_coins {
+            let (object_ref, value) =
+                maybe_coin.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            selected_gas.push(object_ref);
+            selected_gas_value += value;
+        }
+
+        transaction.gas_data_mut().payment = selected_gas;
+
+        selected_gas_value
+    };
 
     if selected_gas_value >= budget {
-        Ok(selected_gas)
+        Ok(())
     } else {
         Err(RpcError::new(
             tonic::Code::InvalidArgument,
             format!(
-                "unable to select sufficient gas coins from account {owner} \
-                    to satisfy required budget {budget}"
+                "Unable to perform gas selection due to insufficient SUI \
+                balance (in address balance or coins) for account {owner} \
+                to satisfy required budget {budget}."
             ),
         ))
     }

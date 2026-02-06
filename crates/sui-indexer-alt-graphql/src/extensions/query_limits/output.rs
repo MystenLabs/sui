@@ -1,18 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    ServerResult, Value, Variables, parser::types::ExecutableDocument, registry::Registry,
-};
-use serde::{Deserialize, Serialize};
+use async_graphql::ServerResult;
+use async_graphql::Value;
+use async_graphql::Variables;
+use async_graphql::parser::types::ExecutableDocument;
+use async_graphql::registry::Registry;
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::pagination::{PaginationConfig, is_connection};
-
-use super::{
-    QueryLimitsConfig,
-    error::{Error, ErrorKind},
-    visitor::{Driver, FieldDriver, Visitor},
-};
+use crate::extensions::query_limits::QueryLimitsConfig;
+use crate::extensions::query_limits::error::Error;
+use crate::extensions::query_limits::error::ErrorKind;
+use crate::extensions::query_limits::visitor::Driver;
+use crate::extensions::query_limits::visitor::FieldDriver;
+use crate::extensions::query_limits::visitor::Visitor;
+use crate::pagination::PaginationConfig;
+use crate::pagination::is_connection;
 
 /// How many output nodes are estimated to be output from this query.
 #[derive(Serialize, Deserialize)]

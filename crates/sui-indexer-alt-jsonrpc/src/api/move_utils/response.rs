@@ -2,20 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use move_binary_format::file_format::{Ability, AbilitySet, Visibility};
-use sui_json_rpc_types::{
-    SuiMoveAbility, SuiMoveAbilitySet, SuiMoveNormalizedFunction, SuiMoveNormalizedType,
-    SuiMoveVisibility,
-};
-use sui_package_resolver::{FunctionDef, OpenSignature, OpenSignatureBody, Reference};
-use sui_types::{Identifier, base_types::ObjectID};
+use move_binary_format::file_format::Ability;
+use move_binary_format::file_format::AbilitySet;
+use move_binary_format::file_format::Visibility;
+use sui_json_rpc_types::SuiMoveAbility;
+use sui_json_rpc_types::SuiMoveAbilitySet;
+use sui_json_rpc_types::SuiMoveNormalizedFunction;
+use sui_json_rpc_types::SuiMoveNormalizedType;
+use sui_json_rpc_types::SuiMoveVisibility;
+use sui_package_resolver::FunctionDef;
+use sui_package_resolver::OpenSignature;
+use sui_package_resolver::OpenSignatureBody;
+use sui_package_resolver::Reference;
+use sui_types::Identifier;
+use sui_types::base_types::ObjectID;
 
-use crate::{
-    context::Context,
-    error::{RpcError, invalid_params},
-};
-
-use super::error::Error;
+use crate::api::move_utils::error::Error;
+use crate::context::Context;
+use crate::error::RpcError;
+use crate::error::invalid_params;
 
 /// Load information about a function, and convert it into a JSON-RPC response.
 pub(super) async fn function(

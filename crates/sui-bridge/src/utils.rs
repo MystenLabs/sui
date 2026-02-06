@@ -7,55 +7,116 @@ use crate::abi::{
 use crate::config::{
     BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig, WatchdogConfig, default_ed25519_key_pair,
 };
-use crate::crypto::BridgeAuthorityKeyPair;
-use crate::crypto::BridgeAuthorityPublicKeyBytes;
+use crate::crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKeyBytes};
 use crate::server::APPLICATION_JSON;
-use crate::types::BridgeCommittee;
-use crate::types::{AddTokensOnSuiAction, BridgeAction};
+use crate::types::{AddTokensOnSuiAction, BridgeAction, BridgeCommittee};
+use alloy::network::EthereumWallet;
+use alloy::primitives::Address as EthAddress;
+use alloy::providers::{ProviderBuilder, RootProvider, WsConnect};
+use alloy::signers::local::PrivateKeySigner;
 use anyhow::anyhow;
-use ethers::core::k256::ecdsa::SigningKey;
-use ethers::middleware::SignerMiddleware;
-use ethers::prelude::*;
-use ethers::providers::{Http, Provider};
-use ethers::signers::Wallet;
-use ethers::types::Address as EthAddress;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::secp256k1::Secp256k1KeyPair;
-use fastcrypto::traits::EncodeDecodeBase64;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
 use futures::future::join_all;
+use move_core_types::language_storage::StructTag;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::Config;
-use sui_json_rpc_types::SuiExecutionStatus;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keypair_file::read_key;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
-use sui_types::bridge::BridgeChainId;
-use sui_types::bridge::{BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME};
+use sui_types::bridge::{
+    BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME, BridgeChainId,
+};
 use sui_types::committee::StakeUnit;
-use sui_types::crypto::SuiKeyPair;
-use sui_types::crypto::ToFromBytes;
-use sui_types::crypto::get_key_pair;
+use sui_types::crypto::{SuiKeyPair, ToFromBytes, get_key_pair};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::{ObjectArg, TransactionData};
+use url::Url;
 
-pub type EthSigner = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
+pub struct EthBridgeContracts {
+    pub bridge: EthSuiBridge::EthSuiBridgeInstance<EthProvider>,
+    pub committee: EthBridgeCommittee::EthBridgeCommitteeInstance<EthProvider>,
+    pub limiter: EthBridgeLimiter::EthBridgeLimiterInstance<EthProvider>,
+    pub vault: EthBridgeVault::EthBridgeVaultInstance<EthProvider>,
+    pub config: EthBridgeConfig::EthBridgeConfigInstance<EthProvider>,
+}
 
-pub struct EthBridgeContracts<P> {
-    pub bridge: EthSuiBridge<Provider<P>>,
-    pub committee: EthBridgeCommittee<Provider<P>>,
-    pub limiter: EthBridgeLimiter<Provider<P>>,
-    pub vault: EthBridgeVault<Provider<P>>,
-    pub config: EthBridgeConfig<Provider<P>>,
+pub type EthProvider = Arc<RootProvider<alloy::network::Ethereum>>;
+pub type EthSignerProvider = Arc<
+    alloy::providers::fillers::FillProvider<
+        alloy::providers::fillers::JoinFill<
+            alloy::providers::fillers::JoinFill<
+                alloy::providers::Identity,
+                alloy::providers::fillers::JoinFill<
+                    alloy::providers::fillers::GasFiller,
+                    alloy::providers::fillers::JoinFill<
+                        alloy::providers::fillers::BlobGasFiller,
+                        alloy::providers::fillers::JoinFill<
+                            alloy::providers::fillers::NonceFiller,
+                            alloy::providers::fillers::ChainIdFiller,
+                        >,
+                    >,
+                >,
+            >,
+            alloy::providers::fillers::WalletFiller<EthereumWallet>,
+        >,
+        EthProvider,
+        alloy::network::Ethereum,
+    >,
+>;
+pub type EthWsProvider = Arc<
+    alloy::providers::fillers::FillProvider<
+        alloy::providers::fillers::JoinFill<
+            alloy::providers::Identity,
+            alloy::providers::fillers::JoinFill<
+                alloy::providers::fillers::GasFiller,
+                alloy::providers::fillers::JoinFill<
+                    alloy::providers::fillers::BlobGasFiller,
+                    alloy::providers::fillers::JoinFill<
+                        alloy::providers::fillers::NonceFiller,
+                        alloy::providers::fillers::ChainIdFiller,
+                    >,
+                >,
+            >,
+        >,
+        alloy::providers::RootProvider<alloy::network::Ethereum>,
+        alloy::network::Ethereum,
+    >,
+>;
+
+pub fn get_eth_provider(url: &str) -> anyhow::Result<EthProvider> {
+    let url = Url::parse(url).map_err(|e| anyhow!("Invalid RPC URL: {}", e))?;
+    let provider = RootProvider::new_http(url);
+    Ok(Arc::new(provider))
+}
+
+pub fn get_eth_signer_provider(
+    url: &str,
+    private_key_hex: &str,
+) -> anyhow::Result<EthSignerProvider> {
+    let signer = PrivateKeySigner::from_str(private_key_hex)
+        .map_err(|e| anyhow!("Invalid private key: {}", e))?;
+    let wallet = EthereumWallet::from(signer);
+    let provider = ProviderBuilder::new()
+        .wallet(wallet)
+        .connect_provider(get_eth_provider(url)?);
+    Ok(Arc::new(provider))
+}
+
+pub async fn get_eth_ws_provider(url: &str) -> anyhow::Result<EthWsProvider> {
+    let url = Url::parse(url).map_err(|e| anyhow!("Invalid WebSocket URL: {}", e))?;
+    let ws = WsConnect::new(url);
+    let provider = ProviderBuilder::new().connect_ws(ws).await?;
+    Ok(Arc::new(provider))
 }
 
 /// Generate Bridge Authority key (Secp256k1KeyPair) and write to a file as base64 encoded `privkey`.
@@ -104,9 +165,9 @@ pub fn generate_bridge_client_key_and_write_to_file(
 }
 
 /// Given the address of SuiBridge Proxy, return the addresses of the committee, limiter, vault, and config.
-pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 'static>(
+pub async fn get_eth_contract_addresses(
     bridge_proxy_address: EthAddress,
-    provider: &Arc<Provider<P>>,
+    provider: EthProvider,
 ) -> anyhow::Result<(
     EthAddress,
     EthAddress,
@@ -124,11 +185,54 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
     let bridge_config = EthBridgeConfig::new(config_address, provider.clone());
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
     let vault_address: EthAddress = sui_bridge.vault().call().await?;
-    let vault = EthBridgeVault::new(vault_address, provider.clone());
-    let weth_address: EthAddress = vault.w_eth().call().await?;
-    let usdt_address: EthAddress = bridge_config.token_address_of(4).call().await?;
-    let wbtc_address: EthAddress = bridge_config.token_address_of(1).call().await?;
-    let lbtc_address: EthAddress = bridge_config.token_address_of(6).call().await?;
+
+    // Token address lookups are only used for watchdog monitoring and are not critical
+    // for the signing server. If vault_address is zero (can happen due to storage layout
+    // mismatch during upgrades), skip these lookups and use zero addresses.
+    let (weth_address, usdt_address, wbtc_address, lbtc_address) =
+        if vault_address.is_zero() {
+            tracing::warn!(
+                "Vault address is zero - likely storage layout mismatch. \
+            Token address lookups skipped. Watchdog monitoring will be limited."
+            );
+            (
+                EthAddress::ZERO,
+                EthAddress::ZERO,
+                EthAddress::ZERO,
+                EthAddress::ZERO,
+            )
+        } else {
+            let vault = EthBridgeVault::new(vault_address, provider.clone());
+            let weth_address: EthAddress = vault.wETH().call().await.unwrap_or_else(|e| {
+                tracing::warn!("Failed to get wETH address from vault: {:?}", e);
+                EthAddress::ZERO
+            });
+            let usdt_address: EthAddress = bridge_config
+                .tokenAddressOf(4)
+                .call()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to get USDT address: {:?}", e);
+                    EthAddress::ZERO
+                });
+            let wbtc_address: EthAddress = bridge_config
+                .tokenAddressOf(1)
+                .call()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to get WBTC address: {:?}", e);
+                    EthAddress::ZERO
+                });
+            let lbtc_address: EthAddress = bridge_config
+                .tokenAddressOf(6)
+                .call()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to get LBTC address: {:?}", e);
+                    EthAddress::ZERO
+                });
+            (weth_address, usdt_address, wbtc_address, lbtc_address)
+        };
 
     Ok((
         committee_address,
@@ -143,10 +247,10 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
 }
 
 /// Given the address of SuiBridge Proxy, return the contracts of the committee, limiter, vault, and config.
-pub async fn get_eth_contracts<P: ethers::providers::JsonRpcClient + 'static>(
+pub async fn get_eth_contracts(
     bridge_proxy_address: EthAddress,
-    provider: &Arc<Provider<P>>,
-) -> anyhow::Result<EthBridgeContracts<P>> {
+    provider: EthProvider,
+) -> anyhow::Result<EthBridgeContracts> {
     let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
     let committee_address: EthAddress = sui_bridge.committee().call().await?;
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
@@ -210,7 +314,10 @@ pub fn generate_bridge_node_config_and_write_to_file(
             sui_bridge_next_sequence_number_override: None,
         },
         eth: EthConfig {
-            eth_rpc_url: "your_eth_rpc_url".to_string(),
+            eth_rpc_url: None, // to be deprecated
+            eth_rpc_urls: Some(vec!["your_eth_rpc_url".to_string()]),
+            eth_rpc_quorum: 1,
+            eth_health_check_interval_secs: 300,
             eth_bridge_proxy_address: "0x0000000000000000000000000000000000000000".to_string(),
             eth_bridge_chain_id: BridgeChainId::EthSepolia as u8,
             eth_contracts_start_block_fallback: Some(0),
@@ -239,17 +346,6 @@ pub fn generate_bridge_node_config_and_write_to_file(
     config.save(path)
 }
 
-pub async fn get_eth_signer_client(url: &str, private_key_hex: &str) -> anyhow::Result<EthSigner> {
-    let provider = Provider::<Http>::try_from(url)
-        .unwrap()
-        .interval(std::time::Duration::from_millis(2000));
-    let chain_id = provider.get_chainid().await?;
-    let wallet = Wallet::from_str(private_key_hex)
-        .unwrap()
-        .with_chain_id(chain_id.as_u64());
-    Ok(SignerMiddleware::new(provider, wallet))
-}
-
 pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
     wallet_context: &WalletContext,
     bridge_arg: ObjectArg,
@@ -260,13 +356,8 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
 ) -> BridgeAction {
     assert!(token_ids.len() == token_packages_dir.len());
     assert!(token_prices.len() == token_packages_dir.len());
-    let sui_client = wallet_context.get_client().await.unwrap();
-    let quorum_driver_api = Arc::new(sui_client.quorum_driver_api().clone());
-    let rgp = sui_client
-        .governance_api()
-        .get_reference_gas_price()
-        .await
-        .unwrap();
+    let client = wallet_context.grpc_client().unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
     let senders = wallet_context.get_addresses();
     // We want each sender to deal with one coin
@@ -285,18 +376,11 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
             .publish(token_package_dir.to_path_buf())
             .build();
         let tx = wallet_context.sign_transaction(&tx).await;
-        let api_clone = quorum_driver_api.clone();
+        let api_clone = client.clone();
         publish_tokens_tasks.push(tokio::spawn(async move {
-            api_clone.execute_transaction_block(
-                tx,
-                SuiTransactionBlockResponseOptions::new()
-                    .with_effects()
-                    .with_input()
-                    .with_events()
-                    .with_object_changes()
-                    .with_balance_changes(),
-                Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
-            ).await
+            api_clone
+                .execute_transaction_and_wait_for_checkpoint(&tx)
+                .await
         }));
     }
     let publish_coin_responses = join_all(publish_tokens_tasks).await;
@@ -305,28 +389,42 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
     let mut register_tasks = vec![];
     for (response, sender) in publish_coin_responses.into_iter().zip(senders.clone()) {
         let response = response.unwrap().unwrap();
-        assert_eq!(
-            response.effects.unwrap().status(),
-            &SuiExecutionStatus::Success
-        );
-        let object_changes = response.object_changes.unwrap();
+        assert!(response.effects.status().is_ok());
         let mut tc = None;
         let mut type_ = None;
         let mut uc = None;
         let mut metadata = None;
-        for object_change in &object_changes {
-            if let o @ sui_json_rpc_types::ObjectChange::Created { object_type, .. } = object_change
-            {
+        for o in &response.changed_objects {
+            use sui_rpc::proto::sui::rpc::v2::changed_object::IdOperation;
+            if matches!(o.id_operation(), IdOperation::Created) {
+                let Ok(object_type) = o.object_type().parse::<StructTag>() else {
+                    continue;
+                };
                 if object_type.name.as_str().starts_with("TreasuryCap") {
                     assert!(tc.is_none() && type_.is_none());
-                    tc = Some(o.clone());
+                    tc = {
+                        let id = o.object_id().parse().unwrap();
+                        let version = o.output_version().into();
+                        let digest = o.output_digest().parse().unwrap();
+                        Some((id, version, digest))
+                    };
                     type_ = Some(object_type.type_params.first().unwrap().clone());
                 } else if object_type.name.as_str().starts_with("UpgradeCap") {
                     assert!(uc.is_none());
-                    uc = Some(o.clone());
+                    uc = {
+                        let id = o.object_id().parse().unwrap();
+                        let version = o.output_version().into();
+                        let digest = o.output_digest().parse().unwrap();
+                        Some((id, version, digest))
+                    };
                 } else if object_type.name.as_str().starts_with("CoinMetadata") {
                     assert!(metadata.is_none());
-                    metadata = Some(o.clone());
+                    metadata = {
+                        let id = o.object_id().parse().unwrap();
+                        let version = o.output_version().into();
+                        let digest = o.output_digest().parse().unwrap();
+                        Some((id, version, digest))
+                    };
                 }
             }
         }
@@ -336,15 +434,9 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
         // register with the bridge
         let mut builder = ProgrammableTransactionBuilder::new();
         let bridge_arg = builder.obj(bridge_arg).unwrap();
-        let uc_arg = builder
-            .obj(ObjectArg::ImmOrOwnedObject(uc.object_ref()))
-            .unwrap();
-        let tc_arg = builder
-            .obj(ObjectArg::ImmOrOwnedObject(tc.object_ref()))
-            .unwrap();
-        let metadata_arg = builder
-            .obj(ObjectArg::ImmOrOwnedObject(metadata.object_ref()))
-            .unwrap();
+        let uc_arg = builder.obj(ObjectArg::ImmOrOwnedObject(uc)).unwrap();
+        let tc_arg = builder.obj(ObjectArg::ImmOrOwnedObject(tc)).unwrap();
+        let metadata_arg = builder.obj(ObjectArg::ImmOrOwnedObject(metadata)).unwrap();
         builder.programmable_move_call(
             BRIDGE_PACKAGE_ID,
             BRIDGE_MODULE_NAME.into(),
@@ -360,23 +452,16 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
             .unwrap();
         let tx = TransactionData::new_programmable(sender, vec![gas], pt, 1_000_000_000, rgp);
         let signed_tx = wallet_context.sign_transaction(&tx).await;
-        let api_clone = quorum_driver_api.clone();
+        let api_clone = client.clone();
         register_tasks.push(async move {
             api_clone
-                .execute_transaction_block(
-                    signed_tx,
-                    SuiTransactionBlockResponseOptions::new().with_effects(),
-                    None,
-                )
+                .execute_transaction_and_wait_for_checkpoint(&signed_tx)
                 .await
         });
         token_type_names.push(type_);
     }
     for response in join_all(register_tasks).await {
-        assert_eq!(
-            response.unwrap().effects.unwrap().status(),
-            &SuiExecutionStatus::Success
-        );
+        assert!(response.unwrap().effects.status().is_ok());
     }
 
     BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {

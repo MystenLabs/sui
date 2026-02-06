@@ -25,6 +25,7 @@ tower-http.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 sui-sdk.workspace = true
+sui-rpc-api.workspace = true
 sui-config.workspace = true
 sui-keys.workspace = true
 shared-crypto.workspace = true

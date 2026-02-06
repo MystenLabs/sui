@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anemo::types::PeerAffinity;
 use anemo::types::PeerInfo;
 use anemo::{Network, Peer, PeerId, Request, Response, types::PeerEvent};
 use fastcrypto::ed25519::{Ed25519PublicKey, Ed25519Signature};
@@ -9,18 +10,20 @@ use mysten_common::debug_fatal;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
     time::Duration,
 };
-use sui_config::p2p::{AccessType, DiscoveryConfig, P2pConfig, SeedPeer};
+
+use crate::endpoint_manager::AddressSource;
+use sui_config::p2p::{AccessType, DiscoveryConfig, P2pConfig};
 use sui_types::crypto::{NetworkKeyPair, Signer, ToFromBytes, VerifyingKey};
 use sui_types::digests::Digest;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::multiaddr::Multiaddr;
 use tap::{Pipe, TapFallible};
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::watch;
+use tokio::sync::mpsc;
 use tokio::{
     sync::oneshot,
     task::{AbortHandle, JoinSet},
@@ -42,12 +45,48 @@ mod server;
 #[cfg(test)]
 mod tests;
 
-pub use builder::{Builder, Handle, UnstartedDiscovery};
+pub use builder::{Builder, UnstartedDiscovery};
 pub use generated::{
     discovery_client::DiscoveryClient,
     discovery_server::{Discovery, DiscoveryServer},
 };
 pub use server::GetKnownPeersResponseV2;
+
+/// Message types for the discovery system mailbox.
+#[derive(Debug)]
+pub enum DiscoveryMessage {
+    PeerAddressChange {
+        peer_id: PeerId,
+        source: AddressSource,
+        addresses: Vec<anemo::types::Address>,
+    },
+}
+
+/// A Handle to the Discovery subsystem. The Discovery system will be shut down once all Handles
+/// have been dropped.
+#[derive(Clone, Debug)]
+pub struct Handle {
+    pub(super) _shutdown_handle: Arc<oneshot::Sender<()>>,
+    sender: mpsc::Sender<DiscoveryMessage>,
+}
+
+impl Handle {
+    /// Updates the address for a single peer from a specific source.
+    pub fn peer_address_change(
+        &self,
+        peer_id: PeerId,
+        source: AddressSource,
+        addresses: Vec<anemo::types::Address>,
+    ) {
+        self.sender
+            .try_send(DiscoveryMessage::PeerAddressChange {
+                peer_id,
+                source,
+                addresses,
+            })
+            .expect("Discovery mailbox should not overflow or be closed")
+    }
+}
 
 use self::metrics::Metrics;
 
@@ -56,6 +95,7 @@ struct State {
     our_info: Option<SignedNodeInfo>,
     connected_peers: HashMap<PeerId, ()>,
     known_peers: HashMap<PeerId, VerifiedSignedNodeInfo>,
+    peer_address_overrides: HashMap<PeerId, BTreeMap<AddressSource, Vec<anemo::types::Address>>>,
 }
 
 /// The information necessary to dial another peer.
@@ -106,15 +146,11 @@ impl Message for NodeInfo {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct TrustedPeerChangeEvent {
-    pub new_peers: Vec<PeerInfo>,
-}
-
 struct DiscoveryEventLoop {
     config: P2pConfig,
     discovery_config: Arc<DiscoveryConfig>,
-    allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    unidentified_seed_peers: Vec<anemo::types::Address>,
     network: Network,
     keypair: NetworkKeyPair,
     tasks: JoinSet<()>,
@@ -122,7 +158,7 @@ struct DiscoveryEventLoop {
     dial_seed_peers_task: Option<AbortHandle>,
     shutdown_handle: oneshot::Receiver<()>,
     state: Arc<RwLock<State>>,
-    trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+    mailbox: mpsc::Receiver<DiscoveryMessage>,
     metrics: Metrics,
 }
 
@@ -148,9 +184,8 @@ impl DiscoveryEventLoop {
                 peer_event = peer_events.recv() => {
                     self.handle_peer_event(peer_event);
                 },
-                Ok(()) = self.trusted_peer_change_rx.changed() => {
-                    let event: TrustedPeerChangeEvent = self.trusted_peer_change_rx.borrow_and_update().clone();
-                    self.handle_trusted_peer_change_event(event);
+                Some(message) = self.mailbox.recv() => {
+                    self.handle_message(message);
                 }
                 Some(task_result) = self.tasks.join_next() => {
                     match task_result {
@@ -177,6 +212,18 @@ impl DiscoveryEventLoop {
         info!("Discovery ended");
     }
 
+    fn handle_message(&mut self, message: DiscoveryMessage) {
+        match message {
+            DiscoveryMessage::PeerAddressChange {
+                peer_id,
+                source,
+                addresses,
+            } => {
+                self.handle_peer_address_change(peer_id, source, addresses);
+            }
+        }
+    }
+
     fn construct_our_info(&mut self) {
         if self.state.read().unwrap().our_info.is_some() {
             return;
@@ -201,35 +248,9 @@ impl DiscoveryEventLoop {
     }
 
     fn configure_preferred_peers(&mut self) {
-        for (peer_id, address) in self
-            .discovery_config
-            .allowlisted_peers
-            .iter()
-            .map(|sp| (sp.peer_id, sp.address.clone()))
-            .chain(self.config.seed_peers.iter().filter_map(|ap| {
-                ap.peer_id
-                    .map(|peer_id| (peer_id, Some(ap.address.clone())))
-            }))
-        {
-            let anemo_address = if let Some(address) = address {
-                let Ok(address) = address.to_anemo_address() else {
-                    debug!(p2p_address=?address, "Can't convert p2p address to anemo address");
-                    continue;
-                };
-                Some(address)
-            } else {
-                None
-            };
-
-            // TODO: once we have `PeerAffinity::Allowlisted` we should update allowlisted peers'
-            // affinity.
-            let peer_info = anemo::types::PeerInfo {
-                peer_id,
-                affinity: anemo::types::PeerAffinity::High,
-                address: anemo_address.into_iter().collect(),
-            };
+        for peer_info in self.configured_peers.values() {
             debug!(?peer_info, "Add configured preferred peer");
-            self.network.known_peers().insert(peer_info);
+            self.network.known_peers().insert(peer_info.clone());
         }
     }
 
@@ -242,26 +263,64 @@ impl DiscoveryEventLoop {
         }
     }
 
-    // TODO: we don't boot out old committee member yets, however we may want to do this
-    // in the future along with other network management work.
-    fn handle_trusted_peer_change_event(
+    fn handle_peer_address_change(
         &mut self,
-        trusted_peer_change_event: TrustedPeerChangeEvent,
+        peer_id: PeerId,
+        source: AddressSource,
+        addresses: Vec<anemo::types::Address>,
     ) {
-        for peer_info in trusted_peer_change_event.new_peers {
-            debug!(?peer_info, "Add committee member as preferred peer.");
-            if let Some(old_peer_info) = self.network.known_peers().insert(peer_info.clone())
-                && old_peer_info.address != peer_info.address
-                && let Some(address) = peer_info.address.first().cloned()
-            {
-                // Forcibly reconnect to the peer if its address(es) changed.
-                let _ = self.network.disconnect(peer_info.peer_id);
+        debug!(
+            ?peer_id,
+            ?source,
+            ?addresses,
+            "Received peer address change"
+        );
+
+        // Update stored addresses.
+        {
+            let mut state = self.state.write().unwrap();
+            let source_map = state.peer_address_overrides.entry(peer_id).or_default();
+
+            if addresses.is_empty() {
+                source_map.remove(&source);
+                if source_map.is_empty() {
+                    state.peer_address_overrides.remove(&peer_id);
+                }
+            } else {
+                source_map.insert(source, addresses);
+            }
+        }
+
+        // Reconfigure network if priority addresses changed.
+        let priority_addresses = self
+            .state
+            .read()
+            .unwrap()
+            .peer_address_overrides
+            .get(&peer_id)
+            .and_then(|sources| sources.first_key_value().map(|(_, addrs)| addrs.clone()))
+            .unwrap_or_default();
+        let current_addresses = self
+            .network
+            .known_peers()
+            .get(&peer_id)
+            .map(|info| info.address.clone())
+            .unwrap_or_default();
+        if priority_addresses != current_addresses {
+            let new_peer_info = PeerInfo {
+                peer_id,
+                affinity: PeerAffinity::High,
+                address: priority_addresses.clone(),
+            };
+
+            self.network.known_peers().insert(new_peer_info);
+            let _ = self.network.disconnect(peer_id);
+
+            if let Some(address) = priority_addresses.first().cloned() {
                 let network = self.network.clone();
                 self.tasks.spawn(async move {
                     // If this fails, ConnectionManager will retry.
-                    let _ = network
-                        .connect_with_peer_id(address, peer_info.peer_id)
-                        .await;
+                    let _ = network.connect_with_peer_id(address, peer_id).await;
                 });
             }
         }
@@ -282,7 +341,7 @@ impl DiscoveryEventLoop {
                         peer,
                         self.state.clone(),
                         self.metrics.clone(),
-                        self.allowlisted_peers.clone(),
+                        self.configured_peers.clone(),
                     ));
                 }
             }
@@ -309,7 +368,7 @@ impl DiscoveryEventLoop {
                 self.discovery_config.clone(),
                 self.state.clone(),
                 self.metrics.clone(),
-                self.allowlisted_peers.clone(),
+                self.configured_peers.clone(),
             ));
 
         // Cull old peers older than a day
@@ -364,16 +423,23 @@ impl DiscoveryEventLoop {
         }
 
         // If we aren't connected to anything and we aren't presently trying to connect to anyone
-        // we need to try the seed peers
+        // we need to try the configured peers with High affinity (seed peers)
+        let has_peers_to_dial = || {
+            self.configured_peers
+                .values()
+                .any(|p| p.affinity == PeerAffinity::High)
+                || !self.unidentified_seed_peers.is_empty()
+        };
         if self.dial_seed_peers_task.is_none()
             && state.connected_peers.is_empty()
             && self.pending_dials.is_empty()
-            && !self.config.seed_peers.is_empty()
+            && has_peers_to_dial()
         {
             let abort_handle = self.tasks.spawn(try_to_connect_to_seed_peers(
                 self.network.clone(),
                 self.discovery_config.clone(),
-                self.config.seed_peers.clone(),
+                self.configured_peers.clone(),
+                self.unidentified_seed_peers.clone(),
             ));
 
             self.dial_seed_peers_task = Some(abort_handle);
@@ -407,37 +473,61 @@ async fn try_to_connect_to_peer(network: Network, info: NodeInfo) {
 async fn try_to_connect_to_seed_peers(
     network: Network,
     config: Arc<DiscoveryConfig>,
-    seed_peers: Vec<SeedPeer>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    unidentified_seed_peers: Vec<anemo::types::Address>,
 ) {
-    debug!(?seed_peers, "Connecting to seed peers");
+    let high_affinity_peers: Vec<_> = configured_peers
+        .values()
+        .filter(|p| p.affinity == PeerAffinity::High)
+        .cloned()
+        .collect();
+    debug!(
+        ?high_affinity_peers,
+        ?unidentified_seed_peers,
+        "Connecting to seed peers"
+    );
     let network = &network;
 
-    futures::stream::iter(seed_peers.into_iter().filter_map(|seed| {
-        seed.address
-            .to_anemo_address()
-            .ok()
-            .map(|address| (seed, address))
-    }))
-    .for_each_concurrent(
-        config.target_concurrent_connections(),
-        |(seed, address)| async move {
-            // Ignore the result and just log the error  if there is one
-            let _ = if let Some(peer_id) = seed.peer_id {
-                network.connect_with_peer_id(address, peer_id).await
-            } else {
-                network.connect(address).await
-            }
-            .tap_err(|e| debug!("error dialing multiaddr '{}': {e}", seed.address));
-        },
-    )
-    .await;
+    // Attempt connection to all high-affinity and seed peers.
+    let with_peer_id = high_affinity_peers.into_iter().flat_map(|peer_info| {
+        peer_info
+            .address
+            .into_iter()
+            .map(move |addr| (Some(peer_info.peer_id), addr))
+    });
+    let without_peer_id = unidentified_seed_peers.into_iter().map(|addr| (None, addr));
+    futures::stream::iter(with_peer_id.chain(without_peer_id))
+        .for_each_concurrent(
+            config.target_concurrent_connections(),
+            |(peer_id, address)| async move {
+                // Ignore the result and just log the error if there is one
+                let _ = if let Some(peer_id) = peer_id {
+                    network
+                        .connect_with_peer_id(address.clone(), peer_id)
+                        .await
+                        .tap_err(|e| {
+                            debug!(
+                                "error dialing peer {} at '{}': {e}",
+                                peer_id.short_display(4),
+                                address
+                            )
+                        })
+                } else {
+                    network
+                        .connect(address.clone())
+                        .await
+                        .tap_err(|e| debug!("error dialing address '{}': {e}", address))
+                };
+            },
+        )
+        .await;
 }
 
 async fn query_peer_for_their_known_peers(
     peer: Peer,
     state: Arc<RwLock<State>>,
     metrics: Metrics,
-    allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
 ) {
     let mut client = DiscoveryClient::new(peer);
 
@@ -459,7 +549,7 @@ async fn query_peer_for_their_known_peers(
             },
         );
     if let Some(found_peers) = found_peers {
-        update_known_peers(state, metrics, found_peers, allowlisted_peers);
+        update_known_peers(state, metrics, found_peers, configured_peers);
     }
 }
 
@@ -468,7 +558,7 @@ async fn query_connected_peers_for_their_known_peers(
     config: Arc<DiscoveryConfig>,
     state: Arc<RwLock<State>>,
     metrics: Metrics,
-    allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
 ) {
     use rand::seq::IteratorRandom;
 
@@ -507,14 +597,14 @@ async fn query_connected_peers_for_their_known_peers(
         .collect::<Vec<_>>()
         .await;
 
-    update_known_peers(state, metrics, found_peers, allowlisted_peers);
+    update_known_peers(state, metrics, found_peers, configured_peers);
 }
 
 fn update_known_peers(
     state: Arc<RwLock<State>>,
     metrics: Metrics,
     found_peers: Vec<SignedNodeInfo>,
-    allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
 ) {
     use std::collections::hash_map::Entry;
 
@@ -536,10 +626,12 @@ fn update_known_peers(
             continue;
         }
 
-        // If Peer is Private, and not in our allowlist, skip it.
-        if peer_info.access_type == AccessType::Private
-            && !allowlisted_peers.contains_key(&peer_info.peer_id)
-        {
+        // If Peer is Private or Trusted, and not in our configured peers, skip it.
+        let is_restricted = match peer_info.access_type {
+            AccessType::Public => false,
+            AccessType::Private | AccessType::Trusted => true,
+        };
+        if is_restricted && !configured_peers.contains_key(&peer_info.peer_id) {
             continue;
         }
 

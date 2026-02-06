@@ -9,17 +9,19 @@
 //! collections. It should not be used in memory-constrained contexts like RPC
 //! handlers where the size of the data is unbounded.
 
-use move_core_types::{
-    annotated_value::{MoveStruct, MoveTypeLayout, MoveValue},
-    annotated_visitor as AV,
-    language_storage::TypeTag,
-};
-use serde_json::{Map, Value};
-use sui_package_resolver::{PackageStore, Resolver, error::Error as ResolverError};
-use sui_types::{
-    event::Event,
-    object::{option_visitor as OV, rpc_visitor as RV},
-};
+use move_core_types::annotated_value::MoveStruct;
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::annotated_value::MoveValue;
+use move_core_types::annotated_visitor as AV;
+use move_core_types::language_storage::TypeTag;
+use serde_json::Map;
+use serde_json::Value;
+use sui_package_resolver::PackageStore;
+use sui_package_resolver::Resolver;
+use sui_package_resolver::error::Error as ResolverError;
+use sui_types::event::Event;
+use sui_types::object::option_visitor as OV;
+use sui_types::object::rpc_visitor as RV;
 
 /// Error type for JSON visitor operations
 #[derive(thiserror::Error, Debug)]

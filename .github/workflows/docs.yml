@@ -15,7 +15,7 @@ jobs:
       isOldDoc: ${{ steps.diff.outputs.isOldDoc }}
       isExamples: ${{ steps.diff.outputs.isExamples }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - name: Detect Changes
         uses: './.github/actions/diffs'
         id: diff
@@ -27,16 +27,17 @@ jobs:
     runs-on: [ubuntu-latest]
     
     steps:
-      - name: Notify Slack of Examples Changes
-        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
+      - name: Dispatch to sui-operations for notification
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
         with:
-          method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: "docs-automations"
-            text: |
-              An open PR modifies files in the `examples/` directory.
-              Please review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}|PR${{ github.event.number }}>
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          repository: MystenLabs/sui-operations
+          event-type: docs-change-notify
+          client-payload: |-
+            {
+              "pr_number": "${{ github.event.number }}",
+              "repository": "${{ github.repository }}"
+            }
   
   spelling:
     name: Lint documentation
@@ -45,8 +46,8 @@ jobs:
     runs-on: [ubuntu-latest]
 
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - name: Spell Check Docs
-        uses: crate-ci/typos@v1.16.11
+        uses: crate-ci/typos@73edd198fc9a18a49c00475ca869188a13ae0117 # pin@v1.42.3
         with:
           files: ./docs/content

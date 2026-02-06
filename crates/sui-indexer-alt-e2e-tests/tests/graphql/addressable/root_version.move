@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --simulator
+//# init --protocol-version 108 --accounts A --simulator
 
 //# programmable --sender A --inputs @A
 //> 0: sui::bag::new();
@@ -130,6 +130,56 @@ fragment DF on DynamicField {
 
 fragment DOF on DynamicField {
   value { ... on MoveObject { contents { json } } }
+}
+
+//# run-graphql
+{ # Fetching an address at another checkpoint, and fetching its objects,
+  # balances, and transactions. The owned objects and balances are scoped to
+  # the address' checkpoint, while the transactions are scoped by the
+  # checkpoint being viewed, which means it doesn't change between checkpoints.
+  atCp0: address(address: "@{A}", atCheckpoint: 0) {
+    balance(coinType: "sui::sui::SUI") {
+      totalBalance
+    }
+
+    objects {
+      nodes {
+        address
+        contents {
+          type { repr }
+          json
+        }
+      }
+    }
+
+    transactions {
+      nodes {
+        digest
+      }
+    }
+  }
+
+  atCp1: address(address: "@{A}", atCheckpoint: 1) {
+    balance(coinType: "sui::sui::SUI") {
+      totalBalance
+    }
+
+    objects {
+      nodes {
+        address
+        contents {
+          type { repr }
+          json
+        }
+      }
+    }
+
+    transactions {
+      nodes {
+        digest
+      }
+    }
+  }
 }
 
 //# run-graphql

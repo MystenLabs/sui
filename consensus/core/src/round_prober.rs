@@ -27,7 +27,7 @@ use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
     BlockAPI as _, context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
-    network::NetworkClient, round_tracker::PeerRoundTracker,
+    network::NetworkClient, round_tracker::RoundTracker,
 };
 
 // Handle to control the RoundProber loop and read latest round gaps.
@@ -51,7 +51,7 @@ impl RoundProberHandle {
 pub(crate) struct RoundProber<C: NetworkClient> {
     context: Arc<Context>,
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
-    round_tracker: Arc<RwLock<PeerRoundTracker>>,
+    round_tracker: Arc<RwLock<RoundTracker>>,
     dag_state: Arc<RwLock<DagState>>,
     network_client: Arc<C>,
     shutdown_notify: Arc<NotifyOnce>,
@@ -61,7 +61,7 @@ impl<C: NetworkClient> RoundProber<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
-        round_tracker: Arc<RwLock<PeerRoundTracker>>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
         network_client: Arc<C>,
     ) -> Self {
@@ -146,7 +146,8 @@ impl<C: NetworkClient> RoundProber<C> {
 
         // For our own index, the highest received & accepted round is our last
         // accepted round or our last proposed round.
-        highest_received_rounds[own_index] = self.core_thread_dispatcher.highest_received_rounds();
+        highest_received_rounds[own_index] =
+            self.round_tracker.read().local_highest_received_rounds();
         highest_accepted_rounds[own_index] = local_highest_accepted_rounds;
         highest_received_rounds[own_index][own_index] = last_proposed_round;
         highest_accepted_rounds[own_index][own_index] = last_proposed_round;
@@ -232,19 +233,15 @@ mod test {
         error::{ConsensusError, ConsensusResult},
         network::{BlockStream, NetworkClient},
         round_prober::RoundProber,
-        round_tracker::PeerRoundTracker,
+        round_tracker::RoundTracker,
         storage::mem_store::MemStore,
     };
 
-    struct FakeThreadDispatcher {
-        highest_received_rounds: Vec<Round>,
-    }
+    struct FakeThreadDispatcher {}
 
     impl FakeThreadDispatcher {
-        fn new(highest_received_rounds: Vec<Round>) -> Self {
-            Self {
-                highest_received_rounds,
-            }
+        fn new() -> Self {
+            Self {}
         }
     }
 
@@ -285,10 +282,6 @@ mod test {
 
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             unimplemented!()
-        }
-
-        fn highest_received_rounds(&self) -> Vec<Round> {
-            self.highest_received_rounds.clone()
         }
     }
 
@@ -378,9 +371,7 @@ mod test {
         telemetry_subscribers::init_for_testing();
         const NUM_AUTHORITIES: usize = 7;
         let context = Arc::new(Context::new_for_test(NUM_AUTHORITIES).0);
-        let core_thread_dispatcher = Arc::new(FakeThreadDispatcher::new(vec![
-            110, 120, 130, 140, 150, 160, 170,
-        ]));
+        let core_thread_dispatcher = Arc::new(FakeThreadDispatcher::new());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
         // Have some peers return error or incorrect number of rounds.
@@ -405,7 +396,11 @@ mod test {
             ], // highest_accepted_rounds
         ));
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        // Initialize RoundTracker with the local highest_received_rounds
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(
+            context.clone(),
+            vec![110, 120, 130, 140, 150, 160, 170],
+        )));
         let prober = RoundProber::new(
             context.clone(),
             core_thread_dispatcher.clone(),

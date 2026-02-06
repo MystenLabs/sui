@@ -22,10 +22,14 @@ use sui_sdk_types::Command;
 use sui_types::base_types::ObjectRef;
 use sui_types::move_package::MovePackage;
 use sui_types::transaction::CallArg;
+use sui_types::transaction::FundsWithdrawalArg;
 use sui_types::transaction::GasData;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::transaction::Reservation;
 use sui_types::transaction::TransactionData;
+use sui_types::transaction::WithdrawFrom;
+use sui_types::transaction::WithdrawalTypeArg;
 use tap::Pipe;
 
 mod literal;
@@ -328,6 +332,7 @@ fn resolve_arg(
             version: None,
             digest: None,
             mutable: None,
+            funds_withdrawal: None,
             literal: None,
         }
         | UnresolvedInput {
@@ -337,6 +342,7 @@ fn resolve_arg(
             version: None,
             digest: None,
             mutable: None,
+            funds_withdrawal: None,
             literal: None,
         } => CallArg::Pure(pure.to_vec()),
 
@@ -348,6 +354,7 @@ fn resolve_arg(
             version,
             digest,
             mutable: None,
+            funds_withdrawal: None,
             literal: None,
         } => CallArg::Object(ObjectArg::ImmOrOwnedObject(resolve_object_reference(
             reader,
@@ -366,6 +373,7 @@ fn resolve_arg(
             version: _,
             digest: None,
             mutable: _,
+            funds_withdrawal: None,
             literal: None,
         } => CallArg::Object(resolve_shared_input(
             reader,
@@ -383,6 +391,7 @@ fn resolve_arg(
             version,
             digest,
             mutable: None,
+            funds_withdrawal: None,
             literal: None,
         } => CallArg::Object(ObjectArg::Receiving(resolve_object_reference(
             reader,
@@ -401,6 +410,7 @@ fn resolve_arg(
             version,
             digest,
             mutable,
+            funds_withdrawal: None,
             literal: None,
         } => CallArg::Object(resolve_object(
             reader,
@@ -413,6 +423,28 @@ fn resolve_arg(
             mutable,
         )?),
 
+        // FundsWithdrawal
+        UnresolvedInput {
+            kind: Some(InputKind::FundsWithdrawal),
+            pure: None,
+            object_id: None,
+            version: None,
+            digest: None,
+            mutable: None,
+            funds_withdrawal: Some(w),
+            literal: None,
+        }
+        | UnresolvedInput {
+            kind: None,
+            pure: None,
+            object_id: None,
+            version: None,
+            digest: None,
+            mutable: None,
+            funds_withdrawal: Some(w),
+            literal: None,
+        } => CallArg::FundsWithdrawal(w),
+
         // Literal, unresolved pure argument
         UnresolvedInput {
             kind: None, // TODO should we have a kind?
@@ -421,6 +453,7 @@ fn resolve_arg(
             version: None,
             digest: None,
             mutable: None,
+            funds_withdrawal: None,
             literal: Some(literal),
         } => CallArg::Pure(literal::resolve_literal(
             called_packages,
@@ -749,6 +782,7 @@ struct UnresolvedInput<'a> {
     pub version: Option<sui_sdk_types::Version>,
     pub digest: Option<sui_sdk_types::Digest>,
     pub mutable: Option<bool>,
+    pub funds_withdrawal: Option<FundsWithdrawalArg>,
     pub literal: Option<&'a prost_types::Value>,
 }
 
@@ -779,6 +813,32 @@ impl<'a> UnresolvedInput<'a> {
                         FieldViolation::new("digest")
                             .with_description(format!("invalid digest: {e}"))
                             .with_reason(ErrorReason::FieldInvalid)
+                    })
+                })
+                .transpose()?,
+            funds_withdrawal: input
+                .funds_withdrawal_opt()
+                .map(|w| {
+                    Ok(FundsWithdrawalArg {
+                        reservation: Reservation::MaxAmountU64(w.amount.ok_or_else(|| {
+                            FieldViolation::new("amount").with_reason(ErrorReason::FieldMissing)
+                        })?),
+                        type_arg: WithdrawalTypeArg::Balance(
+                            w.coin_type().parse::<sui_types::TypeTag>().map_err(|e| {
+                                FieldViolation::new("coin_type")
+                                    .with_description(format!("invalid coin_type: {e}"))
+                                    .with_reason(ErrorReason::FieldInvalid)
+                            })?,
+                        ),
+                        withdraw_from: match w.source() {
+                            sui_rpc::proto::sui::rpc::v2::funds_withdrawal::Source::Sender => {
+                                WithdrawFrom::Sender
+                            }
+                            sui_rpc::proto::sui::rpc::v2::funds_withdrawal::Source::Sponsor => {
+                                WithdrawFrom::Sponsor
+                            }
+                            _ => WithdrawFrom::Sender,
+                        },
                     })
                 })
                 .transpose()?,

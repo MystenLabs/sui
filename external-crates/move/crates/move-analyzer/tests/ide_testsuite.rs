@@ -25,7 +25,7 @@ use move_analyzer::{
 };
 use move_command_line_common::testing::insta_assert;
 use move_compiler::{editions::Flavor, linters::LintLevel};
-use move_package_alt::flavor::{MoveFlavor, Vanilla};
+use move_package_alt::{MoveFlavor, Vanilla};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use vfs::{MemoryFS, VfsPath};
@@ -573,7 +573,7 @@ fn use_def_test_suite<F: MoveFlavor>(
             // We do incremental compilation only for the first file in the test suite.
             // The results for remaining files should still be correct due to all symbols
             // being computed during the initial full compilation at suite level, and
-            // due to merging of symbols from modified and unmofdified files
+            // due to merging of symbols from modified and unmodified files
             // (which is what it is being tested here).
 
             let original = std::fs::read_to_string(&cpath)?;

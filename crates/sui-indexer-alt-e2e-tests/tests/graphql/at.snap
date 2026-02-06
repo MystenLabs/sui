@@ -1,0 +1,81 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 1000u64 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 12-14:
+//# programmable --sender A --inputs object(1,0) 1u64 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 4, lines 16-18:
+//# programmable --sender A --inputs object(2,0) 2u64 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+Error: INVALID TEST. Unknown object, object(2,0)
+
+task 5, line 20:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 22-24:
+//# programmable --sender A --inputs object(3,0) 3u64 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+Error: INVALID TEST. Unknown object, object(3,0)
+
+task 7, line 26:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, lines 28-49:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "version": 3
+    },
+    "address": {
+      "asObject": {
+        "version": 3
+      }
+    },
+    "c2": {
+      "query": {
+        "object": {
+          "version": 2,
+          "latestObject": {
+            "version": 3
+          }
+        },
+        "address": {
+          "asObject": {
+            "version": 2
+          },
+          "latestAddress": {
+            "asObject": {
+              "version": 3
+            }
+          }
+        }
+      }
+    }
+  }
+}

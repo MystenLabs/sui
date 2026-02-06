@@ -1,22 +1,25 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 pub mod legacy;
 pub mod legacy_lockfile;
 pub mod legacy_parser;
 
-use std::collections::{BTreeMap, HashSet};
-use std::fs;
-use std::path::{Path, PathBuf};
+use crate::{
+    package::layout::SourcePackageLayout, package::paths::PackagePath, schema::PackageName,
+};
 
-use anyhow::{Context, Result, bail};
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
-use once_cell::sync::Lazy;
-use regex::Regex;
-use tracing::debug;
 
-use crate::compatibility::legacy_parser::{LegacyPackageMetadata, parse_package_info};
-use crate::package::layout::SourcePackageLayout;
-use crate::package::paths::PackagePath;
-use crate::schema::PackageName;
-use toml::value::Value as TV;
+use anyhow::Result;
+use regex::Regex;
+use std::{
+    collections::{BTreeMap, HashSet},
+    fs,
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
+use tracing::debug;
 
 pub type LegacyVersion = (u64, u64, u64);
 pub type LegacySubstitution = BTreeMap<String, LegacySubstOrRename>;
@@ -38,7 +41,8 @@ const MODULE_REGEX: &str = r"\bmodule\s+([a-zA-Z_][\w]*)::([a-zA-Z_][\w]*)";
 // Compile regex once at program startup
 #[cfg(not(msim))]
 fn get_module_regex() -> &'static Regex {
-    static MODULE_REGEX_COMPILED: Lazy<Regex> = Lazy::new(|| Regex::new(MODULE_REGEX).unwrap());
+    static MODULE_REGEX_COMPILED: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(MODULE_REGEX).unwrap());
     &MODULE_REGEX_COMPILED
 }
 
@@ -46,7 +50,7 @@ fn get_module_regex() -> &'static Regex {
 #[cfg(msim)]
 fn get_module_regex() -> Regex {
     thread_local! {
-        static MODULE_REGEX_COMPILED: Lazy<Regex> = Lazy::new(|| Regex::new(MODULE_REGEX).unwrap());
+        static MODULE_REGEX_COMPILED: LazyLock<Regex> = LazyLock::new(|| Regex::new(MODULE_REGEX).unwrap());
     }
 
     MODULE_REGEX_COMPILED.with(|val| (*val).clone())
@@ -188,28 +192,6 @@ fn strip_comments(source: &str) -> String {
     }
 
     result
-}
-
-/// Return legacy package metadata; this is needed for tests in sui side
-pub fn parse_legacy_package_info(
-    package_path: &Path,
-) -> Result<LegacyPackageMetadata, anyhow::Error> {
-    let manifest_string = std::fs::read_to_string(package_path.join("Move.toml"))?;
-    let tv =
-        toml::from_str::<TV>(&manifest_string).context("Unable to parse Move package manifest")?;
-
-    match tv {
-        TV::Table(mut table) => {
-            let metadata = table
-                .remove("package")
-                .map(parse_package_info)
-                .transpose()
-                .context("Error parsing '[package]' section of manifest")?
-                .unwrap();
-            Ok(metadata)
-        }
-        _ => bail!("Expected a table from the manifest file"),
-    }
 }
 
 #[cfg(test)]

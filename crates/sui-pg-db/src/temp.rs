@@ -1,18 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Debug;
+use std::fs::OpenOptions;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Child;
+use std::process::Command;
+use std::process::ExitStatus;
+use std::time::Duration;
+use std::time::Instant;
+
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
-use std::fmt::Debug;
-use std::fs::OpenOptions;
-use std::process::ExitStatus;
-use std::{
-    path::{Path, PathBuf},
-    process::{Child, Command},
-    time::{Duration, Instant},
-};
-use tracing::{event_enabled, info, trace};
+use tracing::event_enabled;
+use tracing::info;
+use tracing::trace;
 use url::Url;
 
 /// A temporary, local postgres database
@@ -274,7 +278,7 @@ fn pg_isready(port: u16) -> Result<(), HealthCheckError> {
         .arg(port.to_string())
         .arg("--username=postgres")
         .output()
-        .map_err(|e| HealthCheckError::Unknown(format!("command not found: pg_ctl: {e}")))?;
+        .map_err(|e| HealthCheckError::Unknown(format!("command not found: pg_isready: {e}")))?;
 
     trace!("pg_isready code: {:?}", output.status.code());
     trace!("pg_isready output: {}", output.stderr.escape_ascii());

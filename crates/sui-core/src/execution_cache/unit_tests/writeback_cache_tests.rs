@@ -29,7 +29,7 @@ use tokio::sync::RwLock;
 
 use super::*;
 use crate::{
-    authority::{AuthorityState, AuthorityStore, test_authority_builder::TestAuthorityBuilder},
+    authority::{AuthorityStore, test_authority_builder::TestAuthorityBuilder},
     execution_cache::ExecutionCacheAPI,
 };
 
@@ -52,9 +52,7 @@ impl AssertInserted for bool {
 type ActionCb = Box<dyn Fn(&mut Scenario) + Send>;
 
 pub(crate) struct Scenario {
-    pub authority: Arc<AuthorityState>,
     pub store: Arc<AuthorityStore>,
-    pub epoch_store: Arc<AuthorityPerEpochStore>,
     pub cache: Arc<WritebackCache>,
 
     id_map: BTreeMap<u32, ObjectID>,
@@ -69,9 +67,7 @@ pub(crate) struct Scenario {
 impl Scenario {
     async fn new(do_after: Option<(u32, ActionCb)>, action_count: Arc<AtomicU32>) -> Self {
         let authority = TestAuthorityBuilder::new().build().await;
-
         let store = authority.database_for_testing().clone();
-        let epoch_store = authority.epoch_store_for_testing().clone();
 
         static METRICS: once_cell::sync::Lazy<Arc<ExecutionCacheMetrics>> =
             once_cell::sync::Lazy::new(|| Arc::new(ExecutionCacheMetrics::new(default_registry())));
@@ -83,9 +79,7 @@ impl Scenario {
             BackpressureManager::new_for_tests(),
         ));
         Self {
-            authority,
             store,
-            epoch_store,
             cache,
             id_map: BTreeMap::new(),
             objects: BTreeMap::new(),
@@ -170,7 +164,6 @@ impl Scenario {
             locks_to_delete: Default::default(),
             new_locks_to_init: Default::default(),
             written: Default::default(),
-            output_keys: Default::default(),
         }
     }
 
@@ -521,19 +514,6 @@ impl Scenario {
             .get(&self.obj_id(short_id))
             .expect("no such object")
             .clone()
-    }
-
-    pub fn obj_ref(&self, short_id: u32) -> ObjectRef {
-        self.object(short_id).compute_object_reference()
-    }
-
-    pub fn make_signed_transaction(&self, tx: &VerifiedTransaction) -> VerifiedSignedTransaction {
-        VerifiedSignedTransaction::new(
-            self.epoch_store.epoch(),
-            tx.clone(),
-            self.authority.name,
-            &*self.authority.secret,
-        )
     }
 }
 
@@ -1009,166 +989,8 @@ async fn test_concurrent_readers() {
     t2.await.unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-async fn test_concurrent_lockers() {
-    telemetry_subscribers::init_for_testing();
-
-    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
-    let cache = s.cache.clone();
-    let mut txns = Vec::new();
-
-    for i in 0..1000 {
-        let a = i * 4;
-        let b = i * 4 + 1;
-        let c = i * 4 + 2;
-        let d = i * 4 + 3;
-        s.with_created(&[a, b]);
-        s.do_tx().await;
-
-        let a_ref = s.obj_ref(a);
-        let b_ref = s.obj_ref(b);
-
-        // these contents of these txns are never used, they are just unique transactions to use for
-        // attempted equivocation
-        s.with_created(&[c]);
-        let tx1 = s.take_outputs();
-
-        s.with_created(&[d]);
-        let tx2 = s.take_outputs();
-
-        let tx1 = s.make_signed_transaction(&tx1.transaction);
-        let tx2 = s.make_signed_transaction(&tx2.transaction);
-
-        txns.push((tx1, tx2, a_ref, b_ref));
-    }
-
-    let barrier = Arc::new(tokio::sync::Barrier::new(2));
-
-    let t1 = {
-        let txns = txns.clone();
-        let cache = cache.clone();
-        let barrier = barrier.clone();
-        let epoch_store = s.epoch_store.clone();
-        tokio::task::spawn(async move {
-            let mut results = Vec::new();
-            for (tx1, _, a_ref, b_ref) in txns {
-                results.push(cache.acquire_transaction_locks(
-                    &epoch_store,
-                    &[a_ref, b_ref],
-                    *tx1.digest(),
-                    Some(tx1.clone()),
-                ));
-                barrier.wait().await;
-            }
-            results
-        })
-    };
-
-    let t2 = {
-        let txns = txns.clone();
-        let cache = cache.clone();
-        let barrier = barrier.clone();
-        let epoch_store = s.epoch_store.clone();
-        tokio::task::spawn(async move {
-            let mut results = Vec::new();
-            for (_, tx2, a_ref, b_ref) in txns {
-                results.push(cache.acquire_transaction_locks(
-                    &epoch_store,
-                    &[a_ref, b_ref],
-                    *tx2.digest(),
-                    Some(tx2.clone()),
-                ));
-                barrier.wait().await;
-            }
-            results
-        })
-    };
-
-    let results1 = t1.await.unwrap();
-    let results2 = t2.await.unwrap();
-
-    for (r1, r2) in results1.into_iter().zip(results2) {
-        // exactly one should succeed in each case
-        assert_eq!(r1.is_ok(), r2.is_err());
-    }
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-async fn test_concurrent_lockers_same_tx() {
-    telemetry_subscribers::init_for_testing();
-
-    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
-    let cache = s.cache.clone();
-    let mut txns = Vec::new();
-
-    for i in 0..1000 {
-        let a = i * 4;
-        let b = i * 4 + 1;
-        s.with_created(&[a, b]);
-        s.do_tx().await;
-
-        let a_ref = s.obj_ref(a);
-        let b_ref = s.obj_ref(b);
-
-        let tx1 = s.take_outputs();
-
-        let tx1 = s.make_signed_transaction(&tx1.transaction);
-
-        txns.push((tx1, a_ref, b_ref));
-    }
-
-    let barrier = Arc::new(tokio::sync::Barrier::new(2));
-
-    let t1 = {
-        let txns = txns.clone();
-        let cache = cache.clone();
-        let barrier = barrier.clone();
-        let epoch_store = s.epoch_store.clone();
-        tokio::task::spawn(async move {
-            let mut results = Vec::new();
-            for (tx1, a_ref, b_ref) in txns {
-                results.push(cache.acquire_transaction_locks(
-                    &epoch_store,
-                    &[a_ref, b_ref],
-                    *tx1.digest(),
-                    Some(tx1.clone()),
-                ));
-                barrier.wait().await;
-            }
-            results
-        })
-    };
-
-    let t2 = {
-        let txns = txns.clone();
-        let cache = cache.clone();
-        let barrier = barrier.clone();
-        let epoch_store = s.epoch_store.clone();
-        tokio::task::spawn(async move {
-            let mut results = Vec::new();
-            for (tx1, a_ref, b_ref) in txns {
-                results.push(cache.acquire_transaction_locks(
-                    &epoch_store,
-                    &[a_ref, b_ref],
-                    *tx1.digest(),
-                    Some(tx1.clone()),
-                ));
-                barrier.wait().await;
-            }
-            results
-        })
-    };
-
-    let results1 = t1.await.unwrap();
-    let results2 = t2.await.unwrap();
-
-    for (r1, r2) in results1.into_iter().zip(results2) {
-        assert!(r1.is_ok());
-        assert!(r2.is_ok());
-    }
-}
-
 #[tokio::test]
+#[cfg(not(tidehunter))] // something about metrics initialization in this test does not work w/ tidheunter build and cause 'AlreadyReg' error
 async fn latest_object_cache_race_test() {
     telemetry_subscribers::init_for_testing();
     let authority = TestAuthorityBuilder::new().build().await;

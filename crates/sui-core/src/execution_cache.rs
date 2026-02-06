@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulators::funds_read::AccountFundsRead;
 use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
@@ -34,7 +35,7 @@ use sui_types::storage::{
     ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
+use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
     object::Owner,
@@ -71,6 +72,7 @@ pub struct ExecutionCacheTraitPointers {
     pub state_sync_store: Arc<dyn StateSyncAPI>,
     pub cache_commit: Arc<dyn ExecutionCacheCommit>,
     pub testing_api: Arc<dyn TestingAPI>,
+    pub account_funds_read: Arc<dyn AccountFundsRead>,
 }
 
 impl ExecutionCacheTraitPointers {
@@ -88,6 +90,7 @@ impl ExecutionCacheTraitPointers {
             + StateSyncAPI
             + ExecutionCacheCommit
             + TestingAPI
+            + AccountFundsRead
             + 'static,
     {
         Self {
@@ -104,6 +107,7 @@ impl ExecutionCacheTraitPointers {
             state_sync_store: cache.clone(),
             cache_commit: cache.clone(),
             testing_api: cache.clone(),
+            account_funds_read: cache.clone(),
         }
     }
 }
@@ -604,14 +608,9 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// from consensus or checkpoints.
     fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>);
 
-    /// Attempt to acquire object locks for all of the owned input locks.
-    fn acquire_transaction_locks(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
-        signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult;
+    /// Validate owned object versions and digests without acquiring locks.
+    /// Used to validate transaction input before submitting or voting to accept the transaction.
+    fn validate_owned_object_versions(&self, owned_input_objects: &[ObjectRef]) -> SuiResult;
 
     /// Write an object entry directly to the cache for testing.
     /// This allows us to write an object without constructing the entire

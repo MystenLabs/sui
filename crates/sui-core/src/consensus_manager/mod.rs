@@ -2,27 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient};
-use crate::consensus_handler::{
-    ConsensusBlockHandler, ConsensusHandlerInitializer, MysticetiConsensusHandler,
-};
+use crate::consensus_handler::{ConsensusHandlerInitializer, MysticetiConsensusHandler};
 use crate::consensus_validator::SuiTxValidator;
 use crate::mysticeti_adapter::LazyMysticetiClient;
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
-use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use consensus_config::{
+    Committee, NetworkKeyPair, NetworkPublicKey as ConsensusNetworkPublicKey, Parameters,
+    ProtocolKeyPair,
+};
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority, NetworkType,
 };
 use core::panic;
 use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::{RegistryID, RegistryService};
+use mysten_network::Multiaddr;
 use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::{ConsensusConfig, NodeConfig};
+use sui_network::endpoint_manager::ConsensusAddressUpdater;
 use sui_protocol_config::ProtocolVersion;
-use sui_types::error::SuiResult;
+use sui_types::crypto::NetworkPublicKey;
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
@@ -39,6 +44,77 @@ pub mod consensus_manager_tests;
 enum Running {
     True(EpochId, ProtocolVersion),
     False,
+}
+
+/// Stores address updates that should be persisted across epoch changes.
+/// We store the consensus NetworkPublicKey to avoid repeated conversions.
+struct AddressOverridesMap {
+    // We store the AddressSource on a BTreeMap as it helps accessing the keys in priority order.
+    map: BTreeMap<
+        ConsensusNetworkPublicKey,
+        BTreeMap<sui_network::endpoint_manager::AddressSource, Vec<Multiaddr>>,
+    >,
+}
+
+impl AddressOverridesMap {
+    pub fn new() -> Self {
+        Self {
+            map: BTreeMap::new(),
+        }
+    }
+
+    pub fn insert(
+        &mut self,
+        network_pubkey: ConsensusNetworkPublicKey,
+        source: sui_network::endpoint_manager::AddressSource,
+        addresses: Vec<Multiaddr>,
+    ) {
+        self.map
+            .entry(network_pubkey)
+            .or_default()
+            .insert(source, addresses);
+    }
+
+    pub fn remove(
+        &mut self,
+        network_pubkey: ConsensusNetworkPublicKey,
+        source: sui_network::endpoint_manager::AddressSource,
+    ) {
+        self.map
+            .entry(network_pubkey.clone())
+            .or_default()
+            .remove(&source);
+
+        // If no sources remain for this peer, remove the peer entry entirely
+        if self.map.get(&network_pubkey.clone()).unwrap().is_empty() {
+            self.map.remove(&network_pubkey);
+        }
+    }
+
+    pub fn get_highest_priority_address(
+        &self,
+        network_pubkey: ConsensusNetworkPublicKey,
+    ) -> Option<Multiaddr> {
+        self.map
+            .get(&network_pubkey)
+            .and_then(|sources| sources.first_key_value())
+            .and_then(|(_, addresses)| addresses.first().cloned())
+    }
+
+    pub fn get_all_highest_priority_addresses(
+        &self,
+    ) -> Vec<(ConsensusNetworkPublicKey, Multiaddr)> {
+        let mut result = Vec::new();
+
+        for (network_pubkey, sources) in self.map.iter() {
+            if let Some((_source, addresses)) = sources.first_key_value()
+                && let Some(address) = addresses.first()
+            {
+                result.push((network_pubkey.clone(), address.clone()));
+            }
+        }
+        result
+    }
 }
 
 /// Used by Sui validator to start consensus protocol for each epoch.
@@ -70,6 +146,10 @@ pub struct ConsensusManager {
     pub(crate) boot_counter: Mutex<u64>,
     #[cfg(not(test))]
     boot_counter: Mutex<u64>,
+
+    // Persistent storage for address updates across epoch changes.
+    // Keyed by NetworkPublicKey and then by AddressSource.
+    address_overrides: Mutex<AddressOverridesMap>,
 }
 
 impl ConsensusManager {
@@ -99,6 +179,7 @@ impl ConsensusManager {
             consumer_monitor_sender,
             running: Mutex::new(Running::False),
             boot_counter: Mutex::new(0),
+            address_overrides: Mutex::new(AddressOverridesMap::new()),
         }
     }
 
@@ -157,23 +238,15 @@ impl ConsensusManager {
         let replay_after_commit_index =
             last_processed_commit_index.saturating_sub(num_prior_commits);
 
-        let (commit_consumer, commit_receiver, block_receiver) =
+        let (commit_consumer, commit_receiver) =
             CommitConsumerArgs::new(replay_after_commit_index, last_processed_commit_index);
         let monitor = commit_consumer.monitor();
 
         // Spin up the new Mysticeti consensus handler to listen for committed sub dags, before starting authority.
-        let consensus_block_handler = ConsensusBlockHandler::new(
-            epoch_store.clone(),
-            consensus_handler.execution_scheduler_sender().clone(),
-            consensus_handler_initializer.backpressure_subscriber(),
-            consensus_handler_initializer.metrics().clone(),
-        );
         let handler = MysticetiConsensusHandler::new(
             last_processed_commit_index,
             consensus_handler,
-            consensus_block_handler,
             commit_receiver,
-            block_receiver,
             monitor.clone(),
         );
         let mut consensus_handler = self.consensus_handler.lock().await;
@@ -225,6 +298,15 @@ impl ConsensusManager {
 
         let registered_authority = Arc::new((authority, registry_id));
         self.authority.swap(Some(registered_authority.clone()));
+
+        // Reapply all stored address updates to the new consensus instance.
+        let address_overrides = self.address_overrides.lock().await;
+        let highest_priority_addresses = address_overrides.get_all_highest_priority_addresses();
+        for (network_pubkey, address) in highest_priority_addresses {
+            registered_authority
+                .0
+                .update_peer_address(network_pubkey, Some(address.clone()));
+        }
 
         // Initialize the client to send transactions to this Mysticeti instance.
         self.client.set(client);
@@ -313,6 +395,50 @@ impl ConsensusManager {
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("{}", epoch));
         store_path
+    }
+}
+
+// Implementing the interface so we can update the consensus peer addresses when requested.
+impl ConsensusAddressUpdater for ConsensusManager {
+    fn update_address(
+        &self,
+        network_pubkey: NetworkPublicKey,
+        source: sui_network::endpoint_manager::AddressSource,
+        addresses: Vec<Multiaddr>,
+    ) -> SuiResult<()> {
+        // Convert to consensus network public key once
+        let network_pubkey = ConsensusNetworkPublicKey::new(network_pubkey.clone());
+
+        // Determine what address should be used after this update (if any)
+        let address_to_apply = {
+            let mut address_overrides = self.address_overrides.blocking_lock();
+
+            if addresses.is_empty() {
+                address_overrides.remove(network_pubkey.clone(), source);
+            } else {
+                address_overrides.insert(network_pubkey.clone(), source, addresses.clone());
+            }
+
+            address_overrides.get_highest_priority_address(network_pubkey.clone())
+        };
+
+        // Apply the update to running consensus if it exists
+        if let Some(authority) = self.authority.load_full() {
+            authority
+                .0
+                .update_peer_address(network_pubkey, address_to_apply);
+            Ok(())
+        } else {
+            info!(
+                "Consensus authority node is not running, address update persisted for peer {:?} from source {:?} and will be applied on next start",
+                network_pubkey, source
+            );
+            Err(SuiErrorKind::GenericAuthorityError {
+                error: "Consensus authority node is not running. Can not apply address update"
+                    .to_string(),
+            }
+            .into())
+        }
     }
 }
 

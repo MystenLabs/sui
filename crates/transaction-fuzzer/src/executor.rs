@@ -6,8 +6,9 @@
 
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
+use sui_core::authority::AuthorityState;
+use sui_core::authority::authority_test_utils::submit_and_execute;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
-use sui_core::{authority::AuthorityState, test_utils::send_and_confirm_transaction};
 use sui_move_build::BuildConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -103,7 +104,7 @@ impl Executor {
 
     pub fn execute_transaction(&mut self, txn: Transaction) -> ExecutionResult {
         self.rt
-            .block_on(send_and_confirm_transaction(&self.state, None, txn))
+            .block_on(submit_and_execute(&self.state, txn))
             .map(|(_, effects)| effects.into_data().status().clone())
     }
 
@@ -127,7 +128,7 @@ impl Executor {
         let txn = to_sender_signed_transaction(data, &account.initial_data.account.key);
         let effects = self
             .rt
-            .block_on(send_and_confirm_transaction(&self.state, None, txn))
+            .block_on(submit_and_execute(&self.state, txn))
             .unwrap()
             .1
             .into_data();

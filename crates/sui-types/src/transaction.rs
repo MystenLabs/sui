@@ -35,9 +35,9 @@ use crate::signature_verification::{
 };
 use crate::type_input::TypeInput;
 use crate::{
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -96,6 +96,10 @@ mod balance_withdraw_tests;
 #[path = "unit_tests/address_balance_gas_tests.rs"]
 mod address_balance_gas_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_claims_tests.rs"]
+mod transaction_claims_tests;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum CallArg {
     // contains no structs or objects
@@ -141,40 +145,29 @@ pub enum ObjectArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Reservation {
-    // Reserve the entire balance.
-    // This is not yet supported.
-    EntireBalance,
     // Reserve a specific amount of the balance.
     MaxAmountU64(u64),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum WithdrawalTypeArg {
-    Balance(TypeInput),
+    Balance(TypeTag),
 }
 
 impl WithdrawalTypeArg {
     /// Convert the withdrawal type argument to a full type tag,
     /// e.g. `Balance<T>` -> `0x2::balance::Balance<T>`
-    pub fn to_type_tag(&self) -> UserInputResult<TypeTag> {
-        match self {
-            WithdrawalTypeArg::Balance(type_param) => {
-                Ok(Balance::type_tag(type_param.to_type_tag().map_err(
-                    |e| UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    },
-                )?))
-            }
-        }
+    pub fn to_type_tag(&self) -> TypeTag {
+        let WithdrawalTypeArg::Balance(type_param) = self;
+        Balance::type_tag(type_param.clone())
     }
 
     /// If this is a Balance accumulator, return the type parameter of `Balance<T>`,
     /// e.g. `Balance<T>` -> `Some(T)`
     /// Otherwise, return `None`. This is not possible today, but in the future we will support other types of accumulators.
-    pub fn get_balance_type_param(&self) -> anyhow::Result<Option<TypeTag>> {
-        match self {
-            WithdrawalTypeArg::Balance(type_param) => type_param.to_type_tag().map(Some),
-        }
+    pub fn get_balance_type_param(&self) -> Option<TypeTag> {
+        let WithdrawalTypeArg::Balance(type_param) = self;
+        Some(type_param.clone())
     }
 }
 
@@ -200,7 +193,7 @@ pub enum WithdrawFrom {
 
 impl FundsWithdrawalArg {
     /// Withdraws from `Balance<balance_type>` in the sender's address.
-    pub fn balance_from_sender(amount: u64, balance_type: TypeInput) -> Self {
+    pub fn balance_from_sender(amount: u64, balance_type: TypeTag) -> Self {
         Self {
             reservation: Reservation::MaxAmountU64(amount),
             type_arg: WithdrawalTypeArg::Balance(balance_type),
@@ -209,7 +202,7 @@ impl FundsWithdrawalArg {
     }
 
     /// Withdraws from `Balance<balance_type>` in the sponsor's address (gas owner).
-    pub fn balance_from_sponsor(amount: u64, balance_type: TypeInput) -> Self {
+    pub fn balance_from_sponsor(amount: u64, balance_type: TypeTag) -> Self {
         Self {
             reservation: Reservation::MaxAmountU64(amount),
             type_arg: WithdrawalTypeArg::Balance(balance_type),
@@ -217,7 +210,7 @@ impl FundsWithdrawalArg {
         }
     }
 
-    fn owner_for_withdrawal(&self, tx: &impl TransactionDataAPI) -> SuiAddress {
+    pub fn owner_for_withdrawal(&self, tx: &impl TransactionDataAPI) -> SuiAddress {
         match self.withdraw_from {
             WithdrawFrom::Sender => tx.sender(),
             WithdrawFrom::Sponsor => tx.gas_owner(),
@@ -345,6 +338,12 @@ impl AuthenticatorStateExpire {
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum StoredExecutionTimeObservations {
     V1(Vec<(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)>),
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct WriteAccumulatorStorageCost {
+    /// Contains the end-of-epoch-computed storage cost for accumulator objects.
+    pub storage_cost: u64,
 }
 
 impl StoredExecutionTimeObservations {
@@ -495,6 +494,7 @@ pub enum EndOfEpochTransactionKind {
     CoinRegistryCreate,
     DisplayRegistryCreate,
     AddressAliasStateCreate,
+    WriteAccumulatorStorageCost(WriteAccumulatorStorageCost),
 }
 
 impl EndOfEpochTransactionKind {
@@ -572,6 +572,10 @@ impl EndOfEpochTransactionKind {
         Self::StoreExecutionTimeObservations(estimates)
     }
 
+    pub fn new_write_accumulator_storage_cost(storage_cost: u64) -> Self {
+        Self::WriteAccumulatorStorageCost(WriteAccumulatorStorageCost { storage_cost })
+    }
+
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Self::ChangeEpoch(_) => {
@@ -615,6 +619,13 @@ impl EndOfEpochTransactionKind {
             Self::CoinRegistryCreate => vec![],
             Self::DisplayRegistryCreate => vec![],
             Self::AddressAliasStateCreate => vec![],
+            Self::WriteAccumulatorStorageCost(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutability: SharedObjectMutability::Mutable,
+                }]
+            }
         }
     }
 
@@ -653,6 +664,9 @@ impl EndOfEpochTransactionKind {
             Self::CoinRegistryCreate => Either::Right(iter::empty()),
             Self::DisplayRegistryCreate => Either::Right(iter::empty()),
             Self::AddressAliasStateCreate => Either::Right(iter::empty()),
+            Self::WriteAccumulatorStorageCost(_) => {
+                Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
+            }
         }
     }
 
@@ -734,6 +748,13 @@ impl EndOfEpochTransactionKind {
                 if !config.address_aliases() {
                     return Err(UserInputError::Unsupported(
                         "address aliases not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::WriteAccumulatorStorageCost(_) => {
+                if !config.enable_accumulators() {
+                    return Err(UserInputError::Unsupported(
+                        "accumulators not enabled".to_string(),
                     ));
                 }
             }
@@ -1061,12 +1082,6 @@ impl ProgrammableMoveCall {
         }
         Ok(())
     }
-
-    fn is_input_arg_used(&self, arg: u16) -> bool {
-        self.arguments
-            .iter()
-            .any(|a| matches!(a, Argument::Input(inp) if *inp == arg))
-    }
 }
 
 impl Command {
@@ -1193,20 +1208,23 @@ impl Command {
     }
 
     fn is_input_arg_used(&self, input_arg: u16) -> bool {
+        self.is_argument_used(Argument::Input(input_arg))
+    }
+
+    pub fn is_gas_coin_used(&self) -> bool {
+        self.is_argument_used(Argument::GasCoin)
+    }
+
+    pub fn is_argument_used(&self, argument: Argument) -> bool {
         match self {
-            Command::MoveCall(c) => c.is_input_arg_used(input_arg),
+            Command::MoveCall(c) => c.arguments.iter().any(|a| a == &argument),
             Command::TransferObjects(args, arg)
             | Command::MergeCoins(arg, args)
-            | Command::SplitCoins(arg, args) => args
-                .iter()
-                .chain(once(arg))
-                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
-            Command::MakeMoveVec(_, args) => args
-                .iter()
-                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
-            Command::Upgrade(_, _, _, arg) => {
-                matches!(arg, Argument::Input(inp) if *inp == input_arg)
+            | Command::SplitCoins(arg, args) => {
+                args.iter().chain(once(arg)).any(|a| a == &argument)
             }
+            Command::MakeMoveVec(_, args) => args.iter().any(|a| a == &argument),
+            Command::Upgrade(_, _, _, arg) => arg == &argument,
             Command::Publish(_, _) => false,
         }
     }
@@ -1520,6 +1538,14 @@ impl TransactionKind {
             self,
             TransactionKind::EndOfEpochTransaction(_) | TransactionKind::ChangeEpoch(_)
         )
+    }
+
+    pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
+        matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
+            && self.shared_input_objects().any(|obj| {
+                obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+                    && obj.mutability == SharedObjectMutability::Mutable
+            })
     }
 
     /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
@@ -1893,6 +1919,15 @@ pub struct GasData {
     pub owner: SuiAddress,
     pub price: u64,
     pub budget: u64,
+}
+
+impl GasData {
+    pub fn is_unmetered(&self) -> bool {
+        self.payment.len() == 1
+            && self.payment[0].0 == ObjectID::ZERO
+            && self.payment[0].1 == SequenceNumber::default()
+            && self.payment[0].2 == ObjectDigest::MIN
+    }
 }
 
 pub fn is_gas_paid_from_address_balance(
@@ -2343,6 +2378,35 @@ impl TransactionData {
         )
     }
 
+    pub fn new_programmable_with_address_balance_gas(
+        sender: SuiAddress,
+        pt: ProgrammableTransaction,
+        gas_budget: u64,
+        gas_price: u64,
+        chain_identifier: ChainIdentifier,
+        current_epoch: EpochId,
+        nonce: u32,
+    ) -> Self {
+        TransactionData::V1(TransactionDataV1 {
+            kind: TransactionKind::ProgrammableTransaction(pt),
+            sender,
+            gas_data: GasData {
+                payment: vec![],
+                owner: sender,
+                price: gas_price,
+                budget: gas_budget,
+            },
+            expiration: TransactionExpiration::ValidDuring {
+                min_epoch: Some(current_epoch),
+                max_epoch: Some(current_epoch + 1),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: chain_identifier,
+                nonce,
+            },
+        })
+    }
+
     pub fn message_version(&self) -> u64 {
         match self {
             TransactionData::V1(_) => 1,
@@ -2392,6 +2456,8 @@ pub trait TransactionDataAPI {
     fn gas_budget(&self) -> u64;
 
     fn expiration(&self) -> &TransactionExpiration;
+
+    fn expiration_mut(&mut self) -> &mut TransactionExpiration;
 
     fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)>;
 
@@ -2518,6 +2584,10 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self.expiration
     }
 
+    fn expiration_mut(&mut self) -> &mut TransactionExpiration {
+        &mut self.expiration
+    }
+
     fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)> {
         self.kind.move_calls()
     }
@@ -2586,15 +2656,14 @@ impl TransactionDataAPI for TransactionDataV1 {
                     assert!(*amount > 0, "verified in validity check");
                     *amount
                 }
-                Reservation::EntireBalance => unreachable!("verified in validity check"),
             };
 
             let account_address = withdraw.owner_for_withdrawal(self);
             let account_id =
-                AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag()?)
+                AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag())
                     .map_err(|e| UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    })?;
+                    error: e.to_string(),
+                })?;
 
             let current_amount = withdraw_map.entry(account_id).or_default();
             *current_amount = current_amount.checked_add(reserved_amount).ok_or(
@@ -2623,17 +2692,14 @@ impl TransactionDataAPI for TransactionDataV1 {
                     assert!(*amount > 0, "verified in validity check");
                     *amount
                 }
-                Reservation::EntireBalance => unreachable!("verified in validity check"),
             };
 
             let withdrawal_owner = withdraw.owner_for_withdrawal(self);
 
             // unwrap checked at signing time
-            let account_id = AccumulatorValue::get_field_id(
-                withdrawal_owner,
-                &withdraw.type_arg.to_type_tag().unwrap(),
-            )
-            .unwrap();
+            let account_id =
+                AccumulatorValue::get_field_id(withdrawal_owner, &withdraw.type_arg.to_type_tag())
+                    .unwrap();
 
             let value = withdraw_map.entry(account_id).or_default();
             // overflow checked at signing time
@@ -2803,12 +2869,6 @@ impl TransactionDataAPI for TransactionDataV1 {
                             }
                             .into()
                         );
-                    }
-                    Reservation::EntireBalance => {
-                        return Err(UserInputError::InvalidWithdrawReservation {
-                            error: "Reserving the entire balance is not supported".to_string(),
-                        }
-                        .into());
                     }
                 };
             }
@@ -3007,15 +3067,9 @@ impl TransactionDataV1 {
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
         if self.is_gas_paid_from_address_balance() {
             Some(if self.sender() != self.gas_owner() {
-                FundsWithdrawalArg::balance_from_sponsor(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
+                FundsWithdrawalArg::balance_from_sponsor(self.gas_data().budget, GAS::type_tag())
             } else {
-                FundsWithdrawalArg::balance_from_sender(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
+                FundsWithdrawalArg::balance_from_sender(self.gas_data().budget, GAS::type_tag())
             })
         } else {
             None
@@ -3118,20 +3172,20 @@ impl<'de> Deserialize<'de> for SenderSignedTransaction {
 }
 
 impl SenderSignedTransaction {
+    /// Returns a mapping from signer address to the signature and its index in `tx_signatures`.
     pub(crate) fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
-    ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+    ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
         let mut mapping = BTreeMap::new();
-        for sig in &self.tx_signatures {
-            if verify_legacy_zklogin_address {
+        for (idx, sig) in self.tx_signatures.iter().enumerate() {
+            if verify_legacy_zklogin_address && let GenericSignature::ZkLoginAuthenticator(z) = sig
+            {
                 // Try deriving the address from the legacy padded way.
-                if let GenericSignature::ZkLoginAuthenticator(z) = sig {
-                    mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, sig);
-                };
+                mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, (idx as u8, sig));
             }
             let address = sig.try_into()?;
-            mapping.insert(address, sig);
+            mapping.insert(address, (idx as u8, sig));
         }
         Ok(mapping)
     }
@@ -3177,7 +3231,7 @@ impl SenderSignedData {
     pub(crate) fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
-    ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+    ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
         self.inner()
             .get_signer_sig_mapping(verify_legacy_zklogin_address)
     }
@@ -3214,9 +3268,14 @@ impl SenderSignedData {
         &mut self.inner_mut().tx_signatures
     }
 
-    pub fn full_message_digest(&self) -> SenderSignedDataDigest {
+    /// Includes alias_versions to ensure cache invalidation when aliases change.
+    pub fn full_message_digest_with_alias_versions(
+        &self,
+        alias_versions: &Vec<(SuiAddress, Option<SequenceNumber>)>,
+    ) -> SenderSignedDataDigest {
         let mut digest = DefaultHash::default();
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
+        bcs::serialize_into(&mut digest, alias_versions).expect("serialization should not fail");
         let hash = digest.finalize();
         SenderSignedDataDigest::new(hash.into())
     }
@@ -3624,7 +3683,8 @@ impl Transaction {
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
             vec![],
-        )
+        )?;
+        Ok(())
     }
 
     pub fn try_into_verified_for_testing(
@@ -3732,11 +3792,11 @@ pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQ
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WithAliases<T>(
     T,
-    #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+    #[serde(with = "nonempty_as_vec")] NonEmpty<(u8, Option<SequenceNumber>)>,
 );
 
 impl<T> WithAliases<T> {
-    pub fn new(tx: T, aliases: NonEmpty<(SuiAddress, Option<SequenceNumber>)>) -> Self {
+    pub fn new(tx: T, aliases: NonEmpty<(u8, Option<SequenceNumber>)>) -> Self {
         Self(tx, aliases)
     }
 
@@ -3744,7 +3804,7 @@ impl<T> WithAliases<T> {
         &self.0
     }
 
-    pub fn aliases(&self) -> &NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
+    pub fn aliases(&self) -> &NonEmpty<(u8, Option<SequenceNumber>)> {
         &self.1
     }
 
@@ -3752,11 +3812,11 @@ impl<T> WithAliases<T> {
         self.0
     }
 
-    pub fn into_aliases(self) -> NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
+    pub fn into_aliases(self) -> NonEmpty<(u8, Option<SequenceNumber>)> {
         self.1
     }
 
-    pub fn into_inner(self) -> (T, NonEmpty<(SuiAddress, Option<SequenceNumber>)>) {
+    pub fn into_inner(self) -> (T, NonEmpty<(u8, Option<SequenceNumber>)>) {
         (self.0, self.1)
     }
 }
@@ -3769,30 +3829,60 @@ impl<T: Message, S> WithAliases<VerifiedEnvelope<T, S>> {
 }
 
 impl<S> WithAliases<Envelope<SenderSignedData, S>> {
+    /// Creates a WithAliases where each required signer is mapped to its corresponding
+    /// signature index (assuming 1:1 correspondence) with no alias object version.
     pub fn no_aliases(tx: Envelope<SenderSignedData, S>) -> Self {
-        let no_aliases = tx
-            .intent_message()
-            .value
-            .required_signers()
-            .map(|s| (s, None));
-        Self::new(tx, no_aliases)
+        let required_signers = tx.intent_message().value.required_signers();
+        assert_eq!(required_signers.len(), tx.tx_signatures().len());
+        let no_aliases = required_signers
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| (idx as u8, None))
+            .collect::<Vec<_>>();
+        Self::new(
+            tx,
+            NonEmpty::from_vec(no_aliases).expect("must have at least one required_signer"),
+        )
     }
 }
 
 impl<S> WithAliases<VerifiedEnvelope<SenderSignedData, S>> {
+    /// Creates a WithAliases where each required signer is mapped to its corresponding
+    /// signature index (assuming 1:1 correspondence) with no alias object version.
     pub fn no_aliases(tx: VerifiedEnvelope<SenderSignedData, S>) -> Self {
-        let no_aliases = tx
-            .intent_message()
-            .value
-            .required_signers()
-            .map(|s| (s, None));
-        Self::new(tx, no_aliases)
+        let required_signers = tx.intent_message().value.required_signers();
+        assert_eq!(required_signers.len(), tx.tx_signatures().len());
+        let no_aliases = required_signers
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| (idx as u8, None))
+            .collect::<Vec<_>>();
+        Self::new(
+            tx,
+            NonEmpty::from_vec(no_aliases).expect("must have at least one required_signer"),
+        )
     }
 }
 
 pub type TransactionWithAliases = WithAliases<Transaction>;
 pub type VerifiedTransactionWithAliases = WithAliases<VerifiedTransaction>;
 pub type TrustedTransactionWithAliases = WithAliases<TrustedTransaction>;
+
+/// Deprecated version of WithAliases that uses SuiAddress instead of u8.
+/// This is needed to read data from deferred_transactions_with_aliases_v2 table
+/// which was written with the old format before the type was changed.
+// TODO: Delete this after all production networks are on the latest table.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DeprecatedWithAliases<T>(
+    T,
+    #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+);
+
+impl<T> DeprecatedWithAliases<T> {
+    pub fn into_inner(self) -> (T, NonEmpty<(SuiAddress, Option<SequenceNumber>)>) {
+        (self.0, self.1)
+    }
+}
 
 impl<T: Message, S> From<WithAliases<VerifiedEnvelope<T, S>>> for WithAliases<Envelope<T, S>> {
     fn from(value: WithAliases<VerifiedEnvelope<T, S>>) -> Self {
@@ -3860,6 +3950,114 @@ mod nonempty_as_vec {
         }
 
         deserializer.deserialize_seq(NonEmptyVisitor(PhantomData))
+    }
+}
+
+// =============================================================================
+// TransactionWithClaims - Generalized claim system for consensus messages
+// =============================================================================
+
+/// Claims that can be attached to a transaction for consensus validation.
+/// Each claim type represents a piece of information that:
+/// 1. The submitting validator includes in the consensus message
+/// 2. Voting validators verify before accepting
+/// 3. The consensus handler can use deterministically
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TransactionClaim {
+    /// DEPRECATED. Do not use.
+    #[deprecated(note = "Use AddressAliasesV2")]
+    AddressAliases(
+        #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+    ),
+
+    /// Object IDs that are claimed to be immutable.
+    /// Used to filter out immutable objects from lock acquisition in consensus handler.
+    ImmutableInputObjects(Vec<ObjectID>),
+
+    /// Address aliases used for signature verification.
+    /// Length must equal the number of `required_signers`. Each element maps the corresponding
+    /// signer to the signature index and alias object version (if any) used to verify it.
+    AddressAliasesV2(#[serde(with = "nonempty_as_vec")] NonEmpty<(u8, Option<SequenceNumber>)>),
+}
+
+/// A transaction with attached claims that have been verified by voting validators.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransactionWithClaims<T> {
+    tx: T,
+    claims: Vec<TransactionClaim>,
+}
+
+impl<T> TransactionWithClaims<T> {
+    pub fn new(tx: T, claims: Vec<TransactionClaim>) -> Self {
+        Self { tx, claims }
+    }
+
+    /// Create from a transaction with only address aliases.
+    pub fn from_aliases(tx: T, aliases: NonEmpty<(u8, Option<SequenceNumber>)>) -> Self {
+        Self {
+            tx,
+            claims: vec![TransactionClaim::AddressAliasesV2(aliases)],
+        }
+    }
+
+    /// Creates from a transaction without any aliases attached.
+    pub fn no_aliases(tx: T) -> Self {
+        Self { tx, claims: vec![] }
+    }
+
+    pub fn tx(&self) -> &T {
+        &self.tx
+    }
+
+    pub fn into_tx(self) -> T {
+        self.tx
+    }
+
+    /// Get the address aliases V2 claim. Differentiate between empty and not present for validation.
+    pub fn aliases(&self) -> Option<NonEmpty<(u8, Option<SequenceNumber>)>> {
+        self.claims
+            .iter()
+            .find_map(|c| match c {
+                TransactionClaim::AddressAliasesV2(aliases) => Some(aliases),
+                _ => None,
+            })
+            .cloned()
+    }
+
+    // TODO: Remove once `fix_checkpoint_signature_mapping` flag is enabled in testnet.
+    #[allow(deprecated)]
+    pub fn aliases_v1(&self) -> Option<NonEmpty<(SuiAddress, Option<SequenceNumber>)>> {
+        self.claims
+            .iter()
+            .find_map(|c| match c {
+                TransactionClaim::AddressAliases(aliases) => Some(aliases),
+                _ => None,
+            })
+            .cloned()
+    }
+
+    /// Get the immutable input objects claim. Returns empty vector if not present.
+    pub fn get_immutable_objects(&self) -> Vec<ObjectID> {
+        self.claims
+            .iter()
+            .find_map(|c| match c {
+                TransactionClaim::ImmutableInputObjects(objs) => Some(objs.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+}
+
+pub type PlainTransactionWithClaims = TransactionWithClaims<Transaction>;
+
+/// Convert from `WithAliases<VerifiedEnvelope>` to `TransactionWithClaims<Envelope>`.
+/// Used when feature flag is off to convert existing WithAliases to the new type.
+impl<T: Message, S> From<WithAliases<VerifiedEnvelope<T, S>>>
+    for TransactionWithClaims<Envelope<T, S>>
+{
+    fn from(value: WithAliases<VerifiedEnvelope<T, S>>) -> Self {
+        let (tx, aliases) = value.into_inner();
+        Self::from_aliases(tx.into(), aliases)
     }
 }
 

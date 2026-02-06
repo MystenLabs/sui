@@ -12,22 +12,17 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{collections::HashMap, time::Instant};
-use sui_json_rpc_types::SuiTransactionBlockResponse;
-use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponseOptions,
-};
-use sui_sdk::SuiClient;
-use sui_sdk::apis::ReadApi;
-use sui_sdk::rpc_types::SuiObjectResponse;
+use sui_rpc_api::Client;
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_types::Identifier;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::UserInputError;
-use sui_types::object::{Object, Owner};
+use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::NON_RECOVERABLE_ERROR_MSG;
 use sui_types::transaction::{Argument, Transaction};
 use sui_types::transaction::{Command, ObjectArg, SharedObjectMutability};
+use sui_types::transaction_driver_types::NON_RECOVERABLE_ERROR_MSG;
 use sui_types::{
     base_types::SuiAddress,
     transaction::{CallArg, TransactionData},
@@ -74,7 +69,7 @@ impl OracleNode {
     pub async fn run(mut self) -> anyhow::Result<()> {
         info!("Starting OracleNode...");
         let signer_address = self.wallet_ctx.active_address()?;
-        let client = Arc::new(self.wallet_ctx.get_client().await?);
+        let client = self.wallet_ctx.grpc_client()?;
 
         let wallet_ctx = Arc::new(self.wallet_ctx);
         DataProviderRunner::new(
@@ -126,7 +121,7 @@ impl DataProviderRunner {
         upload_feeds: HashMap<String, HashMap<String, UploadFeedConfig>>,
         gas_coin_id: ObjectID,
         wallet_ctx: Arc<WalletContext>,
-        client: Arc<SuiClient>,
+        mut client: Client,
         signer_address: SuiAddress,
         metrics: Arc<OracleMetrics>,
     ) -> Self {
@@ -153,7 +148,7 @@ impl DataProviderRunner {
                     oracle_object_args.entry(oracle_obj_id)
                 {
                     e.insert(
-                        get_object_arg(client.read_api(), oracle_obj_id, true)
+                        get_object_arg(&mut client, oracle_obj_id, true)
                             .await
                             .unwrap(),
                     );
@@ -162,7 +157,7 @@ impl DataProviderRunner {
         }
         info!("Staleness tolerance: {:?}", staleness_tolerance);
 
-        let gas_obj_ref = get_gas_obj_ref(client.read_api(), gas_coin_id, signer_address).await;
+        let gas_obj_ref = get_gas_obj_ref(client.clone(), gas_coin_id, signer_address).await;
         info!("Gas object: {:?}", gas_obj_ref);
 
         let uploader = OnChainDataUploader {
@@ -194,25 +189,21 @@ impl DataProviderRunner {
 }
 
 async fn get_gas_obj_ref(
-    read_api: &ReadApi,
+    mut client: Client,
     gas_obj_id: ObjectID,
     owner_address: SuiAddress,
 ) -> ObjectRef {
     loop {
-        match read_api
-            .get_object_with_options(gas_obj_id, SuiObjectDataOptions::default().with_owner())
-            .await
-            .map(|resp| resp.data)
-        {
-            Ok(Some(gas_obj)) => {
+        match client.get_object(gas_obj_id).await {
+            Ok(gas_obj) => {
                 assert_eq!(
-                    gas_obj.owner,
-                    Some(Owner::AddressOwner(owner_address)),
+                    gas_obj.owner(),
+                    &Owner::AddressOwner(owner_address),
                     "Provided gas obj {:?} does not belong to {}",
                     gas_obj,
                     owner_address
                 );
-                return gas_obj.object_ref();
+                return gas_obj.compute_object_reference();
             }
             other => {
                 warn!("Can't get gas object: {:?}: {:?}", gas_obj_id, other);
@@ -340,7 +331,7 @@ fn make_onchain_feed_name(feed_name: &str, source_name: &str) -> String {
 
 struct OnChainDataUploader {
     wallet_ctx: Arc<WalletContext>,
-    client: Arc<SuiClient>,
+    client: Client,
     receiver: tokio::sync::mpsc::Receiver<DataPoint>,
     signer_address: SuiAddress,
     gas_obj_ref: ObjectRef,
@@ -365,12 +356,9 @@ impl OnChainDataUploader {
                     "Upload failure: {err}. About to resting for {UPLOAD_FAILURE_RECOVER_SEC} sec."
                 );
                 tokio::time::sleep(Duration::from_secs(UPLOAD_FAILURE_RECOVER_SEC)).await;
-                self.gas_obj_ref = get_gas_obj_ref(
-                    self.client.read_api(),
-                    self.gas_obj_ref.0,
-                    self.signer_address,
-                )
-                .await;
+                self.gas_obj_ref =
+                    get_gas_obj_ref(self.client.clone(), self.gas_obj_ref.0, self.signer_address)
+                        .await;
                 error!("Updated gas object reference: {:?}", self.gas_obj_ref);
             }
         }
@@ -420,10 +408,7 @@ impl OnChainDataUploader {
         data_points
     }
 
-    async fn upload(
-        &mut self,
-        data_points: Vec<DataPoint>,
-    ) -> anyhow::Result<SuiTransactionBlockEffects> {
+    async fn upload(&mut self, data_points: Vec<DataPoint>) -> anyhow::Result<TransactionEffects> {
         let _scope = monitored_scope("Oracle::OnChainDataUploader::upload");
         // TODO add more error handling & polling perhaps
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -487,11 +472,7 @@ impl OnChainDataUploader {
             is_first = false;
         }
         let pt = builder.finish();
-        let rgp = self
-            .client
-            .governance_api()
-            .get_reference_gas_price()
-            .await?;
+        let rgp = self.client.get_reference_gas_price().await?;
         let tx = TransactionData::new_programmable(
             self.signer_address,
             vec![self.gas_obj_ref],
@@ -510,10 +491,10 @@ impl OnChainDataUploader {
 
         // We asked for effects.
         // But is there a better way to handle this instead of panic?
-        let effects = response.effects.expect("Expect to see effects in response");
+        let effects = response.effects;
 
         // It's critical to update the gas object reference for next transaction
-        self.gas_obj_ref = effects.gas_object().reference.to_object_ref();
+        self.gas_obj_ref = effects.gas_object().0;
 
         let success = effects.status().is_ok();
 
@@ -570,51 +551,70 @@ impl OnChainDataUploader {
         }
     }
 
-    async fn execute(&mut self, tx: Transaction) -> anyhow::Result<SuiTransactionBlockResponse> {
+    async fn execute(&mut self, tx: Transaction) -> anyhow::Result<ExecutedTransaction> {
         let tx_digest = tx.digest();
         let mut retry_attempts = 3;
         loop {
             match self
                 .client
-                .quorum_driver_api()
-                .execute_transaction_block(
-                    tx.clone(),
-                    SuiTransactionBlockResponseOptions::new().with_effects(),
-                    // TODO: after 1.4.0, we can simply use `WaitForEffectsCert` which is faster.
-                    // Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
-                    Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
-                )
-                .await {
+                .execute_transaction_and_wait_for_checkpoint(&tx)
+                .await
+            {
                 Ok(response) => return Ok(response),
-                Err(sui_sdk::error::Error::RpcError(err)) => {
-                    // jsonrpsee translate every SuiError into jsonrpsee::core::Error, so we need to further distinguish 
+                Err(err) => {
+                    // jsonrpsee translate every SuiError into jsonrpsee::core::Error, so we need to further distinguish
                     if err.to_string().contains(NON_RECOVERABLE_ERROR_MSG) {
-                        let stale_obj_error = STALE_OBJ_ERROR
-                            .get_or_init(||
-                                String::from(UserInputError::ObjectVersionUnavailableForConsumption { provided_obj_ref: random_object_ref(), current_version: 0.into() }.as_ref())
-                            );
+                        let stale_obj_error = STALE_OBJ_ERROR.get_or_init(|| {
+                            String::from(
+                                UserInputError::ObjectVersionUnavailableForConsumption {
+                                    provided_obj_ref: random_object_ref(),
+                                    current_version: 0.into(),
+                                }
+                                .as_ref(),
+                            )
+                        });
                         if err.to_string().contains(stale_obj_error) {
-                            error!(?tx_digest, "Failed to submit tx, it looks like gas object is stale : {:?}", err);
-                            let new_ref = get_gas_obj_ref(self.client.read_api(), self.gas_obj_ref.0, self.signer_address).await;
+                            error!(
+                                ?tx_digest,
+                                "Failed to submit tx, it looks like gas object is stale : {:?}",
+                                err
+                            );
+                            let new_ref = get_gas_obj_ref(
+                                self.client.clone(),
+                                self.gas_obj_ref.0,
+                                self.signer_address,
+                            )
+                            .await;
                             self.gas_obj_ref = new_ref;
                             info!("Gas object updated: {:?}", new_ref);
-                            anyhow::bail!("Gas object is stale, now updated to {:?}. tx_digest={:?}", new_ref, tx_digest);
+                            anyhow::bail!(
+                                "Gas object is stale, now updated to {:?}. tx_digest={:?}",
+                                new_ref,
+                                tx_digest
+                            );
                         } else {
-                            error!(?tx_digest, "Failed to submit tx, with non recoverable error: {:?}", err);
-                            anyhow::bail!("Non-retryable error {:?}. tx_digest={:?}", err, tx_digest);
+                            error!(
+                                ?tx_digest,
+                                "Failed to submit tx, with non recoverable error: {:?}", err
+                            );
+                            anyhow::bail!(
+                                "Non-retryable error {:?}. tx_digest={:?}",
+                                err,
+                                tx_digest
+                            );
                         }
                     }
                     // Likely retryable error?
-                    error!(?tx_digest, "Failed to submit tx, with (likely) recoverable error: {:?}. Remaining retry times: {}", err, retry_attempts);
+                    error!(
+                        ?tx_digest,
+                        "Failed to submit tx, with (likely) recoverable error: {:?}. Remaining retry times: {}",
+                        err,
+                        retry_attempts
+                    );
                     retry_attempts -= 1;
                     if retry_attempts <= 0 {
                         anyhow::bail!("Too many RPC errors: {}. tx_digest={:?}", err, tx_digest);
                     }
-                }
-                // All other errors are unexpected
-                Err(err) => {
-                    error!(?tx_digest, "Failed to submit tx, with unexpected error: {:?}", err);
-                    anyhow::bail!("Unexpected error in tx submission {:?}. tx_digest={:?}", err, tx_digest);
                 }
             }
         }
@@ -631,7 +631,7 @@ struct DataPoint {
 }
 
 struct OnChainDataReader {
-    pub client: Arc<SuiClient>,
+    pub client: Client,
     // For now we share one read interval for all reads
     pub read_interval: Duration,
     pub read_configs: HashMap<String, ObjectID>,
@@ -639,7 +639,7 @@ struct OnChainDataReader {
 }
 
 impl OnChainDataReader {
-    pub async fn start(self, sender: tokio::sync::mpsc::Sender<(String, ObjectID, f64)>) {
+    pub async fn start(mut self, sender: tokio::sync::mpsc::Sender<(String, ObjectID, f64)>) {
         info!(
             "Starting on-chain data reader with interval {:?} and config: {:?}",
             self.read_interval, self.read_configs
@@ -649,15 +649,8 @@ impl OnChainDataReader {
         loop {
             read_interval.tick().await;
             for (feed_name, object_id) in &self.read_configs {
-                match self
-                    .client
-                    .read_api()
-                    .get_object_with_options(*object_id, SuiObjectDataOptions::default())
-                    .await
-                {
-                    Ok(SuiObjectResponse {
-                        data: Some(_data), ..
-                    }) => {
+                match self.client.get_object(*object_id).await {
+                    Ok(_object) => {
                         // TODO parse value based on returned BCS
                         let value = 5_f64;
                         let _ = sender.send((feed_name.clone(), *object_id, value)).await;
@@ -689,15 +682,11 @@ impl OnChainDataReader {
 }
 
 async fn get_object_arg(
-    read_api: &ReadApi,
+    client: &mut Client,
     id: ObjectID,
     is_mutable_ref: bool,
 ) -> anyhow::Result<ObjectArg> {
-    let response = read_api
-        .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
-        .await?;
-
-    let obj: Object = response.into_object()?.try_into()?;
+    let obj = client.get_object(id).await?;
     let obj_ref = obj.compute_object_reference();
     let owner = obj.owner.clone();
     Ok(match owner {

@@ -41,7 +41,7 @@ Sui Full nodes don't require data from checkpoints to  execute and submit transa
 
 Sui full nodes support more than 40 RPC types that includes the following categories:
 
-* **General metadata**, such as `sui_getProtocolConfig` and `sui_getChainIdentier`. These requests don't depend on additional indexing and don't require historic data to process.
+* **General metadata**, such as `sui_getProtocolConfig` and `sui_getChainIdentifier`. These requests don't depend on additional indexing and don't require historic data to process.
 * **Direct lookups**, such as `sui_getObject`, `sui_getEvents`. These requests don't depend on additional indexing, but require historic data in some cases, such as `sui_tryGetPastObject` and `sui_getTransactionBlock`.
 * **Accumulation and filtering queries**,such as `suix_getOwnedObjects` and `suix_getCoins`. These requests depend on additional indexing, and require historic data in some cases, such as `suix_queryTransactionBlocks`.
 

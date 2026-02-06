@@ -1,24 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use anyhow::{Result, ensure};
+use anyhow::Result;
+use anyhow::ensure;
+use async_trait::async_trait;
 use diesel::prelude::QueryableByName;
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    FieldCount,
-    pipeline::Processor,
-    postgres::{Connection, handler::Handler},
-    types::{base_types::ObjectID, full_checkpoint_content::Checkpoint, object::Object},
-};
-use sui_indexer_alt_schema::{
-    objects::{StoredObjInfo, StoredObjInfoDeletionReference},
-    schema::{obj_info, obj_info_deletion_reference},
-};
+use sui_indexer_alt_framework::FieldCount;
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::base_types::ObjectID;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::object::Object;
+use sui_indexer_alt_schema::objects::StoredObjInfo;
+use sui_indexer_alt_schema::objects::StoredObjInfoDeletionReference;
+use sui_indexer_alt_schema::schema::obj_info;
+use sui_indexer_alt_schema::schema::obj_info_deletion_reference;
 
-use super::checkpoint_input_objects;
-use async_trait::async_trait;
+use crate::handlers::checkpoint_input_objects;
 
 pub(crate) struct ObjInfo;
 
@@ -269,15 +272,13 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 
 #[cfg(test)]
 mod tests {
-    use sui_indexer_alt_framework::{
-        Indexer,
-        types::{
-            base_types::{SequenceNumber, dbg_addr},
-            object::Owner,
-            test_checkpoint_data_builder::TestCheckpointBuilder,
-        },
-    };
-    use sui_indexer_alt_schema::{MIGRATIONS, objects::StoredOwnerKind};
+    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_framework::types::base_types::SequenceNumber;
+    use sui_indexer_alt_framework::types::base_types::dbg_addr;
+    use sui_indexer_alt_framework::types::object::Owner;
+    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::TestCheckpointBuilder;
+    use sui_indexer_alt_schema::MIGRATIONS;
+    use sui_indexer_alt_schema::objects::StoredOwnerKind;
 
     use super::*;
 

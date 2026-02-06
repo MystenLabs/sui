@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod compatibility_tests {
+    use move_package_alt::PackageLoader;
     use std::collections::BTreeMap;
     use std::path::Path;
     use sui_framework::{BuiltInFramework, compare_system_package};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
-    use sui_move_build::{parse_legacy_pkg_info, published_at_property};
+    use sui_package_alt::{SuiFlavor, testnet_environment};
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
     /// The number of bytecode snapshots to backtest against the current framework.
@@ -83,24 +84,31 @@ mod compatibility_tests {
     /// within the repo; we check the historical metadata against the current repository. If
     /// needed, we could be more precise by first checking out the revision of the package listed
     /// in the manifest (this should actually be fairly cheap since the git history is present).
-    #[test]
-    fn check_manifest_against_tomls() {
+    #[tokio::test]
+    async fn check_manifest_against_tomls() {
         let manifest = load_bytecode_snapshot_manifest();
         for entry in manifest.values() {
             for package in entry.packages.iter() {
                 // parse package.path/Move.toml
                 let package_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("..")
-                    .join("..")
+                    .join("../..")
                     .join(&package.path);
-                let legacy_package_info =
-                    parse_legacy_pkg_info(&package_path).expect("Move.toml exists");
-                // check manifest name field is package.name
-                assert_eq!(legacy_package_info.legacy_name, package.name);
-                // check manifest published-at field is package.id
-                let published_at_field = published_at_property(&package_path)
-                    .expect("Move.toml file has published-at field");
-                assert_eq!(published_at_field, package.id);
+
+                let root_pkg = PackageLoader::new(&package_path, testnet_environment())
+                    .load::<SuiFlavor>()
+                    .await
+                    .expect("can load system packages");
+
+                assert_eq!(root_pkg.package_info().display_name(), package.name);
+                assert_eq!(
+                    root_pkg
+                        .package_info()
+                        .published()
+                        .expect("system packages are published")
+                        .published_at
+                        .0,
+                    *package.id
+                );
             }
         }
     }

@@ -8,7 +8,7 @@
 // Q2 is obj(8,0)
 // Q3 is obj(9,0)
 
-//# init --protocol-version 70 --accounts A --addresses P1=0x0 P2=0x0 P3=0x0 Q1=0x0 Q2=0x0 Q3=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses P1=0x0 P2=0x0 P3=0x0 Q1=0x0 Q2=0x0 Q3=0x0 --simulator
 
 //# publish --upgradeable --sender A
 module P1::M {

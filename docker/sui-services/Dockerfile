@@ -1,4 +1,4 @@
-FROM rust:1.90-bullseye AS chef
+FROM rust:1.92-bullseye AS chef
 WORKDIR sui
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
@@ -13,8 +13,7 @@ COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
 RUN cargo build --release \
-    --bin sui-oracle \
-    --bin suins-indexer
+    --bin sui-oracle
 RUN mkdir /sui/bin/
 RUN find /sui/target/release/ -maxdepth 1 -type f -executable -print 
 RUN find /sui/target/release/ -maxdepth 1 -type f -executable -print | xargs cp -t /sui/bin/

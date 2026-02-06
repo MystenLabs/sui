@@ -9,7 +9,7 @@ use sui_types::base_types::{FullObjectID, ObjectRef};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
-use sui_types::storage::{FullObjectKey, InputKey, MarkerValue, ObjectKey};
+use sui_types::storage::{FullObjectKey, MarkerValue, ObjectKey};
 use sui_types::transaction::{TransactionData, TransactionDataAPI, VerifiedTransaction};
 
 /// TransactionOutputs
@@ -19,7 +19,7 @@ pub struct TransactionOutputs {
     pub effects: TransactionEffects,
     pub events: TransactionEvents,
     pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
-    pub accumulator_events: Mutex<Vec<AccumulatorEvent>>,
+    pub accumulator_events: Mutex<Option<Vec<AccumulatorEvent>>>,
 
     pub markers: Vec<(FullObjectKey, MarkerValue)>,
     pub wrapped: Vec<ObjectKey>,
@@ -27,10 +27,6 @@ pub struct TransactionOutputs {
     pub locks_to_delete: Vec<ObjectRef>,
     pub new_locks_to_init: Vec<ObjectRef>,
     pub written: WrittenObjects,
-
-    // Temporarily needed to notify TxManager about the availability of objects.
-    // TODO: Remove this once we ship the new ExecutionScheduler.
-    pub output_keys: Vec<InputKey>,
 }
 
 impl TransactionOutputs {
@@ -41,8 +37,6 @@ impl TransactionOutputs {
         inner_temporary_store: InnerTemporaryStore,
         unchanged_loaded_runtime_objects: Vec<ObjectKey>,
     ) -> TransactionOutputs {
-        let output_keys = inner_temporary_store.get_output_keys(&effects);
-
         let InnerTemporaryStore {
             input_objects,
             stream_ended_consensus_objects,
@@ -54,6 +48,7 @@ impl TransactionOutputs {
             binary_config: _,
             runtime_packages_loaded_from_db: _,
             lamport_version,
+            accumulator_running_max_withdraws: _,
         } = inner_temporary_store;
 
         let tx_digest = *transaction.digest();
@@ -191,19 +186,21 @@ impl TransactionOutputs {
             effects,
             events,
             unchanged_loaded_runtime_objects,
-            accumulator_events: Mutex::new(accumulator_events),
+            accumulator_events: Mutex::new(Some(accumulator_events)),
             markers,
             wrapped,
             deleted,
             locks_to_delete,
             new_locks_to_init,
             written,
-            output_keys,
         }
     }
 
     pub fn take_accumulator_events(&self) -> Vec<AccumulatorEvent> {
-        std::mem::take(&mut *self.accumulator_events.lock())
+        self.accumulator_events
+            .lock()
+            .take()
+            .expect("take_accumulator_events called twice")
     }
 
     #[cfg(test)]
@@ -213,14 +210,13 @@ impl TransactionOutputs {
             effects,
             events: TransactionEvents { data: vec![] },
             unchanged_loaded_runtime_objects: vec![],
-            accumulator_events: Default::default(),
+            accumulator_events: Mutex::new(Some(vec![])),
             markers: vec![],
             wrapped: vec![],
             deleted: vec![],
             locks_to_delete: vec![],
             new_locks_to_init: vec![],
             written: WrittenObjects::new(),
-            output_keys: vec![],
         }
     }
 }
@@ -238,7 +234,7 @@ pub fn unchanged_loaded_runtime_objects(
         .collect();
 
     // Remove any object that is referenced in the changed objects effects set since it would be
-    // redundent to include it again.
+    // redundant to include it again.
     for change in effects.object_changes() {
         unchanged_loaded_runtime_objects.remove(&change.id);
     }

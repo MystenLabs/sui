@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(deprecated)]
+
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -32,8 +34,8 @@ use sui_types::coin::{COIN_MODULE_NAME, TreasuryCap};
 use sui_types::crypto::Signature;
 use sui_types::digests::ObjectDigest;
 use sui_types::gas_coin::GAS;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::load_test_vectors;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use sui_types::{SUI_FRAMEWORK_ADDRESS, parse_sui_struct_tag};

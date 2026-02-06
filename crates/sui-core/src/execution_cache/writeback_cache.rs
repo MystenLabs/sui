@@ -37,6 +37,7 @@
 //!
 //! The above design is used for both objects and markers.
 
+use crate::accumulators::funds_read::AccountFundsRead;
 use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{
@@ -64,7 +65,9 @@ use std::sync::atomic::AtomicU64;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::accumulator_event::AccumulatorEvent;
+use sui_types::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
@@ -81,7 +84,7 @@ use sui_types::storage::{
     FullObjectKey, InputKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
 };
 use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
-use sui_types::transaction::{TransactionDataAPI, VerifiedSignedTransaction, VerifiedTransaction};
+use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
 use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -1383,6 +1386,55 @@ impl WritebackCache {
     }
 }
 
+impl AccountFundsRead for WritebackCache {
+    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber) {
+        let mut pre_root_version =
+            ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .unwrap()
+                .version();
+        let mut loop_iter = 0;
+        loop {
+            let account_obj = ObjectCacheRead::get_object(self, account_id.inner());
+            if let Some(account_obj) = account_obj {
+                let (_, AccumulatorValue::U128(value)) =
+                    account_obj.data.try_as_move().unwrap().try_into().unwrap();
+                return (value.value, account_obj.version());
+            }
+            let post_root_version =
+                ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                    .unwrap()
+                    .version();
+            if pre_root_version == post_root_version {
+                return (0, pre_root_version);
+            }
+            debug!(
+                "Root version changed from {} to {} while reading account amount, retrying",
+                pre_root_version, post_root_version
+            );
+            pre_root_version = post_root_version;
+            loop_iter += 1;
+            if loop_iter >= 3 {
+                debug_fatal!("Unable to get a stable version after 3 iterations");
+            }
+        }
+    }
+
+    fn get_account_amount_at_version(
+        &self,
+        account_id: &AccumulatorObjId,
+        version: SequenceNumber,
+    ) -> u128 {
+        let account_obj = self.find_object_lt_or_eq_version(*account_id.inner(), version);
+        if let Some(account_obj) = account_obj {
+            let (_, AccumulatorValue::U128(value)) =
+                account_obj.data.try_as_move().unwrap().try_into().unwrap();
+            value.value
+        } else {
+            0
+        }
+    }
+}
+
 impl ExecutionCacheAPI for WritebackCache {}
 
 impl ExecutionCacheCommit for WritebackCache {
@@ -2275,20 +2327,8 @@ impl TransactionCacheRead for WritebackCache {
 }
 
 impl ExecutionCacheWrite for WritebackCache {
-    fn acquire_transaction_locks(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
-        signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult {
-        self.object_locks.acquire_transaction_locks(
-            self,
-            epoch_store,
-            owned_input_objects,
-            tx_digest,
-            signed_transaction,
-        )
+    fn validate_owned_object_versions(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
+        ObjectLocks::validate_owned_object_versions(self, owned_input_objects)
     }
 
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {

@@ -22,6 +22,7 @@ bin-version.workspace = true
 bip32.workspace = true
 camino.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
 codespan-reporting.workspace = true
 datatest-stable.workspace = true
 futures.workspace = true
@@ -50,6 +51,8 @@ tracing.workspace = true
 uuid.workspace = true
 url.workspace = true
 
+sui-rpc-api.workspace = true
+sui-rpc.workspace = true
 sui-config.workspace = true
 sui-bridge.workspace = true
 sui-data-store.workspace = true

@@ -50,8 +50,8 @@ impl TableConfig {
             // These can be any number
             enum_defs: u16::MAX,
             enum_def_instantiations: u16::MAX,
-            variant_handles: 1024,
-            variant_instantiation_handles: 1024,
+            variant_handles: u16::MAX,
+            variant_instantiation_handles: u16::MAX,
         }
     }
 }
@@ -136,5 +136,12 @@ impl BinaryConfig {
 
     pub fn allow_unpublishable(&self) -> bool {
         self.allow_unpublishable
+    }
+
+    /// This function exists solely for propagating a VMConfig down into the unit testing
+    /// environment. It should never be called anywhere else.
+    #[cfg(feature = "testing")]
+    pub fn allow_unpublishable_for_move_unit_testing(&mut self) {
+        self.allow_unpublishable = true;
     }
 }

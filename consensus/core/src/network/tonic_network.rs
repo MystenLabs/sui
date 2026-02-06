@@ -85,6 +85,10 @@ impl TonicClient {
             .accept_compressed(CompressionEncoding::Zstd);
         Ok(client)
     }
+
+    pub(crate) fn update_peer_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>) {
+        self.channel_pool.update_address(peer, address);
+    }
 }
 
 // TODO: make sure callsites do not send request to own index, and return error otherwise.
@@ -251,9 +255,11 @@ impl NetworkClient for TonicClient {
             .await
             .map_err(|e| {
                 if e.code() == tonic::Code::DeadlineExceeded {
-                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
+                    ConsensusError::NetworkRequestTimeout(format!(
+                        "fetch_latest_blocks failed: {e:?}"
+                    ))
                 } else {
-                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
+                    ConsensusError::NetworkRequest(format!("fetch_latest_blocks failed: {e:?}"))
                 }
             })?
             .into_inner();
@@ -355,6 +361,8 @@ struct ChannelPool {
     context: Arc<Context>,
     // Size is limited by known authorities in the committee.
     channels: RwLock<BTreeMap<AuthorityIndex, Channel>>,
+    // Simple address override for peers. If set, this address is used instead of the committee address.
+    address_overrides: RwLock<BTreeMap<AuthorityIndex, Multiaddr>>,
 }
 
 impl ChannelPool {
@@ -362,6 +370,36 @@ impl ChannelPool {
         Self {
             context,
             channels: RwLock::new(BTreeMap::new()),
+            address_overrides: RwLock::new(BTreeMap::new()),
+        }
+    }
+
+    // Update the address override for a peer. If None, clears the override.
+    fn update_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>) {
+        {
+            let mut overrides = self.address_overrides.write();
+
+            if let Some(addr) = address {
+                if let Some(previous_address) = overrides.insert(peer, addr.clone()) {
+                    info!(
+                        "Updated address override for peer {}: {} -> {}",
+                        peer, previous_address, addr
+                    );
+                } else {
+                    info!("Set address override for peer {} to {}", peer, addr);
+                }
+            } else if overrides.remove(&peer).is_some() {
+                info!("Cleared address override for peer {}", peer);
+            }
+        }
+
+        // Clear the cached channel so that the next connection attempt uses the updated address.
+        let mut channels = self.channels.write();
+        if channels.remove(&peer).is_some() {
+            info!(
+                "Cleared cached channel for peer {} due to address update",
+                peer
+            );
         }
     }
 
@@ -379,7 +417,16 @@ impl ChannelPool {
         }
 
         let authority = self.context.committee.authority(peer);
-        let address = to_host_port_str(&authority.address).map_err(|e| {
+
+        let peer_address = {
+            let overrides = self.address_overrides.read();
+            overrides
+                .get(&peer)
+                .cloned()
+                .unwrap_or_else(|| authority.address.clone())
+        };
+
+        let address = to_host_port_str(&peer_address).map_err(|e| {
             ConsensusError::NetworkConfig(format!("Cannot convert address to host:port: {e:?}"))
         })?;
         let address = format!("https://{address}");
@@ -396,7 +443,7 @@ impl ChannelPool {
             Some(network_keypair.private_key().into_inner()),
         );
         let endpoint = tonic_rustls::Channel::from_shared(address.clone())
-            .unwrap()
+            .map_err(|e| ConsensusError::NetworkConfig(format!("invalid URI '{address}': {e}")))?
             .connect_timeout(timeout)
             .initial_connection_window_size(Some(buffer_size as u32))
             .initial_stream_window_size(Some(buffer_size as u32 / 2))
@@ -710,6 +757,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         self.client.clone()
     }
 
+    fn update_peer_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>) {
+        self.client.update_peer_address(peer, address);
+    }
+
     async fn install_service(&mut self, service: Arc<S>) {
         self.context
             .metrics
@@ -920,7 +971,7 @@ fn to_host_port_str(addr: &Multiaddr) -> Result<String, String> {
             Ok(format!("{}:{}", ipaddr, port))
         }
         (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => {
-            Ok(format!("{}:{}", ipaddr, port))
+            Ok(format!("{}", SocketAddrV6::new(ipaddr, port, 0, 0)))
         }
         (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port))) => {
             Ok(format!("{}:{}", hostname, port))
@@ -1163,4 +1214,125 @@ fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {
         chunks.push(chunk);
     }
     chunks
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{context::Clock, metrics::initialise_metrics};
+    use consensus_config::{Parameters, local_committee_and_keys};
+    use prometheus::Registry;
+    use sui_protocol_config::ProtocolConfig;
+
+    fn create_test_context_and_client() -> (Arc<Context>, TonicClient) {
+        let (committee, mut keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
+        let parameters = Parameters::default();
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let metrics = initialise_metrics(Registry::new());
+
+        let context = Arc::new(Context::new(
+            0,
+            committee.to_authority_index(0).unwrap(),
+            committee,
+            parameters,
+            protocol_config,
+            metrics,
+            Arc::new(Clock::default()),
+        ));
+
+        let (network_keypair, _protocol_keypair) = keypairs.remove(0);
+        let client = TonicClient::new(context.clone(), network_keypair);
+
+        (context, client)
+    }
+
+    #[tokio::test]
+    async fn test_update_peer_address() {
+        let (context, client) = create_test_context_and_client();
+
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let new_address: Multiaddr = "/ip4/127.0.0.1/udp/9000".parse().unwrap();
+
+        client.update_peer_address(peer, Some(new_address.clone()));
+
+        // Verify the override was set
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert_eq!(overrides.get(&peer), Some(&new_address));
+        }
+
+        // Update with a different address
+        let newer_address: Multiaddr = "/ip4/127.0.0.1/udp/9001".parse().unwrap();
+        client.update_peer_address(peer, Some(newer_address.clone()));
+
+        // Verify the override was updated
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert_eq!(overrides.get(&peer), Some(&newer_address));
+        }
+
+        // Verify channels map doesn't contain the peer
+        {
+            let channels = client.channel_pool.channels.read();
+            assert!(!channels.contains_key(&peer));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_clear_peer_address() {
+        let (context, client) = create_test_context_and_client();
+
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let new_address: Multiaddr = "/ip4/127.0.0.1/udp/9000".parse().unwrap();
+
+        // Set address override
+        client.update_peer_address(peer, Some(new_address));
+
+        // Verify the override was set
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert!(overrides.contains_key(&peer));
+        }
+
+        // Clear the override
+        client.update_peer_address(peer, None);
+
+        // Verify the override was cleared
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert!(!overrides.contains_key(&peer));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_different_peers_independent() {
+        let (context, client) = create_test_context_and_client();
+
+        let peer1 = context.committee.to_authority_index(1).unwrap();
+        let peer2 = context.committee.to_authority_index(2).unwrap();
+
+        let address1: Multiaddr = "/ip4/127.0.0.1/udp/9000".parse().unwrap();
+        let address2: Multiaddr = "/ip4/127.0.0.1/udp/9001".parse().unwrap();
+
+        // Set different addresses for different peers
+        client.update_peer_address(peer1, Some(address1.clone()));
+        client.update_peer_address(peer2, Some(address2.clone()));
+
+        // Verify both overrides are set correctly
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert_eq!(overrides.get(&peer1), Some(&address1));
+            assert_eq!(overrides.get(&peer2), Some(&address2));
+        }
+
+        // Clear one peer's override
+        client.update_peer_address(peer1, None);
+
+        // Verify only peer1's override was cleared
+        {
+            let overrides = client.channel_pool.address_overrides.read();
+            assert!(!overrides.contains_key(&peer1));
+            assert_eq!(overrides.get(&peer2), Some(&address2));
+        }
+    }
 }

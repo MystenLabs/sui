@@ -1,7 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
+use crate::crypto::BridgeAuthorityPublicKey;
+use crate::error::{BridgeError, BridgeResult};
+use crate::events::SuiBridgeEvent;
+use crate::metrics::BridgeMetrics;
+use crate::retry_with_max_elapsed_time;
+use crate::types::BridgeActionStatus;
+use crate::types::ParsedTokenTransferMessage;
+use crate::types::SuiEvents;
+use crate::types::{BridgeAction, BridgeAuthority, BridgeCommittee};
 use async_trait::async_trait;
 use core::panic;
 use fastcrypto::traits::ToFromBytes;
@@ -10,21 +18,20 @@ use std::str::from_utf8;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::BcsEvent;
-use sui_json_rpc_types::{EventFilter, Page, SuiEvent};
-use sui_json_rpc_types::{
-    EventPage, SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::SuiEvent;
+use sui_json_rpc_types::SuiExecutionStatus;
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
 use sui_rpc::proto::sui::rpc::v2::{
     Checkpoint, ExecuteTransactionRequest, ExecutedTransaction, GetCheckpointRequest,
     GetObjectRequest, GetServiceInfoRequest, GetTransactionRequest, Object,
     Transaction as ProtoTransaction, UserSignature as ProtoUserSignature,
 };
-use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_sdk_types::Address;
 use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::Identifier;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
 use sui_types::TypeTag;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::bridge::{
@@ -36,25 +43,16 @@ use sui_types::bridge::{
     MoveTypeCommitteeMember, MoveTypeTokenTransferPayload, MoveTypeTokenTransferPayloadV2,
 };
 use sui_types::collection_types::LinkedTableNode;
+use sui_types::digests::TransactionDigest;
+use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::Transaction;
-use sui_types::{Identifier, base_types::ObjectID, digests::TransactionDigest, event::EventID};
 use tokio::sync::OnceCell;
 use tracing::{error, warn};
-
-use crate::crypto::BridgeAuthorityPublicKey;
-use crate::error::{BridgeError, BridgeResult};
-use crate::events::SuiBridgeEvent;
-use crate::metrics::BridgeMetrics;
-use crate::retry_with_max_elapsed_time;
-use crate::types::BridgeActionStatus;
-use crate::types::ParsedTokenTransferMessage;
-use crate::types::SuiEvents;
-use crate::types::{BridgeAction, BridgeAuthority, BridgeCommittee};
 
 pub struct SuiClient<P> {
     inner: P,
@@ -64,8 +62,7 @@ pub struct SuiClient<P> {
 pub type SuiBridgeClient = SuiClient<SuiClientInternal>;
 
 pub struct SuiClientInternal {
-    jsonrpc_client: SuiSdkClient,
-    grpc_client: sui_rpc::Client,
+    grpc_client: sui_rpc_api::Client,
 }
 
 #[derive(Clone, Debug)]
@@ -76,17 +73,8 @@ pub struct ExecuteTransactionResult {
 
 impl SuiBridgeClient {
     pub async fn new(rpc_url: &str, bridge_metrics: Arc<BridgeMetrics>) -> anyhow::Result<Self> {
-        let jsonrpc_client = SuiClientBuilder::default()
-            .build(rpc_url)
-            .await
-            .map_err(|e| {
-                anyhow!("Can't establish connection with Sui Rpc {rpc_url}. Error: {e}")
-            })?;
-        let grpc_client = sui_rpc::Client::new(rpc_url)?;
-        let inner = SuiClientInternal {
-            jsonrpc_client,
-            grpc_client,
-        };
+        let grpc_client = sui_rpc_api::Client::new(rpc_url)?;
+        let inner = SuiClientInternal { grpc_client };
         let self_ = Self {
             inner,
             bridge_metrics,
@@ -95,11 +83,7 @@ impl SuiBridgeClient {
         Ok(self_)
     }
 
-    pub fn jsonrpc_client(&self) -> &SuiSdkClient {
-        &self.inner.jsonrpc_client
-    }
-
-    pub fn grpc_client(&self) -> &sui_rpc::Client {
+    pub fn grpc_client(&self) -> &sui_rpc_api::Client {
         &self.inner.grpc_client
     }
 }
@@ -141,31 +125,6 @@ where
             bridge_object_arg
         })
         .await
-    }
-
-    /// Query emitted Events that are defined in the given Move Module.
-    pub async fn query_events_by_module(
-        &self,
-        package: ObjectID,
-        module: Identifier,
-        // cursor is exclusive
-        cursor: Option<EventID>,
-    ) -> BridgeResult<Page<SuiEvent, EventID>> {
-        let filter = EventFilter::MoveEventModule {
-            package,
-            module: module.clone(),
-        };
-        let events = self.inner.query_events(filter.clone(), cursor).await?;
-
-        // Safeguard check that all events are emitted from requested package and module
-        assert!(
-            events
-                .data
-                .iter()
-                .all(|event| event.type_.address.as_ref() == package.as_ref()
-                    && event.type_.module == module)
-        );
-        Ok(events)
     }
 
     /// Returns BridgeAction from a Sui Transaction with transaction hash
@@ -462,12 +421,6 @@ where
 /// Use a trait to abstract over the SuiSDKClient and SuiMockClient for testing.
 #[async_trait]
 pub trait SuiClientInner: Send + Sync {
-    async fn query_events(
-        &self,
-        query: EventFilter,
-        cursor: Option<EventID>,
-    ) -> Result<EventPage, BridgeError>;
-
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
@@ -534,165 +487,14 @@ pub trait SuiClientInner: Send + Sync {
 }
 
 #[async_trait]
-impl SuiClientInner for SuiSdkClient {
-    async fn query_events(
-        &self,
-        query: EventFilter,
-        cursor: Option<EventID>,
-    ) -> Result<EventPage, BridgeError> {
-        self.event_api()
-            .query_events(query, cursor, None, false)
-            .await
-            .map_err(Into::into)
-    }
-
-    async fn get_events_by_tx_digest(
-        &self,
-        _tx_digest: TransactionDigest,
-    ) -> Result<SuiEvents, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_bridge_summary(&self) -> Result<BridgeSummary, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_token_transfer_action_onchain_status(
-        &self,
-        _bridge_object_arg: ObjectArg,
-        _source_chain_id: u8,
-        _seq_number: u64,
-    ) -> Result<BridgeActionStatus, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_token_transfer_action_onchain_signatures(
-        &self,
-        _bridge_object_arg: ObjectArg,
-        _source_chain_id: u8,
-        _seq_number: u64,
-    ) -> Result<Option<Vec<Vec<u8>>>, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn execute_transaction_block_with_effects(
-        &self,
-        tx: Transaction,
-    ) -> Result<ExecuteTransactionResult, BridgeError> {
-        use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-        match self.quorum_driver_api().execute_transaction_block(
-            tx,
-            SuiTransactionBlockResponseOptions::new().with_effects().with_events(),
-            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
-        ).await {
-            Ok(response) => {
-                let effects = response.effects.expect("We requested effects but got None.");
-                let events = response.events.expect("We requested events but got None.");
-                Ok(ExecuteTransactionResult {
-                    status: effects.status().clone(),
-                    events: events.data,
-                })
-            }
-            Err(e) => Err(BridgeError::SuiTxFailureGeneric(e.to_string())),
-        }
-    }
-
-    async fn get_parsed_token_transfer_message(
-        &self,
-        _bridge_object_arg: ObjectArg,
-        _source_chain_id: u8,
-        _seq_number: u64,
-    ) -> Result<Option<MoveTypeParsedTokenTransferMessage>, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_bridge_record(
-        &self,
-        _source_chain_id: u8,
-        _seq_number: u64,
-    ) -> Result<Option<MoveTypeBridgeRecord>, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_gas_data_panic_if_not_gas(
-        &self,
-        gas_object_id: ObjectID,
-    ) -> (GasCoin, ObjectRef, Owner) {
-        loop {
-            match self
-                .read_api()
-                .get_object_with_options(
-                    gas_object_id,
-                    SuiObjectDataOptions::default().with_owner().with_content(),
-                )
-                .await
-                .map(|resp| resp.data)
-            {
-                Ok(Some(gas_obj)) => {
-                    let owner = gas_obj.owner.clone().expect("Owner is requested");
-                    let gas_coin = GasCoin::try_from(&gas_obj)
-                        .unwrap_or_else(|err| panic!("{} is not a gas coin: {err}", gas_object_id));
-                    return (gas_coin, gas_obj.object_ref(), owner);
-                }
-                other => {
-                    warn!("Can't get gas object: {:?}: {:?}", gas_object_id, other);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                }
-            }
-        }
-    }
-
-    async fn get_bridge_records_in_range(
-        &self,
-        _source_chain_id: u8,
-        _start_seq_num: u64,
-        _end_seq_num: u64,
-    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-
-    async fn get_token_transfer_next_seq_number(
-        &self,
-        _source_chain_id: u8,
-    ) -> Result<u64, BridgeError> {
-        unimplemented!("use gRPC implementation")
-    }
-}
-
-#[async_trait]
-impl SuiClientInner for sui_rpc::Client {
-    async fn query_events(
-        &self,
-        _query: EventFilter,
-        _cursor: Option<EventID>,
-    ) -> Result<EventPage, BridgeError> {
-        //TODO we'll need to reimplement the sui_syncer to iterate though records instead of
-        //querying events using this api
-        unimplemented!("query_events not supported in gRPC");
-    }
-
+impl SuiClientInner for sui_rpc_api::Client {
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
     ) -> Result<SuiEvents, BridgeError> {
         let mut client = self.clone();
         let resp = client
+            .inner_mut()
             .ledger_client()
             .get_transaction(
                 GetTransactionRequest::new(&(tx_digest.into())).with_read_mask(
@@ -744,6 +546,7 @@ impl SuiClientInner for sui_rpc::Client {
     async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
         let chain_id = self
             .clone()
+            .inner_mut()
             .ledger_client()
             .get_service_info(GetServiceInfoRequest::default())
             .await?
@@ -756,7 +559,7 @@ impl SuiClientInner for sui_rpc::Client {
 
     async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
         let mut client = self.clone();
-        sui_rpc::Client::get_reference_gas_price(&mut client)
+        sui_rpc::Client::get_reference_gas_price(client.inner_mut())
             .await
             .map_err(Into::into)
     }
@@ -765,6 +568,7 @@ impl SuiClientInner for sui_rpc::Client {
         let mut client = self.clone();
         let resp =
             client
+                .inner_mut()
                 .ledger_client()
                 .get_checkpoint(GetCheckpointRequest::latest().with_read_mask(
                     FieldMask::from_paths([Checkpoint::path_builder().sequence_number()]),
@@ -777,6 +581,7 @@ impl SuiClientInner for sui_rpc::Client {
     async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, BridgeError> {
         let owner = self
             .clone()
+            .inner_mut()
             .ledger_client()
             .get_object(
                 GetObjectRequest::new(&(SUI_BRIDGE_OBJECT_ID.into())).with_read_mask(
@@ -803,6 +608,7 @@ impl SuiClientInner for sui_rpc::Client {
             .get_or_try_init::<BridgeError, _, _>(|| async {
                 let bridge_wrapper_bcs = self
                     .clone()
+                    .inner_mut()
                     .ledger_client()
                     .get_object(
                         GetObjectRequest::new(&(SUI_BRIDGE_OBJECT_ID.into())).with_read_mask(
@@ -826,6 +632,7 @@ impl SuiClientInner for sui_rpc::Client {
 
         let field_bcs = self
             .clone()
+            .inner_mut()
             .ledger_client()
             .get_object(GetObjectRequest::new(&bridge_inner_id).with_read_mask(
                 FieldMask::from_paths([Object::path_builder().contents().finish()]),
@@ -904,6 +711,7 @@ impl SuiClientInner for sui_rpc::Client {
 
         let response = self
             .clone()
+            .inner_mut()
             .execution_client()
             .execute_transaction(request)
             .await
@@ -1045,6 +853,7 @@ impl SuiClientInner for sui_rpc::Client {
         let response =
             match self
                 .clone()
+                .inner_mut()
                 .ledger_client()
                 .get_object(GetObjectRequest::new(&record_id).with_read_mask(
                     FieldMask::from_paths([Object::path_builder().contents().finish()]),
@@ -1079,6 +888,7 @@ impl SuiClientInner for sui_rpc::Client {
             let result = async {
                 let resp = self
                     .clone()
+                    .inner_mut()
                     .ledger_client()
                     .get_object(
                         GetObjectRequest::new(&(gas_object_id.into())).with_read_mask(
@@ -1130,13 +940,15 @@ impl SuiClientInner for sui_rpc::Client {
 
     async fn get_token_transfer_next_seq_number(
         &self,
-        source_chain_id: u8,
+        _source_chain_id: u8,
     ) -> Result<u64, BridgeError> {
         let summary = self.get_bridge_summary().await?;
+        // The bridge's sequence_nums is keyed by message_type
+        const TOKEN_MESSAGE_TYPE: u8 = 0;
         let seq_num = summary
             .sequence_nums
             .iter()
-            .find(|(chain_id, _)| *chain_id == source_chain_id)
+            .find(|(msg_type, _)| *msg_type == TOKEN_MESSAGE_TYPE)
             .map(|(_, seq)| *seq)
             .unwrap_or(0);
         Ok(seq_num)
@@ -1145,14 +957,6 @@ impl SuiClientInner for sui_rpc::Client {
 
 #[async_trait]
 impl SuiClientInner for SuiClientInternal {
-    async fn query_events(
-        &self,
-        query: EventFilter,
-        cursor: Option<EventID>,
-    ) -> Result<EventPage, BridgeError> {
-        self.jsonrpc_client.query_events(query, cursor).await
-    }
-
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
@@ -1161,11 +965,11 @@ impl SuiClientInner for SuiClientInternal {
     }
 
     async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
-        self.grpc_client.get_chain_identifier().await
+        SuiClientInner::get_chain_identifier(&self.grpc_client).await
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
-        self.grpc_client.get_reference_gas_price().await
+        SuiClientInner::get_reference_gas_price(&self.grpc_client).await
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, BridgeError> {
@@ -1246,7 +1050,7 @@ impl SuiClientInner for SuiClientInternal {
         &self,
         gas_object_id: ObjectID,
     ) -> (GasCoin, ObjectRef, Owner) {
-        self.jsonrpc_client
+        self.grpc_client
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await
     }
@@ -1285,7 +1089,7 @@ mod tests {
             get_test_sui_to_eth_bridge_action,
         },
     };
-    use ethers::types::Address as EthAddress;
+    use alloy::primitives::Address as EthAddress;
     use move_core_types::account_address::AccountAddress;
     use serde::{Deserialize, Serialize};
     use std::str::FromStr;
@@ -1324,7 +1128,7 @@ mod tests {
             source_chain: sanitized_event_1.sui_chain_id as u8,
             sender_address: sanitized_event_1.sui_address.to_vec(),
             target_chain: sanitized_event_1.eth_chain_id as u8,
-            target_address: sanitized_event_1.eth_address.as_bytes().to_vec(),
+            target_address: sanitized_event_1.eth_address.to_vec(),
             token_type: sanitized_event_1.token_id,
             amount_sui_adjusted: sanitized_event_1.amount_sui_adjusted,
         };

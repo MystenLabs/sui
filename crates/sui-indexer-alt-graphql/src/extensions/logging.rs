@@ -1,33 +1,47 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    future::Future,
-    net::SocketAddr,
-    pin::Pin,
-    sync::{Arc, OnceLock},
-    task::{Context, Poll},
-};
+use std::future::Future;
+use std::net::SocketAddr;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use std::task::Context;
+use std::task::Poll;
 
-use async_graphql::{
-    Request, Response, ServerError, ServerResult, ValidationResult, Value, Variables,
-    extensions::{
-        Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextPrepareRequest,
-        NextRequest, NextResolve, NextValidation, ResolveInfo,
-    },
-    parser::types::ExecutableDocument,
-};
+use async_graphql::Request;
+use async_graphql::Response;
+use async_graphql::ServerError;
+use async_graphql::ServerResult;
+use async_graphql::ValidationResult;
+use async_graphql::Value;
+use async_graphql::Variables;
+use async_graphql::extensions::Extension;
+use async_graphql::extensions::ExtensionContext;
+use async_graphql::extensions::ExtensionFactory;
+use async_graphql::extensions::NextParseQuery;
+use async_graphql::extensions::NextPrepareRequest;
+use async_graphql::extensions::NextRequest;
+use async_graphql::extensions::NextResolve;
+use async_graphql::extensions::NextValidation;
+use async_graphql::extensions::ResolveInfo;
+use async_graphql::parser::types::ExecutableDocument;
 use axum::http::HeaderName;
-use pin_project::{pin_project, pinned_drop};
+use pin_project::pin_project;
+use pin_project::pinned_drop;
 use prometheus::HistogramTimer;
 use serde_json::json;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::log::Level;
+use tracing::log::log_enabled;
+use tracing::warn;
 use uuid::Uuid;
 
-use crate::{
-    error::{code, error_codes, fill_error_code},
-    metrics::RpcMetrics,
-};
+use crate::error::code;
+use crate::error::error_codes;
+use crate::error::fill_error_code;
+use crate::metrics::RpcMetrics;
 
 /// This custom response header contains a unique request-id used for debugging and appears in the logs.
 pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-request-id");
@@ -198,33 +212,38 @@ where
         resp.http_headers.insert(REQUEST_ID_HEADER, request_id);
 
         if resp.is_ok() {
-            info!(%uuid, %addr, elapsed_ms, "Request succeeded");
+            if log_enabled!(Level::Debug) {
+                debug!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request succeeded");
+            } else {
+                info!(%uuid, %addr, elapsed_ms, "Request succeeded");
+            }
             ext.metrics.queries_succeeded.inc();
         } else {
             let codes = error_codes(&resp);
 
+            ext.metrics.queries_failed.inc();
+
             // Log internal errors, timeouts, and unknown errors at a higher log level than other errors.
             if is_loud_query(&codes) {
-                warn!(%uuid, %addr, query = ext.query.get().unwrap(), "Query");
+                warn!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
+            } else if log_enabled!(Level::Debug) {
+                debug!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
             } else {
-                debug!(%uuid, %addr, query = ext.query.get().unwrap(), "Query");
+                info!(%uuid, %addr, elapsed_ms, ?codes, "Request failed");
             }
-
-            info!(%uuid, %addr, elapsed_ms, ?codes, "Request failed");
 
             if codes.is_empty() {
                 ext.metrics
-                    .queries_failed
+                    .query_errors
                     .with_label_values(&["<UNKNOWN>"])
                     .inc();
             }
 
             for code in &codes {
-                ext.metrics.queries_failed.with_label_values(&[code]).inc();
+                ext.metrics.query_errors.with_label_values(&[code]).inc();
             }
         }
 
-        debug!(%uuid, %addr, response = %json!(resp), "Response");
         Poll::Ready(resp)
     }
 }
@@ -233,9 +252,10 @@ where
 impl<F> PinnedDrop for MetricsFuture<F> {
     fn drop(self: Pin<&mut Self>) {
         if let Some(RequestMetrics { timer, ext }) = self.project().metrics.take() {
+            let Session { uuid, addr } = ext.session.get().unwrap();
             let elapsed_ms = timer.stop_and_record() * 1000.0;
             ext.metrics.queries_cancelled.inc();
-            info!(elapsed_ms, "Request cancelled");
+            info!(%uuid, %addr, elapsed_ms, "Request cancelled");
         }
     }
 }
@@ -251,7 +271,10 @@ fn is_loud_query(codes: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
+    use async_graphql::EmptyMutation;
+    use async_graphql::EmptySubscription;
+    use async_graphql::Object;
+    use async_graphql::Schema;
     use prometheus::Registry;
 
     use super::*;
@@ -282,7 +305,7 @@ mod tests {
         assert_eq!(metrics.queries_received.get(), 1);
         assert_eq!(
             metrics
-                .queries_failed
+                .query_errors
                 .with_label_values(&[code::GRAPHQL_PARSE_FAILED])
                 .get(),
             1
@@ -311,10 +334,41 @@ mod tests {
         assert_eq!(metrics.queries_received.get(), 1);
         assert_eq!(
             metrics
-                .queries_failed
+                .query_errors
                 .with_label_values(&[code::GRAPHQL_VALIDATION_FAILED])
                 .get(),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn multiple_error_codes_single_request_failed() {
+        let registry = Registry::new();
+        let metrics = RpcMetrics::new(&registry);
+
+        let request = Request::from("{ undefined1 undefined2 undefined3 }")
+            .data(Session::new("0.0.0.0:0".parse().unwrap()));
+
+        let response = Schema::build(Query, EmptyMutation, EmptySubscription)
+            .extension(Logging(metrics.clone()))
+            .finish()
+            .execute(request)
+            .await;
+
+        assert!(response.is_err());
+
+        // Should have multiple errors
+        let codes = error_codes(&response);
+        assert_eq!(codes.len(), 3);
+
+        assert_eq!(metrics.queries_received.get(), 1);
+        assert_eq!(metrics.queries_failed.get(), 1);
+        assert_eq!(
+            metrics
+                .query_errors
+                .with_label_values(&[code::GRAPHQL_VALIDATION_FAILED])
+                .get(),
+            3,
         );
     }
 }

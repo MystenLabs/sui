@@ -7,4 +7,4 @@ expression: "strands(\"{'foo' | 'bar\\nbaz' | 'qux\\\\'quux' | 'quy\\\\\\\\quz' 
 | "qux'quux"
 | "quy\\quz"
 | "xyzzy"
-}
+}@0

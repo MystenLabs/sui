@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --simulator
+//# init --protocol-version 108 --accounts A B --simulator
 
 // Transaction in Epoch 0
 //# programmable --sender A --inputs 100 @B

@@ -5,9 +5,8 @@ import { fileURLToPath } from "url";
 import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
-//import rehypeRawFiles from "./src/rehype/rehype-raw-only.mjs";
-//import rehypeTabsMd from "./src/rehype/rehype-tabs.mjs";
-//import rehypeFixAnchorUrls from "./src/rehype/rehype-fix-anchor-urls.mjs";
+import remarkGlossary from "./src/shared/plugins/remark-glossary.js";
+
 const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 
 const effortRemarkPlugin = require("./src/plugins/effort");
@@ -56,25 +55,13 @@ const config = {
     //require.resolve('./src/plugins/framework'),
     "docusaurus-plugin-copy-page-button",
     [
-      require.resolve("./src/plugins/plausible"),
+      require.resolve("./src/shared/plugins/plausible"),
       {
         domain: "docs.sui.io",
         enableInDev: false,
         trackOutboundLinks: true,
         hashMode: false,
         trackLocalhost: false,
-      },
-    ],
-    [
-      "@graphql-markdown/docusaurus",
-      {
-        id: "alpha",
-        schema: "../../crates/sui-graphql-rpc/schema.graphql",
-        rootPath: "../content", // docs will be generated under rootPath/baseURL
-        baseURL: "references/sui-api/sui-graphql/alpha/reference",
-        loaders: {
-          GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
-        },
       },
     ],
     function stepHeadingLoader() {
@@ -95,7 +82,7 @@ const config = {
                     {
                       loader: path.resolve(
                         __dirname,
-                        "./src/plugins/inject-code/stepLoader.js",
+                        "./src/shared/plugins/inject-code/stepLoader.js",
                       ),
                     },
                   ],
@@ -129,7 +116,7 @@ const config = {
         },
       },
     ],
-    //require.resolve("./src/plugins/tabs-md-client/index.mjs"),
+    //require.resolve("./src/shared/plugins/tabs-md-client/index.mjs"),
     async function myPlugin(context, options) {
       return {
         name: "docusaurus-tailwindcss",
@@ -141,9 +128,8 @@ const config = {
         },
       };
     },
-    path.resolve(__dirname, `./src/plugins/descriptions`),
+    path.resolve(__dirname, `./src/shared/plugins/descriptions`),
     path.resolve(__dirname, `./src/plugins/framework`),
-    path.resolve(__dirname, `./src/plugins/askcookbook`),
     path.resolve(__dirname, `./src/plugins/protocol`),
   ],
   presets: [
@@ -172,9 +158,8 @@ const config = {
             [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],
             effortRemarkPlugin,
             betaRemarkPlugin,
+            [remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }],
           ],
-          //beforeDefaultRehypePlugins: [rehypeFixAnchorUrls],
-          //rehypePlugins: [katex, rehypeRawFiles, rehypeTabsMd],
           rehypePlugins: [katex],
         },
         theme: {
@@ -184,6 +169,9 @@ const config = {
             require.resolve("./src/css/details.css"),
           ],
         },
+        pages: {
+          remarkPlugins: [[remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }]],
+        }
       },
     ],
   ],
@@ -191,7 +179,21 @@ const config = {
   scripts: [
     //{ src: "./src/js/tabs-md.js", defer: true },
     {
-      src: "/js/clarity.js",
+      src: "https://widget.kapa.ai/kapa-widget.bundle.js",
+      "data-website-id": "b05d8d86-0b10-4eb2-acfe-e9012d75d9db",
+      "data-project-name": "Sui Knowledge",
+      "data-project-color": "#298DFF",
+      "data-button-hide": "true",
+      "data-modal-title": "Ask Sui AI",
+      "data-modal-ask-ai-input-placeholder": "Ask me anything about Sui!",
+      "data-modal-example-questions":"How do I deploy to Sui?,What is Mysticeti?,What are object ownership types for Sui Move?,What are programmable transaction blocks (PTBs)?",
+      "data-modal-body-bg-color": "#E0E2E6",
+      "data-source-link-bg-color": "#FFFFFF",
+      "data-source-link-border": "#298DFF",
+      "data-answer-feedback-button-bg-color": "#FFFFFF",
+      "data-answer-copy-button-bg-color" : "#FFFFFF",
+      "data-thread-clear-button-bg-color" : "#FFFFFF",
+      "data-modal-image": "img/logo.svg",
       async: true,
     },
   ],

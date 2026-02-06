@@ -5,16 +5,15 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     hash::Hash,
     num::NonZeroUsize,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
-use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor, CommitIndex};
+use consensus_core::{CommitConsumerMonitor, CommitIndex, CommitRef};
 use consensus_types::block::TransactionIndex;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
-use itertools::Itertools as _;
 use lru::LruCache;
 use mysten_common::{
     assert_reachable, assert_sometimes, debug_fatal, random_util::randomize_cache_capacity_in_tests,
@@ -24,24 +23,26 @@ use mysten_metrics::{
     monitored_mpsc::{self, UnboundedReceiver},
     monitored_scope, spawn_monitored_task,
 };
+use nonempty::NonEmpty;
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
     base_types::{
-        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, SequenceNumber,
-        TransactionDigest,
+        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectID, ObjectRef,
+        SequenceNumber, TransactionDigest,
     },
     crypto::RandomnessRound,
-    digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest},
+    digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest, Digest},
     executable_transaction::{
         TrustedExecutableTransaction, VerifiedExecutableTransaction,
         VerifiedExecutableTransactionWithAliases,
     },
     messages_checkpoint::CheckpointSignatureMessage,
+    messages_checkpoint::CheckpointTimestamp,
     messages_consensus::{
         AuthorityCapabilitiesV2, AuthorityIndex, ConsensusDeterminedVersionAssignments,
         ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
@@ -49,7 +50,8 @@ use sui_types::{
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        SenderSignedData, TransactionKey, VerifiedCertificate, VerifiedTransaction, WithAliases,
+        InputObjectKind, SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedCertificate,
+        VerifiedTransaction, WithAliases,
     },
 };
 use tokio::task::JoinSet;
@@ -72,11 +74,12 @@ use crate::{
         transaction_deferral::{DeferralKey, DeferralReason, transaction_deferral_within_limit},
     },
     checkpoints::{
-        CheckpointService, CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo,
+        CheckpointHeight, CheckpointRoots, CheckpointService, CheckpointServiceNotify,
+        PendingCheckpoint, PendingCheckpointInfo, PendingCheckpointV2,
     },
     consensus_adapter::ConsensusAdapter,
     consensus_throughput_calculator::ConsensusThroughputCalculator,
-    consensus_types::consensus_output_api::{ConsensusCommitAPI, parse_block_transactions},
+    consensus_types::consensus_output_api::ConsensusCommitAPI,
     epoch::{
         randomness::{DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
@@ -87,6 +90,13 @@ use crate::{
     scoring_decision::update_low_scoring_authorities,
     traffic_controller::{TrafficController, policies::TrafficTally},
 };
+
+/// Output from filtering consensus transactions.
+/// Contains the filtered transactions and any owned object locks acquired post-consensus.
+struct FilteredConsensusOutput {
+    transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
+    owned_object_locks: HashMap<ObjectRef, TransactionDigest>,
+}
 
 pub struct ConsensusHandlerInitializer {
     state: Arc<AuthorityState>,
@@ -161,14 +171,6 @@ impl ConsensusHandlerInitializer {
             self.backpressure_manager.subscribe(),
             self.state.traffic_controller.clone(),
         )
-    }
-
-    pub(crate) fn metrics(&self) -> &Arc<AuthorityMetrics> {
-        &self.state.metrics
-    }
-
-    pub(crate) fn backpressure_subscriber(&self) -> BackpressureSubscriber {
-        self.backpressure_manager.subscribe()
     }
 }
 
@@ -516,6 +518,174 @@ mod additional_consensus_state {
 use additional_consensus_state::AdditionalConsensusState;
 pub(crate) use additional_consensus_state::{ConsensusCommitInfo, IndirectStateObserver};
 
+struct QueuedCheckpointRoots {
+    roots: CheckpointRoots,
+    timestamp: CheckpointTimestamp,
+    consensus_commit_ref: CommitRef,
+    rejected_transactions_digest: Digest,
+}
+
+pub(crate) struct CheckpointQueue {
+    last_built_timestamp: CheckpointTimestamp,
+    pending_roots: VecDeque<QueuedCheckpointRoots>,
+    height: u64,
+}
+
+impl CheckpointQueue {
+    pub(crate) fn new(last_built_timestamp: CheckpointTimestamp, checkpoint_height: u64) -> Self {
+        Self {
+            last_built_timestamp,
+            pending_roots: VecDeque::new(),
+            height: checkpoint_height,
+        }
+    }
+
+    fn next_height(&mut self) -> u64 {
+        self.height += 1;
+        self.height
+    }
+
+    fn push_checkpoint_roots(
+        &mut self,
+        roots_list: Vec<CheckpointRoots>,
+        timestamp: CheckpointTimestamp,
+        consensus_commit_ref: CommitRef,
+        rejected_transactions_digest: Digest,
+    ) {
+        for roots in roots_list {
+            self.pending_roots.push_back(QueuedCheckpointRoots {
+                roots,
+                timestamp,
+                consensus_commit_ref,
+                rejected_transactions_digest,
+            });
+        }
+    }
+
+    pub(crate) fn flush_checkpoint_roots(
+        &mut self,
+        protocol_config: &ProtocolConfig,
+        current_timestamp: CheckpointTimestamp,
+    ) -> Vec<PendingCheckpointV2> {
+        self.flush_checkpoint_roots_impl(protocol_config, current_timestamp, false)
+    }
+
+    pub(crate) fn flush_all_checkpoint_roots(
+        &mut self,
+        protocol_config: &ProtocolConfig,
+        current_timestamp: CheckpointTimestamp,
+    ) -> Vec<PendingCheckpointV2> {
+        self.flush_checkpoint_roots_impl(protocol_config, current_timestamp, true)
+    }
+
+    fn should_build_checkpoint(
+        &self,
+        protocol_config: &ProtocolConfig,
+        current_timestamp: CheckpointTimestamp,
+        flush_all: bool,
+    ) -> bool {
+        if self.pending_roots.is_empty() {
+            return false;
+        }
+
+        if flush_all {
+            return true;
+        }
+
+        let min_checkpoint_interval_ms = protocol_config
+            .min_checkpoint_interval_ms_as_option()
+            .unwrap_or_default();
+        let max_transactions_per_checkpoint =
+            protocol_config.max_transactions_per_checkpoint() as usize;
+
+        if current_timestamp >= self.last_built_timestamp + min_checkpoint_interval_ms {
+            return true;
+        }
+
+        // If batching all pending roots would exceed constraints, build now so we can
+        // batch up to N-1 of them.
+        let total_pending_tx_count: usize = self
+            .pending_roots
+            .iter()
+            .map(|q| q.roots.tx_roots.len())
+            .sum();
+        if total_pending_tx_count >= max_transactions_per_checkpoint {
+            return true;
+        }
+
+        false
+    }
+
+    fn flush_checkpoint_roots_impl(
+        &mut self,
+        protocol_config: &ProtocolConfig,
+        current_timestamp: CheckpointTimestamp,
+        flush_all: bool,
+    ) -> Vec<PendingCheckpointV2> {
+        let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+
+        // Collect all roots to flush
+        let mut to_flush = Vec::new();
+        while self.should_build_checkpoint(protocol_config, current_timestamp, flush_all) {
+            to_flush.push(self.pending_roots.pop_front().unwrap());
+        }
+
+        if to_flush.is_empty() {
+            return Vec::new();
+        }
+
+        // Group into checkpoints respecting max_transactions_per_checkpoint
+        let mut pending_checkpoints = Vec::new();
+        let mut current_roots = Vec::new();
+        let mut current_tx_count = 0;
+        let mut current_details: Option<&QueuedCheckpointRoots> = None;
+
+        for queued in &to_flush {
+            let next_tx_count = queued.roots.tx_roots.len();
+
+            if current_tx_count + next_tx_count > max_tx && !current_roots.is_empty() {
+                assert_reachable!("checkpoint split due to transaction limit");
+                let details = current_details.unwrap();
+                pending_checkpoints.push(PendingCheckpointV2 {
+                    roots: std::mem::take(&mut current_roots),
+                    details: PendingCheckpointInfo {
+                        timestamp_ms: details.timestamp,
+                        last_of_epoch: false,
+                        checkpoint_height: details.roots.height,
+                        consensus_commit_ref: details.consensus_commit_ref,
+                        rejected_transactions_digest: details.rejected_transactions_digest,
+                    },
+                });
+                current_tx_count = 0;
+            }
+
+            current_roots.push(queued.roots.clone());
+            current_tx_count += next_tx_count;
+            current_details = Some(queued);
+        }
+
+        // Flush final checkpoint
+        if let Some(details) = current_details {
+            pending_checkpoints.push(PendingCheckpointV2 {
+                roots: current_roots,
+                details: PendingCheckpointInfo {
+                    timestamp_ms: details.timestamp,
+                    last_of_epoch: false,
+                    checkpoint_height: details.roots.height,
+                    consensus_commit_ref: details.consensus_commit_ref,
+                    rejected_transactions_digest: details.rejected_transactions_digest,
+                },
+            });
+        }
+
+        if let Some(last) = pending_checkpoints.last() {
+            self.last_built_timestamp = last.details.timestamp_ms;
+        }
+
+        pending_checkpoints
+    }
+}
+
 pub struct ConsensusHandler<C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
     /// corresponding store. This store is also used to get the current epoch ID.
@@ -549,6 +719,8 @@ pub struct ConsensusHandler<C> {
     backpressure_subscriber: BackpressureSubscriber,
 
     traffic_controller: Option<Arc<TrafficController>>,
+
+    checkpoint_queue: Mutex<CheckpointQueue>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -567,6 +739,16 @@ impl<C> ConsensusHandler<C> {
         backpressure_subscriber: BackpressureSubscriber,
         traffic_controller: Option<Arc<TrafficController>>,
     ) -> Self {
+        assert!(
+            matches!(
+                epoch_store
+                    .protocol_config()
+                    .per_object_congestion_control_mode(),
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+            ),
+            "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
+        );
+
         // Recover last_consensus_stats so it is consistent across validators.
         let mut last_consensus_stats = epoch_store
             .get_last_consensus_stats()
@@ -580,6 +762,14 @@ impl<C> ConsensusHandler<C> {
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
+        let last_built_summary = epoch_store
+            .last_built_checkpoint_builder_summary()
+            .expect("Should be able to read last built checkpoint");
+        let last_built_timestamp = last_built_summary
+            .as_ref()
+            .map(|s| s.summary.timestamp_ms)
+            .unwrap_or(0);
+        let checkpoint_height = last_consensus_stats.height;
         Self {
             epoch_store,
             last_consensus_stats,
@@ -599,16 +789,16 @@ impl<C> ConsensusHandler<C> {
             ),
             backpressure_subscriber,
             traffic_controller,
+            checkpoint_queue: Mutex::new(CheckpointQueue::new(
+                last_built_timestamp,
+                checkpoint_height,
+            )),
         }
     }
 
     /// Returns the last subdag index processed by the handler.
     pub(crate) fn last_processed_subdag_index(&self) -> u64 {
         self.last_consensus_stats.index.sub_dag_index
-    }
-
-    pub(crate) fn execution_scheduler_sender(&self) -> &ExecutionSchedulerSender {
-        &self.execution_scheduler_sender
     }
 
     pub(crate) fn new_for_testing(
@@ -628,6 +818,14 @@ impl<C> ConsensusHandler<C> {
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
+        let last_built_summary = epoch_store
+            .last_built_checkpoint_builder_summary()
+            .expect("Should be able to read last built checkpoint");
+        let last_built_timestamp = last_built_summary
+            .as_ref()
+            .map(|s| s.summary.timestamp_ms)
+            .unwrap_or(0);
+        let checkpoint_height = last_consensus_stats.height;
         Self {
             epoch_store,
             last_consensus_stats,
@@ -647,6 +845,10 @@ impl<C> ConsensusHandler<C> {
             ),
             backpressure_subscriber,
             traffic_controller,
+            checkpoint_queue: Mutex::new(CheckpointQueue::new(
+                last_built_timestamp,
+                checkpoint_height,
+            )),
         }
     }
 }
@@ -764,15 +966,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &mut self,
         consensus_commit: impl ConsensusCommitAPI,
     ) {
-        let protocol_config = self.epoch_store.protocol_config();
+        {
+            let protocol_config = self.epoch_store.protocol_config();
 
-        // Assert all protocol config settings for which we don't support old behavior.
-        assert!(protocol_config.ignore_execution_time_observations_after_certs_closed());
-        assert!(protocol_config.record_time_estimate_processed());
-        assert!(protocol_config.prepend_prologue_tx_in_consensus_commit_in_checkpoints());
-        assert!(protocol_config.consensus_checkpoint_signature_key_includes_digest());
-        assert!(protocol_config.authority_capabilities_v2());
-        assert!(protocol_config.cancel_for_failed_dkg_early());
+            // Assert all protocol config settings for which we don't support old behavior.
+            assert!(protocol_config.ignore_execution_time_observations_after_certs_closed());
+            assert!(protocol_config.record_time_estimate_processed());
+            assert!(protocol_config.prepend_prologue_tx_in_consensus_commit_in_checkpoints());
+            assert!(protocol_config.consensus_checkpoint_signature_key_includes_digest());
+            assert!(protocol_config.authority_capabilities_v2());
+            assert!(protocol_config.cancel_for_failed_dkg_early());
+        }
 
         // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
@@ -797,7 +1001,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         let commit_info = self.additional_consensus_state.observe_commit(
-            protocol_config,
+            self.epoch_store.protocol_config(),
             self.epoch_store
                 .epoch_start_config()
                 .epoch_start_timestamp_ms(),
@@ -810,7 +1014,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         info!(
             %consensus_commit,
-            "Received consensus output. Rejected transactions: {}",
+            "Received consensus output {}. Rejected transactions {}",
+            consensus_commit.commit_ref(),
             consensus_commit.rejected_transactions_debug_string(),
         );
 
@@ -826,7 +1031,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             &self.committee,
             consensus_commit.reputation_score_sorted_desc(),
             &self.metrics,
-            protocol_config.consensus_bad_nodes_stake_threshold(),
+            self.epoch_store
+                .protocol_config()
+                .consensus_bad_nodes_stake_threshold(),
         );
 
         self.metrics
@@ -845,11 +1052,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .clone(),
         };
 
-        let transactions = self.filter_consensus_txns(
+        let FilteredConsensusOutput {
+            transactions,
+            owned_object_locks,
+        } = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
             &consensus_commit,
         );
+        // Buffer owned object locks for batch write when preconsensus locking is disabled
+        if !owned_object_locks.is_empty() {
+            state.output.set_owned_object_locks(owned_object_locks);
+        }
         let transactions = self.deduplicate_consensus_txns(&mut state, &commit_info, transactions);
 
         let mut randomness_manager = state.init_randomness(&self.epoch_store, &commit_info);
@@ -888,42 +1102,144 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let authenticator_state_update_transaction =
             self.create_authenticator_state_update(last_committed_round, &commit_info);
 
-        let (schedulables, randomness_schedulables, assigned_versions) = self.process_transactions(
-            &mut state,
-            &mut execution_time_estimator,
-            &commit_info,
-            authenticator_state_update_transaction,
-            user_transactions,
-        );
-
-        let (should_accept_tx, lock, final_round) =
-            self.handle_eop(&mut state, end_of_publish_transactions);
-
-        let make_checkpoint = should_accept_tx || final_round;
-        if !make_checkpoint {
-            // No need for any further processing
-            return;
-        }
-
-        // If this is the final round, record execution time observations for storage in the
-        // end-of-epoch tx.
-        if final_round {
-            self.record_end_of_epoch_execution_time_observations(&mut execution_time_estimator);
-        }
-
-        self.create_pending_checkpoints(
-            &mut state,
-            &commit_info,
-            &schedulables,
-            &randomness_schedulables,
+        let (
+            lock,
             final_round,
-        );
+            schedulables,
+            randomness_schedulables,
+            assigned_versions,
+            checkpoint_height,
+        ) = if !self
+            .epoch_store
+            .protocol_config()
+            .split_checkpoints_in_consensus_handler()
+        {
+            let (schedulables, randomness_schedulables, assigned_versions) = self
+                .process_transactions(
+                    &mut state,
+                    &mut execution_time_estimator,
+                    &commit_info,
+                    authenticator_state_update_transaction,
+                    user_transactions,
+                );
+
+            let (should_accept_tx, lock, final_round) =
+                self.handle_eop(&mut state, end_of_publish_transactions);
+
+            let make_checkpoint = should_accept_tx || final_round;
+            if !make_checkpoint {
+                // No need for any further processing
+                return;
+            }
+
+            // If this is the final round, record execution time observations for storage in the
+            // end-of-epoch tx.
+            if final_round {
+                self.record_end_of_epoch_execution_time_observations(&mut execution_time_estimator);
+            }
+
+            let checkpoint_height = self
+                .epoch_store
+                .calculate_pending_checkpoint_height(commit_info.round);
+
+            self.create_pending_checkpoints(
+                &mut state,
+                &commit_info,
+                &schedulables,
+                &randomness_schedulables,
+                final_round,
+            );
+
+            (
+                lock,
+                final_round,
+                schedulables,
+                randomness_schedulables,
+                assigned_versions,
+                checkpoint_height,
+            )
+        } else {
+            let (
+                transactions_to_schedule,
+                randomness_transactions_to_schedule,
+                cancelled_txns,
+                randomness_state_update_transaction,
+            ) = self.collect_transactions_to_schedule(
+                &mut state,
+                &mut execution_time_estimator,
+                &commit_info,
+                user_transactions,
+            );
+
+            let (should_accept_tx, lock, final_round) =
+                self.handle_eop(&mut state, end_of_publish_transactions);
+
+            let make_checkpoint = should_accept_tx || final_round;
+            if !make_checkpoint {
+                // No need for any further processing
+                return;
+            }
+
+            // If this is the final round, record execution time observations for storage in the
+            // end-of-epoch tx.
+            if final_round {
+                self.record_end_of_epoch_execution_time_observations(&mut execution_time_estimator);
+            }
+
+            let epoch = self.epoch_store.epoch();
+            let consensus_commit_prologue = (!commit_info.skip_consensus_commit_prologue_in_test)
+                .then_some(Schedulable::ConsensusCommitPrologue(
+                    epoch,
+                    commit_info.round,
+                    commit_info.consensus_commit_ref.index,
+                ));
+
+            let schedulables: Vec<_> = itertools::chain!(
+                consensus_commit_prologue.into_iter(),
+                authenticator_state_update_transaction
+                    .into_iter()
+                    .map(Schedulable::Transaction),
+                transactions_to_schedule
+                    .into_iter()
+                    .map(Schedulable::Transaction),
+            )
+            .collect();
+
+            let randomness_schedulables: Vec<_> = randomness_state_update_transaction
+                .into_iter()
+                .chain(
+                    randomness_transactions_to_schedule
+                        .into_iter()
+                        .map(Schedulable::Transaction),
+                )
+                .collect();
+
+            let (checkpoint_height, schedulables, randomness_schedulables, assigned_versions) =
+                self.create_pending_checkpoints_v2(
+                    &mut state,
+                    &commit_info,
+                    schedulables,
+                    randomness_schedulables,
+                    &cancelled_txns,
+                    final_round,
+                );
+
+            (
+                lock,
+                final_round,
+                schedulables,
+                randomness_schedulables,
+                assigned_versions,
+                checkpoint_height,
+            )
+        };
 
         let notifications = state.get_notifications();
 
-        state
-            .output
-            .record_consensus_commit_stats(self.last_consensus_stats.clone());
+        let mut stats_to_record = self.last_consensus_stats.clone();
+        stats_to_record.height = checkpoint_height;
+
+        state.output.record_consensus_commit_stats(stats_to_record);
 
         self.record_deferral_deletion(&mut state);
 
@@ -1008,7 +1324,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut deferred_transactions = self
             .epoch_store
             .consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock();
         for deleted_deferred_key in state.output.get_deleted_deferred_txn_keys() {
             deferred_transactions.remove(&deleted_deferred_key);
@@ -1036,6 +1352,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         randomness_schedulables: &[Schedulable],
         final_round: bool,
     ) {
+        assert!(
+            !self
+                .epoch_store
+                .protocol_config()
+                .split_checkpoints_in_consensus_handler()
+        );
+
         let checkpoint_height = self
             .epoch_store
             .calculate_pending_checkpoint_height(commit_info.round);
@@ -1085,19 +1408,22 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
     }
 
-    fn process_transactions(
+    #[allow(clippy::type_complexity)]
+    fn collect_transactions_to_schedule(
         &self,
         state: &mut CommitHandlerState,
         execution_time_estimator: &mut ExecutionTimeEstimator,
         commit_info: &ConsensusCommitInfo,
-        authenticator_state_update_transaction: Option<VerifiedExecutableTransactionWithAliases>,
         user_transactions: Vec<VerifiedExecutableTransactionWithAliases>,
-    ) -> (Vec<Schedulable>, Vec<Schedulable>, AssignedTxAndVersions) {
+    ) -> (
+        Vec<VerifiedExecutableTransactionWithAliases>,
+        Vec<VerifiedExecutableTransactionWithAliases>,
+        BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        Option<Schedulable<VerifiedExecutableTransactionWithAliases>>,
+    ) {
         let protocol_config = self.epoch_store.protocol_config();
         let epoch = self.epoch_store.epoch();
 
-        // Get the ordered set of all transactions to process, which includes deferred and
-        // newly arrived transactions.
         let (ordered_txns, ordered_randomness_txns, previously_deferred_tx_digests) =
             self.merge_and_reorder_transactions(state, commit_info, user_transactions);
 
@@ -1169,7 +1495,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let mut deferred_transactions = self
                 .epoch_store
                 .consensus_output_cache
-                .deferred_transactions_v2
+                .deferred_transactions
                 .lock();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
@@ -1214,6 +1540,38 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state
             .output
             .set_congestion_control_randomness_object_debts(randomness_object_debts);
+
+        (
+            transactions_to_schedule,
+            randomness_transactions_to_schedule,
+            cancelled_txns,
+            randomness_state_update_transaction,
+        )
+    }
+
+    fn process_transactions(
+        &self,
+        state: &mut CommitHandlerState,
+        execution_time_estimator: &mut ExecutionTimeEstimator,
+        commit_info: &ConsensusCommitInfo,
+        authenticator_state_update_transaction: Option<VerifiedExecutableTransactionWithAliases>,
+        user_transactions: Vec<VerifiedExecutableTransactionWithAliases>,
+    ) -> (Vec<Schedulable>, Vec<Schedulable>, AssignedTxAndVersions) {
+        let protocol_config = self.epoch_store.protocol_config();
+        assert!(!protocol_config.split_checkpoints_in_consensus_handler());
+        let epoch = self.epoch_store.epoch();
+
+        let (
+            transactions_to_schedule,
+            randomness_transactions_to_schedule,
+            cancelled_txns,
+            randomness_state_update_transaction,
+        ) = self.collect_transactions_to_schedule(
+            state,
+            execution_time_estimator,
+            commit_info,
+            user_transactions,
+        );
 
         let mut settlement = None;
         let mut randomness_settlement = None;
@@ -1302,6 +1660,205 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .collect();
 
         (schedulables, randomness_schedulables, assigned_versions)
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn create_pending_checkpoints_v2(
+        &self,
+        state: &mut CommitHandlerState,
+        commit_info: &ConsensusCommitInfo,
+        schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
+        randomness_schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
+        cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        final_round: bool,
+    ) -> (
+        CheckpointHeight,
+        Vec<Schedulable>,
+        Vec<Schedulable>,
+        AssignedTxAndVersions,
+    ) {
+        let protocol_config = self.epoch_store.protocol_config();
+        assert!(protocol_config.split_checkpoints_in_consensus_handler());
+
+        let epoch = self.epoch_store.epoch();
+        let accumulators_enabled = self.epoch_store.accumulators_enabled();
+        let max_transactions_per_checkpoint =
+            protocol_config.max_transactions_per_checkpoint() as usize;
+
+        let should_write_random_checkpoint = state.randomness_round.is_some()
+            || (state.dkg_failed && !randomness_schedulables.is_empty());
+
+        let mut checkpoint_queue = self.checkpoint_queue.lock().unwrap();
+
+        let build_chunks =
+            |schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
+             queue: &mut CheckpointQueue|
+             -> Vec<(
+                Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
+                CheckpointHeight,
+            )> {
+                schedulables
+                    .chunks(max_transactions_per_checkpoint)
+                    .map(|chunk| {
+                        let height = queue.next_height();
+                        let mut chunk_vec: Vec<_> = chunk.to_vec();
+                        if accumulators_enabled {
+                            chunk_vec.push(Schedulable::AccumulatorSettlement(epoch, height));
+                        }
+                        (chunk_vec, height)
+                    })
+                    .collect()
+            };
+
+        let chunked_schedulables = build_chunks(schedulables, &mut checkpoint_queue);
+        let chunked_randomness_schedulables = if should_write_random_checkpoint {
+            build_chunks(randomness_schedulables, &mut checkpoint_queue)
+        } else {
+            vec![]
+        };
+
+        let schedulables_for_version_assignment: Vec<_> = chunked_schedulables
+            .iter()
+            .flat_map(|(chunk, _)| chunk.iter())
+            .cloned()
+            .collect();
+        let randomness_schedulables_for_version_assignment: Vec<_> =
+            chunked_randomness_schedulables
+                .iter()
+                .flat_map(|(chunk, _)| chunk.iter())
+                .cloned()
+                .collect();
+
+        let assigned_versions = self
+            .epoch_store
+            .process_consensus_transaction_shared_object_versions(
+                self.cache_reader.as_ref(),
+                schedulables_for_version_assignment.iter(),
+                randomness_schedulables_for_version_assignment.iter(),
+                cancelled_txns,
+                &mut state.output,
+            )
+            .expect("failed to assign shared object versions");
+
+        let consensus_commit_prologue =
+            self.add_consensus_commit_prologue_transaction(state, commit_info, &assigned_versions);
+
+        let mut chunked_schedulables = chunked_schedulables;
+        let mut assigned_versions = assigned_versions;
+        if let Some(consensus_commit_prologue) = consensus_commit_prologue {
+            assert!(matches!(
+                chunked_schedulables[0].0[0],
+                Schedulable::ConsensusCommitPrologue(..)
+            ));
+            assert!(matches!(
+                assigned_versions.0[0].0,
+                TransactionKey::ConsensusCommitPrologue(..)
+            ));
+            assigned_versions.0[0].0 =
+                TransactionKey::Digest(*consensus_commit_prologue.tx().digest());
+            chunked_schedulables[0].0[0] = Schedulable::Transaction(consensus_commit_prologue);
+        }
+
+        self.epoch_store.process_user_signatures(
+            chunked_schedulables
+                .iter()
+                .flat_map(|(chunk, _)| chunk.iter())
+                .chain(
+                    chunked_randomness_schedulables
+                        .iter()
+                        .flat_map(|(chunk, _)| chunk.iter()),
+                ),
+        );
+
+        let checkpoint_roots_list = Self::to_checkpoint_roots(&chunked_schedulables);
+        checkpoint_queue.push_checkpoint_roots(
+            checkpoint_roots_list,
+            commit_info.timestamp,
+            commit_info.consensus_commit_ref,
+            commit_info.rejected_transactions_digest,
+        );
+
+        let mut pending_checkpoints = if final_round || should_write_random_checkpoint {
+            checkpoint_queue.flush_all_checkpoint_roots(protocol_config, commit_info.timestamp)
+        } else {
+            checkpoint_queue.flush_checkpoint_roots(protocol_config, commit_info.timestamp)
+        };
+
+        if should_write_random_checkpoint {
+            for randomness_roots in Self::to_checkpoint_roots(&chunked_randomness_schedulables) {
+                let checkpoint_height = randomness_roots.height;
+                pending_checkpoints.push(PendingCheckpointV2 {
+                    roots: vec![randomness_roots],
+                    details: PendingCheckpointInfo {
+                        timestamp_ms: commit_info.timestamp,
+                        last_of_epoch: false,
+                        checkpoint_height,
+                        consensus_commit_ref: commit_info.consensus_commit_ref,
+                        rejected_transactions_digest: commit_info.rejected_transactions_digest,
+                    },
+                });
+            }
+        }
+
+        if final_round && let Some(last) = pending_checkpoints.last_mut() {
+            last.details.last_of_epoch = true;
+        }
+
+        let commit_height = chunked_randomness_schedulables
+            .last()
+            .or(chunked_schedulables.last())
+            .map(|(_, height)| *height)
+            .expect("at least one checkpoint root must be created per commit");
+
+        drop(checkpoint_queue);
+
+        for pending_checkpoint in pending_checkpoints {
+            debug!(
+                checkpoint_height = pending_checkpoint.details.checkpoint_height,
+                roots_count = pending_checkpoint.num_roots(),
+                "Writing pending checkpoint",
+            );
+            self.epoch_store
+                .write_pending_checkpoint_v2(&mut state.output, &pending_checkpoint)
+                .expect("failed to write pending checkpoint");
+        }
+
+        // Strip alias version information
+        let flat_schedulables: Vec<Schedulable> = chunked_schedulables
+            .into_iter()
+            .flat_map(|(chunk, _)| chunk.into_iter().map(|s| s.into()))
+            .collect();
+        let flat_randomness_schedulables: Vec<Schedulable> = chunked_randomness_schedulables
+            .into_iter()
+            .flat_map(|(chunk, _)| chunk.into_iter().map(|s| s.into()))
+            .collect();
+
+        (
+            commit_height,
+            flat_schedulables,
+            flat_randomness_schedulables,
+            assigned_versions,
+        )
+    }
+
+    fn to_checkpoint_roots<T: crate::authority::shared_object_version_manager::AsTx>(
+        chunks: &[(Vec<Schedulable<T>>, CheckpointHeight)],
+    ) -> Vec<CheckpointRoots> {
+        chunks
+            .iter()
+            .map(|(schedulables, height)| {
+                let mut tx_roots: Vec<_> = schedulables.iter().map(|s| s.key()).collect();
+                let settlement_root = tx_roots
+                    .last()
+                    .is_some_and(|k| matches!(k, TransactionKey::AccumulatorSettlement(..)))
+                    .then(|| tx_roots.pop().unwrap());
+                CheckpointRoots {
+                    tx_roots,
+                    settlement_root,
+                    height: *height,
+                }
+            })
+            .collect()
     }
 
     // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
@@ -1833,8 +2390,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         reconfig_state.close_all_certs();
 
         let commit_has_deferred_txns = state.output.has_deferred_transactions();
-        let previous_commits_have_deferred_txns =
-            !self.epoch_store.deferred_transactions_empty_v2();
+        let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
 
         if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
             if !start_state_is_reject_all_tx {
@@ -1930,14 +2486,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     // Filters out rejected or deprecated transactions.
+    // Returns FilteredConsensusOutput containing transactions and owned_object_locks
+    // (collected when preconsensus locking is disabled).
     #[instrument(level = "trace", skip_all)]
     fn filter_consensus_txns(
         &mut self,
         initial_reconfig_state: ReconfigState,
         commit_info: &ConsensusCommitInfo,
         consensus_commit: &impl ConsensusCommitAPI,
-    ) -> Vec<(SequencedConsensusTransactionKind, u32)> {
+    ) -> FilteredConsensusOutput {
         let mut transactions = Vec::new();
+        let mut owned_object_locks = HashMap::new();
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
@@ -2006,18 +2565,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         num_rejected_user_transactions[author] += 1;
                     }
                     // Skip processing rejected transactions.
-                    // TODO(fastpath): Handle unlocking.
                     continue;
                 }
-                if matches!(
-                    parsed.transaction.kind,
-                    ConsensusTransactionKind::UserTransaction(_)
-                        | ConsensusTransactionKind::UserTransactionV2(_)
-                ) {
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
-                    num_finalized_user_transactions[author] += 1;
-                }
+
                 let kind = classify(&parsed.transaction);
                 self.metrics
                     .consensus_handler_processed
@@ -2077,7 +2627,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                if parsed.transaction.is_mfp_transaction()
+                if parsed.transaction.is_user_transaction()
                     && !self.epoch_store.protocol_config().mysticeti_fastpath()
                 {
                     debug!(
@@ -2141,6 +2691,62 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
+                // When preconsensus locking is disabled, perform post-consensus owned object
+                // conflict detection. If lock acquisition fails, the transaction has
+                // invalid/conflicting owned inputs and should be dropped.
+                // This must happen AFTER all filtering checks above to avoid acquiring locks
+                // for transactions that will be dropped (e.g., during epoch change).
+                // Only applies to UserTransactionV2 - other transaction types don't need lock acquisition.
+                if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                    &parsed.transaction.kind
+                {
+                    let immutable_object_ids: HashSet<ObjectID> =
+                        tx_with_claims.get_immutable_objects().into_iter().collect();
+                    let tx = tx_with_claims.tx();
+
+                    let Ok(input_objects) = tx.transaction_data().input_objects() else {
+                        debug_fatal!("Invalid input objects for transaction {}", tx.digest());
+                        continue;
+                    };
+
+                    // Filter ImmOrOwnedMoveObject inputs, excluding those claimed to be immutable.
+                    // Immutable objects don't need lock acquisition as they can be used concurrently.
+                    let owned_object_refs: Vec<_> = input_objects
+                        .iter()
+                        .filter_map(|obj| match obj {
+                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
+                                if !immutable_object_ids.contains(&obj_ref.0) =>
+                            {
+                                Some(*obj_ref)
+                            }
+                            _ => None,
+                        })
+                        .collect();
+
+                    match self
+                        .epoch_store
+                        .try_acquire_owned_object_locks_post_consensus(
+                            &owned_object_refs,
+                            *tx.digest(),
+                            &owned_object_locks,
+                        ) {
+                        Ok(new_locks) => {
+                            owned_object_locks.extend(new_locks.into_iter());
+                            // Lock acquisition succeeded - now set Finalized status
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+                            num_finalized_user_transactions[author] += 1;
+                        }
+                        Err(e) => {
+                            debug!("Dropping transaction {}: {}", tx.digest(), e);
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
+                            self.epoch_store.set_rejection_vote_reason(position, &e);
+                            continue;
+                        }
+                    }
+                }
+
                 let transaction = SequencedConsensusTransactionKind::External(parsed.transaction);
                 transactions.push((transaction, author as u32));
             }
@@ -2170,7 +2776,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .add(num_rejected_user_transactions[i.value()] as i64);
         }
 
-        transactions
+        FilteredConsensusOutput {
+            transactions,
+            owned_object_locks,
+        }
     }
 
     fn deduplicate_consensus_txns(
@@ -2287,15 +2896,44 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 ));
                         }
                         ConsensusTransactionKind::UserTransactionV2(tx) => {
-                            let (tx, used_alias_versions) = tx.into_inner();
+                            // Extract the aliases claim (required) from the claims
+                            let used_alias_versions = if self
+                                .epoch_store
+                                .protocol_config()
+                                .fix_checkpoint_signature_mapping()
+                            {
+                                tx.aliases()
+                            } else {
+                                // Convert V1 to V2 format using dummy signature indices
+                                // which will be ignored with `fix_checkpoint_signature_mapping`
+                                // disabled.
+                                tx.aliases_v1().map(|a| {
+                                    NonEmpty::from_vec(
+                                        a.into_iter()
+                                            .enumerate()
+                                            .map(|(idx, (_, seq))| (idx as u8, seq))
+                                            .collect(),
+                                    )
+                                    .unwrap()
+                                })
+                            };
+                            let inner_tx = tx.into_tx();
                             // Safe because transactions are certified by consensus.
-                            let tx = VerifiedTransaction::new_unchecked(tx);
+                            let tx = VerifiedTransaction::new_unchecked(inner_tx);
                             // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
                             let transaction =
                                 VerifiedExecutableTransaction::new_from_consensus(tx, epoch);
-                            commit_handler_input
-                                .user_transactions
-                                .push(WithAliases::new(transaction, used_alias_versions));
+                            if let Some(used_alias_versions) = used_alias_versions {
+                                commit_handler_input
+                                    .user_transactions
+                                    .push(WithAliases::new(transaction, used_alias_versions));
+                            } else {
+                                commit_handler_input.user_transactions.push(
+                                    VerifiedExecutableTransactionWithAliases::no_aliases(
+                                        transaction,
+                                    ),
+                                );
+                            }
                         }
 
                         // === State machines ===
@@ -2472,11 +3110,13 @@ impl MysticetiConsensusHandler {
     pub(crate) fn new(
         last_processed_commit_at_startup: CommitIndex,
         mut consensus_handler: ConsensusHandler<CheckpointService>,
-        consensus_block_handler: ConsensusBlockHandler,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
-        mut block_receiver: UnboundedReceiver<consensus_core::CertifiedBlocksOutput>,
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
     ) -> Self {
+        debug!(
+            last_processed_commit_at_startup,
+            "Starting consensus replay"
+        );
         let mut tasks = JoinSet::new();
         tasks.spawn(monitored_future!(async move {
             // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
@@ -2492,15 +3132,6 @@ impl MysticetiConsensusHandler {
                 commit_consumer_monitor.set_highest_handled_commit(commit_index);
             }
         }));
-        if consensus_block_handler.enabled() {
-            tasks.spawn(monitored_future!(async move {
-                while let Some(blocks) = block_receiver.recv().await {
-                    consensus_block_handler
-                        .handle_certified_blocks(blocks)
-                        .await;
-                }
-            }));
-        }
         Self { tasks }
     }
 
@@ -2801,156 +3432,6 @@ impl SequencedConsensusTransaction {
     }
 }
 
-/// Handles certified and rejected transactions output by consensus.
-pub(crate) struct ConsensusBlockHandler {
-    /// Whether to enable handling certified transactions.
-    enabled: bool,
-    /// Per-epoch store.
-    epoch_store: Arc<AuthorityPerEpochStore>,
-    /// Enqueues transactions to the execution scheduler via a separate task.
-    execution_scheduler_sender: ExecutionSchedulerSender,
-    /// Backpressure subscriber to wait for backpressure to be resolved.
-    backpressure_subscriber: BackpressureSubscriber,
-    /// Metrics for consensus transaction handling.
-    metrics: Arc<AuthorityMetrics>,
-}
-
-impl ConsensusBlockHandler {
-    pub fn new(
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        execution_scheduler_sender: ExecutionSchedulerSender,
-        backpressure_subscriber: BackpressureSubscriber,
-        metrics: Arc<AuthorityMetrics>,
-    ) -> Self {
-        Self {
-            enabled: epoch_store.protocol_config().mysticeti_fastpath(),
-            epoch_store,
-            execution_scheduler_sender,
-            backpressure_subscriber,
-            metrics,
-        }
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.enabled
-    }
-
-    #[instrument(level = "debug", skip_all)]
-    async fn handle_certified_blocks(&self, blocks_output: CertifiedBlocksOutput) {
-        self.backpressure_subscriber.await_no_backpressure().await;
-
-        let _scope = monitored_scope("ConsensusBlockHandler::handle_certified_blocks");
-
-        // Avoid triggering fastpath execution or setting transaction status to fastpath certified, during reconfiguration.
-        let reconfiguration_lock = self.epoch_store.get_reconfig_state_read_lock_guard();
-        if !reconfiguration_lock.should_accept_user_certs() {
-            debug!(
-                "Skipping fastpath execution because epoch {} is closing user transactions: {}",
-                self.epoch_store.epoch(),
-                blocks_output
-                    .blocks
-                    .iter()
-                    .map(|b| b.block.reference().to_string())
-                    .join(", "),
-            );
-            return;
-        }
-
-        self.metrics.consensus_block_handler_block_processed.inc();
-        let epoch = self.epoch_store.epoch();
-        let parsed_transactions = blocks_output
-            .blocks
-            .into_iter()
-            .map(|certified_block| {
-                let block_ref = certified_block.block.reference();
-                let transactions =
-                    parse_block_transactions(&certified_block.block, &certified_block.rejected);
-                (block_ref, transactions)
-            })
-            .collect::<Vec<_>>();
-        let mut executable_transactions = vec![];
-        for (block, transactions) in parsed_transactions.into_iter() {
-            // Set the "ping" transaction status for this block. This is ncecessary as there might be some ping requests waiting for the ping transaction to be certified.
-            self.epoch_store.set_consensus_tx_status(
-                ConsensusPosition::ping(epoch, block),
-                ConsensusTxStatus::FastpathCertified,
-            );
-
-            for (txn_idx, parsed) in transactions.into_iter().enumerate() {
-                let position = ConsensusPosition {
-                    epoch,
-                    block,
-                    index: txn_idx as TransactionIndex,
-                };
-
-                let status_str = if parsed.rejected {
-                    "rejected"
-                } else {
-                    "certified"
-                };
-                if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
-                    debug!(
-                        "User Transaction in position: {:} with digest {:} is {:}",
-                        position,
-                        tx.digest(),
-                        status_str
-                    );
-                } else {
-                    debug!(
-                        "System Transaction in position: {:} is {:}",
-                        position, status_str
-                    );
-                }
-
-                if parsed.rejected {
-                    // TODO(fastpath): avoid parsing blocks twice between handling commit and fastpath transactions?
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
-                    self.metrics
-                        .consensus_block_handler_txn_processed
-                        .with_label_values(&["rejected"])
-                        .inc();
-                    continue;
-                }
-
-                self.metrics
-                    .consensus_block_handler_txn_processed
-                    .with_label_values(&["certified"])
-                    .inc();
-
-                if let Some(tx) = parsed.transaction.kind.into_user_transaction() {
-                    if tx.is_consensus_tx() {
-                        continue;
-                    }
-                    // Only set fastpath certified status on transactions intended for fastpath execution.
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
-                    let tx = VerifiedTransaction::new_unchecked(tx);
-                    executable_transactions.push(Schedulable::Transaction(
-                        VerifiedExecutableTransaction::new_from_consensus(
-                            tx,
-                            self.epoch_store.epoch(),
-                        ),
-                    ));
-                }
-            }
-        }
-
-        if executable_transactions.is_empty() {
-            return;
-        }
-        self.metrics
-            .consensus_block_handler_fastpath_executions
-            .inc_by(executable_transactions.len() as u64);
-
-        self.execution_scheduler_sender.send(
-            executable_transactions,
-            Default::default(),
-            SchedulingSource::MysticetiFastPath,
-        );
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub(crate) struct CommitIntervalObserver {
     ring_buffer: VecDeque<u64>,
@@ -2989,10 +3470,8 @@ mod tests {
     use std::collections::HashSet;
 
     use consensus_core::{
-        BlockAPI, CertifiedBlock, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
-        VerifiedBlock,
+        BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
     };
-    use consensus_types::block::TransactionIndex;
     use futures::pin_mut;
     use prometheus::Registry;
     use sui_protocol_config::{ConsensusTransactionOrdering, ProtocolConfig};
@@ -3010,7 +3489,7 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         transaction::{
-            CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+            CertifiedTransaction, TransactionData, TransactionDataAPI, VerifiedCertificate,
         },
     };
 
@@ -3021,9 +3500,7 @@ mod tests {
             test_authority_builder::TestAuthorityBuilder,
         },
         checkpoints::CheckpointServiceNoop,
-        consensus_adapter::consensus_tests::{
-            test_certificates_with_gas_objects, test_user_transaction,
-        },
+        consensus_adapter::consensus_tests::test_user_transaction,
         consensus_test_utils::make_consensus_adapter_for_test,
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
@@ -3105,35 +3582,31 @@ mod tests {
             user_transactions.push(transaction);
         }
 
-        // AND create 4 certified transactions with remaining gas objects and 2 shared objects.
+        // AND create 4 more user transactions with remaining gas objects and 2 shared objects.
         // Having more txns on the same shared object may get deferred.
-        let certified_transactions = [
-            test_certificates_with_gas_objects(
+        for (i, gas_object) in gas_objects[8..12].iter().enumerate() {
+            let shared_object = if i < 2 {
+                shared_objects[4].clone()
+            } else {
+                shared_objects[5].clone()
+            };
+            let transaction = test_user_transaction(
                 &state,
-                &gas_objects[8..10],
-                shared_objects[4].clone(),
+                sender,
+                &keypair,
+                gas_object.clone(),
+                vec![shared_object],
             )
-            .await,
-            test_certificates_with_gas_objects(
-                &state,
-                &gas_objects[10..12],
-                shared_objects[5].clone(),
-            )
-            .await,
-        ]
-        .concat();
+            .await;
+            user_transactions.push(transaction);
+        }
 
-        // AND create block for each user and certified transaction
+        // AND create block for each user transaction
         let mut blocks = Vec::new();
         for (i, consensus_transaction) in user_transactions
             .iter()
             .cloned()
             .map(|t| ConsensusTransaction::new_user_transaction_v2_message(&state.name, t.into()))
-            .chain(
-                certified_transactions
-                    .iter()
-                    .map(|t| ConsensusTransaction::new_certificate_message(&state.name, t.clone())),
-            )
             .enumerate()
         {
             let transaction_bytes = bcs::to_bytes(&consensus_transaction).unwrap();
@@ -3153,6 +3626,7 @@ mod tests {
             blocks.clone(),
             leader_block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
+            true,
         );
 
         // Test that the consensus handler respects backpressure.
@@ -3181,7 +3655,7 @@ mod tests {
 
         // THEN check the consensus stats
         let num_blocks = blocks.len();
-        let num_transactions = user_transactions.len() + certified_transactions.len();
+        let num_transactions = user_transactions.len();
         let last_consensus_stats_1 = consensus_handler.last_consensus_stats.clone();
         assert_eq!(
             last_consensus_stats_1.index.transaction_index,
@@ -3189,7 +3663,6 @@ mod tests {
         );
         assert_eq!(last_consensus_stats_1.index.sub_dag_index, 10_u64);
         assert_eq!(last_consensus_stats_1.index.last_committed_round, 100_u64);
-        assert_eq!(last_consensus_stats_1.hash, 0);
         assert_eq!(
             last_consensus_stats_1.stats.get_num_messages(0),
             num_blocks as u64
@@ -3214,188 +3687,8 @@ mod tests {
             }
         }
 
-        // THEN check for execution status of certified transactions.
-        for (i, t) in certified_transactions.iter().enumerate() {
-            let digest = t.digest();
-            if let Ok(Ok(_)) = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                state.notify_read_effects("", *digest),
-            )
-            .await
-            {
-                // Effects exist as expected.
-            } else {
-                panic!("Certified transaction {} {} did not execute", i, digest);
-            }
-        }
-
         // THEN check for no inflight or suspended transactions.
         state.execution_scheduler().check_empty_for_testing();
-    }
-
-    #[tokio::test]
-    async fn test_consensus_block_handler() {
-        // GIVEN
-        // 1 account keypair
-        let (sender, keypair) = deterministic_random_account_key();
-        // 8 gas objects.
-        let gas_objects: Vec<Object> = (0..8)
-            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
-            .collect();
-        // 4 owned objects.
-        let owned_objects: Vec<Object> = (0..4)
-            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
-            .collect();
-        // 4 shared objects.
-        let shared_objects: Vec<Object> = (0..4)
-            .map(|_| Object::shared_for_testing())
-            .collect::<Vec<_>>();
-        let mut all_objects = gas_objects.clone();
-        all_objects.extend(owned_objects.clone());
-        all_objects.extend(shared_objects.clone());
-
-        let network_config =
-            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                .with_objects(all_objects.clone())
-                .build();
-
-        let state = TestAuthorityBuilder::new()
-            .with_network_config(&network_config, 0)
-            .build()
-            .await;
-        let epoch_store = state.epoch_store_for_testing().clone();
-        let execution_scheduler_sender = ExecutionSchedulerSender::start(
-            state.execution_scheduler().clone(),
-            epoch_store.clone(),
-        );
-
-        let backpressure_manager = BackpressureManager::new_for_tests();
-        let block_handler = ConsensusBlockHandler::new(
-            epoch_store.clone(),
-            execution_scheduler_sender,
-            backpressure_manager.subscribe(),
-            state.metrics.clone(),
-        );
-
-        // AND create test transactions alternating between owned and shared input.
-        let mut transactions = vec![];
-        for (i, gas_object) in gas_objects.iter().enumerate() {
-            let input_object = if i % 2 == 0 {
-                owned_objects.get(i / 2).unwrap().clone()
-            } else {
-                shared_objects.get(i / 2).unwrap().clone()
-            };
-            let transaction = test_user_transaction(
-                &state,
-                sender,
-                &keypair,
-                gas_object.clone(),
-                vec![input_object],
-            )
-            .await;
-            transactions.push(transaction);
-        }
-
-        let serialized_transactions: Vec<_> = transactions
-            .iter()
-            .cloned()
-            .map(|t| {
-                Transaction::new(
-                    bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
-                        &state.name,
-                        t.into(),
-                    ))
-                    .unwrap(),
-                )
-            })
-            .collect();
-
-        // AND create block for all transactions
-        let block = VerifiedBlock::new_for_test(
-            TestBlock::new(100, 1)
-                .set_transactions(serialized_transactions.clone())
-                .build(),
-        );
-
-        // AND set rejected transactions.
-        let rejected_transactions = vec![0, 3, 4];
-
-        // AND process the transactions from consensus output.
-        block_handler
-            .handle_certified_blocks(CertifiedBlocksOutput {
-                blocks: vec![CertifiedBlock {
-                    block: block.clone(),
-                    rejected: rejected_transactions.clone(),
-                }],
-            })
-            .await;
-
-        // Ensure the correct consensus status is set for the correct consensus position
-        let consensus_tx_status_cache = epoch_store.consensus_tx_status_cache.as_ref().unwrap();
-        for txn_idx in 0..transactions.len() {
-            let position = ConsensusPosition {
-                epoch: epoch_store.epoch(),
-                block: block.reference(),
-                index: txn_idx as TransactionIndex,
-            };
-            if rejected_transactions.contains(&(txn_idx as TransactionIndex)) {
-                // Expect rejected transactions to be marked as such.
-                assert_eq!(
-                    consensus_tx_status_cache.get_transaction_status(&position),
-                    Some(ConsensusTxStatus::Rejected)
-                );
-            } else if txn_idx % 2 == 0 {
-                // Expect owned object transactions to be marked as fastpath certified.
-                assert_eq!(
-                    consensus_tx_status_cache.get_transaction_status(&position),
-                    Some(ConsensusTxStatus::FastpathCertified),
-                );
-            } else {
-                // Expect shared object transactions to be marked as fastpath certified.
-                assert_eq!(
-                    consensus_tx_status_cache.get_transaction_status(&position),
-                    None,
-                );
-            }
-        }
-
-        // THEN check for status of transactions that should have been executed.
-        for (i, t) in transactions.iter().enumerate() {
-            // Do not expect shared transactions or rejected transactions to be executed.
-            if i % 2 == 1 || rejected_transactions.contains(&(i as TransactionIndex)) {
-                continue;
-            }
-            let digest = t.tx().digest();
-            if tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                state
-                    .get_transaction_cache_reader()
-                    .notify_read_fastpath_transaction_outputs(&[*digest]),
-            )
-            .await
-            .is_err()
-            {
-                panic!("Transaction {} {} did not execute", i, digest);
-            }
-        }
-
-        // THEN check for no inflight or suspended transactions.
-        state.execution_scheduler().check_empty_for_testing();
-
-        // THEN check that rejected transactions are not executed.
-        for (i, t) in transactions.iter().enumerate() {
-            // Expect shared transactions or rejected transactions to not have executed.
-            if i % 2 == 0 && !rejected_transactions.contains(&(i as TransactionIndex)) {
-                continue;
-            }
-            let digest = t.tx().digest();
-            assert!(
-                !state.is_tx_already_executed(digest),
-                "Rejected transaction {} {} should not have been executed",
-                i,
-                digest
-            );
-        }
     }
 
     fn to_short_strings(txs: Vec<VerifiedExecutableTransactionWithAliases>) -> Vec<String> {
@@ -3508,6 +3801,7 @@ mod tests {
             vec![block.clone()],
             block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
+            true,
         );
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
@@ -3628,6 +3922,7 @@ mod tests {
             vec![block.clone()],
             block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
+            true,
         );
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
@@ -3699,22 +3994,196 @@ mod tests {
 
     fn user_txn(gas_price: u64) -> VerifiedExecutableTransactionWithAliases {
         let (committee, keypairs) = Committee::new_simple_test_committee();
-        let data = SenderSignedData::new(
+        let (sender, sender_keypair) = deterministic_random_account_key();
+        let tx = sui_types::transaction::Transaction::from_data_and_signer(
             TransactionData::new_transfer(
                 SuiAddress::default(),
                 FullObjectRef::from_fastpath_ref(random_object_ref()),
-                SuiAddress::default(),
+                sender,
                 random_object_ref(),
                 1000 * gas_price,
                 gas_price,
             ),
-            vec![],
+            vec![&sender_keypair],
         );
         let tx = VerifiedExecutableTransaction::new_from_certificate(
             VerifiedCertificate::new_unchecked(
-                CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
+                CertifiedTransaction::new_from_keypairs_for_testing(
+                    tx.into_data(),
+                    &keypairs,
+                    &committee,
+                ),
             ),
         );
         VerifiedExecutableTransactionWithAliases::no_aliases(tx)
+    }
+
+    mod checkpoint_queue_tests {
+        use super::*;
+        use crate::checkpoints::CheckpointRoots;
+        use consensus_core::CommitRef;
+        use sui_protocol_config::ProtocolConfig;
+        use sui_types::digests::Digest;
+        use sui_types::transaction::TransactionKey;
+
+        fn make_roots(tx_count: usize, height: u64) -> CheckpointRoots {
+            CheckpointRoots {
+                tx_roots: (0..tx_count)
+                    .map(|_| TransactionKey::Digest(TransactionDigest::random()))
+                    .collect(),
+                settlement_root: None,
+                height,
+            }
+        }
+
+        fn make_commit_ref(index: u32) -> CommitRef {
+            CommitRef {
+                index,
+                digest: CommitDigest::MIN,
+            }
+        }
+
+        #[test]
+        fn test_flush_all_checkpoint_roots() {
+            let mut queue = CheckpointQueue::new(0, 0);
+            let roots1 = make_roots(5, 1);
+            let roots2 = make_roots(3, 2);
+
+            queue.push_checkpoint_roots(
+                vec![roots1, roots2],
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+            );
+
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let pending = queue.flush_all_checkpoint_roots(&protocol_config, 1000);
+
+            assert!(!pending.is_empty());
+            assert!(queue.pending_roots.is_empty());
+        }
+
+        #[test]
+        fn test_flush_respects_min_checkpoint_interval() {
+            let mut queue = CheckpointQueue::new(1000, 0);
+            let roots = make_roots(5, 1);
+
+            queue.push_checkpoint_roots(vec![roots], 1000, make_commit_ref(1), Digest::default());
+
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let min_interval = protocol_config
+                .min_checkpoint_interval_ms_as_option()
+                .unwrap_or(200);
+
+            // Timestamp hasn't advanced enough - should not flush
+            let pending = queue.flush_checkpoint_roots(&protocol_config, 1000 + min_interval - 1);
+            assert!(pending.is_empty());
+            assert_eq!(queue.pending_roots.len(), 1);
+
+            // Timestamp has advanced enough - should flush
+            let pending = queue.flush_checkpoint_roots(&protocol_config, 1000 + min_interval);
+            assert_eq!(pending.len(), 1);
+            assert!(queue.pending_roots.is_empty());
+        }
+
+        #[test]
+        fn test_flush_when_would_exceed_max_transactions() {
+            // Start with last_built_timestamp = 1000 so time-based condition doesn't trigger
+            let mut queue = CheckpointQueue::new(1000, 0);
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+
+            // Add two roots that together would exceed max_transactions
+            let roots1 = make_roots(max_tx / 2 + 1, 1);
+            let roots2 = make_roots(max_tx / 2 + 1, 2);
+
+            queue.push_checkpoint_roots(vec![roots1], 1000, make_commit_ref(1), Digest::default());
+            queue.push_checkpoint_roots(vec![roots2], 1000, make_commit_ref(2), Digest::default());
+
+            // Should flush the first one since batching would exceed max
+            let pending = queue.flush_checkpoint_roots(&protocol_config, 1000);
+            assert_eq!(pending.len(), 1);
+            assert_eq!(queue.pending_roots.len(), 1);
+        }
+
+        #[test]
+        fn test_multiple_roots_merged_into_one_checkpoint() {
+            let mut queue = CheckpointQueue::new(0, 0);
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+
+            // Add small roots that can be merged
+            let roots1 = make_roots(10, 1);
+            let roots2 = make_roots(10, 2);
+            let roots3 = make_roots(10, 3);
+
+            queue.push_checkpoint_roots(vec![roots1], 1000, make_commit_ref(1), Digest::default());
+            queue.push_checkpoint_roots(vec![roots2], 1000, make_commit_ref(2), Digest::default());
+            queue.push_checkpoint_roots(vec![roots3], 1000, make_commit_ref(3), Digest::default());
+
+            // Flush all - should merge into one checkpoint if under max
+            let pending = queue.flush_all_checkpoint_roots(&protocol_config, 1000);
+
+            // All roots should be in one checkpoint (30 txs < max_transactions_per_checkpoint)
+            assert_eq!(pending.len(), 1);
+            assert_eq!(pending[0].roots.len(), 3);
+        }
+
+        #[test]
+        fn test_large_roots_split_into_multiple_checkpoints() {
+            let mut queue = CheckpointQueue::new(0, 0);
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+
+            // Add roots that exceed max per checkpoint
+            let roots1 = make_roots(max_tx / 2, 1);
+            let roots2 = make_roots(max_tx / 2, 2);
+            let roots3 = make_roots(max_tx / 2, 3);
+
+            queue.push_checkpoint_roots(vec![roots1], 1000, make_commit_ref(1), Digest::default());
+            queue.push_checkpoint_roots(vec![roots2], 1000, make_commit_ref(2), Digest::default());
+            queue.push_checkpoint_roots(vec![roots3], 1000, make_commit_ref(3), Digest::default());
+
+            let pending = queue.flush_all_checkpoint_roots(&protocol_config, 1000);
+
+            // Should split into multiple checkpoints
+            assert!(pending.len() >= 2);
+            for p in &pending {
+                let tx_count: usize = p.roots.iter().map(|r| r.tx_roots.len()).sum();
+                assert!(tx_count <= max_tx);
+            }
+        }
+
+        #[test]
+        fn test_checkpoint_uses_last_roots_height() {
+            let mut queue = CheckpointQueue::new(0, 0);
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+
+            let roots1 = make_roots(10, 100);
+            let roots2 = make_roots(10, 200);
+
+            queue.push_checkpoint_roots(vec![roots1], 1000, make_commit_ref(1), Digest::default());
+            queue.push_checkpoint_roots(vec![roots2], 1000, make_commit_ref(2), Digest::default());
+
+            let pending = queue.flush_all_checkpoint_roots(&protocol_config, 1000);
+
+            assert_eq!(pending.len(), 1);
+            // Checkpoint height should be from the last root
+            assert_eq!(pending[0].details.checkpoint_height, 200);
+        }
+
+        #[test]
+        fn test_last_built_timestamp_updated_on_flush() {
+            let mut queue = CheckpointQueue::new(0, 0);
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+
+            let roots = make_roots(10, 1);
+            queue.push_checkpoint_roots(vec![roots], 5000, make_commit_ref(1), Digest::default());
+
+            assert_eq!(queue.last_built_timestamp, 0);
+
+            let _ = queue.flush_all_checkpoint_roots(&protocol_config, 5000);
+
+            assert_eq!(queue.last_built_timestamp, 5000);
+        }
     }
 }

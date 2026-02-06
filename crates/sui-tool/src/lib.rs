@@ -21,8 +21,7 @@ use sui_core::execution_cache::build_execution_cache_from_env;
 use sui_data_ingestion_core::{CheckpointReader, create_remote_store_client, end_of_epoch_data};
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
-use sui_sdk::SuiClient;
-use sui_sdk::SuiClientBuilder;
+use sui_rpc_api::Client;
 use sui_storage::object_store::http::HttpDownloaderBuilder;
 use sui_storage::object_store::util::MANIFEST_FILENAME;
 use sui_storage::object_store::util::Manifest;
@@ -55,6 +54,7 @@ use sui_snapshot::reader::StateSnapshotReaderV1;
 use sui_snapshot::setup_db_state;
 use sui_storage::object_store::ObjectStoreGetExt;
 use sui_storage::object_store::util::{copy_file, exists, get_path};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
@@ -71,6 +71,37 @@ pub mod commands;
 #[cfg(not(tidehunter))]
 pub mod db_tool;
 mod formal_snapshot_util;
+
+async fn fetch_checkpoint_with_retry(
+    client: &dyn object_store::ObjectStore,
+    checkpoint_number: u64,
+    max_retries: usize,
+) -> Result<(Arc<CheckpointData>, usize)> {
+    let mut attempts = 0;
+    let max_attempts = max_retries + 1;
+    loop {
+        attempts += 1;
+        match CheckpointReader::fetch_from_object_store(client, checkpoint_number).await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                if attempts >= max_attempts {
+                    return Err(anyhow!(
+                        "Failed to fetch checkpoint {} after {} attempts: {}",
+                        checkpoint_number,
+                        attempts,
+                        e
+                    ));
+                }
+                let backoff_ms = 1000 * attempts as u64;
+                warn!(
+                    "Failed to fetch checkpoint {} (attempt {}/{}): {}, retrying in {}ms",
+                    checkpoint_number, attempts, max_attempts, e, backoff_ms
+                );
+                tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+            }
+        }
+    }
+}
 
 #[derive(
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
@@ -92,15 +123,14 @@ pub enum SnapshotVerifyMode {
 
 // This functions requires at least one of genesis or fullnode_rpc to be `Some`.
 async fn make_clients(
-    sui_client: &Arc<SuiClient>,
+    sui_client: &Client,
 ) -> Result<BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>> {
     let mut net_config = default_mysten_network_config();
     net_config.connect_timeout = Some(Duration::from_secs(5));
     let mut authority_clients = BTreeMap::new();
 
     let active_validators = sui_client
-        .governance_api()
-        .get_latest_sui_system_state()
+        .get_system_state_summary(None)
         .await?
         .active_validators;
 
@@ -374,7 +404,7 @@ pub async fn get_transaction_block(
     show_input_tx: bool,
     fullnode_rpc: String,
 ) -> Result<String> {
-    let sui_client = Arc::new(SuiClientBuilder::default().build(fullnode_rpc).await?);
+    let sui_client = Client::new(fullnode_rpc)?;
     let clients = make_clients(&sui_client).await?;
     let timer = Instant::now();
     let responses = join_all(clients.iter().map(|(name, (address, client))| async {
@@ -815,7 +845,7 @@ pub async fn download_formal_snapshot(
         None,
     ));
     let genesis = Genesis::load(genesis).unwrap();
-    let genesis_committee = genesis.committee()?;
+    let genesis_committee = genesis.committee();
     let committee_store = Arc::new(CommitteeStore::new(
         path.join("epochs"),
         &genesis_committee,
@@ -859,6 +889,7 @@ pub async fn download_formal_snapshot(
                 num_parallel_downloads,
                 m,
                 end_of_epoch_checkpoint_seq_nums,
+                max_retries,
             )
             .await
         })
@@ -907,10 +938,31 @@ pub async fn download_formal_snapshot(
         num_live_objects += num_objects;
         root_global_state_hash.union(&partial_hash);
     }
-    summaries_handle
-        .await
-        .expect("Task join failed")
-        .expect("Summaries task failed");
+    tokio::pin!(summaries_handle);
+    tokio::pin!(snapshot_handle);
+    tokio::pin!(backfill_handle);
+
+    let mut summaries_done = false;
+    let mut snapshot_done = false;
+    let mut backfill_done = false;
+
+    // Wait for summaries (required for verification) while monitoring other tasks for early failures
+    while !summaries_done {
+        tokio::select! {
+            result = &mut summaries_handle, if !summaries_done => {
+                summaries_done = true;
+                result.expect("Summaries task panicked")?;
+            }
+            result = &mut backfill_handle, if !backfill_done => {
+                backfill_done = true;
+                result.expect("Backfill task panicked")?;
+            }
+            result = &mut snapshot_handle, if !snapshot_done => {
+                snapshot_done = true;
+                result.expect("Snapshot task panicked")?;
+            }
+        }
+    }
 
     let last_checkpoint = checkpoint_store
         .get_highest_verified_checkpoint()?
@@ -967,10 +1019,19 @@ pub async fn download_formal_snapshot(
         )?;
     }
 
-    snapshot_handle
-        .await
-        .expect("Task join failed")
-        .expect("Snapshot restore task failed");
+    // Wait for remaining tasks to complete
+    while !snapshot_done || !backfill_done {
+        tokio::select! {
+            result = &mut backfill_handle, if !backfill_done => {
+                backfill_done = true;
+                result.expect("Backfill task panicked")?;
+            }
+            result = &mut snapshot_handle, if !snapshot_done => {
+                snapshot_done = true;
+                result.expect("Snapshot task panicked")?;
+            }
+        }
+    }
 
     // TODO we should ensure this map is being updated for all end of epoch
     // checkpoints during summary sync. This happens in `insert_{verified|certified}_checkpoint`
@@ -989,9 +1050,6 @@ pub async fn download_formal_snapshot(
         m.clone(),
     )
     .await?;
-
-    // Wait for backfill to complete
-    backfill_handle.await.expect("Task join failed")?;
 
     let new_path = path.parent().unwrap().join("live");
     if new_path.exists() {
@@ -1014,6 +1072,7 @@ async fn backfill_epoch_transaction_digests(
     concurrency: usize,
     m: MultiProgress,
     end_of_epoch_checkpoint_seq_nums: Vec<u64>,
+    max_retries: usize,
 ) -> Result<()> {
     if epoch == 0 {
         return Ok(());
@@ -1083,13 +1142,7 @@ async fn backfill_epoch_transaction_digests(
     futures::stream::iter(checkpoints_to_fetch)
         .map(|sq| {
             let client = client.clone();
-            async move {
-                let res = CheckpointReader::fetch_from_object_store(&**client, sq).await;
-                if let Err(ref e) = res {
-                    warn!("Failed to fetch checkpoint {}: {:?}", sq, e);
-                }
-                res
-            }
+            async move { fetch_checkpoint_with_retry(&**client, sq, max_retries).await }
         })
         .buffer_unordered(concurrency)
         .try_for_each(|checkpoint| {

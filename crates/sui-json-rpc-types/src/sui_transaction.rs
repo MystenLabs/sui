@@ -45,7 +45,6 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
 use sui_types::sui_serde::Readable;
@@ -58,6 +57,7 @@ use sui_types::transaction::{
     SenderSignedData, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
     WithdrawalTypeArg,
 };
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::{authenticator_state::ActiveJwk, transaction::SharedObjectMutability};
 
 use crate::balance_changes::BalanceChange;
@@ -622,6 +622,9 @@ impl SuiTransactionBlockKind {
                             }
                             EndOfEpochTransactionKind::AddressAliasStateCreate => {
                                 SuiEndOfEpochTransactionKind::AddressAliasStateCreate
+                            }
+                            EndOfEpochTransactionKind::WriteAccumulatorStorageCost(_) => {
+                                SuiEndOfEpochTransactionKind::WriteAccumulatorStorageCost
                             }
                         })
                         .collect(),
@@ -1791,6 +1794,7 @@ pub enum SuiEndOfEpochTransactionKind {
     CoinRegistryCreate,
     DisplayRegistryCreate,
     AddressAliasStateCreate,
+    WriteAccumulatorStorageCost,
 }
 
 #[serde_as]
@@ -2387,12 +2391,11 @@ impl SuiCallArg {
             }
             CallArg::FundsWithdrawal(arg) => SuiCallArg::FundsWithdrawal(SuiFundsWithdrawalArg {
                 reservation: match arg.reservation {
-                    Reservation::EntireBalance => SuiReservation::EntireBalance,
                     Reservation::MaxAmountU64(amount) => SuiReservation::MaxAmountU64(amount),
                 },
                 type_arg: match arg.type_arg {
                     WithdrawalTypeArg::Balance(type_input) => {
-                        SuiWithdrawalTypeArg::Balance(type_input.to_type_tag()?.into())
+                        SuiWithdrawalTypeArg::Balance(type_input.into())
                     }
                 },
                 withdraw_from: match arg.withdraw_from {
@@ -2478,7 +2481,6 @@ pub enum SuiObjectArg {
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum SuiReservation {
-    EntireBalance,
     MaxAmountU64(
         #[schemars(with = "BigInt<u64>")]
         #[serde_as(as = "BigInt<u64>")]

@@ -31,6 +31,7 @@ jsonrpsee = { workspace = true, features = ["macros", "server"] }
 pin-project-lite.workspace = true
 pin-project.workspace = true
 prometheus.workspace = true
+rustls.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

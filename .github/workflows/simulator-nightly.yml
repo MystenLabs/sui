@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Install Teleport
-        uses: teleport-actions/setup@176c25dfcd19cd31a252f275d579822b243e7b9c # pin@v1.0.6
+        uses: teleport-actions/setup@a820ebbf1bc1a496efca348ad21042d6e8df73a6 # pin@v1.1.0
         with:
           version: 18.2.0
       - name: Authorize against Teleport
@@ -84,6 +84,7 @@ jobs:
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
 
       - name: Set protocol config override based on trigger
+        id: protocol
         # This step determines which protocol config override to use.
         # It checks if the trigger was a manual dispatch or a specific schedule.
         run: |
@@ -109,7 +110,23 @@ jobs:
       - name: Run simtest
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} ./scripts/simtest/simtest-run.sh"
-  
+
+      - name: Collect failing tests
+        id: failures
+        if: failure()
+        run: |
+          LOG_DIR=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -td ~/simtest_logs/*/ | head -1")
+          FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sed 's/\x1b\[[0-9;]*m//g' ${LOG_DIR}* 2>/dev/null | grep -E '^\s*(FAIL|TIMEOUT)\s+\[' | sed -E 's/^\s*(FAIL|TIMEOUT)\s+\[[^]]+\]\s+//' | sort -u | head -20")
+          echo "failed_tests<<EOF" >> $GITHUB_OUTPUT
+          echo "$FAILED_TESTS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "log_dir=$LOG_DIR" >> $GITHUB_OUTPUT
+
+    outputs:
+      failed_tests: ${{ steps.failures.outputs.failed_tests }}
+      log_dir: ${{ steps.failures.outputs.log_dir }}
+      protocol_message: ${{ steps.protocol.outputs.protocol_message }}
+
   notify:
     name: Notify
     needs: [simtest]
@@ -119,65 +136,20 @@ jobs:
     steps:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
-    - name: Checkout sui repo main branch
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-    
-    - name: Get sui commit
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        export sui_sha=$(git rev-parse HEAD)
-        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
-
-    - name: Get link to logs
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
-        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
-
-    - name: Get current oncall
-      run: |
-        export current_oncall=$(curl -s --request GET \
-          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
-          --header 'Accept: application/json' \
-          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
-          --header 'Content-Type: application/json' \
-          | jq '.oncalls[].user.summary' | tr -d '"')
-        echo "current_oncall=$(echo ${current_oncall})" >> $GITHUB_ENV
-
-        export oncall_name=$(curl -s --request GET \
-          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
-          --header 'Accept: application/json' \
-          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
-          --header 'Content-Type: application/json' \
-          | jq '.oncalls[].escalation_policy.summary' | tr -d '"')
-        echo "oncall_name=$(echo ${oncall_name})" >> $GITHUB_ENV
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
+    - name: Dispatch to sui-operations for notification
+      uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-west-2
-
-    - name: Get slack id for the oncall
-      run: |
-        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ env.current_oncall }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
-        echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV        
-
-    - name: Post to slack
-      uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        SUI_SHA: ${{ env.sui_sha }}
-        GH_JOB_LINK: ${{ env.gh_job_link }}
-        SLACK_ID: ${{ env.slack_id }}
-        ONCALL_NAME: ${{ env.oncall_name }}
-      with:
-        channel-id: 'simtest-nightly'
-        slack-message: |
-          :sui::error-cross: *${{ github.workflow }}* ${{ needs.simtest.outputs.protocol_message }}workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
-          Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
-          Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
-          <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results
+        token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+        repository: MystenLabs/sui-operations
+        event-type: simtest-failure
+        client-payload: |-
+          {
+            "commit_sha": "${{ github.sha }}",
+            "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "run_id": "${{ github.run_id }}",
+            "workflow_name": "${{ github.workflow }}",
+            "workflow_conclusion": "${{ env.WORKFLOW_CONCLUSION }}",
+            "protocol_message": "${{ needs.simtest.outputs.protocol_message }}",
+            "failed_tests": ${{ toJSON(needs.simtest.outputs.failed_tests) }},
+            "log_dir": "${{ needs.simtest.outputs.log_dir }}"
+          }
