@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 110;
+const MAX_PROTOCOL_VERSION: u64 = 111;
 
 // Record history of protocol version allocations here:
 //
@@ -295,6 +295,8 @@ const MAX_PROTOCOL_VERSION: u64 = 110;
 //              function on mainnet.
 //              split_checkpoints_in_consensus_handler in devnet
 //              Enable additional validation on zkLogin public identifier.
+// Version 111: Enable Ristretto255 in devnet.
+//              Enable Sha3-512 in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4590,7 +4592,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
-
+                }
+                111 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
                         cfg.feature_flags.enable_group_ops_native_functions = true;
