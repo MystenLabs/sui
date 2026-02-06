@@ -48,11 +48,11 @@ use std::{
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
+    Flags, PreCompiledProgramInfo,
     editions::Edition,
     expansion::ast as E,
     parser::{ast as P, syntax::parse_file_string},
     shared::{CompilationEnv, NamedAddressMap, PackageConfig},
-    Flags, PreCompiledProgramInfo,
 };
 use move_ir_types::location::sp;
 use move_symbol_pool::Symbol;
