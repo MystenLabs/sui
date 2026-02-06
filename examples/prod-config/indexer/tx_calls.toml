@@ -4,4 +4,4 @@ write-concurrency = 10
 [pruner]
 retention = 31104000
 
-[pipeline.tx_calls]
+[pipeline.tx_calls.pruner]
