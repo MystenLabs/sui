@@ -1,16 +1,19 @@
 # Topology Crawler Design (Planning)
 
 ## Overview
-The topology crawler discovers the public Sui network graph by walking the
-discovery protocol starting from the configured seed peers. It periodically
-generates a JSON snapshot of nodes and edges that a simple web UI can render.
+The topology crawler is a Rust binary that discovers the public Sui network
+graph by walking the discovery protocol starting from hardcoded seed peers. It
+outputs a JSON snapshot to stdout, which a cron job can capture and publish for
+the web UI.
 
-The crawler lives alongside the discovery protocol in the `sui-network` crate
-and reuses the discovery RPC client to query peers.
+The crawler lives alongside the discovery protocol in the `sui-network` crate,
+under `crates/sui-network/topology-crawler/`, and reuses the discovery RPC
+client to query peers.
 
 ## Goals
 - Traverse the reachable public peer graph starting from seed peers.
 - Emit a compact JSON snapshot of nodes and edges with public metadata.
+- Provide a CLI for `--network (mainnet|testnet)`.
 - Run as a cron job every 60 minutes (or on-demand) and overwrite the snapshot.
 
 ## Non-goals
@@ -20,10 +23,11 @@ and reuses the discovery RPC client to query peers.
 
 ## Inputs and Outputs
 ### Inputs
-- Seed peers from the full node config (`p2p-config.seed-peers`).
+- `--network (mainnet|testnet)` CLI argument.
+- Hardcoded seed peers from `docs/content/guides/operator/sui-full-node.mdx`.
 - Discovery RPC `get_known_peers_v2` responses.
 
-### Output (JSON snapshot)
+### Output (JSON snapshot to stdout)
 ```json
 {
   "generated_at_ms": 1730000000000,
@@ -50,7 +54,7 @@ and reuses the discovery RPC client to query peers.
    - Record the peer's `NodeInfo` and edges to returned peers.
    - Enqueue newly discovered peers (dedupe by `peer_id`).
 3. Stop when the queue is empty or after a max budget (time or peer count).
-4. Write the JSON snapshot atomically (write temp file, rename).
+4. Write the JSON snapshot to stdout.
 
 ## Public Metadata
 `NodeInfo` provides:
