@@ -41,7 +41,7 @@ use sui_types::storage::error::Error as StorageError;
 use tracing::{debug, info, instrument, trace};
 use typed_store::DBMapUtils;
 use typed_store::rocks::{
-    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
+    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, RawDBBatch, default_db_options,
     read_size_from_env,
 };
 use typed_store::traits::Map;
@@ -625,7 +625,7 @@ impl IndexStore {
     pub fn index_coin(
         &self,
         digest: &TransactionDigest,
-        batch: &mut DBBatch,
+        batch: &mut RawDBBatch,
         object_index_changes: &ObjectIndexChanges,
         tx_coins: Option<TxCoins>,
     ) -> SuiResult<IndexStoreCacheUpdates> {
@@ -769,9 +769,14 @@ impl IndexStore {
         Ok(cache_updates)
     }
 
+    pub fn allocate_sequence_number(&self) -> u64 {
+        self.next_sequence_number.fetch_add(1, Ordering::SeqCst)
+    }
+
     #[instrument(skip_all)]
     pub fn index_tx(
         &self,
+        sequence: u64,
         sender: SuiAddress,
         active_inputs: impl Iterator<Item = ObjectID>,
         mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
@@ -782,9 +787,8 @@ impl IndexStore {
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
         accumulator_events: Vec<AccumulatorEvent>,
-    ) -> SuiResult<u64> {
-        let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
-        let mut batch = self.tables.transactions_from_addr.batch();
+    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdates)> {
+        let mut batch = RawDBBatch::new();
 
         batch.insert_batch(
             &self.tables.transaction_order,
@@ -838,7 +842,6 @@ impl IndexStore {
         // update address balances index
         let address_balance_updates = accumulator_events.into_iter().filter_map(|event| {
             let ty = &event.write.address.ty;
-            // Only process events with Balance<T> types
             let coin_type = sui_types::balance::Balance::maybe_get_balance_type_param(ty)?;
             Some(((event.write.address.address, coin_type), ()))
         });
@@ -930,32 +933,40 @@ impl IndexStore {
             }),
         )?;
 
+        Ok((batch, cache_updates))
+    }
+
+    /// Write a combined index batch and apply cache updates.
+    pub fn commit_index_batch(
+        &self,
+        batch: DBBatch,
+        cache_updates: Vec<IndexStoreCacheUpdates>,
+    ) -> SuiResult {
         let invalidate_caches =
             read_size_from_env(ENV_VAR_INVALIDATE_INSTEAD_OF_UPDATE).unwrap_or(0) > 0;
 
         if invalidate_caches {
-            // Invalidate cache before writing to db so we always serve latest values
-            self.invalidate_per_coin_type_cache(
-                cache_updates
-                    .per_coin_type_balance_changes
-                    .iter()
-                    .map(|x| x.0.clone()),
-            )?;
-            self.invalidate_all_balance_cache(
-                cache_updates.all_balance_changes.iter().map(|x| x.0),
-            )?;
+            for cu in &cache_updates {
+                self.invalidate_per_coin_type_cache(
+                    cu.per_coin_type_balance_changes.iter().map(|x| x.0.clone()),
+                )?;
+                self.invalidate_all_balance_cache(cu.all_balance_changes.iter().map(|x| x.0))?;
+            }
         }
 
         batch.write()?;
 
         if !invalidate_caches {
-            // We cannot update the cache before updating the db or else on failing to write to db
-            // we will update the cache twice). However, this only means cache is eventually consistent with
-            // the db (within a very short delay)
-            self.update_per_coin_type_cache(cache_updates.per_coin_type_balance_changes)?;
-            self.update_all_balance_cache(cache_updates.all_balance_changes)?;
+            for cu in cache_updates {
+                self.update_per_coin_type_cache(cu.per_coin_type_balance_changes)?;
+                self.update_all_balance_cache(cu.all_balance_changes)?;
+            }
         }
-        Ok(sequence)
+        Ok(())
+    }
+
+    pub fn new_db_batch(&self) -> DBBatch {
+        self.tables.transactions_from_addr.batch()
     }
 
     pub fn next_sequence_number(&self) -> TxSequenceNumber {
