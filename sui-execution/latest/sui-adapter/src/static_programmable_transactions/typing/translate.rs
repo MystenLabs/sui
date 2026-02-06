@@ -80,7 +80,7 @@ impl Context {
         // - intern the bytes
         // - build maps for object, pure, and receiving inputs
         for (i, (arg, ty)) in linputs.into_iter().enumerate() {
-            let idx = T::InputIndex(i as u16);
+            let idx = T::InputIndex(checked_as!(i, u16)?);
             let kind = match (arg, ty) {
                 (L::InputArg::Pure(bytes), L::InputType::Bytes) => {
                     let (byte_index, _) = context.bytes.insert_full(bytes);
@@ -128,7 +128,7 @@ impl Context {
             // iterate to check the correctness of bytes interning
             for (i, arg) in cloned_inputs.iter().enumerate() {
                 if let L::InputArg::Pure(bytes) = &arg {
-                    let idx = T::InputIndex(i as u16);
+                    let idx = T::InputIndex(checked_as!(i, u16)?);
                     let Some(byte_index) = context.bytes_idx_remapping.get(&idx) else {
                         invariant_violation!("Unbound pure input {}", idx.0);
                     };
@@ -221,13 +221,13 @@ impl Context {
                     let Some(index) = self.objects.get_index_of(&i) else {
                         invariant_violation!("Unbound object input {}", i.0)
                     };
-                    T::Location::ObjectInput(index as u16)
+                    T::Location::ObjectInput(checked_as!(index, u16)?)
                 }
                 InputKind::Withdrawal => {
                     let Some(withdrawal_index) = self.withdrawals.get_index_of(&i) else {
                         invariant_violation!("Unbound withdrawal input {}", i.0)
                     };
-                    T::Location::WithdrawalInput(withdrawal_index as u16)
+                    T::Location::WithdrawalInput(checked_as!(withdrawal_index, u16)?)
                 }
                 InputKind::Pure | InputKind::Receiving => return Ok(None),
             },
@@ -253,13 +253,13 @@ impl Context {
                     let Some(index) = self.objects.get_index_of(&i) else {
                         invariant_violation!("Unbound object input {}", i.0)
                     };
-                    T::Location::ObjectInput(index as u16)
+                    T::Location::ObjectInput(checked_as!(index, u16)?)
                 }
                 InputKind::Withdrawal => {
                     let Some(index) = self.withdrawals.get_index_of(&i) else {
                         invariant_violation!("Unbound withdrawal input {}", i.0)
                     };
-                    T::Location::WithdrawalInput(index as u16)
+                    T::Location::WithdrawalInput(checked_as!(index, u16)?)
                 }
                 InputKind::Pure => {
                     let ty = match expected_ty {
@@ -280,7 +280,7 @@ impl Context {
                         self.pure.insert(k.clone(), pure);
                     }
                     let byte_index = self.pure.get_index_of(&k).unwrap();
-                    return Ok((T::Location::PureInput(byte_index as u16), ty));
+                    return Ok((T::Location::PureInput(checked_as!(byte_index, u16)?), ty));
                 }
                 InputKind::Receiving => {
                     let ty = match expected_ty {
@@ -301,7 +301,7 @@ impl Context {
                         self.receiving.insert(k.clone(), receiving);
                     }
                     let byte_index = self.receiving.get_index_of(&k).unwrap();
-                    return Ok((T::Location::ReceivingInput(byte_index as u16), ty));
+                    return Ok((T::Location::ReceivingInput(checked_as!(byte_index, u16)?), ty));
                 }
             },
         };
@@ -330,7 +330,7 @@ pub fn transaction<Mode: ExecutionMode>(
         &mut commands,
     )?;
     for (i, c) in commands.into_iter().enumerate() {
-        let idx = i as u16;
+        let idx = checked_as!(i, u16)?;
         context.current_command = idx;
         let (c_, tys) =
             command::<Mode>(env, &mut context, c).map_err(|e| e.with_command_index(i))?;
@@ -348,7 +348,7 @@ pub fn transaction<Mode: ExecutionMode>(
     // mark the last usage of references as Move instead of Copy
     scope_references::transaction(&mut ast);
     // mark unused results to be dropped
-    unused_results::transaction(&mut ast);
+    unused_results::transaction(&mut ast)?;
     // track shared object IDs
     consumed_shared_objects::transaction(&mut ast)?;
     Ok(ast)
@@ -576,7 +576,7 @@ fn move_call_arguments(
                     };
                     // TODO this might overlap or be  out of bounds of the original PTB arguments...
                     // what do we do here?
-                    let idx = param_idx as u16;
+                    let idx = checked_as!(param_idx, u16)?;
                     let arg__ = T::Argument__::Borrow(is_mut, T::Location::TxContext);
                     let ty = Type::Reference(is_mut, Rc::new(env.tx_context_type()?));
                     sp(idx, (arg__, ty))
@@ -703,7 +703,7 @@ fn argument(
     let arg__ = argument_(env, context, command_arg_idx, location, &expected_ty)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
     let arg_ = (arg__, expected_ty);
-    Ok(sp(command_arg_idx as u16, arg_))
+    Ok(sp(checked_as!(command_arg_idx, u16)?, arg_))
 }
 
 fn argument_(
@@ -716,7 +716,7 @@ fn argument_(
     let current_command = context.current_command;
     let bytes_constraint = BytesConstraint {
         command: current_command,
-        argument: command_arg_idx as u16,
+        argument: checked_as!(command_arg_idx, u16)?,
     };
     let (location, actual_ty) =
         context.resolve_location(env, location, expected_ty, bytes_constraint)?;
@@ -810,7 +810,7 @@ fn constrained_argument(
         err_case,
     )
     .map_err(|e| e.into_execution_error(command_arg_idx))?;
-    Ok(sp(command_arg_idx as u16, arg_))
+    Ok(sp(checked_as!(command_arg_idx, u16)?, arg_))
 }
 
 fn constrained_argument_(
@@ -859,7 +859,7 @@ fn coin_mut_ref_argument(
 ) -> Result<T::Argument, ExecutionError> {
     let arg_ = coin_mut_ref_argument_(env, context, command_arg_idx, location)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
-    Ok(sp(command_arg_idx as u16, arg_))
+    Ok(sp(checked_as!(command_arg_idx, u16)?, arg_))
 }
 
 fn coin_mut_ref_argument_(
@@ -916,16 +916,17 @@ fn determine_withdrawal_compatibility_inputs(
             if let L::InputArg::FundsWithdrawal(withdrawal) = input_arg
                 && withdrawal.from_compatibility_object
             {
-                Some((i as u16, withdrawal.owner))
+                Some((i, withdrawal.owner))
             } else {
                 None
             }
         })
-        .collect();
+        .map(|(i, owner)| Ok((checked_as!(i, u16)?, owner)))
+        .collect::<Result<_, ExecutionError>>()?;
     withdrawal_compatibility_owners
         .into_iter()
         .map(|(i, owner)| {
-            let owner_idx = inputs.len() as u16;
+            let owner_idx = checked_as!(inputs.len(), u16)?;
             let bytes: Vec<u8> = bcs::to_bytes(&owner).map_err(|_| {
                 make_invariant_violation!(
                     "Failed to serialize owner address for withdrawal compatibility input",
@@ -964,7 +965,7 @@ fn withdrawal_compatibility_conversion(
         let result_idx = convert_withdrawal_to_coin(env, context, input, owner_idx)?;
         compatibility_remap.remap.insert(input, result_idx);
     }
-    compatibility_remap.lift = context.commands.len() as u16;
+    compatibility_remap.lift = checked_as!(context.commands.len(), u16)?;
     lift_result_indices(&compatibility_remap, commands)
 }
 
@@ -1024,7 +1025,7 @@ fn convert_withdrawal_to_coin(
         drop_values: vec![],
         consumed_shared_objects: vec![],
     };
-    let conversion_idx = context.commands.len() as u16;
+    let conversion_idx = checked_as!(context.commands.len(), u16)?;
     context.push_result(conversion_command_)?;
     // manage metadata
     context.withdrawal_compatibility_conversions.insert(
@@ -1185,13 +1186,14 @@ mod scope_references {
 
 mod unused_results {
     use indexmap::IndexSet;
+    use sui_types::error::ExecutionError;
 
     use crate::{sp, static_programmable_transactions::typing::ast as T};
 
     /// Finds what `Result` indexes are never used in the transaction.
     /// For each command, marks the indexes of result values with `drop` that are never referred to
     /// via `Result`.
-    pub fn transaction(ast: &mut T::Transaction) {
+    pub fn transaction(ast: &mut T::Transaction) -> Result<(), ExecutionError> {
         // Collect all used result locations (i, j) across all commands
         let mut used: IndexSet<(u16, u16)> = IndexSet::new();
         for c in &ast.commands {
@@ -1201,15 +1203,17 @@ mod unused_results {
         // For each command, mark unused result indexes with `drop`
         for (i, sp!(_, c)) in ast.commands.iter_mut().enumerate() {
             debug_assert!(c.drop_values.is_empty());
-            let i = i as u16;
+            let i = checked_as!(i, u16)?;
             c.drop_values = c
                 .result_type
                 .iter()
                 .enumerate()
-                .map(|(j, ty)| (j as u16, ty))
-                .map(|(j, ty)| ty.abilities().has_drop() && !used.contains(&(i, j)))
-                .collect();
+                .map(|(j, ty)| {
+                    Ok(ty.abilities().has_drop() && !used.contains(&(i, checked_as!(j, u16)?)))
+                })
+                .collect::<Result<_, ExecutionError>>()?;
         }
+        Ok(())
     }
 
     fn command(used: &mut IndexSet<(u16, u16)>, sp!(_, c): &T::Command) {

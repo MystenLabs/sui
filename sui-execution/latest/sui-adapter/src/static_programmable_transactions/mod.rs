@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(clippy::arithmetic_side_effects)]
+// #![deny(clippy::indexing_slicing)]
+#![deny(clippy::cast_possible_truncation)]
 
 use crate::{
     data_store::cached_package_store::CachedPackageStore,

@@ -79,6 +79,23 @@ macro_rules! assert_invariant {
     }};
 }
 
+/// A helper macro for performing a checked cast from one type to another, returning a
+/// ExecutionError invariant violation if the cast fails.
+#[macro_export]
+macro_rules! checked_as {
+    ($value:expr, $target_type:ty) => {{
+        let v = $value;
+        <$target_type>::try_from(v).map_err(|e| {
+            $crate::make_invariant_violation!(
+                "Value {} cannot be safely cast to {}: {:?}",
+                v,
+                stringify!($target_type),
+                e
+            )
+        })
+    }};
+}
+
 #[derive(
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
 )]

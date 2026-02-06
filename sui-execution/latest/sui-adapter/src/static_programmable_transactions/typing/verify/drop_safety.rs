@@ -147,7 +147,7 @@ mod refine {
             let Some(cur_command) = ast.commands.len().checked_sub(1) else {
                 invariant_violation!("cannot be zero commands with a conversion")
             };
-            let cur_command = cur_command as u16;
+            let cur_command = checked_as!(cur_command, u16)?;
             let T::WithdrawalCompatibilityConversion {
                 owner,
                 conversion_result,
@@ -413,8 +413,8 @@ mod verify {
             };
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::UnusedValueWithoutDrop {
-                    result_idx: i as u16,
-                    secondary_idx: j as u16,
+                    result_idx: checked_as!(i, u16)?,
+                    secondary_idx: checked_as!(j, u16)?,
                 },
                 msg,
             ));

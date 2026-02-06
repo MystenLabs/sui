@@ -323,7 +323,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .into_iter()
             .enumerate()
             .map(|(i, (_, m))| {
-                let v_opt = object_inputs.local(i as u16)?.move_if_valid()?;
+                let v_opt = object_inputs.local(checked_as!(i, u16)?)?.move_if_valid()?;
                 Ok((m, v_opt))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
@@ -913,7 +913,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             self.take_user_events(
                 storage_id,
                 fdef_idx,
-                fdef.code.as_ref().map(|c| c.code.len() as u16).unwrap_or(0),
+                fdef.code.as_ref().map(|c| checked_as!(c.code.len(), u16)).transpose()?.unwrap_or(0),
                 linkage,
             )?;
             assert_invariant!(
