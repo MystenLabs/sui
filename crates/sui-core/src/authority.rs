@@ -3849,6 +3849,16 @@ impl AuthorityState {
         &self.pending_post_processing
     }
 
+    pub async fn await_post_processing(&self, tx_digest: &TransactionDigest) {
+        if let Some((_, rx)) = self.pending_post_processing.remove(tx_digest) {
+            // Indicates tx was executed and digest was placed into pending_post_processing map.
+            let _ = rx.await;
+        } else {
+            // Indicates that either tx was already persisted (and no post-processing was needed)
+            // or post-processing was already completed.
+        }
+    }
+
     pub fn get_reconfig_api(&self) -> &Arc<dyn ExecutionCacheReconfigAPI> {
         &self.execution_cache_trait_pointers.reconfig_api
     }

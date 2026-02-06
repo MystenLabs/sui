@@ -791,15 +791,16 @@ where
             .with_label_values(&[tx_type.as_str()])
             .start_timer();
         debug!("Waiting for finalized tx to be executed locally.");
-        match timeout(
-            LOCAL_EXECUTION_TIMEOUT,
+        match timeout(LOCAL_EXECUTION_TIMEOUT, async move {
             validator_state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_digests(
                     "TransactionOrchestrator::notify_read_wait_for_local_execution",
                     &[tx_digest],
-                ),
-        )
+                )
+                .await;
+            validator_state.await_post_processing(&tx_digest).await;
+        })
         .instrument(error_span!(
             "transaction_orchestrator::local_execution",
             ?tx_digest
