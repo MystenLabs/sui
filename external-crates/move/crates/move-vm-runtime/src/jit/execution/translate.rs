@@ -7,7 +7,7 @@ use crate::{
         arena::{Arena, ArenaBox, ArenaVec},
         identifier_interner::{IdentifierInterner, IdentifierKey},
     },
-    dbg_println,
+    checked_as, dbg_println,
     execution::{
         dispatch_tables::{DefinitionMap, IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::Value,
@@ -680,7 +680,7 @@ fn enums(
 
             let type_parameters = context.arena_vec(enum_handle.type_parameters.iter().cloned())?;
 
-            let variant_count = enum_def.variants.len() as u16;
+            let variant_count = checked_as!(enum_def.variants.len(), u16)?;
 
             // Initialize the EnumDef
             let enum_ = EnumDef {
@@ -704,7 +704,7 @@ fn enums(
             .iter()
             .enumerate()
             .map(|(variant_tag, variant_def)| {
-                let variant_tag = variant_tag as u16;
+                let variant_tag = checked_as!(variant_tag, u16)?;
                 let variant_name = context
                     .interner
                     .intern_ident_str(module.identifier_at(variant_def.variant_name));
@@ -768,8 +768,13 @@ fn cache_signatures(
     let signature_map = signatures
         .iter()
         .enumerate()
-        .map(|(ndx, entry)| (SignatureIndex::new(ndx as u16), VMPointer::from_ref(entry)))
-        .collect::<BTreeMap<_, _>>();
+        .map(|(ndx, entry)| {
+            Ok((
+                SignatureIndex::new(checked_as!(ndx, u16)?),
+                VMPointer::from_ref(entry),
+            ))
+        })
+        .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
     Ok((signatures, signature_map))
 }
 
@@ -830,7 +835,7 @@ fn struct_instantiations(
         .map(|struct_inst| {
             let def = struct_inst.def.0 as usize;
             let struct_def = &structs.safe_get(def)?;
-            let field_count = struct_def.fields.len() as u16;
+            let field_count = checked_as!(struct_def.fields.len(), u16)?;
             let instantiation_idx = struct_inst.type_parameters;
             let type_params = signatures
                 .safe_get(instantiation_idx.0 as usize)?
@@ -858,8 +863,14 @@ fn enum_instantiations(
         .map(|enum_inst| {
             let def = enum_inst.def.0 as usize;
             let enum_def = enums.safe_get(def)?;
-            let variant_count_map =
-                context.arena_vec(enum_def.variants.iter().map(|v| v.fields.len() as u16))?;
+            let variant_count_map = context.arena_vec(
+                enum_def
+                    .variants
+                    .iter()
+                    .map(|v| checked_as!(v.fields.len(), u16))
+                    .collect::<PartialVMResult<Vec<_>>>()?
+                    .into_iter(),
+            )?;
             let instantiation_idx = enum_inst.type_parameters;
             let type_params = signatures
                 .safe_get(instantiation_idx.0 as usize)?
@@ -994,7 +1005,7 @@ fn preallocate_functions(
         .iter()
         .enumerate()
         .map(|(ndx, fun)| {
-            let findex = FunctionDefinitionIndex(ndx as TableIndex);
+            let findex = FunctionDefinitionIndex(checked_as!(ndx, TableIndex)?);
             alloc_function(package_context, module_name, module, findex, fun)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;

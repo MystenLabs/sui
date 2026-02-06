@@ -4,6 +4,7 @@
 
 use crate::{
     cache::arena::{Arena, ArenaVec},
+    checked_as,
     jit::execution::ast::Type,
     partial_vm_error,
     shared::{
@@ -1630,9 +1631,9 @@ macro_rules! cast_integer {
             use IntegerValue::*;
 
             match self {
-                U8(x) => Ok(x as $target_type),
+                U8(x) => Ok($crate::checked_as!(x, $target_type)?),
                 U16(x) => {
-                    if x > ($max_value as u16) {
+                    if x > $crate::checked_as!($max_value, u16)? {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u16({}) to {}",
@@ -1640,11 +1641,11 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok(x as $target_type)
+                        Ok($crate::checked_as!(x, $target_type)?)
                     }
                 }
                 U32(x) => {
-                    if x > ($max_value as u32) {
+                    if x > $crate::checked_as!($max_value, u32)? {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u32({}) to {}",
@@ -1652,11 +1653,11 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok(x as $target_type)
+                        Ok($crate::checked_as!(x, $target_type)?)
                     }
                 }
                 U64(x) => {
-                    if x > ($max_value as u64) {
+                    if x > $crate::checked_as!($max_value, u64)? {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u64({}) to {}",
@@ -1664,11 +1665,11 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok(x as $target_type)
+                        Ok($crate::checked_as!(x, $target_type)?)
                     }
                 }
                 U128(x) => {
-                    if x > ($max_value as u128) {
+                    if x > $crate::checked_as!($max_value, u128)? {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u128({}) to {}",
@@ -1676,7 +1677,7 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok(x as $target_type)
+                        Ok($crate::checked_as!(x, $target_type)?)
                     }
                 }
                 U256(x) => {
@@ -1986,7 +1987,7 @@ impl VectorRef {
         let vec = value.vector_mut_ref()?;
         let size = vec.len();
 
-        if size >= (capacity as usize) {
+        if size >= checked_as!(capacity, usize)? {
             return Err(partial_vm_error!(
                 VECTOR_OPERATION_ERROR,
                 "vector size limit is {capacity}",
@@ -2194,7 +2195,7 @@ impl Vector {
                 ));
             }
         };
-        if expected_num as usize == elements.len() {
+        if checked_as!(expected_num, usize)? == elements.len() {
             Ok(elements)
         } else {
             Err(partial_vm_error!(VECTOR_OPERATION_ERROR)
@@ -2694,7 +2695,12 @@ impl serde::Serialize for Value {
                         variant.0.0, VARIANT_TAG_MAX_VALUE
                     )));
                 } else {
-                    variant.0.0 as u8
+                    checked_as!(variant.0.0, u8).map_err(|e| {
+                        serde::ser::Error::custom(format!(
+                            "Variant tag {} cannot be safely cast to u8: {:?}",
+                            variant.0.0, e
+                        ))
+                    })?
                 };
 
                 let mut t = serializer.serialize_tuple(2)?;
@@ -2864,7 +2870,12 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, Fi
                 tag, VARIANT_TAG_MAX_VALUE
             )));
         } else {
-            *tag as u8
+            checked_as!(*tag, u8).map_err(|e| {
+                serde::ser::Error::custom(format!(
+                    "Variant tag {} cannot be safely cast to u8: {:?}",
+                    tag, e
+                ))
+            })?
         };
 
         let fields = &self

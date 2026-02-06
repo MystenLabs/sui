@@ -9,6 +9,7 @@
 
 use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
+    checked_as,
     execution::vm::DatatypeInfo,
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
@@ -523,7 +524,7 @@ impl VMDispatchTables {
                     .iter()
                     .enumerate()
                     .map(|(idx, ty)| {
-                        let var = idx as TypeParameterIndex;
+                        let var = checked_as!(idx, TypeParameterIndex)?;
                         Ok((var, self.calculate_depth_of_type_and_cache(ty)?))
                     })
                     .collect::<PartialVMResult<BTreeMap<_, _>>>()?;

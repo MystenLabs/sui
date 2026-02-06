@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    jit::optimization::ast, shared::SafeIndex as _, validation::verification::ast as Input,
+    checked_as, jit::optimization::ast, shared::SafeIndex as _,
+    validation::verification::ast as Input,
 };
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
@@ -42,7 +43,7 @@ fn module(m: Input::Module) -> PartialVMResult<ast::Module> {
         .iter()
         .enumerate()
         .map(|(ndx, fun)| -> PartialVMResult<_> {
-            let index = FF::FunctionDefinitionIndex::new(ndx as u16);
+            let index = FF::FunctionDefinitionIndex::new(checked_as!(ndx, u16)?);
             Ok((index, function(index, fun)?))
         })
         .collect::<PartialVMResult<_>>()?;

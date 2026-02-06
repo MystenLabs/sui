@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::cast_possible_truncation)]
 use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::Duration,
