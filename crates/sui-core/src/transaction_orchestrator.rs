@@ -843,7 +843,14 @@ where
                     &[tx_digest],
                 )
                 .await;
-            validator_state.await_post_processing(&tx_digest).await;
+            // Wait for the checkpoint containing this tx to be finalized.
+            // Index data is committed before the checkpoint notification fires,
+            // so it is guaranteed to be available when this resolves.
+            let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+            epoch_store
+                .transactions_executed_in_checkpoint_notify(vec![tx_digest])
+                .await
+                .expect("db error waiting for transaction checkpointing");
         })
         .instrument(error_span!(
             "transaction_orchestrator::local_execution",
