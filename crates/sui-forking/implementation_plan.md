@@ -137,36 +137,48 @@ pub trait ForkingDataStoreReadWrite:
 
 ---
 
-## Part 2: Filesystem Implementation in `sui-data-store`
+## Part 2: Extend `FileSystemStore` + New `ObjectReadThroughStore` Combinator
 
-New file: `sui-data-store/src/stores/forking_fs.rs`
+No new store struct. Instead:
+1. Add the new traits as additional implementations on the **existing `FileSystemStore`**
+2. Add a `FileSystemStore::new_with_path(base_dir)` constructor for user-specified directories
+3. Add a new **`ObjectReadThroughStore<P, S>`** combinator that does read-through
+   **only for objects**, passing everything else through to the primary
 
 ### Directory Layout
 
-The base directory is **user-specified** via a CLI argument in `sui-forking`.
-This allows stopping and restarting the forked network from where it left off.
-The top-level folder is the `<forked_at_checkpoint>` number, making it clear
-which fork point this data belongs to.
+Object data and fork-specific state are stored separately:
+
+**Shared object storage** — uses the existing `FileSystemStore` path
+(`~/.sui_data_store/<chain_id>/objects/`). Object BCS files are immutable
+and keyed by `(object_id, version)`, so they're safely shared across forks.
+Objects already cached by previous runs are automatically available.
+
+**Fork-specific storage** — user-specified directory, organized by
+`<chain_id>/<forked_at_checkpoint>/`. This allows multiple forks from
+different networks (mainnet, testnet) and different checkpoints to coexist.
 
 ```
+~/.sui_data_store/<chain_id>/objects/          SHARED (existing FS store path)
+  <object_id_hex>/
+    <version>                                  BCS: Object
+
 <user-specified-dir>/
-  <forked_at_checkpoint>/
-    checkpoints/
-      by_seq/<sequence_number>          BCS: inner checkpoint data (*)
-      contents/<contents_digest_hex>    BCS: CheckpointContents
-      digest_to_seq.csv                 CSV: <digest_hex>,<sequence_number>
-      highest                           plain text: highest sequence number
-    transactions/
-      data/<tx_digest_hex>              BCS: inner Transaction data (*)
-      effects/<tx_digest_hex>           BCS: TransactionEffects
-      events/<tx_digest_hex>            BCS: TransactionEvents
-    objects/
-      <object_id_hex>/
-        latest                          plain text: current version number
-        <version>                       BCS: Object
-        ...
-    committees/
-      <epoch>                           BCS: Committee
+  <chain_id>/
+    <forked_at_checkpoint>/                    FORK-SPECIFIC
+      object_versions/
+        <object_id_hex>                        plain text: latest version for this fork
+      checkpoints/
+        by_seq/<sequence_number>               BCS: inner checkpoint data (*)
+        contents/<contents_digest_hex>         BCS: CheckpointContents
+        digest_to_seq.csv                      CSV: <digest_hex>,<sequence_number>
+        highest                                plain text: highest sequence number
+      transactions/
+        data/<tx_digest_hex>                   BCS: inner Transaction data (*)
+        effects/<tx_digest_hex>                BCS: TransactionEffects
+        events/<tx_digest_hex>                 BCS: TransactionEvents
+      committees/
+        <epoch>                                BCS: Committee
 ```
 
 (*) For `VerifiedCheckpoint` and `VerifiedTransaction`, we serialize the inner
@@ -174,75 +186,142 @@ which fork point this data belongs to.
 with `VerifiedCheckpoint::new_unchecked()` / `VerifiedTransaction::new_unchecked()`
 since we trust data we wrote ourselves.
 
-### Struct
+### FileSystemStore changes
+
+Add a new constructor and implement the new traits. The store needs two paths:
+- `shared_objects_dir`: the existing `~/.sui_data_store/<chain_id>/objects/`
+  for shared object BCS files
+- `fork_dir`: `<user-dir>/<chain_id>/<forked_at_checkpoint>/` for fork-specific
+  data (checkpoints, transactions, committees, object_versions)
 
 ```rust
-pub struct ForkingFileStore {
-    base_dir: PathBuf,  // <user-dir>/<forked_at_checkpoint>/
+impl FileSystemStore {
+    /// Create a FileSystemStore for forking with explicit paths.
+    pub fn new_for_forking(
+        shared_objects_dir: PathBuf,  // existing objects path
+        fork_dir: PathBuf,            // <user-dir>/<chain_id>/<checkpoint>/
+    ) -> Result<Self> { ... }
+}
+
+// New trait implementations on the existing FileSystemStore:
+impl CheckpointStore for FileSystemStore { ... }
+impl CheckpointStoreWriter for FileSystemStore { ... }
+impl ExecutedTransactionStore for FileSystemStore { ... }
+impl ExecutedTransactionStoreWriter for FileSystemStore { ... }
+impl VersionedObjectStore for FileSystemStore { ... }
+impl VersionedObjectStoreWriter for FileSystemStore { ... }
+impl CommitteeStore for FileSystemStore { ... }
+impl CommitteeStoreWriter for FileSystemStore { ... }
+```
+
+The existing `read_bcs_file`/`write_bcs_file` helpers are reused internally.
+The existing traits (`TransactionStore`, `ObjectStore`, etc.) remain unchanged.
+
+### `ObjectReadThroughStore<P, S>` combinator
+
+New file: `sui-data-store/src/stores/object_read_through.rs`
+
+```rust
+/// A combinator that does read-through ONLY for objects.
+/// All other traits (checkpoints, transactions, committees) pass through
+/// to the primary with no fallback.
+pub struct ObjectReadThroughStore<P, S> {
+    primary: P,               // e.g. FileSystemStore — read/write everything
+    secondary: S,             // e.g. DataStore (GraphQL) — read-only, objects only
     forked_at_checkpoint: u64,
-    /// Optional fallback for fetching objects not on local disk (e.g. from
-    /// mainnet/testnet). On a get_object miss, the fallback is queried with
-    /// AtCheckpoint(forked_at_checkpoint). The result is written to disk
-    /// before returning, so subsequent reads are served from the filesystem.
-    /// The fallback implements the existing sui_data_store::ObjectStore trait,
-    /// so the 3-tier ReadThroughStore<LruMemory, ReadThroughStore<FileSystem,
-    /// DataStore>> can be plugged in directly.
-    fallback: Option<Box<dyn crate::ObjectStore + Send + Sync>>,
+}
+```
+
+**Trait implementations:**
+
+```rust
+// OBJECTS: read-through (primary → miss → secondary → write-back to primary)
+impl<P, S> VersionedObjectStore for ObjectReadThroughStore<P, S>
+where
+    P: VersionedObjectStoreWriter,
+    S: crate::ObjectStore,  // existing ObjectStore trait (get_objects with ObjectKey)
+{
+    fn get_object(&self, id: &ObjectID) -> Result<Option<Object>> {
+        // Try primary
+        if let Some(obj) = self.primary.get_object(id)? {
+            return Ok(Some(obj));
+        }
+        // Fallback to secondary using AtCheckpoint query
+        let key = ObjectKey {
+            object_id: *id,
+            version_query: VersionQuery::AtCheckpoint(self.forked_at_checkpoint),
+        };
+        let results = self.secondary.get_objects(&[key])?;
+        if let Some((obj, _version)) = results.into_iter().next().flatten() {
+            // Write back to primary filesystem
+            self.primary.update_objects(BTreeMap::from([(*id, obj.clone())]))?;
+            Ok(Some(obj))
+        } else {
+            Ok(None)
+        }
+    }
+    // get_object_at_version: primary only (no fallback)
+    // owned_objects: primary only (no fallback)
 }
 
-impl ForkingFileStore {
-    pub fn new(base_dir: PathBuf, forked_at_checkpoint: u64) -> Result<Self> { ... }
-
-    pub fn with_fallback(
-        self,
-        fallback: Box<dyn crate::ObjectStore + Send + Sync>,
-    ) -> Self { ... }
-
-    // Internal helpers (reuse patterns from existing FileSystemStore)
-    fn read_bcs_file<T: DeserializeOwned>(&self, path: &Path) -> Result<T>;
-    fn write_bcs_file<T: Serialize>(&self, path: &Path, data: &T) -> Result<()>;
+// ALL OTHER TRAITS: pass-through to primary, no fallback
+impl<P, S> CheckpointStore for ObjectReadThroughStore<P, S>
+where P: CheckpointStore
+{
+    // delegates every method to self.primary
 }
+
+impl<P, S> ExecutedTransactionStore for ObjectReadThroughStore<P, S>
+where P: ExecutedTransactionStore
+{
+    // delegates every method to self.primary
+}
+
+impl<P, S> CommitteeStore for ObjectReadThroughStore<P, S>
+where P: CommitteeStore
+{
+    // delegates every method to self.primary
+}
+
+// Writer traits also pass through to primary
+impl<P, S> CheckpointStoreWriter for ObjectReadThroughStore<P, S> ...
+impl<P, S> ExecutedTransactionStoreWriter for ObjectReadThroughStore<P, S> ...
+impl<P, S> VersionedObjectStoreWriter for ObjectReadThroughStore<P, S> ...
+impl<P, S> CommitteeStoreWriter for ObjectReadThroughStore<P, S> ...
 ```
 
 ### Key implementation details
 
-**Fallback policy:** Only objects have a network fallback (GraphQL DataStore).
-All other data (checkpoints, transactions, effects, events, committees) is
-local-only — if not on disk, return `None`.
-
-**Checkpoints:**
+**Checkpoints (FileSystemStore):**
 - `write_checkpoint`: Serialize to `checkpoints/by_seq/<seq>`, append to
   `digest_to_seq.csv`, update `highest` file.
 - `get_checkpoint_by_digest`: Read `digest_to_seq.csv` (or cache it), look up
   sequence number, then read by sequence.
 - `get_highest_checkpoint`: Read `highest` file, then read that checkpoint.
-- No fallback: local-only.
 
-**Transactions:**
+**Transactions (FileSystemStore):**
 - Three separate files per transaction (data, effects, events) keyed by digest hex.
-- Simple: `write_transaction` → `transactions/data/<digest>`,
+- `write_transaction` → `transactions/data/<digest>`,
   `write_transaction_effects` → `transactions/effects/<digest>`, etc.
-- No fallback: local-only.
 
-**Committees:**
+**Committees (FileSystemStore):**
 - One file per epoch: `committees/<epoch>`.
-- No fallback: local-only.
 
-**Objects:**
-- `update_objects`: For each written object, write BCS to
-  `objects/<id>/<version>` and update `objects/<id>/latest` with the new
-  version number. All versions are kept on disk.
-- `get_object`: Read `objects/<id>/latest` to get the current version number,
-  then read `objects/<id>/<version>`. On miss (no `latest` file), if a
-  fallback is configured, query it with
-  `ObjectKey { object_id, version_query: AtCheckpoint(forked_at_checkpoint) }`.
-  If found, write the object to disk + update `latest`, then return it.
-  This means network-fetched objects are cached locally for future reads
-  and survive restarts.
-- `get_object_at_version`: Read `objects/<id>/<version>` directly.
-- `owned_objects`: Scan all object directories, read each object's latest
-  version, filter by owner. (Slow but functional; can optimize later with
-  an owner-index file.)
+**Objects (FileSystemStore):**
+- `update_objects`: For each written object, write BCS to the **shared** dir
+  (`shared_objects_dir/<id>/<version>`) and update the **fork-specific**
+  `object_versions/<id>` with the new version number.
+- `get_object`: Read fork-specific `object_versions/<id>` to get the current
+  version, then read shared `shared_objects_dir/<id>/<version>`. Returns
+  `None` if no version file for this fork.
+- `get_object_at_version`: Read `shared_objects_dir/<id>/<version>` directly.
+- `owned_objects`: Scan fork-specific `object_versions/` directory, read each
+  object's latest version from shared storage, filter by owner.
+
+**Objects (ObjectReadThroughStore):**
+- `get_object`: Primary miss → query secondary with
+  `AtCheckpoint(forked_at_checkpoint)` → write back to primary → return.
+  Network-fetched objects are cached on disk and survive restarts.
 
 ---
 
@@ -252,18 +331,20 @@ local-only — if not on disk, return `None`.
 
 ```rust
 pub struct ForkingStore {
-    /// Filesystem-backed store from sui-data-store
-    fs_store: ForkingFileStore,
+    /// ObjectReadThroughStore composes:
+    /// - Primary: FileSystemStore (local disk, read/write everything)
+    /// - Secondary: DataStore (GraphQL, read-only objects fallback)
+    store: ObjectReadThroughStore<FileSystemStore, DataStore>,
 }
 ```
 
-No in-memory maps. All reads/writes go through `fs_store`.
+No in-memory maps. All reads/writes go through the composed store.
 
 ### Instantiation (in `sui-forking` server startup)
 
 ```rust
 use sui_data_store::Node;
-use sui_data_store::stores::{DataStore, ForkingFileStore};
+use sui_data_store::stores::{DataStore, FileSystemStore, ObjectReadThroughStore};
 
 // 1. Create the GraphQL-backed store (only used as object fallback)
 let node = match chain {
@@ -273,45 +354,53 @@ let node = match chain {
 };
 let graphql = DataStore::new(node, version)?;
 
-// 2. Create the filesystem store with GraphQL fallback for objects
-let fs_store = ForkingFileStore::new(user_specified_dir, forked_at_checkpoint)?
-    .with_fallback(Box::new(graphql));
+// 2. Create the filesystem store with two paths:
+//    - shared objects: ~/.sui_data_store/<chain_id>/objects/ (existing, shared across forks)
+//    - fork-specific: <user_dir>/<chain_id>/<checkpoint>/ (checkpoints, txns, latest pointers)
+let shared_objects_dir = FileSystemStore::default_objects_dir(node)?;
+let fork_dir = user_specified_dir
+    .join(chain_id)
+    .join(forked_at_checkpoint.to_string());
+let fs = FileSystemStore::new_for_forking(shared_objects_dir, fork_dir)?;
 
-// 3. Create ForkingStore wrapping the filesystem store
-let forking_store = ForkingStore::new(&config.genesis, fs_store);
+// 3. Compose: filesystem primary + GraphQL secondary (objects only)
+let store = ObjectReadThroughStore::new(fs, graphql, forked_at_checkpoint);
 
-// 4. Plug into Simulacrum
+// 4. Create ForkingStore and plug into Simulacrum
+let forking_store = ForkingStore::new(&config.genesis, store);
 let simulacrum = Simulacrum::new_with_network_config_store(&config, rng, forking_store);
 ```
 
-`DataStore` implements `sui_data_store::ObjectStore`, so it plugs directly into
-`ForkingFileStore::with_fallback()`. No LRU or extra caching layers needed —
-`ForkingFileStore` itself is the filesystem cache. Once an object is fetched
-from GraphQL, it's written to disk and subsequent reads are served locally.
-On restart with the same directory, previously fetched objects won't hit
-GraphQL again.
+`DataStore` implements the existing `sui_data_store::ObjectStore` trait.
+`ObjectReadThroughStore` uses it as the secondary for object fallback only.
+Once an object is fetched from GraphQL, `FileSystemStore` writes it to the
+**shared** objects directory, so it's available to any fork. The fork-specific
+`object_versions/` pointer is also updated. On restart with the same fork
+directory, all state is preserved.
 
 ### SimulatorStore implementation
 
-ForkingStore implements `SimulatorStore` by delegating to the filesystem store:
+ForkingStore implements `SimulatorStore` by delegating to the composed store:
 
 ```rust
 impl SimulatorStore for ForkingStore {
     fn get_checkpoint_by_sequence_number(&self, seq: CheckpointSequenceNumber)
         -> Option<VerifiedCheckpoint>
     {
-        self.fs_store.get_checkpoint_by_sequence_number(seq)
+        self.store.get_checkpoint_by_sequence_number(seq)
             .ok()
             .flatten()
     }
 
     fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
-        self.fs_store.write_checkpoint(&checkpoint)
+        self.store.write_checkpoint(&checkpoint)
             .expect("failed to write checkpoint");
     }
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
-        self.fs_store.get_object(id).ok().flatten()
+        // This goes through ObjectReadThroughStore:
+        // filesystem hit → return; miss → GraphQL → write to disk → return
+        self.store.get_object(id).ok().flatten()
     }
 
     fn insert_executed_transaction(
@@ -322,10 +411,10 @@ impl SimulatorStore for ForkingStore {
         written_objects: BTreeMap<ObjectID, Object>,
     ) {
         let digest = *effects.transaction_digest();
-        self.fs_store.write_transaction(&transaction).unwrap();
-        self.fs_store.write_transaction_effects(&digest, &effects).unwrap();
-        self.fs_store.write_transaction_events(&digest, &events).unwrap();
-        self.fs_store.update_objects(written_objects).unwrap();
+        self.store.write_transaction(&transaction).unwrap();
+        self.store.write_transaction_effects(&digest, &effects).unwrap();
+        self.store.write_transaction_events(&digest, &events).unwrap();
+        self.store.update_objects(written_objects).unwrap();
     }
 
     // ... etc for all SimulatorStore methods
@@ -380,8 +469,9 @@ No changes needed to the gRPC service layer itself.
 ### sui-data-store
 | File | Action |
 |------|--------|
-| `src/lib.rs` | Add new traits (or `mod forking;`) |
-| `src/stores/forking_fs.rs` | New: ForkingFileStore implementation |
+| `src/lib.rs` | Add new traits (CheckpointStore, ExecutedTransactionStore, etc.) |
+| `src/stores/filesystem.rs` | Add `new_with_path()`, implement new traits on FileSystemStore |
+| `src/stores/object_read_through.rs` | New: ObjectReadThroughStore combinator |
 | `src/stores/mod.rs` | Export new module and types |
 | `Cargo.toml` | Possibly no changes (sui-types already a dep) |
 
@@ -400,11 +490,11 @@ No changes needed to the gRPC service layer itself.
 
 ## Verification Plan
 
-1. Unit tests in sui-data-store for ForkingFileStore:
-   - Write/read roundtrip for checkpoints, transactions, objects, committees
-   - get_highest_checkpoint after multiple writes
-   - update_objects with writes and deletes
-   - owned_objects filtering
+1. Unit tests in sui-data-store:
+   - FileSystemStore new trait impls: write/read roundtrip for checkpoints,
+     transactions, objects (with `latest` file), committees
+   - ObjectReadThroughStore: primary hit (no secondary call), primary miss
+     with secondary fallback + write-back, pass-through for non-object traits
 
 2. Integration: boot sui-forking, execute a transaction, verify data appears on
    filesystem, restart and verify data loads correctly.
