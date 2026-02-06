@@ -3305,6 +3305,8 @@ impl AuthorityState {
         if self.config.sync_post_process_one_tx {
             // Synchronous mode: run post-processing inline on the calling thread.
             // Used as a rollback mechanism and for testing correctness against async mode.
+            // TODO: delete this branch once async mode has shipped; both paths could share
+            // a single spawn_blocking call with the sync path simply awaiting the handle.
             let result = Self::post_process_one_tx_impl(
                 &self.indexes,
                 &self.subscription_handler,
