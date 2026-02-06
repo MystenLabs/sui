@@ -217,6 +217,10 @@ pub struct ReplayConfigExperimental {
     /// Cache executors across transactions within the same epoch.
     #[arg(long = "cache-executor", default_value = "false")]
     pub cache_executor: bool,
+
+    /// Number of times to execute each transaction. Useful for benchmarking.
+    #[arg(long = "iterations", default_value = "1")]
+    pub iterations: u32,
 }
 
 impl Default for ReplayConfigExperimental {
@@ -227,6 +231,7 @@ impl Default for ReplayConfigExperimental {
             store_mode: StoreMode::GqlOnly,
             track_time: false,
             cache_executor: false,
+            iterations: 1,
         }
     }
 }
@@ -343,6 +348,7 @@ pub async fn handle_replay_config(
         store_mode,
         track_time,
         cache_executor,
+        iterations,
     } = experimental_config;
 
     let output_root_dir = if let Some(dir) = output_dir {
@@ -404,6 +410,7 @@ pub async fn handle_replay_config(
                 terminate_early,
                 *track_time,
                 *cache_executor,
+                *iterations,
             )
             .await?;
         }
@@ -424,6 +431,7 @@ pub async fn handle_replay_config(
                 terminate_early,
                 *track_time,
                 *cache_executor,
+                *iterations,
             )
             .await?;
         }
@@ -441,6 +449,7 @@ pub async fn handle_replay_config(
                 terminate_early,
                 *track_time,
                 *cache_executor,
+                *iterations,
             )
             .await?;
         }
@@ -460,6 +469,7 @@ pub async fn handle_replay_config(
                 terminate_early,
                 *track_time,
                 *cache_executor,
+                *iterations,
             )
             .await?;
         }
@@ -482,6 +492,7 @@ pub async fn handle_replay_config(
                 terminate_early,
                 *track_time,
                 *cache_executor,
+                *iterations,
             )
             .await?;
         }
@@ -501,6 +512,7 @@ async fn run_replay<S>(
     terminate_early: bool,
     track_time: bool,
     cache_executor: bool,
+    iterations: u32,
 ) -> Result<()>
 where
     S: ReadDataStore + StoreSummary + SetupStore,
@@ -514,7 +526,8 @@ where
 
     let mp = MultiProgress::new();
     let tx_spinner = mp.add(ProgressBar::new_spinner());
-    let progress_bar = mp.add(ProgressBar::new(digests.len() as u64));
+    let total_executions = digests.len() as u64 * iterations as u64;
+    let progress_bar = mp.add(ProgressBar::new(total_executions));
 
     tx_spinner.set_style(ProgressStyle::with_template("{spinner}: {msg}").unwrap());
     tx_spinner.enable_steady_tick(Duration::from_millis(80));
@@ -522,53 +535,75 @@ where
     for tx_digest in digests {
         let tx_dir = output_root_dir.join(tx_digest);
         let artifact_manager = ArtifactManager::new(&tx_dir, overwrite_existing)?;
-        let span = info_span!("replay", tx_digest = %tx_digest);
 
-        tx_spinner.set_message(format!("Executing transaction {}", tx_digest));
+        for iteration in 0..iterations {
+            let span = info_span!("replay", tx_digest = %tx_digest, iteration = iteration);
 
-        let tx_start = Instant::now();
-        let result = replay_transaction(
-            &artifact_manager,
-            tx_digest,
-            data_store,
-            node.network_name(),
-            trace,
-            &mut executor_provider,
-        )
-        .instrument(span)
-        .await;
-        let tx_total_ms = tx_start.elapsed().as_millis();
+            let iteration_msg = if iterations > 1 {
+                format!(
+                    "Executing transaction {} (iteration {}/{})",
+                    tx_digest,
+                    iteration + 1,
+                    iterations
+                )
+            } else {
+                format!("Executing transaction {}", tx_digest)
+            };
+            tx_spinner.set_message(iteration_msg);
 
-        let success = result.is_ok();
-        let exec_ms = result.as_ref().ok().copied().unwrap_or(0);
-
-        total_metrics.add_transaction(success, tx_total_ms, exec_ms);
-
-        // Print per-transaction result
-        let status = if success { "OK" } else { "FAILED" };
-
-        let time_info = if track_time {
-            format!(
-                " ({}): exec_ms={}, total_ms={}",
-                status, exec_ms, tx_total_ms
+            let tx_start = Instant::now();
+            let result = replay_transaction(
+                &artifact_manager,
+                tx_digest,
+                data_store,
+                node.network_name(),
+                trace,
+                &mut executor_provider,
             )
-        } else {
-            "".to_owned()
-        };
+            .instrument(span)
+            .await;
+            let tx_total_ms = tx_start.elapsed().as_millis();
 
-        tx_spinner.println(format!("Executed transaction {}{}", tx_digest, time_info));
+            let success = result.is_ok();
+            let exec_ms = result.as_ref().ok().copied().unwrap_or(0);
 
-        match result {
-            Err(e) if terminate_early => {
-                error!(tx_digest = %tx_digest, error = ?e, "Replay error; terminating early");
-                bail!("Replay terminated due to error: {}", e);
+            total_metrics.add_transaction(success, tx_total_ms, exec_ms);
+
+            // Print per-transaction result
+            let status = if success { "OK" } else { "FAILED" };
+
+            let iteration_suffix = if iterations > 1 {
+                format!(" [iteration {}/{}]", iteration + 1, iterations)
+            } else {
+                String::new()
+            };
+
+            let time_info = if track_time {
+                format!(
+                    " ({}): exec_ms={}, total_ms={}",
+                    status, exec_ms, tx_total_ms
+                )
+            } else {
+                String::new()
+            };
+
+            tx_spinner.println(format!(
+                "Executed transaction {}{}{}",
+                tx_digest, iteration_suffix, time_info
+            ));
+
+            match result {
+                Err(e) if terminate_early => {
+                    error!(tx_digest = %tx_digest, iteration = iteration, error = ?e, "Replay error; terminating early");
+                    bail!("Replay terminated due to error: {}", e);
+                }
+                Err(e) => {
+                    error!(tx_digest = %tx_digest, iteration = iteration, error = ?e, "Replay failed");
+                }
+                Ok(_) => {}
             }
-            Err(e) => {
-                error!(tx_digest = %tx_digest, error = ?e, "Replay failed");
-            }
-            Ok(_) => {}
+            progress_bar.inc(1);
         }
-        progress_bar.inc(1);
     }
 
     tx_spinner.finish_and_clear();
@@ -581,7 +616,8 @@ where
         }
     }
 
-    if digests.len() > 1 {
+    let show_summary = digests.len() > 1 || iterations > 1;
+    if show_summary {
         println!(
             "Replay run: tx_count={} success={} failure={} - exec_ms={}, total_ms={}",
             total_metrics.tx_count,
