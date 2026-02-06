@@ -3310,11 +3310,9 @@ impl AuthorityState {
             .as_ref()
             .map(|idx| idx.allocate_sequence_number());
 
-        let (done_tx, done_rx) = tokio::sync::oneshot::channel::<PostProcessingOutput>();
-        self.pending_post_processing.insert(tx_digest, done_rx);
-
         if self.config.sync_post_process_one_tx {
-            // Synchronous mode: run post-processing inline on the calling thread.
+            // Synchronous mode: run post-processing inline on the calling thread
+            // and commit the index batch immediately.
             // Used as a rollback mechanism and for testing correctness against async mode.
             // TODO: delete this branch once async mode has shipped
             let result = Self::post_process_one_tx_impl(
@@ -3332,8 +3330,16 @@ impl AuthorityState {
             );
 
             match result {
-                Ok(output) => {
-                    let _ = done_tx.send(output);
+                Ok((raw_batch, cache_updates)) => {
+                    if let Some(indexes) = &self.indexes {
+                        let mut db_batch = indexes.new_db_batch();
+                        db_batch
+                            .absorb_raw_batches(vec![raw_batch])
+                            .expect("failed to absorb raw index batch");
+                        indexes
+                            .commit_index_batch(db_batch, vec![cache_updates])
+                            .expect("failed to commit index batch");
+                    }
                 }
                 Err(e) => {
                     self.metrics.post_processing_total_failures.inc();
@@ -3344,6 +3350,9 @@ impl AuthorityState {
 
             return Ok(());
         }
+
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel::<PostProcessingOutput>();
+        self.pending_post_processing.insert(tx_digest, done_rx);
 
         let indexes = self.indexes.clone();
         let subscription_handler = self.subscription_handler.clone();
