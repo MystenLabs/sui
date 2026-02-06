@@ -9,7 +9,7 @@ use crate::config::Config;
 pub async fn query_last_checkpoint_of_epoch(config: &Config, epoch_id: u64) -> anyhow::Result<u64> {
     // GraphQL query to get the last checkpoint of an epoch
     let query = json!({
-        "query": "query ($epochID: Int) { epoch(id: $epochID) { checkpoints(last: 1) { nodes { sequenceNumber } } } }",
+        "query": "query ($epochID: UInt53) { epoch(epochId: $epochID) { checkpoints(last: 1) { nodes { sequenceNumber } } } }",
         "variables": { "epochID": epoch_id }
     });
 
