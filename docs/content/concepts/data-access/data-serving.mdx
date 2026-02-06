@@ -62,7 +62,7 @@ The gRPC and GraphQL RPC APIs have replaced JSON-RPC. View the video below to le
 
 ### General-purpose Indexer
 
-The [General-purpose Indexer](/concepts/data-access/graphql-indexer.mdx) includes a performant and scalable implementation of the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx). The underlying framework uses the remote checkpoint store and full node RPCs to ingest data.
+The [General-purpose Indexer](/concepts/data-access/custom-indexers.mdx) includes a performant and scalable implementation of the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx). The underlying framework uses the remote checkpoint store and full node RPCs to ingest data.
 
 General-purpose Indexer is declarative in the sense that you can seamlessly configure it to load different kinds of Sui network data into Postgres relational tables in parallel. This improves the performance of the data ingestion into the Postgres-compatible database. In addition, you can configure pruning for different tables in the Postgres-compatible database, allowing you to tune it for the desired combination of performance and cost characteristics.
 
@@ -74,7 +74,7 @@ General-purpose Indexer is in beta, which is a near-stable release that is subje
 
 ### GraphQL RPC
 
-The [GraphQL RPC Service](/concepts/data-access/graphql-indexer.mdx) is a performant GraphQL RPC layer that reads data from the General-purpose Indexer's Postgres-compatible database, [Archival Store and Service](#archival-store-and-service), and a full node. GraphQL RPC is an alternative to gRPC API. If you are already using the **deprecated** JSON-RPC in your application today, you have an option to migrate to GraphQL RPC by either self-operating the combined stack of General-purpose Indexer, Postgres-compatible database, and GraphQL RPC server, or by utilizing it as a service from an RPC provider or indexer operator.
+The [GraphQL RPC Service](/concepts/data-access/custom-indexers.mdx) is a performant GraphQL RPC layer that reads data from the General-purpose Indexer's Postgres-compatible database, [Archival Store and Service](#archival-store-and-service), and a full node. GraphQL RPC is an alternative to gRPC API. If you are already using the **deprecated** JSON-RPC in your application today, you have an option to migrate to GraphQL RPC by either self-operating the combined stack of General-purpose Indexer, Postgres-compatible database, and GraphQL RPC server, or by utilizing it as a service from an RPC provider or indexer operator.
 
 GraphQL RPC Service is a lightweight server component that allows you to combine data from multiple tables in the Postgres-compatible database using GraphQL's expressive querying system, which is appealing to frontend developers.
 
@@ -162,6 +162,6 @@ You can get real-time or historical data using JSON-RPC. Retention period for hi
 <RelatedLink to="/guides/developer/accessing-data/pipeline-architecture" />
 <RelatedLink to="/guides/developer/accessing-data/archival-store" />
 <RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework" />
-<RelatedLink to="/concepts/data-access/graphql-indexer" />
+<RelatedLink to="/concepts/data-access/custom-indexers" />
 <RelatedLink href="/references/fullnode-protocol" label="Sui Full Node gRPC" desc="Generated documentation from the Sui gRPC schema." />
 <RelatedLink href="/references/sui-api/sui-graphql/beta/reference" label="GraphQL Beta schema" desc="Schema documentation for GraphQL Beta." />
