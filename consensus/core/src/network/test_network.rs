@@ -13,8 +13,8 @@ use crate::{
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{
-        BlockRequestStream, BlockStream, NetworkService, NodeId, ObserverBlockStream,
-        ObserverNetworkService,
+        BlockRequestStream, BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService,
+        ValidatorNetworkService,
     },
 };
 
@@ -46,7 +46,7 @@ impl TestService {
 }
 
 #[async_trait]
-impl NetworkService for Mutex<TestService> {
+impl ValidatorNetworkService for Mutex<TestService> {
     async fn handle_send_block(
         &self,
         peer: AuthorityIndex,

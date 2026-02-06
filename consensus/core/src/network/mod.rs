@@ -41,6 +41,7 @@ pub(crate) enum PeerId {
     /// A validator node identified by its authority index.
     Authority(AuthorityIndex),
     /// An observer node identified by its network public key.
+    #[allow(dead_code)]
     Observer(NodeId),
 }
 
@@ -53,14 +54,15 @@ mod tonic_gen {
     ));
 }
 
+mod clients;
 pub(crate) mod metrics;
 mod metrics_layer;
 #[cfg(all(test, not(msim)))]
 mod network_tests;
 #[cfg(not(msim))]
-pub(crate) mod observer_network;
+pub(crate) mod observer;
 #[cfg(msim)]
-pub mod observer_network;
+pub mod observer;
 #[cfg(test)]
 pub(crate) mod test_network;
 #[cfg(not(msim))]
@@ -68,18 +70,17 @@ pub(crate) mod tonic_network;
 #[cfg(msim)]
 pub mod tonic_network;
 mod tonic_tls;
-pub(crate) mod unified_client;
 
 /// A stream of serialized filtered blocks returned over the network.
 pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = ExtendedSerializedBlock> + Send>>;
 
-/// Network client for communicating with peers.
+/// Validator network client for communicating with validator peers.
 ///
 /// NOTE: the timeout parameters help saving resources at client and potentially server.
 /// But it is up to the server implementation if the timeout is honored.
 /// - To bound server resources, server should implement own timeout for incoming requests.
 #[async_trait]
-pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
+pub(crate) trait ValidatorNetworkClient: Send + Sync + Sized + 'static {
     /// Subscribes to blocks from a peer after last_received round.
     async fn subscribe_blocks(
         &self,
@@ -139,9 +140,9 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
     ) -> ConsensusResult<()>;
 }
 
-/// Network service for handling requests from peers.
+/// Validator network service for handling requests from validator peers.
 #[async_trait]
-pub(crate) trait NetworkService: Send + Sync + 'static {
+pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
     /// Handles the block sent from the peer via either unicast RPC or subscription stream.
     /// Peer value can be trusted to be a valid authority index.
     /// But serialized_block must be verified before its contents are trusted.
@@ -207,7 +208,7 @@ pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = ObserverBlockStr
 /// Observer block request stream type for bidirectional streaming.
 #[allow(dead_code)]
 pub(crate) type BlockRequestStream =
-    Pin<Box<dyn Stream<Item = crate::network::observer_network::BlockStreamRequest> + Send>>;
+    Pin<Box<dyn Stream<Item = crate::network::observer::BlockStreamRequest> + Send>>;
 
 /// Observer network service for handling requests from observer nodes.
 /// Unlike NetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
@@ -278,75 +279,35 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.
 /// Dropping `NetworkManager` will shutdown the network service.
-pub(crate) trait NetworkManager<S>: Send + Sync
-where
-    S: NetworkService,
-{
-    type Client: NetworkClient;
+pub(crate) trait NetworkManager: Send + Sync {
+    type ValidatorClient: ValidatorNetworkClient;
+    type ObserverClient: ObserverNetworkClient;
 
     /// Creates a new network manager.
     fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self;
 
-    /// Returns the network client.
-    fn client(&self) -> Arc<Self::Client>;
+    /// Returns the validator network client.
+    fn validator_client(&self) -> Arc<Self::ValidatorClient>;
 
-    /// Installs network service.
-    async fn install_service(&mut self, service: Arc<S>);
+    /// Returns the observer network client.
+    fn observer_client(&self) -> Arc<Self::ObserverClient>;
+
+    /// Starts the validator network server with the provided service.
+    async fn start_validator_server<V>(&mut self, service: Arc<V>)
+    where
+        V: ValidatorNetworkService;
+
+    /// Starts the observer network server with the provided service.
+    async fn start_observer_server<O>(&mut self, service: Arc<O>)
+    where
+        O: ObserverNetworkService;
 
     /// Stops the network service.
     async fn stop(&mut self);
 }
 
-/// Client interface for synchronizer operations.
-/// This trait abstracts over both validator and observer network clients,
-/// allowing the synchronizer to fetch blocks from any peer type.
-#[async_trait]
-pub(crate) trait SynchronizerClient: Send + Sync + 'static {
-    /// Fetches serialized `SignedBlock`s from a peer.
-    /// For validator peers, it may return additional ancestor blocks according to
-    /// the provided `highest_accepted_rounds`.
-    async fn fetch_blocks(
-        &self,
-        peer: PeerId,
-        block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
-        timeout: Duration,
-    ) -> ConsensusResult<Vec<Bytes>>;
-
-    /// Fetches the latest block from `peer` for the requested `authorities`.
-    /// This is only applicable for validator peers.
-    async fn fetch_latest_blocks(
-        &self,
-        peer: PeerId,
-        authorities: Vec<AuthorityIndex>,
-        timeout: Duration,
-    ) -> ConsensusResult<Vec<Bytes>>;
-
-    /// Gets the latest received & accepted rounds of all authorities from the peer.
-    /// This is only applicable for validator peers.
-    async fn get_latest_rounds(
-        &self,
-        peer: PeerId,
-        timeout: Duration,
-    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
-}
-
-/// Client interface for commit syncer operations.
-/// This trait abstracts over both validator and observer network clients,
-/// allowing the commit syncer to fetch commits from any peer type.
-#[async_trait]
-pub(crate) trait CommitSyncerClient: Send + Sync + 'static {
-    /// Fetches serialized commits in the commit range from a peer.
-    /// Returns a tuple of both the serialized commits, and serialized blocks that contain
-    /// votes certifying the last commit.
-    async fn fetch_commits(
-        &self,
-        peer: PeerId,
-        commit_range: CommitRange,
-        timeout: Duration,
-    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
-}
+// Re-export the concrete client implementations.
+pub(crate) use clients::{CommitSyncerClient, SynchronizerClient};
 
 /// Serialized block with extended information from the proposing authority.
 #[derive(Clone, PartialEq, Eq, Debug)]

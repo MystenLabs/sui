@@ -16,7 +16,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
-    network::{NetworkClient, NetworkService},
+    network::{ValidatorNetworkClient, ValidatorNetworkService},
 };
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
@@ -24,7 +24,7 @@ use crate::{
 /// service for processing.
 /// Currently subscription management for individual peer is not exposed, but it could become
 /// useful in future.
-pub(crate) struct Subscriber<C: NetworkClient, S: NetworkService> {
+pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkService> {
     context: Arc<Context>,
     network_client: Arc<C>,
     authority_service: Arc<S>,
@@ -32,7 +32,7 @@ pub(crate) struct Subscriber<C: NetworkClient, S: NetworkService> {
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
 }
 
-impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
+impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
     pub(crate) fn new(
         context: Arc<Context>,
         network_client: Arc<C>,
@@ -261,7 +261,7 @@ mod test {
     }
 
     #[async_trait]
-    impl NetworkClient for SubscriberTestClient {
+    impl ValidatorNetworkClient for SubscriberTestClient {
         async fn send_block(
             &self,
             _peer: AuthorityIndex,

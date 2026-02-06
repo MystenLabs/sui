@@ -40,7 +40,7 @@ impl Broadcaster {
     const LAST_BLOCK_RETRY_INTERVAL: Duration = Duration::from_secs(2);
     const MIN_SEND_BLOCK_NETWORK_TIMEOUT: Duration = Duration::from_secs(5);
 
-    pub(crate) fn new<C: NetworkClient>(
+    pub(crate) fn new<C: ValidatorNetworkClient>(
         context: Arc<Context>,
         network_client: Arc<C>,
         signals_receiver: &CoreSignalsReceivers,
@@ -71,7 +71,7 @@ impl Broadcaster {
     /// channel to the target peer.
     ///
     /// The loop does not exit until the validator is shutting down.
-    async fn push_blocks<C: NetworkClient>(
+    async fn push_blocks<C: ValidatorNetworkClient>(
         context: Arc<Context>,
         network_client: Arc<C>,
         mut rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
@@ -99,7 +99,7 @@ impl Broadcaster {
 
         let mut requests = FuturesUnordered::new();
 
-        async fn send_block<C: NetworkClient>(
+        async fn send_block<C: ValidatorNetworkClient>(
             network_client: Arc<C>,
             peer: AuthorityIndex,
             rtt_estimate: Duration,
@@ -223,7 +223,7 @@ mod test {
     }
 
     #[async_trait]
-    impl NetworkClient for FakeNetworkClient {
+    impl ValidatorNetworkClient for FakeNetworkClient {
         async fn send_block(
             &self,
             peer: AuthorityIndex,

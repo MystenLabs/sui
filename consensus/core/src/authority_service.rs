@@ -33,8 +33,8 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
-        BlockRequestStream, BlockStream, ExtendedSerializedBlock, NetworkService, NodeId,
-        ObserverBlockStream, ObserverNetworkService,
+        BlockRequestStream, BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream,
+        ObserverNetworkService, ValidatorNetworkService,
     },
     round_tracker::PeerRoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
@@ -155,7 +155,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
 }
 
 #[async_trait]
-impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
+impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     async fn handle_send_block(
         &self,
         peer: AuthorityIndex,
@@ -850,7 +850,9 @@ mod tests {
         core_thread::{CoreError, CoreThreadDispatcher},
         dag_state::DagState,
         error::ConsensusResult,
-        network::{BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkService},
+        network::{
+            BlockStream, ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService,
+        },
         round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
@@ -923,7 +925,7 @@ mod tests {
     struct FakeNetworkClient {}
 
     #[async_trait]
-    impl NetworkClient for FakeNetworkClient {
+    impl ValidatorNetworkClient for FakeNetworkClient {
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
@@ -980,6 +982,38 @@ mod tests {
         }
     }
 
+    use crate::network::{ObserverNetworkClient, SynchronizerClient};
+
+    #[async_trait]
+    impl ObserverNetworkClient for FakeNetworkClient {
+        async fn stream_blocks(
+            &self,
+            _peer: crate::network::NodeId,
+            _request_stream: crate::network::BlockRequestStream,
+            _timeout: Duration,
+        ) -> ConsensusResult<crate::network::ObserverBlockStream> {
+            unimplemented!("Observer not supported")
+        }
+
+        async fn fetch_blocks(
+            &self,
+            _peer: crate::network::NodeId,
+            _block_refs: Vec<BlockRef>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Observer not supported")
+        }
+
+        async fn fetch_commits(
+            &self,
+            _peer: crate::network::NodeId,
+            _commit_range: CommitRange,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Observer not supported")
+        }
+    }
+
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_send_block() {
         let (context, _keys) = Context::new_for_test(4);
@@ -988,7 +1022,11 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
-        let network_client = Arc::new(FakeNetworkClient::default());
+        let mock_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            mock_client.clone(),
+            mock_client.clone(),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1107,7 +1145,11 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
-        let network_client = Arc::new(FakeNetworkClient::default());
+        let mock_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            mock_client.clone(),
+            mock_client.clone(),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1275,7 +1317,11 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
-        let network_client = Arc::new(FakeNetworkClient::default());
+        let mock_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            mock_client.clone(),
+            mock_client.clone(),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());

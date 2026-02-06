@@ -29,10 +29,10 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
 use tracing::{debug, error, info, trace, warn};
 
 use super::{
-    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
-    ObserverNetworkService,
+    BlockStream, ExtendedSerializedBlock, NetworkManager, ObserverNetworkService,
+    ValidatorNetworkClient, ValidatorNetworkService,
     metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
-    observer_network::ObserverServiceProxy,
+    observer::{ObserverServiceProxy, TonicObserverClient},
     tonic_gen::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
@@ -58,14 +58,14 @@ pub(crate) const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
 const DEFAULT_GRPC_SERVER_TIMEOUT: Duration = Duration::from_secs(300);
 
-// Implements Tonic RPC client for Consensus.
-pub(crate) struct TonicClient {
+// Implements Tonic RPC client for validator consensus operations.
+pub(crate) struct TonicValidatorClient {
     context: Arc<Context>,
     network_keypair: NetworkKeyPair,
     channel_pool: Arc<ChannelPool>,
 }
 
-impl TonicClient {
+impl TonicValidatorClient {
     pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
         Self {
             context: context.clone(),
@@ -95,7 +95,7 @@ impl TonicClient {
 
 // TODO: make sure callsites do not send request to own index, and return error otherwise.
 #[async_trait]
-impl NetworkClient for TonicClient {
+impl ValidatorNetworkClient for TonicValidatorClient {
     async fn subscribe_blocks(
         &self,
         peer: AuthorityIndex,
@@ -455,19 +455,19 @@ impl ChannelPool {
 }
 
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
-struct TonicServiceProxy<S: NetworkService> {
+struct TonicServiceProxy<S: ValidatorNetworkService> {
     context: Arc<Context>,
     service: Arc<S>,
 }
 
-impl<S: NetworkService> TonicServiceProxy<S> {
+impl<S: ValidatorNetworkService> TonicServiceProxy<S> {
     fn new(context: Arc<Context>, service: Arc<S>) -> Self {
         Self { context, service }
     }
 }
 
 #[async_trait]
-impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
+impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
     async fn send_block(
         &self,
         request: Request<SendBlockRequest>,
@@ -685,49 +685,83 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
 
 /// Manages the lifecycle of Tonic network client and service. Typical usage during initialization:
 /// 1. Create a new `TonicManager`.
-/// 2. Take `TonicClient` from `TonicManager::client()`.
+/// 2. Take validator and observer clients from `TonicManager::validator_client()` and `TonicManager::observer_client()`.
 /// 3. Create consensus components.
 /// 4. Create `TonicService` for consensus service handler.
 /// 5. Install `TonicService` to `TonicManager` with `TonicManager::install_service()`.
 pub(crate) struct TonicManager {
     context: Arc<Context>,
     network_keypair: NetworkKeyPair,
-    client: Arc<TonicClient>,
+    validator_client: Arc<TonicValidatorClient>,
+    observer_client: Arc<TonicObserverClient>,
     server: Option<ServerHandle>,
     observer_server: Option<ServerHandle>,
 }
 
 impl TonicManager {
     pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
+        let validator_client = Arc::new(TonicValidatorClient::new(
+            context.clone(),
+            network_keypair.clone(),
+        ));
+        let observer_client = Arc::new(TonicObserverClient::new(
+            context.clone(),
+            network_keypair.clone(),
+        ));
+
         Self {
-            context: context.clone(),
-            network_keypair: network_keypair.clone(),
-            client: Arc::new(TonicClient::new(context, network_keypair)),
+            context,
+            network_keypair,
+            validator_client,
+            observer_client,
             server: None,
             observer_server: None,
         }
     }
 }
 
-impl<S: NetworkService + ObserverNetworkService> NetworkManager<S> for TonicManager {
-    type Client = TonicClient;
+impl NetworkManager for TonicManager {
+    type ValidatorClient = TonicValidatorClient;
+    type ObserverClient = TonicObserverClient;
 
     fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
         TonicManager::new(context, network_keypair)
     }
 
-    fn client(&self) -> Arc<Self::Client> {
-        self.client.clone()
+    fn validator_client(&self) -> Arc<Self::ValidatorClient> {
+        self.validator_client.clone()
     }
 
-    async fn install_service(&mut self, service: Arc<S>) {
-        info!("Starting tonic service");
+    fn observer_client(&self) -> Arc<Self::ObserverClient> {
+        self.observer_client.clone()
+    }
 
-        let service_arc = service.clone();
-        let (own_address, http_config) = self.start_validator_server(service).await;
+    async fn start_validator_server<V>(&mut self, service: Arc<V>)
+    where
+        V: ValidatorNetworkService,
+    {
+        info!("Starting tonic validator server");
+        self.start_validator_server_impl(service).await;
+    }
 
-        // Start observer server if configured
-        self.start_observer_server(service_arc, own_address, http_config)
+    async fn start_observer_server<O>(&mut self, service: Arc<O>)
+    where
+        O: ObserverNetworkService,
+    {
+        info!("Starting tonic observer server");
+        let own_address = *self
+            .server
+            .as_ref()
+            .expect("Validator server must be started before observer server")
+            .local_addr();
+        let http_config = sui_http::Config::default()
+            .initial_connection_window_size(64 << 20)
+            .initial_stream_window_size(32 << 20)
+            .http2_keepalive_interval(Some(self.context.parameters.tonic.keepalive_interval))
+            .http2_keepalive_timeout(Some(self.context.parameters.tonic.keepalive_interval))
+            .accept_http1(false);
+
+        self.start_observer_server_impl(service, own_address, http_config)
             .await;
     }
 
@@ -743,10 +777,7 @@ impl<S: NetworkService + ObserverNetworkService> NetworkManager<S> for TonicMana
 }
 
 impl TonicManager {
-    async fn start_validator_server<S: NetworkService>(
-        &mut self,
-        service: Arc<S>,
-    ) -> (SocketAddr, sui_http::Config) {
+    async fn start_validator_server_impl<V: ValidatorNetworkService>(&mut self, service: Arc<V>) {
         let authority = self.context.committee.authority(self.context.own_index);
         // By default, bind to the unspecified address to allow the actual address to be assigned.
         // But bind to localhost if it is requested.
@@ -876,13 +907,11 @@ impl TonicManager {
 
         info!("Server started at: {own_address}");
         self.server = Some(server);
-
-        (own_address, http_config)
     }
 
-    async fn start_observer_server<S: NetworkService + ObserverNetworkService>(
+    async fn start_observer_server_impl<O: ObserverNetworkService>(
         &mut self,
-        service: Arc<S>,
+        service: Arc<O>,
         validator_address: SocketAddr,
         http_config: sui_http::Config,
     ) {

@@ -27,7 +27,7 @@ use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
     BlockAPI as _, context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
-    network::NetworkClient, round_tracker::PeerRoundTracker,
+    network::ValidatorNetworkClient, round_tracker::PeerRoundTracker,
 };
 
 // Handle to control the RoundProber loop and read latest round gaps.
@@ -48,7 +48,7 @@ impl RoundProberHandle {
     }
 }
 
-pub(crate) struct RoundProber<C: NetworkClient> {
+pub(crate) struct RoundProber<C: ValidatorNetworkClient> {
     context: Arc<Context>,
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
     round_tracker: Arc<RwLock<PeerRoundTracker>>,
@@ -57,7 +57,7 @@ pub(crate) struct RoundProber<C: NetworkClient> {
     shutdown_notify: Arc<NotifyOnce>,
 }
 
-impl<C: NetworkClient> RoundProber<C> {
+impl<C: ValidatorNetworkClient> RoundProber<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
@@ -230,7 +230,7 @@ mod test {
         core_thread::{CoreError, CoreThreadDispatcher},
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
-        network::{BlockStream, NetworkClient},
+        network::{BlockStream, ValidatorNetworkClient},
         round_prober::RoundProber,
         round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
@@ -310,7 +310,7 @@ mod test {
     }
 
     #[async_trait]
-    impl NetworkClient for FakeNetworkClient {
+    impl ValidatorNetworkClient for FakeNetworkClient {
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
