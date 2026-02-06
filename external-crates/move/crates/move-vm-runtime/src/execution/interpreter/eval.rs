@@ -276,6 +276,8 @@ fn step(
 
 #[inline]
 fn control_flow_instruction(instruction: &Bytecode) -> bool {
+    // Explicitly list all the opcodes to make sure that we handle this
+    // case properly when adding new instructions.
     match instruction {
         Bytecode::Ret
         | Bytecode::BrTrue(_)
