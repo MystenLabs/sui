@@ -106,7 +106,9 @@ pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
 use crate::jsonrpc_index::IndexStore;
-use crate::jsonrpc_index::{CoinInfo, IndexStoreCacheUpdates, ObjectIndexChanges};
+use crate::jsonrpc_index::{
+    CoinInfo, IndexStoreCacheUpdates, IndexStoreCacheUpdatesWithLocks, ObjectIndexChanges,
+};
 use mysten_common::debug_fatal;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_config::genesis::Genesis;
@@ -2922,7 +2924,8 @@ impl AuthorityState {
         written: &WrittenObjects,
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdates)> {
+        acquire_locks: bool,
+    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdatesWithLocks)> {
         let changes = Self::process_object_index(backing_package_store, object_store, effects, written, inner_temporary_store, epoch_store)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
@@ -2953,6 +2956,7 @@ impl AuthorityState {
             timestamp_ms,
             tx_coins,
             effects.accumulator_events(),
+            acquire_locks,
         )
     }
 
@@ -3312,7 +3316,7 @@ impl AuthorityState {
 
         if self.config.sync_post_process_one_tx {
             // Synchronous mode: run post-processing inline on the calling thread
-            // and commit the index batch immediately.
+            // and commit the index batch immediately with locks held.
             // Used as a rollback mechanism and for testing correctness against async mode.
             // TODO: delete this branch once async mode has shipped
             let result = Self::post_process_one_tx_impl(
@@ -3327,17 +3331,21 @@ impl AuthorityState {
                 effects,
                 inner_temporary_store,
                 epoch_store,
+                true, // acquire_locks
             );
 
             match result {
-                Ok((raw_batch, cache_updates)) => {
+                Ok((raw_batch, cache_updates_with_locks)) => {
                     if let Some(indexes) = &self.indexes {
                         let mut db_batch = indexes.new_db_batch();
                         db_batch
                             .absorb_raw_batches(vec![raw_batch])
                             .expect("failed to absorb raw index batch");
+                        // Destructure to keep _locks alive through commit_index_batch.
+                        let IndexStoreCacheUpdatesWithLocks { _locks, inner } =
+                            cache_updates_with_locks;
                         indexes
-                            .commit_index_batch(db_batch, vec![cache_updates])
+                            .commit_index_batch(db_batch, vec![inner])
                             .expect("failed to commit index batch");
                     }
                 }
@@ -3392,11 +3400,13 @@ impl AuthorityState {
                     &effects,
                     &inner_temporary_store,
                     &epoch_store,
+                    false, // acquire_locks
                 );
 
                 match result {
-                    Ok(output) => {
+                    Ok((raw_batch, cache_updates_with_locks)) => {
                         fail_point!("crash-after-post-process-one-tx");
+                        let output = (raw_batch, cache_updates_with_locks.into_inner());
                         let _ = done_tx.send(output);
                     }
                     Err(e) => {
@@ -3423,7 +3433,8 @@ impl AuthorityState {
         effects: &TransactionEffects,
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<PostProcessingOutput> {
+        acquire_locks: bool,
+    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdatesWithLocks)> {
         let _scope = monitored_scope("Execution::post_process_one_tx");
 
         let tx_digest = certificate.digest();
@@ -3459,6 +3470,7 @@ impl AuthorityState {
             written,
             inner_temporary_store,
             epoch_store,
+            acquire_locks,
         )
         .tap_ok(|_| metrics.post_processing_total_tx_indexed.inc())
         .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"))

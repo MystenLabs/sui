@@ -5,7 +5,7 @@
 //! The main user of this data is the explorer.
 
 use std::cmp::{max, min};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use bincode::Options;
 use itertools::Itertools;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
+use parking_lot::ArcMutexGuard;
 use prometheus::{
     IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry,
@@ -190,6 +191,25 @@ pub struct IndexStoreCaches {
     pub locks: MutexTable<SuiAddress>,
 }
 
+type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
+
+/// Cache updates with optional locks held. Returned from `index_tx`.
+/// In sync mode, locks are acquired and held until the batch is committed.
+/// In async mode, locks are None and this is converted to `IndexStoreCacheUpdates`
+/// via `into_inner()` before sending across threads.
+pub struct IndexStoreCacheUpdatesWithLocks {
+    pub(crate) _locks: Option<Vec<OwnedMutexGuard<()>>>,
+    pub(crate) inner: IndexStoreCacheUpdates,
+}
+
+impl IndexStoreCacheUpdatesWithLocks {
+    pub fn into_inner(self) -> IndexStoreCacheUpdates {
+        self.inner
+    }
+}
+
+/// Send-safe cache updates without locks, used in the async post-processing channel
+/// and by `commit_index_batch`.
 #[derive(Default)]
 pub struct IndexStoreCacheUpdates {
     per_coin_type_balance_changes: Vec<((SuiAddress, TypeTag), SuiResult<TotalBalance>)>,
@@ -622,18 +642,42 @@ impl IndexStore {
         &self,
         digest: &TransactionDigest,
         batch: &mut RawDBBatch,
+        object_index_changes: &ObjectIndexChanges,
         tx_coins: Option<TxCoins>,
-    ) -> SuiResult<IndexStoreCacheUpdates> {
+        acquire_locks: bool,
+    ) -> SuiResult<IndexStoreCacheUpdatesWithLocks> {
         // In production if this code path is hit, we should expect `tx_coins` to not be None.
         // However, in many tests today we do not distinguish validator and/or fullnode, so
         // we gracefully exist here.
         if tx_coins.is_none() {
-            return Ok(IndexStoreCacheUpdates::default());
+            return Ok(IndexStoreCacheUpdatesWithLocks {
+                _locks: None,
+                inner: IndexStoreCacheUpdates::default(),
+            });
         }
+
+        let _locks = if acquire_locks {
+            let mut addresses: HashSet<SuiAddress> = HashSet::new();
+            addresses.extend(
+                object_index_changes
+                    .deleted_owners
+                    .iter()
+                    .map(|(owner, _)| *owner),
+            );
+            addresses.extend(
+                object_index_changes
+                    .new_owners
+                    .iter()
+                    .map(|((owner, _), _)| *owner),
+            );
+            Some(self.caches.locks.acquire_locks(addresses.into_iter()))
+        } else {
+            None
+        };
+
+        let (input_coins, written_coins) = tx_coins.unwrap();
         let mut balance_changes: HashMap<SuiAddress, HashMap<TypeTag, TotalBalance>> =
             HashMap::new();
-        // Index coin info
-        let (input_coins, written_coins) = tx_coins.unwrap();
 
         // 1. Remove old coins from the DB by looking at the set of input coin objects
         let coin_delete_keys = input_coins
@@ -741,9 +785,12 @@ impl IndexStore {
                 )
             })
             .collect();
-        let cache_updates = IndexStoreCacheUpdates {
-            per_coin_type_balance_changes,
-            all_balance_changes,
+        let cache_updates = IndexStoreCacheUpdatesWithLocks {
+            _locks,
+            inner: IndexStoreCacheUpdates {
+                per_coin_type_balance_changes,
+                all_balance_changes,
+            },
         };
         Ok(cache_updates)
     }
@@ -766,7 +813,8 @@ impl IndexStore {
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
         accumulator_events: Vec<AccumulatorEvent>,
-    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdates)> {
+        acquire_locks: bool,
+    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdatesWithLocks)> {
         let mut batch = RawDBBatch::new();
 
         batch.insert_batch(
@@ -816,7 +864,13 @@ impl IndexStore {
         )?;
 
         // Coin Index
-        let cache_updates = self.index_coin(digest, &mut batch, tx_coins)?;
+        let cache_updates = self.index_coin(
+            digest,
+            &mut batch,
+            &object_index_changes,
+            tx_coins,
+            acquire_locks,
+        )?;
 
         // update address balances index
         let address_balance_updates = accumulator_events.into_iter().filter_map(|event| {
@@ -2027,12 +2081,13 @@ mod tests {
             1234,
             Some(tx_coins),
             vec![],
+            false,
         )?;
         // Commit the batch so subsequent reads see the data
         let mut db_batch = index_store.new_db_batch();
         db_batch.absorb_raw_batches(vec![raw_batch]).unwrap();
         index_store
-            .commit_index_batch(db_batch, vec![cache_updates])
+            .commit_index_batch(db_batch, vec![cache_updates.into_inner()])
             .unwrap();
 
         let balance_from_db = IndexStore::get_balance_from_db(
@@ -2078,11 +2133,12 @@ mod tests {
             1234,
             Some(tx_coins),
             vec![],
+            false,
         )?;
         let mut db_batch = index_store.new_db_batch();
         db_batch.absorb_raw_batches(vec![raw_batch]).unwrap();
         index_store
-            .commit_index_batch(db_batch, vec![cache_updates])
+            .commit_index_batch(db_batch, vec![cache_updates.into_inner()])
             .unwrap();
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
