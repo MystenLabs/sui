@@ -167,7 +167,7 @@ impl Payload for AdversarialTestPayload {
         // Sometimes useful when figuring out why things failed
         let stat = match effects {
             ExecutionEffects::FinalizedTransactionEffects(e, _) => e.data().status(),
-            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+            ExecutionEffects::SuiTransactionBlockEffects(_) => unimplemented!("Not impl"),
         };
 
         debug_assert!(
