@@ -1,0 +1,23 @@
+[ingestion]
+ingest-concurrency = 20
+
+[pruner]
+retention = 31104000
+
+[pipeline.cp_sequence_numbers.pruner]
+
+[pipeline.tx_balance_changes.pruner]
+
+[pipeline.tx_digests.pruner]
+
+[pipeline.kv_epoch_ends.pruner]
+
+[pipeline.kv_epoch_starts.pruner]
+
+[pipeline.kv_feature_flags.pruner]
+
+[pipeline.kv_packages.pruner]
+
+[pipeline.kv_protocol_configs.pruner]
+
+[pipeline.sum_displays.pruner]
