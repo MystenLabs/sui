@@ -296,6 +296,7 @@ const MAX_PROTOCOL_VERSION: u64 = 111;
 //              split_checkpoints_in_consensus_handler in devnet
 //              Enable additional validation on zkLogin public identifier.
 // Version 111: Validator metadata
+//              Enable Ristretto255 in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4599,6 +4600,9 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
+                }
+                111 => {
+                    cfg.feature_flags.validator_metadata_verify_v2 = true;
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
@@ -4627,9 +4631,6 @@ impl ProtocolConfig {
                         cfg.hash_sha3_512_data_cost_per_byte = Some(2);
                         cfg.hash_sha3_512_data_cost_per_block = Some(2);
                     }
-                }
-                111 => {
-                    cfg.feature_flags.validator_metadata_verify_v2 = true;
                 }
                 // Use this template when making changes:
                 //
