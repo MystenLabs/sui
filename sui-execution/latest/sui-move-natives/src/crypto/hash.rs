@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::crypto::group_ops::NOT_SUPPORTED_ERROR;
+use crate::object_runtime::ObjectRuntime;
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256, Sha3_512};
 use move_binary_format::errors::PartialVMResult;
@@ -13,8 +15,6 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, ops::Mul};
-use crate::crypto::group_ops::NOT_SUPPORTED_ERROR;
-use crate::object_runtime::ObjectRuntime;
 
 const BLAKE_2B256_BLOCK_SIZE: u16 = 128;
 const KECCAK_256_BLOCK_SIZE: u16 = 136;
@@ -163,7 +163,6 @@ pub fn sha3_512(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-
     if !is_sha3_512_supported(context)? {
         return Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED_ERROR));
     }
@@ -173,10 +172,7 @@ pub fn sha3_512(
         .hash_sha3_512_cost_params
         .clone();
     // Charge the base cost for this oper
-    native_charge_gas_early_exit!(
-        context,
-        hash_sha3_512_cost_params.hash_sha3_512_cost_base
-    );
+    native_charge_gas_early_exit!(context, hash_sha3_512_cost_params.hash_sha3_512_cost_base);
 
     hash::<Sha3_512, 64>(
         context,
