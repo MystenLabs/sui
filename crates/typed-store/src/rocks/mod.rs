@@ -1145,6 +1145,78 @@ pub enum StorageWriteBatch {
     TideHunter(tidehunter::batch::WriteBatch),
 }
 
+enum RawBatchEntry {
+    Put {
+        cf_name: String,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    },
+    Delete {
+        cf_name: String,
+        key: Vec<u8>,
+    },
+}
+
+/// A write batch that stores serialized operations in memory without requiring
+/// a database reference. Can be replayed into a real `DBBatch` for atomic commit.
+pub struct RawDBBatch {
+    entries: Vec<RawBatchEntry>,
+    size_bytes: usize,
+}
+
+impl RawDBBatch {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            size_bytes: 0,
+        }
+    }
+
+    pub fn insert_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
+        &mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, U)>,
+    ) -> Result<&mut Self, TypedStoreError> {
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let k_buf = be_fix_int_ser(k.borrow());
+                let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
+                self.size_bytes += k_buf.len() + v_buf.len();
+                self.entries.push(RawBatchEntry::Put {
+                    cf_name: db.cf_name().to_owned(),
+                    key: k_buf,
+                    value: v_buf,
+                });
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
+        &mut self,
+        db: &DBMap<K, V>,
+        purged_vals: impl IntoIterator<Item = J>,
+    ) -> Result<(), TypedStoreError> {
+        purged_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|k| {
+                let k_buf = be_fix_int_ser(k.borrow());
+                self.size_bytes += k_buf.len();
+                self.entries.push(RawBatchEntry::Delete {
+                    cf_name: db.cf_name().to_owned(),
+                    key: k_buf,
+                });
+                Ok(())
+            })?;
+        Ok(())
+    }
+
+    pub fn size_in_bytes(&self) -> usize {
+        self.size_bytes
+    }
+}
+
 /// Provides a mutable struct to form a collection of database write operations, and execute them.
 ///
 /// Batching write and delete operations is faster than performing them one by one and ensures their atomicity,
@@ -1290,6 +1362,52 @@ impl DBBatch {
             #[cfg(tidehunter)]
             StorageWriteBatch::TideHunter(_) => 0,
         }
+    }
+
+    /// Replay all operations from multiple `RawDBBatch`es into this batch.
+    pub fn absorb_raw_batches(
+        &mut self,
+        raw_batches: Vec<RawDBBatch>,
+    ) -> Result<(), TypedStoreError> {
+        for raw_batch in raw_batches {
+            for entry in raw_batch.entries {
+                match entry {
+                    RawBatchEntry::Put {
+                        cf_name,
+                        key,
+                        value,
+                    } => match &mut self.batch {
+                        StorageWriteBatch::Rocks(b) => {
+                            b.put_cf(&rocks_cf_from_db(&self.database, &cf_name)?, key, value);
+                        }
+                        StorageWriteBatch::InMemory(b) => {
+                            b.put_cf(&cf_name, key, value);
+                        }
+                        #[cfg(tidehunter)]
+                        _ => {
+                            return Err(TypedStoreError::RocksDBError(
+                                "absorb_raw_batches not supported for TideHunter".to_string(),
+                            ));
+                        }
+                    },
+                    RawBatchEntry::Delete { cf_name, key } => match &mut self.batch {
+                        StorageWriteBatch::Rocks(b) => {
+                            b.delete_cf(&rocks_cf_from_db(&self.database, &cf_name)?, key);
+                        }
+                        StorageWriteBatch::InMemory(b) => {
+                            b.delete_cf(&cf_name, key);
+                        }
+                        #[cfg(tidehunter)]
+                        _ => {
+                            return Err(TypedStoreError::RocksDBError(
+                                "absorb_raw_batches not supported for TideHunter".to_string(),
+                            ));
+                        }
+                    },
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
