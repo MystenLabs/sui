@@ -3186,8 +3186,7 @@ impl AuthorityState {
         if self.config.sync_post_process_one_tx {
             // Synchronous mode: run post-processing inline on the calling thread.
             // Used as a rollback mechanism and for testing correctness against async mode.
-            // TODO: delete this branch once async mode has shipped; both paths could share
-            // a single spawn_blocking call with the sync path simply awaiting the handle.
+            // TODO: delete this branch once async mode has shipped
             let result = Self::post_process_one_tx_impl(
                 &self.indexes,
                 &self.subscription_handler,
@@ -3212,7 +3211,6 @@ impl AuthorityState {
             return result;
         }
 
-        // Clone the individual Arc fields needed by the spawned task
         let indexes = self.indexes.clone();
         let subscription_handler = self.subscription_handler.clone();
         let metrics = self.metrics.clone();
@@ -3222,17 +3220,12 @@ impl AuthorityState {
         let pending_map = self.pending_post_processing.clone();
         let semaphore = self.post_processing_semaphore.clone();
 
-        // Clone the data arguments
         let certificate = certificate.clone();
         let effects = effects.clone();
         let inner_temporary_store = inner_temporary_store.clone();
         let epoch_store = epoch_store.clone();
 
-        // Spawn an async task that acquires a semaphore permit before spawning
-        // the blocking work. The semaphore limits concurrent post-processing tasks
-        // to avoid overwhelming the blocking thread pool (default: num_cpus permits).
-        // If all permits are held, this task waits asynchronously until one frees up,
-        // providing backpressure without blocking the executor thread.
+        // spawn post processing on a blocking thread
         tokio::spawn(async move {
             let permit = {
                 let _scope = monitored_scope("Execution::post_process_one_tx::semaphore_acquire");
@@ -3243,8 +3236,6 @@ impl AuthorityState {
             };
 
             let _ = tokio::task::spawn_blocking(move || {
-                // Move the permit into the closure so it is held for the duration
-                // of the work and released when the closure completes.
                 let _permit = permit;
 
                 let result = Self::post_process_one_tx_impl(
@@ -3267,7 +3258,6 @@ impl AuthorityState {
 
                 fail_point!("crash-after-post-process-one-tx");
 
-                // Signal completion and remove from pending map.
                 let _ = done_tx.send(());
                 pending_map.remove(&tx_digest);
             })
