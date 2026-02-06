@@ -24,9 +24,9 @@ use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
 use arc_swap::{ArcSwap, ArcSwapOption, Guard};
-use dashmap::DashMap;
 use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
+use dashmap::DashMap;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::hash::MultisetHash;
@@ -2970,8 +2970,7 @@ impl AuthorityState {
                 };
                 // When we process the index, the latest object hasn't been written yet so
                 // the old object must be present.
-                let Some(old_object) = object_store.get_object_by_key(id, *old_version)
-                else {
+                let Some(old_object) = object_store.get_object_by_key(id, *old_version) else {
                     panic!(
                         "tx_digest={:?}, error processing object owner index, cannot find owner for object {:?} at version {:?}",
                         tx_digest, id, old_version
@@ -3038,16 +3037,22 @@ impl AuthorityState {
                         oref.1
                     );
 
-                    let Some(df_info) = Self::try_create_dynamic_field_info(object_store, new_object, written, layout_resolver.as_mut())
-                        .unwrap_or_else(|e| {
-                            error!("try_create_dynamic_field_info should not fail, {}, new_object={:?}", e, new_object);
-                            None
-                        }
+                    let Some(df_info) = Self::try_create_dynamic_field_info(
+                        object_store,
+                        new_object,
+                        written,
+                        layout_resolver.as_mut(),
                     )
-                        else {
-                            // Skip indexing for non dynamic field objects.
-                            continue;
-                        };
+                    .unwrap_or_else(|e| {
+                        error!(
+                            "try_create_dynamic_field_info should not fail, {}, new_object={:?}",
+                            e, new_object
+                        );
+                        None
+                    }) else {
+                        // Skip indexing for non dynamic field objects.
+                        continue;
+                    };
                     new_dynamic_fields.push(((ObjectID::from(owner), *id), df_info))
                 }
                 _ => {}
@@ -3228,8 +3233,7 @@ impl AuthorityState {
         // providing backpressure without blocking the executor thread.
         tokio::spawn(async move {
             let permit = {
-                let _scope =
-                    monitored_scope("Execution::post_process_one_tx::semaphore_acquire");
+                let _scope = monitored_scope("Execution::post_process_one_tx::semaphore_acquire");
                 semaphore
                     .acquire_owned()
                     .await
@@ -5252,8 +5256,7 @@ impl AuthorityState {
             if inner_temporary_store
                 .loaded_runtime_objects
                 .contains_key(&object_id)
-                && let Some(object) = object_store
-                    .get_object_by_key(&object_id, version)
+                && let Some(object) = object_store.get_object_by_key(&object_id, version)
                 && object.is_coin()
             {
                 input_coin_objects.insert(object_id, object);

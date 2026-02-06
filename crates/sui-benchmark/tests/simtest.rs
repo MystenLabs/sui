@@ -1693,9 +1693,7 @@ mod test {
             .start_fullnode_from_config(async_fn_config)
             .await;
         let async_fn_name = async_fullnode.sui_node.state().name;
-        let async_fn_sim_id = async_fullnode
-            .sui_node
-            .with(|n| n.get_sim_node_id());
+        let async_fn_sim_id = async_fullnode.sui_node.with(|n| n.get_sim_node_id());
         drop(async_fullnode);
 
         // Spawn sync fullnode
@@ -1733,8 +1731,9 @@ mod test {
             let mut rng = thread_rng();
             if rng.gen_range(0.0..1.0) < 0.02 {
                 let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
-                let alive_until =
-                    Instant::now() + restart_after + Duration::from_millis(rng.gen_range(5000..30000));
+                let alive_until = Instant::now()
+                    + restart_after
+                    + Duration::from_millis(rng.gen_range(5000..30000));
                 *grace_period = Some(alive_until);
 
                 error!(?cur_node, "killing async fullnode");

@@ -26,8 +26,8 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_test_transaction_builder::{
     TestTransactionBuilder, batch_make_transfer_transactions, create_nft, delete_nft,
-    increment_counter, publish_basics_package,
-    publish_basics_package_and_make_counter, publish_nfts_package,
+    increment_counter, publish_basics_package, publish_basics_package_and_make_counter,
+    publish_nfts_package,
 };
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{FullObjectRef, ObjectID, SuiAddress, TransactionDigest};
@@ -1445,5 +1445,3 @@ async fn publish_init_events_without_local_execution() {
         .unwrap();
     assert_eq!(response.events.unwrap().data.len(), 1);
 }
-
-
