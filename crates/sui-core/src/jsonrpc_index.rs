@@ -2014,7 +2014,9 @@ mod tests {
         };
 
         let tx_coins = (input_objects.clone(), written_objects.clone());
-        index_store.index_tx(
+        let seq = index_store.allocate_sequence_number();
+        let (raw_batch, cache_updates) = index_store.index_tx(
+            seq,
             address,
             vec![].into_iter(),
             vec![].into_iter(),
@@ -2026,6 +2028,12 @@ mod tests {
             Some(tx_coins),
             vec![],
         )?;
+        // Commit the batch so subsequent reads see the data
+        let mut db_batch = index_store.new_db_batch();
+        db_batch.absorb_raw_batches(vec![raw_batch]).unwrap();
+        index_store
+            .commit_index_batch(db_batch, vec![cache_updates])
+            .unwrap();
 
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
@@ -2057,7 +2065,9 @@ mod tests {
             new_dynamic_fields: vec![],
         };
         let tx_coins = (input_objects, written_objects);
-        index_store.index_tx(
+        let seq = index_store.allocate_sequence_number();
+        let (raw_batch, cache_updates) = index_store.index_tx(
+            seq,
             address,
             vec![].into_iter(),
             vec![].into_iter(),
@@ -2069,6 +2079,11 @@ mod tests {
             Some(tx_coins),
             vec![],
         )?;
+        let mut db_batch = index_store.new_db_batch();
+        db_batch.absorb_raw_batches(vec![raw_batch]).unwrap();
+        index_store
+            .commit_index_batch(db_batch, vec![cache_updates])
+            .unwrap();
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
             index_store.tables.coin_index_2.clone(),
