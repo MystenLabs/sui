@@ -68,8 +68,19 @@ fn thdb_config() -> Config {
         println!("Using frag size from env variable {frag_size}");
         frag_size
     } else {
-        1024 * 1024 * 1024
+        #[cfg(debug_assertions)]
+        {
+            32 * 1024 * 1024
+        } // 32 Mb for tests
+        #[cfg(not(debug_assertions))]
+        {
+            1024 * 1024 * 1024
+        } // 1 Gb for prod
     };
+    #[cfg(debug_assertions)]
+    let max_maps = 4;
+    #[cfg(not(debug_assertions))]
+    let max_maps = 8; // 8Gb of mapped space for prod
     Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
@@ -78,13 +89,19 @@ fn thdb_config() -> Config {
         snapshot_unload_threshold: 128 * 1024 * 1024 * 1024,
         unload_jitter_pct: 30,
         max_dirty_keys: 1024,
-        max_maps: 8, // 8Gb of mapped space
+        max_maps,
         ..Config::default()
     }
 }
 
+#[cfg(not(debug_assertions))]
 pub fn default_mutex_count() -> usize {
     1024
+}
+
+#[cfg(debug_assertions)]
+pub fn default_mutex_count() -> usize {
+    16
 }
 
 pub fn default_value_cache_size() -> usize {
