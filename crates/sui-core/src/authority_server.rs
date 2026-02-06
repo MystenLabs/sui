@@ -1190,19 +1190,20 @@ impl ValidatorService {
             // Ensure that finalized effects are always prioritized.
             biased;
             // We always wait for effects regardless of consensus position via
-            // notify_read_executed_effects. This is safe because we have separated
+            // notify_read_executed_effects_may_fail. This is safe because we have separated
             // mysticeti fastpath outputs to a separate dirty cache
             // UncommittedData::fastpath_transaction_outputs that will only get flushed
-            // once finalized. So the output of notify_read_executed_effects is
+            // once finalized. So the output of notify_read_executed_effects_may_fail is
             // guaranteed to be finalized effects or effects from QD execution.
-            mut effects = self.state
+            // We use _may_fail variant because effects may have been pruned for old transactions.
+            effects_result = self.state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects(
+                .notify_read_executed_effects_may_fail(
                     "AuthorityServer::wait_for_effects::notify_read_executed_effects_finalized",
                     &tx_digests,
                 ) => {
                 tracing::Span::current().record("fast_path_effects", false);
-                let effects = effects.pop().unwrap();
+                let effects = effects_result?.pop().unwrap();
                 let details = if request.include_details {
                     Some(self.complete_executed_data(effects.clone(), None).await?)
                 } else {

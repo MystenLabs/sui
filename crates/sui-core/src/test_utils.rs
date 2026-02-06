@@ -59,7 +59,9 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>, 
     )
     .await
     {
-        Ok(_) => info!(?digest, "digest found"),
+        Ok(_) => {
+            info!(?digest, "digest found");
+        }
         Err(e) => {
             warn!(?digest, "digest not found!");
             panic!("timed out waiting for effects of digest! {e}");

@@ -179,9 +179,8 @@ impl SingleValidator {
                     &self.epoch_store,
                 );
                 self.get_validator()
-                    .wait_for_transaction_execution(&executable, &self.epoch_store)
+                    .wait_for_transaction_execution_for_testing(&executable, &self.epoch_store)
                     .await
-                    .unwrap()
             }
             Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
                 // Execute the transaction directly using try_execute_executable_for_test

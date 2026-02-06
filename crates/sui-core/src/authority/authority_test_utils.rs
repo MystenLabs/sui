@@ -231,7 +231,9 @@ pub async fn enqueue_and_execute_all(
     );
     let mut output = Vec::new();
     for (exec, _) in executables {
-        let effects = authority.notify_read_effects("", *exec.digest()).await?;
+        let effects = authority
+            .notify_read_effects_for_testing("", *exec.digest())
+            .await;
         output.push(effects);
     }
     Ok(output)

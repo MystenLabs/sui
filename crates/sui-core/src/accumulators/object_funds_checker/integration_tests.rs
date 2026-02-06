@@ -270,9 +270,8 @@ async fn test_object_withdraw_multiple_withdraws() {
             assert!(matches!(output, ExecutionOutput::RetryLater));
             let effects = env
                 .authority
-                .notify_read_effects("test", digest)
-                .await
-                .unwrap();
+                .notify_read_effects_for_testing("test", digest)
+                .await;
             assert!(matches!(
                 effects.status(),
                 ExecutionStatus::Failure {
@@ -327,9 +326,8 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
     assert!(matches!(output, ExecutionOutput::RetryLater));
     let effects = env
         .authority
-        .notify_read_effects("test", digest)
-        .await
-        .unwrap();
+        .notify_read_effects_for_testing("test", digest)
+        .await;
     assert!(matches!(
         effects.status(),
         ExecutionStatus::Failure {
@@ -389,9 +387,8 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
     assert!(matches!(output, ExecutionOutput::RetryLater));
     let effects = env
         .authority
-        .notify_read_effects("test", digest)
-        .await
-        .unwrap();
+        .notify_read_effects_for_testing("test", digest)
+        .await;
     assert!(matches!(
         effects.status(),
         ExecutionStatus::Failure {

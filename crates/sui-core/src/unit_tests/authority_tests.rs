@@ -2303,9 +2303,8 @@ async fn test_handle_confirmation_transaction_idempotent() {
 
     // Query the effects again - should return the same result
     let effects2 = authority_state
-        .notify_read_effects("", tx_digest)
-        .await
-        .unwrap();
+        .notify_read_effects_for_testing("", tx_digest)
+        .await;
     assert_eq!(effects2.status(), &ExecutionStatus::Success);
 
     // this is valid because we're checking the authority state does not change the effects
@@ -4772,9 +4771,8 @@ async fn test_shared_object_transaction_ok() {
 
     // Ensure transaction effects are available.
     authority
-        .notify_read_effects("", *executable.digest())
-        .await
-        .unwrap();
+        .notify_read_effects_for_testing("", *executable.digest())
+        .await;
 
     // Ensure shared object sequence number increased.
     let shared_object_version = authority

@@ -4126,17 +4126,15 @@ mod tests {
     }
 
     impl TransactionCacheRead for HashMap<TransactionDigest, TransactionEffects> {
-        fn notify_read_executed_effects(
+        fn notify_read_executed_effects_may_fail(
             &self,
             _: &str,
             digests: &[TransactionDigest],
-        ) -> BoxFuture<'_, Vec<TransactionEffects>> {
-            std::future::ready(
-                digests
-                    .iter()
-                    .map(|d| self.get(d).expect("effects not found").clone())
-                    .collect(),
-            )
+        ) -> BoxFuture<'_, SuiResult<Vec<TransactionEffects>>> {
+            std::future::ready(Ok(digests
+                .iter()
+                .map(|d| self.get(d).expect("effects not found").clone())
+                .collect()))
             .boxed()
         }
 
