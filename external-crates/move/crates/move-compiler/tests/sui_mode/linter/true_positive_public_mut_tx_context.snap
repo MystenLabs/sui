@@ -32,6 +32,16 @@ warning[Lint W99009]: prefer '&mut TxContext' over '&TxContext'
    = When upgrading, the public function cannot be modified to take '&mut TxContext' instead of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to future-proof the function.
    = This warning can be suppressed with '#[allow(lint(prefer_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[Sui W02002]: non-callable function
+   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:12:70
+   │
+12 │     public fun mixed_function(_a: &CustomStruct, _b: &TxContext, _c: &mut TxContext) {}
+   │                                                      ----------      ^^^^^^^^^^^^^^ Duplicate 'TxContext' usage. '&mut TxContext' usage must be unique
+   │                                                      │                
+   │                                                      Previous 'TxContext' usage here
+   │
+   = Due to restrictions in PTB execution if there is a mutable reference to a TxContext, it must be unique. This means that there cannot be another usage of the transaction context (either '&TxContext' or '&mut TxContext') in the function parameters. This function will not be callable on Sui
+
 warning[Lint W99009]: prefer '&mut TxContext' over '&TxContext'
    ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:18:13
    │
@@ -40,3 +50,13 @@ warning[Lint W99009]: prefer '&mut TxContext' over '&TxContext'
    │
    = When upgrading, the public function cannot be modified to take '&mut TxContext' instead of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to future-proof the function.
    = This warning can be suppressed with '#[allow(lint(prefer_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Sui W02002]: non-callable function
+   ┌─ tests/sui_mode/linter/true_positive_public_mut_tx_context.move:19:13
+   │
+18 │         _b: &TxContext, // Should warn
+   │             ---------- Previous 'TxContext' usage here
+19 │         _c: &mut TxContext,
+   │             ^^^^^^^^^^^^^^ Duplicate 'TxContext' usage. '&mut TxContext' usage must be unique
+   │
+   = Due to restrictions in PTB execution if there is a mutable reference to a TxContext, it must be unique. This means that there cannot be another usage of the transaction context (either '&TxContext' or '&mut TxContext') in the function parameters. This function will not be callable on Sui

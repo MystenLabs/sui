@@ -302,8 +302,10 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
     }
     if name.0.value == INIT_FUNCTION_NAME {
         init_visibility(context, name, *visibility, *entry);
+    } else {
+        // don't run these checks on init since they have their own rules
+        signature_sanity_check(context, name, signature);
     }
-    signature_sanity_check(context, name, signature);
     if let sp!(_, T::FunctionBody_::Defined(seq)) = body {
         context.visit_seq(body.loc, seq)
     }
@@ -370,8 +372,11 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
     let tx_ctx_kind = parameters
         .last()
         .map(|(_, _, last_param_ty)| tx_context_kind(last_param_ty))
-        .unwrap_or(TxContextKind::None);
-    if tx_ctx_kind == TxContextKind::None {
+        .unwrap_or(Some(TxContextKind::None));
+    if matches!(
+        tx_ctx_kind,
+        Some(TxContextKind::None | TxContextKind::Owned)
+    ) {
         let msg = format!(
             "'init' functions must have their last parameter as \
             '&{a}::{m}::{t}' or '&mut {a}::{m}::{t}'",
@@ -390,7 +395,10 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
     let otw_name: Symbol = context.otw_name();
     if parameters.len() == 1
         && context.one_time_witness.is_some()
-        && tx_ctx_kind != TxContextKind::None
+        && matches!(
+            tx_ctx_kind,
+            Some(TxContextKind::Mutable | TxContextKind::Immutable)
+        )
     {
         // if there is 1 parameter, and a OTW, this is an error since the OTW must be used
         let msg = format!(
@@ -587,7 +595,7 @@ fn invalid_otw_field_loc(fields: &Fields<(DocComment, Type)>) -> Option<InvalidO
 
 fn signature_sanity_check(
     context: &mut Context,
-    name: FunctionName,
+    _name: FunctionName,
     signature: &FunctionSignature,
 ) {
     // check tx context usage
@@ -598,18 +606,21 @@ fn signature_sanity_check(
     // Check for multiple TxContexts
     let mut prev_tx_ctx: Option<(Loc, /* mut */ bool)> = None;
     for (_, _, param_ty) in &signature.parameters {
-        match (tx_context_kind(param_ty), &prev_tx_ctx) {
+        let Some(tx_ctx_kind) = tx_context_kind(param_ty) else {
+            continue;
+        };
+        match (tx_ctx_kind, &prev_tx_ctx) {
             (TxContextKind::None, _) => (),
             (TxContextKind::Mutable, None) => prev_tx_ctx = Some((param_ty.loc, true)),
             (TxContextKind::Immutable, None) | (TxContextKind::Immutable, Some((_, false))) => {
                 prev_tx_ctx = Some((param_ty.loc, false))
             }
-            (TxContextKind::Mutable, Some((prev_loc, prev_kind))) => {
-                let mut_msg = "Duplicate TxContext usage. '&mut TxContext' usage must be unique";
+            (TxContextKind::Mutable, Some((prev_loc, _prev_kind))) => {
+                let mut_msg = "Duplicate 'TxContext' usage. '&mut TxContext' usage must be unique";
                 let mut diag = diag!(
                     UNCALLABLE_FUNCTION_SIGNATURE,
                     (param_ty.loc, mut_msg),
-                    (prev_loc, "Previous TxContext usage here")
+                    (*prev_loc, "Previous 'TxContext' usage here")
                 );
                 diag.add_note(DUPLICATE_TX_CTX_NOTE);
                 context.add_diag(diag);
@@ -617,12 +628,19 @@ fn signature_sanity_check(
             }
             (TxContextKind::Immutable, Some((prev_loc, true))) => {
                 let mut_msg =
-                    "Previous TxContext usage here. '&mut TxContext' usage must be unique";
+                    "Previous 'TxContext' usage here. '&mut TxContext' usage must be unique";
                 let diag = diag!(
                     UNCALLABLE_FUNCTION_SIGNATURE,
                     (param_ty.loc, "Duplicate TxContext usage"),
-                    (prev_loc, mut_msg)
+                    (*prev_loc, mut_msg)
                 );
+                context.add_diag(diag);
+                break;
+            }
+            (TxContextKind::Owned, _) => {
+                let msg = "Invalid TxContext usage. 'TxContext' must be taken by reference, \
+                    e.g. '&TxContext' or '&mut TxContext'";
+                let diag = diag!(UNCALLABLE_FUNCTION_SIGNATURE, (param_ty.loc, msg));
                 context.add_diag(diag);
                 break;
             }
@@ -641,7 +659,6 @@ fn signature_sanity_check(
             let mut diag = diag!(UNCALLABLE_FUNCTION_SIGNATURE, (param_ty.loc, msg),);
             diag.add_note(OBJECT_NOTE);
             context.add_diag(diag);
-            break;
         }
         if is_mut_random(param_ty) {
             let msg = format!(
@@ -651,45 +668,48 @@ fn signature_sanity_check(
             let mut diag = diag!(UNCALLABLE_FUNCTION_SIGNATURE, (param_ty.loc, msg));
             diag.add_note(OBJECT_NOTE);
             context.add_diag(diag);
-            break;
         }
     }
 }
 
-fn tx_context_kind(sp!(_, last_param_ty_): &Type) -> TxContextKind {
-    // Already an error, so assume a valid, mutable TxContext
-    if matches!(last_param_ty_.inner(), TI::UnresolvedError | TI::Var(_)) {
-        return TxContextKind::Mutable;
-    }
-
-    let TI::Ref(is_mut, inner_ty) = last_param_ty_.inner() else {
-        // not a reference
-        return TxContextKind::None;
+fn tx_context_kind(sp!(_, param_ty): &Type) -> Option<TxContextKind> {
+    let (ref_kind, inner_name) = match param_ty.inner() {
+        TI::Ref(is_mut, inner_ty) => match &inner_ty.value.inner() {
+            TI::Apply(_, sp!(_, inner_name), _) => (Some(*is_mut), inner_name),
+            // Unknown type resulting from a previous error
+            TI::UnresolvedError | TI::Var(_) => return None,
+            // not a user defined type
+            _ => return Some(TxContextKind::None),
+        },
+        TI::Apply(_, sp!(_, inner_name), _) => (None, inner_name),
+        // Unknown type resulting from a previous error
+        TI::UnresolvedError | TI::Var(_) => return None,
+        // not a reference or user defined type
+        _ => return Some(TxContextKind::None),
     };
-    let TI::Apply(_, sp!(_, inner_name), _) = &inner_ty.value.inner() else {
-        // not a user defined type
-        return TxContextKind::None;
-    };
-    if inner_name.is(
+    let kind = if inner_name.is(
         &SUI_ADDR_VALUE,
         TX_CONTEXT_MODULE_NAME,
         TX_CONTEXT_TYPE_NAME,
     ) {
-        if *is_mut {
-            TxContextKind::Mutable
-        } else {
-            TxContextKind::Immutable
+        match ref_kind {
+            None => TxContextKind::Owned,
+            Some(true) => TxContextKind::Mutable,
+            Some(false) => TxContextKind::Immutable,
         }
     } else {
         // not the tx context
         TxContextKind::None
-    }
+    };
+    Some(kind)
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum TxContextKind {
     // No TxContext
     None,
+    // Invalid but TxContext
+    Owned,
     // &mut TxContext
     Mutable,
     // &TxContext

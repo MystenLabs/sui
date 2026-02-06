@@ -5,4 +5,12 @@ info:
   edition: legacy
   lint: true
 ---
-
+warning[Sui W02002]: non-callable function
+   ┌─ tests/sui_mode/linter/suppress_public_mut_tx_context.move:11:70
+   │
+11 │     public fun suppressed_multi_param(_a: u64, _ctx: &TxContext, _b: &mut TxContext) {}
+   │                                                      ----------      ^^^^^^^^^^^^^^ Duplicate 'TxContext' usage. '&mut TxContext' usage must be unique
+   │                                                      │                
+   │                                                      Previous 'TxContext' usage here
+   │
+   = Due to restrictions in PTB execution if there is a mutable reference to a TxContext, it must be unique. This means that there cannot be another usage of the transaction context (either '&TxContext' or '&mut TxContext') in the function parameters. This function will not be callable on Sui
