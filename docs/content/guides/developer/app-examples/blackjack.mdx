@@ -1,8 +1,7 @@
 ---
 title: Blackjack
 description: Learn Sui using an example implementation of the popular casino game Blackjack.
-
-keywords: [ http requests, serverless functions, on-chain randomness, generate randomness, create game, game app, game app, example game ]
+keywords: [ public bls key, http requests, serverless functions, randomness, generate randomness, create game, game app, game app, example game ]
 ---
 
 The following documentation goes through an example implementation of the popular casino game Blackjack on Sui. This guide walks through its components, providing a detailed look at the module's functions, structures, constants, and their significance in the overall gameplay mechanism.
@@ -24,7 +23,7 @@ You can also find the [full repository for this example here](https://github.com
 
 ## Gameplay
 
-In this single-player version of blackjack, the player competes against a dealer, which is automated by the system. The dealer's actions are triggered by HTTP requests to serverless functions. Players place their bet to start the game. Upon initiating the game, a request is made to the backend (dealer), which processes it by signing and subsequently dealing two cards to the player and one to themselves.
+In this single-player version of blackjack, the player competes against a dealer, which is automated by the system. The dealer is equipped with a public BLS key that plays a central role in the game's mechanics. The dealer's actions are triggered by HTTP requests to serverless functions. Players place their bet to start the game. Upon initiating the game, a request is made to the backend (dealer), which processes it by signing and subsequently dealing two cards to the player and one to themselves.
 
 The player has the option to 'Hit' or 'Stand.' Selecting 'Stand' triggers the dealer to draw cards until the total reaches 17 or higher. After the dealer stops, the smart contract steps in to compare the totals and declare the winner. On the other hand, choosing 'Hit' prompts the dealer to draw an additional card for the player.
 
@@ -41,7 +40,7 @@ The [`single_player_blackjack.move`](https://github.com/MystenLabs/blackjack-sui
 - `HOUSE_WON_STATUS`
 - `TIE_STATUS`
 
-There are also constants for error handling, such as `EUnauthorizedPlayer`, `EInsufficientBalance`, and others, ensuring robust game mechanics.
+There are also constants for error handling, such as `EInvalidBlsSig`, `EInsufficientBalance`, and others, ensuring robust game mechanics.
 
 Structs like `GameCreatedEvent`, `GameOutcomeEvent`, and `HitDoneEvent` capture the various events and actions within a game. The `HitRequest` and `StandRequest` structs ensure that a move (hit/stand) can be performed by the house only if the player has already requested it. `HouseAdminCap` and `HouseData` are crucial for maintaining the house's data, including balance and public key, while the `Game` struct contains all the necessary information about each game, such as player data, cards, and the current status.
 
@@ -50,26 +49,6 @@ The module's functions can be broadly categorized into initialization, game mana
 Utility functions like `get_next_random_card` and `get_card_sum` are essential for the game's mechanics, generating random cards and calculating hand values. The module also includes accessors for retrieving various pieces of game and house data.
 
 For testing purposes, the module provides special functions like `get_house_admin_cap_for_testing`, `player_won_post_handling_for_test` and `house_won_post_handling_for_test`, ensuring that developers can thoroughly test the game mechanics and house data handling.
-
-### On-chain randomness
-
-The Blackjack game leverages Sui's built-in [on-chain randomness module](/guides/developer/advanced/randomness-onchain.mdx) to generate unpredictable and verifiable card values, eliminating the need for external oracles or VRF (Verifiable Random Function) services. This approach ensures fairness and transparency in the game.
-
-The randomness is used in three key scenarios:
-
-1. **Initial deal (`first_deal` function)**: When the game starts, the dealer uses on-chain randomness to deal two cards to the player and one card to the dealer. The function creates a random generator and uses it to generate card values:
-
-```move
-let mut random_generator = random::new_generator(r, ctx);
-let card1 = get_next_random_card(&mut random_generator, game);
-let card2 = get_next_random_card(&mut random_generator, game);
-```
-
-2. **Hit action (`hit` function)**: When a player chooses to hit, the dealer draws an additional card using the same randomness mechanism, ensuring each card is truly random and cannot be predicted.
-
-3. **Stand action (`stand` function)**: When a player stands, the dealer automatically draws cards until reaching a sum of 17 or higher, with each card generated using on-chain randomness.
-
-The `get_next_random_card` function uses the random generator to produce a card value between 1 and 13 (representing Ace through King), while also tracking used cards to prevent duplicates within the same game. This implementation ensures that the game outcome is determined fairly and transparently on-chain, with all randomness verifiable through the blockchain.
 
 ## Backend
 
@@ -127,29 +106,6 @@ The main sub-directories are:
 - [`helpers/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/helpers), [`utils/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/utils), [`lib/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/lib): Multiple helper functions and utilities.
 - [`types/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/types): The types/interfaces used in the app.
 - [`styles/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/styles): The global CSS files to style the app.
-- [`__generated__/`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/__generated__): Auto-generated TypeScript bindings from Move contracts (see Codegen section below).
-
-### Codegen
-
-The project uses [`@mysten/codegen`](https://www.npmjs.com/package/@mysten/codegen) to automatically generate type-safe TypeScript bindings from the Move smart contracts. This ensures type safety when interacting with the blockchain from the frontend and backend.
-
-The codegen configuration is defined in [`sui-codegen.config.ts`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/sui-codegen.config.ts):
-
-```typescript
-const config: SuiCodegenConfig = {
-  output: './src/__generated__',
-  generateSummaries: true,
-  prune: true,
-  packages: [
-    {
-      package: '@local-pkg/blackjack',
-      path: path.join(__dirname, '../move/blackjack'),
-    },
-  ],
-};
-```
-
-To generate the TypeScript bindings, run `pnpm codegen` in the `app/` directory. This creates type-safe functions and types in the `__generated__/` folder that match your Move module's functions and structures, making it easier to interact with the smart contracts without manual type definitions.
 
 ### Components and custom hooks for state management
 
@@ -162,43 +118,6 @@ To generate the TypeScript bindings, run `pnpm codegen` in the `app/` directory.
 - **Game actions:** The [`GameActions`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/GameActions.tsx) component is used to display the **Hit** and **Stand** buttons, and trigger the corresponding actions, as they are exported by the [`useBlackjackGame`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useBlackjackGame.ts) hook to execute the corresponding transactions.
 
 - **`BlackjackBanner`**: The [`BlackjackBanner`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components/home/BlackjackBanner.tsx) component is used as a custom view to display when the player wins with a blackjack.
-
-
-### Enoki
-
-The game uses [Enoki](https://docs.enoki.mystenlabs.com/) for transaction sponsorship, enabling users to play the game gas-free. The sponsorship workflow involves two key API endpoints:
-
-#### [`/api/sponsor`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api/sponsor/route.ts) endpoint
-
-This endpoint receives the transaction kind bytes and sender address, then creates a sponsored transaction through Enoki. It configures allowed addresses and specific Move call targets for security:
-
-```typescript
-const sponsored = await enokiClient.createSponsoredTransaction({
-  network: serverConfig.NEXT_PUBLIC_SUI_NETWORK_NAME,
-  transactionKindBytes,
-  sender: sender,
-  allowedAddresses: [sender, serverConfig.NEXT_PUBLIC_ADMIN_ADDRESS],
-  allowedMoveCallTargets: [
-    getMoveTarget('single_player_blackjack', 'do_hit'),
-    getMoveTarget('single_player_blackjack', 'do_stand'),
-    getMoveTarget('single_player_blackjack', 'place_bet_and_create_game'),
-  ],
-});
-```
-
-#### [`/api/execute`](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api/execute/route.ts) endpoint
-
-After the user signs the sponsored transaction, this endpoint executes it on Sui:
-
-```typescript
-const executionResult = await enokiClient.executeSponsoredTransaction({
-  digest,
-  signature,
-});
-```
-
-The complete sponsorship flow is: build transaction → request sponsorship → sign sponsored bytes → execute transaction. This is implemented in the [`useSponsoredTransaction` hook](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/hooks/useSponsoredTransaction.ts), which handles all player-initiated transactions (creating games, hitting, and standing).
-
 
 ## Comparison: Blackjack and Coin Flip
 
@@ -226,6 +145,6 @@ The complete sponsorship flow is: build transaction → request sponsorship → 
 
 :::info
 
-The complete app example can be found in [the `blackjack-sui` repository](https://github.com/MystenLabs/blackjack-sui).
+The complete app example can be found in [the `blackjack-sui` repo](https://github.com/MystenLabs/blackjack-sui).
 
 :::
