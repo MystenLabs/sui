@@ -46,7 +46,6 @@ feature_flags:
   hardened_otw_check: true
   allow_receiving_object_id: true
   enable_poseidon: true
-  enable_sha3_512: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   enable_group_ops_native_function_msm: true
@@ -348,9 +347,6 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 10
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
-hash_sha3_512_cost_base: 52
-hash_sha3_512_data_cost_per_byte: 2
-hash_sha3_512_data_cost_per_block: 2
 poseidon_bn254_cost_base: 260
 poseidon_bn254_cost_per_block: 388
 group_ops_bls12381_decode_scalar_cost: 7
@@ -388,23 +384,6 @@ group_ops_bls12381_uncompressed_g1_to_g1_cost: 677
 group_ops_bls12381_uncompressed_g1_sum_base_cost: 77
 group_ops_bls12381_uncompressed_g1_sum_cost_per_term: 26
 group_ops_bls12381_uncompressed_g1_sum_max_terms: 1200
-group_ops_ristretto_decode_scalar_cost: 7
-group_ops_ristretto_decode_point_cost: 2848
-group_ops_ristretto_scalar_add_cost: 10
-group_ops_ristretto_point_add_cost: 1556
-group_ops_ristretto_scalar_sub_cost: 10
-group_ops_ristretto_point_sub_cost: 1550
-group_ops_ristretto_scalar_mul_cost: 11
-group_ops_ristretto_point_mul_cost: 4842
-group_ops_ristretto_scalar_div_cost: 91
-group_ops_ristretto_point_div_cost: 5091
-group_ops_ristretto_scalar_hash_to_base_cost: 100
-group_ops_ristretto_scalar_hash_to_cost_per_byte: 2
-group_ops_ristretto_point_hash_to_base_cost: 2962
-group_ops_ristretto_point_hash_to_cost_per_byte: 2
-group_ops_ristretto_msm_base_cost: 62648
-group_ops_ristretto_msm_base_cost_per_input: 1333
-group_ops_ristretto_msm_max_len: 1200
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
