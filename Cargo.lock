@@ -8577,6 +8577,7 @@ dependencies = [
  "move-regex-borrow-graph",
  "move-vm-config",
  "petgraph 0.8.1",
+ "serde",
 ]
 
 [[package]]
@@ -9207,6 +9208,8 @@ dependencies = [
  "clap",
  "move-binary-format",
  "move-bytecode-source-map",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
  "move-cli",
  "move-command-line-common",
  "move-compiler",
@@ -9214,6 +9217,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-compiler",
  "move-ir-types",
+ "move-regex-borrow-graph",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -9223,6 +9227,7 @@ dependencies = [
  "move-vm-types",
  "rayon",
  "regex",
+ "serde_json",
  "tempfile",
  "tokio",
 ]
