@@ -48,11 +48,11 @@ use std::{
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    Flags, PreCompiledProgramInfo,
     editions::Edition,
     expansion::ast as E,
     parser::{ast as P, syntax::parse_file_string},
     shared::{CompilationEnv, NamedAddressMap, PackageConfig},
+    Flags, PreCompiledProgramInfo,
 };
 use move_ir_types::location::sp;
 use move_symbol_pool::Symbol;
@@ -132,7 +132,6 @@ pub fn collect_extensions_info(
             // Target is a user module
             extended_user_files.insert(file_path.clone());
         }
-        // If target is neither, it might be an error or forward reference - ignore
     }
 
     ExtensionsInfo {
