@@ -209,7 +209,7 @@ def main():
             valid = False
         if args.stress_commit and not validate_commit_on_remote(args.stress_commit, "MystenLabs/sui", "stress_commit"):
             valid = False
-        if args.config_commit and not validate_commit_on_remote(args.config_commit, "MystenLabs/sui", "config_commit"):
+        if args.cli_commit and not validate_commit_on_remote(args.cli_commit, "MystenLabs/sui", "cli_commit"):
             valid = False
         if args.workflow_ref and not validate_ref_on_remote(args.workflow_ref, sui_ops_repo):
             valid = False
