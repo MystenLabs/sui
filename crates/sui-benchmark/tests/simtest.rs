@@ -3,9 +3,9 @@
 
 #[cfg(msim)]
 mod test {
-    use mysten_common::register_debug_fatal_handler;
+    use mysten_common::{random::get_rng, register_debug_fatal_handler};
     use prost::Message;
-    use rand::{Rng, distributions::uniform::SampleRange, rngs::OsRng, thread_rng};
+    use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
@@ -1675,20 +1675,19 @@ mod test {
     async fn test_simulated_load_async_post_processing_consistency() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-        let mut test_cluster = init_test_cluster_builder(4, 10_000)
+        let mut test_cluster = init_test_cluster_builder(1, 15_000)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_submit_delay_step_override_millis(3000)
             .build()
             .await;
 
         // Spawn async fullnode (default config)
         let async_fn_config = test_cluster
             .fullnode_config_builder()
-            .build(&mut OsRng, test_cluster.swarm.config());
+            .build(&mut get_rng(), test_cluster.swarm.config());
         let async_fullnode = test_cluster
             .start_fullnode_from_config(async_fn_config)
             .await;
@@ -1700,7 +1699,7 @@ mod test {
         let sync_fn_config = test_cluster
             .fullnode_config_builder()
             .with_sync_post_process_one_tx(true)
-            .build(&mut OsRng, test_cluster.swarm.config());
+            .build(&mut get_rng(), test_cluster.swarm.config());
         let sync_fullnode = test_cluster
             .start_fullnode_from_config(sync_fn_config)
             .await;
@@ -1755,11 +1754,9 @@ mod test {
 
         clear_fail_point("crash-after-post-process-one-tx");
 
-        // Allow time for the async fullnode to catch up after fail point is cleared
-        tokio::time::sleep(Duration::from_secs(15)).await;
-
         // Trigger reconfiguration which calls check_system_consistency on all nodes,
-        // including the transactions_seq verification
+        // including the transactions_seq verification. All nodes must catch up to
+        // complete reconfiguration, so no separate delay is needed.
         test_cluster.trigger_reconfiguration().await;
 
         // Compare sequence numbers between async and sync fullnodes.
