@@ -106,7 +106,7 @@ pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
 use crate::jsonrpc_index::IndexStore;
-use crate::jsonrpc_index::{CoinInfo, ObjectIndexChanges};
+use crate::jsonrpc_index::{CoinInfo, IndexStoreCacheUpdates, ObjectIndexChanges};
 use mysten_common::debug_fatal;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_config::genesis::Genesis;
@@ -168,6 +168,7 @@ use sui_types::{
 };
 use sui_types::{TypeTag, is_system_package};
 use typed_store::TypedStoreError;
+use typed_store::rocks::RawDBBatch;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
@@ -866,6 +867,8 @@ impl ForkRecoveryState {
     }
 }
 
+pub type PostProcessingOutput = (RawDBBatch, IndexStoreCacheUpdates);
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -931,9 +934,10 @@ pub struct AuthorityState {
     object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
 
     /// Tracks transactions whose post-processing (indexing/events) is still in flight.
-    /// CheckpointExecutor removes entries and awaits the receiver before persisting
-    /// transaction outputs, ensuring crash-safety of post-processing data.
-    pending_post_processing: Arc<DashMap<TransactionDigest, oneshot::Receiver<()>>>,
+    /// CheckpointExecutor removes entries and collects the index batches before committing
+    /// them atomically at checkpoint boundaries.
+    pending_post_processing:
+        Arc<DashMap<TransactionDigest, oneshot::Receiver<PostProcessingOutput>>>,
 
     /// Limits the number of concurrent post-processing tasks to avoid overwhelming
     /// the blocking thread pool. Defaults to the number of available CPUs.
@@ -2785,6 +2789,7 @@ impl AuthorityState {
 
     #[instrument(level = "debug", skip_all, err(level = "debug"))]
     fn index_tx(
+        sequence: u64,
         backing_package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: &Arc<dyn ObjectStore + Send + Sync>,
         indexes: &IndexStore,
@@ -2798,11 +2803,12 @@ impl AuthorityState {
         written: &WrittenObjects,
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<u64> {
+    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdates)> {
         let changes = Self::process_object_index(backing_package_store, object_store, effects, written, inner_temporary_store, epoch_store)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
         indexes.index_tx(
+            sequence,
             cert.data().intent_message().value.sender(),
             cert.data()
                 .intent_message()
@@ -3179,8 +3185,13 @@ impl AuthorityState {
 
         let tx_digest = *certificate.digest();
 
-        // Create notification channel and register in pending map
-        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        // Allocate sequence number on the calling thread to preserve execution order.
+        let sequence = self
+            .indexes
+            .as_ref()
+            .map(|idx| idx.allocate_sequence_number());
+
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel::<PostProcessingOutput>();
         self.pending_post_processing.insert(tx_digest, done_rx);
 
         if self.config.sync_post_process_one_tx {
@@ -3188,6 +3199,7 @@ impl AuthorityState {
             // Used as a rollback mechanism and for testing correctness against async mode.
             // TODO: delete this branch once async mode has shipped
             let result = Self::post_process_one_tx_impl(
+                sequence,
                 &self.indexes,
                 &self.subscription_handler,
                 &self.metrics,
@@ -3200,15 +3212,18 @@ impl AuthorityState {
                 epoch_store,
             );
 
-            if let Err(e) = &result {
-                self.metrics.post_processing_total_failures.inc();
-                error!(?tx_digest, "tx post processing failed: {e}");
+            match result {
+                Ok(output) => {
+                    let _ = done_tx.send(output);
+                }
+                Err(e) => {
+                    self.metrics.post_processing_total_failures.inc();
+                    error!(?tx_digest, "tx post processing failed: {e}");
+                    return Err(e);
+                }
             }
 
-            let _ = done_tx.send(());
-            self.pending_post_processing.remove(&tx_digest);
-
-            return result;
+            return Ok(());
         }
 
         let indexes = self.indexes.clone();
@@ -3217,7 +3232,6 @@ impl AuthorityState {
         let name = self.name;
         let backing_package_store = self.get_backing_package_store().clone();
         let object_store = self.get_object_store().clone();
-        let pending_map = self.pending_post_processing.clone();
         let semaphore = self.post_processing_semaphore.clone();
 
         let certificate = certificate.clone();
@@ -3239,6 +3253,7 @@ impl AuthorityState {
                 let _permit = permit;
 
                 let result = Self::post_process_one_tx_impl(
+                    sequence,
                     &indexes,
                     &subscription_handler,
                     &metrics,
@@ -3251,15 +3266,16 @@ impl AuthorityState {
                     &epoch_store,
                 );
 
-                if let Err(e) = &result {
-                    metrics.post_processing_total_failures.inc();
-                    error!(?tx_digest, "tx post processing failed: {e}");
+                match result {
+                    Ok(output) => {
+                        fail_point!("crash-after-post-process-one-tx");
+                        let _ = done_tx.send(output);
+                    }
+                    Err(e) => {
+                        metrics.post_processing_total_failures.inc();
+                        error!(?tx_digest, "tx post processing failed: {e}");
+                    }
                 }
-
-                fail_point!("crash-after-post-process-one-tx");
-
-                let _ = done_tx.send(());
-                pending_map.remove(&tx_digest);
             })
             .await;
         });
@@ -3268,6 +3284,7 @@ impl AuthorityState {
     }
 
     fn post_process_one_tx_impl(
+        sequence: Option<u64>,
         indexes: &Option<Arc<IndexStore>>,
         subscription_handler: &Arc<SubscriptionHandler>,
         metrics: &Arc<AuthorityMetrics>,
@@ -3278,7 +3295,7 @@ impl AuthorityState {
         effects: &TransactionEffects,
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
+    ) -> SuiResult<PostProcessingOutput> {
         let _scope = monitored_scope("Execution::post_process_one_tx");
 
         let tx_digest = certificate.digest();
@@ -3295,50 +3312,55 @@ impl AuthorityState {
         );
 
         // Index tx
-        if let Some(indexes) = indexes {
-            let _ = Self::index_tx(
-                backing_package_store,
-                object_store,
-                indexes.as_ref(),
-                tx_digest,
-                certificate,
-                effects,
-                events,
-                timestamp_ms,
-                tx_coins,
-                written,
-                inner_temporary_store,
-                epoch_store,
-            )
-            .tap_ok(|_| metrics.post_processing_total_tx_indexed.inc())
-            .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"))
-            .expect("Indexing tx should not fail");
+        let indexes = indexes
+            .as_ref()
+            .expect("post_process_one_tx_impl called without indexes");
+        let sequence = sequence.expect("sequence number must be allocated when indexes exist");
 
-            let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
-            let events = Self::make_transaction_block_events(
-                backing_package_store,
-                events.clone(),
-                *tx_digest,
-                timestamp_ms,
-                epoch_store,
-                inner_temporary_store,
-            )?;
-            // Emit events
-            subscription_handler
-                .process_tx(certificate.data().transaction_data(), &effects, &events)
-                .tap_ok(|_| metrics.post_processing_total_tx_had_event_processed.inc())
-                .tap_err(|e| {
-                    warn!(
-                        ?tx_digest,
-                        "Post processing - Couldn't process events for tx: {}", e
-                    )
-                })?;
+        let (raw_batch, cache_updates) = Self::index_tx(
+            sequence,
+            backing_package_store,
+            object_store,
+            indexes.as_ref(),
+            tx_digest,
+            certificate,
+            effects,
+            events,
+            timestamp_ms,
+            tx_coins,
+            written,
+            inner_temporary_store,
+            epoch_store,
+        )
+        .tap_ok(|_| metrics.post_processing_total_tx_indexed.inc())
+        .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"))
+        .expect("Indexing tx should not fail");
 
-            metrics
-                .post_processing_total_events_emitted
-                .inc_by(events.data.len() as u64);
-        };
-        Ok(())
+        let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
+        let events = Self::make_transaction_block_events(
+            backing_package_store,
+            events.clone(),
+            *tx_digest,
+            timestamp_ms,
+            epoch_store,
+            inner_temporary_store,
+        )?;
+        // Emit events
+        subscription_handler
+            .process_tx(certificate.data().transaction_data(), &effects, &events)
+            .tap_ok(|_| metrics.post_processing_total_tx_had_event_processed.inc())
+            .tap_err(|e| {
+                warn!(
+                    ?tx_digest,
+                    "Post processing - Couldn't process events for tx: {}", e
+                )
+            })?;
+
+        metrics
+            .post_processing_total_events_emitted
+            .inc_by(events.data.len() as u64);
+
+        Ok((raw_batch, cache_updates))
     }
 
     fn make_transaction_block_events(
@@ -3753,17 +3775,20 @@ impl AuthorityState {
 
     pub fn pending_post_processing(
         &self,
-    ) -> &Arc<DashMap<TransactionDigest, oneshot::Receiver<()>>> {
+    ) -> &Arc<DashMap<TransactionDigest, oneshot::Receiver<PostProcessingOutput>>> {
         &self.pending_post_processing
     }
 
-    pub async fn await_post_processing(&self, tx_digest: &TransactionDigest) {
+    pub async fn await_post_processing(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<PostProcessingOutput> {
         if let Some((_, rx)) = self.pending_post_processing.remove(tx_digest) {
-            // Indicates tx was executed and digest was placed into pending_post_processing map.
-            let _ = rx.await;
+            // Tx was executed and post-processing is in flight.
+            rx.await.ok()
         } else {
-            // Indicates that either tx was already persisted (and no post-processing was needed)
-            // or post-processing was already completed.
+            // Tx was already persisted or post-processing already completed.
+            None
         }
     }
 
