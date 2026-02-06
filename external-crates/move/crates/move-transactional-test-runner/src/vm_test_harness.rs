@@ -13,8 +13,7 @@ use move_binary_format::{
     file_format::{EnumDefinitionIndex, FieldHandleIndex, LocalIndex, MemberCount, VariantTag},
 };
 use move_bytecode_source_map::source_map::{FunctionSourceMap, SourceMap};
-use move_bytecode_verifier::absint::FunctionContext;
-use move_bytecode_verifier::regex_reference_safety::abstract_state::StateSerializer;
+use move_bytecode_verifier::{absint::FunctionContext, regex_reference_safety};
 use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_command_line_common::{
     files::verify_and_create_named_address_mapping, testing::InstaOptions,
@@ -518,7 +517,9 @@ impl<'a> SourceMapRegexStateSerializer<'a> {
     }
 }
 
-impl StateSerializer for SourceMapRegexStateSerializer<'_> {
+impl regex_reference_safety::serializable_state::StateSerializer
+    for SourceMapRegexStateSerializer<'_>
+{
     fn local_root(&mut self, _: Ref) -> String {
         "ROOT".to_owned()
     }

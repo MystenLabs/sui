@@ -8,6 +8,7 @@
 //! - accesses to global storage references are safe
 
 pub mod abstract_state;
+pub mod serializable_state;
 
 use crate::absint::{FunctionContext, TransferFunctions, analyze_function};
 use crate::regex_reference_safety::abstract_state::STEP_BASE_COST;
