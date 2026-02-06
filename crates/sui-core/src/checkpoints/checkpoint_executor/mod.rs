@@ -618,16 +618,16 @@ impl CheckpointExecutor {
                     cache_updates.push(cu);
                 }
             }
-            if !raw_batches.is_empty() {
-                if let Some(indexes) = &self.state.indexes {
-                    let mut db_batch = indexes.new_db_batch();
-                    db_batch
-                        .absorb_raw_batches(raw_batches)
-                        .expect("failed to absorb raw index batches");
-                    indexes
-                        .commit_index_batch(db_batch, cache_updates)
-                        .expect("failed to commit index batch");
-                }
+            if !raw_batches.is_empty()
+                && let Some(indexes) = &self.state.indexes
+            {
+                let mut db_batch = indexes.new_db_batch();
+                db_batch
+                    .absorb_raw_batches(raw_batches)
+                    .expect("failed to absorb raw index batches");
+                indexes
+                    .commit_index_batch(db_batch, cache_updates)
+                    .expect("failed to commit index batch");
             }
         }
 
