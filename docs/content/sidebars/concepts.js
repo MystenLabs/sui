@@ -68,7 +68,7 @@ const concepts = [
 		},
 		items: [
 			'concepts/data-access/grpc',
-			'concepts/data-access/graphql-indexer',
+			'concepts/data-access/custom-indexers',
 			'concepts/data-access/graphql-rpc',
 		],
 	},

@@ -95,7 +95,7 @@ rpc:
 
 ```
 
-Running gRPC alongside JSON-RPC increases your full node’s storage usage. You can reclaim this storage by disabling JSON-RPC after all your client applications have migrated from JSON-RPC. All applications must gradually migrate to gRPC or [GraphQL RPC](/concepts/data-access/graphql-indexer.mdx). You can also run gRPC and JSON-RPC on separate nodes to optimize resource usage and provide a performant and resilient RPC experience to client applications. Add the following to the `fullnode.yaml` configuration of your full node to selectively disable JSON-RPC on it:
+Running gRPC alongside JSON-RPC increases your full node’s storage usage. You can reclaim this storage by disabling JSON-RPC after all your client applications have migrated from JSON-RPC. All applications must gradually migrate to gRPC or [GraphQL RPC](/concepts/data-access/custom-indexers.mdx). You can also run gRPC and JSON-RPC on separate nodes to optimize resource usage and provide a performant and resilient RPC experience to client applications. Add the following to the `fullnode.yaml` configuration of your full node to selectively disable JSON-RPC on it:
 
 ```sh
 
