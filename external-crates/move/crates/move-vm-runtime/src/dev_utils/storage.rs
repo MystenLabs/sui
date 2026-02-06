@@ -138,7 +138,7 @@ impl StoredPackage {
         self.0
     }
 
-    fn original_id(linkage: &BTreeMap<VersionId, OriginalId>, version_id: VersionId) -> OriginalId {
+    fn original_id(linkage: &BTreeMap<OriginalId, VersionId>, version_id: VersionId) -> OriginalId {
         linkage
             .iter()
             .find_map(|(k, v)| if *v == version_id { Some(*k) } else { None })
@@ -254,5 +254,36 @@ impl ModuleResolver for InMemoryStorage {
                 }
             })
             .collect::<Result<Vec<_>, Self::Error>>()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn original_id_returns_key_not_value() {
+        let orig = AccountAddress::new([0xAA; 32]);
+        let ver = AccountAddress::new([0xBB; 32]);
+        let mut linkage = BTreeMap::new();
+        linkage.insert(orig, ver);
+
+        let result = StoredPackage::original_id(&linkage, ver);
+        assert_eq!(
+            result, orig,
+            "original_id should return the OriginalId (key), not the VersionId (value)"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "address not found in linkage table")]
+    fn original_id_panics_when_version_id_not_found() {
+        let orig = AccountAddress::new([0xAA; 32]);
+        let ver = AccountAddress::new([0xBB; 32]);
+        let missing = AccountAddress::new([0xCC; 32]);
+        let mut linkage = BTreeMap::new();
+        linkage.insert(orig, ver);
+
+        StoredPackage::original_id(&linkage, missing);
     }
 }
