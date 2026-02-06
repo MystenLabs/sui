@@ -1980,16 +1980,30 @@ impl CheckpointBuilder {
             }
             sorted.extend(CausalOrder::causal_sort(unsorted));
 
-            if checkpoint_roots.settlement_root.is_some() {
-                let (tx_key, settlement_effects) = self
-                    .construct_and_execute_settlement_transactions(
-                        &sorted,
-                        checkpoint_roots.height,
-                        next_checkpoint_seq,
-                        tx_index_offset,
-                    )
-                    .await;
-                debug!(?tx_key, "executed settlement transactions");
+            if let Some(settlement_key) = &checkpoint_roots.settlement_root {
+                let settlement_effects = if self
+                    .epoch_store
+                    .protocol_config()
+                    .settle_early_in_consensus_handler()
+                {
+                    let result = self
+                        .epoch_store
+                        .wait_for_settlement_result(*settlement_key)
+                        .await;
+                    debug!(?settlement_key, "received early settlement result");
+                    result.settlement_effects
+                } else {
+                    let (tx_key, settlement_effects) = self
+                        .construct_and_execute_settlement_transactions(
+                            &sorted,
+                            checkpoint_roots.height,
+                            next_checkpoint_seq,
+                            tx_index_offset,
+                        )
+                        .await;
+                    debug!(?tx_key, "executed settlement transactions");
+                    settlement_effects
+                };
 
                 sorted.extend(settlement_effects);
             }

@@ -5,7 +5,10 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     hash::Hash,
     num::NonZeroUsize,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -62,7 +65,7 @@ use crate::{
         AuthorityMetrics, AuthorityState, ExecutionEnv,
         authority_per_epoch_store::{
             AuthorityPerEpochStore, CancelConsensusCertificateReason, ConsensusStats,
-            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStats,
+            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStats, SettlementBatchInfo,
             consensus_quarantine::ConsensusCommitOutput,
         },
         backpressure::{BackpressureManager, BackpressureSubscriber},
@@ -721,6 +724,8 @@ pub struct ConsensusHandler<C> {
     traffic_controller: Option<Arc<TrafficController>>,
 
     checkpoint_queue: Mutex<CheckpointQueue>,
+
+    next_checkpoint_seq: AtomicU64,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -769,6 +774,12 @@ impl<C> ConsensusHandler<C> {
             .as_ref()
             .map(|s| s.summary.timestamp_ms)
             .unwrap_or(0);
+        let next_checkpoint_seq = AtomicU64::new(
+            last_built_summary
+                .as_ref()
+                .map(|s| *s.summary.sequence_number() + 1)
+                .unwrap_or(0),
+        );
         let checkpoint_height = last_consensus_stats.height;
         Self {
             epoch_store,
@@ -793,6 +804,7 @@ impl<C> ConsensusHandler<C> {
                 last_built_timestamp,
                 checkpoint_height,
             )),
+            next_checkpoint_seq,
         }
     }
 
@@ -825,6 +837,12 @@ impl<C> ConsensusHandler<C> {
             .as_ref()
             .map(|s| s.summary.timestamp_ms)
             .unwrap_or(0);
+        let next_checkpoint_seq = AtomicU64::new(
+            last_built_summary
+                .as_ref()
+                .map(|s| *s.summary.sequence_number() + 1)
+                .unwrap_or(0),
+        );
         let checkpoint_height = last_consensus_stats.height;
         Self {
             epoch_store,
@@ -849,6 +867,7 @@ impl<C> ConsensusHandler<C> {
                 last_built_timestamp,
                 checkpoint_height,
             )),
+            next_checkpoint_seq,
         }
     }
 }
@@ -1771,6 +1790,50 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
 
         let checkpoint_roots_list = Self::to_checkpoint_roots(&chunked_schedulables);
+
+        let store_settlement_batch_infos =
+            |chunks: &[(
+                Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
+                CheckpointHeight,
+            )],
+             epoch_store: &AuthorityPerEpochStore,
+             next_checkpoint_seq: &AtomicU64| {
+                let mut tx_index_offset = 0u64;
+                for (schedulables, height) in chunks {
+                    let tx_keys: Vec<_> = schedulables
+                        .iter()
+                        .filter_map(|s| match s.key() {
+                            TransactionKey::AccumulatorSettlement(..) => None,
+                            key => Some(key),
+                        })
+                        .collect();
+                    if let Some(settlement_key) = schedulables.iter().find_map(|s| match s.key() {
+                        key @ TransactionKey::AccumulatorSettlement(..) => Some(key),
+                        _ => None,
+                    }) {
+                        let checkpoint_seq = next_checkpoint_seq.fetch_add(1, Ordering::SeqCst);
+                        epoch_store.store_settlement_batch_info(
+                            settlement_key,
+                            SettlementBatchInfo {
+                                tx_keys: tx_keys.clone(),
+                                checkpoint_height: *height,
+                                tx_index_offset,
+                                checkpoint_seq,
+                            },
+                        );
+                    }
+                    tx_index_offset += tx_keys.len() as u64;
+                }
+            };
+
+        if protocol_config.settle_early_in_consensus_handler() {
+            store_settlement_batch_infos(
+                &chunked_schedulables,
+                &self.epoch_store,
+                &self.next_checkpoint_seq,
+            );
+        }
+
         checkpoint_queue.push_checkpoint_roots(
             checkpoint_roots_list,
             commit_info.timestamp,
@@ -1785,6 +1848,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         };
 
         if should_write_random_checkpoint {
+            if protocol_config.settle_early_in_consensus_handler() {
+                store_settlement_batch_infos(
+                    &chunked_randomness_schedulables,
+                    &self.epoch_store,
+                    &self.next_checkpoint_seq,
+                );
+            }
+
             for randomness_roots in Self::to_checkpoint_roots(&chunked_randomness_schedulables) {
                 let checkpoint_height = randomness_roots.height;
                 pending_checkpoints.push(PendingCheckpointV2 {
