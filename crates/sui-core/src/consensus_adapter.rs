@@ -344,37 +344,12 @@ impl ConsensusAdapter {
     }
 
     pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
-        // Transactions being sent to consensus can be dropped on crash, before included in a proposed block.
-        // System transactions do not have clients to retry them. They need to be resubmitted to consensus on restart.
-        // get_all_pending_consensus_transactions() can return both system and certified transactions though.
-        //
-        // todo - get_all_pending_consensus_transactions is called twice when
-        // initializing AuthorityPerEpochStore and here, should not be a big deal but can be optimized
-        let mut recovered = epoch_store.get_all_pending_consensus_transactions();
-
-        #[allow(clippy::collapsible_if)] // This if can be collapsed but it will be ugly
+        // Send EndOfPublish if needed.
+        // This handles the case where the node crashed after setting reconfig lock state
+        // but before the EndOfPublish message was sent to consensus.
         if epoch_store.should_send_end_of_publish() {
-            if !recovered
-                .iter()
-                .any(ConsensusTransaction::is_end_of_publish)
-            {
-                // There are two cases when this is needed
-                // (1) We send EndOfPublish message after removing pending certificates in submit_and_wait_inner
-                // It is possible that node will crash between those two steps, in which case we might need to
-                // re-introduce EndOfPublish message on restart
-                // (2) If node crashed inside ConsensusAdapter::close_epoch,
-                // after reconfig lock state was written to DB and before we persisted EndOfPublish message
-                recovered.push(ConsensusTransaction::new_end_of_publish(self.authority));
-            }
-        }
-        debug!(
-            "Submitting {:?} recovered pending consensus transactions to consensus",
-            recovered.len()
-        );
-        for transaction in recovered {
-            if transaction.is_end_of_publish() {
-                info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
-            }
+            let transaction = ConsensusTransaction::new_end_of_publish(self.authority);
+            info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
             self.submit_unchecked(&[transaction], epoch_store, None, None);
         }
     }
@@ -639,7 +614,7 @@ impl ConsensusAdapter {
     pub fn submit_batch(
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
-        lock: Option<&RwLockReadGuard<ReconfigState>>,
+        _lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
         submitter_client_addr: Option<IpAddr>,
@@ -682,10 +657,6 @@ impl ConsensusAdapter {
                     return Err(SuiErrorKind::InvalidTxKindInSoftBundle.into());
                 }
             }
-        }
-
-        if !transactions.is_empty() {
-            epoch_store.insert_pending_consensus_transactions(transactions, lock)?;
         }
 
         Ok(self.submit_unchecked(
@@ -1000,23 +971,6 @@ impl ConsensusAdapter {
             };
         }
         debug!("{transaction_keys:?} processed by consensus");
-
-        let consensus_keys: Vec<_> = transactions
-            .iter()
-            .filter_map(|t| {
-                if t.is_user_transaction() {
-                    // UserTransaction is not inserted into the pending consensus transactions table.
-                    // Also UserTransaction shares the same key as CertifiedTransaction, so removing
-                    // the key here can have unexpected effects.
-                    None
-                } else {
-                    Some(t.key())
-                }
-            })
-            .collect();
-        epoch_store
-            .remove_pending_consensus_transactions(&consensus_keys)
-            .expect("Storage error when removing consensus transaction");
 
         let is_user_tx = is_soft_bundle
             || matches!(

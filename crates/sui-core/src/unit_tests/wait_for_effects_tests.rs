@@ -112,7 +112,7 @@ async fn test_wait_for_effects_position_mismatch() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position2, ConsensusTxStatus::FastpathCertified);
+        epoch_store.set_consensus_tx_status(tx_position2, ConsensusTxStatus::Finalized);
         state_clone
             .try_execute_immediately(
                 &transaction,
@@ -160,7 +160,7 @@ async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
         tokio::time::sleep(Duration::from_millis(100)).await;
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Rejected);
     });
@@ -308,7 +308,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
     let exec_handle = tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
         state_clone
             .try_execute_immediately(
                 &transaction,
@@ -416,7 +416,7 @@ async fn test_wait_for_effects_fastpath_certified_then_executed() {
     let exec_handle = tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
         tokio::time::sleep(Duration::from_millis(100)).await;
         state_clone
             .try_execute_immediately(
@@ -469,7 +469,7 @@ async fn test_wait_for_effects_finalized() {
     let exec_handle = tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
         tokio::time::sleep(Duration::from_millis(100)).await;
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -629,7 +629,7 @@ async fn test_wait_for_effects_ping() {
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(100)).await;
             let epoch_store = state_clone.epoch_store_for_testing();
-            epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+            epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
         });
 
         let response = test_context
@@ -676,7 +676,7 @@ async fn test_wait_for_effects_ping() {
             let epoch_store = state_clone.epoch_store_for_testing();
 
             tokio::time::sleep(Duration::from_millis(100)).await;
-            epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+            epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
 
             tokio::time::sleep(Duration::from_millis(100)).await;
             epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
@@ -730,7 +730,7 @@ async fn test_wait_for_effects_ping() {
 
             // First consider the block as fast path certified. The simulate a "garbage collection".
             tokio::time::sleep(Duration::from_millis(100)).await;
-            epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+            epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
 
             // Move the committed round to a round that is far enough in the future that the block is considered garbage collected.
             // get the gc depth and calculate the round that is far enough in the future.
