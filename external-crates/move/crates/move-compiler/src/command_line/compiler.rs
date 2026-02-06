@@ -318,6 +318,12 @@ impl Compiler {
         self
     }
 
+    /// Removes the specified file paths from the compiler's target list.
+    pub fn filter_dep_package_targets(mut self, files_to_remove: &BTreeSet<Symbol>) -> Self {
+        self.targets.retain(|t| !files_to_remove.contains(&t.path));
+        self
+    }
+
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -665,6 +671,31 @@ impl PreCompiledProgramInfo {
             );
         }
         mapped_files
+    }
+
+    /// Returns the set of file paths containing the specified modules.
+    pub fn get_file_paths_for_modules(
+        &self,
+        modules: &BTreeSet<E::ModuleIdent>,
+    ) -> BTreeSet<Symbol> {
+        self.0
+            .iter()
+            .filter(|(k, _)| modules.contains(k))
+            .map(|(_, v)| v.file_name)
+            .collect()
+    }
+
+    /// Returns a new `PreCompiledProgramInfo` with all modules from the specified
+    /// file paths removed. Since a file may contain multiple modules, this removes
+    /// all modules from each excluded file, not just specific modules.
+    pub fn filter_modules_on_paths(&self, paths_to_exclude: &BTreeSet<Symbol>) -> Self {
+        PreCompiledProgramInfo(
+            self.0
+                .iter()
+                .filter(|(_, v)| !paths_to_exclude.contains(&v.file_name))
+                .map(|(k, v)| (*k, v.clone()))
+                .collect(),
+        )
     }
 }
 
