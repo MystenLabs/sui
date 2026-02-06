@@ -76,6 +76,108 @@ async fn get_known_peers() -> Result<()> {
 }
 
 #[tokio::test]
+async fn get_known_peers_v3() -> Result<()> {
+    let config = P2pConfig::default();
+    let (UnstartedDiscovery { state, .. }, server) = Builder::new().config(config).build_internal();
+
+    let our_peer_id = PeerId([9; 32]);
+    let mut our_addresses = BTreeMap::new();
+    our_addresses.insert(EndpointId::P2p(our_peer_id), vec![]);
+
+    let our_info_v2 = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses: our_addresses.clone(),
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    });
+
+    // Err when own_info_v2 not set
+    let request_info = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses: BTreeMap::new(),
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    });
+    server
+        .get_known_peers_v3(Request::new(GetKnownPeersRequestV3 {
+            own_info: SignedVersionedNodeInfo::new_from_data_and_sig(
+                request_info,
+                Ed25519Signature::default(),
+            ),
+        }))
+        .await
+        .unwrap_err();
+
+    // Normal response with our_info_v2
+    state.write().unwrap().our_info_v2 = Some(SignedVersionedNodeInfo::new_from_data_and_sig(
+        our_info_v2.clone(),
+        Ed25519Signature::default(),
+    ));
+
+    let request_info = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses: BTreeMap::new(),
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    });
+    let response = server
+        .get_known_peers_v3(Request::new(GetKnownPeersRequestV3 {
+            own_info: SignedVersionedNodeInfo::new_from_data_and_sig(
+                request_info,
+                Ed25519Signature::default(),
+            ),
+        }))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.own_info.data(), &our_info_v2);
+    assert!(response.known_peers.is_empty());
+
+    // Normal response with some known peers
+    let other_peer_id = PeerId([13; 32]);
+    let mut other_addresses = BTreeMap::new();
+    other_addresses.insert(EndpointId::P2p(other_peer_id), vec![]);
+    let other_peer = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses: other_addresses,
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    });
+    state.write().unwrap().known_peers_v2.insert(
+        other_peer_id,
+        VerifiedSignedVersionedNodeInfo::new_unchecked(
+            SignedVersionedNodeInfo::new_from_data_and_sig(
+                other_peer.clone(),
+                Ed25519Signature::default(),
+            ),
+        ),
+    );
+
+    let request_info = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses: BTreeMap::new(),
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    });
+    let response = server
+        .get_known_peers_v3(Request::new(GetKnownPeersRequestV3 {
+            own_info: SignedVersionedNodeInfo::new_from_data_and_sig(
+                request_info,
+                Ed25519Signature::default(),
+            ),
+        }))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.own_info.data(), &our_info_v2);
+    assert_eq!(
+        response
+            .known_peers
+            .into_iter()
+            .map(|peer| peer.into_data())
+            .collect::<Vec<_>>(),
+        vec![other_peer]
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn trusted_peers_shared_only_with_configured_peers() {
     // Set up a config with a configured peer (via seed_peers).
     let configured_peer_id = PeerId([42; 32]);
@@ -182,6 +284,154 @@ async fn trusted_peers_shared_only_with_configured_peers() {
     );
     assert!(
         returned_peer_ids.contains(&public_peer.peer_id),
+        "Anonymous request should see Public peers"
+    );
+}
+
+#[tokio::test]
+async fn trusted_peers_shared_only_with_configured_peers_v3() {
+    // Set up a config with a configured peer (via seed_peers).
+    let configured_peer_id = PeerId([42; 32]);
+    let non_configured_peer_id = PeerId([99; 32]);
+
+    let mut config = P2pConfig::default();
+    config.seed_peers.push(SeedPeer {
+        peer_id: Some(configured_peer_id),
+        address: "/dns/localhost/udp/8080".parse().unwrap(),
+    });
+
+    let (builder, server) = Builder::new().config(config).build_internal();
+    let (network, keypair) = crate::utils::build_network_and_key(|router| router);
+    let _ = builder.build(network, keypair);
+
+    let our_peer_id = PeerId([9; 32]);
+    let mut our_addresses = BTreeMap::new();
+    our_addresses.insert(EndpointId::P2p(our_peer_id), vec![]);
+    let our_info_v2 = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses: our_addresses,
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    });
+    server.state.write().unwrap().our_info_v2 = Some(
+        SignedVersionedNodeInfo::new_from_data_and_sig(our_info_v2, Ed25519Signature::default()),
+    );
+
+    // Add a Trusted peer and a Public peer to known_peers_v2.
+    let trusted_peer_id = PeerId([10; 32]);
+    let mut trusted_addresses = BTreeMap::new();
+    trusted_addresses.insert(EndpointId::P2p(trusted_peer_id), vec![]);
+    let trusted_peer = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses: trusted_addresses,
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Trusted,
+    });
+
+    let public_peer_id = PeerId([11; 32]);
+    let mut public_addresses = BTreeMap::new();
+    public_addresses.insert(EndpointId::P2p(public_peer_id), vec![]);
+    let public_peer = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses: public_addresses,
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    });
+
+    {
+        let mut state = server.state.write().unwrap();
+        state.known_peers_v2.insert(
+            trusted_peer_id,
+            VerifiedSignedVersionedNodeInfo::new_unchecked(
+                SignedVersionedNodeInfo::new_from_data_and_sig(
+                    trusted_peer.clone(),
+                    Ed25519Signature::default(),
+                ),
+            ),
+        );
+        state.known_peers_v2.insert(
+            public_peer_id,
+            VerifiedSignedVersionedNodeInfo::new_unchecked(
+                SignedVersionedNodeInfo::new_from_data_and_sig(
+                    public_peer.clone(),
+                    Ed25519Signature::default(),
+                ),
+            ),
+        );
+    }
+
+    let make_request = || {
+        let request_info = VersionedNodeInfo::V2(NodeInfoV2 {
+            addresses: BTreeMap::new(),
+            timestamp_ms: now_unix(),
+            access_type: AccessType::Public,
+        });
+        GetKnownPeersRequestV3 {
+            own_info: SignedVersionedNodeInfo::new_from_data_and_sig(
+                request_info,
+                Ed25519Signature::default(),
+            ),
+        }
+    };
+
+    // Request from a configured peer - should see both Public and Trusted peers.
+    let request_from_configured = Request::new(make_request()).with_extension(configured_peer_id);
+    let response = server
+        .get_known_peers_v3(request_from_configured)
+        .await
+        .unwrap()
+        .into_inner();
+    let returned_peer_ids: HashSet<_> = response
+        .known_peers
+        .iter()
+        .filter_map(|p| p.peer_id())
+        .collect();
+    assert!(
+        returned_peer_ids.contains(&trusted_peer_id),
+        "Configured peer should see Trusted peers"
+    );
+    assert!(
+        returned_peer_ids.contains(&public_peer_id),
+        "Configured peer should see Public peers"
+    );
+
+    // Request from a non-configured peer - should see only Public peer, not Trusted.
+    let request_from_non_configured =
+        Request::new(make_request()).with_extension(non_configured_peer_id);
+    let response = server
+        .get_known_peers_v3(request_from_non_configured)
+        .await
+        .unwrap()
+        .into_inner();
+    let returned_peer_ids: HashSet<_> = response
+        .known_peers
+        .iter()
+        .filter_map(|p| p.peer_id())
+        .collect();
+    assert!(
+        !returned_peer_ids.contains(&trusted_peer_id),
+        "Non-configured peer should NOT see Trusted peers"
+    );
+    assert!(
+        returned_peer_ids.contains(&public_peer_id),
+        "Non-configured peer should see Public peers"
+    );
+
+    // Request with no peer_id - should see only Public peer, not Trusted.
+    let request_anonymous = Request::new(make_request());
+    let response = server
+        .get_known_peers_v3(request_anonymous)
+        .await
+        .unwrap()
+        .into_inner();
+    let returned_peer_ids: HashSet<_> = response
+        .known_peers
+        .iter()
+        .filter_map(|p| p.peer_id())
+        .collect();
+    assert!(
+        !returned_peer_ids.contains(&trusted_peer_id),
+        "Anonymous request should NOT see Trusted peers"
+    );
+    assert!(
+        returned_peer_ids.contains(&public_peer_id),
         "Anonymous request should see Public peers"
     );
 }

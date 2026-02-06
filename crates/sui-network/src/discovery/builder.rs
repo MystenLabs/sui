@@ -65,6 +65,12 @@ impl Builder {
                     rate_limit::WaitMode::Block,
                 )),
             );
+            discovery_server = discovery_server.add_layer_for_get_known_peers_v3(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
         }
         (builder, discovery_server)
     }
@@ -79,13 +85,15 @@ impl Builder {
 
         let handle = Handle {
             _shutdown_handle: Arc::new(shutdown_tx),
-            sender: mailbox_tx,
+            sender: mailbox_tx.clone(),
         };
 
         let state = State {
             our_info: None,
+            our_info_v2: None,
             connected_peers: HashMap::default(),
             known_peers: HashMap::default(),
+            known_peers_v2: HashMap::default(),
             peer_address_overrides: HashMap::default(),
         }
         .pipe(RwLock::new)
@@ -96,6 +104,7 @@ impl Builder {
         let server = Server {
             state: state.clone(),
             configured_peers: configured_peers.clone(),
+            mailbox_sender: mailbox_tx.clone(),
         };
 
         (
