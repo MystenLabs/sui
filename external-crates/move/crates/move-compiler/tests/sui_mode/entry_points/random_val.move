@@ -10,6 +10,8 @@ module sui::random {
     struct Random has key {
         id: sui::object::UID,
     }
+
+    fun test_random_val(_: Random) { abort 0 }
 }
 
 module sui::object {

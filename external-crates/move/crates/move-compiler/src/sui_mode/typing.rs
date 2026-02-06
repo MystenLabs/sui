@@ -598,6 +598,10 @@ fn signature_sanity_check(
     _name: FunctionName,
     signature: &FunctionSignature,
 ) {
+    if context.current_module().value.address.is(&SUI_ADDR_VALUE) {
+        // skip signature checks for `sui` since it defines these types
+        return;
+    }
     // check tx context usage
     const DUPLICATE_TX_CTX_NOTE: &str = "Due to restrictions in PTB execution if there is a \
         mutable reference to a TxContext, it must be unique. This means that there cannot be \

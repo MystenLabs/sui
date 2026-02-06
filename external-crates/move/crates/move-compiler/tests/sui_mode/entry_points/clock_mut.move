@@ -10,6 +10,8 @@ module sui::clock {
     struct Clock has key {
         id: sui::object::UID,
     }
+
+    fun test_clock_mut(_: &mut Clock) {}
 }
 
 module sui::object {

@@ -10,6 +10,8 @@ module sui::clock {
     struct Clock has key {
         id: sui::object::UID,
     }
+
+    fun test_clock_val(_: Clock) { abort 0 }
 }
 
 module sui::object {
