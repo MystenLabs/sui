@@ -176,7 +176,7 @@ impl StackFrame {
     pub fn move_loc(&mut self, ndx: usize) -> PartialVMResult<Value> {
         let value_slot = self.get_valid_mut(ndx)?;
         Ok(std::mem::replace(
-            &mut *value_slot.borrow_mut(),
+            &mut *value_slot.try_borrow_mut()?,
             Value::invalid(),
         ))
     }
@@ -248,33 +248,39 @@ impl StackFrame {
             })
     }
 
-    pub fn drop_all_values(&mut self) -> impl Iterator<Item = Value> {
-        self.slice
+    pub fn drop_all_values(&mut self) -> PartialVMResult<Vec<Value>> {
+        let borrow_muts = self
+            .slice
             .iter_mut()
-            .filter_map(|value| match &mut *value.borrow_mut() {
-                Value::Invalid => None,
-                value @ Value::Reference(_) => {
-                    *value = Value::Invalid;
-                    None
-                }
-                value @ (Value::U8(_)
-                | Value::U16(_)
-                | Value::U32(_)
-                | Value::U64(_)
-                | Value::U128(_)
-                | Value::U256(_)
-                | Value::Bool(_)
-                | Value::Address(_)
-                | Value::Vec(_)
-                | Value::PrimVec(_)
-                | Value::Struct(_)
-                | Value::Variant(_)) => {
-                    let result = std::mem::replace(value, Value::Invalid);
-                    Some(result)
+            .map(|membox| {
+                let value_ref = &mut *membox.try_borrow_mut()?;
+                match &*value_ref {
+                    Value::Invalid => Ok(None),
+                    Value::Reference(_) => {
+                        *value_ref = Value::Invalid;
+                        Ok(None)
+                    }
+                    Value::U8(_)
+                    | Value::U16(_)
+                    | Value::U32(_)
+                    | Value::U64(_)
+                    | Value::U128(_)
+                    | Value::U256(_)
+                    | Value::Bool(_)
+                    | Value::Address(_)
+                    | Value::Vec(_)
+                    | Value::PrimVec(_)
+                    | Value::Struct(_)
+                    | Value::Variant(_) => {
+                        Ok(Some(std::mem::replace(&mut *value_ref, Value::Invalid)))
+                    }
                 }
             })
-            .collect::<Vec<_>>()
+            .collect::<PartialVMResult<Vec<_>>>()?
             .into_iter()
+            .flatten()
+            .collect::<Vec<Value>>();
+        Ok(borrow_muts)
     }
 
     #[cfg(test)]
@@ -283,6 +289,14 @@ impl StackFrame {
     /// If you ever mark this not #[cfg(test)] you will have your VM implementor card revoked.
     pub(crate) fn UNSAFE_copy_local_box(&mut self, ndx: usize) -> MemBox<Value> {
         self.slice[ndx].UNSAFE_ptr_clone()
+    }
+
+    #[cfg(test)]
+    #[allow(non_snake_case)]
+    /// This is strictly for testing dropping.
+    /// If you ever mark this not #[cfg(test)] you will have your VM implementor card revoked.
+    pub(crate) fn UNSAFE_borrow_slice(&self) -> &[MemBox<Value>] {
+        &self.slice
     }
 }
 

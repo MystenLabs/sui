@@ -3,16 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::values::{Reference, VMValueCast, Value},
+    execution::values::Value,
     jit::execution::ast::Type,
     natives::{
         functions::{NativeContext, NativeFunction, NativeResult},
         make_module_natives,
     },
 };
+
+#[cfg(feature = "testing")]
+use crate::execution::values::{Reference, VMValueCast};
+
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use smallvec::smallvec;
+
 use std::{collections::VecDeque, sync::Arc};
 
 /***************************************************************************************************
@@ -121,7 +126,7 @@ fn native_print_stack_trace_nop(
 #[inline]
 fn native_print_stack_trace(
     gas_params: &PrintStackTraceGasParameters,
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -131,7 +136,7 @@ fn native_print_stack_trace(
     #[cfg(feature = "testing")]
     {
         let mut s = String::new();
-        context.print_stack_trace(&mut s)?;
+        _context.print_stack_trace(&mut s)?;
         println!("{}", s);
     }
 

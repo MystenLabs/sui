@@ -299,15 +299,20 @@ impl<'b> NativeContext<'_, 'b, '_> {
         self.extensions
     }
 
-    pub fn charge_gas(&self, amount: InternalGas) -> bool {
-        let mut gas_left = self.gas_left.borrow_mut();
+    pub fn charge_gas(&self, amount: InternalGas) -> PartialVMResult<bool> {
+        let mut gas_left = self.gas_left.try_borrow_mut().map_err(|_| {
+            partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "gas left was already mutably borrowed"
+            )
+        })?;
 
         match gas_left.checked_sub(amount) {
             Some(x) => {
                 *gas_left = x;
-                true
+                Ok(true)
             }
-            None => false,
+            None => Ok(false),
         }
     }
 
@@ -335,7 +340,7 @@ impl<'b> NativeContext<'_, 'b, '_> {
 macro_rules! native_charge_gas_early_exit {
     ($native_context:ident, $cost:expr) => {{
         use move_core_types::vm_status::sub_status::NFE_OUT_OF_GAS;
-        if !$native_context.charge_gas($cost) {
+        if !$native_context.charge_gas($cost)? {
             // Exhausted all in budget. terminate early
             return Ok(NativeResult::err(
                 $native_context.gas_budget(),

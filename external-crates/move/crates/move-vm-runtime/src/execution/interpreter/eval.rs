@@ -179,7 +179,13 @@ fn step(
             });
 
             partial_error_to_error(state, run_context, charge_result)?;
-            let non_ref_vals = state.call_stack.current_frame.stack_frame.drop_all_values();
+
+            let non_ref_vals = state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .drop_all_values()
+                .map_err(|e| state.set_location(e))?;
 
             // TODO: Check if the error location is set correctly.
             gas_meter
