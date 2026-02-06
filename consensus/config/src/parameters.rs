@@ -262,6 +262,10 @@ pub struct TonicParameters {
 }
 
 impl TonicParameters {
+    pub fn is_observer_server_enabled(&self) -> bool {
+        self.observer_server_port.is_some()
+    }
+
     fn default_keepalive_interval() -> Duration {
         Duration::from_secs(10)
     }

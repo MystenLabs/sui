@@ -1024,8 +1024,8 @@ mod tests {
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let mock_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
-            mock_client.clone(),
-            mock_client.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
         ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
@@ -1147,8 +1147,8 @@ mod tests {
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let mock_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
-            mock_client.clone(),
-            mock_client.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
         ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
@@ -1319,8 +1319,8 @@ mod tests {
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let mock_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
-            mock_client.clone(),
-            mock_client.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
         ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");

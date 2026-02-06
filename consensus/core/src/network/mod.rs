@@ -287,6 +287,7 @@ pub(crate) trait NetworkManager: Send + Sync {
     fn validator_client(&self) -> Arc<Self::ValidatorClient>;
 
     /// Returns the observer network client.
+    #[allow(dead_code)]
     fn observer_client(&self) -> Arc<Self::ObserverClient>;
 
     /// Starts the validator network server with the provided service.

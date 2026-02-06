@@ -1482,8 +1482,8 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let mock_client = Arc::new(MockNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
-            mock_client.clone(),
-            mock_client.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
         ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
@@ -1545,8 +1545,8 @@ mod tests {
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(MockNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
-            mock_client.clone(),
-            mock_client.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
         ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
@@ -1664,8 +1664,8 @@ mod tests {
 
         // WHEN start the synchronizer and wait for a couple of seconds
         let network_client = Arc::new(SynchronizerClient::new(
-            mock_client.clone(),
-            mock_client.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
         ));
         let _handle = Synchronizer::start(
             network_client,
@@ -1775,8 +1775,8 @@ mod tests {
 
         // WHEN start the synchronizer and wait for a couple of seconds where normally the synchronizer should have kicked in.
         let network_client = Arc::new(SynchronizerClient::new(
-            mock_client.clone(),
-            mock_client.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
         ));
         let _handle = Synchronizer::start(
             network_client,
@@ -1919,8 +1919,8 @@ mod tests {
 
         // WHEN start the synchronizer and wait for a couple of seconds
         let network_client = Arc::new(SynchronizerClient::new(
-            mock_client.clone(),
-            mock_client.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
         ));
         let handle = Synchronizer::start(
             network_client,

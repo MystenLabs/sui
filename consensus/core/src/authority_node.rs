@@ -205,15 +205,20 @@ where
 
         let mut network_manager = N::new(context.clone(), network_keypair);
         let validator_client = network_manager.validator_client();
-        let observer_client = network_manager.observer_client();
 
-        let synchronizer_client = Arc::new(SynchronizerClient::new(
-            validator_client.clone(),
-            observer_client.clone(),
+        let synchronizer_client = Arc::new(SynchronizerClient::<
+            N::ValidatorClient,
+            N::ObserverClient,
+        >::new(
+            Some(validator_client.clone()),
+            None, // TODO: set observer client if this is an observer node.
         ));
-        let commit_syncer_client = Arc::new(CommitSyncerClient::new(
-            validator_client.clone(),
-            observer_client.clone(),
+        let commit_syncer_client = Arc::new(CommitSyncerClient::<
+            N::ValidatorClient,
+            N::ObserverClient,
+        >::new(
+            Some(validator_client.clone()),
+            None, // TODO: set observer client if this is an observer node.
         ));
 
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
@@ -361,7 +366,9 @@ where
         network_manager
             .start_validator_server(network_service.clone())
             .await;
-        network_manager.start_observer_server(network_service).await;
+        if context.parameters.tonic.is_observer_server_enabled() {
+            network_manager.start_observer_server(network_service).await;
+        }
 
         info!(
             "Consensus authority started, took {:?}",

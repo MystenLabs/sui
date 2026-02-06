@@ -1003,8 +1003,8 @@ mod tests {
         let core_thread_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(CommitSyncerClient::new(
-            mock_client.clone(),
-            mock_client.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
         ));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
