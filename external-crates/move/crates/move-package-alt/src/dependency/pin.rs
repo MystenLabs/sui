@@ -24,7 +24,7 @@ use crate::{
 use super::{CombinedDependency, Dependency};
 
 /// [Dependency<Pinned>]s are guaranteed to always resolve to the same package source. For example,
-/// a git dependendency with a branch or tag revision may change over time (and is thus not
+/// a git dependency with a branch or tag revision may change over time (and is thus not
 /// pinned), whereas a git dependency with a sha revision is always guaranteed to produce the same
 /// files.
 #[derive(Clone, Debug)]
@@ -35,7 +35,7 @@ pub enum Pinned {
     Root(PackagePath),
 }
 
-/// Invariant: if a PinnedDepencyInfo has `dep_info` `Root`, then its `containing_file` is either a
+/// Invariant: if a PinnedDependencyInfo has `dep_info` `Root`, then its `containing_file` is either a
 /// manifest or a lockfile in the directory containing the root package
 #[derive(Clone, Debug)]
 pub struct PinnedGitDependency {
@@ -334,10 +334,7 @@ impl From<Pinned> for EphemeralDependencyInfo {
             .canonicalize()
             .expect("Filesystem path for pinned package is valid");
 
-        match value.into() {
-            LockfileDependencyInfo::OnChain(onchain) => Self::OnChain(onchain),
-            _ => Self::Local(LocalDepInfo { local }),
-        }
+        Self(LocalDepInfo { local })
     }
 }
 
@@ -385,7 +382,7 @@ mod tests {
     }
 
     /// Pinning a local dep `{local = "child"}` relative to another local dep `{local = "parent"}`
-    /// returns `{local = "parent/child"}`, with the absoluted directory set to
+    /// returns `{local = "parent/child"}`, with the absolute directory set to
     /// `/root/parent/child`
     #[test]
     fn local_dep_of_local() {
