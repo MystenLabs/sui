@@ -979,6 +979,10 @@ struct FeatureFlags {
     // If true, always accept committed system transactions.
     #[serde(skip_serializing_if = "is_false")]
     consensus_always_accept_system_transactions: bool,
+
+    // If true, settle transactions early in consensus handler instead of checkpoint builder.
+    #[serde(skip_serializing_if = "is_false")]
+    settle_early_in_consensus_handler: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2572,6 +2576,10 @@ impl ProtocolConfig {
     pub fn consensus_always_accept_system_transactions(&self) -> bool {
         self.feature_flags
             .consensus_always_accept_system_transactions
+    }
+
+    pub fn settle_early_in_consensus_handler(&self) -> bool {
+        self.feature_flags.settle_early_in_consensus_handler
     }
 }
 
@@ -4527,6 +4535,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
+                    cfg.feature_flags.settle_early_in_consensus_handler = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4916,6 +4925,10 @@ impl ProtocolConfig {
 
     pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
         self.feature_flags.split_checkpoints_in_consensus_handler = val;
+    }
+
+    pub fn set_settle_early_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.settle_early_in_consensus_handler = val;
     }
 }
 

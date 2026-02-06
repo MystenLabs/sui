@@ -444,6 +444,13 @@ pub struct AuthorityPerEpochStore {
     /// Waiters for barrier transactions. Used by execution scheduler to wait for
     /// barrier transaction (keyed by the same AccumulatorSettlement key as settlements).
     barrier_registrations: Arc<Mutex<HashMap<TransactionKey, BarrierRegistration>>>,
+
+    /// Maps settlement key to batch transaction info for early settlement.
+    settlement_batch_info: Arc<Mutex<HashMap<TransactionKey, SettlementBatchInfo>>>,
+
+    /// Settlement results computed by the execution scheduler for checkpoint builder consumption.
+    settlement_result_registrations:
+        Arc<Mutex<HashMap<TransactionKey, SettlementResultRegistration>>>,
 }
 enum SettlementRegistration {
     Ready(Vec<VerifiedExecutableTransaction>),
@@ -452,6 +459,23 @@ enum SettlementRegistration {
 enum BarrierRegistration {
     Ready(Box<VerifiedExecutableTransaction>),
     Waiting(oneshot::Sender<VerifiedExecutableTransaction>),
+}
+
+pub struct SettlementBatchInfo {
+    pub tx_keys: Vec<TransactionKey>,
+    pub checkpoint_height: u64,
+    pub tx_index_offset: u64,
+    pub checkpoint_seq: u64,
+}
+
+pub struct SettlementResult {
+    pub settlement_effects: Vec<TransactionEffects>,
+    pub funds_settlement: crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
+}
+
+enum SettlementResultRegistration {
+    Ready(SettlementResult),
+    Waiting(oneshot::Sender<SettlementResult>),
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -1276,6 +1300,8 @@ impl AuthorityPerEpochStore {
             finalized_transactions_cache,
             settlement_registrations: Default::default(),
             barrier_registrations: Default::default(),
+            settlement_batch_info: Default::default(),
+            settlement_result_registrations: Default::default(),
         });
 
         s.update_buffer_stake_metric();
@@ -2005,6 +2031,58 @@ impl AuthorityPerEpochStore {
             } else {
                 let (tx, rx) = oneshot::channel();
                 registrations.insert(key, BarrierRegistration::Waiting(tx));
+                rx
+            }
+        };
+
+        rx.await.unwrap()
+    }
+
+    pub(crate) fn store_settlement_batch_info(
+        &self,
+        tx_key: TransactionKey,
+        batch_info: SettlementBatchInfo,
+    ) {
+        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
+        self.settlement_batch_info.lock().insert(tx_key, batch_info);
+    }
+
+    pub(crate) fn take_settlement_batch_info(
+        &self,
+        tx_key: &TransactionKey,
+    ) -> Option<SettlementBatchInfo> {
+        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
+        self.settlement_batch_info.lock().remove(tx_key)
+    }
+
+    pub(crate) fn notify_settlement_result_ready(
+        &self,
+        tx_key: TransactionKey,
+        result: SettlementResult,
+    ) {
+        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
+        let mut registrations = self.settlement_result_registrations.lock();
+        if let Some(registration) = registrations.remove(&tx_key) {
+            let SettlementResultRegistration::Waiting(tx) = registration else {
+                fatal!("Settlement result registration should be waiting");
+            };
+            tx.send(result).ok();
+        } else {
+            registrations.insert(tx_key, SettlementResultRegistration::Ready(result));
+        }
+    }
+
+    pub(crate) async fn wait_for_settlement_result(&self, key: TransactionKey) -> SettlementResult {
+        let rx = {
+            let mut registrations = self.settlement_result_registrations.lock();
+            if let Some(registration) = registrations.remove(&key) {
+                let SettlementResultRegistration::Ready(result) = registration else {
+                    fatal!("Settlement result registration should be ready");
+                };
+                return result;
+            } else {
+                let (tx, rx) = oneshot::channel();
+                registrations.insert(key, SettlementResultRegistration::Waiting(tx));
                 rx
             }
         };
