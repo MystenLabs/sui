@@ -13,7 +13,7 @@ use tonic::{Request, Response, Streaming};
 
 use super::{
     NodeId, ObserverBlockStream, ObserverNetworkClient, ObserverNetworkService,
-    tonic_gen::observer_consensus_service_server::ObserverConsensusService,
+    tonic_gen::observer_service_server::ObserverService,
 };
 use crate::{
     commit::CommitRange,
@@ -155,7 +155,7 @@ impl<S: ObserverNetworkService> ObserverServiceProxy<S> {
 }
 
 #[async_trait]
-impl<S: ObserverNetworkService> ObserverConsensusService for ObserverServiceProxy<S> {
+impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
     type StreamBlocksStream =
         Pin<Box<dyn Stream<Item = Result<BlockStreamResponse, tonic::Status>> + Send>>;
 

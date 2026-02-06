@@ -46,7 +46,7 @@ use crate::{
     network::{
         tonic_gen::{
             consensus_service_server::ConsensusServiceServer,
-            observer_consensus_service_server::ObserverConsensusServiceServer,
+            observer_service_server::ObserverServiceServer,
         },
         tonic_tls::certificate_server_name,
     },
@@ -938,7 +938,7 @@ impl TonicManager {
         let observer_address = SocketAddr::new(validator_address.ip(), observer_port);
         let observer_service_proxy = ObserverServiceProxy::new(self.context.clone(), service);
 
-        let observer_service_server = ObserverConsensusServiceServer::new(observer_service_proxy)
+        let observer_service_server = ObserverServiceServer::new(observer_service_proxy)
             .max_encoding_message_size(config.message_size_limit)
             .max_decoding_message_size(config.message_size_limit)
             .send_compressed(CompressionEncoding::Zstd)

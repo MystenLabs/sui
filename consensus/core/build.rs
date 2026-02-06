@@ -89,7 +89,7 @@ fn build_tonic_services(out_dir: &Path) {
         .build();
 
     let observer_service = tonic_build::manual::Service::builder()
-        .name("ObserverConsensusService")
+        .name("ObserverService")
         .package("consensus")
         .comment("Observer node interface to serve observer clients")
         .method(

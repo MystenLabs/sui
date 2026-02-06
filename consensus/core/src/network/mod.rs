@@ -48,10 +48,7 @@ pub(crate) enum PeerId {
 // Tonic generated RPC stubs.
 mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
-    include!(concat!(
-        env!("OUT_DIR"),
-        "/consensus.ObserverConsensusService.rs"
-    ));
+    include!(concat!(env!("OUT_DIR"), "/consensus.ObserverService.rs"));
 }
 
 mod clients;
