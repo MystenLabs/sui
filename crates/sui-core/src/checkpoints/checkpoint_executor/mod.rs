@@ -405,14 +405,6 @@ impl CheckpointExecutor {
 
         let seq = ckpt_state.data.checkpoint.sequence_number;
 
-        // Wait for all post-processing to complete before persisting transaction outputs.
-        // This ensures that if we crash after persistence, post-processing is guaranteed
-        // complete — so on restart, skipping re-execution of already-persisted transactions
-        // does not lose post-processing work.
-        for tx_digest in &ckpt_state.data.tx_digests {
-            self.state.await_post_processing(tx_digest).await;
-        }
-
         let batch = self
             .state
             .get_cache_commit()
@@ -608,6 +600,31 @@ impl CheckpointExecutor {
         }
 
         finish_stage!(pipeline_handle, WaitForTransactions);
+
+        // Collect index batches from post-processing and commit atomically.
+        // This must happen BEFORE insert_finalized_transactions so that index data
+        // is available when transactions_executed_in_checkpoint_notify fires.
+        {
+            let mut raw_batches = Vec::new();
+            let mut cache_updates = Vec::new();
+            for tx_digest in &ckpt_state.data.tx_digests {
+                if let Some((raw_batch, cu)) = self.state.await_post_processing(tx_digest).await {
+                    raw_batches.push(raw_batch);
+                    cache_updates.push(cu);
+                }
+            }
+            if !raw_batches.is_empty() {
+                if let Some(indexes) = &self.state.indexes {
+                    let mut db_batch = indexes.new_db_batch();
+                    db_batch
+                        .absorb_raw_batches(raw_batches)
+                        .expect("failed to absorb raw index batches");
+                    indexes
+                        .commit_index_batch(db_batch, cache_updates)
+                        .expect("failed to commit index batch");
+                }
+            }
+        }
 
         if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
             self.execute_change_epoch_tx(&tx_data).await;
