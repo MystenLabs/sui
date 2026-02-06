@@ -198,7 +198,18 @@ fn step(
             if state.can_pop_call_frame() {
                 state.pop_call_frame()?;
                 // Note: the caller will find the callee's return values at the top of the shared operand stack
-                state.call_stack.current_frame.pc += 1; // advance past the Call instruction in the caller
+                state.call_stack.current_frame.pc = state
+                    .call_stack
+                    .current_frame
+                    .pc
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        set_err_info!(
+                            run_context.interner(),
+                            state.call_stack.current_frame,
+                            partial_vm_error!(PC_OVERFLOW, "PC overflow when returning to caller")
+                        )
+                    })?;
                 Ok(StepStatus::Running)
             } else {
                 // end of execution. `state` should no longer be used afterward
@@ -828,7 +839,17 @@ fn op_step_impl(
         }
     }
     if !control_flow_instruction(instruction) {
-        state.call_stack.current_frame.pc += 1;
+        state.call_stack.current_frame.pc = state
+            .call_stack
+            .current_frame
+            .pc
+            .checked_add(1)
+            .ok_or_else(|| {
+                partial_vm_error!(
+                    PC_OVERFLOW,
+                    "PC overflow when advancing to next instruction"
+                )
+            })?;
     }
     Ok(())
 }
@@ -908,7 +929,19 @@ fn call_function(
         });
 
         native_result?;
-        state.call_stack.current_frame.pc += 1; // advance past the Call instruction in the caller
+        // advance past the Call instruction in the caller
+        state.call_stack.current_frame.pc = state
+            .call_stack
+            .current_frame
+            .pc
+            .checked_add(1)
+            .ok_or_else(|| {
+                set_err_info!(
+                    run_context.interner(),
+                    state.call_stack.current_frame,
+                    partial_vm_error!(PC_OVERFLOW, "PC overflow when returning from native call")
+                )
+            })?;
     } else {
         // Note: the caller will find the callee's return values at the top of the shared
         // operand stack when the new frame returns.
