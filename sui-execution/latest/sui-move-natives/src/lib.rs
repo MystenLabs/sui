@@ -966,6 +966,7 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ("address", "to_u256", make_native!(address::to_u256)),
         ("address", "from_u256", make_native!(address::from_u256)),
         ("hash", "blake2b256", make_native!(hash::blake2b256)),
+        ("hash", "sha3_512", make_native!(hash::sha3_512)),
         (
             "bls12381",
             "bls12381_min_sig_verify",
