@@ -411,7 +411,11 @@ impl CheckpointExecutor {
         // does not lose post-processing work.
         for tx_digest in &ckpt_state.data.tx_digests {
             if let Some((_, rx)) = self.state.pending_post_processing().remove(tx_digest) {
+                // Indicates tx was executed and digest was placed into pending_post_processing map.
                 let _ = rx.await;
+            } else {
+                // Indicates that either tx was already persisted (and no post-processing was needed)
+                // or post-processing was already completed.
             }
         }
 
