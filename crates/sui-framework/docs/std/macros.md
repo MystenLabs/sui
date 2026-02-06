@@ -33,6 +33,8 @@ This module holds shared implementation of macros used in <code>std</code>
 -  [Macro function `try_as_u32`](#std_macros_try_as_u32)
 -  [Macro function `try_as_u64`](#std_macros_try_as_u64)
 -  [Macro function `try_as_u128`](#std_macros_try_as_u128)
+-  [Macro function `num_mul_div`](#std_macros_num_mul_div)
+-  [Macro function `num_mul_div_ceil`](#std_macros_num_mul_div_ceil)
 -  [Macro function `uq_from_quotient`](#std_macros_uq_from_quotient)
 -  [Macro function `uq_from_int`](#std_macros_uq_from_int)
 -  [Macro function `uq_add`](#std_macros_uq_add)
@@ -821,6 +823,54 @@ This module holds shared implementation of macros used in <code>std</code>
 <pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u128">try_as_u128</a>($x: _): Option&lt;<a href="../std/u128.md#std_u128">u128</a>&gt; {
     <b>let</b> x = $x;
     <b>if</b> (x &gt; 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u128.md#std_u128">u128</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_mul_div"></a>
+
+## Macro function `num_mul_div`
+
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_mul_div">num_mul_div</a>&lt;$T, $U&gt;($a: $T, $b: $T, $c: $T): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_mul_div">num_mul_div</a>&lt;$T, $U&gt;($a: $T, $b: $T, $c: $T): $T {
+    (($a <b>as</b> $U) * ($b <b>as</b> $U) / ($c <b>as</b> $U)) <b>as</b> $T
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_mul_div_ceil"></a>
+
+## Macro function `num_mul_div_ceil`
+
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_mul_div_ceil">num_mul_div_ceil</a>&lt;$T, $U&gt;($a: $T, $b: $T, $c: $T): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_mul_div_ceil">num_mul_div_ceil</a>&lt;$T, $U&gt;($a: $T, $b: $T, $c: $T): $T {
+    (($a <b>as</b> $U) * ($b <b>as</b> $U)).divide_and_round_up($c <b>as</b> $U) <b>as</b> $T
 }
 </code></pre>
 

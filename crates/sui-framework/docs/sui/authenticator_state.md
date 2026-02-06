@@ -29,6 +29,8 @@ title: Module `sui::authenticator_state`
 <b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
 <b>use</b> <a href="../std/option.md#std_option">std::option</a>;
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/u128.md#std_u128">std::u128</a>;
+<b>use</b> <a href="../std/u256.md#std_u256">std::u256</a>;
 <b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
