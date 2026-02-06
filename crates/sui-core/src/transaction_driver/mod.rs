@@ -213,6 +213,14 @@ where
                             .settlement_finality_latency
                             .with_label_values(&[tx_type.as_str(), ping_label])
                             .observe(settlement_finality_latency);
+                        let is_out_of_expected_range = settlement_finality_latency >= 8.0
+                            || settlement_finality_latency <= 0.1;
+                        tracing::debug!(
+                            ?tx_type,
+                            ?is_out_of_expected_range,
+                            "Settlement finality latency: {:.3} seconds",
+                            settlement_finality_latency
+                        );
                         // Record the number of retries for successful transaction
                         self.metrics
                             .transaction_retries
