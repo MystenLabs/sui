@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TrafficControlPolicy"],"struct":["FreqThresholdPolicy","NoOpPolicy","PolicyResponse","TestNConnIPPolicy","TestPanicOnInvocationPolicy","TrafficSketch","TrafficTally"],"trait":["Policy"]};

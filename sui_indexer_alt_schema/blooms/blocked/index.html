@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Blocked bloom filter implementation for efficient database queries."><title>sui_indexer_alt_schema::blooms::blocked - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sui_indexer_alt_schema" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module blocked</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../sui_indexer_alt_schema/index.html">sui_<wbr>indexer_<wbr>alt_<wbr>schema</a><span class="version">1.66.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module blocked</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In sui_<wbr>indexer_<wbr>alt_<wbr>schema::<wbr>blooms</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">sui_indexer_alt_schema</a>::<wbr><a href="../index.html">blooms</a></div><h1>Module <span>blocked</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/sui_indexer_alt_schema/blooms/blocked.rs.html#4-327">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Blocked bloom filter implementation for efficient database queries.</p>
+<p>A blocked bloom filter partitions the filter into fixed-size blocks, where each element
+hashes to exactly one block for bits to be set, essentially a hash-indexed array of smaller bloom filters.
+Each block is stored as a separate row. This allows us to query specific blocks for membership instead of
+scanning the entire filter for improved IO.</p>
+<ol>
+<li>
+<p><strong>Targeted queries</strong>: When checking membership, only the specific block for that element
+needs to be loaded from the database, not the entire filter.</p>
+</li>
+<li>
+<p><strong>Incremental updates</strong>: Blocks can be OR’d together independently, allowing bloom filters
+from multiple checkpoints to be merged at the block level without loading entire filters.
+<strong>Note</strong>: Do not use folding with blocked bloom filters. Merging requires fixed-size blocks;
+variable-sized blocks from folding would cause the merge to fail.</p>
+</li>
+<li>
+<p><strong>Sparse storage</strong>: Only blocks with bits set need to be stored. In practice, with well-chosen parameters,
+values should be uniformly distributed across blocks.</p>
+</li>
+</ol>
+<p>The filter uses double hashing: the first hash selects the block, and subsequent hashes
+(with a different seed to prevent correlation) select bit positions within that block.</p>
+<div class="example-wrap"><pre class="language-text"><code>  Blocked Bloom Filter (128 blocks × 2 KB each)
+  ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐
+  │  0  │  1  │  2  │  3  │ ... │ 125 │ 126 │ 127 │
+  └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
+           ▲
+           │
+      hash(key, seed) selects block, then subsequent hash(key, seed1) sets bits within that block</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.BlockedBloomFilter.html" title="struct sui_indexer_alt_schema::blooms::blocked::BlockedBloomFilter">Blocked<wbr>Bloom<wbr>Filter</a></dt><dd>A generic blocked bloom filter.</dd><dt><a class="struct" href="struct.BlockedBloomProbe.html" title="struct sui_indexer_alt_schema::blooms::blocked::BlockedBloomProbe">Blocked<wbr>Bloom<wbr>Probe</a></dt><dd>Probe for checking membership in a blocked bloom filter.</dd></dl></section></div></main></body></html>

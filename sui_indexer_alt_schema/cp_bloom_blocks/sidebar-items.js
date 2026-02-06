@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BLOOM_BLOCK_BITS","BLOOM_BLOCK_BYTES","CP_BLOCK_SIZE","NUM_BLOOM_BLOCKS","NUM_HASHES","TOTAL_BLOOM_BITS"],"fn":["cp_block_index","function_bytea_or"],"struct":["StoredCpBloomBlock"],"type":["CpBlockedBloomFilter","function_bytea_or"]};

@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["sui_checkpoint_blob_indexer",[["impl Handler for <a class=\"struct\" href=\"sui_checkpoint_blob_indexer/struct.CheckpointBcsPipeline.html\" title=\"struct sui_checkpoint_blob_indexer::CheckpointBcsPipeline\">CheckpointBcsPipeline</a>"],["impl Handler for <a class=\"struct\" href=\"sui_checkpoint_blob_indexer/struct.CheckpointBlobPipeline.html\" title=\"struct sui_checkpoint_blob_indexer::CheckpointBlobPipeline\">CheckpointBlobPipeline</a>"],["impl Handler for <a class=\"struct\" href=\"sui_checkpoint_blob_indexer/struct.EpochsPipeline.html\" title=\"struct sui_checkpoint_blob_indexer::EpochsPipeline\">EpochsPipeline</a>"]]],["sui_indexer_alt_framework",[]],["sui_kvstore",[["impl Handler for <a class=\"struct\" href=\"sui_kvstore/struct.EpochLegacyPipeline.html\" title=\"struct sui_kvstore::EpochLegacyPipeline\">EpochLegacyPipeline</a>"],["impl&lt;P&gt; Handler for <a class=\"struct\" href=\"sui_kvstore/struct.BigTableHandler.html\" title=\"struct sui_kvstore::BigTableHandler\">BigTableHandler</a>&lt;P&gt;<div class=\"where\">where\n    P: BigTableProcessor + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/marker/trait.Send.html\" title=\"trait core::marker::Send\">Send</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a>,</div>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[633,33,689]}

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["subscribe_bridge_events"],"struct":["BridgeMonitor"]};

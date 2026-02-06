@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["main","parse_max_mutations"],"struct":["Args"]};
