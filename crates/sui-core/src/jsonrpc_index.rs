@@ -5,7 +5,7 @@
 //! The main user of this data is the explorer.
 
 use std::cmp::{max, min};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,7 +13,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use bincode::Options;
 use itertools::Itertools;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
-use parking_lot::ArcMutexGuard;
 use prometheus::{
     IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry,
@@ -45,8 +44,6 @@ use typed_store::rocks::{
     read_size_from_env,
 };
 use typed_store::traits::Map;
-
-type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
@@ -195,7 +192,6 @@ pub struct IndexStoreCaches {
 
 #[derive(Default)]
 pub struct IndexStoreCacheUpdates {
-    _locks: Vec<OwnedMutexGuard<()>>,
     per_coin_type_balance_changes: Vec<((SuiAddress, TypeTag), SuiResult<TotalBalance>)>,
     all_balance_changes: Vec<(SuiAddress, SuiResult<Arc<AllBalance>>)>,
 }
@@ -626,7 +622,6 @@ impl IndexStore {
         &self,
         digest: &TransactionDigest,
         batch: &mut RawDBBatch,
-        object_index_changes: &ObjectIndexChanges,
         tx_coins: Option<TxCoins>,
     ) -> SuiResult<IndexStoreCacheUpdates> {
         // In production if this code path is hit, we should expect `tx_coins` to not be None.
@@ -635,21 +630,6 @@ impl IndexStore {
         if tx_coins.is_none() {
             return Ok(IndexStoreCacheUpdates::default());
         }
-        // Acquire locks on changed coin owners
-        let mut addresses: HashSet<SuiAddress> = HashSet::new();
-        addresses.extend(
-            object_index_changes
-                .deleted_owners
-                .iter()
-                .map(|(owner, _)| *owner),
-        );
-        addresses.extend(
-            object_index_changes
-                .new_owners
-                .iter()
-                .map(|((owner, _), _)| *owner),
-        );
-        let _locks = self.caches.locks.acquire_locks(addresses.into_iter());
         let mut balance_changes: HashMap<SuiAddress, HashMap<TypeTag, TotalBalance>> =
             HashMap::new();
         // Index coin info
@@ -762,7 +742,6 @@ impl IndexStore {
             })
             .collect();
         let cache_updates = IndexStoreCacheUpdates {
-            _locks,
             per_coin_type_balance_changes,
             all_balance_changes,
         };
@@ -837,7 +816,7 @@ impl IndexStore {
         )?;
 
         // Coin Index
-        let cache_updates = self.index_coin(digest, &mut batch, &object_index_changes, tx_coins)?;
+        let cache_updates = self.index_coin(digest, &mut batch, tx_coins)?;
 
         // update address balances index
         let address_balance_updates = accumulator_events.into_iter().filter_map(|event| {
