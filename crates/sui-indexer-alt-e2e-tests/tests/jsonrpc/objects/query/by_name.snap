@@ -70,7 +70,7 @@ Response: {
         }
       }
     ],
-    "nextCursor": "IP9+QrXhO5ZqiGLiweKv0ac7GsrMzyxw/a2oxwLbtWwbAQAAAAAAAAA=",
+    "nextCursor": "gQEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh7Z4PnHKoaBTj/BOtWcg1z8WgjE48AkDUkknQ5lsTSrcgAAAAAAAAABTQAAAAAAAAACTzEAAAAAAAAAAQAAAAkA/35CteE7lmqIYuLB4q/RpzsayszPLHD9rajHAtu1bBs=",
     "hasNextPage": false
   }
 }
@@ -91,7 +91,7 @@ Response: {
         }
       }
     ],
-    "nextCursor": "IPOHIUk8Sb9X0YWS59Gu0vxr0GCrKj3lsc8M25UylpaqAQAAAAAAAAA=",
+    "nextCursor": "fQD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHtng+ccqhoFOP8E61ZyDXPxaCMTjwCQNSSSdDmWxNKtyAAAAAAAAAAFNAAAAAAAAAAJPMgAAAAAAAAAAAPOHIUk8Sb9X0YWS59Gu0vxr0GCrKj3lsc8M25Uylpaq",
     "hasNextPage": false
   }
 }
@@ -112,13 +112,13 @@ Response: {
         }
       }
     ],
-    "nextCursor": "IGNgGcSkdwlUZTCUqLWCQqdigTfL6GUVdEM6AzJcQsqcAgAAAAAAAAA=",
+    "nextCursor": "gQEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh7Z4PnHKoaBTj/BOtWcg1z8WgjE48AkDUkknQ5lsTSrcgAAAAAAAAABTQAAAAAAAAACTzEAAAAAAAAAAQAAAAgAY2AZxKR3CVRlMJSotYJCp2KBN8voZRV0QzoDMlxCypw=",
     "hasNextPage": true
   }
 }
 
 task 10, lines 96-108:
-//# run-jsonrpc --cursors bcs(bcs(@{obj_5_0}),2)
+//# run-jsonrpc --cursors bcs(bin(0u8,@{A},@{P}::M::O1<u16>,0u8,@{obj_5_0}))
 Response: {
   "jsonrpc": "2.0",
   "id": 3,
@@ -133,7 +133,7 @@ Response: {
         }
       }
     ],
-    "nextCursor": "IP9+QrXhO5ZqiGLiweKv0ac7GsrMzyxw/a2oxwLbtWwbAQAAAAAAAAA=",
+    "nextCursor": "gQEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh7Z4PnHKoaBTj/BOtWcg1z8WgjE48AkDUkknQ5lsTSrcgAAAAAAAAABTQAAAAAAAAACTzEAAAAAAAAAAQAAAAkA/35CteE7lmqIYuLB4q/RpzsayszPLHD9rajHAtu1bBs=",
     "hasNextPage": false
   }
 }

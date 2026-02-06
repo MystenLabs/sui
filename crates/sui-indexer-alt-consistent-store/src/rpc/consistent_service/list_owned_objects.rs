@@ -32,6 +32,9 @@ pub(super) enum Error {
     #[error("Missing 'object_type' filter for kind '{}'", .0.as_str_name())]
     MissingType(grpc::owner::OwnerKind),
 
+    #[error("'object_type' and 'exclude_object_type' are mutually exclusive")]
+    MutuallyExclusiveTypeFilter,
+
     #[error("Unexpected 'address' for kind '{}'", .0.as_str_name())]
     UnexpectedAddress(grpc::owner::OwnerKind),
 }
@@ -44,6 +47,7 @@ impl StatusCode for Error {
             | Error::MissingAddress(_)
             | Error::MissingOwner
             | Error::MissingType(_)
+            | Error::MutuallyExclusiveTypeFilter
             | Error::UnexpectedAddress(_) => tonic::Code::InvalidArgument,
         }
     }
@@ -77,15 +81,24 @@ pub(super) fn list_owned_objects(
         }
     };
 
-    // Looking up immutable or shared objects requires some sort of type filter.
+    // Looking up immutable or shared objects requires an inclusive type filter.
     if matches!(kind, SK::Immutable | SK::Shared) && request.object_type().is_empty() {
         return Err(Error::MissingType(owner.kind()).into());
     }
 
-    let type_: Option<TypeFilter> = (!request.object_type().is_empty())
+    let include_type: Option<TypeFilter> = (!request.object_type().is_empty())
         .then(|| request.object_type().parse())
         .transpose()
         .map_err(Error::from)?;
+
+    let exclude_type: Option<TypeFilter> = (!request.exclude_object_type().is_empty())
+        .then(|| request.exclude_object_type().parse())
+        .transpose()
+        .map_err(Error::from)?;
+
+    if include_type.is_some() && exclude_type.is_some() {
+        return Err(Error::MutuallyExclusiveTypeFilter.into());
+    }
 
     let page = Page::from_request(
         &state.rpc_config.pagination,
@@ -96,8 +109,10 @@ pub(super) fn list_owned_objects(
     );
 
     let index = &state.store.schema().object_by_owner;
-    let resp = if let Some(type_) = type_ {
+    let resp = if let Some(type_) = include_type {
         page.paginate_prefix(index, checkpoint, &(kind, type_))?
+    } else if let Some(type_) = exclude_type {
+        page.paginate_exclude(index, checkpoint, &kind, &type_)?
     } else {
         page.paginate_prefix(index, checkpoint, &kind)?
     };

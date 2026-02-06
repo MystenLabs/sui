@@ -144,6 +144,7 @@ impl CoinsApiServer for Coins {
                 OwnerKind::Address,
                 Some(owner.to_string()),
                 Some(object_type.to_canonical_string(/* with_prefix */ true)),
+                None,
                 Some(page.limit as u32),
                 page.cursor.as_ref().map(|c| c.0.clone()),
                 None,

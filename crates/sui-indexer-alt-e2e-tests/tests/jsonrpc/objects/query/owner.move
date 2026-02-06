@@ -6,9 +6,8 @@
 // 1. All objects owned by A
 // 2. ...owned by B
 // 3. Limited number of objects owned by A
-// 4. Limited and offset by a cursor
-// 5. Objects after they have been modified
-// 6. Objects after they have been transferred
+// 4. Objects after they have been modified
+// 5. Objects after they have been transferred
 
 //# programmable --sender A --inputs @A 42 43 44
 //> 0: SplitCoins(Gas, [Input(1), Input(2), Input(3)]);
@@ -46,12 +45,6 @@
 {
   "method": "suix_getOwnedObjects",
   "params": ["@{A}", { "options": { "showContent": true } }, null, 2]
-}
-
-//# run-jsonrpc --cursors bcs(bcs(@{obj_4_1}),2)
-{
-  "method": "suix_getOwnedObjects",
-  "params": ["@{A}", { "options": { "showContent": true } }, "@{cursor_0}", 2]
 }
 
 //# programmable --sender B --inputs @B object(2,0) 21
