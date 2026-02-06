@@ -26,7 +26,7 @@ pub struct HmacHmacSha3256CostParams {
     pub hmac_hmac_sha3_256_input_cost_per_block: InternalGas,
 }
 /***************************************************************************************************
- * native fun ed25519_verify
+ * native fun hmac_sha3_256
  * Implementation of the Move native function `hmac_sha3_256(key: &vector<u8>, msg: &vector<u8>): vector<u8>;`
  *   gas cost: hmac_hmac_sha3_256_cost_base                          | base cost for function call and fixed opers
  *              + hmac_hmac_sha3_256_input_cost_per_byte * msg.len()   | cost depends on length of message

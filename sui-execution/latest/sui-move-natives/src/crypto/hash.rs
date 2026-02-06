@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension};
-use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
+use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256, Sha3_512};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -13,6 +13,8 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, ops::Mul};
+use crate::crypto::group_ops::NOT_SUPPORTED_ERROR;
+use crate::object_runtime::ObjectRuntime;
 
 const BLAKE_2B256_BLOCK_SIZE: u16 = 128;
 const KECCAK_256_BLOCK_SIZE: u16 = 136;
@@ -129,6 +131,59 @@ pub fn blake2b256(
         args,
         hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_byte,
         hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_block,
+        BLAKE_2B256_BLOCK_SIZE,
+    )
+}
+
+#[derive(Clone)]
+pub struct HashSha3_512CostParams {
+    /// Base cost for invoking the `sha3_512` function
+    pub hash_sha3_512_cost_base: InternalGas,
+    /// Cost per byte of `data`
+    pub hash_sha3_512_data_cost_per_byte: InternalGas,
+    /// Cost per block of `data`, where a block is 136 bytes
+    pub hash_sha3_512_data_cost_per_block: InternalGas,
+}
+
+fn is_sha3_512_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .enable_sha3_512())
+}
+
+/***************************************************************************************************
+ * native fun sha3_512
+ * Implementation of the Move native function `hash::sha3_512(data: &vector<u8>): vector<u8>`
+ *   gas cost: hash_sha3_512_cost_base                               | base cost for function call and fixed opers
+ *              + hash_sha3_512_data_cost_per_byte * msg.len()       | cost depends on length of message
+ *              + hash_sha3_512_data_cost_per_block * num_blocks     | cost depends on number of blocks in message
+ **************************************************************************************************/
+pub fn sha3_512(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+
+    if !is_sha3_512_supported(context)? {
+        return Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED_ERROR));
+    }
+
+    // TODO: Add the correct cost params
+    let hash_sha3_512_cost_params = get_extension!(context, NativesCostTable)?
+        .hash_sha3_512_cost_params
+        .clone();
+    // Charge the base cost for this oper
+    native_charge_gas_early_exit!(
+        context,
+        hash_sha3_512_cost_params.hash_sha3_512_cost_base
+    );
+
+    hash::<Sha3_512, 64>(
+        context,
+        ty_args,
+        args,
+        hash_sha3_512_cost_params.hash_sha3_512_data_cost_per_byte,
+        hash_sha3_512_cost_params.hash_sha3_512_data_cost_per_block,
         BLAKE_2B256_BLOCK_SIZE,
     )
 }

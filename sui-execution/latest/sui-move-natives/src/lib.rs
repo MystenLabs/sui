@@ -72,6 +72,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use transfer::TransferReceiveObjectInternalCostParams;
+use crate::crypto::hash::HashSha3_512CostParams;
 
 mod accumulator;
 mod address;
@@ -175,6 +176,7 @@ pub struct NativesCostTable {
     // hash
     pub hash_blake2b256_cost_params: HashBlake2b256CostParams,
     pub hash_keccak256_cost_params: HashKeccak256CostParams,
+    pub hash_sha3_512_cost_params: HashSha3_512CostParams,
 
     // poseidon
     pub poseidon_bn254_cost_params: PoseidonBN254CostParams,
@@ -352,6 +354,15 @@ impl NativesCostTable {
                     .into(),
                 hash_keccak256_data_cost_per_block: protocol_config
                     .hash_keccak256_data_cost_per_block()
+                    .into(),
+            },
+            hash_sha3_512_cost_params: HashSha3_512CostParams {
+                hash_sha3_512_cost_base: protocol_config.hash_sha3_512_cost_base().into(),
+                hash_sha3_512_data_cost_per_byte: protocol_config
+                    .hash_sha3_512_data_cost_per_byte()
+                    .into(),
+                hash_sha3_512_data_cost_per_block: protocol_config
+                    .hash_sha3_512_data_cost_per_block()
                     .into(),
             },
             transfer_transfer_internal_cost_params: TransferInternalCostParams {
@@ -751,6 +762,55 @@ impl NativesCostTable {
                     .map(Into::into),
                 bls12381_uncompressed_g1_sum_max_terms: protocol_config
                     .group_ops_bls12381_uncompressed_g1_sum_max_terms_as_option(),
+                ristretto_decode_scalar_cost: protocol_config
+                    .group_ops_ristretto_decode_scalar_cost_as_option()
+                    .map(Into::into),
+                ristretto_decode_point_cost: protocol_config
+                    .group_ops_ristretto_decode_point_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_add_cost: protocol_config
+                    .group_ops_ristretto_scalar_add_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_add_cost: protocol_config
+                    .group_ops_ristretto_point_add_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_sub_cost: protocol_config
+                    .group_ops_ristretto_scalar_sub_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_sub_cost: protocol_config
+                    .group_ops_ristretto_point_sub_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_mul_cost: protocol_config
+                    .group_ops_ristretto_scalar_mul_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_mul_cost: protocol_config
+                    .group_ops_ristretto_point_mul_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_div_cost: protocol_config
+                    .group_ops_ristretto_scalar_div_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_div_cost: protocol_config
+                    .group_ops_ristretto_point_div_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_hash_to_base_cost: protocol_config
+                    .group_ops_ristretto_scalar_hash_to_base_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_hash_to_cost_per_byte: protocol_config
+                    .group_ops_ristretto_scalar_hash_to_cost_per_byte_as_option()
+                    .map(Into::into),
+                ristretto_point_hash_to_base_cost: protocol_config
+                    .group_ops_ristretto_point_hash_to_base_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_hash_to_cost_per_byte: protocol_config
+                    .group_ops_ristretto_point_hash_to_cost_per_byte_as_option()
+                    .map(Into::into),
+                ristretto_msm_base_cost: protocol_config
+                    .group_ops_ristretto_msm_base_cost_as_option()
+                    .map(Into::into),
+                ristretto_msm_base_cost_per_input: protocol_config
+                    .group_ops_ristretto_msm_base_cost_per_input_as_option()
+                    .map(Into::into),
+                ristretto_msm_max_len: protocol_config.group_ops_ristretto_msm_max_len_as_option(),
             },
             vdf_cost_params: VDFCostParams {
                 vdf_verify_cost: protocol_config
