@@ -15880,6 +15880,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-mainnet-call-graph-test"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "move-binary-format",
+ "move-model-2",
+ "rayon",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "sui-metric-checker"
 version = "1.66.0"
 dependencies = [
