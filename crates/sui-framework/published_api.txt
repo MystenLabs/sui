@@ -1636,6 +1636,9 @@ blake2b256
 keccak256
 	public fun
 	0x2::hash
+sha3_512
+	public fun
+	0x2::hash
 BCS
 	public struct
 	0x2::bcs
@@ -3604,6 +3607,75 @@ generate_u8_in_range
 shuffle
 	public fun
 	0x2::random
+Scalar
+	public struct
+	0x2::ristretto255
+Point
+	public struct
+	0x2::ristretto255
+scalar_from_bytes
+	public fun
+	0x2::ristretto255
+scalar_from_u64
+	public fun
+	0x2::ristretto255
+scalar_zero
+	public fun
+	0x2::ristretto255
+scalar_one
+	public fun
+	0x2::ristretto255
+scalar_add
+	public fun
+	0x2::ristretto255
+scalar_sub
+	public fun
+	0x2::ristretto255
+scalar_mul
+	public fun
+	0x2::ristretto255
+scalar_div
+	public fun
+	0x2::ristretto255
+scalar_neg
+	public fun
+	0x2::ristretto255
+scalar_inv
+	public fun
+	0x2::ristretto255
+hash_to_scalar
+	public fun
+	0x2::ristretto255
+point_from_bytes
+	public fun
+	0x2::ristretto255
+identity
+	public fun
+	0x2::ristretto255
+generator
+	public fun
+	0x2::ristretto255
+point_add
+	public fun
+	0x2::ristretto255
+point_sub
+	public fun
+	0x2::ristretto255
+point_mul
+	public fun
+	0x2::ristretto255
+point_div
+	public fun
+	0x2::ristretto255
+point_neg
+	public fun
+	0x2::ristretto255
+hash_to_point
+	public fun
+	0x2::ristretto255
+multi_scalar_multiplication
+	public fun
+	0x2::ristretto255
 TableVec
 	public struct
 	0x2::table_vec
