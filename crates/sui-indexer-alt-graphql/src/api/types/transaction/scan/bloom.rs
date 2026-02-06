@@ -24,12 +24,6 @@ use crate::pagination::Page;
 /// Multiplier to page limit to adjust for bloom filter false positives.
 const OVERFETCH_MULTIPLIER: f64 = 1.2;
 
-#[derive(QueryableByName)]
-struct CpResult {
-    #[diesel(sql_type = BigInt)]
-    cp_sequence_number: i64,
-}
-
 /// The checkpoints that might contain the filter criteria.
 ///
 /// Does a coarse filter over checkpoints ranges using cp_bloom_blocks,
@@ -64,37 +58,49 @@ pub(super) async fn candidate_cps(
     let block_size = CP_BLOCK_SIZE as i64;
     let adjusted_limit = (page.limit_with_overhead() as f64 * OVERFETCH_MULTIPLIER) as i64;
 
-    // Keep cp blocks where no probe fails. A probe fails if the bloom block row
+    // Keep LIMIT of cp blocks where no probe fails. A probe fails if the bloom block row
     // is missing or the required bit is not set.
     let matched_blocks = query!(
         r#"
         -- Pre-fetch each bloom block once, so the NOT EXISTS check
-        -- doesn't re-lookup the same row for every bit probe.
+        -- doesn't re-lookup the same row for every bit probe to reduce IO.
         WITH block_lookup AS MATERIALIZED (
-            SELECT p.cp_block_index, p.bloom_idx, bb.bloom_filter
-            FROM (SELECT DISTINCT cp_block_index, bloom_idx FROM block_bit_probes) p
+            SELECT
+                p.cp_block_index,
+                p.bloom_idx,
+                bb.bloom_filter
+            FROM
+                (SELECT DISTINCT cp_block_index, bloom_idx FROM block_bit_probes) p
             LEFT JOIN cp_bloom_blocks bb
-              ON bb.cp_block_index = p.cp_block_index
-             AND bb.bloom_block_index = p.bloom_idx
+                ON bb.cp_block_index = p.cp_block_index
+                AND bb.bloom_block_index = p.bloom_idx
         )
-
-        SELECT bp.cp_block_index,
-            bp.cp_block_index * {BigInt} as cp_lo,
-            bp.cp_block_index * {BigInt} + {BigInt} - 1 as cp_hi_inclusive
-        FROM (SELECT DISTINCT cp_block_index FROM block_bit_probes) bp
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM block_bit_probes p
-            JOIN block_lookup bl
-              ON bl.cp_block_index = p.cp_block_index
-             AND bl.bloom_idx = p.bloom_idx
-            WHERE p.cp_block_index = bp.cp_block_index
-              AND (bl.bloom_filter IS NULL
-                OR (get_byte(bl.bloom_filter, p.byte_pos % length(bl.bloom_filter))
-                    & p.bit_mask) != p.bit_mask)
-        )
-        ORDER BY cp_lo {}
-        LIMIT {BigInt}
+        SELECT
+            bp.cp_block_index,
+            bp.cp_block_index * {BigInt} AS cp_lo,
+            bp.cp_block_index * {BigInt} + {BigInt} - 1 AS cp_hi_inclusive
+        FROM
+            (SELECT DISTINCT cp_block_index FROM block_bit_probes) bp
+        WHERE
+            NOT EXISTS (
+                SELECT 1
+                FROM
+                    block_bit_probes p
+                JOIN block_lookup bl
+                    ON bl.cp_block_index = p.cp_block_index
+                    AND bl.bloom_idx = p.bloom_idx
+                WHERE
+                    p.cp_block_index = bp.cp_block_index
+                    AND (bl.bloom_filter IS NULL
+                        OR (p.bit_mask <> get_byte(
+                            bl.bloom_filter,
+                            p.byte_pos % length(bl.bloom_filter))
+                        ))
+            )
+        ORDER BY
+            cp_lo {}
+        LIMIT
+            {BigInt}
         "#,
         block_size,
         block_size,
@@ -103,40 +109,42 @@ pub(super) async fn candidate_cps(
         adjusted_limit,
     );
 
-    // Expand matched blocks into individual checkpoint sequences.
-    let candidate_cps = query!(
-        r#"
-        SELECT gs.cp AS cp_sequence_number
-        FROM matched_blocks mb
-        CROSS JOIN LATERAL generate_series(
-            GREATEST(mb.cp_lo, {BigInt}),
-            LEAST(mb.cp_hi_inclusive, {BigInt})
-        ) AS gs(cp)
-        "#,
-        cp_lo as i64,
-        cp_hi_inclusive as i64,
-    );
-
-    // Check each candidate checkpoint's bloom filter.
+    // For each matched block, scan cp_blooms by index until we have adjusted_limit of checkpoints that match the probe.
     let query = query!(
         r#"
-        WITH block_bit_probes AS ({})
-        , matched_blocks AS ({})
-        , candidate_cps AS MATERIALIZED ({})
-        SELECT cb.cp_sequence_number::BIGINT
-        FROM cp_blooms cb
-        JOIN candidate_cps cc ON cb.cp_sequence_number = cc.cp_sequence_number
-        WHERE {}
-        ORDER BY cb.cp_sequence_number {}
-        LIMIT {BigInt}
+        WITH
+            block_bit_probes AS ({})
+            , matched_blocks AS ({})
+        SELECT
+            cb.cp_sequence_number::BIGINT
+        FROM
+            matched_blocks mb
+        CROSS JOIN LATERAL (
+            SELECT
+                cb.cp_sequence_number
+            FROM
+                cp_blooms cb
+            WHERE
+                cb.cp_sequence_number BETWEEN mb.cp_lo AND mb.cp_hi_inclusive
+                AND {}
+            ORDER BY
+                cb.cp_sequence_number {}
+        ) cb
+        LIMIT
+            {BigInt}
         "#,
         block_probes,
         matched_blocks,
-        candidate_cps,
         bloom_check,
         page.order_by_direction(),
         adjusted_limit,
     );
+
+    #[derive(QueryableByName)]
+    struct CpResult {
+        #[diesel(sql_type = BigInt)]
+        cp_sequence_number: i64,
+    }
 
     let results: Vec<CpResult> = conn
         .results(query)
