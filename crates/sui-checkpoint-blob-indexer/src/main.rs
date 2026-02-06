@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use object_store::ClientOptions;
+use object_store::RetryConfig;
 use object_store::aws::{AmazonS3Builder, S3ConditionalPut};
 use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
@@ -106,11 +107,16 @@ async fn main() -> anyhow::Result<()> {
 
     let is_bounded_job = args.indexer_args.last_checkpoint.is_some();
     let client_options = ClientOptions::default().with_timeout(args.request_timeout);
+    let retry_config = RetryConfig {
+        max_retries: 0,
+        ..Default::default()
+    };
 
     let object_store: Arc<dyn object_store::ObjectStore> = if let Some(bucket) = args.s3 {
         info!(bucket, "Using S3 storage");
         AmazonS3Builder::from_env()
             .with_client_options(client_options)
+            .with_retry(retry_config)
             .with_imdsv1_fallback()
             .with_bucket_name(bucket)
             .with_conditional_put(S3ConditionalPut::ETagMatch)
@@ -120,6 +126,7 @@ async fn main() -> anyhow::Result<()> {
         info!(bucket, "Using GCS storage");
         GoogleCloudStorageBuilder::from_env()
             .with_client_options(client_options)
+            .with_retry(retry_config)
             .with_bucket_name(bucket)
             .build()
             .map(Arc::new)?
@@ -127,6 +134,7 @@ async fn main() -> anyhow::Result<()> {
         info!(container, "Using Azure storage");
         MicrosoftAzureBuilder::from_env()
             .with_client_options(client_options)
+            .with_retry(retry_config)
             .with_container_name(container)
             .build()
             .map(Arc::new)?
@@ -135,6 +143,7 @@ async fn main() -> anyhow::Result<()> {
         HttpBuilder::new()
             .with_url(endpoint.to_string())
             .with_client_options(client_options)
+            .with_retry(retry_config)
             .build()
             .map(Arc::new)?
     } else if let Some(path) = args.path {
