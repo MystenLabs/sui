@@ -41,6 +41,7 @@ use self::{
     validator::ValidatorValidateMetadataBcsCostParams,
 };
 use crate::crypto::group_ops::GroupOpsCostParams;
+use crate::crypto::hash::HashSha3_512CostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
@@ -72,7 +73,6 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use transfer::TransferReceiveObjectInternalCostParams;
-use crate::crypto::hash::HashSha3_512CostParams;
 
 mod accumulator;
 mod address;
