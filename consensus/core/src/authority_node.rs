@@ -219,7 +219,10 @@ where
         let network_client = network_manager.client();
 
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
-        let store = Arc::new(RocksDBStore::new(store_path));
+        let store = Arc::new(RocksDBStore::new(
+            store_path,
+            context.parameters.use_fifo_compaction,
+        ));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(
