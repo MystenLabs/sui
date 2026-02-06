@@ -46,6 +46,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
+    commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
     task: Option<String>,
     metrics: Arc<IndexerMetrics>,
@@ -164,6 +165,8 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             let elapsed = guard.stop_and_record();
 
             if let Some(watermark) = watermark {
+                let _ = commit_hi_tx.send((H::NAME, next_checkpoint));
+
                 metrics
                     .watermark_epoch
                     .with_label_values(&[H::NAME])
@@ -327,6 +330,8 @@ mod tests {
         store: MockStore,
     ) -> TestSetup {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
+        #[allow(clippy::disallowed_methods)]
+        let (commit_hi_tx, _commit_hi_rx) = mpsc::unbounded_channel();
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         let store_clone = store.clone();
@@ -335,6 +340,7 @@ mod tests {
             next_checkpoint,
             config,
             watermark_rx,
+            commit_hi_tx,
             store_clone,
             None,
             metrics,
