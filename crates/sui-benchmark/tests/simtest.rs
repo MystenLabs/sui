@@ -1675,7 +1675,7 @@ mod test {
     async fn test_simulated_load_async_post_processing_consistency() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-        let mut test_cluster = init_test_cluster_builder(1, 15_000)
+        let mut test_cluster = init_test_cluster_builder(1, 0)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
@@ -1753,6 +1753,12 @@ mod test {
         .await;
 
         clear_fail_point("crash-after-post-process-one-tx");
+
+        // Wait for the async fullnode to restart if it was killed during the test.
+        let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
+        while async_node.get_node_handle().is_none() {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
 
         // Trigger reconfiguration which calls check_system_consistency on all nodes,
         // including the transactions_seq verification. All nodes must catch up to
