@@ -3,7 +3,7 @@
 
 #[cfg(msim)]
 mod test {
-    use mysten_common::{random::get_rng, register_debug_fatal_handler};
+    use mysten_common::register_debug_fatal_handler;
     use prost::Message;
     use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
     use std::collections::BTreeMap;
@@ -1687,7 +1687,7 @@ mod test {
         // Spawn async fullnode (default config)
         let async_fn_config = test_cluster
             .fullnode_config_builder()
-            .build(&mut get_rng(), test_cluster.swarm.config());
+            .build(&mut thread_rng(), test_cluster.swarm.config());
         let async_fullnode = test_cluster
             .start_fullnode_from_config(async_fn_config)
             .await;
@@ -1699,7 +1699,7 @@ mod test {
         let sync_fn_config = test_cluster
             .fullnode_config_builder()
             .with_sync_post_process_one_tx(true)
-            .build(&mut get_rng(), test_cluster.swarm.config());
+            .build(&mut thread_rng(), test_cluster.swarm.config());
         let sync_fullnode = test_cluster
             .start_fullnode_from_config(sync_fn_config)
             .await;
