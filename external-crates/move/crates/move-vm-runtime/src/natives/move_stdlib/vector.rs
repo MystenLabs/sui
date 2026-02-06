@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    checked_as,
     execution::values::{Value, Vector, VectorRef},
     jit::execution::ast::Type,
     native_charge_gas_early_exit,
@@ -180,7 +181,7 @@ pub fn native_borrow(
     debug_assert!(args.len() == 2);
 
     native_charge_gas_early_exit!(context, gas_params.base);
-    let idx = pop_arg!(args, u64) as usize;
+    let idx = checked_as!(pop_arg!(args, u64), usize)?;
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_one(
         context.gas_used(),
@@ -289,8 +290,8 @@ pub fn native_swap(
     debug_assert!(args.len() == 3);
 
     native_charge_gas_early_exit!(context, gas_params.base);
-    let idx2 = pop_arg!(args, u64) as usize;
-    let idx1 = pop_arg!(args, u64) as usize;
+    let idx2 = checked_as!(pop_arg!(args, u64), usize)?;
+    let idx1 = checked_as!(pop_arg!(args, u64), usize)?;
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_empty(
         context.gas_used(),
