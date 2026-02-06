@@ -1150,6 +1150,7 @@ enum RawBatchEntry {
 
 /// A write batch that stores serialized operations in memory without requiring
 /// a database reference. Can be replayed into a real `DBBatch` for atomic commit.
+#[derive(Default)]
 pub struct RawDBBatch {
     entries: Vec<RawBatchEntry>,
     size_bytes: usize,
@@ -1157,10 +1158,7 @@ pub struct RawDBBatch {
 
 impl RawDBBatch {
     pub fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-            size_bytes: 0,
-        }
+        Self::default()
     }
 
     pub fn insert_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
