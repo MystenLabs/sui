@@ -148,7 +148,6 @@ members = [
   "crates/sui-kv-rpc",
   "crates/sui-kvstore",
   "crates/sui-light-client",
-  "crates/sui-mainnet-call-graph-test",
   "crates/sui-macros",
   "crates/sui-metric-checker",
   "crates/sui-metrics-push-client",
@@ -741,7 +740,6 @@ sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }
 sui-move-model-tests = { path = "crates/sui-move-model-tests" }
-sui-mainnet-call-graph-test = { path = "crates/sui-mainnet-call-graph-test" }
 sui-name-service = { path = "crates/sui-name-service" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
