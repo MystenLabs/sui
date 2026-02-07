@@ -217,9 +217,7 @@ fn ingest_and_broadcast_range(
     TaskGuard::new(tokio::spawn(async move {
         // Backpressure is enforced at the stream level: checkpoints are only yielded when
         // ingest_hi allows, preventing spawned tasks from piling up while blocked.
-        let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
-
-        checkpoints
+        backpressured_checkpoint_stream(start, end, ingest_hi_rx)
             .try_for_each_spawned(ingest_concurrency, |cp| {
                 let client = client.clone();
                 let subscribers = subscribers.clone();
