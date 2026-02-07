@@ -155,14 +155,15 @@ pub fn make_table<S: Into<Box<str>>>(
     elems: impl IntoIterator<Item = (S, S, NativeFunction)>,
 ) -> NativeFunctionTable {
     // [SAEFTY] This is done during creation, and crashing at startup due to bad natives is
-    // preferable to launching with invalid nativs.
+    // preferable to launching with invalid natives.
+    #[allow(clippy::expect_used)]
     elems
         .into_iter()
         .map(|(module_name, func_name, func)| {
             (
                 addr,
-                Identifier::new(module_name).unwrap(),
-                Identifier::new(func_name).unwrap(),
+                Identifier::new(module_name).expect("Invalid module name for native function"),
+                Identifier::new(func_name).expect("Invalid function name for native function"),
                 func,
             )
         })

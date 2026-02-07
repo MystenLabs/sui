@@ -2,6 +2,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// These are allowed because we are in test situations in this module, and we want to be able to
+// use these constructs to write tests. In production code, these are not allowed.
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::unwrap_used,
+    unsafe_code,
+)]
+
 mod bad_entry_point_tests;
 mod bad_storage_tests;
 mod basic_block_tests;

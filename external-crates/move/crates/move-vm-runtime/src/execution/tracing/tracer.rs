@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // This code is only enabled when the `tracing` feature is enabled and is not enabled in prod, so
-// direct use of indexing/slicing is acceptable here.
-#![allow(clippy::indexing_slicing)]
-#![allow(clippy::cast_possible_truncation)]
+// direct use of these are fine.
+#![allow(
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::cast_possible_truncation
+)]
+
 use crate::{
     cache::identifier_interner::IdentifierInterner,
     execution::{
