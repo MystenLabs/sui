@@ -17,7 +17,8 @@ use crate::tidehunter_util::{
     apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
 };
 use crate::util::{
-    be_fix_int_ser, ensure_database_type, iterator_bounds, iterator_bounds_with_range,
+    be_fix_int_ser, be_fix_int_ser_into, ensure_database_type, iterator_bounds,
+    iterator_bounds_with_range,
 };
 use crate::{DbIterator, StorageType, TypedStoreError};
 use crate::{
@@ -1179,16 +1180,15 @@ impl RawDBBatch {
         new_vals
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
-                let k_buf = be_fix_int_ser(k.borrow());
-                let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
                 let offset = self.data.len();
                 self.data.extend_from_slice(cf_name.as_bytes());
-                self.data.extend_from_slice(&k_buf);
-                self.data.extend_from_slice(&v_buf);
+                let key_len = be_fix_int_ser_into(&mut self.data, k.borrow());
+                bcs::serialize_into(&mut self.data, v.borrow())
+                    .map_err(typed_store_err_from_bcs_err)?;
                 self.entries.push(EntryHeader {
                     offset,
                     cf_name_len: cf_name.len(),
-                    key_len: k_buf.len(),
+                    key_len,
                     is_put: true,
                 });
                 Ok(())
@@ -1205,14 +1205,13 @@ impl RawDBBatch {
         purged_vals
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|k| {
-                let k_buf = be_fix_int_ser(k.borrow());
                 let offset = self.data.len();
                 self.data.extend_from_slice(cf_name.as_bytes());
-                self.data.extend_from_slice(&k_buf);
+                let key_len = be_fix_int_ser_into(&mut self.data, k.borrow());
                 self.entries.push(EntryHeader {
                     offset,
                     cf_name_len: cf_name.len(),
-                    key_len: k_buf.len(),
+                    key_len,
                     is_put: false,
                 });
                 Ok(())
