@@ -27,7 +27,9 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
+    use sui_config::node::{
+        AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig, RunWithRange,
+    };
     use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -49,6 +51,7 @@ mod test {
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
+    use sui_types::committee::CommitteeTrait;
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -1638,9 +1641,14 @@ mod test {
             .build()
             .await;
 
+        // Both fullnodes use RunWithRange::Epoch(0) so they stop after processing
+        // epoch 0. This ensures they are at the same checkpoint when we compare indexes.
+        let run_with_range = Some(RunWithRange::Epoch(0));
+
         // Spawn async fullnode (default config)
         let async_fn_config = test_cluster
             .fullnode_config_builder()
+            .with_run_with_range(run_with_range)
             .build(&mut get_rng(), test_cluster.swarm.config());
         let async_fullnode = test_cluster
             .start_fullnode_from_config(async_fn_config)
@@ -1653,6 +1661,7 @@ mod test {
         let sync_fn_config = test_cluster
             .fullnode_config_builder()
             .with_sync_post_process_one_tx(true)
+            .with_run_with_range(run_with_range)
             .build(&mut get_rng(), test_cluster.swarm.config());
         let sync_fullnode = test_cluster
             .start_fullnode_from_config(sync_fn_config)
@@ -1714,18 +1723,54 @@ mod test {
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
-        // Trigger reconfiguration which calls check_system_consistency on all nodes,
-        // including the transactions_seq verification. All nodes must catch up to
-        // complete reconfiguration, so no separate delay is needed.
-        test_cluster.trigger_reconfiguration().await;
-
-        // Exhaustively compare the owner_index and coin_index_2 tables between the
-        // async and sync fullnodes. Both have processed the same set of checkpoints, so
-        // the indexes should be identical.
+        // Subscribe to shutdown channels on both RunWithRange fullnodes BEFORE
+        // triggering epoch change. This ensures the broadcast::send succeeds when
+        // the RunWithRange condition fires.
+        // Also grab Arc<AuthorityState> references now, since get_node_handle()
+        // returns None after the node shuts down.
         let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
         let sync_node = test_cluster.swarm.node(&sync_fn_name).unwrap();
-        let async_state = async_node.get_node_handle().unwrap().state();
-        let sync_state = sync_node.get_node_handle().unwrap().state();
+        let async_handle = async_node.get_node_handle().unwrap();
+        let sync_handle = sync_node.get_node_handle().unwrap();
+        let mut async_shutdown_rx = async_handle.with(|node| node.subscribe_to_shutdown_channel());
+        let mut sync_shutdown_rx = sync_handle.with(|node| node.subscribe_to_shutdown_channel());
+        let async_state = async_handle.state();
+        let sync_state = sync_handle.state();
+        drop(async_handle);
+        drop(sync_handle);
+
+        // Close epoch on validators and wait for the default fullnode to reach
+        // epoch 1. We cannot use trigger_reconfiguration because it calls
+        // wait_for_epoch_all_nodes which may race with RunWithRange shutdown.
+        {
+            let cur_committee = test_cluster
+                .fullnode_handle
+                .sui_node
+                .with(|node| node.state().clone_committee_for_testing());
+            let mut cur_stake = 0;
+            for node in test_cluster.swarm.active_validators() {
+                node.get_node_handle()
+                    .unwrap()
+                    .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
+                    .await;
+                cur_stake +=
+                    cur_committee.weight(&node.get_node_handle().unwrap().with(|n| n.state().name));
+                if cur_stake >= cur_committee.quorum_threshold() {
+                    break;
+                }
+            }
+            test_cluster
+                .wait_for_epoch(Some(cur_committee.epoch + 1))
+                .await;
+        }
+
+        // Wait for both RunWithRange fullnodes to shut down. This guarantees
+        // they have processed exactly through the end-of-epoch checkpoint and
+        // stopped, so their databases are quiescent and comparable.
+        async_shutdown_rx.recv().await.unwrap();
+        sync_shutdown_rx.recv().await.unwrap();
+
+        // Exhaustively compare index tables between the async and sync fullnodes.
         let async_indexes = async_state
             .indexes
             .as_ref()
