@@ -23,6 +23,7 @@ pub mod public_mut_tx_context;
 pub mod public_random;
 pub mod self_transfer;
 pub mod share_owned;
+pub mod uncallable_function;
 pub mod unnecessary_public_entry;
 
 pub const TRANSFER_MOD_NAME: &str = "transfer";
@@ -73,6 +74,7 @@ pub const MISSING_KEY_FILTER_NAME: &str = "missing_key";
 pub const FREEZING_CAPABILITY_FILTER_NAME: &str = "freezing_capability";
 pub const PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME: &str = "prefer_mut_tx_context";
 pub const UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME: &str = "public_entry";
+pub const UNCALLABLE_FUNCTION_FILTER_NAME: &str = "uncallable_function";
 
 pub const RANDOM_MOD_NAME: &str = "random";
 pub const RANDOM_STRUCT_NAME: &str = "Random";
@@ -93,6 +95,7 @@ pub enum LinterDiagnosticCode {
     FreezingCapability,
     PreferMutableTxContext,
     UnnecessaryPublicEntry,
+    UncallableFunction,
 }
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
@@ -164,6 +167,12 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
             LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
             Some(UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME),
         ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::UncallableFunction as u8,
+            Some(UNCALLABLE_FUNCTION_FILTER_NAME),
+        ),
     ];
 
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
@@ -182,6 +191,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
             public_random::PublicRandomVisitor.visitor(),
             missing_key::MissingKeyVisitor.visitor(),
             unnecessary_public_entry::UnnecessaryPublicEntry.visitor(),
+            uncallable_function::UncallableFunction.visitor(),
         ],
         LintLevel::All => {
             let mut visitors = linter_visitors(LintLevel::Default);

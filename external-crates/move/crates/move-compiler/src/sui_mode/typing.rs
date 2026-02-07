@@ -10,17 +10,17 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
     editions::Flavor,
-    expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, Visibility},
+    expansion::ast::{Fields, ModuleIdent, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, Type_, TypeInner as TI,
-        TypeName_, UNIT_TYPE, Var,
+        TypeName_, UNIT_TYPE,
     },
     parser::ast::{Ability_, DatatypeName, DocComment, FunctionName, TargetKind},
     shared::{CompilationEnv, Identifier, program_info::TypingProgramInfo},
     sui_mode::*,
     typing::{
         ast::{self as T, ModuleCall},
-        core::{Subst, ability_not_satisfied_tips, error_format, error_format_},
+        core::{Subst, error_format, error_format_},
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
@@ -288,7 +288,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
         loc: _,
         compiled_visibility: _,
         visibility,
-        signature,
+        signature: _,
         body,
         warning_filter: _,
         index: _,
@@ -302,9 +302,6 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
     }
     if name.0.value == INIT_FUNCTION_NAME {
         init_visibility(context, name, *visibility, *entry);
-    }
-    if let Some(entry_loc) = entry {
-        entry_signature(context, *entry_loc, name, signature);
     }
     if let sp!(_, T::FunctionBody_::Defined(seq)) = body {
         context.visit_seq(body.loc, seq)
@@ -372,8 +369,11 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
     let tx_ctx_kind = parameters
         .last()
         .map(|(_, _, last_param_ty)| tx_context_kind(last_param_ty))
-        .unwrap_or(TxContextKind::None);
-    if tx_ctx_kind == TxContextKind::None {
+        .unwrap_or(Some(TxContextKind::None));
+    if matches!(
+        tx_ctx_kind,
+        Some(TxContextKind::None | TxContextKind::Owned)
+    ) {
         let msg = format!(
             "'init' functions must have their last parameter as \
             '&{a}::{m}::{t}' or '&mut {a}::{m}::{t}'",
@@ -392,7 +392,10 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
     let otw_name: Symbol = context.otw_name();
     if parameters.len() == 1
         && context.one_time_witness.is_some()
-        && tx_ctx_kind != TxContextKind::None
+        && matches!(
+            tx_ctx_kind,
+            Some(TxContextKind::Mutable | TxContextKind::Immutable)
+        )
     {
         // if there is 1 parameter, and a OTW, this is an error since the OTW must be used
         let msg = format!(
@@ -584,140 +587,54 @@ fn invalid_otw_field_loc(fields: &Fields<(DocComment, Type)>) -> Option<InvalidO
 }
 
 //**************************************************************************************************
-// entry types
+// well known type helpers
 //**************************************************************************************************
 
-fn entry_signature(
-    context: &mut Context,
-    entry_loc: Loc,
-    name: FunctionName,
-    signature: &FunctionSignature,
-) {
-    let FunctionSignature {
-        type_parameters: _,
-        parameters,
-        return_type,
-    } = signature;
-    let all_non_ctx_parameters = match parameters.last() {
-        Some((_, _, last_param_ty)) if tx_context_kind(last_param_ty) != TxContextKind::None => {
-            &parameters[0..parameters.len() - 1]
-        }
-        _ => parameters,
+pub fn tx_context_kind(sp!(_, param_ty): &Type) -> Option<TxContextKind> {
+    let (ref_kind, inner_name) = match param_ty.inner() {
+        TI::Ref(is_mut, inner_ty) => match &inner_ty.value.inner() {
+            TI::Apply(_, sp!(_, inner_name), _) => (Some(*is_mut), inner_name),
+            // Unknown type resulting from a previous error
+            TI::UnresolvedError | TI::Var(_) => return None,
+            // not a user defined type
+            _ => return Some(TxContextKind::None),
+        },
+        TI::Apply(_, sp!(_, inner_name), _) => (None, inner_name),
+        // Unknown type resulting from a previous error
+        TI::UnresolvedError | TI::Var(_) => return None,
+        // not a reference or user defined type
+        _ => return Some(TxContextKind::None),
     };
-    entry_param(context, entry_loc, name, all_non_ctx_parameters);
-    entry_return(context, entry_loc, name, return_type);
-}
-
-fn tx_context_kind(sp!(_, last_param_ty_): &Type) -> TxContextKind {
-    // Already an error, so assume a valid, mutable TxContext
-    if matches!(last_param_ty_.inner(), TI::UnresolvedError | TI::Var(_)) {
-        return TxContextKind::Mutable;
-    }
-
-    let TI::Ref(is_mut, inner_ty) = last_param_ty_.inner() else {
-        // not a reference
-        return TxContextKind::None;
-    };
-    let TI::Apply(_, sp!(_, inner_name), _) = &inner_ty.value.inner() else {
-        // not a user defined type
-        return TxContextKind::None;
-    };
-    if inner_name.is(
+    let kind = if inner_name.is(
         &SUI_ADDR_VALUE,
         TX_CONTEXT_MODULE_NAME,
         TX_CONTEXT_TYPE_NAME,
     ) {
-        if *is_mut {
-            TxContextKind::Mutable
-        } else {
-            TxContextKind::Immutable
+        match ref_kind {
+            None => TxContextKind::Owned,
+            Some(true) => TxContextKind::Mutable,
+            Some(false) => TxContextKind::Immutable,
         }
     } else {
         // not the tx context
         TxContextKind::None
-    }
+    };
+    Some(kind)
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum TxContextKind {
     // No TxContext
     None,
+    // Invalid but TxContext
+    Owned,
     // &mut TxContext
     Mutable,
     // &TxContext
     Immutable,
 }
 
-fn entry_param(
-    context: &mut Context,
-    entry_loc: Loc,
-    name: FunctionName,
-    parameters: &[(Mutability, Var, Type)],
-) {
-    for (_, var, ty) in parameters {
-        entry_param_ty(context, entry_loc, name, var, ty);
-    }
-}
-
-/// A valid entry param type is
-/// - A primitive (including strings, ID, and object)
-/// - A vector of primitives (including nested vectors)
-///
-/// - An object
-/// - A reference to an object
-/// - A vector of objects
-fn entry_param_ty(
-    context: &mut Context,
-    entry_loc: Loc,
-    name: FunctionName,
-    param: &Var,
-    param_ty: &Type,
-) {
-    let is_mut_clock = is_mut_clock(param_ty);
-    let is_mut_random = is_mut_random(param_ty);
-
-    // TODO better error message for cases such as `MyObject<InnerTypeWithoutStore>`
-    // which should give a contextual error about `MyObject` having `key`, but the instantiation
-    // `MyObject<InnerTypeWithoutStore>` not having `key` due to `InnerTypeWithoutStore` not having
-    // `store`
-    let is_valid = is_entry_primitive_ty(param_ty)
-        || is_entry_object_ty(param_ty)
-        || is_entry_receiving_ty(param_ty);
-    if is_mut_clock || is_mut_random || !is_valid {
-        let pmsg = format!(
-            "Invalid 'entry' parameter type for parameter '{}'",
-            param.value.name
-        );
-        let tmsg = if is_mut_clock {
-            format!(
-                "{a}::{m}::{n} must be passed by immutable reference, e.g. '&{a}::{m}::{n}'",
-                a = SUI_ADDR_NAME,
-                m = CLOCK_MODULE_NAME,
-                n = CLOCK_TYPE_NAME,
-            )
-        } else if is_mut_random {
-            format!(
-                "{a}::{m}::{n} must be passed by immutable reference, e.g. '&{a}::{m}::{n}'",
-                a = SUI_ADDR_NAME,
-                m = RANDOMNESS_MODULE_NAME,
-                n = RANDOMNESS_STATE_TYPE_NAME,
-            )
-        } else {
-            "'entry' parameters must be primitives (by-value), vectors of primitives, objects \
-            (by-reference or by-value), vectors of objects, or 'Receiving' arguments (by-reference or by-value)"
-                .to_owned()
-        };
-        let emsg = format!("'{name}' was declared 'entry' here");
-        context.add_diag(diag!(
-            ENTRY_FUN_SIGNATURE_DIAG,
-            (param.loc, pmsg),
-            (param_ty.loc, tmsg),
-            (entry_loc, emsg)
-        ));
-    }
-}
-
-fn is_mut_clock(param_ty: &Type) -> bool {
+pub fn is_mut_clock(param_ty: &Type) -> bool {
     match &param_ty.value.inner() {
         TI::Ref(/* mut */ false, _) => false,
         TI::Ref(/* mut */ true, t) => is_mut_clock(t),
@@ -732,7 +649,7 @@ fn is_mut_clock(param_ty: &Type) -> bool {
     }
 }
 
-fn is_mut_random(param_ty: &Type) -> bool {
+pub fn is_mut_random(param_ty: &Type) -> bool {
     match &param_ty.value.inner() {
         TI::Ref(/* mut */ false, _) => false,
         TI::Ref(/* mut */ true, t) => is_mut_random(t),
@@ -749,192 +666,6 @@ fn is_mut_random(param_ty: &Type) -> bool {
         | TI::UnresolvedError
         | TI::Fun(_, _) => false,
     }
-}
-
-fn is_entry_receiving_ty(param_ty: &Type) -> bool {
-    match &param_ty.value.inner() {
-        TI::Ref(_, t) => is_entry_receiving_ty(t),
-        TI::Apply(_, sp!(_, n), targs)
-            if n.is(&SUI_ADDR_VALUE, TRANSFER_MODULE_NAME, RECEIVING_TYPE_NAME) =>
-        {
-            debug_assert!(targs.len() == 1);
-            // Don't care about the type parameter, just that it's a receiving type -- since it has
-            // a `key` requirement on the type parameter it must be an object or type checking will
-            // fail.
-            true
-        }
-        _ => false,
-    }
-}
-
-fn is_entry_primitive_ty(param_ty: &Type) -> bool {
-    use BuiltinTypeName_ as B;
-    use TypeName_ as N;
-
-    match &param_ty.value.inner() {
-        // A bit of a hack since no primitive has key
-        TI::Param(tp) => !tp.abilities.has_ability_(Ability_::Key),
-        // nonsensical, but no error needed
-        TI::Apply(_, sp!(_, N::Multiple(_)), ts) => ts.iter().all(is_entry_primitive_ty),
-        // Simple recursive cases
-        TI::Ref(_, t) => is_entry_primitive_ty(t),
-        TI::Apply(_, sp!(_, N::Builtin(sp!(_, B::Vector))), targs) => {
-            debug_assert!(targs.len() == 1);
-            is_entry_primitive_ty(&targs[0])
-        }
-
-        // custom "primitives"
-        TI::Apply(_, sp!(_, n), targs)
-            if n.is(&STD_ADDR_VALUE, ASCII_MODULE_NAME, ASCII_TYPE_NAME)
-                || n.is(&STD_ADDR_VALUE, UTF_MODULE_NAME, UTF_TYPE_NAME)
-                || n.is(&SUI_ADDR_VALUE, OBJECT_MODULE_NAME, ID_TYPE_NAME) =>
-        {
-            debug_assert!(targs.is_empty());
-            true
-        }
-        TI::Apply(_, sp!(_, n), targs)
-            if n.is(&STD_ADDR_VALUE, OPTION_MODULE_NAME, OPTION_TYPE_NAME) =>
-        {
-            debug_assert!(targs.len() == 1);
-            is_entry_primitive_ty(&targs[0])
-        }
-
-        // primitives
-        TI::Apply(_, sp!(_, N::Builtin(_)), targs) => {
-            debug_assert!(targs.is_empty());
-            true
-        }
-
-        // Non primitive
-        TI::Apply(_, sp!(_, N::ModuleType(_, _)), _) => false,
-        TI::Unit => false,
-
-        // Error case nothing to do
-        TI::UnresolvedError | TI::Anything | TI::Void | TI::Var(_) | TI::Fun(_, _) => true,
-    }
-}
-
-fn is_entry_object_ty(param_ty: &Type) -> bool {
-    use BuiltinTypeName_ as B;
-    use TypeName_ as N;
-    match &param_ty.value.inner() {
-        TI::Ref(_, t) => is_entry_object_ty_inner(t),
-        TI::Apply(_, sp!(_, N::Builtin(sp!(_, B::Vector))), targs) => {
-            debug_assert!(targs.len() == 1);
-            is_entry_object_ty_inner(&targs[0])
-        }
-        _ => is_entry_object_ty_inner(param_ty),
-    }
-}
-
-fn is_entry_object_ty_inner(param_ty: &Type) -> bool {
-    use TypeName_ as N;
-    match &param_ty.value.inner() {
-        TI::Param(tp) => tp.abilities.has_ability_(Ability_::Key),
-        // nonsensical, but no error needed
-        TI::Apply(_, sp!(_, N::Multiple(_)), ts) => ts.iter().all(is_entry_object_ty_inner),
-        // Simple recursive cases, shouldn't be hit but no need to error
-        TI::Ref(_, t) => is_entry_object_ty_inner(t),
-
-        // Objects
-        TI::Apply(Some(abilities), _, _) => abilities.has_ability_(Ability_::Key),
-
-        // Error case nothing to do
-        TI::UnresolvedError | TI::Anything | TI::Void | TI::Var(_) | TI::Unit | TI::Fun(_, _) => {
-            true
-        }
-        // Unreachable cases
-        TI::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
-    }
-}
-
-fn entry_return(
-    context: &mut Context,
-    entry_loc: Loc,
-    name: FunctionName,
-    return_type @ sp!(tloc, return_type_): &Type,
-) {
-    match return_type_.inner() {
-        // unit is fine, nothing to do
-        TI::Unit => (),
-        TI::Ref(_, _) => {
-            let fmsg = format!("Invalid return type for entry function '{}'", name);
-            let tmsg = "Expected a non-reference type";
-            context.add_diag(diag!(
-                ENTRY_FUN_SIGNATURE_DIAG,
-                (entry_loc, fmsg),
-                (*tloc, tmsg)
-            ))
-        }
-        TI::Param(tp) => {
-            if !tp.abilities.has_ability_(Ability_::Drop) {
-                let declared_loc_opt = Some(tp.user_specified_name.loc);
-                let declared_abilities = tp.abilities.clone();
-                invalid_entry_return_ty(
-                    context,
-                    entry_loc,
-                    name,
-                    return_type,
-                    declared_loc_opt,
-                    &declared_abilities,
-                    std::iter::empty(),
-                )
-            }
-        }
-        TI::Apply(Some(abilities), sp!(_, tn_), ty_args) => {
-            if !abilities.has_ability_(Ability_::Drop) {
-                let (declared_loc_opt, declared_abilities) = match tn_ {
-                    TypeName_::Multiple(_) => (None, AbilitySet::collection(*tloc)),
-                    TypeName_::ModuleType(m, n) => (
-                        Some(context.info.datatype_declared_loc(m, n)),
-                        context.info.datatype_declared_abilities(m, n).clone(),
-                    ),
-                    TypeName_::Builtin(b) => (None, b.value.declared_abilities(b.loc)),
-                };
-                invalid_entry_return_ty(
-                    context,
-                    entry_loc,
-                    name,
-                    return_type,
-                    declared_loc_opt,
-                    &declared_abilities,
-                    ty_args.iter().map(|ty_arg| (ty_arg, get_abilities(ty_arg))),
-                )
-            }
-        }
-        // Error case nothing to do
-        TI::UnresolvedError | TI::Anything | TI::Void | TI::Var(_) | TI::Fun(_, _) => (),
-        // Unreachable cases
-        TI::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
-    }
-}
-
-fn get_abilities(sp!(loc, ty_): &Type) -> AbilitySet {
-    ty_.abilities(*loc)
-        .expect("ICE abilities should have been expanded")
-}
-
-fn invalid_entry_return_ty<'a>(
-    context: &mut Context,
-    entry_loc: Loc,
-    name: FunctionName,
-    ty: &Type,
-    declared_loc_opt: Option<Loc>,
-    declared_abilities: &AbilitySet,
-    ty_args: impl IntoIterator<Item = (&'a Type, AbilitySet)>,
-) {
-    let fmsg = format!("Invalid return type for entry function '{}'", name);
-    let mut diag = diag!(ENTRY_FUN_SIGNATURE_DIAG, (entry_loc, fmsg));
-    ability_not_satisfied_tips(
-        &Subst::empty(),
-        &mut diag,
-        Ability_::Drop,
-        ty,
-        declared_loc_opt,
-        declared_abilities,
-        ty_args,
-    );
-    context.add_diag(diag)
 }
 
 //**************************************************************************************************
