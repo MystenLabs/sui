@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_json::json;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -36,7 +37,7 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::load_test_vectors;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
-use sui_types::{SUI_FRAMEWORK_ADDRESS, parse_sui_struct_tag};
+use sui_types::{SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, parse_sui_struct_tag};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
 
@@ -92,6 +93,198 @@ async fn test_get_package_with_display_should_not_fail() -> Result<(), anyhow::E
             .data
             .is_none()
     );
+    Ok(())
+}
+
+#[sim_test]
+async fn test_get_object_with_display_v2_should_render() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await;
+    let http_client = cluster.rpc_client();
+    let address = cluster.get_address_0();
+
+    let objects = http_client
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+    let gas = objects.first().unwrap().object().unwrap();
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["tests", "data", "display_v2"]);
+    let compiled_package = BuildConfig::new_for_testing().build_async(&path).await?;
+    let compiled_modules_bytes =
+        compiled_package.get_package_base64(/* with_unpublished_deps */ false);
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
+
+    let transaction_bytes: TransactionBlockBytes = http_client
+        .publish(
+            address,
+            compiled_modules_bytes,
+            dependencies,
+            Some(gas.object_id),
+            100_000_000.into(),
+        )
+        .await?;
+
+    let tx = cluster
+        .wallet
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    let tx_response = http_client
+        .execute_transaction_block(
+            tx_bytes,
+            signatures,
+            Some(SuiTransactionBlockResponseOptions::new().with_object_changes()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+
+    let object_changes = tx_response.object_changes.unwrap();
+    let package_id = object_changes
+        .iter()
+        .find_map(|e| {
+            if let ObjectChange::Published { package_id, .. } = e {
+                Some(*package_id)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    let setup_bytes: TransactionBlockBytes = http_client
+        .move_call(
+            address,
+            package_id,
+            "display_v2".to_string(),
+            "setup_display".to_string(),
+            type_args![]?,
+            call_args!(SUI_DISPLAY_REGISTRY_OBJECT_ID)?,
+            Some(gas.object_id),
+            50_000_000.into(),
+            None,
+        )
+        .await?;
+
+    let setup_tx = cluster
+        .wallet
+        .sign_transaction(&setup_bytes.to_data()?)
+        .await;
+    let (setup_tx_bytes, setup_signatures) = setup_tx.to_tx_bytes_and_signatures();
+
+    let setup_response = http_client
+        .execute_transaction_block(
+            setup_tx_bytes,
+            setup_signatures,
+            Some(SuiTransactionBlockResponseOptions::new().with_effects()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+    assert_eq!(
+        SuiExecutionStatus::Success,
+        *setup_response.effects.unwrap().status()
+    );
+
+    let mint_bytes: TransactionBlockBytes = http_client
+        .move_call(
+            address,
+            package_id,
+            "display_v2".to_string(),
+            "mint".to_string(),
+            type_args![]?,
+            call_args!(42u64, "hello", address, address)?,
+            Some(gas.object_id),
+            10_000_000.into(),
+            None,
+        )
+        .await?;
+
+    let mint_tx = cluster
+        .wallet
+        .sign_transaction(&mint_bytes.to_data()?)
+        .await;
+    let (mint_tx_bytes, mint_signatures) = mint_tx.to_tx_bytes_and_signatures();
+
+    let mint_response = http_client
+        .execute_transaction_block(
+            mint_tx_bytes,
+            mint_signatures,
+            Some(SuiTransactionBlockResponseOptions::new().with_effects()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+
+    let created = mint_response.effects.unwrap().created().to_vec();
+    let created_id = created.first().unwrap().reference.object_id;
+
+    let add_df_bytes: TransactionBlockBytes = http_client
+        .move_call(
+            address,
+            package_id,
+            "display_v2".to_string(),
+            "add_df".to_string(),
+            type_args![]?,
+            call_args!(created_id)?,
+            Some(gas.object_id),
+            10_000_000.into(),
+            None,
+        )
+        .await?;
+
+    let add_df_tx = cluster
+        .wallet
+        .sign_transaction(&add_df_bytes.to_data()?)
+        .await;
+    let (add_df_tx_bytes, add_df_signatures) = add_df_tx.to_tx_bytes_and_signatures();
+
+    http_client
+        .execute_transaction_block(
+            add_df_tx_bytes,
+            add_df_signatures,
+            Some(SuiTransactionBlockResponseOptions::new()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+
+    let response = http_client
+        .get_object(
+            created_id,
+            Some(SuiObjectDataOptions::new().with_display().with_type()),
+        )
+        .await?;
+    let object = response.into_object()?;
+    let display = object.display.unwrap();
+    let display_data = display.data.unwrap();
+
+    assert!(display.error.is_none());
+    let expected_display = json!({
+        "bar": "bar is 42!",
+        "baz": "baz is true?",
+        "qux": {
+            "val": "hello",
+            "quy": {
+                "val": format!("{address}"),
+                "quz": {
+                    "val": 43
+                }
+            }
+        },
+        "quy": format!("quy is {address}."),
+        "qu_": format!("x(hello) y({address}), z(43)?!"),
+        "f42": "[42] is 42004200"
+    });
+    assert_eq!(serde_json::to_value(display_data)?, expected_display);
+
     Ok(())
 }
 

@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use anyhow::bail;
 use anyhow::Context as _;
+use anyhow::bail;
 use async_trait::async_trait;
 use futures::future::OptionFuture;
 use move_core_types::annotated_value::MoveTypeLayout;
@@ -21,6 +21,7 @@ use sui_json_rpc_types::SuiObjectResponse;
 use sui_json_rpc_types::SuiParsedData;
 use sui_json_rpc_types::SuiPastObjectResponse;
 use sui_json_rpc_types::SuiRawData;
+use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectType;
 use sui_types::base_types::SequenceNumber;
@@ -29,14 +30,13 @@ use sui_types::display_registry;
 use sui_types::error::SuiObjectResponseError;
 use sui_types::object::Data;
 use sui_types::object::Object;
-use sui_types::TypeTag;
 use tokio::join;
 
 use crate::context::Context;
 use crate::data::load_live;
-use crate::error::rpc_bail;
 use crate::error::InternalContext;
 use crate::error::RpcError;
+use crate::error::rpc_bail;
 
 struct DisplayStore<'c> {
     ctx: &'c Context,

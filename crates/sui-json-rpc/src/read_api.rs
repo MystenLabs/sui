@@ -18,6 +18,7 @@ use itertools::Itertools;
 use jsonrpsee::RpcModule;
 use jsonrpsee::core::RpcResult;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use once_cell::sync::Lazy;
@@ -50,6 +51,7 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::display::DisplayVersionUpdatedEvent;
+use sui_types::display_registry;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiObjectResponseError};
 use sui_types::messages_checkpoint::{
@@ -72,11 +74,67 @@ use shared_crypto::intent::Intent;
 use sui_json_rpc_types::ZkLoginVerifyResult;
 use sui_types::authenticator_state::{ActiveJwk, get_authenticator_state};
 
-/// A field access in a  Display string cannot exceed this level of nesting.
-const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
+/// Default max depth used while converting rendered Display values to JSON.
+const DEFAULT_MAX_DISPLAY_MOVE_VALUE_DEPTH: usize = 32;
 
 /// Default budget for Display output size.
 const DEFAULT_MAX_DISPLAY_OUTPUT_SIZE: usize = 1024 * 1024;
+
+/// A field access in a Display string cannot exceed this level of nesting.
+static MAX_DISPLAY_FIELD_DEPTH: Lazy<usize> = Lazy::new(|| {
+    let max_opt = std::env::var("MAX_DISPLAY_FIELD_DEPTH")
+        .ok()
+        .and_then(|s| s.parse().ok());
+
+    if let Some(max) = max_opt {
+        info!("Using custom value for 'MAX_DISPLAY_FIELD_DEPTH': {max}");
+        max
+    } else {
+        sui_display::v2::Limits::default().max_depth
+    }
+});
+
+/// Parser node budget for Display v2.
+static MAX_DISPLAY_FORMAT_NODES: Lazy<usize> = Lazy::new(|| {
+    let max_opt = std::env::var("MAX_DISPLAY_FORMAT_NODES")
+        .ok()
+        .and_then(|s| s.parse().ok());
+
+    if let Some(max) = max_opt {
+        info!("Using custom value for 'MAX_DISPLAY_FORMAT_NODES': {max}");
+        max
+    } else {
+        sui_display::v2::Limits::default().max_nodes
+    }
+});
+
+/// Max object loads budget for Display v2.
+static MAX_DISPLAY_OBJECT_LOADS: Lazy<usize> = Lazy::new(|| {
+    let max_opt = std::env::var("MAX_DISPLAY_OBJECT_LOADS")
+        .ok()
+        .and_then(|s| s.parse().ok());
+
+    if let Some(max) = max_opt {
+        info!("Using custom value for 'MAX_DISPLAY_OBJECT_LOADS': {max}");
+        max
+    } else {
+        sui_display::v2::Limits::default().max_loads
+    }
+});
+
+/// Maximum depth used while converting rendered Display values to JSON.
+static MAX_DISPLAY_MOVE_VALUE_DEPTH: Lazy<usize> = Lazy::new(|| {
+    let max_opt = std::env::var("MAX_MOVE_VALUE_DEPTH")
+        .ok()
+        .and_then(|s| s.parse().ok());
+
+    if let Some(max) = max_opt {
+        info!("Using custom value for 'MAX_MOVE_VALUE_DEPTH': {max}");
+        max
+    } else {
+        DEFAULT_MAX_DISPLAY_MOVE_VALUE_DEPTH
+    }
+});
 
 /// Overall display output cannot exceed this size.
 static MAX_DISPLAY_OUTPUT_SIZE: Lazy<usize> = Lazy::new(|| {
@@ -91,6 +149,38 @@ static MAX_DISPLAY_OUTPUT_SIZE: Lazy<usize> = Lazy::new(|| {
         DEFAULT_MAX_DISPLAY_OUTPUT_SIZE
     }
 });
+
+struct DisplayStore<'s> {
+    state: &'s dyn StateRead,
+}
+
+impl<'s> DisplayStore<'s> {
+    fn new(state: &'s dyn StateRead) -> Self {
+        Self { state }
+    }
+}
+
+#[async_trait]
+impl sui_display::v2::Store for DisplayStore<'_> {
+    async fn object(
+        &self,
+        id: AccountAddress,
+    ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+        let read = self.state.get_object_read(&id.into())?;
+        let ObjectRead::Exists(_, object, Some(layout)) = read else {
+            return Ok(None);
+        };
+
+        let Some(move_object) = object.data.try_as_move() else {
+            return Ok(None);
+        };
+
+        Ok(Some(sui_display::v2::OwnedSlice {
+            bytes: move_object.contents().to_vec(),
+            layout: MoveTypeLayout::Struct(Box::new(layout)),
+        }))
+    }
+}
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
 // Fullnodes.
@@ -1231,6 +1321,9 @@ pub enum ObjectDisplayError {
 
     #[error(transparent)]
     StateReadError(#[from] StateReadError),
+
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
 }
 
 #[instrument(skip(fullnode_api, kv_store))]
@@ -1240,7 +1333,11 @@ async fn get_display_fields(
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
 ) -> Result<DisplayFieldsResponse, ObjectDisplayError> {
-    let Some(layout) = original_layout else {
+    let (layout, type_) = if let Some(layout) = original_layout {
+        let type_ = &layout.type_;
+        let layout = MoveTypeLayout::Struct(Box::new(layout.clone()));
+        (layout, type_)
+    } else {
         return Ok(DisplayFieldsResponse {
             data: None,
             error: None,
@@ -1251,38 +1348,88 @@ async fn get_display_fields(
         return Err(ObjectDisplayError::MoveObject);
     };
 
-    let Some(display_object) =
-        get_display_object_by_type(kv_store, fullnode_api, &layout.type_).await?
-    else {
+    let display: Vec<(String, Result<Json, anyhow::Error>)> = if let Some(display_object) =
+        get_display_object_v2_by_type(fullnode_api, type_)?
+    {
+        let root = sui_display::v2::OwnedSlice {
+            bytes: move_object.contents().to_owned(),
+            layout,
+        };
+
+        let store = DisplayStore::new(fullnode_api.state.as_ref());
+        let interpreter = sui_display::v2::Interpreter::new(root, store);
+        let limits = sui_display::v2::Limits {
+            max_depth: *MAX_DISPLAY_FIELD_DEPTH,
+            max_nodes: *MAX_DISPLAY_FORMAT_NODES,
+            max_loads: *MAX_DISPLAY_OBJECT_LOADS,
+        };
+
+        match sui_display::v2::Display::parse(limits, display_object.fields()) {
+            Ok(display) => match display
+                .display(
+                    *MAX_DISPLAY_MOVE_VALUE_DEPTH,
+                    *MAX_DISPLAY_OUTPUT_SIZE,
+                    &interpreter,
+                )
+                .await
+            {
+                Ok(fields) => fields
+                    .into_iter()
+                    .map(|(field, value)| (field, value.map_err(anyhow::Error::from)))
+                    .collect(),
+                Err(e) => {
+                    return Ok(DisplayFieldsResponse {
+                        data: None,
+                        error: Some(SuiObjectResponseError::DisplayError {
+                            error: e.to_string(),
+                        }),
+                    });
+                }
+            },
+
+            Err(e) => {
+                return Ok(DisplayFieldsResponse {
+                    data: None,
+                    error: Some(SuiObjectResponseError::DisplayError {
+                        error: e.to_string(),
+                    }),
+                });
+            }
+        }
+    } else if let Some(display_object) =
+        get_display_object_v1_by_type(kv_store, fullnode_api, type_).await?
+    {
+        let format = match Format::parse(*MAX_DISPLAY_FIELD_DEPTH, &display_object.fields) {
+            Ok(format) => format,
+            Err(e) => {
+                return Ok(DisplayFieldsResponse {
+                    data: None,
+                    error: Some(SuiObjectResponseError::DisplayError {
+                        error: e.to_string(),
+                    }),
+                });
+            }
+        };
+
+        match format.display(*MAX_DISPLAY_OUTPUT_SIZE, move_object.contents(), &layout) {
+            Ok(fields) => fields
+                .into_iter()
+                .map(|(field, value)| (field, value.map(Json::String)))
+                .collect(),
+            Err(e) => {
+                return Ok(DisplayFieldsResponse {
+                    data: None,
+                    error: Some(SuiObjectResponseError::DisplayError {
+                        error: e.to_string(),
+                    }),
+                });
+            }
+        }
+    } else {
         return Ok(DisplayFieldsResponse {
             data: None,
             error: None,
         });
-    };
-
-    let format = match Format::parse(MAX_DISPLAY_NESTED_LEVEL, &display_object.fields) {
-        Ok(format) => format,
-        Err(e) => {
-            return Ok(DisplayFieldsResponse {
-                data: None,
-                error: Some(SuiObjectResponseError::DisplayError {
-                    error: e.to_string(),
-                }),
-            });
-        }
-    };
-
-    let layout = MoveTypeLayout::Struct(Box::new(layout.clone()));
-    let display = match format.display(*MAX_DISPLAY_OUTPUT_SIZE, move_object.contents(), &layout) {
-        Ok(fields) => fields,
-        Err(e) => {
-            return Ok(DisplayFieldsResponse {
-                data: None,
-                error: Some(SuiObjectResponseError::DisplayError {
-                    error: e.to_string(),
-                }),
-            });
-        }
     };
 
     let mut fields = BTreeMap::new();
@@ -1291,7 +1438,7 @@ async fn get_display_fields(
     for (key, value) in display {
         match value {
             Ok(v) => {
-                fields.insert(key, Json::String(v));
+                fields.insert(key, v);
             }
             Err(e) => {
                 errors.push(e.to_string());
@@ -1308,11 +1455,10 @@ async fn get_display_fields(
 }
 
 #[instrument(skip(kv_store, fullnode_api))]
-async fn get_display_object_by_type(
+async fn get_display_object_v1_by_type(
     kv_store: &Arc<TransactionKeyValueStore>,
     fullnode_api: &ReadApi,
     object_type: &StructTag,
-    // TODO: add query version support
 ) -> Result<Option<DisplayVersionUpdatedEvent>, ObjectDisplayError> {
     let mut events = fullnode_api
         .state
@@ -1326,13 +1472,29 @@ async fn get_display_object_by_type(
         .await?;
 
     // If there's any recent version of Display, give it to the client.
-    // TODO: add support for version query.
     if let Some(event) = events.pop() {
         let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs.into_bytes())?;
         Ok(Some(display))
     } else {
         Ok(None)
     }
+}
+
+#[instrument(skip(fullnode_api))]
+fn get_display_object_v2_by_type(
+    fullnode_api: &ReadApi,
+    object_type: &StructTag,
+) -> Result<Option<display_registry::Display>, ObjectDisplayError> {
+    let object_id = display_registry::display_object_id(object_type.clone().into())?;
+    let ObjectRead::Exists(_, object, _) = fullnode_api.state.get_object_read(&object_id)? else {
+        return Ok(None);
+    };
+
+    let Some(move_object) = object.data.try_as_move() else {
+        return Ok(None);
+    };
+
+    Ok(Some(bcs::from_bytes(move_object.contents())?))
 }
 
 #[instrument(skip_all)]
