@@ -369,8 +369,14 @@ impl<T: Debug> MemBox<T> {
         self.0.borrow()
     }
 
-    pub fn borrow_mut(&self) -> std::cell::RefMut<'_, T> {
-        self.0.borrow_mut()
+    pub fn try_borrow_mut(&self) -> PartialVMResult<std::cell::RefMut<'_, T>> {
+        self.0.try_borrow_mut().map_err(|err| {
+            partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "failed to borrow mutable reference due to previous borrow {:?}",
+                err
+            )
+        })
     }
 
     pub fn replace(&mut self, t: T) -> T {
@@ -907,7 +913,7 @@ impl Reference {
                     }};
                 }
                 let (vec, ndx) = &*index_ref;
-                match &mut *vec.borrow_mut().prim_vec_mut_ref()? {
+                match &mut *vec.try_borrow_mut()?.prim_vec_mut_ref()? {
                     PrimVec::VecU8(items) => assign!(items, *ndx, U8, value),
                     PrimVec::VecU16(items) => assign!(items, *ndx, U16, value),
                     PrimVec::VecU32(items) => assign!(items, *ndx, U32, value),
@@ -959,7 +965,7 @@ impl StructRef {
         index: usize,
         mem_box: MemBox<Value>,
     ) -> PartialVMResult<()> {
-        let container = &mut *self.0.borrow_mut();
+        let container = &mut *self.0.try_borrow_mut()?;
         match container {
             Value::Struct(fixed_vec) => {
                 fixed_vec.0.0[index] = mem_box;
@@ -1981,7 +1987,7 @@ impl VectorRef {
     }
 
     pub fn push_back(&self, e: Value, type_param: &Type, capacity: u64) -> PartialVMResult<()> {
-        let value = &mut *self.0.borrow_mut();
+        let value = &mut *self.0.try_borrow_mut()?;
         check_elem_layout(type_param, value)?;
         let vec = value.vector_mut_ref()?;
         let size = vec.len();
@@ -2023,7 +2029,7 @@ impl VectorRef {
     }
 
     pub fn pop(&self, type_param: &Type) -> PartialVMResult<Value> {
-        let value = &mut *self.0.borrow_mut();
+        let value = &mut *self.0.try_borrow_mut()?;
         check_elem_layout(type_param, value)?;
 
         macro_rules! pop_vec_item {
@@ -2055,7 +2061,7 @@ impl VectorRef {
     }
 
     pub fn swap(&self, idx1: usize, idx2: usize, type_param: &Type) -> PartialVMResult<()> {
-        let value = &mut *self.0.borrow_mut();
+        let value = &mut *self.0.try_borrow_mut()?;
         check_elem_layout(type_param, value)?;
 
         macro_rules! swap {

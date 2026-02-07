@@ -58,7 +58,7 @@ fn native_to_bytes(
         None => {
             // If we run out of gas when charging for failure, we don't want the `OUT_OF_GAS` error
             // to mask the actual error `NFE_BCS_SERIALIZATION_FAILURE`, so we saturate deduction at 0
-            context.charge_gas(gas_params.failure);
+            context.charge_gas(gas_params.failure)?;
             return Ok(NativeResult::err(
                 context.gas_used(),
                 NFE_BCS_SERIALIZATION_FAILURE,
@@ -72,7 +72,7 @@ fn native_to_bytes(
         None => {
             // If we run out of gas when charging for failure, we don't want the `OUT_OF_GAS` error
             // to mask the actual error `NFE_BCS_SERIALIZATION_FAILURE`, so we saturate deduction at 0
-            context.charge_gas(gas_params.failure);
+            context.charge_gas(gas_params.failure)?;
             return Ok(NativeResult::err(
                 context.gas_used(),
                 NFE_BCS_SERIALIZATION_FAILURE,
