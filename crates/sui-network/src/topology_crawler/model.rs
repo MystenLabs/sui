@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TopologySnapshot {
     pub generated_at_ms: u64,
     pub nodes: Vec<NodeMeta>,
@@ -8,7 +8,7 @@ pub struct TopologySnapshot {
     pub errors: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NodeMeta {
     pub peer_id: String,
     pub addresses: Vec<String>,
@@ -17,7 +17,7 @@ pub struct NodeMeta {
     pub label: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Edge {
     pub from: String,
     pub to: String,
