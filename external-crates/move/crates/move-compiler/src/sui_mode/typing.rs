@@ -288,7 +288,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
         loc: _,
         compiled_visibility: _,
         visibility,
-        signature,
+        signature: _,
         body,
         warning_filter: _,
         index: _,
@@ -302,9 +302,6 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
     }
     if name.0.value == INIT_FUNCTION_NAME {
         init_visibility(context, name, *visibility, *entry);
-    } else {
-        // don't run these checks on init since they have their own rules
-        signature_sanity_check(context, name, signature);
     }
     if let sp!(_, T::FunctionBody_::Defined(seq)) = body {
         context.visit_seq(body.loc, seq)
@@ -590,93 +587,10 @@ fn invalid_otw_field_loc(fields: &Fields<(DocComment, Type)>) -> Option<InvalidO
 }
 
 //**************************************************************************************************
-// function signatures
+// well known type helpers
 //**************************************************************************************************
 
-fn signature_sanity_check(
-    context: &mut Context,
-    _name: FunctionName,
-    signature: &FunctionSignature,
-) {
-    if context.current_module().value.address.is(&SUI_ADDR_VALUE) {
-        // skip signature checks for `sui` since it defines these types
-        return;
-    }
-    // check tx context usage
-    const DUPLICATE_TX_CTX_NOTE: &str = "Due to restrictions in PTB execution if there is a \
-        mutable reference to a TxContext, it must be unique. This means that there cannot be \
-        another usage of the transaction context (either '&TxContext' or '&mut TxContext') in the \
-        function parameters. This function will not be callable on Sui";
-    // Check for multiple TxContexts
-    let mut prev_tx_ctx: Option<(Loc, /* mut */ bool)> = None;
-    for (_, _, param_ty) in &signature.parameters {
-        let Some(tx_ctx_kind) = tx_context_kind(param_ty) else {
-            continue;
-        };
-        match (tx_ctx_kind, &prev_tx_ctx) {
-            (TxContextKind::None, _) => (),
-            (TxContextKind::Mutable, None) => prev_tx_ctx = Some((param_ty.loc, true)),
-            (TxContextKind::Immutable, None) | (TxContextKind::Immutable, Some((_, false))) => {
-                prev_tx_ctx = Some((param_ty.loc, false))
-            }
-            (TxContextKind::Mutable, Some((prev_loc, _prev_kind))) => {
-                let mut_msg = "Duplicate 'TxContext' usage. '&mut TxContext' usage must be unique";
-                let mut diag = diag!(
-                    UNCALLABLE_FUNCTION_SIGNATURE,
-                    (param_ty.loc, mut_msg),
-                    (*prev_loc, "Previous 'TxContext' usage here")
-                );
-                diag.add_note(DUPLICATE_TX_CTX_NOTE);
-                context.add_diag(diag);
-                break;
-            }
-            (TxContextKind::Immutable, Some((prev_loc, true))) => {
-                let mut_msg =
-                    "Previous 'TxContext' usage here. '&mut TxContext' usage must be unique";
-                let diag = diag!(
-                    UNCALLABLE_FUNCTION_SIGNATURE,
-                    (param_ty.loc, "Duplicate TxContext usage"),
-                    (*prev_loc, mut_msg)
-                );
-                context.add_diag(diag);
-                break;
-            }
-            (TxContextKind::Owned, _) => {
-                let msg = "Invalid TxContext usage. 'TxContext' must be taken by reference, \
-                    e.g. '&TxContext' or '&mut TxContext'";
-                let diag = diag!(UNCALLABLE_FUNCTION_SIGNATURE, (param_ty.loc, msg));
-                context.add_diag(diag);
-                break;
-            }
-        }
-    }
-
-    // extra warnings for entry functions
-    const OBJECT_NOTE: &str = "This object has extra restrictions checked when submitting \
-        transactions to Sui. As such, this function will not be callable.";
-    for (_, _, param_ty) in &signature.parameters {
-        if is_mut_clock(param_ty) {
-            let msg = format!(
-                "Invalid parameter type. '{2}' must be taken immutably, e.g. '&{}::{}::{2}'",
-                SUI_ADDR_NAME, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME
-            );
-            let mut diag = diag!(UNCALLABLE_FUNCTION_SIGNATURE, (param_ty.loc, msg),);
-            diag.add_note(OBJECT_NOTE);
-            context.add_diag(diag);
-        }
-        if is_mut_random(param_ty) {
-            let msg = format!(
-                "Invalid parameter type. '{2}' must be taken immutably, e.g. '&{}::{}::{2}'",
-                SUI_ADDR_NAME, RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_TYPE_NAME
-            );
-            let mut diag = diag!(UNCALLABLE_FUNCTION_SIGNATURE, (param_ty.loc, msg));
-            diag.add_note(OBJECT_NOTE);
-            context.add_diag(diag);
-        }
-    }
-}
-
-fn tx_context_kind(sp!(_, param_ty): &Type) -> Option<TxContextKind> {
+pub fn tx_context_kind(sp!(_, param_ty): &Type) -> Option<TxContextKind> {
     let (ref_kind, inner_name) = match param_ty.inner() {
         TI::Ref(is_mut, inner_ty) => match &inner_ty.value.inner() {
             TI::Apply(_, sp!(_, inner_name), _) => (Some(*is_mut), inner_name),
@@ -720,7 +634,7 @@ pub enum TxContextKind {
     Immutable,
 }
 
-fn is_mut_clock(param_ty: &Type) -> bool {
+pub fn is_mut_clock(param_ty: &Type) -> bool {
     match &param_ty.value.inner() {
         TI::Ref(/* mut */ false, _) => false,
         TI::Ref(/* mut */ true, t) => is_mut_clock(t),
@@ -735,7 +649,7 @@ fn is_mut_clock(param_ty: &Type) -> bool {
     }
 }
 
-fn is_mut_random(param_ty: &Type) -> bool {
+pub fn is_mut_random(param_ty: &Type) -> bool {
     match &param_ty.value.inner() {
         TI::Ref(/* mut */ false, _) => false,
         TI::Ref(/* mut */ true, t) => is_mut_random(t),

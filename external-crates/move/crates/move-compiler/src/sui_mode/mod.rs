@@ -118,13 +118,6 @@ pub const ID_LEAK_DIAG: DiagnosticInfo = custom(
     "invalid object construction",
 );
 
-pub const UNCALLABLE_FUNCTION_SIGNATURE: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
-    Severity::Warning,
-    /* category */ TYPING,
-    /* code */ 2,
-    "non-callable function",
-);
 pub const INIT_FUN_DIAG: DiagnosticInfo = custom(
     SUI_DIAG_PREFIX,
     Severity::NonblockingError,
