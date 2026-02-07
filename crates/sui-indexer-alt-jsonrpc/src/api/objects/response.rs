@@ -191,7 +191,7 @@ async fn display(ctx: &Context, object: &Object) -> DisplayFieldsResponse {
     for (name, value) in fields {
         match value {
             Ok(value) => {
-                field_values.insert(name, Json::String(value));
+                field_values.insert(name, value);
             }
             Err(e) => {
                 write!(field_errors, "{prefix}Error for field {name:?}: {e:#}").unwrap();
