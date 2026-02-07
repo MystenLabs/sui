@@ -56,7 +56,11 @@ fn test_drop_all_values_borrow_error() {
     let frame_ptr = &mut frame as *mut locals::StackFrame;
 
     #[allow(unsafe_code)]
-    let _held_borrow = unsafe { (*frame_ptr).UNSAFE_borrow_slice()[0].try_borrow_mut().unwrap() };
+    let _held_borrow = unsafe {
+        (*frame_ptr).UNSAFE_borrow_slice()[0]
+            .try_borrow_mut()
+            .unwrap()
+    };
 
     // This should return an error because slot 0 is already borrowed
     #[allow(unsafe_code)]
