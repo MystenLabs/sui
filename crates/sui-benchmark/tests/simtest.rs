@@ -3,7 +3,7 @@
 
 #[cfg(msim)]
 mod test {
-    use mysten_common::register_debug_fatal_handler;
+    use mysten_common::{random::get_rng, register_debug_fatal_handler};
     use prost::Message;
     use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
     use std::collections::BTreeMap;
@@ -1665,5 +1665,123 @@ mod test {
 
         assert!(shared_plus_randomness_txns > 0);
         assert!(shared_plus_randomness_cancellations > 0);
+    }
+
+    /// Tests that async post-processing produces consistent indexes even when
+    /// the node crashes after indexing but before notifying the checkpoint executor.
+    /// Uses a fail point to simulate this crash scenario under load, then verifies
+    /// that the async fullnode recovers and matches a sync fullnode's index state.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_async_post_processing_consistency() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let mut test_cluster = init_test_cluster_builder(1, 0)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .build()
+            .await;
+
+        // Spawn async fullnode (default config)
+        let async_fn_config = test_cluster
+            .fullnode_config_builder()
+            .build(&mut get_rng(), test_cluster.swarm.config());
+        let async_fullnode = test_cluster
+            .start_fullnode_from_config(async_fn_config)
+            .await;
+        let async_fn_name = async_fullnode.sui_node.state().name;
+        let async_fn_sim_id = async_fullnode.sui_node.with(|n| n.get_sim_node_id());
+        drop(async_fullnode);
+
+        // Spawn sync fullnode
+        let sync_fn_config = test_cluster
+            .fullnode_config_builder()
+            .with_sync_post_process_one_tx(true)
+            .build(&mut get_rng(), test_cluster.swarm.config());
+        let sync_fullnode = test_cluster
+            .start_fullnode_from_config(sync_fn_config)
+            .await;
+        let sync_fn_name = sync_fullnode.sui_node.state().name;
+        drop(sync_fullnode);
+
+        let test_cluster: Arc<TestCluster> = test_cluster.into();
+
+        // Only crash the async fullnode. Grace period prevents rapid re-crashing
+        // after restart.
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
+        let grace_period_clone = grace_period.clone();
+        register_fail_point("crash-after-post-process-one-tx", move || {
+            let cur_node = sui_simulator::current_simnode_id();
+            if cur_node != async_fn_sim_id {
+                return;
+            }
+
+            let mut grace_period = grace_period_clone.lock().unwrap();
+            if let Some(t) = *grace_period {
+                if t < Instant::now() {
+                    *grace_period = None;
+                } else {
+                    return;
+                }
+            }
+
+            let mut rng = thread_rng();
+            if rng.gen_range(0.0..1.0) < 0.02 {
+                let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
+                let alive_until = Instant::now()
+                    + restart_after
+                    + Duration::from_millis(rng.gen_range(5000..30000));
+                *grace_period = Some(alive_until);
+
+                error!(?cur_node, "killing async fullnode");
+                drop(grace_period);
+                sui_simulator::task::kill_current_node(Some(restart_after));
+            }
+        });
+
+        test_simulated_load_with_test_config(
+            test_cluster.clone(),
+            60,
+            SimulatedLoadConfig::default(),
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+
+        clear_fail_point("crash-after-post-process-one-tx");
+
+        // Wait for the async fullnode to restart if it was killed during the test.
+        let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
+        while async_node.get_node_handle().is_none() {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+
+        // Trigger reconfiguration which calls check_system_consistency on all nodes,
+        // including the transactions_seq verification. All nodes must catch up to
+        // complete reconfiguration, so no separate delay is needed.
+        test_cluster.trigger_reconfiguration().await;
+
+        // Exhaustively compare the owner_index and coin_index_2 tables between the
+        // async and sync fullnodes. Both have processed the same set of checkpoints, so
+        // the indexes should be identical.
+        let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
+        let sync_node = test_cluster.swarm.node(&sync_fn_name).unwrap();
+        let async_state = async_node.get_node_handle().unwrap().state();
+        let sync_state = sync_node.get_node_handle().unwrap().state();
+        let async_indexes = async_state
+            .indexes
+            .as_ref()
+            .expect("async fullnode should have indexes");
+        let sync_indexes = sync_state
+            .indexes
+            .as_ref()
+            .expect("sync fullnode should have indexes");
+        async_indexes
+            .tables()
+            .check_databases_equal(sync_indexes.tables());
     }
 }

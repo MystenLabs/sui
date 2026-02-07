@@ -791,15 +791,23 @@ where
             .with_label_values(&[tx_type.as_str()])
             .start_timer();
         debug!("Waiting for finalized tx to be executed locally.");
-        match timeout(
-            LOCAL_EXECUTION_TIMEOUT,
+        match timeout(LOCAL_EXECUTION_TIMEOUT, async move {
             validator_state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_digests(
                     "TransactionOrchestrator::notify_read_wait_for_local_execution",
                     &[tx_digest],
-                ),
-        )
+                )
+                .await;
+            // Wait for the checkpoint containing this tx to be finalized.
+            // Index data is committed before the checkpoint notification fires,
+            // so it is guaranteed to be available when this resolves.
+            let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+            epoch_store
+                .transactions_executed_in_checkpoint_notify(vec![tx_digest])
+                .await
+                .expect("db error waiting for transaction checkpointing");
+        })
         .instrument(error_span!(
             "transaction_orchestrator::local_execution",
             ?tx_digest
