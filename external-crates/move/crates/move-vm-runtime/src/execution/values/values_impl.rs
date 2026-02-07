@@ -973,17 +973,8 @@ impl StructRef {
         let container = &mut *self.0.try_borrow_mut()?;
         match container {
             Value::Struct(fixed_vec) => {
-                let slots = &mut fixed_vec.0.0;
-                let slot: &mut MemBox<Value> = match slots.get_mut(index) {
-                    Some(slot) => slot,
-                    None => {
-                        return Err(partial_vm_error!(
-                            INDEX_OUT_OF_BOUNDS,
-                            "failed in UNSAFE_write_field_box with index lookup failure"
-                        ));
-                    }
-                };
-                *slot = mem_box;
+                // [SAFETY] Unsafe is fine here because we are testing.
+                fixed_vec.0.0[index] = mem_box;
                 Ok(())
             }
             _ => Err(partial_vm_error!(

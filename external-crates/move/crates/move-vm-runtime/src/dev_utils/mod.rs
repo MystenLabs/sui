@@ -11,11 +11,11 @@
 // These are allowed because dev utilities are only used in test situations in this module, and we
 // want to be able to use these constructs to write tests.
 #![allow(
-    clippy::cast_possible_truncation
+    clippy::cast_possible_truncation,
     clippy::expect_used,
     clippy::indexing_slicing,
     clippy::new_without_default,
-    clippy::panic,
+    clippy::panic
 )]
 
 pub(crate) mod dbg_print;
