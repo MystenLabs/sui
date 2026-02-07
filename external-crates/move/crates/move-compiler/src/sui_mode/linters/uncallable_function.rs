@@ -72,11 +72,12 @@ simple_visitor!(
                 (TxContextKind::Immutable, Some((prev_loc, true))) => {
                     let mut_msg =
                         "Previous 'TxContext' usage here. '&mut TxContext' usage must be unique";
-                    let diag = diag!(
+                    let mut diag = diag!(
                         UNCALLABLE_FUNCTION_SIGNATURE,
                         (param_ty.loc, "Duplicate TxContext usage"),
                         (*prev_loc, mut_msg)
                     );
+                    diag.add_note(DUPLICATE_TX_CTX_NOTE);
                     self.add_diag(diag);
                     break;
                 }
