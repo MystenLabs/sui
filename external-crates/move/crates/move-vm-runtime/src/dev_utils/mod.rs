@@ -15,9 +15,7 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
-    clippy::unwrap_used,
 )]
-
 
 pub(crate) mod dbg_print;
 pub mod in_memory_test_adapter;

@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{shared::constants::IDENTIFIER_INTERNER_SIZE_LIMIT};
+use crate::shared::constants::IDENTIFIER_INTERNER_SIZE_LIMIT;
 
 use move_core_types::identifier::{IdentStr, Identifier};
 

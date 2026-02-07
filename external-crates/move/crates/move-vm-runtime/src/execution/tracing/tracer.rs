@@ -3,7 +3,7 @@
 
 // This code is only enabled when the `tracing` feature is enabled and is not enabled in prod, so
 // direct use of indexing/slicing and panics is acceptable here.
-#![allow(clippy::indexing_slicing,clippy::panic)]
+#![allow(clippy::indexing_slicing, clippy::panic)]
 use crate::{
     cache::identifier_interner::IdentifierInterner,
     execution::{

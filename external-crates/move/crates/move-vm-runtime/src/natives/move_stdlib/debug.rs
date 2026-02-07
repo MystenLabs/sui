@@ -207,7 +207,6 @@ mod testing {
     };
     use std::{fmt, fmt::Write};
 
-
     const VECTOR_BEGIN: &str = "[";
 
     const VECTOR_OR_STRUCT_SEP: &str = ",";

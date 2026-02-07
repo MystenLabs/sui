@@ -284,7 +284,7 @@ impl StackFrame {
     }
 
     #[cfg(test)]
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, clippy::indexing_slicing)]
     /// This is strictly for testing cycle dropping.
     /// If you ever mark this not #[cfg(test)] you will have your VM implementor card revoked.
     pub(crate) fn UNSAFE_copy_local_box(&mut self, ndx: usize) -> MemBox<Value> {
