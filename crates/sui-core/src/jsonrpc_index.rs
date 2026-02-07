@@ -285,8 +285,6 @@ impl IndexStoreTables {
         &self.coin_index_2
     }
 
-    /// Asserts that the `owner_index` and `coin_index_2` tables of `self` and `other` are
-    /// identical by tandem-iterating both sorted tables in lockstep.
     pub fn check_databases_equal(&self, other: &IndexStoreTables) {
         fn assert_tables_equal<K, V>(name: &str, table_a: &DBMap<K, V>, table_b: &DBMap<K, V>)
         where
@@ -323,8 +321,257 @@ impl IndexStoreTables {
             info!("{name}: verified {count} entries are identical");
         }
 
+        // Tables keyed by TxSequenceNumber may have different sequence numbers between
+        // async and sync post-processing. Compare the (prefix, value) pairs as sorted
+        // vectors instead of lockstep iteration.
+        fn assert_seq_table_equal<P, V>(
+            name: &str,
+            table_a: &DBMap<(P, TxSequenceNumber), V>,
+            table_b: &DBMap<(P, TxSequenceNumber), V>,
+        ) where
+            P: Serialize + DeserializeOwned + Ord + std::fmt::Debug,
+            V: Serialize + DeserializeOwned + Ord + std::fmt::Debug,
+        {
+            let mut entries_a: Vec<(P, V)> = table_a
+                .safe_iter()
+                .map(|r| {
+                    let ((p, _seq), v) = r.expect("failed to read from table_a");
+                    (p, v)
+                })
+                .collect();
+            let mut entries_b: Vec<(P, V)> = table_b
+                .safe_iter()
+                .map(|r| {
+                    let ((p, _seq), v) = r.expect("failed to read from table_b");
+                    (p, v)
+                })
+                .collect();
+            entries_a.sort();
+            entries_b.sort();
+            assert!(
+                entries_a.len() == entries_b.len(),
+                "{name}: different number of entries: {} vs {}",
+                entries_a.len(),
+                entries_b.len()
+            );
+            for (i, (a, b)) in entries_a.iter().zip(entries_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "{name}: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "{name}: verified {} entries match (ignoring sequence numbers)",
+                entries_a.len()
+            );
+        }
+
+        // EventIndex contains a wall-clock timestamp that differs between nodes.
+        // Compare only (TransactionEventsDigest, TransactionDigest).
+        type EventKey = (TransactionEventsDigest, TransactionDigest);
+        fn strip_timestamp(ei: EventIndex) -> EventKey {
+            (ei.0, ei.1)
+        }
+
+        // Tables where the key contains an EventId = (TxSequenceNumber, usize). Compare
+        // the (prefix, event_key) pairs as sorted vectors, ignoring both event ids and
+        // timestamps.
+        fn assert_event_table_equal<P>(
+            name: &str,
+            table_a: &DBMap<(P, EventId), EventIndex>,
+            table_b: &DBMap<(P, EventId), EventIndex>,
+        ) where
+            P: Serialize + DeserializeOwned + Ord + std::fmt::Debug,
+        {
+            let mut entries_a: Vec<(P, EventKey)> = table_a
+                .safe_iter()
+                .map(|r| {
+                    let ((p, _eid), v) = r.expect("failed to read from table_a");
+                    (p, strip_timestamp(v))
+                })
+                .collect();
+            let mut entries_b: Vec<(P, EventKey)> = table_b
+                .safe_iter()
+                .map(|r| {
+                    let ((p, _eid), v) = r.expect("failed to read from table_b");
+                    (p, strip_timestamp(v))
+                })
+                .collect();
+            entries_a.sort();
+            entries_b.sort();
+            assert!(
+                entries_a.len() == entries_b.len(),
+                "{name}: different number of entries: {} vs {}",
+                entries_a.len(),
+                entries_b.len()
+            );
+            for (i, (a, b)) in entries_a.iter().zip(entries_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "{name}: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "{name}: verified {} entries match (ignoring event ids and timestamps)",
+                entries_a.len()
+            );
+        }
+
+        // Exact comparison — tables with no sequence numbers in keys.
         assert_tables_equal("owner_index", &self.owner_index, &other.owner_index);
         assert_tables_equal("coin_index_2", &self.coin_index_2, &other.coin_index_2);
+        assert_tables_equal(
+            "address_balances",
+            &self.address_balances,
+            &other.address_balances,
+        );
+        assert_tables_equal(
+            "dynamic_field_index",
+            &self.dynamic_field_index,
+            &other.dynamic_field_index,
+        );
+
+        // Transaction tables — compare (address, digest) pairs ignoring sequence numbers.
+        assert_seq_table_equal(
+            "transactions_from_addr",
+            &self.transactions_from_addr,
+            &other.transactions_from_addr,
+        );
+        assert_seq_table_equal(
+            "transactions_to_addr",
+            &self.transactions_to_addr,
+            &other.transactions_to_addr,
+        );
+        // transactions_by_move_function has a 4-tuple key: (ObjectID, String, String, TxSequenceNumber)
+        {
+            let mut entries_a: Vec<((ObjectID, String, String), TransactionDigest)> = self
+                .transactions_by_move_function
+                .safe_iter()
+                .map(|r| {
+                    let ((pkg, module, func, _seq), digest) =
+                        r.expect("failed to read from table_a");
+                    ((pkg, module, func), digest)
+                })
+                .collect();
+            let mut entries_b: Vec<((ObjectID, String, String), TransactionDigest)> = other
+                .transactions_by_move_function
+                .safe_iter()
+                .map(|r| {
+                    let ((pkg, module, func, _seq), digest) =
+                        r.expect("failed to read from table_b");
+                    ((pkg, module, func), digest)
+                })
+                .collect();
+            entries_a.sort();
+            entries_b.sort();
+            assert!(
+                entries_a.len() == entries_b.len(),
+                "transactions_by_move_function: different number of entries: {} vs {}",
+                entries_a.len(),
+                entries_b.len()
+            );
+            for (i, (a, b)) in entries_a.iter().zip(entries_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "transactions_by_move_function: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "transactions_by_move_function: verified {} entries match (ignoring sequence numbers)",
+                entries_a.len()
+            );
+        }
+
+        // Event tables — compare event keys ignoring event ids and timestamps.
+        {
+            // event_order: DBMap<EventId, EventIndex> — no prefix, just compare values.
+            let mut vals_a: Vec<EventKey> = self
+                .event_order
+                .safe_iter()
+                .map(|r| strip_timestamp(r.expect("failed to read from table_a").1))
+                .collect();
+            let mut vals_b: Vec<EventKey> = other
+                .event_order
+                .safe_iter()
+                .map(|r| strip_timestamp(r.expect("failed to read from table_b").1))
+                .collect();
+            vals_a.sort();
+            vals_b.sort();
+            assert!(
+                vals_a.len() == vals_b.len(),
+                "event_order: different number of entries: {} vs {}",
+                vals_a.len(),
+                vals_b.len()
+            );
+            for (i, (a, b)) in vals_a.iter().zip(vals_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "event_order: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "event_order: verified {} entries match (ignoring event ids and timestamps)",
+                vals_a.len()
+            );
+        }
+        assert_event_table_equal(
+            "event_by_move_module",
+            &self.event_by_move_module,
+            &other.event_by_move_module,
+        );
+        assert_event_table_equal(
+            "event_by_move_event",
+            &self.event_by_move_event,
+            &other.event_by_move_event,
+        );
+        assert_event_table_equal(
+            "event_by_event_module",
+            &self.event_by_event_module,
+            &other.event_by_event_module,
+        );
+        assert_event_table_equal(
+            "event_by_sender",
+            &self.event_by_sender,
+            &other.event_by_sender,
+        );
+        // event_by_time: key is (timestamp_ms, EventId) — timestamps differ between
+        // nodes, so just compare the set of EventKey values.
+        {
+            let mut vals_a: Vec<EventKey> = self
+                .event_by_time
+                .safe_iter()
+                .map(|r| strip_timestamp(r.expect("failed to read from table_a").1))
+                .collect();
+            let mut vals_b: Vec<EventKey> = other
+                .event_by_time
+                .safe_iter()
+                .map(|r| strip_timestamp(r.expect("failed to read from table_b").1))
+                .collect();
+            vals_a.sort();
+            vals_b.sort();
+            assert!(
+                vals_a.len() == vals_b.len(),
+                "event_by_time: different number of entries: {} vs {}",
+                vals_a.len(),
+                vals_b.len()
+            );
+            for (i, (a, b)) in vals_a.iter().zip(vals_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "event_by_time: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "event_by_time: verified {} entries match (ignoring timestamps and event ids)",
+                vals_a.len()
+            );
+        }
+
+        // Skipped tables:
+        // - transaction_order / transactions_seq: sequence numbers differ by design
+        // - transactions_by_input_object_id / transactions_by_mutated_object_id: deprecated
+        // - meta: metadata singleton, not meaningful to compare
+        // - pruner_watermark: operational state
     }
 
     #[allow(deprecated)]
