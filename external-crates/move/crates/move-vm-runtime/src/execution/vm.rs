@@ -194,13 +194,23 @@ impl<'extensions> MoveVM<'extensions> {
                     format!("Failed to find function {module_id}::{function_name}"),
                 )
             })?;
+        let instruction_count =
+                CodeOffset::try_from(function.to_ref().code.len()).map_err(
+                |e| {
+                    partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Function {module_id}::{function_name} has too many instructions and overflowed `CodeOffset` with error: {e:?}"
+                    )
+                    .finish(Location::Undefined)
+                },
+            )?;
 
         Ok(LoadedFunctionInformation {
             is_entry: function.to_ref().is_entry,
             is_native: function.to_ref().def_is_native,
             visibility: function.to_ref().visibility,
             index: function.to_ref().index,
-            instruction_count: function.to_ref().code.len() as CodeOffset,
+            instruction_count,
             parameters,
             return_: return_type,
         })

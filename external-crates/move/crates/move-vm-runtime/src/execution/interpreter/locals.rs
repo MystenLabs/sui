@@ -138,7 +138,12 @@ impl MachineHeap {
         size: usize,
     ) -> PartialVMResult<StackFrame> {
         // Calculate how many invalid values need to be added
-        let invalids_len = size - params.len();
+        let invalids_len = size.checked_sub(params.len()).ok_or_else(|| {
+            partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Size of stack frame locals must be at least the number of parameters"
+            )
+        })?;
 
         // Initialize the stack frame with the provided parameters and fill remaining slots with `Invalid`
         let local_values = params
