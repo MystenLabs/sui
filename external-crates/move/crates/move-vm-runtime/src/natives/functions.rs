@@ -300,10 +300,11 @@ impl<'b> NativeContext<'_, 'b, '_> {
     }
 
     pub fn charge_gas(&self, amount: InternalGas) -> PartialVMResult<bool> {
-        let mut gas_left = self.gas_left.try_borrow_mut().map_err(|_| {
+        let mut gas_left = self.gas_left.try_borrow_mut().map_err(|err| {
             partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "gas left was already mutably borrowed"
+                "gas left was already mutably borrowed: {:?}",
+                err
             )
         })?;
 

@@ -370,10 +370,11 @@ impl<T: Debug> MemBox<T> {
     }
 
     pub fn try_borrow_mut(&self) -> PartialVMResult<std::cell::RefMut<'_, T>> {
-        self.0.try_borrow_mut().map_err(|_| {
+        self.0.try_borrow_mut().map_err(|err| {
             partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "failed to borrow mutable reference due to previous borrow"
+                "failed to borrow mutable reference due to previous borrow {:?}",
+                err
             )
         })
     }
