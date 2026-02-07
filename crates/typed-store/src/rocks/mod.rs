@@ -1136,24 +1136,24 @@ pub enum StorageWriteBatch {
     TideHunter(tidehunter::batch::WriteBatch),
 }
 
-enum RawBatchEntry {
-    Put {
-        cf_name: String,
-        key: Vec<u8>,
-        value: Vec<u8>,
-    },
-    Delete {
-        cf_name: String,
-        key: Vec<u8>,
-    },
+/// Flat-buffer entry header. All byte data (cf_name, key, value) is stored
+/// contiguously in `RawDBBatch::data`; this header records offsets and lengths
+/// so that slices can be produced without any per-entry allocation.
+struct EntryHeader {
+    /// Byte offset into `RawDBBatch::data` where this entry's data begins.
+    offset: usize,
+    cf_name_len: usize,
+    key_len: usize,
+    is_put: bool,
 }
 
-/// A write batch that stores serialized operations in memory without requiring
-/// a database reference. Can be replayed into a real `DBBatch` for atomic commit.
+/// A write batch that stores serialized operations in a flat byte buffer without
+/// requiring a database reference. Can be replayed into a real `DBBatch` via
+/// `DBBatch::concat`.
 #[derive(Default)]
 pub struct RawDBBatch {
-    entries: Vec<RawBatchEntry>,
-    size_bytes: usize,
+    data: Vec<u8>,
+    entries: Vec<EntryHeader>,
 }
 
 impl RawDBBatch {
@@ -1166,16 +1166,21 @@ impl RawDBBatch {
         db: &DBMap<K, V>,
         new_vals: impl IntoIterator<Item = (J, U)>,
     ) -> Result<&mut Self, TypedStoreError> {
+        let cf_name = db.cf_name();
         new_vals
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow());
                 let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
-                self.size_bytes += k_buf.len() + v_buf.len();
-                self.entries.push(RawBatchEntry::Put {
-                    cf_name: db.cf_name().to_owned(),
-                    key: k_buf,
-                    value: v_buf,
+                let offset = self.data.len();
+                self.data.extend_from_slice(cf_name.as_bytes());
+                self.data.extend_from_slice(&k_buf);
+                self.data.extend_from_slice(&v_buf);
+                self.entries.push(EntryHeader {
+                    offset,
+                    cf_name_len: cf_name.len(),
+                    key_len: k_buf.len(),
+                    is_put: true,
                 });
                 Ok(())
             })?;
@@ -1187,14 +1192,19 @@ impl RawDBBatch {
         db: &DBMap<K, V>,
         purged_vals: impl IntoIterator<Item = J>,
     ) -> Result<(), TypedStoreError> {
+        let cf_name = db.cf_name();
         purged_vals
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|k| {
                 let k_buf = be_fix_int_ser(k.borrow());
-                self.size_bytes += k_buf.len();
-                self.entries.push(RawBatchEntry::Delete {
-                    cf_name: db.cf_name().to_owned(),
-                    key: k_buf,
+                let offset = self.data.len();
+                self.data.extend_from_slice(cf_name.as_bytes());
+                self.data.extend_from_slice(&k_buf);
+                self.entries.push(EntryHeader {
+                    offset,
+                    cf_name_len: cf_name.len(),
+                    key_len: k_buf.len(),
+                    is_put: false,
                 });
                 Ok(())
             })?;
@@ -1202,7 +1212,7 @@ impl RawDBBatch {
     }
 
     pub fn size_in_bytes(&self) -> usize {
-        self.size_bytes
+        self.data.len()
     }
 }
 
@@ -1354,20 +1364,30 @@ impl DBBatch {
     }
 
     /// Replay all operations from `RawDBBatch`es into this batch.
+    /// Replay all operations from `RawDBBatch`es into this batch.
     pub fn concat(&mut self, raw_batches: Vec<RawDBBatch>) -> Result<&mut Self, TypedStoreError> {
         for raw_batch in raw_batches {
-            for entry in raw_batch.entries {
-                match entry {
-                    RawBatchEntry::Put {
-                        cf_name,
-                        key,
-                        value,
-                    } => match &mut self.batch {
+            let data = &raw_batch.data;
+            for (i, hdr) in raw_batch.entries.iter().enumerate() {
+                let end = raw_batch
+                    .entries
+                    .get(i + 1)
+                    .map_or(data.len(), |next| next.offset);
+                let cf_bytes = &data[hdr.offset..hdr.offset + hdr.cf_name_len];
+                let key_start = hdr.offset + hdr.cf_name_len;
+                let key = &data[key_start..key_start + hdr.key_len];
+                // Safety: cf_name was written from &str bytes in insert_batch / delete_batch.
+                let cf_name = std::str::from_utf8(cf_bytes)
+                    .map_err(|e| TypedStoreError::SerializationError(e.to_string()))?;
+
+                if hdr.is_put {
+                    let value = &data[key_start + hdr.key_len..end];
+                    match &mut self.batch {
                         StorageWriteBatch::Rocks(b) => {
-                            b.put_cf(&rocks_cf_from_db(&self.database, &cf_name)?, key, value);
+                            b.put_cf(&rocks_cf_from_db(&self.database, cf_name)?, key, value);
                         }
                         StorageWriteBatch::InMemory(b) => {
-                            b.put_cf(&cf_name, key, value);
+                            b.put_cf(cf_name, key, value);
                         }
                         #[cfg(tidehunter)]
                         _ => {
@@ -1375,13 +1395,14 @@ impl DBBatch {
                                 "concat not supported for TideHunter".to_string(),
                             ));
                         }
-                    },
-                    RawBatchEntry::Delete { cf_name, key } => match &mut self.batch {
+                    }
+                } else {
+                    match &mut self.batch {
                         StorageWriteBatch::Rocks(b) => {
-                            b.delete_cf(&rocks_cf_from_db(&self.database, &cf_name)?, key);
+                            b.delete_cf(&rocks_cf_from_db(&self.database, cf_name)?, key);
                         }
                         StorageWriteBatch::InMemory(b) => {
-                            b.delete_cf(&cf_name, key);
+                            b.delete_cf(cf_name, key);
                         }
                         #[cfg(tidehunter)]
                         _ => {
@@ -1389,7 +1410,7 @@ impl DBBatch {
                                 "concat not supported for TideHunter".to_string(),
                             ));
                         }
-                    },
+                    }
                 }
             }
         }
