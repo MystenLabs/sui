@@ -68,6 +68,12 @@ pub struct ObjectsConfig {
     /// The maximum depth a Display format string is allowed to nest field accesses.
     pub max_display_field_depth: usize,
 
+    /// The maximum number of components in a Display v2 format string.
+    pub max_display_format_nodes: usize,
+
+    /// The maximum number of objects that can be loaded while evaluating a Display v2 format.
+    pub max_display_object_loads: usize,
+
     /// The maximum number of bytes occupied by Display field names and values in the output.
     pub max_display_output_size: usize,
 
@@ -97,6 +103,8 @@ pub struct ObjectsLayer {
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
     pub max_display_field_depth: Option<usize>,
+    pub max_display_format_nodes: Option<usize>,
+    pub max_display_object_loads: Option<usize>,
     pub max_display_output_size: Option<usize>,
     pub max_filter_depth: Option<usize>,
     pub max_type_filters: Option<usize>,
@@ -242,6 +250,12 @@ impl ObjectsLayer {
             max_display_field_depth: self
                 .max_display_field_depth
                 .unwrap_or(base.max_display_field_depth),
+            max_display_format_nodes: self
+                .max_display_format_nodes
+                .unwrap_or(base.max_display_format_nodes),
+            max_display_object_loads: self
+                .max_display_object_loads
+                .unwrap_or(base.max_display_object_loads),
             max_display_output_size: self
                 .max_display_output_size
                 .unwrap_or(base.max_display_output_size),
@@ -349,11 +363,15 @@ impl Default for RpcConfig {
 
 impl Default for ObjectsConfig {
     fn default() -> Self {
+        let display_limits = sui_display::v2::Limits::default();
+
         Self {
             max_multi_get_objects: 50,
             default_page_size: 50,
             max_page_size: 100,
-            max_display_field_depth: 10,
+            max_display_field_depth: display_limits.max_depth,
+            max_display_format_nodes: display_limits.max_nodes,
+            max_display_object_loads: display_limits.max_loads,
             max_display_output_size: 1024 * 1024,
             max_filter_depth: 3,
             max_type_filters: 10,
@@ -425,12 +443,24 @@ impl From<ObjectsConfig> for ObjectsLayer {
             default_page_size: Some(config.default_page_size),
             max_page_size: Some(config.max_page_size),
             max_display_field_depth: Some(config.max_display_field_depth),
+            max_display_format_nodes: Some(config.max_display_format_nodes),
+            max_display_object_loads: Some(config.max_display_object_loads),
             max_display_output_size: Some(config.max_display_output_size),
             max_filter_depth: Some(config.max_filter_depth),
             max_type_filters: Some(config.max_type_filters),
             filter_scan_size: Some(config.filter_scan_size),
             obj_retry_count: Some(config.obj_retry_count),
             obj_retry_interval_ms: Some(config.obj_retry_interval_ms),
+        }
+    }
+}
+
+impl ObjectsConfig {
+    pub(crate) fn display(&self) -> sui_display::v2::Limits {
+        sui_display::v2::Limits {
+            max_depth: self.max_display_field_depth,
+            max_nodes: self.max_display_format_nodes,
+            max_loads: self.max_display_object_loads,
         }
     }
 }
