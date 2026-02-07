@@ -1,0 +1,4 @@
+[ingestion]
+ingest-concurrency = 20
+
+[pipeline.tx_balance_changes]

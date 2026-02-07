@@ -1,12 +1,7 @@
 [ingestion]
 ingest-concurrency = 20
 
-[pruner]
-retention = 31104000
-
 [pipeline.cp_sequence_numbers]
-
-[pipeline.tx_balance_changes]
 
 [pipeline.tx_digests]
 
