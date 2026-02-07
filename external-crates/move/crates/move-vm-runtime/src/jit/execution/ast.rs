@@ -313,6 +313,10 @@ pub struct ModuleIdKey {
 // -------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
+// TODO: These should not contain VirtualTableKeys, but rather be a more direct representation of
+// the type. This is currently the same as the instruction representation of types, but it would be
+// better to never hand VirtualTableKeys out of the runtime.
+// for things like
 pub enum Type {
     Bool,
     U8,
@@ -840,7 +844,7 @@ pub(crate) enum Bytecode {
 // -------------------------------------------------------------------------------------------------
 
 impl Function {
-    pub fn vtable_key(&self) -> &VirtualTableKey {
+    pub(crate) fn vtable_key(&self) -> &VirtualTableKey {
         &self.name
     }
 
@@ -851,9 +855,7 @@ impl Function {
     pub fn module_id(&self, interner: &IdentifierInterner) -> ModuleId {
         // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
         // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name
-            .module_id(interner)
-            .expect("Identifier interner error: module id not found")
+        self.name.module_id(interner)
     }
 
     pub fn index(&self) -> FunctionDefinitionIndex {
@@ -877,11 +879,7 @@ impl Function {
     }
 
     pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
-        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
-        // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name
-            .member_name(interner)
-            .expect("Identifier interner error: function name not found")
+        self.name.member_name(interner)
     }
 
     pub(crate) fn code(&self) -> &[Bytecode] {
@@ -897,19 +895,11 @@ impl Function {
     }
 
     pub fn pretty_string(&self, interner: &IdentifierInterner) -> String {
-        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
-        // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name
-            .to_string(interner)
-            .expect("Identifier interner error: function virtual name not found")
+        self.name.to_string(interner)
     }
 
     pub fn pretty_short_string(&self, interner: &IdentifierInterner) -> String {
-        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
-        // should never happen in a well-formed module. This is as good a time to panic as any.
-        self.name
-            .to_short_string(interner)
-            .expect("Identifier interner error: function short name not found")
+        self.name.to_short_string(interner)
     }
 
     pub fn is_native(&self) -> bool {
@@ -1008,9 +998,9 @@ impl ModuleIdKey {
         Self { address, name }
     }
 
-    pub fn as_id(&self, interner: &IdentifierInterner) -> PartialVMResult<ModuleId> {
-        let name = interner.resolve_ident(&self.name, "module id")?;
-        Ok(ModuleId::new(self.address, name))
+    pub fn as_id(&self, interner: &IdentifierInterner) -> ModuleId {
+        let name = interner.resolve_ident(&self.name, "module id");
+        ModuleId::new(self.address, name)
     }
 
     pub fn address(&self) -> &AccountAddress {
@@ -1018,11 +1008,7 @@ impl ModuleIdKey {
     }
 
     pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
-        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
-        // should never happen in a well-formed module. This is as good a time to panic as any.
-        interner
-            .resolve_ident(&self.name, "module name")
-            .expect("Uninterned key")
+        interner.resolve_ident(&self.name, "module name")
     }
 }
 
@@ -1055,14 +1041,15 @@ impl DatatypeDescriptor {
         }
     }
 
-    pub fn qualified_name(&self) -> VirtualTableKey {
+    #[allow(dead_code)]
+    pub(crate) fn qualified_name(&self) -> VirtualTableKey {
         match self.datatype_info.inner_ref() {
             Datatype::Enum(ptr) => ptr.to_ref().def_vtable_key.clone(),
             Datatype::Struct(ptr) => ptr.to_ref().def_vtable_key.clone(),
         }
     }
 
-    pub fn intra_package_name(&self) -> IntraPackageKey {
+    pub(crate) fn intra_package_name(&self) -> IntraPackageKey {
         match self.datatype_info.inner_ref() {
             Datatype::Enum(ptr) => ptr.def_vtable_key.inner_pkg_key,
             Datatype::Struct(ptr) => ptr.def_vtable_key.inner_pkg_key,
@@ -1182,7 +1169,8 @@ impl Type {
 }
 
 impl DatatypeDescriptor {
-    pub fn datatype_key(&self) -> VirtualTableKey {
+    #[allow(dead_code)]
+    pub(crate) fn datatype_key(&self) -> VirtualTableKey {
         match &self.datatype_info.inner_ref() {
             Datatype::Enum(vmpointer) => vmpointer.def_vtable_key.clone(),
             Datatype::Struct(vmpointer) => vmpointer.def_vtable_key.clone(),
@@ -1583,18 +1571,14 @@ pub trait InternedDisplay<B: std::fmt::Write> {
 
 impl<B: std::fmt::Write> InternedDisplay<B> for IdentifierKey {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
-        let name = interner
-            .resolve_ident(self, "module name")
-            .map_err(|_| ::std::fmt::Error)?;
+        let name = interner.resolve_ident(self, "module name");
         write!(f, "{}", name)
     }
 }
 
 impl<B: std::fmt::Write> InternedDisplay<B> for VirtualTableKey {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
-        let str = self
-            .to_short_string(interner)
-            .map_err(|_| ::std::fmt::Error)?;
+        let str = self.to_short_string(interner);
         write!(f, "{}", str)
     }
 }

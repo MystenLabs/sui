@@ -92,6 +92,9 @@ impl<'a> NativeContextExtensions<'a> {
 
 #[cfg(test)]
 mod tests {
+    // Allowed for testing
+    #![allow(clippy::unwrap_used)]
+
     use crate::natives::extensions::{NativeContextExtensions, NativeExtensionMarker};
     use better_any::{Tid, TidAble};
 

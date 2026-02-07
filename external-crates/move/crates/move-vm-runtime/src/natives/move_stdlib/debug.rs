@@ -14,7 +14,7 @@ use crate::{
 #[cfg(feature = "testing")]
 use crate::execution::values::{Reference, VMValueCast};
 
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_unwrap};
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use smallvec::smallvec;
 
@@ -52,8 +52,8 @@ fn native_print(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
-    let _val = args.pop_back().unwrap();
-    let _ty = ty_args.pop().unwrap();
+    let _val = safe_unwrap!(args.pop_back());
+    let _ty = safe_unwrap!(ty_args.pop());
 
     // No-op if the feature flag is not present.
     #[cfg(feature = "testing")]
@@ -191,6 +191,8 @@ pub fn make_all(
 }
 
 #[cfg(feature = "testing")]
+// We allow unwraps in testing modules.
+#[allow(clippy::unwrap_used)]
 mod testing {
     use crate::{
         execution::values::{VMValueCast, Value},

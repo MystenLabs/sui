@@ -2,6 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: Remove the panics. Some of these removals are currently in flight, so this PR does not
+// handle them.
+#![allow(clippy::panic)]
+
 use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
@@ -968,7 +972,17 @@ impl StructRef {
         let container = &mut *self.0.try_borrow_mut()?;
         match container {
             Value::Struct(fixed_vec) => {
-                fixed_vec.0.0[index] = mem_box;
+                let slots = &mut fixed_vec.0.0;
+                let slot: &mut MemBox<Value> = match slots.get_mut(index) {
+                    Some(slot) => slot,
+                    None => {
+                        return Err(partial_vm_error!(
+                            INDEX_OUT_OF_BOUNDS,
+                            "failed in UNSAFE_write_field_box with index lookup failure"
+                        ));
+                    }
+                };
+                *slot = mem_box;
                 Ok(())
             }
             _ => Err(partial_vm_error!(

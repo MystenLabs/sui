@@ -88,11 +88,11 @@ pub struct VMDispatchTables {
 #[derive(Debug)]
 pub struct PackageVirtualTable {
     /// Representation of runtime functions.
-    pub functions: DefinitionMap<VMPointer<Function>>,
+    pub(crate) functions: DefinitionMap<VMPointer<Function>>,
     /// Representation of runtime types.
-    pub types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
+    pub(crate) types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
     /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
-    pub defining_ids: BTreeSet<DefiningTypeId>,
+    pub(crate) defining_ids: BTreeSet<DefiningTypeId>,
 }
 
 /// This is a lookup-only map for recording information about module members in loaded package
@@ -104,12 +104,16 @@ pub struct DefinitionMap<Value>(HashMap<IntraPackageKey, Value>);
 /// original_address::module_name::function_name
 /// NB: This relies on no boxing -- if this introduces boxes, the arena allocation in the execution
 /// AST will leak memory.
+/// TODO: This key should be private to the VM, but it is currently used in a few representations
+/// that are handed out of the VM. For now, the fields are private.
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct VirtualTableKey {
-    pub package_key: OriginalId,
+    pub(crate) package_key: OriginalId,
     pub(crate) inner_pkg_key: IntraPackageKey,
 }
 
+/// TODO: This key should be private to the VM, but it is currently used in a few representations
+/// that are handed out of the VM. For now, the fields are private.
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub struct IntraPackageKey {
     pub(crate) module_name: IdentifierKey,
@@ -226,7 +230,7 @@ impl VMDispatchTables {
             Err(partial_vm_error!(
                 VTABLE_KEY_LOOKUP_ERROR,
                 "Could not find function {}",
-                vtable_key.to_string(&self.interner)?
+                vtable_key.to_string(&self.interner)
             ))
         }
     }
@@ -248,7 +252,7 @@ impl VMDispatchTables {
             Err(partial_vm_error!(
                 VTABLE_KEY_LOOKUP_ERROR,
                 "Could not find type {}",
-                vtable_key.to_string(&self.interner)?
+                vtable_key.to_string(&self.interner)
             ))
         }
     }
@@ -266,7 +270,7 @@ impl VMDispatchTables {
     // Load a type from a TypeTag into a VM type.
     // NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
     // fail.
-    pub(crate) fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
+    pub fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
         Ok(match type_tag {
             TypeTag::Bool => Type::Bool,
             TypeTag::U8 => Type::U8,
@@ -422,7 +426,7 @@ impl VMDispatchTables {
                     original_id: *descriptor.original_id.address(),
                     defining_id: *descriptor.defining_id.address(),
                     module_name: descriptor.defining_id.name(&self.interner),
-                    type_name: self.interner.resolve_ident(&descriptor.name, "type name")?,
+                    type_name: self.interner.resolve_ident(&descriptor.name, "type name"),
                 })
             }
             Type::DatatypeInstantiation(inst) => {
@@ -432,7 +436,7 @@ impl VMDispatchTables {
                     original_id: *descriptor.original_id.address(),
                     defining_id: *descriptor.defining_id.address(),
                     module_name: descriptor.defining_id.name(&self.interner),
-                    type_name: self.interner.resolve_ident(&descriptor.name, "type name")?,
+                    type_name: self.interner.resolve_ident(&descriptor.name, "type name"),
                 })
             }
         })
@@ -561,9 +565,7 @@ impl VMDispatchTables {
                 datatype.defining_id.name(&self.interner).to_owned(),
             ),
         };
-        let name = self
-            .interner
-            .resolve_ident(&datatype.name, "datatype name")?;
+        let name = self.interner.resolve_ident(&datatype.name, "datatype name");
 
         let tag = StructTag {
             address,
@@ -729,7 +731,7 @@ impl VMDispatchTables {
                         .iter()
                         .zip(variant.fields.iter())
                         .map(|(n, ty)| {
-                            let n = self.interner.resolve_ident(n, "field name")?;
+                            let n = self.interner.resolve_ident(n, "field name");
                             let ty = checked_subst(ty, ty_args)?;
                             let l =
                                 self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
@@ -739,7 +741,7 @@ impl VMDispatchTables {
                     variant_layouts.insert(
                         (
                             self.interner
-                                .resolve_ident(&variant.variant_name, "variant name")?,
+                                .resolve_ident(&variant.variant_name, "variant name"),
                             variant.variant_tag,
                         ),
                         field_layouts,
@@ -764,7 +766,7 @@ impl VMDispatchTables {
                     .iter()
                     .zip(struct_type.fields.iter())
                     .map(|(n, ty)| {
-                        let n = self.interner.resolve_ident(n, "field name")?;
+                        let n = self.interner.resolve_ident(n, "field name");
                         let ty = checked_subst(ty, ty_args)?;
                         let l = self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
                         Ok(annotated_value::MoveFieldLayout::new(n, l))
@@ -1091,35 +1093,35 @@ impl VirtualTableKey {
         }
     }
 
-    pub fn module_id(&self, interner: &IdentifierInterner) -> PartialVMResult<ModuleId> {
-        let module_name = interner.resolve_ident(&self.inner_pkg_key.module_name, "module name")?;
-        Ok(ModuleId::new(self.package_key, module_name))
+    pub fn module_id(&self, interner: &IdentifierInterner) -> ModuleId {
+        let module_name = interner.resolve_ident(&self.inner_pkg_key.module_name, "module name");
+        ModuleId::new(self.package_key, module_name)
     }
 
-    pub fn member_name(&self, interner: &IdentifierInterner) -> PartialVMResult<Identifier> {
+    pub fn member_name(&self, interner: &IdentifierInterner) -> Identifier {
         interner.resolve_ident(&self.inner_pkg_key.member_name, "member name")
     }
 
-    pub fn to_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
-        let inner_name = self.inner_pkg_key.to_string(interner)?;
-        Ok(format!("{}::{}", self.package_key, inner_name))
+    pub fn to_string(&self, interner: &IdentifierInterner) -> String {
+        let inner_name = self.inner_pkg_key.to_string(interner);
+        format!("{}::{}", self.package_key, inner_name)
     }
 
-    pub fn to_short_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
-        let inner_name = self.inner_pkg_key.to_string(interner)?;
-        Ok(format!(
+    pub fn to_short_string(&self, interner: &IdentifierInterner) -> String {
+        let inner_name = self.inner_pkg_key.to_string(interner);
+        format!(
             "0x{}::{}",
             self.package_key.short_str_lossless(),
             inner_name,
-        ))
+        )
     }
 }
 
 impl IntraPackageKey {
-    pub fn to_string(&self, interner: &IdentifierInterner) -> PartialVMResult<String> {
-        let module_name = interner.resolve_ident(&self.module_name, "module name")?;
-        let member_name = interner.resolve_ident(&self.member_name, "member name")?;
-        Ok(format!("{}::{}", module_name, member_name))
+    pub fn to_string(&self, interner: &IdentifierInterner) -> String {
+        let module_name = interner.resolve_ident(&self.module_name, "module name");
+        let member_name = interner.resolve_ident(&self.member_name, "member name");
+        format!("{}::{}", module_name, member_name)
     }
 }
 
