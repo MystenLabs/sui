@@ -16,7 +16,6 @@
     clippy::indexing_slicing,
     clippy::new_without_default,
     clippy::panic,
-    clippy::unwrap_used,
 )]
 
 pub(crate) mod dbg_print;

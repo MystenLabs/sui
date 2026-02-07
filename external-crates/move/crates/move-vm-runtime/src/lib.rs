@@ -9,12 +9,12 @@
 //! soon.
 
 #![deny(
+    clippy::cast_possible_truncation
     clippy::expect_used,
     clippy::indexing_slicing,
     clippy::panic,
     clippy::unwrap_used,
     unsafe_code,
-    clippy::cast_possible_truncation
 )]
 #![cfg_attr(
     test,
