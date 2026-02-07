@@ -27,6 +27,21 @@ public fun diff(x: u16, y: u16): u16 {
     std::macros::num_diff!(x, y)
 }
 
+/// Calculate `x * y / z`, upcasting intermediate values to avoid overflow when possible.
+/// Aborts if `z` is `0`.
+/// Aborts if the result is larger than `MAX`.
+public fun mul_div(x: u16, y: u16, z: u16): u16 {
+    std::macros::num_mul_div!<_, u32>(x, y, z)
+}
+
+/// Calculate `x * y / z`, upcasting intermediate values to avoid overflow when possible.
+/// Rounds up the result if there is a remainder.
+/// Aborts if `z` is `0`.
+/// Aborts if the result is larger than `MAX`.
+public fun mul_div_ceil(x: u16, y: u16, z: u16): u16 {
+    std::macros::num_mul_div_ceil!<_, u32>(x, y, z)
+}
+
 /// Calculate x / y, but round up the result.
 public fun divide_and_round_up(x: u16, y: u16): u16 {
     std::macros::num_divide_and_round_up!(x, y)
