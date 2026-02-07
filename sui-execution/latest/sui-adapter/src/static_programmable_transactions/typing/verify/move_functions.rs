@@ -68,7 +68,7 @@ fn check_signature<Mode: ExecutionMode>(
             && !Mode::allow_arbitrary_values()
         {
             return Err(ExecutionError::from_kind(
-                ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
+                ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: checked_as!(idx, u16)? },
             ));
         }
         Ok(())
