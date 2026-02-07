@@ -17,6 +17,22 @@ where
         .expect("failed to serialize via be_fix_int_ser method")
 }
 
+/// Serialize `t` in big-endian fixed-int encoding directly into `buf`,
+/// returning the number of bytes written.
+#[inline]
+pub fn be_fix_int_ser_into<S>(buf: &mut Vec<u8>, t: &S) -> usize
+where
+    S: ?Sized + serde::Serialize,
+{
+    let before = buf.len();
+    bincode::DefaultOptions::new()
+        .with_big_endian()
+        .with_fixint_encoding()
+        .serialize_into(&mut *buf, t)
+        .expect("failed to serialize via be_fix_int_ser_into method");
+    buf.len() - before
+}
+
 pub(crate) fn iterator_bounds<K>(
     lower_bound: Option<K>,
     upper_bound: Option<K>,
