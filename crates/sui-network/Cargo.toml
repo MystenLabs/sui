@@ -26,6 +26,7 @@ tonic-health.workspace = true
 tower-http.workspace = true
 sui-http.workspace = true
 sui-tls.workspace = true
+async-trait.workspace = true
 
 sui-macros.workspace = true
 sui-storage.workspace = true
@@ -62,3 +63,4 @@ telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 ed25519-consensus.workspace = true
 tempfile = "3.3.0"
+serde_json.workspace = true
