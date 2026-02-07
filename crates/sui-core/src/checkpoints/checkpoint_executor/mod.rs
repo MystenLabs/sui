@@ -601,9 +601,15 @@ impl CheckpointExecutor {
 
         finish_stage!(pipeline_handle, WaitForTransactions);
 
+        if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
+            self.execute_change_epoch_tx(&tx_data).await;
+        }
+
         // Collect index batches from post-processing and commit atomically.
-        // This must happen BEFORE insert_finalized_transactions so that index data
-        // is available when transactions_executed_in_checkpoint_notify fires.
+        // This must happen AFTER execute_change_epoch_tx (so that all transactions
+        // including the end-of-epoch tx have completed post-processing) and BEFORE
+        // insert_finalized_transactions (so that index data is available when
+        // transactions_executed_in_checkpoint_notify fires).
         {
             let mut raw_batches = Vec::new();
             let mut cache_updates = Vec::new();
@@ -624,10 +630,6 @@ impl CheckpointExecutor {
                     .commit_index_batch(db_batch, cache_updates)
                     .expect("failed to commit index batch");
             }
-        }
-
-        if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
-            self.execute_change_epoch_tx(&tx_data).await;
         }
 
         let _scope = mysten_metrics::monitored_scope("CheckpointExecutor::finalize_checkpoint");
