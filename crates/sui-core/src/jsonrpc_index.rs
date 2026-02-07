@@ -324,6 +324,8 @@ impl IndexStoreTables {
         // Tables keyed by TxSequenceNumber may have different sequence numbers between
         // async and sync post-processing. Compare the (prefix, value) pairs as sorted
         // vectors instead of lockstep iteration.
+        // Crash recovery can re-index transactions with new sequence numbers while
+        // old entries remain, producing duplicates. Deduplicate before comparing.
         fn assert_seq_table_equal<P, V>(
             name: &str,
             table_a: &DBMap<(P, TxSequenceNumber), V>,
@@ -347,10 +349,12 @@ impl IndexStoreTables {
                 })
                 .collect();
             entries_a.sort();
+            entries_a.dedup();
             entries_b.sort();
+            entries_b.dedup();
             assert!(
                 entries_a.len() == entries_b.len(),
-                "{name}: different number of entries: {} vs {}",
+                "{name}: different number of unique entries: {} vs {}",
                 entries_a.len(),
                 entries_b.len()
             );
@@ -361,7 +365,7 @@ impl IndexStoreTables {
                 );
             }
             info!(
-                "{name}: verified {} entries match (ignoring sequence numbers)",
+                "{name}: verified {} unique entries match (ignoring sequence numbers)",
                 entries_a.len()
             );
         }
@@ -398,10 +402,12 @@ impl IndexStoreTables {
                 })
                 .collect();
             entries_a.sort();
+            entries_a.dedup();
             entries_b.sort();
+            entries_b.dedup();
             assert!(
                 entries_a.len() == entries_b.len(),
-                "{name}: different number of entries: {} vs {}",
+                "{name}: different number of unique entries: {} vs {}",
                 entries_a.len(),
                 entries_b.len()
             );
@@ -412,7 +418,7 @@ impl IndexStoreTables {
                 );
             }
             info!(
-                "{name}: verified {} entries match (ignoring event ids and timestamps)",
+                "{name}: verified {} unique entries match (ignoring event ids and timestamps)",
                 entries_a.len()
             );
         }
@@ -463,10 +469,12 @@ impl IndexStoreTables {
                 })
                 .collect();
             entries_a.sort();
+            entries_a.dedup();
             entries_b.sort();
+            entries_b.dedup();
             assert!(
                 entries_a.len() == entries_b.len(),
-                "transactions_by_move_function: different number of entries: {} vs {}",
+                "transactions_by_move_function: different number of unique entries: {} vs {}",
                 entries_a.len(),
                 entries_b.len()
             );
@@ -496,7 +504,9 @@ impl IndexStoreTables {
                 .map(|r| strip_timestamp(r.expect("failed to read from table_b").1))
                 .collect();
             vals_a.sort();
+            vals_a.dedup();
             vals_b.sort();
+            vals_b.dedup();
             assert!(
                 vals_a.len() == vals_b.len(),
                 "event_order: different number of entries: {} vs {}",
@@ -548,7 +558,9 @@ impl IndexStoreTables {
                 .map(|r| strip_timestamp(r.expect("failed to read from table_b").1))
                 .collect();
             vals_a.sort();
+            vals_a.dedup();
             vals_b.sort();
+            vals_b.dedup();
             assert!(
                 vals_a.len() == vals_b.len(),
                 "event_by_time: different number of entries: {} vs {}",
