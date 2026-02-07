@@ -12,7 +12,9 @@ use async_graphql::Response;
 use async_graphql::Value;
 use axum::Json;
 use axum::response::IntoResponse;
+use timeout_tracing::TimeoutElapsed;
 use tower_http::catch_panic::ResponseForPanic;
+use tracing_error::SpanTrace;
 
 use crate::metrics::RpcMetrics;
 use crate::pagination;
@@ -51,7 +53,11 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     Pagination(#[from] pagination::Error),
 
     /// The request took too long to process.
-    RequestTimeout { kind: &'static str, limit: Duration },
+    RequestTimeout {
+        kind: &'static str,
+        limit: Duration,
+        err: TimeoutElapsed<SpanTrace>,
+    },
 
     /// Expended some limit, such as node count, depth, etc, during query execution.
     ResourceExhausted(Arc<anyhow::Error>),
@@ -98,10 +104,13 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                 ext.set("code", code::BAD_USER_INPUT);
             }),
 
-            RpcError::RequestTimeout { kind, limit } => {
+            RpcError::RequestTimeout { kind, limit, err } => {
                 format!("{kind} timed out after {:.2}s", limit.as_secs_f64()).extend_with(
                     |_, ext| {
                         ext.set("code", code::REQUEST_TIMEOUT);
+                        if !err.active_traces.is_empty() {
+                            ext.set("chain", format!("{err}"));
+                        }
                     },
                 )
             }
@@ -136,7 +145,17 @@ impl<E: std::error::Error> Clone for RpcError<E> {
             Self::GraphQlError(e) => Self::GraphQlError(e.clone()),
             Self::InternalError(e) => Self::InternalError(e.clone()),
             Self::Pagination(e) => Self::Pagination(e.clone()),
-            &Self::RequestTimeout { kind, limit } => Self::RequestTimeout { kind, limit },
+            &Self::RequestTimeout {
+                kind,
+                limit,
+                ref err,
+            } => Self::RequestTimeout {
+                kind,
+                limit,
+                err: TimeoutElapsed {
+                    active_traces: err.active_traces.clone(),
+                },
+            },
             Self::ResourceExhausted(e) => Self::ResourceExhausted(e.clone()),
         }
     }
@@ -194,8 +213,12 @@ pub(crate) fn feature_unavailable<E: std::error::Error>(what: &'static str) -> R
 
 /// Signal a timeout. `kind` specifies what operation timed out and is included in the error
 /// message.
-pub(crate) fn request_timeout(kind: &'static str, limit: Duration) -> RpcError {
-    RpcError::RequestTimeout { kind, limit }
+pub(crate) fn request_timeout(
+    kind: &'static str,
+    limit: Duration,
+    err: TimeoutElapsed<SpanTrace>,
+) -> RpcError {
+    RpcError::RequestTimeout { kind, limit, err }
 }
 
 /// Signal some resource has been consumed during query execution.
@@ -214,7 +237,9 @@ pub(crate) fn upcast<E: std::error::Error>(err: RpcError) -> RpcError<E> {
         RpcError::GraphQlError(e) => RpcError::GraphQlError(e),
         RpcError::InternalError(e) => RpcError::InternalError(e),
         RpcError::FeatureUnavailable { what } => RpcError::FeatureUnavailable { what },
-        RpcError::RequestTimeout { kind, limit } => RpcError::RequestTimeout { kind, limit },
+        RpcError::RequestTimeout { kind, limit, err } => {
+            RpcError::RequestTimeout { kind, limit, err }
+        }
         RpcError::ResourceExhausted(e) => RpcError::ResourceExhausted(e),
     }
 }
@@ -231,7 +256,9 @@ where
         RpcError::GraphQlError(e) => RpcError::GraphQlError(e),
         RpcError::InternalError(e) => RpcError::InternalError(e),
         RpcError::FeatureUnavailable { what } => RpcError::FeatureUnavailable { what },
-        RpcError::RequestTimeout { kind, limit } => RpcError::RequestTimeout { kind, limit },
+        RpcError::RequestTimeout { kind, limit, err } => {
+            RpcError::RequestTimeout { kind, limit, err }
+        }
         RpcError::ResourceExhausted(e) => RpcError::ResourceExhausted(e),
     }
 }
@@ -370,7 +397,14 @@ mod tests {
 
     #[test]
     fn test_request_timeout() {
-        let err: async_graphql::Error = request_timeout("Kind", Duration::from_secs(5)).into();
+        let err: async_graphql::Error = request_timeout(
+            "Kind",
+            Duration::from_secs(5),
+            TimeoutElapsed {
+                active_traces: vec![],
+            },
+        )
+        .into();
 
         assert_eq!(err.message, "Kind timed out after 5.00s");
 

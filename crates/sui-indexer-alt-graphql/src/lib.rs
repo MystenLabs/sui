@@ -16,6 +16,7 @@ use async_graphql::Schema;
 use async_graphql::SchemaBuilder;
 use async_graphql::SubscriptionType;
 use async_graphql::extensions::ExtensionFactory;
+use async_graphql::extensions::Tracing;
 use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::GraphQLRequest;
 use async_graphql_axum::GraphQLResponse;
@@ -54,6 +55,7 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use task::chain_identifier;
 use task::watermark::WatermarkTask;
 use task::watermark::WatermarksLock;
+use telemetry_subscribers::TelemetryConfig;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tower_http::catch_panic;
@@ -138,6 +140,7 @@ where
 
         // The logging extension should be outermost so that it can surround all other extensions.
         let schema = schema.extension(Logging(metrics.clone()));
+        let schema = schema.extension(Tracing);
 
         Self {
             rpc_listen_address,
@@ -424,6 +427,15 @@ async fn graphql(
 /// at the same path.
 async fn graphiql(path: MatchedPath) -> Html<String> {
     Html(GraphiQLSource::build().endpoint(path.as_str()).finish())
+}
+
+pub fn telemetry_config_for_graphql() -> TelemetryConfig {
+    TelemetryConfig {
+        // ErrorLayer is disabled by default in TelemetryConfig, but enabled by default in GraphQL
+        // to give useful error output for debugging request timeouts.
+        enable_error_layer: Some(true),
+        ..TelemetryConfig::new()
+    }
 }
 
 #[cfg(test)]
