@@ -41,7 +41,7 @@ use sui_types::storage::error::Error as StorageError;
 use tracing::{debug, info, instrument, trace};
 use typed_store::DBMapUtils;
 use typed_store::rocks::{
-    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, RawDBBatch, default_db_options,
+    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, StagedBatch, default_db_options,
     read_size_from_env,
 };
 use typed_store::traits::Map;
@@ -641,7 +641,7 @@ impl IndexStore {
     pub fn index_coin(
         &self,
         digest: &TransactionDigest,
-        batch: &mut RawDBBatch,
+        batch: &mut StagedBatch,
         object_index_changes: &ObjectIndexChanges,
         tx_coins: Option<TxCoins>,
         acquire_locks: bool,
@@ -814,8 +814,8 @@ impl IndexStore {
         tx_coins: Option<TxCoins>,
         accumulator_events: Vec<AccumulatorEvent>,
         acquire_locks: bool,
-    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdatesWithLocks)> {
-        let mut batch = RawDBBatch::new();
+    ) -> SuiResult<(StagedBatch, IndexStoreCacheUpdatesWithLocks)> {
+        let mut batch = StagedBatch::new();
 
         batch.insert_batch(
             &self.tables.transaction_order,

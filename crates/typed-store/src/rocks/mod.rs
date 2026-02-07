@@ -1139,10 +1139,10 @@ pub enum StorageWriteBatch {
 }
 
 /// Flat-buffer entry header. All byte data (cf_name, key, value) is stored
-/// contiguously in `RawDBBatch::data`; this header records offsets and lengths
+/// contiguously in `StagedBatch::data`; this header records offsets and lengths
 /// so that slices can be produced without any per-entry allocation.
 struct EntryHeader {
-    /// Byte offset into `RawDBBatch::data` where this entry's data begins.
+    /// Byte offset into `StagedBatch::data` where this entry's data begins.
     offset: usize,
     cf_name_len: usize,
     key_len: usize,
@@ -1153,12 +1153,12 @@ struct EntryHeader {
 /// requiring a database reference. Can be replayed into a real `DBBatch` via
 /// `DBBatch::concat`.
 #[derive(Default)]
-pub struct RawDBBatch {
+pub struct StagedBatch {
     data: Vec<u8>,
     entries: Vec<EntryHeader>,
 }
 
-impl RawDBBatch {
+impl StagedBatch {
     pub fn new() -> Self {
         Self {
             data: Vec::with_capacity(1024),
@@ -1366,9 +1366,9 @@ impl DBBatch {
         }
     }
 
-    /// Replay all operations from `RawDBBatch`es into this batch.
-    /// Replay all operations from `RawDBBatch`es into this batch.
-    pub fn concat(&mut self, raw_batches: Vec<RawDBBatch>) -> Result<&mut Self, TypedStoreError> {
+    /// Replay all operations from `StagedBatch`es into this batch.
+    /// Replay all operations from `StagedBatch`es into this batch.
+    pub fn concat(&mut self, raw_batches: Vec<StagedBatch>) -> Result<&mut Self, TypedStoreError> {
         for raw_batch in raw_batches {
             let data = &raw_batch.data;
             for (i, hdr) in raw_batch.entries.iter().enumerate() {

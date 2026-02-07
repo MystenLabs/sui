@@ -170,7 +170,7 @@ use sui_types::{
 };
 use sui_types::{TypeTag, is_system_package};
 use typed_store::TypedStoreError;
-use typed_store::rocks::RawDBBatch;
+use typed_store::rocks::StagedBatch;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
@@ -904,7 +904,7 @@ impl ForkRecoveryState {
     }
 }
 
-pub type PostProcessingOutput = (RawDBBatch, IndexStoreCacheUpdates);
+pub type PostProcessingOutput = (StagedBatch, IndexStoreCacheUpdates);
 
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
@@ -2925,7 +2925,7 @@ impl AuthorityState {
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         acquire_locks: bool,
-    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdatesWithLocks)> {
+    ) -> SuiResult<(StagedBatch, IndexStoreCacheUpdatesWithLocks)> {
         let changes = Self::process_object_index(backing_package_store, object_store, effects, written, inner_temporary_store, epoch_store)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
@@ -3434,7 +3434,7 @@ impl AuthorityState {
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         acquire_locks: bool,
-    ) -> SuiResult<(RawDBBatch, IndexStoreCacheUpdatesWithLocks)> {
+    ) -> SuiResult<(StagedBatch, IndexStoreCacheUpdatesWithLocks)> {
         let _scope = monitored_scope("Execution::post_process_one_tx");
 
         let tx_digest = certificate.digest();
