@@ -13,7 +13,7 @@ use crate::{
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{collections::BTreeMap, fmt::Debug, slice::SliceIndex};
 use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
 use tonic::Status;
@@ -94,6 +94,55 @@ macro_rules! checked_as {
             )
         })
     }};
+}
+
+/// A trait for safe indexing into collections that returns a ExecutionError as long as the
+/// collection implements `AsRef<[T]>`.
+/// This is useful for avoiding panics on out-of-bounds access, and instead returning a proper
+/// error.
+pub trait SafeIndex<T> {
+    /// Get a reference to the element at the given `index`, or return invariant violation error
+    /// if the index is out of bounds.
+    fn safe_get<'a, I>(&'a self, index: I) -> Result<&'a I::Output, ExecutionError>
+    where
+        I: SliceIndex<[T]>,
+        T: 'a;
+
+    /// Get a mutable reference to the element at the given `index`, or return invariant violation
+    /// error if the index is out of bounds.
+    fn safe_get_mut<'a, I>(&'a mut self, index: I) -> Result<&'a mut I::Output, ExecutionError>
+    where
+        I: SliceIndex<[T]>,
+        T: 'a;
+}
+
+impl<T, C> SafeIndex<T> for C
+where
+    C: AsRef<[T]> + AsMut<[T]>,
+{
+    fn safe_get<'a, I>(&'a self, index: I) -> Result<&'a I::Output, ExecutionError>
+    where
+        I: SliceIndex<[T]>,
+        T: 'a,
+    {
+        let slice = self.as_ref();
+        let len = slice.len();
+        slice.get(index).ok_or_else(|| {
+            crate::make_invariant_violation!("Index out of bounds for collection of length {}", len)
+        })
+    }
+
+    fn safe_get_mut<'a, I>(&'a mut self, index: I) -> Result<&'a mut I::Output, ExecutionError>
+    where
+        I: SliceIndex<[T]>,
+        T: 'a,
+    {
+        let slice = self.as_mut();
+        let len = slice.len();
+        slice.get_mut(index).ok_or_else(|| {
+            crate::make_invariant_violation!("Index out of bounds for collection of length {}", len)
+        })
+    }
 }
 
 #[derive(

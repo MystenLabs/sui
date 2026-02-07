@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(clippy::arithmetic_side_effects)]
-// #![deny(clippy::indexing_slicing)]
+#![deny(clippy::indexing_slicing)]
 #![deny(clippy::cast_possible_truncation)]
 
 use crate::{

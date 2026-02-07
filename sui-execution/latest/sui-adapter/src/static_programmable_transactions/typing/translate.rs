@@ -19,7 +19,7 @@ use sui_types::{
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectRef, TxContextKind},
     coin::{COIN_MODULE_NAME, REDEEM_FUNDS_FUNC_NAME, RESOLVED_COIN_STRUCT},
-    error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+    error::{ExecutionError, ExecutionErrorKind, SafeIndex, command_argument_error},
     execution_status::CommandArgumentError,
     funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
 };
@@ -190,7 +190,7 @@ impl Context {
         Ok(Some(match location {
             T::Location::TxContext => env.tx_context_type()?,
             T::Location::GasCoin => env.gas_coin_type()?,
-            T::Location::Result(i, j) => self.result_type(i).unwrap()[j as usize].clone(),
+            T::Location::Result(i, j) => self.result_type(i).unwrap().safe_get(j as usize)?.clone(),
             T::Location::ObjectInput(i) => {
                 let Some((_, object_input)) = self.objects.get_index(i as usize) else {
                     invariant_violation!("Unbound object input {}", i)
@@ -216,7 +216,7 @@ impl Context {
         let location = match splat_location {
             SplatLocation::GasCoin => T::Location::GasCoin,
             SplatLocation::Result(i, j) => T::Location::Result(i, j),
-            SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
+            SplatLocation::Input(i) => match self.input_resolution.safe_get(i.0 as usize)? {
                 InputKind::Object => {
                     let Some(index) = self.objects.get_index_of(&i) else {
                         invariant_violation!("Unbound object input {}", i.0)
@@ -248,7 +248,7 @@ impl Context {
         let location = match splat_location {
             SplatLocation::GasCoin => T::Location::GasCoin,
             SplatLocation::Result(i, j) => T::Location::Result(i, j),
-            SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
+            SplatLocation::Input(i) => match self.input_resolution.safe_get(i.0 as usize)? {
                 InputKind::Object => {
                     let Some(index) = self.objects.get_index_of(&i) else {
                         invariant_violation!("Unbound object input {}", i.0)
@@ -301,7 +301,10 @@ impl Context {
                         self.receiving.insert(k.clone(), receiving);
                     }
                     let byte_index = self.receiving.get_index_of(&k).unwrap();
-                    return Ok((T::Location::ReceivingInput(checked_as!(byte_index, u16)?), ty));
+                    return Ok((
+                        T::Location::ReceivingInput(checked_as!(byte_index, u16)?),
+                        ty,
+                    ));
                 }
             },
         };
@@ -1073,7 +1076,7 @@ pub(crate) fn coin_inner_type(ty: &Type) -> Option<&Type> {
         && dt.type_arguments.len() == 1
         && dt.qualified_ident() == RESOLVED_COIN_STRUCT
     {
-        Some(&dt.type_arguments[0])
+        Some(dt.type_arguments.first().unwrap())
     } else {
         None
     }
@@ -1085,7 +1088,7 @@ pub(crate) fn balance_inner_type(ty: &Type) -> Option<&Type> {
         && dt.type_arguments.len() == 1
         && dt.qualified_ident() == RESOLVED_BALANCE_STRUCT
     {
-        Some(&dt.type_arguments[0])
+        Some(dt.type_arguments.first().unwrap())
     } else {
         None
     }
@@ -1097,7 +1100,7 @@ pub(crate) fn withdrawal_inner_type(ty: &Type) -> Option<&Type> {
         && dt.type_arguments.len() == 1
         && dt.qualified_ident() == RESOLVED_WITHDRAWAL_STRUCT
     {
-        Some(&dt.type_arguments[0])
+        Some(dt.type_arguments.first().unwrap())
     } else {
         None
     }
@@ -1260,7 +1263,10 @@ mod consumed_shared_objects {
         sp, static_programmable_transactions::loading::ast as L,
         static_programmable_transactions::typing::ast as T,
     };
-    use sui_types::{base_types::ObjectID, error::ExecutionError};
+    use sui_types::{
+        base_types::ObjectID,
+        error::{ExecutionError, SafeIndex},
+    };
 
     // Shared object (non-party) IDs contained in each location
     struct Context {
@@ -1323,22 +1329,22 @@ mod consumed_shared_objects {
     fn command(context: &mut Context, sp!(_, c): &mut T::Command) -> Result<(), ExecutionError> {
         let mut acc = vec![];
         match &c.command {
-            T::Command__::MoveCall(mc) => arguments(context, &mut acc, &mc.arguments),
+            T::Command__::MoveCall(mc) => arguments(context, &mut acc, &mc.arguments)?,
             T::Command__::TransferObjects(objects, recipient) => {
-                argument(context, &mut acc, recipient);
-                arguments(context, &mut acc, objects);
+                argument(context, &mut acc, recipient)?;
+                arguments(context, &mut acc, objects)?;
             }
             T::Command__::SplitCoins(_, coin, amounts) => {
-                arguments(context, &mut acc, amounts);
-                argument(context, &mut acc, coin);
+                arguments(context, &mut acc, amounts)?;
+                argument(context, &mut acc, coin)?;
             }
             T::Command__::MergeCoins(_, target, coins) => {
-                arguments(context, &mut acc, coins);
-                argument(context, &mut acc, target);
+                arguments(context, &mut acc, coins)?;
+                argument(context, &mut acc, target)?;
             }
-            T::Command__::MakeMoveVec(_, elements) => arguments(context, &mut acc, elements),
+            T::Command__::MakeMoveVec(_, elements) => arguments(context, &mut acc, elements)?,
             T::Command__::Publish(_, _, _) => (),
-            T::Command__::Upgrade(_, _, _, x, _) => argument(context, &mut acc, x),
+            T::Command__::Upgrade(_, _, _, x, _) => argument(context, &mut acc, x)?,
         }
         let (consumed, result) = match &c.command {
             // make move vec does not "consume" any by-value shared objects, and can propagate
@@ -1363,16 +1369,25 @@ mod consumed_shared_objects {
         Ok(())
     }
 
-    fn arguments(context: &mut Context, acc: &mut Vec<ObjectID>, args: &[T::Argument]) {
+    fn arguments(
+        context: &mut Context,
+        acc: &mut Vec<ObjectID>,
+        args: &[T::Argument],
+    ) -> Result<(), ExecutionError> {
         for arg in args {
-            argument(context, acc, arg)
+            argument(context, acc, arg)?
         }
+        Ok(())
     }
 
-    fn argument(context: &mut Context, acc: &mut Vec<ObjectID>, sp!(_, (arg_, _)): &T::Argument) {
+    fn argument(
+        context: &mut Context,
+        acc: &mut Vec<ObjectID>,
+        sp!(_, (arg_, _)): &T::Argument,
+    ) -> Result<(), ExecutionError> {
         let T::Argument__::Use(T::Usage::Move(loc)) = arg_ else {
             // only Move usage can take shared objects by-value since they cannot be copied
-            return;
+            return Ok(());
         };
         match loc {
             // no shared objects in these locations
@@ -1382,16 +1397,21 @@ mod consumed_shared_objects {
             | T::Location::PureInput(_)
             | T::Location::ReceivingInput(_) => (),
             T::Location::ObjectInput(i) => {
-                if let Some(id) = context.inputs[*i as usize] {
+                if let Some(id) = *context.inputs.safe_get(*i as usize)? {
                     acc.push(id);
                 }
             }
 
             T::Location::Result(i, j) => {
-                if let Some(ids) = &context.results[*i as usize][*j as usize] {
+                if let Some(ids) = context
+                    .results
+                    .safe_get(*i as usize)?
+                    .safe_get(*j as usize)?
+                {
                     acc.extend(ids.iter().copied());
                 }
             }
-        }
+        };
+        Ok(())
     }
 }

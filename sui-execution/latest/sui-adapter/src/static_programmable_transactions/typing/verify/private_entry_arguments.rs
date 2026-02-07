@@ -9,6 +9,7 @@ use crate::execution_mode::ExecutionMode;
 use crate::sp;
 use crate::static_programmable_transactions::{env::Env, typing::ast as T};
 use move_binary_format::{CompiledModule, file_format::Visibility};
+use sui_types::error::SafeIndex;
 use sui_types::{
     error::{ExecutionError, command_argument_error},
     execution_status::CommandArgumentError,
@@ -106,7 +107,7 @@ impl Cliques {
         let mut visited = BTreeSet::from([id]);
         let mut cur = id;
         loop {
-            match &self.0[cur] {
+            match self.0.safe_get(cur)? {
                 Clique::Root(_) => return Ok(cur),
                 Clique::Merged(next) => {
                     let newly_visited = visited.insert(*next);
@@ -122,7 +123,7 @@ impl Cliques {
     /// Returns the temperature of the clique (at the root)
     fn temp(&self, id: CliqueID) -> Result<Temperature, ExecutionError> {
         let root = self.root(id)?;
-        let Clique::Root(temp) = self.0[root] else {
+        let Clique::Root(temp) = *self.0.safe_get(root)? else {
             invariant_violation!("Clique {root} should be a root");
         };
         Ok(temp)
@@ -131,7 +132,7 @@ impl Cliques {
     /// Returns a mutable reference to the temperature of the clique (at the root)
     fn temp_mut(&mut self, id: CliqueID) -> Result<&mut Temperature, ExecutionError> {
         let root = self.root(id)?;
-        let Clique::Root(temp) = &mut self.0[root] else {
+        let Clique::Root(temp) = self.0.safe_get_mut(root)? else {
             invariant_violation!("Clique {root} should be a root");
         };
         Ok(temp)
@@ -163,14 +164,14 @@ impl Cliques {
                 let mut merged_temp = Temperature::Count(0);
                 for &root in &roots {
                     let temp = self.temp(root)?;
-                    self.0[root] = Clique::Merged(merged);
+                    *self.0.safe_get_mut(root)? = Clique::Merged(merged);
                     merged_temp = merged_temp.add(temp)?;
                 }
-                self.0[merged] = Clique::Root(merged_temp);
+                *self.0.safe_get_mut(merged)? = Clique::Root(merged_temp);
                 // For efficiency, forward all the non-roots to the merged root
                 // (bypassing the old root)
                 for id in clique_ids {
-                    self.0[id] = Clique::Merged(merged);
+                    *self.0.safe_get_mut(id)? = Clique::Merged(merged);
                 }
                 merged
             }
@@ -288,28 +289,31 @@ impl Context {
         Ok(())
     }
 
-    fn location(&mut self, location: &T::Location) -> &mut Option<Value> {
-        match location {
+    fn location(&mut self, location: &T::Location) -> Result<&mut Option<Value>, ExecutionError> {
+        Ok(match location {
             T::Location::GasCoin => &mut self.gas_coin,
-            T::Location::ObjectInput(i) => &mut self.objects[*i as usize],
-            T::Location::WithdrawalInput(i) => &mut self.withdrawals[*i as usize],
-            T::Location::PureInput(i) => &mut self.pure[*i as usize],
-            T::Location::ReceivingInput(i) => &mut self.receiving[*i as usize],
-            T::Location::Result(i, j) => &mut self.results[*i as usize][*j as usize],
+            T::Location::ObjectInput(i) => self.objects.safe_get_mut(*i as usize)?,
+            T::Location::WithdrawalInput(i) => self.withdrawals.safe_get_mut(*i as usize)?,
+            T::Location::PureInput(i) => self.pure.safe_get_mut(*i as usize)?,
+            T::Location::ReceivingInput(i) => self.receiving.safe_get_mut(*i as usize)?,
+            T::Location::Result(i, j) => self
+                .results
+                .safe_get_mut(*i as usize)?
+                .safe_get_mut(*j as usize)?,
             T::Location::TxContext => &mut self.tx_context,
-        }
+        })
     }
 
     fn usage(&mut self, usage: &T::Usage) -> Result<Value, ExecutionError> {
         match usage {
             T::Usage::Move(location) => {
-                let Some(value) = self.location(location).take() else {
+                let Some(value) = self.location(location)?.take() else {
                     invariant_violation!("Move of moved value");
                 };
                 Ok(value)
             }
             T::Usage::Copy { location, .. } => {
-                let Some(location) = self.location(location).as_ref() else {
+                let Some(location) = self.location(location)?.as_ref() else {
                     invariant_violation!("Copy of moved value");
                 };
                 let (clique, heats) = match location {
@@ -341,7 +345,7 @@ impl Context {
                 new_value
             }
             T::Argument__::Borrow(_, location) => {
-                let Some(location) = self.location(location).as_ref() else {
+                let Some(location) = self.location(location)?.as_ref() else {
                     invariant_violation!("Borrow of moved value");
                 };
                 let (clique, heats) = match location {

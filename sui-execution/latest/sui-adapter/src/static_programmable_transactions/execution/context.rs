@@ -50,7 +50,7 @@ use sui_move_natives::object_runtime::{
 use sui_types::{
     TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, TxContext},
-    error::{ExecutionError, ExecutionErrorKind},
+    error::{ExecutionError, ExecutionErrorKind, SafeIndex},
     execution::ExecutionResults,
     metrics::LimitsMetrics,
     move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
@@ -187,7 +187,7 @@ impl Locations {
             }
             T::Location::PureInput(i) => {
                 let local = self.pure_inputs.local(i)?;
-                let metadata = &self.pure_input_metadata[i as usize];
+                let metadata = &self.pure_input_metadata.safe_get(i as usize)?;
                 let bytes = self
                     .pure_input_bytes
                     .get_index(metadata.byte_index)
@@ -205,7 +205,7 @@ impl Locations {
                 }
             }
             T::Location::ReceivingInput(i) => ResolvedLocation::Receiving {
-                metadata: &self.receiving_input_metadata[i as usize],
+                metadata: self.receiving_input_metadata.safe_get(i as usize)?,
                 local: self.receiving_inputs.local(i)?,
             },
         })
@@ -913,7 +913,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             self.take_user_events(
                 storage_id,
                 fdef_idx,
-                fdef.code.as_ref().map(|c| checked_as!(c.code.len(), u16)).transpose()?.unwrap_or(0),
+                fdef.code
+                    .as_ref()
+                    .map(|c| checked_as!(c.code.len(), u16))
+                    .transpose()?
+                    .unwrap_or(0),
                 linkage,
             )?;
             assert_invariant!(
@@ -935,7 +939,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     ) -> Result<ObjectID, ExecutionError> {
         let runtime_id = if <Mode>::packages_are_predefined() {
             // do not calculate or substitute id for predefined packages
-            (*modules[0].self_id().address()).into()
+            (*modules.safe_get(0)?.self_id().address()).into()
         } else {
             // It should be fine that this does not go through the object runtime since it does not
             // need to know about new packages created, since Move objects and Move packages
@@ -1156,21 +1160,31 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             T::Location::TxContext => return Ok(None),
             T::Location::GasCoin => TxArgument::GasCoin,
             T::Location::Result(i, j) => TxArgument::NestedResult(i, j),
-            T::Location::ObjectInput(i) => {
-                TxArgument::Input(self.locations.input_object_metadata[i as usize].0.0)
-            }
+            T::Location::ObjectInput(i) => TxArgument::Input(
+                self.locations
+                    .input_object_metadata
+                    .safe_get(i as usize)?
+                    .0
+                    .0,
+            ),
             T::Location::WithdrawalInput(i) => TxArgument::Input(
-                self.locations.input_withdrawal_metadata[i as usize]
+                self.locations
+                    .input_withdrawal_metadata
+                    .safe_get(i as usize)?
                     .original_input_index
                     .0,
             ),
             T::Location::PureInput(i) => TxArgument::Input(
-                self.locations.pure_input_metadata[i as usize]
+                self.locations
+                    .pure_input_metadata
+                    .safe_get(i as usize)?
                     .original_input_index
                     .0,
             ),
             T::Location::ReceivingInput(i) => TxArgument::Input(
-                self.locations.receiving_input_metadata[i as usize]
+                self.locations
+                    .receiving_input_metadata
+                    .safe_get(i as usize)?
                     .original_input_index
                     .0,
             ),
