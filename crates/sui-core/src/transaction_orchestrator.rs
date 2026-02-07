@@ -487,6 +487,21 @@ where
         let include_output_objects = request.include_output_objects;
         let include_auxiliary_data = request.include_auxiliary_data;
 
+        // Early return if effects already exist locally
+        if let Some(effects) = self
+            .validator_state
+            .get_transaction_cache_reader()
+            .get_executed_effects(&tx_digest)
+        {
+            self.metrics.early_effects_return.inc();
+            return self.build_response_from_local_effects(
+                effects,
+                include_events,
+                include_input_objects,
+                include_output_objects,
+            );
+        }
+
         let finality_timeout = std::env::var("WAIT_FOR_FINALITY_TIMEOUT_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -564,51 +579,6 @@ where
 
         loop {
             tokio::select! {
-                biased;
-
-                // Local effects might be available
-                all_effects = &mut local_effects_future => {
-                    debug!(
-                        "Effects became available while execution was running"
-                    );
-                    if all_effects.len() != 1 {
-                        break Err(TransactionSubmissionError::TransactionDriverInternalError(SuiErrorKind::Unknown(format!("Unexpected number of effects found: {}", all_effects.len())).into()));
-                    }
-                    self.metrics.concurrent_execution.inc();
-
-                    let effects = all_effects.into_iter().next().unwrap();
-                    let epoch = effects.executed_epoch();
-                    let events = if include_events {
-                        if effects.events_digest().is_some() {
-                            Some(self.validator_state.get_transaction_events(effects.transaction_digest())
-                                .map_err(TransactionSubmissionError::TransactionDriverInternalError)?)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-                    let input_objects = include_input_objects
-                        .then(|| self.validator_state.get_transaction_input_objects(&effects))
-                        .transpose()
-                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
-                    let output_objects = include_output_objects
-                        .then(|| self.validator_state.get_transaction_output_objects(&effects))
-                        .transpose()
-                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
-                    let response = QuorumTransactionResponse {
-                        effects: FinalizedEffects {
-                            effects,
-                            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-                        },
-                        events,
-                        input_objects,
-                        output_objects,
-                        auxiliary_data: None,
-                    };
-                    break Ok((response, true));
-                }
-
                 // This branch is disabled if execution_futures is empty.
                 Some(result) = execution_futures.next() => {
                     match result {
@@ -644,6 +614,28 @@ where
                     }
                 }
 
+                // Local effects might be available
+                all_effects = &mut local_effects_future => {
+                    debug!("Effects became available while execution was running");
+                    if all_effects.len() != 1 {
+                        break Err(TransactionSubmissionError::TransactionDriverInternalError(
+                            SuiErrorKind::Unknown(format!(
+                                "Unexpected number of effects found: {}",
+                                all_effects.len()
+                            ))
+                            .into(),
+                        ));
+                    }
+                    self.metrics.concurrent_execution.inc();
+                    let effects = all_effects.into_iter().next().unwrap();
+                    break self.build_response_from_local_effects(
+                        effects,
+                        include_events,
+                        include_input_objects,
+                        include_output_objects,
+                    );
+                }
+
                 // A timeout has occurred while waiting for finality
                 _ = &mut timeout_future => {
                     if let Some(e) = last_execution_error {
@@ -658,6 +650,56 @@ where
                 }
             }
         }
+    }
+
+    /// Builds a response from locally available effects.
+    /// Used both for early return when effects already exist and when effects
+    /// become available during execution.
+    fn build_response_from_local_effects(
+        &self,
+        effects: sui_types::effects::TransactionEffects,
+        include_events: bool,
+        include_input_objects: bool,
+        include_output_objects: bool,
+    ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), TransactionSubmissionError>
+    {
+        let epoch = effects.executed_epoch();
+        let events = if include_events {
+            if effects.events_digest().is_some() {
+                Some(
+                    self.validator_state
+                        .get_transaction_events(effects.transaction_digest())
+                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?,
+                )
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let input_objects = include_input_objects
+            .then(|| self.validator_state.get_transaction_input_objects(&effects))
+            .transpose()
+            .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
+        let output_objects = include_output_objects
+            .then(|| {
+                self.validator_state
+                    .get_transaction_output_objects(&effects)
+            })
+            .transpose()
+            .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
+
+        let response = QuorumTransactionResponse {
+            effects: FinalizedEffects {
+                effects,
+                finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
+            },
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data: None,
+        };
+        Ok((response, true))
     }
 
     #[instrument(level = "error", skip_all)]
@@ -937,6 +979,7 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
 
+    early_effects_return: IntCounter,
     concurrent_execution: IntCounter,
 
     early_validation_rejections: IntCounterVec,
@@ -1031,6 +1074,12 @@ impl TransactionOrchestratorMetrics {
             local_execution_timeout: register_int_counter_with_registry!(
                 "tx_orchestrator_local_execution_timeout",
                 "Total number of timed-out local execution txns Transaction Orchestrator handles",
+                registry,
+            )
+            .unwrap(),
+            early_effects_return: register_int_counter_with_registry!(
+                "tx_orchestrator_early_effects_return",
+                "Total number of times effects were available locally before submission",
                 registry,
             )
             .unwrap(),
