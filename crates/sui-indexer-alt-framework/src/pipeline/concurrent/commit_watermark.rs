@@ -20,6 +20,7 @@ use crate::pipeline::WARN_PENDING_WATERMARKS;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::Handler;
 use crate::pipeline::logging::WatermarkLogger;
+use crate::store::CommitterWatermark;
 use crate::store::Connection;
 use crate::store::Store;
 use crate::store::pipeline_task;
@@ -77,13 +78,17 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
         );
 
         let mut next_wake = tokio::time::Instant::now();
+        let mut pending_watermark = None;
 
         loop {
+            let mut should_write_db = false;
+
             tokio::select! {
                 () = tokio::time::sleep_until(next_wake) => {
                     // Schedule next wake immediately, so the timer effectively runs in parallel
                     // with the commit logic below.
                     next_wake = config.watermark_interval_with_jitter();
+                    should_write_db = true;
                 }
                 Some(parts) = rx.recv() => {
                     for part in parts {
@@ -97,32 +102,12 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                             }
                         }
                     }
-
-                    continue;
                 }
             }
 
-            // The presence of a watermark means that we can update the watermark in db.
-            // However, concurrent pipelines do not need every watermark update to succeed.
-            let mut watermark = None;
-
-            if precommitted.len() > WARN_PENDING_WATERMARKS {
-                warn!(
-                    pipeline = H::NAME,
-                    pending = precommitted.len(),
-                    "Pipeline has a large number of pending commit watermarks",
-                );
-            }
-
-            let Ok(mut conn) = store.connect().await else {
-                warn!(
-                    pipeline = H::NAME,
-                    "Commit watermark task failed to get connection for DB"
-                );
-                continue;
-            };
-
-            // Check if the pipeline's watermark needs to be updated
+            // Advance the watermark through contiguous precommitted entries on every
+            // iteration, not just when the DB write timer fires. This ensures commit_hi
+            // feedback reaches the broadcaster immediately.
             let guard = metrics
                 .watermark_gather_latency
                 .with_label_values(&[H::NAME])
@@ -142,7 +127,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                     // This is the next checkpoint -- include it.
                     Ordering::Equal => {
-                        watermark = Some(pending.remove().watermark);
+                        pending_watermark = Some(pending.remove().watermark);
                         next_checkpoint += 1;
                     }
 
@@ -164,7 +149,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
             let elapsed = guard.stop_and_record();
 
-            if let Some(watermark) = watermark {
+            if let Some(ref watermark) = pending_watermark {
                 let _ = commit_hi_tx.send((H::NAME, next_checkpoint));
 
                 metrics
@@ -195,57 +180,31 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     pending = precommitted.len(),
                     "Gathered watermarks",
                 );
+            }
 
-                let guard = metrics
-                    .watermark_commit_latency
-                    .with_label_values(&[H::NAME])
-                    .start_timer();
+            if precommitted.len() > WARN_PENDING_WATERMARKS {
+                warn!(
+                    pipeline = H::NAME,
+                    pending = precommitted.len(),
+                    "Pipeline has a large number of pending commit watermarks",
+                );
+            }
 
-                // TODO: If initial_watermark is empty, when we update watermark
-                // for the first time, we should also update the low watermark.
-                match conn
-                    .set_committer_watermark(&pipeline_task, watermark)
-                    .await
-                {
-                    // If there's an issue updating the watermark, log it but keep going,
-                    // it's OK for the watermark to lag from a correctness perspective.
-                    Err(e) => {
-                        let elapsed = guard.stop_and_record();
-                        error!(
-                            pipeline = H::NAME,
-                            elapsed_ms = elapsed * 1000.0,
-                            ?watermark,
-                            "Error updating commit watermark: {e}",
-                        );
-                    }
-
-                    Ok(true) => {
-                        let elapsed = guard.stop_and_record();
-
-                        logger.log::<H>(&watermark, elapsed);
-
-                        checkpoint_lag_reporter.report_lag(
-                            watermark.checkpoint_hi_inclusive,
-                            watermark.timestamp_ms_hi_inclusive,
-                        );
-
-                        metrics
-                            .watermark_epoch_in_db
-                            .with_label_values(&[H::NAME])
-                            .set(watermark.epoch_hi_inclusive as i64);
-
-                        metrics
-                            .watermark_transaction_in_db
-                            .with_label_values(&[H::NAME])
-                            .set(watermark.tx_hi as i64);
-
-                        metrics
-                            .watermark_timestamp_in_db_ms
-                            .with_label_values(&[H::NAME])
-                            .set(watermark.timestamp_ms_hi_inclusive as i64);
-                    }
-                    Ok(false) => {}
-                }
+            // DB writes are deferred to the timer interval to avoid excessive DB load.
+            if should_write_db
+                && let Some(watermark) = pending_watermark.take()
+                && write_watermark::<H>(
+                    &store,
+                    &pipeline_task,
+                    &watermark,
+                    &mut logger,
+                    &checkpoint_lag_reporter,
+                    &metrics,
+                )
+                .await
+                .is_err()
+            {
+                pending_watermark = Some(watermark);
             }
 
             if rx.is_closed() && rx.is_empty() {
@@ -254,9 +213,99 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             }
         }
 
+        if let Some(watermark) = pending_watermark
+            && write_watermark::<H>(
+                &store,
+                &pipeline_task,
+                &watermark,
+                &mut logger,
+                &checkpoint_lag_reporter,
+                &metrics,
+            )
+            .await
+            .is_err()
+        {
+            warn!(
+                pipeline = H::NAME,
+                ?watermark,
+                "Failed to write final watermark on shutdown, will not retry",
+            );
+        }
+
         info!(pipeline = H::NAME, "Stopping committer watermark task");
         Ok(())
     })
+}
+
+/// Write the watermark to DB and update metrics. Returns `Err` on failure so the caller can
+/// preserve the watermark for retry on the next tick.
+async fn write_watermark<H: Handler>(
+    store: &H::Store,
+    pipeline_task: &str,
+    watermark: &CommitterWatermark,
+    logger: &mut WatermarkLogger,
+    checkpoint_lag_reporter: &CheckpointLagMetricReporter,
+    metrics: &IndexerMetrics,
+) -> Result<(), ()> {
+    let Ok(mut conn) = store.connect().await else {
+        warn!(
+            pipeline = H::NAME,
+            "Commit watermark task failed to get connection for DB"
+        );
+        return Err(());
+    };
+
+    let guard = metrics
+        .watermark_commit_latency
+        .with_label_values(&[H::NAME])
+        .start_timer();
+
+    // TODO: If initial_watermark is empty, when we update watermark
+    // for the first time, we should also update the low watermark.
+    match conn
+        .set_committer_watermark(pipeline_task, *watermark)
+        .await
+    {
+        Err(e) => {
+            let elapsed = guard.stop_and_record();
+            error!(
+                pipeline = H::NAME,
+                elapsed_ms = elapsed * 1000.0,
+                ?watermark,
+                "Error updating commit watermark: {e}",
+            );
+            Err(())
+        }
+
+        Ok(true) => {
+            let elapsed = guard.stop_and_record();
+
+            logger.log::<H>(watermark, elapsed);
+
+            checkpoint_lag_reporter.report_lag(
+                watermark.checkpoint_hi_inclusive,
+                watermark.timestamp_ms_hi_inclusive,
+            );
+
+            metrics
+                .watermark_epoch_in_db
+                .with_label_values(&[H::NAME])
+                .set(watermark.epoch_hi_inclusive as i64);
+
+            metrics
+                .watermark_transaction_in_db
+                .with_label_values(&[H::NAME])
+                .set(watermark.tx_hi as i64);
+
+            metrics
+                .watermark_timestamp_in_db_ms
+                .with_label_values(&[H::NAME])
+                .set(watermark.timestamp_ms_hi_inclusive as i64);
+
+            Ok(())
+        }
+        Ok(false) => Ok(()),
+    }
 }
 
 #[cfg(test)]
@@ -474,9 +523,9 @@ mod tests {
         // Wait for retries to complete
         tokio::time::sleep(Duration::from_millis(1_200)).await;
 
-        // Verify watermark is still none
-        let watermark = setup.store.watermark(DataPipeline::NAME);
-        assert!(watermark.is_none());
+        // Verify watermark has progressed after retry
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 10);
     }
 
     #[tokio::test]
