@@ -1152,6 +1152,8 @@ struct EntryHeader {
 /// A write batch that stores serialized operations in a flat byte buffer without
 /// requiring a database reference. Can be replayed into a real `DBBatch` via
 /// `DBBatch::concat`.
+/// TOOD: this can be deleted when we upgrade rust-rocksdb, which supports iterating
+/// over write batches.
 #[derive(Default)]
 pub struct StagedBatch {
     data: Vec<u8>,
@@ -1366,7 +1368,6 @@ impl DBBatch {
         }
     }
 
-    /// Replay all operations from `StagedBatch`es into this batch.
     /// Replay all operations from `StagedBatch`es into this batch.
     pub fn concat(&mut self, raw_batches: Vec<StagedBatch>) -> Result<&mut Self, TypedStoreError> {
         for raw_batch in raw_batches {
