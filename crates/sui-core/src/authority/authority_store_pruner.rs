@@ -136,11 +136,13 @@ pub enum PruningMode {
 
 impl AuthorityStorePruner {
     /// prunes old versions of objects based on transaction effects
-    async fn prune_objects(
+    async fn prune_objects_and_indexes(
         transaction_effects: Vec<TransactionEffects>,
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_number: CheckpointSequenceNumber,
         metrics: Arc<AuthorityStorePruningMetrics>,
+        checkpoint_content_to_prune: Vec<CheckpointContents>,
+        rpc_index: Option<&RpcIndexStore>,
         enable_pruning_tombstones: bool,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
@@ -208,6 +210,10 @@ impl AuthorityStorePruner {
             wb.delete_batch(&perpetual_db.objects, object_keys_to_delete)?;
         }
 
+        if let Some(rpc_index) = rpc_index {
+            rpc_index.prune(checkpoint_number, &checkpoint_content_to_prune)?;
+        }
+
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
         metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
 
@@ -218,7 +224,6 @@ impl AuthorityStorePruner {
     fn prune_checkpoints(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_db: &Arc<CheckpointStore>,
-        rpc_index: Option<&RpcIndexStore>,
         checkpoint_number: CheckpointSequenceNumber,
         checkpoints_to_prune: Vec<CheckpointDigest>,
         checkpoint_content_to_prune: Vec<CheckpointContents>,
@@ -283,9 +288,6 @@ impl AuthorityStorePruner {
             )],
         )?;
 
-        if let Some(rpc_index) = rpc_index {
-            rpc_index.prune(checkpoint_number, &checkpoint_content_to_prune)?;
-        }
         perpetual_batch.write()?;
         checkpoints_batch.write()?;
         metrics
@@ -465,11 +467,13 @@ impl AuthorityStorePruner {
             {
                 match mode {
                     PruningMode::Objects => {
-                        Self::prune_objects(
+                        Self::prune_objects_and_indexes(
                             effects_to_prune,
                             perpetual_db,
                             checkpoint_number,
                             metrics.clone(),
+                            checkpoint_content_to_prune,
+                            rpc_index,
                             !config.killswitch_tombstone_pruning,
                         )
                         .await?
@@ -477,7 +481,6 @@ impl AuthorityStorePruner {
                     PruningMode::Checkpoints => Self::prune_checkpoints(
                         perpetual_db,
                         checkpoint_store,
-                        rpc_index,
                         checkpoint_number,
                         checkpoints_to_prune,
                         checkpoint_content_to_prune,
@@ -496,11 +499,13 @@ impl AuthorityStorePruner {
         if !checkpoints_to_prune.is_empty() {
             match mode {
                 PruningMode::Objects => {
-                    Self::prune_objects(
+                    Self::prune_objects_and_indexes(
                         effects_to_prune,
                         perpetual_db,
                         checkpoint_number,
                         metrics.clone(),
+                        checkpoint_content_to_prune,
+                        rpc_index,
                         !config.killswitch_tombstone_pruning,
                     )
                     .await?
@@ -508,7 +513,6 @@ impl AuthorityStorePruner {
                 PruningMode::Checkpoints => Self::prune_checkpoints(
                     perpetual_db,
                     checkpoint_store,
-                    rpc_index,
                     checkpoint_number,
                     checkpoints_to_prune,
                     checkpoint_content_to_prune,
@@ -1082,9 +1086,17 @@ mod tests {
                     ObjectDigest::MIN,
                 ));
             }
-            AuthorityStorePruner::prune_objects(vec![effects], &db, 0, metrics, true)
-                .await
-                .unwrap();
+            AuthorityStorePruner::prune_objects_and_indexes(
+                vec![effects],
+                &db,
+                0,
+                metrics,
+                vec![],
+                None,
+                true,
+            )
+            .await
+            .unwrap();
             to_keep
         };
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -1172,9 +1184,16 @@ mod tests {
         }
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
-        let total_pruned =
-            AuthorityStorePruner::prune_objects(vec![effects], &perpetual_db, 0, metrics, true)
-                .await;
+        let total_pruned = AuthorityStorePruner::prune_objects_and_indexes(
+            vec![effects],
+            &perpetual_db,
+            0,
+            metrics,
+            vec![],
+            None,
+            true,
+        )
+        .await;
         info!("Total pruned keys = {:?}", total_pruned);
 
         perpetual_db.objects.compact_range(&start, &end)?;
