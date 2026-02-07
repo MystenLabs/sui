@@ -8,6 +8,7 @@ standard library.
 
 -  [Function `blake2b256`](#sui_hash_blake2b256)
 -  [Function `keccak256`](#sui_hash_keccak256)
+-  [Function `sha3_512`](#sui_hash_sha3_512)
 
 
 <pre><code></code></pre>
@@ -56,6 +57,30 @@ Hash the input bytes using keccak256 and returns 32 bytes.
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../sui/hash.md#sui_hash_keccak256">keccak256</a>(data: &vector&lt;u8&gt;): vector&lt;u8&gt;;
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_hash_sha3_512"></a>
+
+## Function `sha3_512`
+
+@param data: Arbitrary binary data to hash
+Hash the input bytes using Sha3-512 and returns 64 bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/hash.md#sui_hash_sha3_512">sha3_512</a>(data: &vector&lt;u8&gt;): vector&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../sui/hash.md#sui_hash_sha3_512">sha3_512</a>(data: &vector&lt;u8&gt;): vector&lt;u8&gt;;
 </code></pre>
 
 
