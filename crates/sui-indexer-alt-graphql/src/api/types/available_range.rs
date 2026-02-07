@@ -140,6 +140,8 @@ impl AvailableRangeKey {
 pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
     match pipeline {
         "consistent" => feature_unavailable("consistent queries across objects and balances"),
+        "cp_blooms" => feature_unavailable("scanning queries on transactions and events"),
+        "cp_bloom_blocks" => feature_unavailable("scanning queries on transactions and events"),
         "cp_sequence_numbers" => feature_unavailable("querying checkpoints"),
         "ev_emit_mod" => feature_unavailable("querying events by emitting module"),
         "ev_struct_inst" => feature_unavailable("querying events by type"),
@@ -388,6 +390,10 @@ collect_pipelines! {
         } else if filters.contains("kind") {
             pipelines.insert("tx_kinds".to_string());
         }
+    };
+    Query.[scanTransactions] |pipelines, _filters| {
+        pipelines.insert("cp_blooms".to_string());
+        pipelines.insert("cp_bloom_blocks".to_string());
     };
 
     TransactionEffects.[balanceChanges] |pipelines, _filters| {

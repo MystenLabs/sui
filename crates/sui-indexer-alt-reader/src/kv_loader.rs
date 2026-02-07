@@ -172,6 +172,45 @@ impl KvLoader {
         }
     }
 
+    pub async fn load_many_checkpoints(
+        &self,
+        sequence_numbers: Vec<u64>,
+    ) -> Result<
+        HashMap<
+            CheckpointKey,
+            (
+                CheckpointSummary,
+                CheckpointContents,
+                AuthorityQuorumSignInfo<true>,
+            ),
+        >,
+        Error,
+    > {
+        let keys: Vec<CheckpointKey> = sequence_numbers.iter().map(|s| CheckpointKey(*s)).collect();
+        match self {
+            Self::Bigtable(loader) => Ok(loader.load_many(keys).await?),
+            Self::Pg(loader) => loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| {
+                    let summary: CheckpointSummary = bcs::from_bytes(&stored.checkpoint_summary)
+                        .context("Failed to deserialize checkpoint summary")?;
+
+                    let contents: CheckpointContents = bcs::from_bytes(&stored.checkpoint_contents)
+                        .context("Failed to deserialize checkpoint contents")?;
+
+                    let signature: AuthorityQuorumSignInfo<true> =
+                        bcs::from_bytes(&stored.validator_signatures)
+                            .context("Failed to deserialize validator signatures")?;
+
+                    Ok((key, (summary, contents, signature)))
+                })
+                .collect(),
+            Self::LedgerGrpc(loader) => Ok(loader.load_many(keys).await?),
+        }
+    }
+
     pub async fn load_one_transaction(
         &self,
         digest: TransactionDigest,

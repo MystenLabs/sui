@@ -55,9 +55,11 @@ use crate::api::types::protocol_configs::ProtocolConfigs;
 use crate::api::types::service_config::ServiceConfig;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::SCTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::transaction::scan::ScanError;
 use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::zklogin;
 use crate::api::types::zklogin::ZkLoginIntentScope;
@@ -709,9 +711,36 @@ impl Query {
                 let limits = pagination.limits("Query", "transactions");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
-                // Use the filter if provided, otherwise use default (unfiltered)
                 let filter = filter.unwrap_or_default();
                 Transaction::paginate(ctx, scope, page, filter).await
+            }
+            .await,
+        )
+    }
+
+    /// Scan for transactions matching a combination of filters (AND semantics).
+    ///
+    /// Unlike `transactions`, which supports a single filter backed by indexed lookups,
+    /// `scanTransactions` supports combining filters (e.g. `affectedAddress` AND `function`)
+    /// but requires a checkpoint range bounded by `ServiceConfig.maxScanLimit`.
+    async fn scan_transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<SCTransaction>,
+        last: Option<u64>,
+        before: Option<SCTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Option<Result<Connection<String, Transaction>, RpcError<ScanError>>> {
+        Some(
+            async {
+                let scope = self.scope(ctx)?;
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "transactions");
+                let page = Page::from_params(limits, first, after, last, before)?;
+
+                let filter = filter.unwrap_or_default();
+                Transaction::scan(ctx, scope, page, filter).await
             }
             .await,
         )
