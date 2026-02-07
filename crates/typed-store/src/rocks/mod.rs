@@ -1168,7 +1168,10 @@ pub struct RawDBBatch {
 
 impl RawDBBatch {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            data: Vec::with_capacity(1024),
+            entries: Vec::with_capacity(16),
+        }
     }
 
     pub fn insert_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
