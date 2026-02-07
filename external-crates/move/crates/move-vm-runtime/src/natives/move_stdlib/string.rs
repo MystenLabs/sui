@@ -5,6 +5,7 @@
 //! Implementation of native functions for utf8 strings.
 
 use crate::{
+    checked_as,
     execution::values::{Value, VectorRef},
     jit::execution::ast::Type,
     native_charge_gas_early_exit,
@@ -95,7 +96,7 @@ fn native_is_char_boundary(
     let s_ref = s_arg.as_bytes_ref();
     let ok = unsafe {
         // This is safe because we guarantee the bytes to be utf8.
-        std::str::from_utf8_unchecked(s_ref.as_slice()).is_char_boundary(i as usize)
+        std::str::from_utf8_unchecked(s_ref.as_slice()).is_char_boundary(checked_as!(i, usize)?)
     };
     NativeResult::map_partial_vm_result_one(context.gas_used(), Ok(Value::bool(ok)))
 }
@@ -129,8 +130,8 @@ fn native_sub_string(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(args.len() == 3);
 
-    let j = pop_arg!(args, u64) as usize;
-    let i = pop_arg!(args, u64) as usize;
+    let j = checked_as!(pop_arg!(args, u64), usize)?;
+    let i = checked_as!(pop_arg!(args, u64), usize)?;
     // Charge before doing work
     native_charge_gas_early_exit!(context, gas_params.base);
 

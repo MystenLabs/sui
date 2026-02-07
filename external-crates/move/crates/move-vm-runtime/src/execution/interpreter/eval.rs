@@ -3,7 +3,7 @@
 
 use crate::{
     cache::identifier_interner::IdentifierInterner,
-    dbg_println,
+    checked_as, dbg_println,
     execution::{
         dispatch_tables::VMDispatchTables,
         interpreter::{
@@ -533,7 +533,7 @@ fn op_step_impl(
             state.push_operand(field_ref)?;
         }
         Bytecode::Pack(struct_ptr) => {
-            let field_count = struct_ptr.field_count() as u16;
+            let field_count = checked_as!(struct_ptr.field_count(), u16)?;
             let struct_type = struct_ptr.datatype();
             check_depth_of_type(run_context, &struct_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
@@ -720,10 +720,11 @@ fn op_step_impl(
             gas_meter.charge_simple_instr(S::Nop)?;
         }
         Bytecode::VecPack(ty_ptr, num) => {
+            let num = checked_as!(*num, u16)?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             check_depth_of_type(run_context, &ty)?;
-            gas_meter.charge_vec_pack(state.last_n_operands(*num as usize)?)?;
-            let elements = state.pop_n_operands(*num as u16)?;
+            gas_meter.charge_vec_pack(state.last_n_operands(num as usize)?)?;
+            let elements = state.pop_n_operands(num)?;
             let specialization: VectorSpecialization = (&ty).try_into()?;
             let value = Vector::pack(specialization, elements)?;
             state.push_operand(value)?;
@@ -736,7 +737,7 @@ fn op_step_impl(
             state.push_operand(value)?;
         }
         Bytecode::VecImmBorrow(ty_ptr) => {
-            let idx = state.pop_operand_as::<u64>()? as usize;
+            let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, &ty);
@@ -744,7 +745,7 @@ fn op_step_impl(
             state.push_operand(res?)?;
         }
         Bytecode::VecMutBorrow(ty_ptr) => {
-            let idx = state.pop_operand_as::<u64>()? as usize;
+            let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, &ty);
@@ -779,8 +780,8 @@ fn op_step_impl(
             }
         }
         Bytecode::VecSwap(ty_ptr) => {
-            let idx2 = state.pop_operand_as::<u64>()? as usize;
-            let idx1 = state.pop_operand_as::<u64>()? as usize;
+            let idx2 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
+            let idx1 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let ty =
                 instantiate_single_type(ty_ptr.to_ref(), state.call_stack.current_frame.ty_args())?;
@@ -792,7 +793,7 @@ fn op_step_impl(
             let field_count = variant_def_ptr.field_count();
             check_depth_of_type(run_context, &enum_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count)?)?;
-            let args = state.pop_n_operands(field_count as u16)?;
+            let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
             state.push_operand(Value::make_variant(variant_def_ptr.variant_tag, args))?;
         }
         Bytecode::PackVariantGeneric(vinst_ptr) => {
@@ -801,7 +802,7 @@ fn op_step_impl(
             let ty = instantiate_enum_type(vinst_ptr, state.call_stack.current_frame.ty_args())?;
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count)?)?;
-            let args = state.pop_n_operands(field_count as u16)?;
+            let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
             state.push_operand(Value::make_variant(variant_tag, args))?;
         }
         Bytecode::UnpackVariant(variant_ptr) => {
@@ -1120,8 +1121,8 @@ fn push_call_frame(
     ty_args: Vec<Type>,
 ) -> VMResult<()> {
     let fun_ref = function.ptr_clone().to_ref();
-    let args = state
-        .pop_n_operands(fun_ref.arg_count() as u16)
+    let args = checked_as!(fun_ref.arg_count(), u16)
+        .and_then(|arg_count| state.pop_n_operands(arg_count))
         .map_err(|e| set_err_info!(run_context.interner(), &state.call_stack.current_frame, e))?;
     state.push_call(function, ty_args, args)
 }
