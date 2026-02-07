@@ -3905,6 +3905,23 @@ impl AuthorityState {
         }
     }
 
+    /// Await post-processing for a transaction and commit the index batch immediately.
+    /// Used in test helpers where there is no CheckpointExecutor to collect and commit
+    /// index batches at checkpoint boundaries.
+    pub async fn flush_post_processing(&self, tx_digest: &TransactionDigest) {
+        if let Some(indexes) = &self.indexes {
+            if let Some((raw_batch, cache_updates)) = self.await_post_processing(tx_digest).await {
+                let mut db_batch = indexes.new_db_batch();
+                db_batch
+                    .concat(vec![raw_batch])
+                    .expect("failed to build index batch");
+                indexes
+                    .commit_index_batch(db_batch, vec![cache_updates])
+                    .expect("failed to commit index batch");
+            }
+        }
+    }
+
     pub fn get_reconfig_api(&self) -> &Arc<dyn ExecutionCacheReconfigAPI> {
         &self.execution_cache_trait_pointers.reconfig_api
     }
