@@ -8,22 +8,27 @@ use std::sync::Arc;
 
 use anyhow::Error;
 use diesel_async::RunQueryDsl;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::MultiProgress;
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 use object_store::path::Path;
 use tokio::sync::Mutex;
-use tracing::{debug, info};
+use tracing::debug;
+use tracing::info;
 
-use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
+use sui_config::object_storage_config::ObjectStoreConfig;
+use sui_config::object_storage_config::ObjectStoreType;
 use sui_core::authority::authority_store_tables::LiveObject;
 use sui_field_count::FieldCount;
 use sui_futures::stream::TrySpawnStreamExt;
 use sui_indexer_alt_schema::objects::StoredObjInfo;
 use sui_indexer_alt_schema::schema::obj_info;
 use sui_pg_db::Db;
-use sui_snapshot::{
-    FileMetadata,
-    reader::{LiveObjectIter, StateSnapshotReaderV1, download_bytes},
-};
+use sui_pg_db::DbConfig;
+use sui_snapshot::FileMetadata;
+use sui_snapshot::reader::LiveObjectIter;
+use sui_snapshot::reader::StateSnapshotReaderV1;
+use sui_snapshot::reader::download_bytes;
 use sui_storage::object_store::ObjectStoreGetExt;
 
 use crate::Args;
@@ -67,7 +72,11 @@ impl SnapshotRestorer {
             3,    // max_retries
         )
         .await?;
-        let db = Db::for_write(args.database_url.clone(), args.db_args.clone()).await?;
+        let db = Db::new(DbConfig::for_write(
+            args.database_url.clone(),
+            args.db_args.clone(),
+        ))
+        .await?;
 
         Ok(Self {
             restore_args: args.clone(),

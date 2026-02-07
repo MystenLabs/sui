@@ -17,6 +17,7 @@ use diesel::query_dsl::methods::LimitDsl;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
+use sui_pg_db::DbConfig;
 use tracing::debug;
 use tracing::warn;
 use url::Url;
@@ -50,7 +51,7 @@ impl PgReader {
         registry: &Registry,
     ) -> anyhow::Result<Self> {
         let db = if let Some(database_url) = database_url {
-            let db = db::Db::for_read(database_url, db_args)
+            let db = db::Db::new(DbConfig::for_read(database_url, db_args).with_registry(registry))
                 .await
                 .context("Failed to create database for reading")?;
 

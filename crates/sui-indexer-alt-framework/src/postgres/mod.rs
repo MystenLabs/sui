@@ -48,7 +48,7 @@ impl Indexer<Db> {
         metrics_prefix: Option<&str>,
         registry: &Registry,
     ) -> Result<Self> {
-        let store = Db::for_write(database_url, db_args) // I guess our store needs a constructor fn
+        let store = Db::new(DbConfig::for_write(database_url, db_args)) // I guess our store needs a constructor fn
             .await
             .context("Failed to connect to database")?;
 
@@ -79,9 +79,12 @@ impl Indexer<Db> {
     /// and returned along with the temporary database.
     pub async fn new_for_testing(migrations: &'static EmbeddedMigrations) -> (Indexer<Db>, TempDb) {
         let temp_db = TempDb::new().unwrap();
-        let store = Db::for_write(temp_db.database().url().clone(), DbArgs::default())
-            .await
-            .unwrap();
+        let store = Db::new(DbConfig::for_write(
+            temp_db.database().url().clone(),
+            DbArgs::default(),
+        ))
+        .await
+        .unwrap();
         store.run_migrations(Some(migrations)).await.unwrap();
 
         let indexer = Indexer::new(

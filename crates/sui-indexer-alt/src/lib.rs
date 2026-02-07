@@ -13,6 +13,7 @@ use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::postgres::DbArgs;
+use sui_indexer_alt_framework::postgres::DbConfig;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_indexer_alt_schema::MIGRATIONS;
 use url::Url;
@@ -102,7 +103,7 @@ pub async fn setup_indexer(
     let retry_interval = ingestion.retry_interval();
 
     // Prepare the store for the indexer
-    let store = Db::for_write(database_url, db_args)
+    let store = Db::new(DbConfig::for_write(database_url, db_args))
         .await
         .context("Failed to connect to database")?;
 

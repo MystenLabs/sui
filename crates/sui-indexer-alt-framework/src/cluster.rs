@@ -224,6 +224,7 @@ mod tests {
     use diesel::QueryDsl;
     use diesel::Queryable;
     use diesel_async::RunQueryDsl;
+    use sui_pg_db::DbConfig;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
@@ -301,8 +302,12 @@ mod tests {
         })
         .await;
 
-        let reader = Db::for_read(url.clone(), DbArgs::default()).await.unwrap();
-        let writer = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
+        let reader = Db::new(DbConfig::for_read(url.clone(), DbArgs::default()))
+            .await
+            .unwrap();
+        let writer = Db::new(DbConfig::for_write(url.clone(), DbArgs::default()))
+            .await
+            .unwrap();
 
         {
             // Create the table we are going to write to. We have to do this manually, because this
