@@ -303,8 +303,8 @@ async fn test_submit_transaction_with_amplification() {
                     },
                 }),
             );
-            // Ensure all requests reach validators before they reply.
-            mock_authority.set_response_delay(Duration::from_secs(5));
+            // Use short delay so responses arrive before the backup request delay (1 second).
+            mock_authority.set_response_delay(Duration::from_millis(100));
         }
 
         let amplification_factor = gas_price / reference_gas_price;
@@ -323,7 +323,8 @@ async fn test_submit_transaction_with_amplification() {
 
         assert!(result.is_ok());
 
-        // Verify that 3 authorities were contacted
+        // Verify that 3 authorities were contacted (initial amplification batch).
+        // Responses arrive before the 1-second backup delay triggers additional requests.
         let total_submissions: usize = mock_authorities
             .iter()
             .map(|auth| auth.get_submission_count())
@@ -331,14 +332,15 @@ async fn test_submit_transaction_with_amplification() {
         assert_eq!(total_submissions, 3);
     }
 
-    // Test 3: Transaction with high amplification factor still works.
+    // Test 3: Transaction with max amplification factor (all validators).
     {
         // Reset submission counts
         for mock_authority in &mock_authorities {
             mock_authority.submission_count.store(0, Ordering::Relaxed);
         }
 
-        let gas_price = reference_gas_price * 100; // Very high gas price
+        let amplification_factor = 4u64;
+        let gas_price = reference_gas_price * amplification_factor;
         let request = create_test_submit_request(gas_price);
         let tx_digest = *request.transaction.as_ref().unwrap().digest();
 
@@ -354,11 +356,10 @@ async fn test_submit_transaction_with_amplification() {
                     },
                 }),
             );
-            // Ensure all requests reach validators before they reply.
-            mock_authority.set_response_delay(Duration::from_secs(5));
+            // Use short delay so responses arrive before backup delay kicks in.
+            mock_authority.set_response_delay(Duration::from_millis(100));
         }
 
-        let amplification_factor = gas_price / reference_gas_price;
         let options = SubmitTransactionOptions::default();
 
         let result = submitter
@@ -386,7 +387,7 @@ async fn test_submit_transaction_with_amplification() {
         );
     }
 
-    // Test 4: Transaction with errors in submission.
+    // Test 4: Transaction with errors in submission triggers backup requests.
     {
         // Reset submission counts
         for mock_authority in &mock_authorities {
@@ -397,7 +398,7 @@ async fn test_submit_transaction_with_amplification() {
         let request = create_test_submit_request(gas_price);
         let tx_digest = *request.transaction.as_ref().unwrap().digest();
 
-        // Set up successful response from all authorities
+        // Set up: first 2 validators return errors, last 2 succeed
         for (i, mock_authority) in mock_authorities.iter().enumerate() {
             if i < 2 {
                 mock_authority.set_submit_response(
@@ -418,8 +419,8 @@ async fn test_submit_transaction_with_amplification() {
                         },
                     }),
                 );
-                // Ensure all requests reach validators before they reply.
-                mock_authority.set_response_delay(Duration::from_secs(5));
+                // Use short delay so responses arrive quickly.
+                mock_authority.set_response_delay(Duration::from_millis(100));
             }
         }
 

@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    sync::Arc,
-    time::{Duration, Instant},
+    cmp::max, sync::Arc, time::{Duration, Instant}
 };
 
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -65,12 +64,7 @@ impl TransactionSubmitter {
     {
         let start_time = Instant::now();
 
-        assert!(
-            0 < amplification_factor
-                && amplification_factor <= authority_aggregator.committee.num_members() as u64,
-            "Invalid amplification factor: {}",
-            amplification_factor
-        );
+        let amplification_factor = amplification_factor.max(1).min(authority_aggregator.committee.num_members() as u64);
         self.metrics
             .submit_amplification_factor
             .observe(amplification_factor as f64);
