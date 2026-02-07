@@ -8,9 +8,13 @@
 //! other blockchains can use it as well. The VM isn't there yet, but hopefully will be there
 //! soon.
 
-#![deny(unsafe_code)]
-#![deny(clippy::indexing_slicing)]
-#![cfg_attr(test, allow(clippy::indexing_slicing))]
+#![deny(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::unwrap_used,
+    unsafe_code,
+)]
 
 mod jit;
 pub mod shared;

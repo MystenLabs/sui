@@ -2,6 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: Remove the panics. Some of these removals are currently in flight, so this PR does not
+// handle them.
+#![allow(clippy::panic)]
+
 use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,

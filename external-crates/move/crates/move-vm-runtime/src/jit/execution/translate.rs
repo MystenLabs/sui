@@ -126,14 +126,10 @@ impl PackageContext<'_> {
             Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
             None => Err(partial_vm_error!(
                 FUNCTION_RESOLUTION_FAILURE,
-                "Function not found in vtable with name: {}",
-                match self
-                    .interner
+                "Function not found in vtable with name: {}::{}",
+                self.version_id,
+                self.interner
                     .resolve_ident(&vtable_entry.inner_pkg_key.member_name, "function name")
-                {
-                    Ok(fn_name) => format!("'{}::{}'", self.version_id, fn_name,),
-                    Err(_) => "'uninterned name'".to_string(),
-                },
             )),
         }
     }
@@ -512,10 +508,7 @@ fn datatypes(
     ArenaVec<EnumDef>,
     ArenaVec<DatatypeDescriptor>,
 )> {
-    fn resolve_member_name(
-        context: &PackageContext,
-        name: &VirtualTableKey,
-    ) -> PartialVMResult<Identifier> {
+    fn resolve_member_name(context: &PackageContext, name: &VirtualTableKey) -> Identifier {
         context
             .interner
             .resolve_ident(&name.inner_pkg_key.member_name, "datatype name")
@@ -534,11 +527,8 @@ fn datatypes(
             .ok_or_else(|| {
                 partial_vm_error!(
                     LOOKUP_FAILED,
-                    "Type origin not found for {}",
-                    match name.to_string(context.interner) {
-                        Ok(name_str) => format!("type {}", name_str),
-                        Err(_) => "unnamed type".to_string(),
-                    },
+                    "Type origin not found for type {}",
+                    name.to_string(context.interner),
                 )
             })?;
         dbg_println!("Package ID: {:?}", version_id);
@@ -558,7 +548,7 @@ fn datatypes(
     let struct_descriptors = structs
         .iter()
         .map(|struct_| {
-            let name = resolve_member_name(context, &struct_.def_vtable_key)?;
+            let name = resolve_member_name(context, &struct_.def_vtable_key);
             let defining_id = defining_id(context, version_id, &struct_.def_vtable_key)?;
             let original_id = module_original_id;
             let datatype_info =
@@ -572,7 +562,7 @@ fn datatypes(
     let enum_descriptors = enums
         .iter()
         .map(|enum_| {
-            let name = resolve_member_name(context, &enum_.def_vtable_key)?;
+            let name = resolve_member_name(context, &enum_.def_vtable_key);
             let defining_id = defining_id(context, version_id, &enum_.def_vtable_key)?;
             let original_id = module_original_id;
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
@@ -1004,14 +994,13 @@ fn preallocate_functions(
             .iter()
             .map(|fun| (fun.name.clone(), VMPointer::from_ref(fun))),
     )
-    .map_err(|key| match key.member_name(package_context.interner) {
-        Ok(fn_name) => partial_vm_error!(
+    .map_err(|key| {
+        partial_vm_error!(
             UNKNOWN_INVARIANT_VIOLATION_ERROR,
             "Duplicate function key {}::{}",
             package_context.version_id,
-            fn_name,
-        ),
-        Err(err) => err,
+            key.member_name(package_context.interner)
+        )
     })?;
     Ok((loaded_functions, fun_map))
 }
@@ -1045,9 +1034,7 @@ fn function_bodies(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 "failed to find function {}::{} in optimized function list",
                 package_context.version_id,
-                fun.name
-                    .to_short_string(package_context.interner)
-                    .unwrap_or_else(|_| "unknown".to_string()),
+                fun.name.to_short_string(package_context.interner)
             ));
         };
         let input::Function {
