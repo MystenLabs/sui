@@ -37,7 +37,7 @@ pub static DESERIALIZATION_STATUS_MAX_CODE: u64 = 3999;
 /// The minimum status code for runtime statuses
 pub static EXECUTION_STATUS_MIN_CODE: u64 = 4000;
 
-/// The maximum status code for runtim statuses
+/// The maximum status code for runtime statuses
 pub static EXECUTION_STATUS_MAX_CODE: u64 = 4999;
 
 /// A status type is one of 5 different variants, along with a fallback variant in the case that we
@@ -341,7 +341,7 @@ pub enum StatusCode {
     REFERENCE_SAFETY_INCONSISTENT = 2024,
 
     // Errors that can arise from binary decoding (deserialization)
-    // Deserializtion Errors: 3000-3999
+    // Deserialization Errors: 3000-3999
     UNKNOWN_BINARY_ERROR = 3000,
     MALFORMED = 3001,
     BAD_MAGIC = 3002,

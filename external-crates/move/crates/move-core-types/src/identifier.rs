@@ -238,7 +238,7 @@ impl IdentStr {
     }
 
     /// Returns the abstract size of the struct
-    /// TODO (ade): use macro to enfornce determinism
+    /// TODO (ade): use macro to enforce determinism
     pub fn abstract_size_for_gas_metering(&self) -> AbstractMemorySize {
         AbstractMemorySize::new((self.len()) as u64)
     }
