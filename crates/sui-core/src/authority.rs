@@ -3220,7 +3220,7 @@ impl AuthorityState {
                     if let Some(indexes) = &self.indexes {
                         let mut db_batch = indexes.new_db_batch();
                         db_batch
-                            .absorb_raw_batches(vec![raw_batch])
+                            .concat(vec![raw_batch])
                             .expect("failed to absorb raw index batch");
                         // Destructure to keep _locks alive through commit_index_batch.
                         let IndexStoreCacheUpdatesWithLocks { _locks, inner } =

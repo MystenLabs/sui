@@ -1362,11 +1362,8 @@ impl DBBatch {
         }
     }
 
-    /// Replay all operations from multiple `RawDBBatch`es into this batch.
-    pub fn absorb_raw_batches(
-        &mut self,
-        raw_batches: Vec<RawDBBatch>,
-    ) -> Result<(), TypedStoreError> {
+    /// Replay all operations from `RawDBBatch`es into this batch.
+    pub fn concat(&mut self, raw_batches: Vec<RawDBBatch>) -> Result<&mut Self, TypedStoreError> {
         for raw_batch in raw_batches {
             for entry in raw_batch.entries {
                 match entry {
@@ -1384,7 +1381,7 @@ impl DBBatch {
                         #[cfg(tidehunter)]
                         _ => {
                             return Err(TypedStoreError::RocksDBError(
-                                "absorb_raw_batches not supported for TideHunter".to_string(),
+                                "concat not supported for TideHunter".to_string(),
                             ));
                         }
                     },
@@ -1398,14 +1395,14 @@ impl DBBatch {
                         #[cfg(tidehunter)]
                         _ => {
                             return Err(TypedStoreError::RocksDBError(
-                                "absorb_raw_batches not supported for TideHunter".to_string(),
+                                "concat not supported for TideHunter".to_string(),
                             ));
                         }
                     },
                 }
             }
         }
-        Ok(())
+        Ok(self)
     }
 
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
