@@ -624,8 +624,8 @@ impl CheckpointExecutor {
             {
                 let mut db_batch = indexes.new_db_batch();
                 db_batch
-                    .absorb_raw_batches(raw_batches)
-                    .expect("failed to absorb raw index batches");
+                    .concat(raw_batches)
+                    .expect("failed to build index batch");
                 indexes
                     .commit_index_batch(db_batch, cache_updates)
                     .expect("failed to commit index batch");

@@ -2085,7 +2085,7 @@ mod tests {
         )?;
         // Commit the batch so subsequent reads see the data
         let mut db_batch = index_store.new_db_batch();
-        db_batch.absorb_raw_batches(vec![raw_batch]).unwrap();
+        db_batch.concat(vec![raw_batch]).unwrap();
         index_store
             .commit_index_batch(db_batch, vec![cache_updates.into_inner()])
             .unwrap();
@@ -2136,7 +2136,7 @@ mod tests {
             false,
         )?;
         let mut db_batch = index_store.new_db_batch();
-        db_batch.absorb_raw_batches(vec![raw_batch]).unwrap();
+        db_batch.concat(vec![raw_batch]).unwrap();
         index_store
             .commit_index_batch(db_batch, vec![cache_updates.into_inner()])
             .unwrap();
