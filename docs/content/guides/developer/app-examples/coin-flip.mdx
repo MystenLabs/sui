@@ -483,6 +483,20 @@ Now add a function that handles game disputes:
 
 This function, `dispute_and_win`, ensures that no bet can live in “purgatory”. After a certain amount of time passes, the player can call this function and get all of their funds back.
 
+We also need a function that creates and initializes a new game:
+
+```move title='single_player_satoshi.move'
+  public fun start_game(guess: String, counter: &mut Counter, coin: Coin<SUI>, house_data: &mut HouseData, ctx: &mut TxContext): ID {
+    let fee_bp = house_data.base_fee_in_bp();
+    let (game_id, new_game) = internal_start_game(guess, counter, coin, house_data, fee_bp, ctx);
+
+    dof::add(house_data.borrow_mut(), game_id, new_game);
+    game_id
+  }
+```
+
+The `start_game` function creates a new game by calling the internal `internal_start_game` helper function, then adds the newly created game as a dynamic object field to the `HouseData` object and returns the game ID for later reference.
+
 The rest of the functions are accessors and helper functions used to retrieve values, check if values exist, initialize the game, and so on:
 
 ```move title='single_player_satoshi.move'
