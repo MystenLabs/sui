@@ -12,6 +12,13 @@ Individual preferences supercede and extend project preferences:
 
 ## Essential Development Commands
 
+### License comments
+
+All new files must start with the following license in comments at the top of the file:
+
+    Copyright (c) Mysten Labs, Inc.
+    SPDX-License-Identifier: Apache-2.0
+
 ### Building and Installation
 
 ```bash
