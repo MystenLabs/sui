@@ -16,8 +16,11 @@ use prometheus::{
     register_int_counter_with_registry,
 };
 use std::{
+    cmp::Ordering,
+    future::Future,
     io,
     net::{IpAddr, SocketAddr},
+    pin::Pin,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -1171,29 +1174,118 @@ impl ValidatorService {
         };
         let tx_digests = [tx_digest];
 
-        // Always wait for effects regardless of consensus position via
-        // notify_read_executed_effects.
-        let effects = self
-            .state
-            .get_transaction_cache_reader()
-            .notify_read_executed_effects(
-                "AuthorityServer::wait_for_effects::notify_read_executed_effects_finalized",
-                &tx_digests,
-            )
-            .await
-            .pop()
-            .unwrap();
-        let details = if request.include_details {
-            Some(self.complete_executed_data(effects.clone(), None).await?)
-        } else {
-            None
+        let rejection_future: Pin<Box<dyn Future<Output = _> + Send>> =
+            if let Some(consensus_position) = request.consensus_position {
+                Box::pin(self.wait_for_rejection_or_expiry(consensus_position, epoch_store))
+            } else {
+                Box::pin(future::pending())
+            };
+
+        tokio::select! {
+            mut effects = self.state
+                .get_transaction_cache_reader()
+                .notify_read_executed_effects(
+                    "AuthorityServer::wait_for_effects::notify_read_executed_effects",
+                    &tx_digests,
+                ) => {
+                let effects = effects.pop().unwrap();
+                let details = if request.include_details {
+                    Some(self.complete_executed_data(effects.clone(), None).await?)
+                } else {
+                    None
+                };
+                Ok(WaitForEffectsResponse::Executed {
+                    effects_digest: effects.digest(),
+                    details,
+                    fast_path: false,
+                })
+            }
+
+            rejection_result = rejection_future => {
+                match rejection_result? {
+                    Some(response) => Ok(response),
+                    None => {
+                        // Accepted by consensus, wait for effects
+                        let effects = self.state
+                            .get_transaction_cache_reader()
+                            .notify_read_executed_effects(
+                                "AuthorityServer::wait_for_effects::notify_read_executed_effects",
+                                &tx_digests,
+                            )
+                            .await
+                            .pop()
+                            .unwrap();
+                        let details = if request.include_details {
+                            Some(self.complete_executed_data(effects.clone(), None).await?)
+                        } else {
+                            None
+                        };
+                        Ok(WaitForEffectsResponse::Executed {
+                            effects_digest: effects.digest(),
+                            details,
+                            fast_path: false,
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    #[instrument(level = "error", skip_all, err(level = "debug"))]
+    async fn wait_for_rejection_or_expiry(
+        &self,
+        consensus_position: ConsensusPosition,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<Option<WaitForEffectsResponse>> {
+        let Some(consensus_tx_status_cache) = epoch_store.consensus_tx_status_cache.as_ref() else {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "Mysticeti fastpath".to_string(),
+            }
+            .into());
         };
 
-        Ok(WaitForEffectsResponse::Executed {
-            effects_digest: effects.digest(),
-            details,
-            fast_path: false,
-        })
+        let local_epoch = epoch_store.epoch();
+        match consensus_position.epoch.cmp(&local_epoch) {
+            Ordering::Less => {
+                return Ok(Some(WaitForEffectsResponse::Expired {
+                    epoch: local_epoch,
+                    round: None,
+                }));
+            }
+            Ordering::Greater => {
+                return Err(SuiErrorKind::WrongEpoch {
+                    expected_epoch: local_epoch,
+                    actual_epoch: consensus_position.epoch,
+                }
+                .into());
+            }
+            Ordering::Equal => {}
+        };
+
+        consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
+
+        let status_result = consensus_tx_status_cache
+            .notify_read_transaction_status_change(consensus_position, None)
+            .await;
+        match status_result {
+            NotifyReadConsensusTxStatusResult::Status(status) => match status {
+                ConsensusTxStatus::Rejected | ConsensusTxStatus::Dropped => {
+                    Ok(Some(WaitForEffectsResponse::Rejected {
+                        error: epoch_store.get_rejection_vote_reason(consensus_position),
+                    }))
+                }
+                ConsensusTxStatus::FastpathCertified | ConsensusTxStatus::Finalized => {
+                    // Transaction is accepted, let caller wait for effects
+                    Ok(None)
+                }
+            },
+            NotifyReadConsensusTxStatusResult::Expired(round) => {
+                Ok(Some(WaitForEffectsResponse::Expired {
+                    epoch: epoch_store.epoch(),
+                    round: Some(round),
+                }))
+            }
+        }
     }
 
     #[instrument(level = "error", skip_all, err(level = "debug"))]
