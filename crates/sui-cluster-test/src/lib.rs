@@ -231,8 +231,11 @@ impl TestContext {
             .get_transaction_with_options(digest, SuiTransactionBlockResponseOptions::new())
             .await
         {
-            Ok(_) => (true, digest, retry_times),
-            Err(_) => {
+            // Wait for the transaction to be included in a checkpoint, not just
+            // known to the fullnode. Index data is only available after the
+            // checkpoint containing the transaction has been processed.
+            Ok(resp) if resp.checkpoint.is_some() => (true, digest, retry_times),
+            _ => {
                 time::sleep(Duration::from_millis(300 * retry_times)).await;
                 (false, digest, retry_times + 1)
             }
