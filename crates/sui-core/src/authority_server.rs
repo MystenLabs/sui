@@ -17,10 +17,8 @@ use prometheus::{
 };
 use std::{
     cmp::Ordering,
-    future::Future,
     io,
     net::{IpAddr, SocketAddr},
-    pin::Pin,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -1174,61 +1172,36 @@ impl ValidatorService {
         };
         let tx_digests = [tx_digest];
 
-        let rejection_future: Pin<Box<dyn Future<Output = _> + Send>> =
-            if let Some(consensus_position) = request.consensus_position {
-                Box::pin(self.wait_for_rejection_or_expiry(consensus_position, epoch_store))
-            } else {
-                Box::pin(future::pending())
-            };
-
-        tokio::select! {
-            mut effects = self.state
-                .get_transaction_cache_reader()
-                .notify_read_executed_effects(
-                    "AuthorityServer::wait_for_effects::notify_read_executed_effects",
-                    &tx_digests,
-                ) => {
-                let effects = effects.pop().unwrap();
-                let details = if request.include_details {
-                    Some(self.complete_executed_data(effects.clone(), None).await?)
-                } else {
-                    None
-                };
-                Ok(WaitForEffectsResponse::Executed {
-                    effects_digest: effects.digest(),
-                    details,
-                    fast_path: false,
-                })
-            }
-
-            rejection_result = rejection_future => {
-                match rejection_result? {
-                    Some(response) => Ok(response),
-                    None => {
-                        // Accepted by consensus, wait for effects
-                        let effects = self.state
-                            .get_transaction_cache_reader()
-                            .notify_read_executed_effects(
-                                "AuthorityServer::wait_for_effects::notify_read_executed_effects",
-                                &tx_digests,
-                            )
-                            .await
-                            .pop()
-                            .unwrap();
-                        let details = if request.include_details {
-                            Some(self.complete_executed_data(effects.clone(), None).await?)
-                        } else {
-                            None
-                        };
-                        Ok(WaitForEffectsResponse::Executed {
-                            effects_digest: effects.digest(),
-                            details,
-                            fast_path: false,
-                        })
-                    }
-                }
-            }
+        // Check for rejection/expiry if we have a consensus position.
+        // Returns early if rejected/expired, otherwise falls through to wait for effects.
+        if let Some(consensus_position) = request.consensus_position
+            && let Some(response) = self
+                .wait_for_rejection_or_expiry(consensus_position, epoch_store)
+                .await?
+        {
+            return Ok(response);
         }
+
+        // Wait for executed effects.
+        let effects = self.state
+            .get_transaction_cache_reader()
+            .notify_read_executed_effects(
+                "AuthorityServer::wait_for_effects::notify_read_executed_effects",
+                &tx_digests,
+            )
+            .await
+            .pop()
+            .unwrap();
+        let details = if request.include_details {
+            Some(self.complete_executed_data(effects.clone(), None).await?)
+        } else {
+            None
+        };
+        Ok(WaitForEffectsResponse::Executed {
+            effects_digest: effects.digest(),
+            details,
+            fast_path: false,
+        })
     }
 
     #[instrument(level = "error", skip_all, err(level = "debug"))]
@@ -1275,7 +1248,7 @@ impl ValidatorService {
                     }))
                 }
                 ConsensusTxStatus::FastpathCertified | ConsensusTxStatus::Finalized => {
-                    // Transaction is accepted, let caller wait for effects
+                    // Transaction is accepted, let caller wait for effects.
                     Ok(None)
                 }
             },
