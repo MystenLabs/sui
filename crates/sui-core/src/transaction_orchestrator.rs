@@ -203,25 +203,24 @@ where
             details: e.to_string(),
         })??;
 
-        if !executed_locally {
-            executed_locally = if matches!(
-                request_type,
-                ExecuteTransactionRequestType::WaitForLocalExecution
-            ) {
-                let executed_locally =
-                    Inner::<A>::wait_for_finalized_tx_executed_locally_with_timeout(
-                        &self.inner.validator_state,
-                        tx_digest,
-                        tx_type,
-                        &self.inner.metrics,
-                    )
-                    .await
-                    .is_ok();
-                add_server_timing("local_execution done");
-                executed_locally
-            } else {
-                false
-            };
+        if matches!(
+            request_type,
+            ExecuteTransactionRequestType::WaitForLocalExecution
+        ) {
+            // Always wait for the checkpoint containing this tx to be finalized,
+            // even when effects are already available locally. With batched index
+            // writes, index data is only committed at checkpoint boundaries, so
+            // callers relying on up-to-date index data after WaitForLocalExecution
+            // need the checkpoint to be processed.
+            executed_locally = Inner::<A>::wait_for_finalized_tx_executed_locally_with_timeout(
+                &self.inner.validator_state,
+                tx_digest,
+                tx_type,
+                &self.inner.metrics,
+            )
+            .await
+            .is_ok();
+            add_server_timing("local_execution done");
         }
 
         let QuorumTransactionResponse {

@@ -192,14 +192,10 @@ pub async fn submit_and_execute_with_error(
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
 
     // Execute
-    let tx_digest = *executable.digest();
     let env = ExecutionEnv::new().with_assigned_versions(assigned_versions.clone());
     let (result, execution_error_opt) = authority
         .try_execute_executable_for_test(&executable, env.clone())
         .await;
-
-    // Flush index writes that were deferred by post_process_one_tx.
-    authority.flush_post_processing(&tx_digest).await;
 
     // Validate state accumulation
     let state_after =
@@ -216,7 +212,6 @@ pub async fn submit_and_execute_with_error(
         fullnode
             .try_execute_executable_for_test(&executable, env)
             .await;
-        fullnode.flush_post_processing(&tx_digest).await;
     }
 
     Ok((executable, result.into_inner(), execution_error_opt))

@@ -1791,6 +1791,7 @@ impl AuthorityState {
             .try_execute_immediately(executable, execution_env, &epoch_store)
             .await
             .unwrap();
+        self.flush_post_processing(executable.digest()).await;
         let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
         (signed_effects, execution_error_opt)
     }
