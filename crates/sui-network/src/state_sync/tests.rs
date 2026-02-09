@@ -12,7 +12,10 @@ use anemo::{PeerId, Request};
 use anyhow::anyhow;
 use std::io::Write;
 use std::num::NonZeroUsize;
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant as StdInstant},
+};
 use sui_config::node::ArchiveReaderConfig;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_config::p2p::StateSyncConfig;
@@ -1292,6 +1295,292 @@ async fn test_peer_balancer_sorts_by_throughput() {
     assert_eq!(peers.len(), 2);
     assert_eq!(peers[0].inner().peer_id(), peer_3_id);
     assert_eq!(peers[1].inner().peer_id(), peer_2_id);
+}
+
+#[test]
+fn test_peer_score_failing_since_tracking() {
+    use super::PeerScore;
+
+    let window = Duration::from_secs(60);
+    let failure_rate = 0.3;
+    let mut score = PeerScore::new(window, failure_rate);
+
+    // Initially, failing_since should be None
+    assert!(score.failing_since.is_none());
+
+    // Not enough samples to be failing, update_failing_state should keep None
+    score.update_failing_state();
+    assert!(score.failing_since.is_none());
+
+    // Make the peer failing: 7 successes + 4 failures = 11 samples, 4/11 = 36% > 30%
+    for _ in 0..7 {
+        score.record_success(100, Duration::from_secs(1));
+    }
+    for _ in 0..4 {
+        score.record_failure();
+    }
+    assert!(score.is_failing());
+
+    // update_failing_state should set failing_since
+    score.update_failing_state();
+    assert!(score.failing_since.is_some());
+    let first_failing_since = score.failing_since.unwrap();
+
+    // Calling again should not change the timestamp
+    std::thread::sleep(Duration::from_millis(10));
+    score.update_failing_state();
+    assert_eq!(score.failing_since.unwrap(), first_failing_since);
+
+    // Record a success - this should clear failing_since
+    score.record_success(100, Duration::from_secs(1));
+    assert!(score.failing_since.is_none());
+
+    // Make failing again and verify update_failing_state doesn't clear it
+    // when is_failing() returns false due to lack of samples (not due to success)
+    let mut score2 = PeerScore::new(window, failure_rate);
+    for _ in 0..7 {
+        score2.record_success(100, Duration::from_secs(1));
+    }
+    for _ in 0..4 {
+        score2.record_failure();
+    }
+    score2.update_failing_state();
+    assert!(score2.failing_since.is_some());
+    let failing_since_before = score2.failing_since.unwrap();
+
+    // Simulate samples aging out by not adding new ones - update_failing_state
+    // should NOT clear failing_since (only record_success does that)
+    score2.update_failing_state();
+    assert_eq!(score2.failing_since, Some(failing_since_before));
+}
+
+#[test]
+fn test_peer_score_consistently_failing() {
+    use super::PeerScore;
+
+    let window = Duration::from_secs(60);
+    let failure_rate = 0.3;
+    let mut score = PeerScore::new(window, failure_rate);
+
+    // Not failing yet
+    assert!(!score.consistently_failing(Duration::from_millis(50)));
+
+    // Make the peer failing
+    for _ in 0..7 {
+        score.record_success(100, Duration::from_secs(1));
+    }
+    for _ in 0..4 {
+        score.record_failure();
+    }
+    score.update_failing_state();
+    assert!(score.failing_since.is_some());
+
+    // Just became failing, should not be consistently failing with any positive threshold
+    assert!(!score.consistently_failing(Duration::from_secs(1)));
+
+    // But should be consistently failing with zero threshold
+    assert!(score.consistently_failing(Duration::ZERO));
+
+    // Wait a bit and check with a small threshold
+    std::thread::sleep(Duration::from_millis(60));
+    assert!(score.consistently_failing(Duration::from_millis(50)));
+}
+
+#[test]
+fn test_find_peer_to_disconnect() {
+    use super::{PeerHeights, PeerScore, PeerStateSyncInfo};
+    use anemo::PeerId;
+
+    let mut peer_heights = PeerHeights {
+        peers: HashMap::new(),
+        unprocessed_checkpoints: HashMap::new(),
+        sequence_number_to_digest: HashMap::new(),
+        scores: HashMap::new(),
+        wait_interval_when_no_peer_to_sync_content: Duration::from_secs(1),
+        peer_scoring_window: Duration::from_secs(60),
+        peer_failure_rate: 0.3,
+        checkpoint_content_timeout_min: Duration::from_secs(10),
+        checkpoint_content_timeout_max: Duration::from_secs(30),
+        exploration_probability: 0.1,
+    };
+
+    let peer_a = PeerId([1; 32]);
+    let peer_b = PeerId([2; 32]);
+    let genesis_digest = CheckpointDigest::default();
+
+    peer_heights.peers.insert(
+        peer_a,
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: genesis_digest,
+            on_same_chain_as_us: true,
+            height: 10,
+            lowest: 0,
+        },
+    );
+    peer_heights.peers.insert(
+        peer_b,
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: genesis_digest,
+            on_same_chain_as_us: true,
+            height: 10,
+            lowest: 0,
+        },
+    );
+
+    // No scores yet, should return None
+    assert!(
+        peer_heights
+            .find_peer_to_disconnect(Duration::from_secs(1))
+            .is_none()
+    );
+
+    // Create a score for peer_a that has been failing for longer
+    let mut score_a = PeerScore::new(Duration::from_secs(60), 0.3);
+    for _ in 0..7 {
+        score_a.record_success(100, Duration::from_secs(1));
+    }
+    for _ in 0..4 {
+        score_a.record_failure();
+    }
+    // Manually set failing_since to a time in the past
+    score_a.failing_since = Some(StdInstant::now() - Duration::from_secs(120));
+    peer_heights.scores.insert(peer_a, score_a);
+
+    // Create a score for peer_b that has been failing for less time
+    let mut score_b = PeerScore::new(Duration::from_secs(60), 0.3);
+    for _ in 0..7 {
+        score_b.record_success(100, Duration::from_secs(1));
+    }
+    for _ in 0..4 {
+        score_b.record_failure();
+    }
+    score_b.failing_since = Some(StdInstant::now() - Duration::from_secs(30));
+    peer_heights.scores.insert(peer_b, score_b);
+
+    // With a 10-second threshold, both are eligible but peer_a has been failing longer
+    let result = peer_heights.find_peer_to_disconnect(Duration::from_secs(10));
+    assert_eq!(result, Some(peer_a));
+
+    // With a 60-second threshold, only peer_a qualifies
+    let result = peer_heights.find_peer_to_disconnect(Duration::from_secs(60));
+    assert_eq!(result, Some(peer_a));
+
+    // With a 200-second threshold, neither qualifies
+    let result = peer_heights.find_peer_to_disconnect(Duration::from_secs(200));
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_min_peer_count_prevents_disconnect() {
+    use super::{PeerHeights, PeerScore, PeerStateSyncInfo};
+    use anemo::PeerId;
+
+    let mut peer_heights = PeerHeights {
+        peers: HashMap::new(),
+        unprocessed_checkpoints: HashMap::new(),
+        sequence_number_to_digest: HashMap::new(),
+        scores: HashMap::new(),
+        wait_interval_when_no_peer_to_sync_content: Duration::from_secs(1),
+        peer_scoring_window: Duration::from_secs(60),
+        peer_failure_rate: 0.3,
+        checkpoint_content_timeout_min: Duration::from_secs(10),
+        checkpoint_content_timeout_max: Duration::from_secs(30),
+        exploration_probability: 0.1,
+    };
+
+    let peer_a = PeerId([1; 32]);
+    let genesis_digest = CheckpointDigest::default();
+
+    peer_heights.peers.insert(
+        peer_a,
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: genesis_digest,
+            on_same_chain_as_us: true,
+            height: 10,
+            lowest: 0,
+        },
+    );
+
+    // Peer not on same chain should not be selected
+    let peer_b = PeerId([2; 32]);
+    peer_heights.peers.insert(
+        peer_b,
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: genesis_digest,
+            on_same_chain_as_us: false,
+            height: 10,
+            lowest: 0,
+        },
+    );
+
+    let mut score_a = PeerScore::new(Duration::from_secs(60), 0.3);
+    for _ in 0..7 {
+        score_a.record_success(100, Duration::from_secs(1));
+    }
+    for _ in 0..4 {
+        score_a.record_failure();
+    }
+    score_a.failing_since = Some(StdInstant::now() - Duration::from_secs(600));
+    peer_heights.scores.insert(peer_a, score_a);
+
+    // peer_b has a failing score too, but is NOT on same chain
+    let mut score_b = PeerScore::new(Duration::from_secs(60), 0.3);
+    for _ in 0..7 {
+        score_b.record_success(100, Duration::from_secs(1));
+    }
+    for _ in 0..4 {
+        score_b.record_failure();
+    }
+    score_b.failing_since = Some(StdInstant::now() - Duration::from_secs(600));
+    peer_heights.scores.insert(peer_b, score_b);
+
+    // find_peer_to_disconnect should only return peer_a (same chain)
+    let result = peer_heights.find_peer_to_disconnect(Duration::from_secs(10));
+    assert_eq!(result, Some(peer_a));
+}
+
+#[test]
+fn test_lost_peer_clears_scores() {
+    use super::{PeerHeights, PeerStateSyncInfo};
+    use anemo::PeerId;
+
+    let mut peer_heights = PeerHeights {
+        peers: HashMap::new(),
+        unprocessed_checkpoints: HashMap::new(),
+        sequence_number_to_digest: HashMap::new(),
+        scores: HashMap::new(),
+        wait_interval_when_no_peer_to_sync_content: Duration::from_secs(1),
+        peer_scoring_window: Duration::from_secs(60),
+        peer_failure_rate: 0.3,
+        checkpoint_content_timeout_min: Duration::from_secs(10),
+        checkpoint_content_timeout_max: Duration::from_secs(30),
+        exploration_probability: 0.1,
+    };
+
+    let peer_id = PeerId([1; 32]);
+    let genesis_digest = CheckpointDigest::default();
+
+    peer_heights.peers.insert(
+        peer_id,
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: genesis_digest,
+            on_same_chain_as_us: true,
+            height: 10,
+            lowest: 0,
+        },
+    );
+
+    peer_heights.record_success(peer_id, 100, Duration::from_secs(1));
+    assert!(peer_heights.scores.contains_key(&peer_id));
+
+    // Simulate LostPeer: remove both peers and scores
+    peer_heights.peers.remove(&peer_id);
+    peer_heights.scores.remove(&peer_id);
+
+    assert!(!peer_heights.peers.contains_key(&peer_id));
+    assert!(!peer_heights.scores.contains_key(&peer_id));
+    assert!(peer_heights.get_throughput(&peer_id).is_none());
+    assert!(!peer_heights.is_failing(&peer_id));
 }
 
 #[test]

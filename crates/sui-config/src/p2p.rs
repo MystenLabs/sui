@@ -255,6 +255,20 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `0.3` (30%).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_failure_rate: Option<f64>,
+
+    /// Duration in milliseconds that a peer must be continuously failing before it is
+    /// disconnected. Set to 0 to disable automatic disconnect of failing peers.
+    ///
+    /// If unspecified, this will default to `300,000` (5 minutes).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_disconnect_threshold_ms: Option<u64>,
+
+    /// Minimum number of same-chain connected peers below which no failing-peer disconnect
+    /// will occur.
+    ///
+    /// If unspecified, this will default to `2`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_peers_for_disconnect: Option<usize>,
 }
 
 impl StateSyncConfig {
@@ -385,6 +399,16 @@ impl StateSyncConfig {
     pub fn peer_failure_rate(&self) -> f64 {
         const DEFAULT: f64 = 0.3;
         self.peer_failure_rate.unwrap_or(DEFAULT)
+    }
+
+    pub fn peer_disconnect_threshold(&self) -> Duration {
+        const DEFAULT_MS: u64 = 300_000; // 5 minutes
+        Duration::from_millis(self.peer_disconnect_threshold_ms.unwrap_or(DEFAULT_MS))
+    }
+
+    pub fn min_peers_for_disconnect(&self) -> usize {
+        const DEFAULT: usize = 2;
+        self.min_peers_for_disconnect.unwrap_or(DEFAULT)
     }
 
     pub fn randomized_for_testing() -> Self {
