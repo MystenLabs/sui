@@ -615,7 +615,7 @@
           "schema": {
             "type": "integer",
             "format": "uint",
-            "minimum": 0.0
+            "minimum": 0
           }
         },
         {
@@ -3238,7 +3238,7 @@
           "schema": {
             "type": "integer",
             "format": "uint",
-            "minimum": 0.0
+            "minimum": 0
           }
         }
       ],
@@ -3444,7 +3444,7 @@
           "schema": {
             "type": "integer",
             "format": "uint",
-            "minimum": 0.0
+            "minimum": 0
           }
         }
       ],
@@ -3676,7 +3676,7 @@
           "schema": {
             "type": "integer",
             "format": "uint",
-            "minimum": 0.0
+            "minimum": 0
           }
         }
       ],
@@ -3819,7 +3819,7 @@
           "schema": {
             "type": "integer",
             "format": "uint",
-            "minimum": 0.0
+            "minimum": 0
           }
         }
       ],
@@ -4215,7 +4215,7 @@
           "schema": {
             "type": "integer",
             "format": "uint",
-            "minimum": 0.0
+            "minimum": 0
           }
         },
         {
@@ -4359,7 +4359,7 @@
           "schema": {
             "type": "integer",
             "format": "uint",
-            "minimum": 0.0
+            "minimum": 0
           }
         },
         {
@@ -4495,7 +4495,7 @@
           "schema": {
             "type": "integer",
             "format": "uint",
-            "minimum": 0.0
+            "minimum": 0
           }
         }
       ],
@@ -5461,7 +5461,7 @@
               "integer": {
                 "type": "integer",
                 "format": "uint64",
-                "minimum": 0.0
+                "minimum": 0
               }
             },
             "additionalProperties": false
@@ -5478,12 +5478,12 @@
                   {
                     "type": "integer",
                     "format": "uint64",
-                    "minimum": 0.0
+                    "minimum": 0
                   },
                   {
                     "type": "integer",
                     "format": "uint64",
-                    "minimum": 0.0
+                    "minimum": 0
                   }
                 ],
                 "maxItems": 2,
@@ -5506,7 +5506,7 @@
                     {
                       "type": "integer",
                       "format": "uint64",
-                      "minimum": 0.0
+                      "minimum": 0
                     },
                     {
                       "$ref": "#/components/schemas/Digest"
@@ -5544,7 +5544,7 @@
           "coinObjectCount": {
             "type": "integer",
             "format": "uint",
-            "minimum": 0.0
+            "minimum": 0
           },
           "coinType": {
             "type": "string"
@@ -5789,7 +5789,7 @@
           "indexMod4": {
             "type": "integer",
             "format": "uint8",
-            "minimum": 0.0
+            "minimum": 0
           },
           "value": {
             "type": "string"
@@ -6196,7 +6196,7 @@
             "items": {
               "type": "integer",
               "format": "uint8",
-              "minimum": 0.0
+              "minimum": 0
             }
           },
           "rawTxnData": {
@@ -6205,7 +6205,7 @@
             "items": {
               "type": "integer",
               "format": "uint8",
-              "minimum": 0.0
+              "minimum": 0
             }
           },
           "results": {
@@ -6405,7 +6405,7 @@
             "items": {
               "type": "integer",
               "format": "uint8",
-              "minimum": 0.0
+              "minimum": 0
             },
             "maxItems": 32,
             "minItems": 32
@@ -7097,7 +7097,7 @@
           {
             "type": "integer",
             "format": "uint32",
-            "minimum": 0.0
+            "minimum": 0
           },
           {
             "type": "boolean"
@@ -7178,7 +7178,7 @@
             "description": "A bitmap that indicates the position of which public key the signature should be authenticated with.",
             "type": "integer",
             "format": "uint16",
-            "minimum": 0.0
+            "minimum": 0
           },
           "multisig_pk": {
             "description": "The public key encoded with each public key with its signature scheme used along with the corresponding weight.",
@@ -7251,7 +7251,7 @@
                 {
                   "type": "integer",
                   "format": "uint8",
-                  "minimum": 0.0
+                  "minimum": 0
                 }
               ],
               "maxItems": 2,
@@ -7262,7 +7262,7 @@
             "description": "If the total weight of the public keys corresponding to verified signatures is larger than threshold, the MultiSig is verified.",
             "type": "integer",
             "format": "uint16",
-            "minimum": 0.0
+            "minimum": 0
           }
         }
       },
@@ -7286,7 +7286,7 @@
                 {
                   "type": "integer",
                   "format": "uint8",
-                  "minimum": 0.0
+                  "minimum": 0
                 }
               ],
               "maxItems": 2,
@@ -7297,7 +7297,7 @@
             "description": "If the total weight of the public keys corresponding to verified signatures is larger than threshold, the MultiSig is verified.",
             "type": "integer",
             "format": "uint16",
-            "minimum": 0.0
+            "minimum": 0
           }
         }
       },
@@ -8296,7 +8296,7 @@
             "items": {
               "type": "integer",
               "format": "uint8",
-              "minimum": 0.0
+              "minimum": 0
             }
           },
           "client_data_json": {
@@ -8593,7 +8593,7 @@
       "SequenceNumber": {
         "type": "integer",
         "format": "uint64",
-        "minimum": 0.0
+        "minimum": 0
       },
       "SequenceNumber2": {
         "$ref": "#/components/schemas/BigInt_for_uint64"
@@ -8756,7 +8756,7 @@
               "Input": {
                 "type": "integer",
                 "format": "uint16",
-                "minimum": 0.0
+                "minimum": 0
               }
             },
             "additionalProperties": false
@@ -8771,7 +8771,7 @@
               "Result": {
                 "type": "integer",
                 "format": "uint16",
-                "minimum": 0.0
+                "minimum": 0
               }
             },
             "additionalProperties": false
@@ -8789,12 +8789,12 @@
                   {
                     "type": "integer",
                     "format": "uint16",
-                    "minimum": 0.0
+                    "minimum": 0
                   },
                   {
                     "type": "integer",
                     "format": "uint16",
-                    "minimum": 0.0
+                    "minimum": 0
                   }
                 ],
                 "maxItems": 2,
@@ -9005,7 +9005,7 @@
             "description": "Number of decimal places the coin uses.",
             "type": "integer",
             "format": "uint8",
-            "minimum": 0.0
+            "minimum": 0
           },
           "description": {
             "description": "Description of the token",
@@ -9122,7 +9122,7 @@
                   "items": {
                     "type": "integer",
                     "format": "uint8",
-                    "minimum": 0.0
+                    "minimum": 0
                   }
                 },
                 {
@@ -9144,7 +9144,7 @@
                   "items": {
                     "type": "integer",
                     "format": "uint8",
-                    "minimum": 0.0
+                    "minimum": 0
                   }
                 },
                 {
@@ -9228,7 +9228,7 @@
               "null"
             ],
             "format": "uint64",
-            "minimum": 0.0
+            "minimum": 0
           },
           "function": {
             "type": [
@@ -9242,7 +9242,7 @@
               "null"
             ],
             "format": "uint16",
-            "minimum": 0.0
+            "minimum": 0
           },
           "module_id": {
             "type": [
@@ -9385,7 +9385,7 @@
           "fileFormatVersion": {
             "type": "integer",
             "format": "uint32",
-            "minimum": 0.0
+            "minimum": 0
           },
           "friends": {
             "type": "array",
@@ -9501,7 +9501,7 @@
               "TypeParameter": {
                 "type": "integer",
                 "format": "uint16",
-                "minimum": 0.0
+                "minimum": 0
               }
             },
             "additionalProperties": false
@@ -10024,7 +10024,7 @@
             "description": "The rate at which the distribution amount decays at the end of each period. Expressed in basis points.",
             "type": "integer",
             "format": "uint16",
-            "minimum": 0.0
+            "minimum": 0
           },
           "stakeSubsidyDistributionCounter": {
             "description": "This counter may be different from the current epoch number if in some epochs we decide to skip the subsidy.",
@@ -11059,7 +11059,7 @@
                 "items": {
                   "type": "integer",
                   "format": "uint8",
-                  "minimum": 0.0
+                  "minimum": 0
                 }
               },
               "randomness_round": {
@@ -11320,7 +11320,7 @@
             "items": {
               "type": "integer",
               "format": "uint8",
-              "minimum": 0.0
+              "minimum": 0
             }
           },
           "rawTransaction": {
@@ -11737,7 +11737,7 @@
           "maxEpoch": {
             "type": "integer",
             "format": "uint64",
-            "minimum": 0.0
+            "minimum": 0
           },
           "userSignature": {
             "$ref": "#/components/schemas/Signature"
