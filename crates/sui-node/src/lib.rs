@@ -2005,6 +2005,10 @@ impl SuiNode {
         self.randomness_handle.clone()
     }
 
+    pub fn state_sync_handle(&self) -> state_sync::Handle {
+        self.state_sync_handle.clone()
+    }
+
     pub fn endpoint_manager(&self) -> &EndpointManager {
         &self.endpoint_manager
     }
