@@ -11,8 +11,8 @@ use crate::{
     execution_scheduler::{
         ExecutingGuard, PendingCertificateStats,
         funds_withdraw_scheduler::{
-            FundsSettlement, ScheduleStatus, TxFundsWithdraw, WithdrawReservations,
-            scheduler::FundsWithdrawScheduler,
+            AddressFundsSchedulerMetrics, FundsSettlement, ScheduleStatus, TxFundsWithdraw,
+            WithdrawReservations, scheduler::FundsWithdrawScheduler,
         },
     },
 };
@@ -94,6 +94,7 @@ pub struct ExecutionScheduler {
     address_funds_withdraw_scheduler: Arc<Mutex<Option<FundsWithdrawScheduler>>>,
     funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
     metrics: Arc<AuthorityMetrics>,
+    address_funds_scheduler_metrics: Arc<AddressFundsSchedulerMetrics>,
 }
 
 struct PendingGuard<'a> {
@@ -135,16 +136,20 @@ impl ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
         metrics: Arc<AuthorityMetrics>,
+        prometheus_registry: &prometheus::Registry,
     ) -> Self {
         tracing::info!(
             ?funds_withdraw_scheduler_type,
             "Creating new ExecutionScheduler"
         );
+        let address_funds_scheduler_metrics =
+            Arc::new(AddressFundsSchedulerMetrics::new(prometheus_registry));
         let address_funds_withdraw_scheduler = Self::initialize_funds_withdraw_scheduler(
             epoch_store,
             &object_cache_read,
             account_funds_read,
             funds_withdraw_scheduler_type,
+            &address_funds_scheduler_metrics,
         );
         Self {
             object_cache_read,
@@ -156,6 +161,7 @@ impl ExecutionScheduler {
             )),
             funds_withdraw_scheduler_type,
             metrics,
+            address_funds_scheduler_metrics,
         }
     }
 
@@ -164,6 +170,7 @@ impl ExecutionScheduler {
         object_cache_read: &Arc<dyn ObjectCacheRead>,
         account_funds_read: Arc<dyn AccountFundsRead>,
         scheduler_type: FundsWithdrawSchedulerType,
+        address_funds_scheduler_metrics: &Arc<AddressFundsSchedulerMetrics>,
     ) -> Option<FundsWithdrawScheduler> {
         let withdraw_scheduler_enabled =
             epoch_store.is_validator() && epoch_store.accumulators_enabled();
@@ -178,6 +185,7 @@ impl ExecutionScheduler {
             account_funds_read.clone(),
             starting_accumulator_version,
             scheduler_type,
+            address_funds_scheduler_metrics.clone(),
         );
 
         Some(address_funds_withdraw_scheduler)
@@ -646,6 +654,7 @@ impl ExecutionScheduler {
             &self.object_cache_read,
             account_funds_read.clone(),
             self.funds_withdraw_scheduler_type,
+            &self.address_funds_scheduler_metrics,
         );
         let mut guard = self.address_funds_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
@@ -722,6 +731,7 @@ mod test {
         // Create a new execution scheduler instead of reusing the authority's, to examine
         // execution_scheduler output from rx_ready_certificates.
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
+        let registry = prometheus::Registry::new();
         let execution_scheduler = ExecutionScheduler::new(
             state.get_object_cache_reader().clone(),
             state.get_account_funds_read().clone(),
@@ -730,6 +740,7 @@ mod test {
             &state.epoch_store_for_testing(),
             FundsWithdrawSchedulerType::default(),
             state.metrics.clone(),
+            &registry,
         );
 
         (execution_scheduler, rx_ready_certificates)

@@ -204,6 +204,10 @@ impl FundsWithdrawSchedulerTrait for EagerFundsWithdrawScheduler {
         debug!("Closing epoch in EagerFundsWithdrawScheduler");
     }
 
+    fn num_tracked_accounts(&self) -> usize {
+        self.inner_state.lock().tracked_accounts.len()
+    }
+
     #[cfg(test)]
     fn get_current_accumulator_version(&self) -> SequenceNumber {
         self.inner_state.lock().accumulator_version
