@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "110",
+              "maxSupportedProtocolVersion": "111",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1433,6 +1433,7 @@
                 "use_new_commit_handler": false,
                 "validate_identifier_inputs": false,
                 "validate_zklogin_public_identifier": false,
+                "validator_metadata_verify_v2": false,
                 "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,
                 "zklogin_auth": false
