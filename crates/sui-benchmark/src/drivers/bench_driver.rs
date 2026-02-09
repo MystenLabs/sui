@@ -250,8 +250,11 @@ enum NextOp {
         /// The payload updated with the effects of the transaction
         payload: Box<dyn Payload>,
     },
-    // The transaction failed and could not be retried
-    Failure,
+    // The transaction failed and could not be retried.
+    // Payload is preserved so its gas coin can be recycled.
+    Failure {
+        payload: Box<dyn Payload>,
+    },
     Retry(RetryType),
 }
 
@@ -922,7 +925,7 @@ async fn run_bench_worker(
                             })
                             .is_err()
                         {
-                            NextOp::Failure
+                            NextOp::Failure { payload }
                         } else {
                             metrics
                                 .num_error
@@ -1149,9 +1152,10 @@ async fn run_bench_worker(
                             break;
                         }
                     }
-                    NextOp::Failure => {
-                        error!("Permanent failure to execute payload. May result in gas objects being leaked");
+                    NextOp::Failure { payload } => {
                         num_error_txes += 1;
+                        num_in_flight -= 1;
+                        free_pool.push_back(payload);
                         // Update total benchmark progress
                         if update_progress(1) {
                             break;
@@ -1209,12 +1213,7 @@ async fn run_bench_worker(
     );
     while let Some(result) = futures.next().await {
         let p = match result {
-            NextOp::Failure => {
-                error!(
-                    "Permanent failure to execute payload. May result in gas objects being leaked"
-                );
-                continue;
-            }
+            NextOp::Failure { payload } => payload,
             NextOp::Response {
                 latency: _,
                 num_commands: _,
