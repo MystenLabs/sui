@@ -17,11 +17,9 @@ use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
-use prost::Message;
 use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
-use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
 use tracing::debug;
 use tracing::error;
 use tracing::warn;
@@ -30,6 +28,7 @@ use url::Url;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::Result as IngestionResult;
+use crate::ingestion::decode;
 use crate::ingestion::store_client::StoreIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IngestionMetrics;
@@ -341,27 +340,10 @@ impl IngestionClient {
                     FetchData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
 
-                        let decompressed = zstd::decode_all(&bytes[..]).map_err(|e| {
+                        decode::checkpoint(&bytes).map_err(|e| {
                             self.metrics.inc_retry(
                                 checkpoint,
-                                "decompression",
-                                IngestionError::DeserializationError(checkpoint, e.into()),
-                            )
-                        })?;
-
-                        let proto_checkpoint =
-                            ProtoCheckpoint::decode(&decompressed[..]).map_err(|e| {
-                                self.metrics.inc_retry(
-                                    checkpoint,
-                                    "deserialization",
-                                    IngestionError::DeserializationError(checkpoint, e.into()),
-                                )
-                            })?;
-
-                        Checkpoint::try_from(&proto_checkpoint).map_err(|e| {
-                            self.metrics.inc_retry(
-                                checkpoint,
-                                "proto_conversion",
+                                e.reason(),
                                 IngestionError::DeserializationError(checkpoint, e.into()),
                             )
                         })?

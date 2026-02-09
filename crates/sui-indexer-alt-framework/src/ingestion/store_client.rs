@@ -12,10 +12,12 @@ use serde::de::DeserializeOwned;
 use tracing::debug;
 use tracing::error;
 
+use crate::ingestion::decode;
 use crate::ingestion::ingestion_client::FetchData;
 use crate::ingestion::ingestion_client::FetchError;
 use crate::ingestion::ingestion_client::FetchResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
+use crate::types::full_checkpoint_content::Checkpoint;
 
 pub struct StoreIngestionClient {
     store: Arc<dyn ObjectStore>,
@@ -33,9 +35,13 @@ impl StoreIngestionClient {
         Ok(serde_json::from_slice(&bytes)?)
     }
 
-    /// Fetch the bytes for a checkpoint by its sequence number.
-    /// The response is the serialized representation of a checkpoint, as raw bytes.
-    pub async fn checkpoint(&self, checkpoint: u64) -> object_store::Result<Bytes> {
+    /// Fetch and decode checkpoint data by sequence number.
+    pub async fn checkpoint(&self, checkpoint: u64) -> anyhow::Result<Checkpoint> {
+        let bytes = self.checkpoint_bytes(checkpoint).await?;
+        Ok(decode::checkpoint(&bytes)?)
+    }
+
+    async fn checkpoint_bytes(&self, checkpoint: u64) -> object_store::Result<Bytes> {
         self.bytes(ObjectPath::from(format!("{checkpoint}.binpb.zst")))
             .await
     }
@@ -58,7 +64,7 @@ impl IngestionClientTrait for StoreIngestionClient {
     /// - server errors (5xx),
     /// - issues getting a full response.
     async fn fetch(&self, checkpoint: u64) -> FetchResult {
-        match self.checkpoint(checkpoint).await {
+        match self.checkpoint_bytes(checkpoint).await {
             Ok(bytes) => Ok(FetchData::Raw(bytes)),
             Err(ObjectStoreError::NotFound { .. }) => {
                 debug!(checkpoint, "Checkpoint not found");
