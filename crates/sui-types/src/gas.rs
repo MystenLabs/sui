@@ -104,8 +104,6 @@ pub mod checked {
             Self::V2(SuiGasStatusV2::new_unmetered())
         }
 
-        // This is the only public API on SuiGasStatus, all other gas related operations should
-        // go through `GasCharger`
         pub fn check_gas_balance(
             &self,
             gas_objs: &[&ObjectReadResult],
@@ -113,6 +111,22 @@ pub mod checked {
         ) -> UserInputResult {
             match self {
                 Self::V2(status) => status.check_gas_balance(gas_objs, gas_budget),
+            }
+        }
+
+        pub fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult {
+            match self {
+                Self::V2(status) => status.check_gas_objects(gas_objs),
+            }
+        }
+
+        pub fn check_gas_data(
+            &self,
+            gas_objs: &[&ObjectReadResult],
+            gas_budget: u64,
+        ) -> UserInputResult {
+            match self {
+                Self::V2(status) => status.check_gas_data(gas_objs, gas_budget),
             }
         }
 

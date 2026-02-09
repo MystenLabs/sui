@@ -133,7 +133,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::gas::GasCostSummary;
 use sui_types::inner_temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
 };
@@ -198,7 +198,6 @@ pub use crate::checkpoints::checkpoint_executor::utils::{
     CheckpointTimeoutConfig, init_checkpoint_timeout_config,
 };
 
-use crate::authority::authority_store_tables::AuthorityPrunerTables;
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
@@ -2513,20 +2512,13 @@ impl AuthorityState {
                 &self.config.verifier_signing_config,
             )?
         } else {
-            let checked_input_objects = sui_transaction_checks::check_dev_inspect_input(
+            sui_transaction_checks::check_dev_inspect_input(
                 protocol_config,
-                transaction.kind(),
+                &transaction,
                 input_objects,
                 receiving_objects,
-            )?;
-            let gas_status = SuiGasStatus::new(
-                transaction.gas_budget(),
-                transaction.gas_price(),
                 epoch_store.reference_gas_price(),
-                protocol_config,
-            )?;
-
-            (gas_status, checked_input_objects)
+            )?
         };
 
         // TODO see if we can spin up a VM once and reuse it
@@ -2722,20 +2714,13 @@ impl AuthorityState {
                     dummy_gas_object.into(),
                 ));
             }
-            let checked_input_objects = sui_transaction_checks::check_dev_inspect_input(
+            sui_transaction_checks::check_dev_inspect_input(
                 protocol_config,
-                &transaction_kind,
+                &transaction,
                 input_objects,
                 receiving_objects,
-            )?;
-            let gas_status = SuiGasStatus::new(
-                max_tx_gas,
-                transaction.gas_price(),
                 reference_gas_price,
-                protocol_config,
-            )?;
-
-            (gas_status, checked_input_objects)
+            )?
         } else {
             // If we are not skipping checks, then we call the check_transaction_input function and its dummy gas
             // variant which will perform full fledged checks just like a real transaction execution.
@@ -3514,7 +3499,6 @@ impl AuthorityState {
         db_checkpoint_config: &DBCheckpointConfig,
         config: NodeConfig,
         chain_identifier: ChainIdentifier,
-        pruner_db: Option<Arc<AuthorityPrunerTables>>,
         policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
         pruner_watermarks: Arc<PrunerWatermarks>,
@@ -3531,6 +3515,7 @@ impl AuthorityState {
                 .clone(),
             tx_ready_certificates,
             &epoch_store,
+            config.funds_withdraw_scheduler_type,
             metrics.clone(),
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
@@ -3548,7 +3533,6 @@ impl AuthorityState {
             epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
-            pruner_db,
             pruner_watermarks,
         );
         let input_loader =
@@ -3744,7 +3728,6 @@ impl AuthorityState {
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
             self.rpc_index.as_deref(),
-            None,
             config.authority_store_pruning_config,
             metrics,
             EPOCH_DURATION_MS_FOR_TESTING,

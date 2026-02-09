@@ -3401,3 +3401,30 @@ async fn test_address_balance_gas_merge_accumulator_events() {
 
     test_cluster.trigger_reconfiguration().await;
 }
+
+#[sim_test]
+async fn test_funds_withdraw_scheduler_type_alternation() {
+    use sui_config::node::FundsWithdrawSchedulerType;
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .build()
+        .await;
+
+    let validator_configs = test_cluster.swarm.config().validator_configs();
+    assert_eq!(validator_configs.len(), 4);
+
+    // Verify alternating scheduler types: even indices use Eager, odd indices use Naive
+    for (idx, config) in validator_configs.iter().enumerate() {
+        let expected_type = if idx % 2 == 0 {
+            FundsWithdrawSchedulerType::Eager
+        } else {
+            FundsWithdrawSchedulerType::Naive
+        };
+        assert_eq!(
+            config.funds_withdraw_scheduler_type, expected_type,
+            "Validator {} has unexpected scheduler type: {:?}, expected {:?}",
+            idx, config.funds_withdraw_scheduler_type, expected_type
+        );
+    }
+}

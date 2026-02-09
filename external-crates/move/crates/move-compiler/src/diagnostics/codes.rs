@@ -270,7 +270,7 @@ codes!(
         DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
         InvalidString: { msg: "invalid string after type inference", severity: NonblockingError },
         MissingLiteralType:
-            { msg: "unable to determine princiapl type for literal", severity: Warning },
+            { msg: "unable to determine principal type for literal", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

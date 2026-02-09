@@ -19,8 +19,8 @@ use std::collections::{BTreeMap, BTreeSet};
 // Note this is not to be used internally and is not
 pub struct Path<Loc, Lbl> {
     pub loc: Loc,
-    pub(crate) labels: Vec<Lbl>,
-    pub(crate) ends_in_dot_star: bool,
+    pub labels: Vec<Lbl>,
+    pub ends_in_dot_star: bool,
 }
 
 pub type Paths<Loc, Lbl> = Vec<Path<Loc, Lbl>>;

@@ -60,7 +60,7 @@ pub fn validate_metadata_bcs(
 
     let cost = context.gas_used();
 
-    if let Result::Err(err_code) = validator_metadata.verify() {
+    if let Result::Err(err_code) = validator_metadata.verify(true) {
         return Ok(NativeResult::err(cost, err_code));
     }
 

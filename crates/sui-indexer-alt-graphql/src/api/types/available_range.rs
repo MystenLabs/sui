@@ -100,9 +100,11 @@ impl AvailableRangeKey {
         collect_pipelines(&self.type_, self.field.as_deref(), filters, &mut pipelines);
 
         pipelines.iter().try_fold(0, |acc, pipeline| {
-            watermarks
-                .pipeline_lo_watermark(pipeline)
-                .map(|wm| acc.max(wm.checkpoint()))
+            let watermark = watermarks
+                .per_pipeline()
+                .get(pipeline)
+                .ok_or_else(|| pipeline_unavailable(pipeline))?;
+            Ok(acc.max(watermark.lo().checkpoint()))
         })
     }
 

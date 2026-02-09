@@ -27,9 +27,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 use sui_core::authority::ExecutionEnv;
 use sui_core::authority::RandomnessRoundReceiver;
-use sui_core::authority::authority_store_tables::{
-    AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
-};
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
 use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
@@ -239,7 +237,7 @@ mod simulator {
 pub use simulator::set_jwk_injector;
 #[cfg(msim)]
 use simulator::*;
-use sui_core::authority::authority_store_pruner::{ObjectsCompactionFilter, PrunerWatermarks};
+use sui_core::authority::authority_store_pruner::PrunerWatermarks;
 use sui_core::{
     consensus_handler::ConsensusHandlerInitializer, safe_client::SafeClientMetricsBase,
 };
@@ -513,24 +511,10 @@ impl SuiNode {
         )
         .await?;
 
-        let mut pruner_db = None;
-        if config
-            .authority_store_pruning_config
-            .enable_compaction_filter
-        {
-            pruner_db = Some(Arc::new(AuthorityPrunerTables::open(
-                &config.db_path().join("store"),
-            )));
-        }
-        let compaction_filter = pruner_db
-            .clone()
-            .map(|db| ObjectsCompactionFilter::new(db, &prometheus_registry));
-
         // By default, only enable write stall on validators for perpetual db.
         let enable_write_stall = config.enable_db_write_stall.unwrap_or(is_validator);
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
-            compaction_filter,
             is_validator,
         };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
@@ -652,7 +636,7 @@ impl SuiNode {
         );
 
         let index_store = if is_full_node && config.enable_index_processing {
-            info!("creating index store");
+            info!("creating jsonrpc index store");
             Some(Arc::new(IndexStore::new(
                 config.db_path().join("indexes"),
                 &prometheus_registry,
@@ -666,6 +650,7 @@ impl SuiNode {
         };
 
         let rpc_index = if is_full_node && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
+            info!("creating rpc index store");
             Some(Arc::new(
                 RpcIndexStore::new(
                     &config.db_path(),
@@ -770,7 +755,6 @@ impl SuiNode {
             &db_checkpoint_config,
             config.clone(),
             chain_identifier,
-            pruner_db,
             config.policy_config.clone(),
             config.firewall_config.clone(),
             pruner_watermarks,
@@ -2401,6 +2385,8 @@ async fn build_http_servers(
     if config.consensus_config().is_some() {
         return Ok((HttpServers::default(), None));
     }
+
+    info!("starting rpc service with config: {:?}", config.rpc);
 
     let mut router = axum::Router::new();
 

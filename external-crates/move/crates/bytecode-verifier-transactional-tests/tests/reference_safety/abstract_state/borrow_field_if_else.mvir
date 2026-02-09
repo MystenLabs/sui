@@ -1,0 +1,28 @@
+// writing to field after join
+
+//# publish
+
+module 0x2.borrow_field_if_else {
+
+struct S has copy, drop {
+    f: u64,
+    g: u64,
+}
+
+t(cond: bool, s: &mut Self.S) {
+    let x: &mut u64;
+label l0:
+    jump_if_false (move(cond)) l2;
+label l1:
+    x = &mut (copy(s)).S::f;
+    jump l3;
+label l2:
+    x = &mut (copy(s)).S::g;
+label l3:
+    *move(x) = 0;
+    return;
+}
+
+}
+
+//# view-abstract-state 0x2::borrow_field_if_else::t

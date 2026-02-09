@@ -41,6 +41,33 @@ def is_git_dirty(cwd=None):
     return result1.returncode != 0 or result2.returncode != 0
 
 
+def validate_commit_on_remote(sha, repo, label):
+    """Check that a commit exists on a remote GitHub repo using gh api."""
+    result = subprocess.run(
+        ["gh", "api", f"repos/{repo}/commits/{sha}", "--silent"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"Error: {label} commit {sha[:8]} not found on {repo}", file=sys.stderr)
+        return False
+    return True
+
+
+def validate_ref_on_remote(ref, cwd):
+    """Check that a ref exists on the remote origin."""
+    result = subprocess.run(
+        ["git", "ls-remote", "--exit-code", "origin", ref],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    if result.returncode != 0:
+        print(f"Error: ref '{ref}' not found on origin in {cwd}", file=sys.stderr)
+        return False
+    return True
+
+
 def format_cmd_for_output(cmd, description):
     """Format command for output, matching bash script's quoting behavior."""
     parts = []
@@ -129,6 +156,11 @@ def main():
         action="store_true",
         help="Print the command that would be executed without running it",
     )
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip validation that commits/refs exist on remote",
+    )
 
     args = parser.parse_args()
 
@@ -168,6 +200,39 @@ def main():
         commit = sui_commit
         alt_commit = args.alt_commit
 
+    # Validate commits/refs exist on remote
+    if not args.skip_validation:
+        valid = True
+        if not validate_commit_on_remote(commit, "MystenLabs/sui", "commit"):
+            valid = False
+        if alt_commit and not validate_commit_on_remote(alt_commit, "MystenLabs/sui", "alt_commit"):
+            valid = False
+        if args.stress_commit and not validate_commit_on_remote(args.stress_commit, "MystenLabs/sui", "stress_commit"):
+            valid = False
+        if args.cli_commit and not validate_commit_on_remote(args.cli_commit, "MystenLabs/sui", "cli_commit"):
+            valid = False
+        if args.workflow_ref and not validate_ref_on_remote(args.workflow_ref, sui_ops_repo):
+            valid = False
+        if not valid:
+            return 1
+
+    # Auto-generate description if not provided
+    if args.description:
+        description = args.description
+    else:
+        branch = get_git_output(["rev-parse", "--abbrev-ref", "HEAD"])
+        parts = [branch, commit[:8]]
+        if args.upgrade:
+            parts.append("upgrade")
+        if args.split_version:
+            parts.append("split-version")
+        parts.append(f"{args.test_duration}h")
+        if args.protocol_override:
+            parts.append(f"proto:{args.protocol_override}")
+        if args.tidehunter_commit:
+            parts.append("tidehunter")
+        description = " ".join(parts)
+
     # Build the gh workflow run command
     cmd = ["gh", "workflow", "run"]
 
@@ -178,8 +243,7 @@ def main():
     cmd.extend(["-f", f"sui_commit={commit}"])
     cmd.extend(["-f", f"test_duration={args.test_duration}"])
 
-    if args.description:
-        cmd.extend(["-f", f"description={args.description}"])
+    cmd.extend(["-f", f"description={description}"])
 
     if alt_commit:
         cmd.extend(["-f", f"sui_commit_alt={alt_commit}"])
@@ -206,7 +270,7 @@ def main():
         cmd.extend(["-f", f"test_name={args.test_name}"])
 
     # Print the command (format to match bash script's output)
-    cmd_str = format_cmd_for_output(cmd, args.description)
+    cmd_str = format_cmd_for_output(cmd, description)
     print(f"Running: {cmd_str}")
 
     if args.dry_run:

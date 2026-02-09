@@ -7,6 +7,7 @@ use bytes::Bytes;
 use object_store::Error as ObjectStoreError;
 use object_store::ObjectStore;
 use object_store::ObjectStoreExt;
+use object_store::RetryConfig;
 use object_store::path::Path as ObjectPath;
 use serde::de::DeserializeOwned;
 use tracing::debug;
@@ -16,6 +17,15 @@ use crate::ingestion::ingestion_client::FetchData;
 use crate::ingestion::ingestion_client::FetchError;
 use crate::ingestion::ingestion_client::FetchResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
+
+/// Disable object_store's internal retries so that transient errors (429s, 5xx) propagate
+/// immediately to the framework's own retry logic.
+pub(super) fn retry_config() -> RetryConfig {
+    RetryConfig {
+        max_retries: 0,
+        ..Default::default()
+    }
+}
 
 pub struct StoreIngestionClient {
     store: Arc<dyn ObjectStore>,

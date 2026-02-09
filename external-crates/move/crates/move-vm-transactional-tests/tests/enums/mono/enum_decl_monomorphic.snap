@@ -23,29 +23,29 @@ enum EnumWithTwoVariantsPlusAbilities has copy, drop, store, key {
 }
 
 public f(): u64 {
-L0:	loc0: EnumWithTwoVariants
-L1:	loc1: u64
+L0:	x: EnumWithTwoVariants
+L1:	y: u64
 B0:
 	0: LdU64(42)
 	1: PackVariant(VariantHandleIndex(0))
-	2: StLoc[0](loc0: EnumWithTwoVariants)
-	3: ImmBorrowLoc[0](loc0: EnumWithTwoVariants)
+	2: StLoc[0](x: EnumWithTwoVariants)
+	3: ImmBorrowLoc[0](x: EnumWithTwoVariants)
 	4: VariantSwitch(VariantJumpTableIndex(0))
 B1:
-	5: MoveLoc[0](loc0: EnumWithTwoVariants)
+	5: MoveLoc[0](x: EnumWithTwoVariants)
 	6: UnpackVariant(VariantHandleIndex(1))
 	7: LdU64(0)
 	8: Ret
 B2:
-	9: MoveLoc[0](loc0: EnumWithTwoVariants)
+	9: MoveLoc[0](x: EnumWithTwoVariants)
 	10: UnpackVariant(VariantHandleIndex(0))
-	11: StLoc[1](loc1: u64)
-	12: MoveLoc[1](loc1: u64)
+	11: StLoc[1](y: u64)
+	12: MoveLoc[1](y: u64)
 	13: Ret
 Jump tables:
 [0]:	variant_switch EnumWithTwoVariants {
-		Variant0 => jump 5
-		Variant1 => jump 9
+		One => jump 5
+		Two => jump 9
 	}
 }
 

@@ -240,6 +240,13 @@ where
             auxiliary_data,
         };
 
+        let request_latency = timer.elapsed().as_secs_f64();
+        if request_latency > 10.0 {
+            warn!(
+                ?tx_digest,
+                "Request latency {} is too high", request_latency,
+            );
+        }
         self.inner
             .metrics
             .request_latency
@@ -248,7 +255,7 @@ where
                 "execute_transaction_block",
                 executed_locally.to_string().as_str(),
             ])
-            .observe(timer.elapsed().as_secs_f64());
+            .observe(request_latency);
 
         Ok((response, executed_locally))
     }
@@ -416,6 +423,7 @@ where
                             );
                         }
                     };
+                    tracing::debug!("Wait for {:.3}s before next retry", delay.as_secs_f32());
                     sleep(delay).await;
                 }
             });
@@ -660,9 +668,8 @@ where
         client_addr: Option<SocketAddr>,
         finality_timeout: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionSubmissionError> {
-        debug!("TO Received transaction execution request.");
-
         let timer = Instant::now();
+        let tx_digest = *verified_transaction.digest();
         let tx_type = if verified_transaction.is_consensus_tx() {
             TxType::SharedObject
         } else {
@@ -696,6 +703,12 @@ where
         self.metrics.wait_for_finality_finished.inc();
 
         let elapsed = timer.elapsed().as_secs_f64();
+        if elapsed > 10.0 {
+            warn!(
+                ?tx_digest,
+                "Settlement finality latency {} is too high", elapsed,
+            );
+        }
         self.metrics
             .settlement_finality_latency
             .with_label_values(&[tx_type.as_str(), driver_type])
@@ -716,8 +729,6 @@ where
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionSubmissionError> {
         let tx_digest = *verified_transaction.digest();
-        debug!("Using TransactionDriver for transaction {:?}", tx_digest);
-
         let td_response = td
             .drive_transaction(
                 SubmitTxRequest::new_transaction(request.transaction.clone()),
@@ -747,7 +758,7 @@ where
 
         match td_response {
             Err(e) => {
-                warn!("TransactionDriver error: {e:?}");
+                warn!(?tx_digest, "TransactionDriver error: {e:?}");
                 Err(e)
             }
             Ok(quorum_transaction_response) => {
