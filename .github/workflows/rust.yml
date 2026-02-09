@@ -144,7 +144,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test with tidehunter
         run: |
-          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo test -p sui-core --features typed-store/tidehunter
+          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci -p sui-core --features typed-store/tidehunter
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
