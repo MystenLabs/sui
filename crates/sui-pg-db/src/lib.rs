@@ -4,6 +4,7 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -21,6 +22,7 @@ use diesel_async::pooled_connection::bb8::PooledConnection;
 use diesel_migrations::EmbeddedMigrations;
 use diesel_migrations::embed_migrations;
 use futures::FutureExt;
+use prometheus::Registry;
 use tracing::info;
 use url::Url;
 
@@ -28,6 +30,7 @@ use crate::tls::AsyncPgConnectionWithId;
 use crate::tls::build_tls_config;
 use crate::tls::establish_tls_connection;
 
+mod metrics;
 mod model;
 pub mod query;
 pub mod schema;
@@ -35,6 +38,7 @@ pub mod store;
 pub mod temp;
 mod tls;
 
+use crate::metrics::PoolMetrics;
 pub use sui_field_count::FieldCount;
 pub use sui_sql_macro::sql;
 
@@ -65,7 +69,16 @@ pub struct DbArgs {
 }
 
 #[derive(Clone)]
-pub struct Db(Pool<AsyncPgConnectionWithId>);
+pub struct Db {
+    pool: Pool<AsyncPgConnectionWithId>,
+    pool_metrics: Option<Arc<PoolMetrics>>,
+}
+
+// Ensures that unacquired_canceled is incremented if neither acquired nor unacquired_error are so
+// that one of acquired, unacquired_error, unacquired_canceled is incremented for every requested
+// connection. This is used to be able to calculate the number of pending connections:
+// pending = requested - (acquired + unacquired_error + unacquired_canceled)
+struct CancelGuard<'m>(Option<&'m PoolMetrics>);
 
 /// Wrapper struct over the remote `PooledConnection` type for dealing with the `Store` trait.
 pub struct Connection<'a>(PooledConnection<'a, AsyncPgConnectionWithId>);
@@ -84,25 +97,60 @@ impl Db {
     /// Construct a new DB connection pool talking to the database at `database_url` that supports
     /// write and reads. Instances of [Db] can be cloned to share access to the same pool.
     pub async fn for_write(database_url: Url, config: DbArgs) -> anyhow::Result<Self> {
-        Ok(Self(pool(database_url, config, false).await?))
+        Self::new(database_url, config, false).await
     }
 
     /// Construct a new DB connection pool talking to the database at `database_url` that defaults
     /// to read-only transactions. Instances of [Db] can be cloned to share access to the same
     /// pool.
     pub async fn for_read(database_url: Url, config: DbArgs) -> anyhow::Result<Self> {
-        Ok(Self(pool(database_url, config, true).await?))
+        Self::new(database_url, config, true).await
+    }
+
+    async fn new(database_url: Url, db_args: DbArgs, read_only: bool) -> anyhow::Result<Self> {
+        Ok(Db {
+            pool: pool(database_url, db_args, read_only).await?,
+            pool_metrics: None,
+        })
+    }
+
+    pub fn register_metrics(
+        mut self,
+        prefix: Option<&str>,
+        registry: &Registry,
+    ) -> anyhow::Result<Self> {
+        let pool_metrics = PoolMetrics::new(prefix, registry)?;
+        self.pool_metrics = Some(pool_metrics);
+        Ok(self)
     }
 
     /// Retrieves a connection from the pool. Can fail with a timeout if a connection cannot be
     /// established before the [DbArgs::connection_timeout] has elapsed.
     pub async fn connect(&self) -> anyhow::Result<Connection<'_>> {
-        Ok(Connection(self.0.get().await?))
+        if let Some(pool_metrics) = &self.pool_metrics {
+            let guard = CancelGuard::request(pool_metrics);
+            match self.pool.get().await {
+                Ok(c) => {
+                    guard.acquired();
+                    Ok(Connection(c))
+                }
+                Err(e) => {
+                    guard.unacquired_error();
+                    Err(e.into())
+                }
+            }
+        } else {
+            Ok(Connection(self.pool.get().await?))
+        }
     }
 
     /// Statistics about the connection pool
     pub fn state(&self) -> bb8::State {
-        self.0.state()
+        self.pool.state()
+    }
+
+    pub fn pool_metrics(&self) -> Option<&PoolMetrics> {
+        self.pool_metrics.as_ref().map(|p| p.as_ref())
     }
 
     async fn clear_database(&self) -> anyhow::Result<()> {
@@ -167,7 +215,7 @@ impl Db {
         let merged_migrations = merge_migrations(migrations);
 
         info!("Running migrations ...");
-        let conn = self.0.dedicated_connection().await?;
+        let conn = self.pool.dedicated_connection().await?;
         let mut wrapper: AsyncConnectionWrapper<AsyncPgConnectionWithId> =
             AsyncConnectionWrapper::from(conn);
 
@@ -184,6 +232,25 @@ impl Db {
     }
 }
 
+impl<'m> CancelGuard<'m> {
+    fn request(stats: &'m PoolMetrics) -> Self {
+        stats.requested.inc();
+        Self(Some(stats))
+    }
+
+    fn acquired(mut self) {
+        if let Some(m) = self.0.take() {
+            m.acquired.inc()
+        }
+    }
+
+    fn unacquired_error(mut self) {
+        if let Some(m) = self.0.take() {
+            m.unacquired_error.inc()
+        }
+    }
+}
+
 impl Default for DbArgs {
     fn default() -> Self {
         Self {
@@ -196,13 +263,21 @@ impl Default for DbArgs {
     }
 }
 
+impl<'m> Drop for CancelGuard<'m> {
+    fn drop(&mut self) {
+        if let Some(m) = self.0.take() {
+            m.unacquired_canceled.inc()
+        }
+    }
+}
+
 /// Drop all tables, and re-run migrations if supplied.
 pub async fn reset_database(
     database_url: Url,
-    db_config: DbArgs,
+    db_args: DbArgs,
     migrations: Option<&'static EmbeddedMigrations>,
 ) -> anyhow::Result<()> {
-    let db = Db::for_write(database_url, db_config).await?;
+    let db = Db::for_write(database_url, db_args).await?;
     db.clear_database().await?;
     if let Some(migrations) = migrations {
         db.run_migrations(Some(migrations)).await?;
@@ -289,16 +364,62 @@ pub fn merge_migrations(
 
     Migrations(migrations)
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::temp::TempDb;
+    use anyhow::Error;
     use diesel::prelude::QueryableByName;
-    use diesel_async::RunQueryDsl;
+    use tokio::spawn;
+    use tokio::time::timeout;
+
+    struct MetricTest {
+        db: Db,
+        _temp_db: TempDb,
+        _registry: Registry,
+    }
+
+    impl MetricTest {
+        async fn new(db_connection_timeout: Duration) -> Arc<Self> {
+            let temp_db = TempDb::new().unwrap();
+            let url = temp_db.database().url();
+            let db_args = DbArgs {
+                db_connection_pool_size: 1,
+                db_connection_timeout_ms: db_connection_timeout.as_millis() as u64,
+                ..Default::default()
+            };
+            let registry = Registry::new();
+            let db = Db::for_read(url.clone(), db_args)
+                .await
+                .unwrap()
+                .register_metrics(None, &registry)
+                .unwrap();
+            Arc::new(Self {
+                db,
+                _temp_db: temp_db,
+                _registry: registry,
+            })
+        }
+
+        fn pool_metrics(&self) -> &PoolMetrics {
+            self.db.pool_metrics().unwrap()
+        }
+
+        async fn select_sleep(&self, duration: Duration) -> Result<(), Error> {
+            let mut conn = self.db.connect().await?;
+            let duration_s = duration.as_secs_f64();
+            diesel::sql_query(format!("SELECT pg_sleep({duration_s});"))
+                .execute(&mut conn)
+                .await?;
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn temp_db_smoketest() {
         telemetry_subscribers::init_for_testing();
-        let db = temp::TempDb::new().unwrap();
+        let db = TempDb::new().unwrap();
         let url = db.database().url();
 
         info!(%url);
@@ -322,7 +443,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_reset_database_skip_migrations() {
-        let temp_db = temp::TempDb::new().unwrap();
+        let temp_db = TempDb::new().unwrap();
         let url = temp_db.database().url();
 
         let db = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
@@ -355,7 +476,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_only() {
-        let temp_db = temp::TempDb::new().unwrap();
+        let temp_db = TempDb::new().unwrap();
         let url = temp_db.database().url();
 
         let writer = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
@@ -413,7 +534,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_statement_timeout() {
-        let temp_db = temp::TempDb::new().unwrap();
+        let temp_db = TempDb::new().unwrap();
         let url = temp_db.database().url();
 
         let reader = Db::for_read(
@@ -445,5 +566,71 @@ mod tests {
                 .await
                 .expect_err("This request should fail because of a timeout");
         }
+    }
+
+    #[tokio::test]
+    async fn test_unacquired_error() {
+        let db_connection_timeout = Duration::from_millis(500);
+        let metric_test = MetricTest::new(db_connection_timeout).await;
+
+        let metric_test_clone = metric_test.clone();
+        let task1 = spawn(async move {
+            metric_test_clone
+                .select_sleep(db_connection_timeout + Duration::from_millis(500))
+                .await
+        });
+        // 1st task takes longer than db_connection_timeout so 2nd task times out
+        let metric_test_clone = metric_test.clone();
+        let task2 = spawn(async move {
+            // sleep duration does not matter because it will never execute
+            metric_test_clone.select_sleep(Duration::ZERO).await
+        });
+        assert!(task1.await.unwrap().is_ok());
+        assert!(task2.await.unwrap().is_err());
+
+        let PoolMetrics {
+            requested,
+            acquired,
+            unacquired_error,
+            unacquired_canceled,
+        } = metric_test.pool_metrics();
+        assert_eq!(requested.get(), 2);
+        assert_eq!(acquired.get(), 1);
+        assert_eq!(unacquired_error.get(), 1);
+        assert_eq!(unacquired_canceled.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_unacquired_canceled() {
+        let task_timeout = Duration::from_millis(500);
+        let sleep_timeout = task_timeout + Duration::from_millis(500);
+        let db_connection_timeout = sleep_timeout + Duration::from_millis(500);
+        let metric_test = MetricTest::new(db_connection_timeout).await;
+
+        let metric_test_clone = metric_test.clone();
+        let task1 = spawn(async move {
+            metric_test_clone
+                .select_sleep(db_connection_timeout + Duration::from_millis(500))
+                .await
+        });
+        let metric_test_clone = metric_test.clone();
+        // 1st task takes longer than task_timeout so 2nd task times out
+        let task2 = spawn(async move {
+            // sleep duration does not matter because it will never execute
+            timeout(task_timeout, metric_test_clone.select_sleep(Duration::ZERO)).await
+        });
+        assert!(task1.await.unwrap().is_ok());
+        assert!(task2.await.unwrap().is_err());
+
+        let PoolMetrics {
+            requested,
+            acquired,
+            unacquired_error,
+            unacquired_canceled,
+        } = metric_test.pool_metrics();
+        assert_eq!(requested.get(), 2);
+        assert_eq!(acquired.get(), 1);
+        assert_eq!(unacquired_error.get(), 0);
+        assert_eq!(unacquired_canceled.get(), 1);
     }
 }
