@@ -10,7 +10,7 @@ error[E04007]: incompatible types
   │
 4 │     fun test() { let _x: S = "inferred stringŻ"; }
   │                          ^   ------------------ Given: string
-  │                          │
+  │                          │    
   │                          Invalid type annotation
   │                          Expected: 'a::m::S'
 

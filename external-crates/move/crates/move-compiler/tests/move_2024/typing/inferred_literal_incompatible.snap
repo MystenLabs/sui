@@ -19,7 +19,7 @@ error[E04033]: types are not equal
   │
 2 │     fun test() { let _x = "hi"; _x = 10; }
   │                           ----  ^^   -- Given a num literal
-  │                           │     │
+  │                           │     │     
   │                           │     Invalid assignment to variable '_x'
   │                           Expected a string literal
   │

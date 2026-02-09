@@ -19,6 +19,6 @@ error[E04007]: incompatible types
   │
 2 │     fun test(): u64 { let x = "hi"; x + 10u64 }
   │                           -           ^ ----- Found: 'u64'. It is not compatible with the other type.
-  │                           │           │
+  │                           │           │  
   │                           │           Incompatible arguments to '+'
   │                           Found: string. It is not compatible with the other type.
