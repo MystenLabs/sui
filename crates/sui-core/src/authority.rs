@@ -5,6 +5,7 @@
 use crate::accumulators::coin_reservations::CoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::object_funds_checker::ObjectFundsChecker;
+use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -962,6 +963,7 @@ pub struct AuthorityState {
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
 
     pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
+    object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -3517,6 +3519,7 @@ impl AuthorityState {
             &epoch_store,
             config.funds_withdraw_scheduler_type,
             metrics.clone(),
+            prometheus_registry,
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
@@ -3562,6 +3565,8 @@ impl AuthorityState {
             execution_cache_trait_pointers.child_object_resolver.clone(),
         ));
 
+        let object_funds_checker_metrics =
+            Arc::new(ObjectFundsCheckerMetrics::new(prometheus_registry));
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3589,6 +3594,7 @@ impl AuthorityState {
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
             object_funds_checker: ArcSwapOption::empty(),
+            object_funds_checker_metrics,
         });
         state.init_object_funds_checker().await;
 
@@ -3644,7 +3650,12 @@ impl AuthorityState {
                 let inner = self
                     .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                     .await
-                    .map(|o| Arc::new(ObjectFundsChecker::new(o.version())));
+                    .map(|o| {
+                        Arc::new(ObjectFundsChecker::new(
+                            o.version(),
+                            self.object_funds_checker_metrics.clone(),
+                        ))
+                    });
                 self.object_funds_checker.store(inner);
             }
         } else {

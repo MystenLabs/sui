@@ -5,7 +5,8 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use super::{
     FundsSettlement, FundsWithdrawSchedulerType, ScheduleResult, ScheduleStatus,
-    eager_scheduler::EagerFundsWithdrawScheduler, naive_scheduler::NaiveFundsWithdrawScheduler,
+    eager_scheduler::EagerFundsWithdrawScheduler, metrics::AddressFundsSchedulerMetrics,
+    naive_scheduler::NaiveFundsWithdrawScheduler,
 };
 use crate::{
     accumulators::funds_read::AccountFundsRead,
@@ -24,6 +25,7 @@ pub(crate) trait FundsWithdrawSchedulerTrait: Send + Sync {
     ) -> BTreeMap<TransactionDigest, ScheduleResult>;
     fn settle_funds(&self, settlement: FundsSettlement);
     fn close_epoch(&self);
+    fn num_tracked_accounts(&self) -> usize;
     #[cfg(test)]
     fn get_current_accumulator_version(&self) -> SequenceNumber;
 }
@@ -71,6 +73,7 @@ impl FundsWithdrawScheduler {
         funds_read: Arc<dyn AccountFundsRead>,
         starting_accumulator_version: SequenceNumber,
         scheduler_type: FundsWithdrawSchedulerType,
+        metrics: Arc<AddressFundsSchedulerMetrics>,
     ) -> Self {
         let scheduler: Arc<dyn FundsWithdrawSchedulerTrait> = match scheduler_type {
             FundsWithdrawSchedulerType::Naive => {
@@ -89,10 +92,12 @@ impl FundsWithdrawScheduler {
         tokio::spawn(Self::process_withdraw_task(
             scheduler.clone(),
             withdraw_receiver,
+            metrics.clone(),
         ));
         tokio::spawn(Self::process_settlement_task(
             scheduler.clone(),
             settlement_receiver,
+            metrics,
         ));
         Self {
             scheduler,
@@ -132,6 +137,7 @@ impl FundsWithdrawScheduler {
     async fn process_withdraw_task(
         scheduler: Arc<dyn FundsWithdrawSchedulerTrait>,
         mut withdraw_receiver: UnboundedReceiver<WithdrawEvent>,
+        metrics: Arc<AddressFundsSchedulerMetrics>,
     ) {
         while let Some(event) = withdraw_receiver.recv().await {
             let WithdrawEvent {
@@ -144,25 +150,49 @@ impl FundsWithdrawScheduler {
                 reservations.withdraws,
             );
 
+            let num_txns = reservations.withdraws.len();
+            let accumulator_version = reservations.accumulator_version;
             let results = scheduler.schedule_withdraws(reservations);
+
+            metrics
+                .highest_scheduled_version
+                .set(accumulator_version.value() as i64);
+            metrics.total_scheduled.inc_by(num_txns as u64);
+            metrics
+                .tracked_accounts
+                .set(scheduler.num_tracked_accounts() as i64);
+
             for (tx_digest, result) in results {
                 let original_sender = senders.remove(&tx_digest).unwrap();
                 match result {
                     ScheduleResult::ScheduleResult(status) => {
                         debug!(?tx_digest, ?status, "Scheduling result");
+                        metrics
+                            .schedule_result
+                            .with_label_values(&[status_label(status)])
+                            .inc();
                         let _ = original_sender.send((tx_digest, status));
                     }
                     ScheduleResult::Pending(receiver) => {
+                        metrics.pending_schedules.inc();
+                        let timer = metrics.pending_schedule_latency.start_timer();
+                        let pending_metrics = metrics.clone();
                         tokio::spawn(async move {
                             match receiver.await {
                                 Ok(status) => {
                                     debug!(?tx_digest, ?status, "Scheduling result (pending)");
+                                    pending_metrics
+                                        .schedule_result
+                                        .with_label_values(&[status_label(status)])
+                                        .inc();
                                     let _ = original_sender.send((tx_digest, status));
                                 }
                                 Err(_) => {
                                     debug!(?tx_digest, "Failed to receive scheduling result");
                                 }
                             }
+                            timer.observe_duration();
+                            pending_metrics.pending_schedules.dec();
                         });
                     }
                 }
@@ -174,6 +204,7 @@ impl FundsWithdrawScheduler {
     async fn process_settlement_task(
         scheduler: Arc<dyn FundsWithdrawSchedulerTrait>,
         mut settlement_receiver: UnboundedReceiver<FundsSettlement>,
+        metrics: Arc<AddressFundsSchedulerMetrics>,
     ) {
         while let Some(settlement) = settlement_receiver.recv().await {
             debug!(
@@ -181,8 +212,25 @@ impl FundsWithdrawScheduler {
                 "Settling funds changes: {:?}",
                 settlement.funds_changes,
             );
+            let next_version = settlement.next_accumulator_version;
             scheduler.settle_funds(settlement);
+
+            metrics
+                .highest_settled_version
+                .set(next_version.value() as i64);
+            metrics.total_settled.inc();
+            metrics
+                .tracked_accounts
+                .set(scheduler.num_tracked_accounts() as i64);
         }
         tracing::info!("Funds settlement receiver closed");
+    }
+}
+
+fn status_label(status: ScheduleStatus) -> &'static str {
+    match status {
+        ScheduleStatus::SufficientFunds => "sufficient",
+        ScheduleStatus::InsufficientFunds => "insufficient",
+        ScheduleStatus::SkipSchedule => "skip",
     }
 }
