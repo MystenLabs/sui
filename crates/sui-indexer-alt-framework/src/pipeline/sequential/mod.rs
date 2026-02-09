@@ -117,7 +117,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     config: SequentialConfig,
     db: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
-    watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
+    commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     info!(
@@ -141,7 +141,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         config,
         next_checkpoint,
         committer_rx,
-        watermark_tx,
+        commit_hi_tx,
         db,
         metrics.clone(),
     );
