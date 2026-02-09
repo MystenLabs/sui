@@ -1632,62 +1632,53 @@ macro_rules! comparison_op {
 }
 
 macro_rules! cast_integer {
-    ($func_name:ident, $target_type:ty, $max_value:expr, $unchecked_cast_method:ident) => {
+    ($func_name:ident, $target_type:ty) => {
         pub fn $func_name(self) -> PartialVMResult<$target_type> {
             use IntegerValue::*;
 
             match self {
-                U8(x) => Ok(move_binary_format::checked_as!(x, $target_type)?),
-                U16(x) => {
-                    if x > move_binary_format::checked_as!($max_value, u16)? {
-                        Err(partial_vm_error!(
-                            ARITHMETIC_ERROR,
-                            "Cannot cast u16({}) to {}",
-                            x,
-                            stringify!($target_type)
-                        ))
-                    } else {
-                        Ok(move_binary_format::checked_as!(x, $target_type)?)
-                    }
-                }
-                U32(x) => {
-                    if x > move_binary_format::checked_as!($max_value, u32)? {
-                        Err(partial_vm_error!(
-                            ARITHMETIC_ERROR,
-                            "Cannot cast u32({}) to {}",
-                            x,
-                            stringify!($target_type)
-                        ))
-                    } else {
-                        Ok(move_binary_format::checked_as!(x, $target_type)?)
-                    }
-                }
-                U64(x) => {
-                    if x > move_binary_format::checked_as!($max_value, u64)? {
-                        Err(partial_vm_error!(
-                            ARITHMETIC_ERROR,
-                            "Cannot cast u64({}) to {}",
-                            x,
-                            stringify!($target_type)
-                        ))
-                    } else {
-                        Ok(move_binary_format::checked_as!(x, $target_type)?)
-                    }
-                }
-                U128(x) => {
-                    if x > move_binary_format::checked_as!($max_value, u128)? {
-                        Err(partial_vm_error!(
-                            ARITHMETIC_ERROR,
-                            "Cannot cast u128({}) to {}",
-                            x,
-                            stringify!($target_type)
-                        ))
-                    } else {
-                        Ok(move_binary_format::checked_as!(x, $target_type)?)
-                    }
-                }
+                U8(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u8({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U16(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u16({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U32(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u32({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U64(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u64({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U128(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u128({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
                 U256(x) => {
-                    if x > u256::U256::from($max_value) {
+                    if x > move_core_types::u256::U256::from(<$target_type>::MAX) {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u256({}) to {}",
@@ -1695,7 +1686,7 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok(x.$unchecked_cast_method())
+                        move_binary_format::checked_as!(x, $target_type)
                     }
                 }
             }
@@ -1727,11 +1718,11 @@ impl IntegerValue {
     comparison_op!(ge, >=, "Cannot compare {:?} and {:?}: incompatible integer types");
 
     // Generate cast functions for all types up to u256
-    cast_integer!(cast_u8, u8, u8::MAX, unchecked_as_u8);
-    cast_integer!(cast_u16, u16, u16::MAX, unchecked_as_u16);
-    cast_integer!(cast_u32, u32, u32::MAX, unchecked_as_u32);
-    cast_integer!(cast_u64, u64, u64::MAX, unchecked_as_u64);
-    cast_integer!(cast_u128, u128, u128::MAX, unchecked_as_u128);
+    cast_integer!(cast_u8, u8);
+    cast_integer!(cast_u16, u16);
+    cast_integer!(cast_u32, u32);
+    cast_integer!(cast_u64, u64);
+    cast_integer!(cast_u128, u128);
 
     pub fn cast_u256(self) -> PartialVMResult<u256::U256> {
         use IntegerValue::*;
