@@ -4357,14 +4357,30 @@ impl AuthorityState {
         // This runs whenever indexes are enabled (not gated on enable_secondary_index_checks)
         // because it is cheap and critical for async post-processing correctness.
         if let Some(indexes) = self.indexes.clone() {
-            info!("Verifying all checkpointed transactions are in transactions_seq");
+            let epoch = cur_epoch_store.epoch();
+            // Only verify the current epoch's checkpoints. Previous epoch contents
+            // may have been pruned, and we only need to verify that this epoch's
+            // async post-processing completed correctly.
+            let first_checkpoint = if epoch == 0 {
+                0
+            } else {
+                self.checkpoint_store
+                    .get_epoch_last_checkpoint_seq_number(epoch - 1)
+                    .expect("Failed to get previous epoch's last checkpoint")
+                    .expect("Previous epoch's last checkpoint missing")
+                    + 1
+            };
             let highest_executed = self
                 .checkpoint_store
                 .get_highest_executed_checkpoint_seq_number()
                 .expect("Failed to get highest executed checkpoint")
                 .expect("No executed checkpoints");
 
-            for seq in 0..=highest_executed {
+            info!(
+                "Verifying checkpointed transactions are in transactions_seq \
+                 (checkpoints {first_checkpoint}..={highest_executed})"
+            );
+            for seq in first_checkpoint..=highest_executed {
                 let checkpoint = self
                     .checkpoint_store
                     .get_checkpoint_by_sequence_number(seq)
