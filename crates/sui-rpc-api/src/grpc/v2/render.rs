@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::FutureExt;
+use prost_types::Struct;
 use sui_rpc::{
     field::FieldMaskTree,
     merge::Merge,
-    proto::sui::rpc::v2::{Bcs, Event, Object, TransactionEffects, TransactionEvents},
+    proto::sui::rpc::v2::{Bcs, Display, Event, Object, TransactionEffects, TransactionEvents},
 };
 
-use crate::RpcService;
+use crate::{RpcService, reader::DisplayStore};
 
 impl RpcService {
     pub fn render_object_to_proto(
@@ -19,6 +21,10 @@ impl RpcService {
 
         if read_mask.contains(Object::JSON_FIELD) {
             message.json = self.render_object_to_json(object).map(Box::new);
+        }
+
+        if read_mask.contains(Object::DISPLAY_FIELD) {
+            message.display = self.render_object_display(object).map(Box::new);
         }
 
         message.merge(object, read_mask);
@@ -50,6 +56,78 @@ impl RpcService {
             .deserialize_value(contents, &layout)
             .map_err(|e| tracing::debug!("unable to convert move value to JSON: {e}"))
             .ok()
+    }
+
+    pub fn render_object_display(&self, object: &sui_types::object::Object) -> Option<Display> {
+        let move_object = object.data.try_as_move()?;
+        let object_type = &move_object.type_().clone().into();
+        let contents = move_object.contents();
+
+        let limits = sui_display::v2::Limits {
+            max_depth: self.config.display().max_field_depth(),
+            max_nodes: self.config.display().max_format_nodes(),
+            max_loads: self.config.display().max_object_loads(),
+        };
+        let display_object = self.reader.get_display_object_v2_by_type(object_type)?;
+        let display_template =
+            sui_display::v2::Display::parse(limits, display_object.fields()).ok()?;
+
+        let layout = self
+            .reader
+            .inner()
+            .get_struct_layout(object_type)
+            .ok()
+            .flatten()?;
+
+        let root = sui_display::v2::OwnedSlice {
+            bytes: contents.to_owned(),
+            layout,
+        };
+        let interpreter = sui_display::v2::Interpreter::new(root, DisplayStore::new(&self.reader));
+
+        let mut display = Display::default();
+
+        // The display api requires that the `sui_display::v2::Store` is async. We know that the
+        // Store implementation we are passing in here is fully synchronous, doing db access
+        // in-place and as such should never return Poll::Pending.
+        match display_template
+            .display::<prost_types::Value>(
+                self.config.display().max_move_value_depth(),
+                self.config.display().max_output_size(),
+                &interpreter,
+            )
+            .now_or_never()
+            .unwrap()
+        {
+            Ok(rendered) => {
+                let mut output = Struct::default();
+                let mut errors = Struct::default();
+
+                for (field, result) in rendered {
+                    match result {
+                        Ok(value) => {
+                            output.fields.insert(field, value);
+                        }
+                        Err(e) => {
+                            errors.fields.insert(field, e.to_string().into());
+                        }
+                    }
+                }
+
+                if !output.fields.is_empty() {
+                    display.set_output(output.fields);
+                }
+
+                if !errors.fields.is_empty() {
+                    display.set_errors(errors.fields);
+                }
+            }
+            Err(e) => {
+                display.set_errors(e.to_string());
+            }
+        }
+
+        Some(display)
     }
 
     pub fn render_events_to_proto(
