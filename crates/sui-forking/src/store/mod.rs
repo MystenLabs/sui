@@ -383,12 +383,27 @@ impl ChildObjectResolver for ForkingStore {
             child_version_upper_bound
         );
 
+        // TODO: NO IDEA IF THIS IS CORRECT!
         if child_object.version() > child_version_upper_bound {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
-                    .to_owned(),
-            }
-            .into());
+            let child_object = self
+                .rpc_data_store
+                .get_objects(&[sui_data_store::ObjectKey {
+                    object_id: child_object.id(),
+                    version_query: sui_data_store::VersionQuery::AtCheckpoint(
+                        self.forked_at_checkpoint,
+                    ),
+                }])
+                .unwrap();
+
+            let first = child_object.first().cloned().flatten();
+
+            return Ok(first.map(|(object, _version)| object));
+
+            // return Err(SuiErrorKind::UnsupportedFeatureError {
+            //     error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
+            //         .to_owned(),
+            // }
+            // .into());
         }
 
         Ok(Some(child_object))

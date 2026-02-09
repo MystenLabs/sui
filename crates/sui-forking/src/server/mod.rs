@@ -550,7 +550,9 @@ pub async fn start_server(
 //     Ok(())
 // }
 
-// Update 0x1 and 0x2 to the versions at the forking checkpoint
+const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6"];
+
+/// Update system objects to the versions at the forking checkpoint
 async fn update_system_objects(context: crate::context::Context) -> anyhow::Result<()> {
     let crate::context::Context {
         db_writer,
@@ -558,50 +560,33 @@ async fn update_system_objects(context: crate::context::Context) -> anyhow::Resu
         ..
     } = context;
 
+    let object_ids: Vec<ObjectID> = SYSTEM_OBJECT_IDS
+        .iter()
+        .map(|id| ObjectID::from_hex_literal(id).unwrap())
+        .collect();
+
     let mut simulacrum = context.simulacrum.write().await;
     let data_store = simulacrum.store_mut();
-    let x1 = ObjectID::from_hex_literal("0x1").unwrap();
-    let x2 = ObjectID::from_hex_literal("0x2").unwrap();
-    let x3 = ObjectID::from_hex_literal("0x3").unwrap();
-    let x6 = ObjectID::from_hex_literal("0x6").unwrap();
-    let acc = ObjectID::from_hex_literal(
-        "0x0000000000000000000000000000000000000000000000000000000000000acc",
-    )
-    .unwrap();
     let objs: HashMap<ObjectID, _> = data_store
         .get_objects()
         .iter()
-        .filter(|x| x.0 == &x1 || x.0 == &x2 || x.0 == &x3 || x.0 == &x6 || x.0 == &acc)
+        .filter(|(id, _)| object_ids.contains(id))
         .map(|(obj_id, map)| (*obj_id, map.clone()))
         .collect();
     info!(
         "Fetching system objects from RPC at checkpoint {}",
         at_checkpoint
     );
+    let object_keys: Vec<ObjectKey> = object_ids
+        .iter()
+        .map(|&object_id| ObjectKey {
+            object_id,
+            version_query: VersionQuery::AtCheckpoint(at_checkpoint),
+        })
+        .collect();
     let obj = data_store
         .get_rpc_data_store()
-        .get_objects(&[
-            ObjectKey {
-                object_id: x1,
-                version_query: VersionQuery::AtCheckpoint(at_checkpoint),
-            },
-            ObjectKey {
-                object_id: x2,
-                version_query: VersionQuery::AtCheckpoint(at_checkpoint),
-            },
-            ObjectKey {
-                object_id: x3,
-                version_query: VersionQuery::AtCheckpoint(at_checkpoint),
-            },
-            ObjectKey {
-                object_id: x6,
-                version_query: VersionQuery::AtCheckpoint(at_checkpoint),
-            },
-            ObjectKey {
-                object_id: acc,
-                version_query: VersionQuery::AtCheckpoint(at_checkpoint),
-            },
-        ])
+        .get_objects(&object_keys)
         .unwrap();
 
     for (ref object, _version) in obj.into_iter().flatten() {
