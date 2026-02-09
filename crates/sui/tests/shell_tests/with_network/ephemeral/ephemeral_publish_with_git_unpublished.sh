@@ -19,7 +19,8 @@ git -C a -c user.email=test@test.com -c user.name=test commit -q -m "initial rev
 HASH=$(git -C a log --pretty=format:%H)
 GIT_DEP="a = { git = \"file://$(pwd)/a\", rev = \"${HASH}\", subdir = \".\" }"
 
-sed -i "" "s|a = { local = \"../a\" }|${GIT_DEP}|g" b/Move.toml
+mv b/Move.toml b/Move.toml.tmp
+sed "s|a = { local = \"../a\" }|${GIT_DEP}|g" b/Move.toml.tmp > b/Move.toml
 
 echo "publishing b (using --publish-unpublished-deps)"
 sui client --client.config $CONFIG test-publish --build-env testnet \
