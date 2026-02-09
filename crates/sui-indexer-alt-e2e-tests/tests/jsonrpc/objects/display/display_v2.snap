@@ -1,0 +1,111 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 7-59:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 13748400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 61-63:
+//# programmable --sender A --inputs object(0xd) @A
+//> 0: test::mod::display(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0), object(2,1), object(2,2)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000d, object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10343600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 65-68:
+//# programmable --sender A --inputs @A 42 true "hello" 43u8
+//> 0: std::option::some<sui::object::ID>(Input(0));
+//> 1: test::mod::new(Input(1), Input(2), Input(3), Result(0), Input(4));
+//> 2: TransferObjects([Result(1)], Input(0))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 70-73:
+//# programmable --sender A --inputs @A 42 true "hello" 43u8
+//> 0: std::option::none<sui::object::ID>();
+//> 1: test::mod::new(Input(1), Input(2), Input(3), Result(0), Input(4));
+//> 2: TransferObjects([Result(1)], Input(0))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2356000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 75-76:
+//# programmable --sender A --inputs object(4,0)
+//> 0: test::mod::add_df(Input(0))
+created: object(5,0)
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 3792400,  storage_rebate: 2332440, non_refundable_storage_fee: 23560
+
+task 6, line 78:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 7, lines 80-90:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": [
+    {
+      "data": {
+        "objectId": "0x21708d015e3401e02ed544e0b9f86377e49a5b69df1973b5a0642764d79894df",
+        "version": "4",
+        "digest": "9nuvmT6Y5CgAAXsTCGTaTZe9BgRrnurXDKXkyuGgdrZv",
+        "display": {
+          "data": {
+            "bar": "bar is 42!",
+            "baz": "baz is true?",
+            "f42": "[42] is 00420042",
+            "qu_": "x(hello) y(0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e), z(43)?!",
+            "qux": {
+              "quy": {
+                "quz": {
+                  "val": 43
+                },
+                "val": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              },
+              "val": "hello"
+            },
+            "quy": "quy is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e."
+          },
+          "error": null
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x23415a8387ee10737660d246579694e6c529b6ddeea3fc78131fb4577a0cc508",
+        "version": "6",
+        "digest": "ivHhnD3k2wy97nJXmbx7uzpC8k4dBinwSwamuaxYC3a",
+        "display": {
+          "data": {
+            "bar": "bar is 42!",
+            "baz": "baz is true?",
+            "f42": "[42] is 42004200",
+            "qu_": null,
+            "qux": {
+              "quy": {
+                "quz": {
+                  "val": 43
+                },
+                "val": null
+              },
+              "val": "hello"
+            },
+            "quy": null
+          },
+          "error": null
+        }
+      }
+    }
+  ]
+}

@@ -4,8 +4,9 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use anyhow::Context as _;
 use anyhow::bail;
+use anyhow::Context as _;
+use async_trait::async_trait;
 use futures::future::OptionFuture;
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
@@ -20,21 +21,26 @@ use sui_json_rpc_types::SuiObjectResponse;
 use sui_json_rpc_types::SuiParsedData;
 use sui_json_rpc_types::SuiPastObjectResponse;
 use sui_json_rpc_types::SuiRawData;
-use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectType;
 use sui_types::base_types::SequenceNumber;
 use sui_types::display::DisplayVersionUpdatedEvent;
+use sui_types::display_registry;
 use sui_types::error::SuiObjectResponseError;
 use sui_types::object::Data;
 use sui_types::object::Object;
+use sui_types::TypeTag;
 use tokio::join;
 
 use crate::context::Context;
 use crate::data::load_live;
+use crate::error::rpc_bail;
 use crate::error::InternalContext;
 use crate::error::RpcError;
-use crate::error::rpc_bail;
+
+struct DisplayStore<'c> {
+    ctx: &'c Context,
+}
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
 /// the latest version of an object, identified by its ID, according to the response `options`.
@@ -185,7 +191,7 @@ async fn display(ctx: &Context, object: &Object) -> DisplayFieldsResponse {
     for (name, value) in fields {
         match value {
             Ok(value) => {
-                field_values.insert(name, Json::String(value));
+                field_values.insert(name, value);
             }
             Err(e) => {
                 write!(field_errors, "{prefix}Error for field {name:?}: {e:#}").unwrap();
@@ -212,7 +218,7 @@ async fn display(ctx: &Context, object: &Object) -> DisplayFieldsResponse {
 async fn display_fields(
     ctx: &Context,
     object: &Object,
-) -> anyhow::Result<BTreeMap<String, anyhow::Result<String>>> {
+) -> anyhow::Result<BTreeMap<String, anyhow::Result<Json>>> {
     let Some(object) = object.data.try_as_move() else {
         bail!("Display is only supported for Move objects");
     };
@@ -221,21 +227,126 @@ async fn display_fields(
     let type_: StructTag = object.type_().clone().into();
 
     let layout = ctx.package_resolver().type_layout(type_.clone().into());
-    let display = ctx.pg_loader().load_one(DisplayKey(type_.clone()));
+    let display_v1 = display_v1(ctx, &type_);
+    let display_v2 = display_v2(ctx, &type_);
 
-    let (layout, display) = join!(layout, display);
+    let (layout, display_v1, display_v2) = join!(layout, display_v1, display_v2);
 
     let layout = layout.context("Failed to resolve type layout")?;
-    let Some(stored) = display.context("Failed to load Display format")? else {
+
+    if let Some(display_v2) = display_v2? {
+        let store = DisplayStore::new(ctx);
+        let root = sui_display::v2::OwnedSlice {
+            bytes: object.contents().to_owned(),
+            layout,
+        };
+
+        let interpreter = sui_display::v2::Interpreter::new(root, store);
+        let fields = sui_display::v2::Display::parse(config.display(), display_v2.fields())?
+            .display(
+                ctx.config().package_resolver.max_move_value_depth,
+                config.max_display_output_size,
+                &interpreter,
+            )
+            .await?;
+
+        Ok(fields
+            .into_iter()
+            .map(|(field, value)| (field, value.map_err(Into::into)))
+            .collect())
+    } else if let Some(display_v1) = display_v1? {
+        let format = Format::parse(config.max_display_field_depth, &display_v1.fields)?;
+        Ok(format
+            .display(config.max_display_output_size, object.contents(), &layout)?
+            .into_iter()
+            .map(|(field, value)| (field, value.map(Json::String)))
+            .collect())
+    } else {
         bail!(
             "Display format not found for {}",
             type_.to_canonical_display(/*with_prefix */ true)
         );
+    }
+}
+
+/// Try to load the V1 Display format for this type.
+async fn display_v1(
+    ctx: &Context,
+    type_: &StructTag,
+) -> anyhow::Result<Option<DisplayVersionUpdatedEvent>> {
+    let Some(stored) = ctx
+        .pg_loader()
+        .load_one(DisplayKey(type_.clone()))
+        .await
+        .context("Failed to load Display v1")?
+    else {
+        return Ok(None);
     };
 
     let event: DisplayVersionUpdatedEvent =
-        bcs::from_bytes(&stored.display).context("Failed to deserialize Display format")?;
+        bcs::from_bytes(&stored.display).context("Failed to deserialize Display v1")?;
 
-    let format = Format::parse(config.max_display_field_depth, &event.fields)?;
-    format.display(config.max_display_output_size, object.contents(), &layout)
+    Ok(Some(event))
+}
+
+/// Try to load the V2 Display format for this type.
+async fn display_v2(
+    ctx: &Context,
+    type_: &StructTag,
+) -> anyhow::Result<Option<display_registry::Display>> {
+    let object_id = display_registry::display_object_id(type_.clone().into())
+        .context("Failed to derive Display v2 object ID")?;
+
+    let Some(object) = load_live(ctx, object_id)
+        .await
+        .context("Failed to fetch Display v2 object")?
+    else {
+        return Ok(None);
+    };
+
+    let Some(move_object) = object.data.try_as_move() else {
+        return Ok(None);
+    };
+
+    let display = bcs::from_bytes(move_object.contents())
+        .context("Failed to deserialize Display v2 object")?;
+    Ok(Some(display))
+}
+
+impl<'c> DisplayStore<'c> {
+    fn new(ctx: &'c Context) -> Self {
+        Self { ctx }
+    }
+}
+
+#[async_trait]
+impl sui_display::v2::Store for DisplayStore<'_> {
+    async fn object(
+        &self,
+        id: move_core_types::account_address::AccountAddress,
+    ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+        let Some(object) = load_live(self.ctx, id.into())
+            .await
+            .context("Failed to fetch object")?
+        else {
+            return Ok(None);
+        };
+
+        let Some(move_object) = object.data.try_as_move() else {
+            return Ok(None);
+        };
+
+        let type_: TypeTag = move_object.type_().clone().into();
+        let layout = self
+            .ctx
+            .package_resolver()
+            .type_layout(type_)
+            .await
+            .context("Failed to resolve type layout")?;
+
+        Ok(Some(sui_display::v2::OwnedSlice {
+            layout,
+            bytes: move_object.contents().to_owned(),
+        }))
+    }
 }
