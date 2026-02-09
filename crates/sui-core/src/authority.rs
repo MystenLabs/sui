@@ -133,7 +133,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::gas::GasCostSummary;
 use sui_types::inner_temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
 };
@@ -2581,20 +2581,13 @@ impl AuthorityState {
                 &self.config.verifier_signing_config,
             )?
         } else {
-            let checked_input_objects = sui_transaction_checks::check_dev_inspect_input(
+            sui_transaction_checks::check_dev_inspect_input(
                 protocol_config,
-                transaction.kind(),
+                &transaction,
                 input_objects,
                 receiving_objects,
-            )?;
-            let gas_status = SuiGasStatus::new(
-                transaction.gas_budget(),
-                transaction.gas_price(),
                 epoch_store.reference_gas_price(),
-                protocol_config,
-            )?;
-
-            (gas_status, checked_input_objects)
+            )?
         };
 
         // TODO see if we can spin up a VM once and reuse it
@@ -2790,20 +2783,13 @@ impl AuthorityState {
                     dummy_gas_object.into(),
                 ));
             }
-            let checked_input_objects = sui_transaction_checks::check_dev_inspect_input(
+            sui_transaction_checks::check_dev_inspect_input(
                 protocol_config,
-                &transaction_kind,
+                &transaction,
                 input_objects,
                 receiving_objects,
-            )?;
-            let gas_status = SuiGasStatus::new(
-                max_tx_gas,
-                transaction.gas_price(),
                 reference_gas_price,
-                protocol_config,
-            )?;
-
-            (gas_status, checked_input_objects)
+            )?
         } else {
             // If we are not skipping checks, then we call the check_transaction_input function and its dummy gas
             // variant which will perform full fledged checks just like a real transaction execution.

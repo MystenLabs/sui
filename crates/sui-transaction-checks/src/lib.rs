@@ -48,24 +48,26 @@ mod checked {
     // Called on both signing and execution.
     // On success the gas part of the transaction (gas data and gas coins)
     // is verified and good to go
-    pub fn get_gas_status(
+    fn get_gas_status(
         objects: &InputObjects,
         gas: &[ObjectRef],
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         transaction: &TransactionData,
-        gas_paid_from_address_balance: bool,
+        gas_ownership_checks: bool,
     ) -> SuiResult<SuiGasStatus> {
-        check_gas(
-            objects,
-            protocol_config,
-            reference_gas_price,
-            gas,
-            transaction.gas_budget(),
-            transaction.gas_price(),
-            transaction.kind(),
-            gas_paid_from_address_balance,
-        )
+        if transaction.kind().is_system_tx() {
+            Ok(SuiGasStatus::new_unmetered())
+        } else {
+            check_gas(
+                objects,
+                protocol_config,
+                reference_gas_price,
+                gas,
+                transaction,
+                gas_ownership_checks,
+            )
+        }
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -158,11 +160,13 @@ mod checked {
     /// bypasses many of the normal object checks
     pub fn check_dev_inspect_input(
         config: &ProtocolConfig,
-        kind: &TransactionKind,
+        transaction: &TransactionData,
         input_objects: InputObjects,
         // TODO: check ReceivingObjects for dev inspect?
         _receiving_objects: ReceivingObjects,
-    ) -> SuiResult<CheckedInputObjects> {
+        reference_gas_price: u64,
+    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
+        let kind = transaction.kind();
         kind.validity_check(config)?;
         if kind.is_system_tx() {
             return Err(UserInputError::Unsupported(format!(
@@ -189,7 +193,16 @@ mod checked {
             }
         }
 
-        Ok(input_objects.into_checked())
+        let gas_status = get_gas_status(
+            &input_objects,
+            &transaction.gas_data().payment, //gas,
+            config,
+            reference_gas_price,
+            transaction,
+            false, // gas_ownership_checks - false means mostly transaction level checks
+        )?;
+
+        Ok((gas_status, input_objects.into_checked()))
     }
 
     // Common checks performed for transactions and certificates.
@@ -213,7 +226,7 @@ mod checked {
             protocol_config,
             reference_gas_price,
             transaction,
-            transaction.is_gas_paid_from_address_balance(),
+            true, // gas_ownership_checks
         )?;
         check_objects(transaction, input_objects)?;
 
@@ -347,36 +360,38 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         gas: &[ObjectRef],
-        gas_budget: u64,
-        gas_price: u64,
-        tx_kind: &TransactionKind,
-        gas_paid_from_address_balance: bool,
+        transaction: &TransactionData,
+        gas_ownership_checks: bool,
     ) -> SuiResult<SuiGasStatus> {
-        if tx_kind.is_system_tx() {
-            Ok(SuiGasStatus::new_unmetered())
-        } else {
-            let gas_status =
-                SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
+        let gas_budget = transaction.gas_budget();
+        let gas_price = transaction.gas_price();
+        let gas_paid_from_address_balance = transaction.is_gas_paid_from_address_balance();
 
-            // check balance and coins consistency
-            // load all gas coins
-            let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
-            let mut gas_objects = vec![];
-            for obj_ref in gas {
-                let obj = objects.get(&obj_ref.0);
-                let obj = *obj.ok_or(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: Some(obj_ref.1),
-                })?;
-                gas_objects.push(obj);
-            }
-            // Skip gas balance check for address balance payments
-            // We reserve gas budget in advance
-            if !gas_paid_from_address_balance {
-                gas_status.check_gas_balance(&gas_objects, gas_budget)?;
-            }
-            Ok(gas_status)
+        let gas_status =
+            SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
+
+        // check balance and coins consistency
+        // load all gas coins
+        let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
+        let mut gas_objects = vec![];
+        for obj_ref in gas {
+            let obj = objects.get(&obj_ref.0);
+            let obj = *obj.ok_or(UserInputError::ObjectNotFound {
+                object_id: obj_ref.0,
+                version: Some(obj_ref.1),
+            })?;
+            gas_objects.push(obj);
         }
+
+        // Skip gas balance check for address balance payments
+        // We reserve gas budget in advance
+        if !gas_paid_from_address_balance {
+            if gas_ownership_checks {
+                gas_status.check_gas_objects(&gas_objects)?;
+            }
+            gas_status.check_gas_data(&gas_objects, gas_budget)?;
+        }
+        Ok(gas_status)
     }
 
     /// Check all the objects used in the transaction against the database, and ensure
