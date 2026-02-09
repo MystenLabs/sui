@@ -46,10 +46,13 @@ const config = {
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "throw",
 
+  staticDirectories: ["static", "src/open-spec"],
+
   markdown: {
     format: "detect",
     mermaid: true,
   },
+  
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
     //require.resolve('./src/plugins/framework'),
