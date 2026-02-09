@@ -23,7 +23,6 @@ use http::Response;
 use prometheus::Registry;
 use sui_types::base_types::EpochId;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::ObjectType;
 use sui_types::base_types::TransactionDigest;
 use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -745,21 +744,6 @@ impl KeyValueStoreReader for BigTableClient {
         }
 
         Ok(results)
-    }
-
-    async fn get_object_types(&mut self, object_ids: &[ObjectID]) -> Result<Vec<ObjectType>> {
-        let keys = object_ids
-            .iter()
-            .map(tables::object_types::encode_key)
-            .collect();
-        let mut result = Vec::with_capacity(object_ids.len());
-        for (_, row) in self
-            .multi_get(tables::object_types::NAME, keys, None)
-            .await?
-        {
-            result.push(tables::object_types::decode(&row)?);
-        }
-        Ok(result)
     }
 }
 
