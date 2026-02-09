@@ -58,19 +58,20 @@ pub struct Code {
     pub(crate) code: BTreeMap<Label, Vec<Bytecode>>,
 }
 
+/// Pre-computed gas charge data for a basic block.
+#[derive(Clone)]
+pub struct ChargeInfo {
+    pub instructions: u64,
+    pub pushes: u64,
+    pub pops: u64,
+}
+
 /// Optimized Bytecode
 #[derive(Clone)]
 pub enum Bytecode {
     /// Pre-computed gas charge for a basic block.
     /// Charges gas for all fixed-cost instructions in the block at once.
-    Charge {
-        /// Number of fixed-cost instructions in this block
-        instructions: u64,
-        /// Total stack pushes from fixed-cost instructions
-        pushes: u64,
-        /// Total stack pops from fixed-cost instructions
-        pops: u64,
-    },
+    Charge(Box<ChargeInfo>),
     Pop,
     Ret,
     BrTrue(Label),
@@ -152,14 +153,10 @@ pub enum Bytecode {
 impl ::std::fmt::Debug for Bytecode {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match self {
-            Bytecode::Charge {
-                instructions,
-                pushes,
-                pops,
-            } => write!(
+            Bytecode::Charge(info) => write!(
                 f,
                 "Charge(instrs={}, pushes={}, pops={})",
-                instructions, pushes, pops
+                info.instructions, info.pushes, info.pops
             ),
             Bytecode::Pop => write!(f, "Pop"),
             Bytecode::Ret => write!(f, "Ret"),
@@ -272,7 +269,7 @@ impl Bytecode {
                     }
                 }
             }
-            Bytecode::Charge { .. }
+            Bytecode::Charge(..)
             | Bytecode::Pop
             | Bytecode::Ret
             | Bytecode::LdU8(_)
@@ -354,7 +351,7 @@ impl Bytecode {
             Bytecode::Branch(_) | Bytecode::Abort | Bytecode::Ret => true,
             // True because verifier insists these are exhaustive
             Bytecode::VariantSwitch(_) => true,
-            Bytecode::Charge { .. }
+            Bytecode::Charge(..)
             | Bytecode::Pop
             | Bytecode::BrTrue(_)
             | Bytecode::BrFalse(_)

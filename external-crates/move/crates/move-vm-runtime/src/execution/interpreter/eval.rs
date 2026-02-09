@@ -284,7 +284,7 @@ fn control_flow_instruction(instruction: &Bytecode) -> bool {
         | Bytecode::Branch(_)
         | Bytecode::VariantSwitch(_) => true,
 
-        Bytecode::Charge { .. }
+        Bytecode::Charge(..)
         | Bytecode::Pop
         | Bytecode::LdU8(_)
         | Bytecode::LdU64(_)
@@ -387,12 +387,8 @@ fn op_step_impl(
         | Bytecode::VirtualCall(_) => unreachable!(),
         // -- GAS BATCHING ----------------------
         // Charge for a basic block's fixed-cost instructions at once.
-        Bytecode::Charge {
-            instructions,
-            pushes,
-            pops,
-        } => {
-            gas_meter.charge_block(*instructions, *pushes, *pops)?;
+        Bytecode::Charge(info) => {
+            gas_meter.charge_block(info.instructions, info.pushes, info.pops)?;
         }
         // -- INTERNAL CONTROL FLOW --------------
         // These all update the current frame's program counter.

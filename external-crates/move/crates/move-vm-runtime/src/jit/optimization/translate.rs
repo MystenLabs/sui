@@ -113,7 +113,7 @@ fn get_fixed_instruction_cost(instr: &ast::Bytecode) -> Option<(u64, u64, Abstra
         // Call operations: handled separately
         Call(_) | CallGeneric(_) => None,
         // Charge itself should not be in input
-        Charge { .. } => None,
+        Charge(..) => None,
     }
 }
 
@@ -203,11 +203,11 @@ fn generate_basic_blocks(
             // Prepend Charge instruction if there are fixed costs
             let final_code = if block_cost.has_fixed_costs() {
                 let mut new_code = Vec::with_capacity(code.len() + 1);
-                new_code.push(ast::Bytecode::Charge {
+                new_code.push(ast::Bytecode::Charge(Box::new(ast::ChargeInfo {
                     instructions: block_cost.instructions,
                     pushes: block_cost.pushes,
                     pops: block_cost.pops,
-                });
+                })));
                 new_code.extend(code);
                 new_code
             } else {
