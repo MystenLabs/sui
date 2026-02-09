@@ -190,7 +190,12 @@ impl Context {
         Ok(Some(match location {
             T::Location::TxContext => env.tx_context_type()?,
             T::Location::GasCoin => env.gas_coin_type()?,
-            T::Location::Result(i, j) => self.result_type(i).unwrap().safe_get(j as usize)?.clone(),
+            T::Location::Result(i, j) => {
+                let Some(tys) = self.result_type(i) else {
+                    invariant_violation!("Result index {i} is out of bounds")
+                };
+                tys.safe_get(j as usize)?.clone()
+            }
             T::Location::ObjectInput(i) => {
                 let Some((_, object_input)) = self.objects.get_index(i as usize) else {
                     invariant_violation!("Unbound object input {}", i)
