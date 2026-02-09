@@ -10,11 +10,11 @@ error[E04007]: incompatible types
   │
 4 │     fun test() { let _x: S = "inferred stringŻ"; }
   │                          ^   ------------------ Given: string
-  │                          │    
+  │                          │
   │                          Invalid type annotation
   │                          Expected: 'a::m::S'
 
-warning[W04039]: unable to determine princiapl type for literal
+warning[W04039]: unable to determine principal type for literal
   ┌─ tests/move_2024/parser/inferred_string_invalid_type.move:4:30
   │
 4 │     fun test() { let _x: S = "inferred stringŻ"; }
