@@ -9,6 +9,7 @@ use anyhow::bail;
 use futures::future::OptionFuture;
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
+use serde_json::Value as Json;
 use sui_display::v1::Format;
 use sui_indexer_alt_reader::displays::DisplayKey;
 use sui_json_rpc_types::DisplayFieldsResponse;
@@ -184,7 +185,7 @@ async fn display(ctx: &Context, object: &Object) -> DisplayFieldsResponse {
     for (name, value) in fields {
         match value {
             Ok(value) => {
-                field_values.insert(name, value);
+                field_values.insert(name, Json::String(value));
             }
             Err(e) => {
                 write!(field_errors, "{prefix}Error for field {name:?}: {e:#}").unwrap();
