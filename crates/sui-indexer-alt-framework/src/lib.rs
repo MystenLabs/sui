@@ -266,13 +266,6 @@ impl<S: Store> Indexer<S> {
         })
     }
 
-    /// The minimum next checkpoint across all pipelines, used to initialize the ingestion
-    /// regulator's high watermark to prevent ingestion from running too far ahead. Returns `None`
-    /// if no pipelines have been added yet.
-    pub fn initial_commit_hi(&self) -> Option<u64> {
-        (self.first_ingestion_checkpoint != u64::MAX).then_some(self.first_ingestion_checkpoint)
-    }
-
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     ///
@@ -312,8 +305,6 @@ impl<S: Store> Indexer<S> {
     ///
     /// Ingestion will stop after consuming the configured `last_checkpoint` if one is provided.
     pub async fn run(self) -> Result<Service> {
-        let initial_commit_hi = self.initial_commit_hi();
-
         if let Some(enabled_pipelines) = self.enabled_pipelines {
             ensure!(
                 enabled_pipelines.is_empty(),
@@ -326,12 +317,10 @@ impl<S: Store> Indexer<S> {
 
         info!(self.first_ingestion_checkpoint, last_checkpoint = ?self.last_checkpoint, "Ingestion range");
 
+        let regulated = true;
         let mut service = self
             .ingestion_service
-            .run(
-                self.first_ingestion_checkpoint..=last_checkpoint,
-                initial_commit_hi,
-            )
+            .run(self.first_ingestion_checkpoint..=last_checkpoint, regulated)
             .await
             .context("Failed to start ingestion service")?;
 
@@ -418,7 +407,7 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
-        let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
+        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe();
 
         self.pipelines.push(sequential::pipeline::<H>(
             handler,
@@ -426,7 +415,7 @@ impl<T: TransactionalStore> Indexer<T> {
             config,
             self.store.clone(),
             checkpoint_rx,
-            watermark_tx,
+            commit_hi_tx,
             self.metrics.clone(),
         ));
 
@@ -1820,11 +1809,10 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify initial_commit_hi is set correctly (10 + 1 = 11)
+        // Verify first ingestion checkpoint is set correctly (10 + 1 = 11)
         assert_eq!(
-            indexer.initial_commit_hi(),
-            Some(11),
-            "initial_commit_hi should be 11"
+            indexer.first_ingestion_checkpoint, 11,
+            "first_ingestion_checkpoint should be 11"
         );
 
         // Add second sequential pipeline
@@ -1838,9 +1826,8 @@ mod tests {
 
         // Should change to 6 (minimum of 6 and 11)
         assert_eq!(
-            indexer.initial_commit_hi(),
-            Some(6),
-            "initial_commit_hi should still be 6"
+            indexer.first_ingestion_checkpoint, 6,
+            "first_ingestion_checkpoint should still be 6"
         );
 
         // Run indexer to verify it can make progress past the initial hi and finish ingesting.
