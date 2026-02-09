@@ -128,6 +128,10 @@ pub mod checked {
             self.gas_status.is_unmetered()
         }
 
+        pub fn is_address_balance(&self) -> bool {
+            self.payment_method.is_address_balance()
+        }
+
         pub fn move_gas_status(&self) -> &GasStatus {
             self.gas_status.move_gas_status()
         }
@@ -319,23 +323,30 @@ pub mod checked {
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
 
+            let is_free_tier = self.gas_budget() == 0 && self.payment_method.is_address_balance();
+
             if self.smashed_gas_coin.is_some() || self.payment_method.is_address_balance() {
-                // bucketize computation cost
-                let is_move_abort = execution_result
-                    .as_ref()
-                    .err()
-                    .map(|err| {
-                        matches!(
-                            err.kind(),
-                            sui_types::execution_status::ExecutionFailureStatus::MoveAbort(_, _)
-                        )
-                    })
-                    .unwrap_or(false);
-                // bucketize computation cost
-                if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
-                    && execution_result.is_ok()
-                {
-                    *execution_result = Err(err);
+                if !is_free_tier {
+                    // bucketize computation cost
+                    let is_move_abort = execution_result
+                        .as_ref()
+                        .err()
+                        .map(|err| {
+                            matches!(
+                                err.kind(),
+                                sui_types::execution_status::ExecutionFailureStatus::MoveAbort(
+                                    _,
+                                    _
+                                )
+                            )
+                        })
+                        .unwrap_or(false);
+                    // bucketize computation cost
+                    if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
+                        && execution_result.is_ok()
+                    {
+                        *execution_result = Err(err);
+                    }
                 }
 
                 // On error we need to dump writes, deletes, etc before charging storage gas
@@ -346,6 +357,9 @@ pub mod checked {
 
             // compute and collect storage charges
             temporary_store.ensure_active_inputs_mutated();
+            if is_free_tier {
+                return GasCostSummary::default();
+            }
             temporary_store.collect_storage_and_rebate(self);
 
             if self.smashed_gas_coin.is_some() {

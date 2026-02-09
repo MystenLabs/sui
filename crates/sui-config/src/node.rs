@@ -1336,6 +1336,9 @@ pub struct AuthorityOverloadConfig {
     // is above the threshold.
     #[serde(default = "default_max_transaction_manager_per_object_queue_length")]
     pub max_transaction_manager_per_object_queue_length: usize,
+
+    #[serde(default = "default_free_tier_load_shedding_multiplier")]
+    pub free_tier_load_shedding_multiplier: f64,
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
@@ -1378,6 +1381,10 @@ fn default_max_transaction_manager_per_object_queue_length() -> usize {
     2000
 }
 
+fn default_free_tier_load_shedding_multiplier() -> f64 {
+    10.0
+}
+
 impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
@@ -1394,6 +1401,7 @@ impl Default for AuthorityOverloadConfig {
             max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),
+            free_tier_load_shedding_multiplier: default_free_tier_load_shedding_multiplier(),
         }
     }
 }

@@ -1287,16 +1287,28 @@ impl AuthorityState {
         Ok(())
     }
 
+    // Free tier uses a load shedding multiplier, so it's substantially shed before paid txs face significant shedding.
     fn check_authority_overload(&self, tx_data: &SenderSignedData) -> SuiResult {
-        if !self.overload_info.is_overload.load(Ordering::Relaxed) {
+        let is_overloaded = self.overload_info.is_overload.load(Ordering::Relaxed);
+
+        if !is_overloaded {
             return Ok(());
         }
 
+        let is_free_tier = tx_data.transaction_data().is_free_tier_transaction();
         let load_shedding_percentage = self
             .overload_info
             .load_shedding_percentage
             .load(Ordering::Relaxed);
-        overload_monitor_accept_tx(load_shedding_percentage, tx_data.digest())
+
+        let effective_percentage = if is_free_tier {
+            let multiplier = self.overload_config().free_tier_load_shedding_multiplier;
+            std::cmp::min(100, (load_shedding_percentage as f64 * multiplier) as u32)
+        } else {
+            load_shedding_percentage
+        };
+
+        overload_monitor_accept_tx(effective_percentage, tx_data.digest())
     }
 
     fn update_overload_metrics(&self, source: &str) {
