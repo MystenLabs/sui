@@ -122,7 +122,7 @@ impl VerifiedValidatorMetadataV1 {
 
 impl ValidatorMetadataV1 {
     /// Verify validator metadata and return a verified version (on success) or error code (on failure)
-    pub fn verify(&self) -> Result<VerifiedValidatorMetadataV1, u64> {
+    pub fn verify(&self, metadata_v2: bool) -> Result<VerifiedValidatorMetadataV1, u64> {
         let protocol_pubkey = AuthorityPublicKey::from_bytes(self.protocol_pubkey_bytes.as_ref())
             .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
 
@@ -210,10 +210,32 @@ impl ValidatorMetadataV1 {
                         .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?,
                 )),
             }?;
-        if next_epoch_network_pubkey.is_some()
-            && next_epoch_network_pubkey == next_epoch_worker_pubkey
-        {
-            return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+        if metadata_v2 {
+            match (&next_epoch_network_pubkey, &next_epoch_worker_pubkey) {
+                (Some(next_epoch_network_pubkey), Some(next_epoch_worker_pubkey)) => {
+                    if next_epoch_network_pubkey == next_epoch_worker_pubkey {
+                        return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+                    }
+                }
+                (Some(next_epoch_network_pubkey), None) => {
+                    if next_epoch_network_pubkey == &worker_pubkey {
+                        return Err(E_METADATA_INVALID_NET_PUBKEY);
+                    }
+                }
+                (None, Some(next_epoch_worker_pubkey)) => {
+                    if next_epoch_worker_pubkey == &network_pubkey {
+                        return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+                    }
+                }
+                (None, None) => (),
+            }
+        } else {
+            // TODO: Clean up this after metadata v2 is fully deployed.
+            if next_epoch_network_pubkey.is_some()
+                && next_epoch_network_pubkey == next_epoch_worker_pubkey
+            {
+                return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+            }
         }
 
         let next_epoch_net_address = match self.next_epoch_net_address.clone() {
@@ -310,7 +332,7 @@ impl ValidatorV1 {
     pub fn verified_metadata(&self) -> &VerifiedValidatorMetadataV1 {
         self.verified_metadata.get_or_init(|| {
             self.metadata
-                .verify()
+                .verify(true)
                 .expect("Validity of metadata should be verified on-chain")
         })
     }
