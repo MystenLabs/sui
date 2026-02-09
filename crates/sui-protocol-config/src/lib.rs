@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 110;
+const MAX_PROTOCOL_VERSION: u64 = 111;
 
 // Record history of protocol version allocations here:
 //
@@ -979,6 +979,10 @@ struct FeatureFlags {
     // If true, always accept committed system transactions.
     #[serde(skip_serializing_if = "is_false")]
     consensus_always_accept_system_transactions: bool,
+
+    // If true, enable free tier transactions (zero-gas address balance transfers).
+    #[serde(skip_serializing_if = "is_false")]
+    enable_free_tier: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1835,6 +1839,9 @@ pub struct ProtocolConfig {
 
     /// The maximum number of updates per settlement transaction.
     max_updates_per_settlement_txn: Option<u32>,
+
+    /// Maximum computation units allowed for a free tier transaction.
+    free_tier_max_computation_units: Option<u64>,
 }
 
 /// An aliased address.
@@ -2573,6 +2580,10 @@ impl ProtocolConfig {
         self.feature_flags
             .consensus_always_accept_system_transactions
     }
+
+    pub fn enable_free_tier(&self) -> bool {
+        self.feature_flags.enable_free_tier
+    }
 }
 
 #[cfg(not(msim))]
@@ -3147,6 +3158,8 @@ impl ProtocolConfig {
             translation_per_linkage_entry_charge: None,
 
             max_updates_per_settlement_txn: None,
+
+            free_tier_max_computation_units: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4528,6 +4541,13 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
                 }
+                111 => {
+                    // Framework upgrade: adds balance::gasless_send_funds for free tier
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_free_tier = true;
+                        cfg.free_tier_max_computation_units = Some(50_000);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4853,6 +4873,16 @@ impl ProtocolConfig {
 
     pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
         self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
+    pub fn enable_free_tier_for_testing(&mut self) {
+        self.enable_address_balance_gas_payments_for_testing();
+        self.feature_flags.enable_free_tier = true;
+        self.free_tier_max_computation_units = Some(50_000);
+    }
+
+    pub fn disable_free_tier_for_testing(&mut self) {
+        self.feature_flags.enable_free_tier = false;
     }
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {

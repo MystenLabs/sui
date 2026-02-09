@@ -103,6 +103,14 @@ public fun send_funds<T>(balance: Balance<T>, recipient: address) {
     sui::funds_accumulator::add_impl(balance, recipient);
 }
 
+/// Gasless (free tier) transfer:
+/// Send a `Balance` to an address's funds accumulator.
+/// Basis points (BPs) may be charged on the transfer amount
+/// in the future.
+public fun gasless_send_funds<T>(balance: Balance<T>, recipient: address) {
+    sui::funds_accumulator::add_impl(balance, recipient);
+}
+
 /// Redeem a `Withdrawal<Balance<T>>` to get the underlying `Balance<T>` from an address's funds
 /// accumulator.
 public fun redeem_funds<T>(withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>): Balance<T> {

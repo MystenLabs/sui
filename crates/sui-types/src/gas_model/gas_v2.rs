@@ -306,6 +306,39 @@ mod checked {
             )
         }
 
+        pub(crate) fn new_free_tier(
+            gas_price: u64,
+            reference_gas_price: u64,
+            config: &ProtocolConfig,
+        ) -> SuiGasStatus {
+            let storage_gas_price = config.storage_gas_price();
+            let compute_cap = config.free_tier_max_computation_units() * gas_price;
+            let sui_cost_table = SuiCostTable::new(config, gas_price);
+            let gas_rounding_mode = if config.gas_rounding_halve_digits() {
+                GasRoundingMode::KeepHalfDigits
+            } else if let Some(step) = config.gas_rounding_step_as_option() {
+                GasRoundingMode::Stepped(step)
+            } else {
+                GasRoundingMode::Bucketize
+            };
+            Self::new(
+                GasStatus::new(
+                    sui_cost_table.execution_cost_table.clone(),
+                    compute_cap,
+                    gas_price,
+                    config.gas_model_version(),
+                ),
+                0,
+                true,
+                gas_price,
+                reference_gas_price,
+                storage_gas_price,
+                config.storage_rebate_rate(),
+                gas_rounding_mode,
+                sui_cost_table,
+            )
+        }
+
         pub fn reference_gas_price(&self) -> u64 {
             self.reference_gas_price
         }

@@ -622,6 +622,7 @@ async fn test_address_balance_gas() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_address_balance_gas_payments_for_testing();
+            cfg.disable_free_tier_for_testing();
             cfg
         }))
         .build()
