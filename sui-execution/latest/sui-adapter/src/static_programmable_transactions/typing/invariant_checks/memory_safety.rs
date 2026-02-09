@@ -290,7 +290,7 @@ impl Location {
 }
 
 impl Context {
-    fn new(txn: &T::Transaction) -> Self {
+    fn new(txn: &T::Transaction) -> anyhow::Result<Self> {
         let T::Transaction {
             bytes: _,
             objects,
@@ -303,18 +303,34 @@ impl Context {
         let tx_context = Location::non_ref(T::Location::TxContext);
         let gas = Location::non_ref(T::Location::GasCoin);
         let object_inputs = (0..objects.len())
-            .map(|i| Location::non_ref(T::Location::ObjectInput(i as u16)))
-            .collect();
+            .map(|i| {
+                Ok(Location::non_ref(T::Location::ObjectInput(checked_as!(
+                    i, u16
+                )?)))
+            })
+            .collect::<Result<_, ExecutionError>>()?;
         let withdrawal_inputs = (0..withdrawals.len())
-            .map(|i| Location::non_ref(T::Location::WithdrawalInput(i as u16)))
-            .collect();
+            .map(|i| {
+                Ok(Location::non_ref(T::Location::WithdrawalInput(
+                    checked_as!(i, u16)?,
+                )))
+            })
+            .collect::<Result<_, ExecutionError>>()?;
         let pure_inputs = (0..pure.len())
-            .map(|i| Location::non_ref(T::Location::PureInput(i as u16)))
-            .collect();
+            .map(|i| {
+                Ok(Location::non_ref(T::Location::PureInput(checked_as!(
+                    i, u16
+                )?)))
+            })
+            .collect::<Result<_, ExecutionError>>()?;
         let receiving_inputs = (0..receiving.len())
-            .map(|i| Location::non_ref(T::Location::ReceivingInput(i as u16)))
-            .collect();
-        Self {
+            .map(|i| {
+                Ok(Location::non_ref(T::Location::ReceivingInput(checked_as!(
+                    i, u16
+                )?)))
+            })
+            .collect::<Result<_, ExecutionError>>()?;
+        Ok(Self {
             tx_context,
             gas,
             object_inputs,
@@ -323,25 +339,34 @@ impl Context {
             receiving_inputs,
             results: vec![],
             arg_roots: IndexSet::new(),
-        }
+        })
     }
 
-    fn current_command(&self) -> u16 {
-        self.results.len() as u16
+    fn current_command(&self) -> anyhow::Result<u16> {
+        Ok(checked_as!(self.results.len(), u16)?)
     }
 
-    fn add_result_values(&mut self, results: impl IntoIterator<Item = Option<Value>>) {
-        let command = self.current_command();
+    fn add_result_values(
+        &mut self,
+        results: impl IntoIterator<Item = Option<Value>>,
+    ) -> anyhow::Result<()> {
+        let command = self.current_command()?;
         self.results.push(
             results
                 .into_iter()
                 .enumerate()
-                .map(|(i, v)| Location {
-                    self_path: Rc::new(PathSet::initial(T::Location::Result(command, i as u16))),
-                    value: v,
+                .map(|(i, v)| {
+                    Ok(Location {
+                        self_path: Rc::new(PathSet::initial(T::Location::Result(
+                            command,
+                            checked_as!(i, u16)?,
+                        ))),
+                        value: v,
+                    })
                 })
-                .collect(),
+                .collect::<Result<_, ExecutionError>>()?,
         );
+        Ok(())
     }
 
     fn location(&self, loc: T::Location) -> anyhow::Result<&Location> {
@@ -418,7 +443,7 @@ impl Context {
                     "Borrowed flag mismatch for copy usage: expected {borrowed}, got {is_borrowed} \
                     location {:?} for in command {}",
                     location.self_path,
-                    self.current_command()
+                    self.current_command()?
                 );
             }
         }
@@ -519,7 +544,7 @@ pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
 }
 
 fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
-    let mut context = Context::new(txn);
+    let mut context = Context::new(txn)?;
     let T::Transaction {
         bytes: _,
         objects: _,
@@ -551,7 +576,7 @@ fn command(context: &mut Context, c: &T::Command) -> anyhow::Result<()> {
             .into_iter()
             .zip(c.value.drop_values.iter().copied())
             .map(|(v, drop)| if drop { None } else { Some(v) }),
-    );
+    )?;
     context.arg_roots.clear();
     Ok(())
 }
@@ -665,7 +690,7 @@ fn call(
         imm_paths.is_disjoint(&mut_paths),
         "Mutable and immutable borrows cannot overlap"
     );
-    let command = context.current_command();
+    let command = context.current_command()?;
     let mut_paths = if mut_paths.is_empty() {
         PathSet::unknown_root(command)
     } else {
@@ -682,7 +707,7 @@ fn call(
         .map(|(i, ty)| {
             let delta = Delta {
                 command,
-                result: i as u16,
+                result: checked_as!(i, u16)?,
             };
             match ty {
                 T::Type::Reference(/* is mut */ true, _) => {

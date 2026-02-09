@@ -113,17 +113,21 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         linkage: &RootedLinkage,
     ) -> ExecutionError {
         use move_core_types::vm_status::StatusCode;
+        let argument_idx = match checked_as!(idx, TypeParameterIndex) {
+            Err(e) => return e,
+            Ok(v) => v,
+        };
         match e.major_status() {
             StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
                 ExecutionErrorKind::TypeArityMismatch.into()
             }
             StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
-                argument_idx: idx as TypeParameterIndex,
+                argument_idx,
                 kind: TypeArgumentError::TypeNotFound,
             }
             .into(),
             StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
-                argument_idx: idx as TypeParameterIndex,
+                argument_idx,
                 kind: TypeArgumentError::ConstraintNotSatisfied,
             }
             .into(),
@@ -664,8 +668,12 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                         .ok()
                         .flatten()
                         .ok_or_else(|| {
+                            let argument_idx = match checked_as!(type_arg_idx, u16) {
+                                Err(e) => return e,
+                                Ok(v) => v,
+                            };
                             ExecutionError::from_kind(ExecutionErrorKind::TypeArgumentError {
-                                argument_idx: type_arg_idx as u16,
+                                argument_idx,
                                 kind: TypeArgumentError::TypeNotFound,
                             })
                         })?;
@@ -676,7 +684,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                     else {
                         return Err(ExecutionError::from_kind(
                             ExecutionErrorKind::TypeArgumentError {
-                                argument_idx: type_arg_idx as u16,
+                                argument_idx: checked_as!(type_arg_idx, u16)?,
                                 kind: TypeArgumentError::TypeNotFound,
                             },
                         ));
