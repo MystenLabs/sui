@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    checked_as,
     natives::functions::NativeFunctions,
     validation::{deserialization::ast as Input, verification::ast},
 };
 
 use move_binary_format::{
-    CompiledModule, IndexKind,
+    CompiledModule, IndexKind, checked_as,
     errors::{Location, PartialVMResult, VMResult, verification_error},
     file_format::{StructFieldInformation, TableIndex},
 };

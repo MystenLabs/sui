@@ -23,40 +23,6 @@ macro_rules! try_block {
     }};
 }
 
-#[macro_export]
-macro_rules! partial_vm_error {
-    ($error_name:ident $(,)?) => {{
-        move_binary_format::errors::PartialVMError::new(
-            move_core_types::vm_status::StatusCode::$error_name,
-        )
-    }};
-    ($error_name:ident, $($body:tt)*) => {{
-        move_binary_format::errors::PartialVMError::new(
-            move_core_types::vm_status::StatusCode::$error_name,
-        ).with_message(
-            format!($($body)*),
-        )
-    }};
-}
-
-/// A helper macro for performing a checked cast from one type to another, returning a
-/// PartialVMError if the cast fails.
-#[macro_export]
-macro_rules! checked_as {
-    ($value:expr, $target_type:ty) => {{
-        let v = $value;
-        <$target_type>::try_from(v).map_err(|e| {
-            $crate::partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Value {} cannot be safely cast to {}: {:?}",
-                v,
-                stringify!($target_type),
-                e
-            )
-        })
-    }};
-}
-
 // NB: this does the lookup separately from the insertion, as otherwise would require copying the
 // key to retrieve the entry and support the error case.
 #[allow(clippy::map_entry)]
@@ -100,7 +66,7 @@ where
         let slice = self.as_ref();
         let len = slice.len();
         slice.get(index).ok_or_else(|| {
-            crate::partial_vm_error!(
+            move_binary_format::partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 "Index out of bounds for collection of length {}",
                 len

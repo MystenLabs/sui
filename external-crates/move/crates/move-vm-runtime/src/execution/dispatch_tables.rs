@@ -9,13 +9,11 @@
 
 use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
-    checked_as,
     execution::vm::DatatypeInfo,
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
         TypeSubst,
     },
-    partial_vm_error,
     shared::{
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
@@ -28,8 +26,10 @@ use crate::{
 };
 
 use move_binary_format::{
+    checked_as,
     errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, TypeParameterIndex},
+    partial_vm_error,
 };
 use move_core_types::{
     annotated_value,

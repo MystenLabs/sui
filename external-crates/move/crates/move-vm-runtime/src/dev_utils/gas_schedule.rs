@@ -7,13 +7,10 @@
 //! It is important to note that the cost schedule defined in this file does not track hashing
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
-use crate::{
-    partial_vm_error,
-    shared::{
-        SafeIndex,
-        gas::{GasMeter, SimpleInstruction},
-        views::{SizeConfig, ValueView},
-    },
+use crate::shared::{
+    SafeIndex,
+    gas::{GasMeter, SimpleInstruction},
+    views::{SizeConfig, ValueView},
 };
 use move_binary_format::{
     errors::PartialVMResult,
@@ -24,6 +21,7 @@ use move_binary_format::{
         VariantInstantiationHandleIndex, VariantJumpTableIndex,
     },
     file_format_common::{Opcodes, instruction_key},
+    partial_vm_error,
 };
 use move_core_types::{
     gas_algebra::{

@@ -196,9 +196,11 @@ mod testing {
         execution::values::{VMValueCast, Value},
         jit::execution::ast::Type,
         natives::functions::NativeContext,
+    };
+    use move_binary_format::{
+        errors::{PartialVMError, PartialVMResult},
         partial_vm_error,
     };
-    use move_binary_format::errors::{PartialVMError, PartialVMResult};
     use move_core_types::{
         account_address::AccountAddress, annotated_value as A, language_storage::TypeTag,
         runtime_value as R,

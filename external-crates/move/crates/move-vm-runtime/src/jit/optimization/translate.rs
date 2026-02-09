@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    checked_as, jit::optimization::ast, shared::SafeIndex as _,
-    validation::verification::ast as Input,
+    jit::optimization::ast, shared::SafeIndex as _, validation::verification::ast as Input,
 };
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
+    checked_as,
     errors::PartialVMResult,
     file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex},
 };

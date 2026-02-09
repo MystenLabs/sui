@@ -3,11 +3,11 @@
 
 #![allow(unsafe_code)]
 
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, partial_vm_error};
 
 use bumpalo::Bump;
 
-use crate::{partial_vm_error, shared::vm_pointer::VMPointer};
+use crate::shared::vm_pointer::VMPointer;
 
 // -------------------------------------------------------------------------------------------------
 // Types - Arenas for Cache Allocations

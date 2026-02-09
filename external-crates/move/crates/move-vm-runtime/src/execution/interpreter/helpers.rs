@@ -14,11 +14,10 @@ use crate::{
         ArenaType, FunctionInstantiation, StructInstantiation, Type, TypeNodeCount, TypeSubst,
         VariantInstantiation,
     },
-    partial_vm_error,
     shared::constants::MAX_TYPE_INSTANTIATION_NODES,
 };
 
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, partial_vm_error};
 
 pub fn instantiate_generic_function(
     fun_inst: &FunctionInstantiation,

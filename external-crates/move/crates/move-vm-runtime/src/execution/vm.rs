@@ -12,7 +12,6 @@ use crate::{
     },
     jit::execution::ast::{Function, Type},
     natives::extensions::NativeExtensions,
-    partial_vm_error,
     runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
     shared::{
         gas::GasMeter,
@@ -25,6 +24,7 @@ use crate::{
 use move_binary_format::{
     errors::{Location, VMError, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility},
+    partial_vm_error,
 };
 use move_core_types::{
     annotated_value,

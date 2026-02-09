@@ -3,7 +3,7 @@
 
 use crate::{
     cache::identifier_interner::IdentifierInterner,
-    checked_as, dbg_println,
+    dbg_println,
     execution::{
         dispatch_tables::VMDispatchTables,
         interpreter::{
@@ -22,7 +22,6 @@ use crate::{
     },
     jit::execution::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
-    partial_vm_error,
     shared::{
         SafeIndex as _,
         gas::{GasMeter, SimpleInstruction},
@@ -30,7 +29,7 @@ use crate::{
     },
 };
 
-use move_binary_format::errors::*;
+use move_binary_format::{checked_as, errors::*, partial_vm_error};
 use move_core_types::{
     gas_algebra::{NumArgs, NumBytes},
     vm_status::StatusType,

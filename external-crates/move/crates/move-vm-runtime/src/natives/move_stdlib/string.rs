@@ -5,7 +5,6 @@
 //! Implementation of native functions for utf8 strings.
 
 use crate::{
-    checked_as,
     execution::values::{Value, VectorRef},
     jit::execution::ast::Type,
     native_charge_gas_early_exit,
@@ -16,7 +15,7 @@ use crate::{
     pop_arg,
     shared::SafeIndex as _,
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{checked_as, errors::PartialVMResult};
 use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
 use std::{collections::VecDeque, sync::Arc};
 

@@ -4,17 +4,17 @@
 
 use crate::{
     cache::arena::{Arena, ArenaVec},
-    checked_as,
     jit::execution::ast::Type,
-    partial_vm_error,
     shared::{
         SafeIndex,
         views::{ValueView, ValueVisitor},
     },
 };
 use move_binary_format::{
+    checked_as,
     errors::*,
     file_format::{Constant, SignatureToken, VariantTag},
+    partial_vm_error,
 };
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
@@ -1637,9 +1637,9 @@ macro_rules! cast_integer {
             use IntegerValue::*;
 
             match self {
-                U8(x) => Ok($crate::checked_as!(x, $target_type)?),
+                U8(x) => Ok(move_binary_format::checked_as!(x, $target_type)?),
                 U16(x) => {
-                    if x > $crate::checked_as!($max_value, u16)? {
+                    if x > move_binary_format::checked_as!($max_value, u16)? {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u16({}) to {}",
@@ -1647,11 +1647,11 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok($crate::checked_as!(x, $target_type)?)
+                        Ok(move_binary_format::checked_as!(x, $target_type)?)
                     }
                 }
                 U32(x) => {
-                    if x > $crate::checked_as!($max_value, u32)? {
+                    if x > move_binary_format::checked_as!($max_value, u32)? {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u32({}) to {}",
@@ -1659,11 +1659,11 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok($crate::checked_as!(x, $target_type)?)
+                        Ok(move_binary_format::checked_as!(x, $target_type)?)
                     }
                 }
                 U64(x) => {
-                    if x > $crate::checked_as!($max_value, u64)? {
+                    if x > move_binary_format::checked_as!($max_value, u64)? {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u64({}) to {}",
@@ -1671,11 +1671,11 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok($crate::checked_as!(x, $target_type)?)
+                        Ok(move_binary_format::checked_as!(x, $target_type)?)
                     }
                 }
                 U128(x) => {
-                    if x > $crate::checked_as!($max_value, u128)? {
+                    if x > move_binary_format::checked_as!($max_value, u128)? {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u128({}) to {}",
@@ -1683,7 +1683,7 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok($crate::checked_as!(x, $target_type)?)
+                        Ok(move_binary_format::checked_as!(x, $target_type)?)
                     }
                 }
                 U256(x) => {

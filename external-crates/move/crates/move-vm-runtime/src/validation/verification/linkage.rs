@@ -12,13 +12,13 @@
 // dependencies fail the linkage checks in this module.
 
 use crate::{
-    partial_vm_error,
     shared::types::{OriginalId, VersionId},
     validation::verification::ast::{Module, Package},
 };
 use move_binary_format::{
     CompiledModule,
     errors::{Location, VMResult},
+    partial_vm_error,
 };
 use move_bytecode_verifier::{cyclic_dependencies, dependencies};
 use std::collections::{BTreeMap, HashMap};

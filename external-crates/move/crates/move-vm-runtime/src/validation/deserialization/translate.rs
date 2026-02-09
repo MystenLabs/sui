@@ -1,4 +1,5 @@
-use crate::{partial_vm_error, validation::deserialization::ast::Package};
+use crate::validation::deserialization::ast::Package;
+use move_binary_format::partial_vm_error;
 
 use move_binary_format::{
     CompiledModule, IndexKind,

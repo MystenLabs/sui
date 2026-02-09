@@ -7,14 +7,13 @@ use crate::{
         arena::{Arena, ArenaBox, ArenaVec},
         identifier_interner::{IdentifierInterner, IdentifierKey},
     },
-    checked_as, dbg_println,
+    dbg_println,
     execution::{
         dispatch_tables::{DefinitionMap, IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::Value,
     },
     jit::{execution::ast::*, optimization::ast as input},
     natives::functions::NativeFunctions,
-    partial_vm_error,
     shared::{
         SafeIndex as _,
         types::{DefiningTypeId, OriginalId, VersionId},
@@ -23,11 +22,13 @@ use crate::{
     },
 };
 use move_binary_format::{
+    checked_as,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         self as FF, CompiledModule, FunctionDefinition, FunctionDefinitionIndex,
         FunctionHandleIndex, SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
     },
+    partial_vm_error,
 };
 use move_core_types::{
     identifier::Identifier, language_storage::ModuleId, resolver::IntraPackageName,

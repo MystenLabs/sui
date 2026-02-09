@@ -7,14 +7,16 @@ pub mod verification;
 use crate::{
     dbg_println,
     natives::functions::NativeFunctions,
-    partial_vm_error,
     shared::types::{OriginalId, VersionId},
     validation::verification::linkage::verify_linkage_and_cyclic_checks_for_publication,
 };
 
 use std::collections::BTreeMap;
 
-use move_binary_format::errors::{Location, VMResult};
+use move_binary_format::{
+    errors::{Location, VMResult},
+    partial_vm_error,
+};
 use move_core_types::resolver::SerializedPackage;
 use move_vm_config::runtime::VMConfig;
 
