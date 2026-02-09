@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 110;
+const MAX_PROTOCOL_VERSION: u64 = 111;
 
 // Record history of protocol version allocations here:
 //
@@ -295,6 +295,7 @@ const MAX_PROTOCOL_VERSION: u64 = 110;
 //              function on mainnet.
 //              split_checkpoints_in_consensus_handler in devnet
 //              Enable additional validation on zkLogin public identifier.
+// Version 111: Validator metadata
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -979,6 +980,10 @@ struct FeatureFlags {
     // If true, always accept committed system transactions.
     #[serde(skip_serializing_if = "is_false")]
     consensus_always_accept_system_transactions: bool,
+
+    // If true perform consistent verification of metadata
+    #[serde(skip_serializing_if = "is_false")]
+    validator_metadata_verify_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2572,6 +2577,10 @@ impl ProtocolConfig {
     pub fn consensus_always_accept_system_transactions(&self) -> bool {
         self.feature_flags
             .consensus_always_accept_system_transactions
+    }
+
+    pub fn validator_metadata_verify_v2(&self) -> bool {
+        self.feature_flags.validator_metadata_verify_v2
     }
 }
 
@@ -4527,6 +4536,9 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
+                }
+                111 => {
+                    cfg.feature_flags.validator_metadata_verify_v2 = true;
                 }
                 // Use this template when making changes:
                 //
