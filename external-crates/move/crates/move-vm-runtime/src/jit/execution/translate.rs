@@ -1379,7 +1379,7 @@ fn compute_renumbered_bytecode(
             | input::Bytecode::UnpackVariantGenericImmRef(..)
             | input::Bytecode::UnpackVariantGenericMutRef(..)
             | input::Bytecode::VariantSwitch(..)
-            | input::Bytecode::Charge { .. }) => Ok(instr),
+            | input::Bytecode::Charge(..)) => Ok(instr),
         }
     }
 
@@ -1395,16 +1395,14 @@ fn bytecode(
     bytecode: input::Bytecode,
 ) -> PartialVMResult<Bytecode> {
     let bytecode = match bytecode {
-        // Gas batching charge instruction - passes through directly
-        input::Bytecode::Charge {
-            instructions,
-            pushes,
-            pops,
-        } => Bytecode::Charge {
-            instructions,
-            pushes,
-            pops,
-        },
+        // Gas batching charge instruction - arena-allocate for execution
+        input::Bytecode::Charge(info) => Bytecode::Charge(
+            context.package_context.arena_box(ChargeInfo {
+                instructions: info.instructions,
+                pushes: info.pushes,
+                pops: info.pops,
+            })?,
+        ),
 
         // Calls -- these get compiled to something more-direct here
         input::Bytecode::Call(ndx) => {
