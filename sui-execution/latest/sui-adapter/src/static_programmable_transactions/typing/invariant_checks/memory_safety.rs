@@ -303,16 +303,32 @@ impl Context {
         let tx_context = Location::non_ref(T::Location::TxContext);
         let gas = Location::non_ref(T::Location::GasCoin);
         let object_inputs = (0..objects.len())
-            .map(|i| Ok(Location::non_ref(T::Location::ObjectInput(checked_as!(i, u16)?))))
+            .map(|i| {
+                Ok(Location::non_ref(T::Location::ObjectInput(checked_as!(
+                    i, u16
+                )?)))
+            })
             .collect::<Result<_, ExecutionError>>()?;
         let withdrawal_inputs = (0..withdrawals.len())
-            .map(|i| Ok(Location::non_ref(T::Location::WithdrawalInput(checked_as!(i, u16)?))))
+            .map(|i| {
+                Ok(Location::non_ref(T::Location::WithdrawalInput(
+                    checked_as!(i, u16)?,
+                )))
+            })
             .collect::<Result<_, ExecutionError>>()?;
         let pure_inputs = (0..pure.len())
-            .map(|i| Ok(Location::non_ref(T::Location::PureInput(checked_as!(i, u16)?))))
+            .map(|i| {
+                Ok(Location::non_ref(T::Location::PureInput(checked_as!(
+                    i, u16
+                )?)))
+            })
             .collect::<Result<_, ExecutionError>>()?;
         let receiving_inputs = (0..receiving.len())
-            .map(|i| Ok(Location::non_ref(T::Location::ReceivingInput(checked_as!(i, u16)?))))
+            .map(|i| {
+                Ok(Location::non_ref(T::Location::ReceivingInput(checked_as!(
+                    i, u16
+                )?)))
+            })
             .collect::<Result<_, ExecutionError>>()?;
         Ok(Self {
             tx_context,
