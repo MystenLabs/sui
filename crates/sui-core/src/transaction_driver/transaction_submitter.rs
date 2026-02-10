@@ -85,17 +85,20 @@ impl TransactionSubmitter {
         } else {
             "false"
         };
+        let mut initial_requests = true;
         let mut retries = 0;
+        let mut backups = 0;
         let mut request_rpcs = FuturesUnordered::new();
 
         // This loop terminates when there are enough (f+1) non-retriable errors when submitting the transaction,
         // or all feasible targets returned errors or timed out.
         loop {
-            let num_additional_requests = if request_rpcs.is_empty() {
+            let num_additional_requests = if initial_requests {
                 // Initially, try to fill up to amplification_factor concurrent requests
+                initial_requests = false;
                 amplification_factor
             } else {
-                // Start a backup request after seeing a failure or backup delay has elapsed.
+                // Start another request after seeing a failure (retry) or backup delay has elapsed.
                 1
             };
             for _ in 0..num_additional_requests {
@@ -124,8 +127,12 @@ impl TransactionSubmitter {
 
                         request_rpcs.push(wrapped_fut);
                     }
-                    Err(_) if request_rpcs.is_empty() => {
-                        // No more targets and no requests in flight
+                    Err(_) => {
+                        if !request_rpcs.is_empty() {
+                            // No more targets but still have requests in flight. Continue to wait for them.
+                            break;
+                        }
+                        // No more targets and no requests in flight. Gather the errors and return.
                         return Err(TransactionDriverError::Aborted {
                             submission_non_retriable_errors: aggregate_request_errors(
                                 retrier
@@ -139,10 +146,6 @@ impl TransactionSubmitter {
                                 digests: Vec::new(),
                             },
                         });
-                    }
-                    Err(_) => {
-                        // No more targets but still have requests in flight
-                        break;
                     }
                 }
             }
@@ -159,6 +162,9 @@ impl TransactionSubmitter {
                             self.metrics
                                 .submit_transaction_retries
                                 .observe(retries as f64);
+                            self.metrics
+                                .submit_transaction_backups
+                                .observe(backups as f64);
                             let elapsed = start_time.elapsed().as_secs_f64();
                             self.metrics
                                 .submit_transaction_latency
@@ -202,6 +208,7 @@ impl TransactionSubmitter {
                 }
                 _ = tokio::time::sleep(SUBMIT_TRANSACTION_BACKUP_REQUEST_DELAY) => {
                     // Backup delay elapsed without response, continue to start another request
+                    backups += 1;
                 }
             }
 

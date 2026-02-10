@@ -1200,16 +1200,16 @@ impl ValidatorService {
                     "AuthorityServer::wait_for_effects::notify_read_executed_effects_finalized",
                     &tx_digests,
                 ) => {
-                tracing::Span::current().record("fast_path_effects", false);
                 let effects = effects_result?.pop().unwrap();
+                let effects_digest = effects.digest();
                 let details = if request.include_details {
-                    Some(self.complete_executed_data(effects.clone(), None).await?)
+                    Some(self.complete_executed_data(effects, None).await?)
                 } else {
                     None
                 };
 
                 Ok(WaitForEffectsResponse::Executed {
-                    effects_digest: effects.digest(),
+                    effects_digest,
                     details,
                     fast_path: false,
                 })
@@ -1399,15 +1399,16 @@ impl ValidatorService {
                     if current_status == Some(ConsensusTxStatus::FastpathCertified) || current_status == Some(ConsensusTxStatus::Finalized) => {
                     let outputs = outputs.pop().unwrap();
                     let effects = outputs.effects.clone();
+                    let effects_digest = effects.digest();
 
                     let details = if include_details {
-                        Some(self.complete_executed_data(effects.clone(), Some(outputs)).await?)
+                        Some(self.complete_executed_data(effects, Some(outputs)).await?)
                     } else {
                         None
                     };
 
                     return Ok(WaitForEffectsResponse::Executed {
-                        effects_digest: effects.digest(),
+                        effects_digest,
                         details,
                         fast_path: current_status == Some(ConsensusTxStatus::FastpathCertified),
                     });

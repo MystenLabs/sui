@@ -19,8 +19,7 @@ use sui_core::{
     epoch::committee_store::CommitteeStore,
     safe_client::SafeClientMetricsBase,
     transaction_driver::{
-        SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
-        reconfig_observer::ReconfigObserver,
+        ReconfigObserver, SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
     },
     validator_client_monitor::ValidatorClientMetrics,
 };
