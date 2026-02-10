@@ -64,6 +64,7 @@ public fun new<T>(
 }
 
 /// Create a new display object using the `Publisher` object.
+#[allow(unused_mut_ref)]
 public fun new_with_publisher<T>(
     registry: &mut DisplayRegistry,
     publisher: &mut Publisher,
@@ -80,7 +81,7 @@ public fun unset<T>(display: &mut Display<T>, _: &DisplayCap<T>, name: String) {
     display.fields.remove(&name);
 }
 
-/// Replace an existing key with the supplied one.
+/// Set a value for the specified key, replacing any existing value.
 public fun set<T>(display: &mut Display<T>, _: &DisplayCap<T>, name: String, value: String) {
     if (display.fields.contains(&name)) {
         display.fields.remove(&name);
@@ -106,7 +107,7 @@ public fun claim<T: key>(
 ): DisplayCap<T> {
     assert!(display.cap_id.is_none(), ECapAlreadyClaimed);
     let cap = DisplayCap<T> { id: object::new(ctx) };
-    display.cap_id = option::some(cap.id.to_inner());
+    display.cap_id.fill(cap.id.to_inner());
     legacy.destroy();
     cap
 }
@@ -120,7 +121,7 @@ public fun claim_with_publisher<T: key>(
     assert!(display.cap_id.is_none(), ECapAlreadyClaimed);
     assert!(publisher.from_package<T>(), ENotValidPublisher);
     let cap = DisplayCap<T> { id: object::new(ctx) };
-    display.cap_id = option::some(cap.id.to_inner());
+    display.cap_id.fill(cap.id.to_inner());
     cap
 }
 
