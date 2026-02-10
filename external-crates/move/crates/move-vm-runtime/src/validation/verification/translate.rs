@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    natives::functions::NativeFunctions, validation::deserialization::ast as Input,
-    validation::verification::ast,
+    natives::functions::NativeFunctions,
+    validation::{deserialization::ast as Input, verification::ast},
 };
 
 use move_binary_format::{
-    CompiledModule, IndexKind,
+    CompiledModule, IndexKind, checked_as,
     errors::{Location, PartialVMResult, VMResult, verification_error},
     file_format::{StructFieldInformation, TableIndex},
 };
@@ -82,19 +82,20 @@ fn check_natives(context: &Context, in_module: &CompiledModule) -> VMResult<()> 
         {
             let fh = module.function_handle_at(native_function.function);
             let mh = module.module_handle_at(fh.module);
-            natives
+            if natives
                 .resolve(
                     module.address_identifier_at(mh.address),
                     module.identifier_at(mh.name).as_str(),
                     module.identifier_at(fh.name).as_str(),
                 )
-                .ok_or_else(|| {
-                    verification_error(
-                        StatusCode::MISSING_DEPENDENCY,
-                        IndexKind::FunctionHandle,
-                        idx as TableIndex,
-                    )
-                })?;
+                .is_none()
+            {
+                return Err(verification_error(
+                    StatusCode::MISSING_DEPENDENCY,
+                    IndexKind::FunctionHandle,
+                    checked_as!(idx, TableIndex)?,
+                ));
+            }
         }
 
         // TODO: fix check and error code if we leave something around for native structs.
@@ -104,7 +105,7 @@ fn check_natives(context: &Context, in_module: &CompiledModule) -> VMResult<()> 
                 return Err(verification_error(
                     StatusCode::MISSING_DEPENDENCY,
                     IndexKind::FunctionHandle,
-                    idx as TableIndex,
+                    checked_as!(idx, TableIndex)?,
                 ));
             }
         }

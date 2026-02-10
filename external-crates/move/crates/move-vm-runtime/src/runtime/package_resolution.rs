@@ -11,12 +11,14 @@ use crate::{
     cache::move_cache::{self, MoveCache, Package, ResolvedPackageResult},
     dbg_println, jit,
     natives::functions::NativeFunctions,
-    partial_vm_error,
     runtime::telemetry::TransactionTelemetryContext,
     shared::{SafeIndex, logging::expect_no_verification_errors, types::VersionId},
     validation::{validate_package, verification},
 };
-use move_binary_format::errors::{Location, VMResult};
+use move_binary_format::{
+    errors::{Location, VMResult},
+    partial_vm_error,
+};
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
 

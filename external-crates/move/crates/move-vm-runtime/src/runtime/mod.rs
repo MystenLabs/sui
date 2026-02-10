@@ -7,7 +7,6 @@ use crate::{
     execution::{dispatch_tables::VMDispatchTables, vm::MoveVM},
     jit,
     natives::{extensions::NativeExtensions, functions::NativeFunctions},
-    partial_vm_error,
     runtime::telemetry::{MoveRuntimeTelemetry, TelemetryContext},
     shared::{
         gas::GasMeter,
@@ -18,7 +17,10 @@ use crate::{
     validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
 
-use move_binary_format::errors::{Location, VMResult};
+use move_binary_format::{
+    errors::{Location, VMResult},
+    partial_vm_error,
+};
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
 

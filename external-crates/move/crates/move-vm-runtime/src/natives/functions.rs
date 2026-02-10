@@ -23,10 +23,9 @@ use crate::{
     },
     jit::execution::ast::Type,
     natives::extensions::NativeContextExtensions,
-    partial_vm_error,
 };
 pub use move_binary_format::errors::PartialVMError;
-use move_binary_format::{errors::PartialVMResult, file_format::AbilitySet};
+use move_binary_format::{errors::PartialVMResult, file_format::AbilitySet, partial_vm_error};
 pub use move_core_types::vm_status::StatusCode;
 use move_core_types::{
     account_address::AccountAddress, annotated_value as A, gas_algebra::InternalGas,
@@ -61,7 +60,9 @@ macro_rules! pop_arg {
         use $crate::execution::values::VMValueCast;
         match $arguments.pop_back().map(|v| VMValueCast::<$t>::cast(v)) {
             None => {
-                return Err($crate::partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR));
+                return Err(move_binary_format::partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR
+                ));
             }
             Some(Err(e)) => return Err(e),
             Some(Ok(v)) => v,

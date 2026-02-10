@@ -11,7 +11,6 @@ use crate::{
         values::ConstantValue,
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
-    partial_vm_error,
     shared::{
         constants::TYPE_DEPTH_MAX,
         types::{OriginalId, VersionId},
@@ -27,6 +26,7 @@ use move_binary_format::{
         SignatureToken, VariantTag, Visibility,
     },
     file_format_common::Opcodes,
+    partial_vm_error,
 };
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::AbstractMemorySize, identifier::Identifier,
@@ -1260,7 +1260,7 @@ macro_rules! impl_deep_subst {
                 self.apply_subst(
                     |idx, depth| match ty_args.get(idx as usize) {
                         Some(ty) => ty.clone_impl(depth),
-                        None => Err($crate::partial_vm_error!(
+                        None => Err(move_binary_format::partial_vm_error!(
                             UNKNOWN_INVARIANT_VIOLATION_ERROR,
                             "type substitution failed: index out of bounds -- len {} got {}",
                             ty_args.len(),

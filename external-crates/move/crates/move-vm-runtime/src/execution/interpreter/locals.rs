@@ -3,12 +3,9 @@
 
 #![allow(unsafe_code)]
 
-use crate::{
-    execution::values::{MemBox, values_impl::Value},
-    partial_vm_error,
-};
+use crate::execution::values::{MemBox, values_impl::Value};
 
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, partial_vm_error};
 
 use std::collections::HashMap;
 

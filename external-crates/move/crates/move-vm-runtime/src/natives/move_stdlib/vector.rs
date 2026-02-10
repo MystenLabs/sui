@@ -10,13 +10,17 @@ use crate::{
         functions::{NativeContext, NativeFunction, NativeResult},
         make_module_natives,
     },
-    partial_vm_error, pop_arg,
+    pop_arg,
     shared::{
         SafeIndex,
         views::{SizeConfig, ValueView},
     },
 };
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::{
+    checked_as,
+    errors::{PartialVMError, PartialVMResult},
+    partial_vm_error,
+};
 use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit},
     vm_status::StatusCode,
@@ -180,7 +184,7 @@ pub fn native_borrow(
     debug_assert!(args.len() == 2);
 
     native_charge_gas_early_exit!(context, gas_params.base);
-    let idx = pop_arg!(args, u64) as usize;
+    let idx = checked_as!(pop_arg!(args, u64), usize)?;
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_one(
         context.gas_used(),
@@ -289,8 +293,8 @@ pub fn native_swap(
     debug_assert!(args.len() == 3);
 
     native_charge_gas_early_exit!(context, gas_params.base);
-    let idx2 = pop_arg!(args, u64) as usize;
-    let idx1 = pop_arg!(args, u64) as usize;
+    let idx2 = checked_as!(pop_arg!(args, u64), usize)?;
+    let idx1 = checked_as!(pop_arg!(args, u64), usize)?;
     let r = pop_arg!(args, VectorRef);
     NativeResult::map_partial_vm_result_empty(
         context.gas_used(),

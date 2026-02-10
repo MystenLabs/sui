@@ -3,11 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use better_any::{Tid, TidExt};
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, partial_vm_error};
 use parking_lot::RwLock;
 use std::{any::TypeId, collections::HashMap, sync::Arc};
-
-use crate::partial_vm_error;
 
 /// A data type to represent a heterogeneous collection of extensions which are available to
 /// native functions. A value to this is passed into the session function execution.

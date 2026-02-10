@@ -14,7 +14,6 @@ use crate::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
         TypeSubst,
     },
-    partial_vm_error,
     shared::{
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
@@ -27,8 +26,10 @@ use crate::{
 };
 
 use move_binary_format::{
+    checked_as,
     errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, TypeParameterIndex},
+    partial_vm_error,
 };
 use move_core_types::{
     annotated_value,
@@ -523,7 +524,7 @@ impl VMDispatchTables {
                     .iter()
                     .enumerate()
                     .map(|(idx, ty)| {
-                        let var = idx as TypeParameterIndex;
+                        let var = checked_as!(idx, TypeParameterIndex)?;
                         Ok((var, self.calculate_depth_of_type_and_cache(ty)?))
                     })
                     .collect::<PartialVMResult<BTreeMap<_, _>>>()?;

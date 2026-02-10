@@ -3,13 +3,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use move_binary_format::errors::{PartialVMResult, VMResult};
+use move_binary_format::{
+    errors::{PartialVMResult, VMResult},
+    partial_vm_error,
+};
 use move_core_types::language_storage::{ModuleId, TypeTag};
 
-use crate::{
-    partial_vm_error,
-    shared::types::{OriginalId, VersionId},
-};
+use crate::shared::types::{OriginalId, VersionId};
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
 /// table, allowing the same module in storage to be run against different dependencies.

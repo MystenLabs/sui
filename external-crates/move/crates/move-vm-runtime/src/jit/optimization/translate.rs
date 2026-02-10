@@ -6,6 +6,7 @@ use crate::{
 };
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
+    checked_as,
     errors::PartialVMResult,
     file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex},
 };
@@ -42,7 +43,7 @@ fn module(m: Input::Module) -> PartialVMResult<ast::Module> {
         .iter()
         .enumerate()
         .map(|(ndx, fun)| -> PartialVMResult<_> {
-            let index = FF::FunctionDefinitionIndex::new(ndx as u16);
+            let index = FF::FunctionDefinitionIndex::new(checked_as!(ndx, u16)?);
             Ok((index, function(index, fun)?))
         })
         .collect::<PartialVMResult<_>>()?;

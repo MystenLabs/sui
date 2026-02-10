@@ -12,14 +12,13 @@ use crate::{
         values::values_impl::{self as values, VMValueCast, Value},
     },
     jit::execution::ast::{Function, InternedDisplay, Type},
-    partial_vm_error,
     shared::{
         SafeIndex as _,
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         vm_pointer::VMPointer,
     },
 };
-use move_binary_format::errors::*;
+use move_binary_format::{errors::*, partial_vm_error};
 
 use std::{fmt::Write, sync::Arc};
 

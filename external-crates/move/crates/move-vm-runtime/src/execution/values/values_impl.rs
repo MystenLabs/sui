@@ -5,15 +5,16 @@
 use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
-    partial_vm_error,
     shared::{
         SafeIndex,
         views::{ValueView, ValueVisitor},
     },
 };
 use move_binary_format::{
+    checked_as,
     errors::*,
     file_format::{Constant, SignatureToken, VariantTag},
+    partial_vm_error,
 };
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
@@ -1631,62 +1632,53 @@ macro_rules! comparison_op {
 }
 
 macro_rules! cast_integer {
-    ($func_name:ident, $target_type:ty, $max_value:expr, $unchecked_cast_method:ident) => {
+    ($func_name:ident, $target_type:ty) => {
         pub fn $func_name(self) -> PartialVMResult<$target_type> {
             use IntegerValue::*;
 
             match self {
-                U8(x) => Ok(x as $target_type),
-                U16(x) => {
-                    if x > ($max_value as u16) {
-                        Err(partial_vm_error!(
-                            ARITHMETIC_ERROR,
-                            "Cannot cast u16({}) to {}",
-                            x,
-                            stringify!($target_type)
-                        ))
-                    } else {
-                        Ok(x as $target_type)
-                    }
-                }
-                U32(x) => {
-                    if x > ($max_value as u32) {
-                        Err(partial_vm_error!(
-                            ARITHMETIC_ERROR,
-                            "Cannot cast u32({}) to {}",
-                            x,
-                            stringify!($target_type)
-                        ))
-                    } else {
-                        Ok(x as $target_type)
-                    }
-                }
-                U64(x) => {
-                    if x > ($max_value as u64) {
-                        Err(partial_vm_error!(
-                            ARITHMETIC_ERROR,
-                            "Cannot cast u64({}) to {}",
-                            x,
-                            stringify!($target_type)
-                        ))
-                    } else {
-                        Ok(x as $target_type)
-                    }
-                }
-                U128(x) => {
-                    if x > ($max_value as u128) {
-                        Err(partial_vm_error!(
-                            ARITHMETIC_ERROR,
-                            "Cannot cast u128({}) to {}",
-                            x,
-                            stringify!($target_type)
-                        ))
-                    } else {
-                        Ok(x as $target_type)
-                    }
-                }
+                U8(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u8({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U16(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u16({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U32(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u32({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U64(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u64({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U128(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u128({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
                 U256(x) => {
-                    if x > u256::U256::from($max_value) {
+                    if x > move_core_types::u256::U256::from(<$target_type>::MAX) {
                         Err(partial_vm_error!(
                             ARITHMETIC_ERROR,
                             "Cannot cast u256({}) to {}",
@@ -1694,7 +1686,7 @@ macro_rules! cast_integer {
                             stringify!($target_type)
                         ))
                     } else {
-                        Ok(x.$unchecked_cast_method())
+                        move_binary_format::checked_as!(x, $target_type)
                     }
                 }
             }
@@ -1726,11 +1718,11 @@ impl IntegerValue {
     comparison_op!(ge, >=, "Cannot compare {:?} and {:?}: incompatible integer types");
 
     // Generate cast functions for all types up to u256
-    cast_integer!(cast_u8, u8, u8::MAX, unchecked_as_u8);
-    cast_integer!(cast_u16, u16, u16::MAX, unchecked_as_u16);
-    cast_integer!(cast_u32, u32, u32::MAX, unchecked_as_u32);
-    cast_integer!(cast_u64, u64, u64::MAX, unchecked_as_u64);
-    cast_integer!(cast_u128, u128, u128::MAX, unchecked_as_u128);
+    cast_integer!(cast_u8, u8);
+    cast_integer!(cast_u16, u16);
+    cast_integer!(cast_u32, u32);
+    cast_integer!(cast_u64, u64);
+    cast_integer!(cast_u128, u128);
 
     pub fn cast_u256(self) -> PartialVMResult<u256::U256> {
         use IntegerValue::*;
@@ -1992,7 +1984,7 @@ impl VectorRef {
         let vec = value.vector_mut_ref()?;
         let size = vec.len();
 
-        if size >= (capacity as usize) {
+        if size >= checked_as!(capacity, usize)? {
             return Err(partial_vm_error!(
                 VECTOR_OPERATION_ERROR,
                 "vector size limit is {capacity}",
@@ -2200,7 +2192,7 @@ impl Vector {
                 ));
             }
         };
-        if expected_num as usize == elements.len() {
+        if checked_as!(expected_num, usize)? == elements.len() {
             Ok(elements)
         } else {
             Err(partial_vm_error!(VECTOR_OPERATION_ERROR)
@@ -2700,7 +2692,12 @@ impl serde::Serialize for Value {
                         variant.0.0, VARIANT_TAG_MAX_VALUE
                     )));
                 } else {
-                    variant.0.0 as u8
+                    checked_as!(variant.0.0, u8).map_err(|e| {
+                        serde::ser::Error::custom(format!(
+                            "Variant tag {} cannot be safely cast to u8: {:?}",
+                            variant.0.0, e
+                        ))
+                    })?
                 };
 
                 let mut t = serializer.serialize_tuple(2)?;
@@ -2870,7 +2867,12 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, Fi
                 tag, VARIANT_TAG_MAX_VALUE
             )));
         } else {
-            *tag as u8
+            checked_as!(*tag, u8).map_err(|e| {
+                serde::ser::Error::custom(format!(
+                    "Variant tag {} cannot be safely cast to u8: {:?}",
+                    tag, e
+                ))
+            })?
         };
 
         let fields = &self

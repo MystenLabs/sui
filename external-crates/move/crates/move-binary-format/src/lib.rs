@@ -185,3 +185,38 @@ macro_rules! safe_assert {
         }
     }};
 }
+
+/// Create a PartialVMError with the given error code and an optional message.
+#[macro_export]
+macro_rules! partial_vm_error {
+    ($error_name:ident $(,)?) => {{
+        $crate::errors::PartialVMError::new(
+            move_core_types::vm_status::StatusCode::$error_name,
+        )
+    }};
+    ($error_name:ident, $($body:tt)*) => {{
+        $crate::errors::PartialVMError::new(
+            move_core_types::vm_status::StatusCode::$error_name,
+        ).with_message(
+            format!($($body)*),
+        )
+    }};
+}
+
+/// A macro for performing a checked cast from one type to another, returning a
+/// PartialVMError if the cast fails.
+#[macro_export]
+macro_rules! checked_as {
+    ($value:expr, $target_type:ty) => {{
+        let v = $value;
+        <$target_type>::try_from(v).map_err(|e| {
+            $crate::partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Value {} cannot be safely cast to {}: {:?}",
+                v,
+                stringify!($target_type),
+                e
+            )
+        })
+    }};
+}

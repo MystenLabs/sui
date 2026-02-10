@@ -9,10 +9,12 @@ use crate::{
         vm::MoveVM,
     },
     jit::execution::ast::Type,
-    partial_vm_error,
     shared::gas::GasMeter,
 };
-use move_binary_format::errors::{Location, PartialVMResult, VMResult};
+use move_binary_format::{
+    errors::{Location, PartialVMResult, VMResult},
+    partial_vm_error,
+};
 use move_core_types::{identifier::IdentStr, language_storage::ModuleId};
 use move_trace_format::format::MoveTraceBuilder;
 use std::{borrow::Borrow, collections::BTreeMap};

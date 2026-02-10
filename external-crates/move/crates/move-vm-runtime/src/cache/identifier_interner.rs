@@ -1,9 +1,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{partial_vm_error, shared::constants::IDENTIFIER_INTERNER_SIZE_LIMIT};
+use crate::shared::constants::IDENTIFIER_INTERNER_SIZE_LIMIT;
 
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, partial_vm_error};
 use move_core_types::identifier::{IdentStr, Identifier};
 
 use lasso::{Spur, ThreadedRodeo};

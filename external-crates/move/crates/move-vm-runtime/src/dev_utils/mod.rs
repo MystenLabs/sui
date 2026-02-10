@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::new_without_default)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::cast_possible_truncation)]
 
 pub(crate) mod dbg_print;
 pub mod in_memory_test_adapter;
