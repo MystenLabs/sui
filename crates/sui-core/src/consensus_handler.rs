@@ -26,6 +26,7 @@ use mysten_metrics::{
 use nonempty::NonEmpty;
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
+use sui_config::node::CongestionLogConfig;
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::{
@@ -66,6 +67,7 @@ use crate::{
             consensus_quarantine::ConsensusCommitOutput,
         },
         backpressure::{BackpressureManager, BackpressureSubscriber},
+        congestion_log::CongestionCommitLogger,
         consensus_tx_status_cache::ConsensusTxStatus,
         epoch_start_configuration::EpochStartConfigTrait,
         execution_time_estimator::ExecutionTimeEstimator,
@@ -106,6 +108,7 @@ pub struct ConsensusHandlerInitializer {
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
     backpressure_manager: Arc<BackpressureManager>,
+    congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
 }
 
 impl ConsensusHandlerInitializer {
@@ -117,7 +120,16 @@ impl ConsensusHandlerInitializer {
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_manager: Arc<BackpressureManager>,
+        congestion_log_config: Option<CongestionLogConfig>,
     ) -> Self {
+        let congestion_logger =
+            congestion_log_config.and_then(|config| match CongestionCommitLogger::new(&config) {
+                Ok(logger) => Some(Arc::new(Mutex::new(logger))),
+                Err(e) => {
+                    debug_fatal!("Failed to create congestion logger: {e}");
+                    None
+                }
+            });
         Self {
             state,
             checkpoint_service,
@@ -126,6 +138,7 @@ impl ConsensusHandlerInitializer {
             low_scoring_authorities,
             throughput_calculator,
             backpressure_manager,
+            congestion_logger,
         }
     }
 
@@ -151,6 +164,7 @@ impl ConsensusHandlerInitializer {
                 state.metrics.clone(),
             )),
             backpressure_manager,
+            congestion_logger: None,
         }
     }
 
@@ -170,6 +184,7 @@ impl ConsensusHandlerInitializer {
             self.throughput_calculator.clone(),
             self.backpressure_manager.subscribe(),
             self.state.traffic_controller.clone(),
+            self.congestion_logger.clone(),
         )
     }
 }
@@ -720,6 +735,8 @@ pub struct ConsensusHandler<C> {
 
     traffic_controller: Option<Arc<TrafficController>>,
 
+    congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
+
     checkpoint_queue: Mutex<CheckpointQueue>,
 }
 
@@ -738,6 +755,7 @@ impl<C> ConsensusHandler<C> {
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_subscriber: BackpressureSubscriber,
         traffic_controller: Option<Arc<TrafficController>>,
+        congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
     ) -> Self {
         assert!(
             matches!(
@@ -789,6 +807,7 @@ impl<C> ConsensusHandler<C> {
             ),
             backpressure_subscriber,
             traffic_controller,
+            congestion_logger,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -845,6 +864,7 @@ impl<C> ConsensusHandler<C> {
             ),
             backpressure_subscriber,
             traffic_controller,
+            congestion_logger: None,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -1519,14 +1539,23 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .with_label_values(&["randomness_commit"])
             .set(shared_object_using_randomness_congestion_tracker.max_cost() as i64);
 
-        let object_debts = shared_object_congestion_tracker.accumulated_debts(commit_info);
-        let randomness_object_debts =
-            shared_object_using_randomness_congestion_tracker.accumulated_debts(commit_info);
+        let congestion_commit_data = shared_object_congestion_tracker.finish_commit(commit_info);
+        let randomness_congestion_commit_data =
+            shared_object_using_randomness_congestion_tracker.finish_commit(commit_info);
+
+        if let Some(logger) = &self.congestion_logger {
+            let epoch = self.epoch_store.epoch();
+            let mut logger = logger.lock().unwrap();
+            logger.write_commit_log(epoch, commit_info, false, &congestion_commit_data);
+            logger.write_commit_log(epoch, commit_info, true, &randomness_congestion_commit_data);
+        }
+
         if let Some(tx_object_debts) = self.epoch_store.tx_object_debts.get()
             && let Err(e) = tx_object_debts.try_send(
-                object_debts
+                congestion_commit_data
+                    .accumulated_debts
                     .iter()
-                    .chain(randomness_object_debts.iter())
+                    .chain(randomness_congestion_commit_data.accumulated_debts.iter())
                     .map(|(id, _)| *id)
                     .collect(),
             )
@@ -1536,10 +1565,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         state
             .output
-            .set_congestion_control_object_debts(object_debts);
-        state
-            .output
-            .set_congestion_control_randomness_object_debts(randomness_object_debts);
+            .set_congestion_control_object_debts(congestion_commit_data.accumulated_debts);
+        state.output.set_congestion_control_randomness_object_debts(
+            randomness_congestion_commit_data.accumulated_debts,
+        );
 
         (
             transactions_to_schedule,
@@ -2143,6 +2172,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .expect("db error"),
             self.epoch_store.protocol_config(),
             for_randomness,
+            self.congestion_logger.is_some(),
         );
 
         fail_point_arg!(
@@ -3561,6 +3591,7 @@ mod tests {
             Arc::new(throughput_calculator),
             backpressure_manager.subscribe(),
             state.traffic_controller.clone(),
+            None,
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -3822,6 +3853,7 @@ mod tests {
             Arc::new(throughput),
             backpressure.subscribe(),
             state.traffic_controller.clone(),
+            None,
         );
 
         handler.handle_consensus_commit(commit).await;
@@ -3943,6 +3975,7 @@ mod tests {
             Arc::new(throughput),
             backpressure.subscribe(),
             state.traffic_controller.clone(),
+            None,
         );
 
         handler.handle_consensus_commit(commit).await;
