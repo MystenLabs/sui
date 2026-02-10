@@ -78,6 +78,14 @@ struct LoggerState {
     last_flush: Instant,
 }
 
+/// State for the background flush task
+struct FlushTaskState {
+    /// Current log file being written to
+    current_file: Option<std::fs::File>,
+    /// Size of the current file in bytes
+    current_file_size: usize,
+}
+
 /// Transaction trace logger
 pub struct TransactionTraceLogger {
     config: TraceLogConfig,
@@ -161,32 +169,29 @@ impl TransactionTraceLogger {
 
     /// Background task that flushes buffers to disk
     async fn run_flush_task(&self, mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<LogRecord>>) {
-        let mut current_file: Option<std::fs::File> = None;
-        let mut current_file_size: usize = 0;
+        let mut state = FlushTaskState {
+            current_file: None,
+            current_file_size: 0,
+        };
 
         while let Some(buffer) = rx.recv().await {
-            if let Err(e) =
-                self.flush_buffer_to_disk(&buffer, &mut current_file, &mut current_file_size)
-            {
+            if let Err(e) = self.flush_buffer_to_disk(&buffer, &mut state) {
                 tracing::error!("Failed to flush transaction trace buffer: {}", e);
             }
         }
+
+        tracing::info!("Transaction trace flush task exiting");
     }
 
     /// Flush a buffer to disk, handling file rotation
-    fn flush_buffer_to_disk(
-        &self,
-        buffer: &[LogRecord],
-        current_file: &mut Option<std::fs::File>,
-        current_file_size: &mut usize,
-    ) -> Result<()> {
+    fn flush_buffer_to_disk(&self, buffer: &[LogRecord], state: &mut FlushTaskState) -> Result<()> {
         use std::io::Write;
 
         // Check if we need to rotate to a new file
-        if current_file.is_none() || *current_file_size >= self.config.max_file_size {
+        if state.current_file.is_none() || state.current_file_size >= self.config.max_file_size {
             // Close current file
-            *current_file = None;
-            *current_file_size = 0;
+            state.current_file = None;
+            state.current_file_size = 0;
 
             // Create new file
             let timestamp = SystemTime::now()
@@ -202,20 +207,20 @@ impl TransactionTraceLogger {
             let abs_time_record = LogRecord::AbsTime(SystemTime::now());
             let encoded = bincode::serialize(&abs_time_record)?;
             file.write_all(&encoded)?;
-            *current_file_size += encoded.len();
+            state.current_file_size += encoded.len();
 
-            *current_file = Some(file);
+            state.current_file = Some(file);
 
             // Clean up old files if needed
             self.cleanup_old_files()?;
         }
 
         // Write buffer to current file
-        if let Some(file) = current_file {
+        if let Some(file) = &mut state.current_file {
             for record in buffer {
                 let encoded = bincode::serialize(record)?;
                 file.write_all(&encoded)?;
-                *current_file_size += encoded.len();
+                state.current_file_size += encoded.len();
             }
             file.flush()?;
         }
