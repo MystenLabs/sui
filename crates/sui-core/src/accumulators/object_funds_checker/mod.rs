@@ -129,6 +129,20 @@ impl ObjectFundsChecker {
             // the execution state to avoid re-execution.
             return false;
         };
+        // When the funds withdraw status is already known to be sufficient (e.g. from
+        // checkpoint executor where we know from effects the transaction didn't fail due
+        // to insufficient funds), we skip the balance check but still track the withdrawal
+        // amounts so that subsequent transactions in the same consensus commit can make
+        // correct decisions based on cumulative withdrawals.
+        if execution_env.funds_withdraw_status == FundsWithdrawStatus::Sufficient {
+            debug!("Funds known sufficient from effects, tracking and committing");
+            self.track_object_funds(object_withdraws, accumulator_version);
+            self.metrics
+                .check_result
+                .with_label_values(&["known_sufficient"])
+                .inc();
+            return true;
+        }
         match self.check_object_funds(object_withdraws, accumulator_version, funds_read.as_ref()) {
             // Sufficient funds, we can go ahead and commit the execution results as it is.
             ObjectFundsWithdrawStatus::SufficientFunds => {
@@ -160,7 +174,8 @@ impl ObjectFundsChecker {
                         .within_alive_epoch(async move {
                             let tx_digest = cert.digest();
                             match receiver.await {
-                                Ok(FundsWithdrawStatus::MaybeSufficient) => {
+                                Ok(FundsWithdrawStatus::MaybeSufficient)
+                                | Ok(FundsWithdrawStatus::Sufficient) => {
                                     // The withdraw state is now deterministically known,
                                     // so we can enqueue the transaction again and it will check again
                                     // whether it is sufficient or not in the next execution.
@@ -279,8 +294,22 @@ impl ObjectFundsChecker {
                 return false;
             }
         }
+        self.track_object_funds(object_withdraws.clone(), accumulator_version);
+        true
+    }
+
+    /// Track object fund withdrawals without checking sufficiency.
+    /// Used when the funds are already known to be sufficient (e.g. from checkpoint effects),
+    /// and also by `try_withdraw` after passing the sufficiency check.
+    /// This updates the internal tracking state so that subsequent transactions
+    /// in the same consensus commit can account for cumulative withdrawals.
+    pub(crate) fn track_object_funds(
+        &self,
+        object_withdraws: BTreeMap<AccumulatorObjId, u128>,
+        accumulator_version: SequenceNumber,
+    ) {
         let mut inner = self.inner.write();
-        for (obj_id, amount) in object_withdraws {
+        for (obj_id, amount) in &object_withdraws {
             let entry = inner
                 .unsettled_withdraws
                 .entry(*obj_id)
@@ -302,7 +331,6 @@ impl ObjectFundsChecker {
         self.metrics
             .unsettled_versions
             .set(inner.unsettled_accounts.len() as i64);
-        true
     }
 
     pub fn settle_accumulator_version(&self, next_accumulator_version: SequenceNumber) {

@@ -15,11 +15,14 @@ pub type ExecutionOrEarlyError = Result<(), ExecutionErrorKind>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FundsWithdrawStatus {
-    /// Either we don't know yet whether the funds withdrawals are sufficient or not,
-    /// or we know for sure that the funds withdrawals are sufficient.
-    /// The reason we don't need to distinguish between unknown and sufficient funds is that
-    /// in either case we would have to go ahead and execute the transaction anyway.
+    /// We don't know yet whether the funds withdrawals are sufficient or not.
+    /// This is the default state when coming from consensus, where we haven't
+    /// pre-determined the transaction outcome.
     MaybeSufficient,
+    /// We know for sure that the funds withdrawals are sufficient.
+    /// This is set when coming from checkpoint executor, where we know from
+    /// the effects that the transaction did not fail due to insufficient funds.
+    Sufficient,
     // TODO(address-funds): Add information on the address and type?
     /// We know for sure that the funds withdrawals in this transaction do not all have enough funds.
     /// This takes account of both address and object funds withdrawals.
@@ -145,12 +148,21 @@ mod tests {
             Some(ExecutionErrorKind::InsufficientFundsForWithdraw)
         );
 
-        // Test with sufficient balance
+        // Test with maybe-sufficient balance (unknown, from consensus)
         let result = get_early_execution_error(
             &tx_digest,
             &input_objects,
             &deny_set,
             &FundsWithdrawStatus::MaybeSufficient,
+        );
+        assert_eq!(result, None);
+
+        // Test with known-sufficient balance (from checkpoint)
+        let result = get_early_execution_error(
+            &tx_digest,
+            &input_objects,
+            &deny_set,
+            &FundsWithdrawStatus::Sufficient,
         );
         assert_eq!(result, None);
     }

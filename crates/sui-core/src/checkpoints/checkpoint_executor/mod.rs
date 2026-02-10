@@ -882,13 +882,14 @@ impl CheckpointExecutor {
                             .with_expected_effects_digest(*expected_fx_digest)
                             .with_barrier_dependencies(barrier_deps);
 
-                        // Check if the expected effects indicate insufficient balance
                         if let &ExecutionStatus::Failure {
                             error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
                             ..
                         } = effects.status()
                         {
                             env = env.with_insufficient_funds();
+                        } else {
+                            env = env.with_sufficient_funds();
                         }
 
                         Some((tx_digest, (txn.clone(), env)))

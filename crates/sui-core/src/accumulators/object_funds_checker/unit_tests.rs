@@ -392,3 +392,186 @@ async fn test_should_commit_early_exits() {
         &epoch_store,
     ));
 }
+
+#[tokio::test]
+async fn test_track_object_funds() {
+    let account = ObjectID::random();
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
+    assert!(checker.is_empty());
+
+    checker.track_object_funds(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 50)]),
+        SequenceNumber::from_u64(0),
+    );
+    assert!(!checker.is_empty());
+
+    // Committing the version should clean up the tracked state.
+    checker.commit_accumulator_versions(vec![SequenceNumber::from_u64(0)]);
+    assert!(checker.is_empty());
+}
+
+#[tokio::test]
+async fn test_track_object_funds_cumulative() {
+    // Verify that track_object_funds accumulates correctly and affects subsequent checks.
+    let account = ObjectID::random();
+    let funds_read = Arc::new(MockFundsRead::new(
+        SequenceNumber::from_u64(0),
+        BTreeMap::from([(account, 100)]),
+    ));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
+
+    // Track a 60-unit withdrawal (without checking). Simulates a checkpoint-known-sufficient tx.
+    checker.track_object_funds(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 60)]),
+        SequenceNumber::from_u64(0),
+    );
+
+    // Now a subsequent check for 50 should fail because 60 + 50 > 100.
+    let status = checker.check_object_funds(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 50)]),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+        panic!("Expected pending status because cumulative 60+50=110 > 100");
+    };
+    let result = receiver.await.unwrap();
+    assert_eq!(result, FundsWithdrawStatus::Insufficient);
+
+    // But a check for 40 should succeed because 60 + 40 = 100 <= 100.
+    let status = checker.check_object_funds(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 40)]),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
+}
+
+#[tokio::test]
+async fn test_should_commit_known_sufficient_skips_check() {
+    // When funds_withdraw_status is Sufficient, should_commit should return true
+    // immediately even if the accumulator version is not yet settled.
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
+    let state = TestAuthorityBuilder::new().build().await;
+    let epoch_store = state.epoch_store_for_testing().clone();
+
+    let (sender, keypair) = get_account_key_pair();
+    let tx = VerifiedExecutableTransaction::new_for_testing(
+        TestTransactionBuilder::new(sender, random_object_ref(), 1).build(),
+        &keypair,
+    );
+    let account = ObjectID::random();
+    let withdraws = BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]);
+
+    // With MaybeSufficient (unknown from consensus) and an unsettled version,
+    // the check would return false (pending).
+    assert!(!checker.should_commit_object_funds_withdraws(
+        &tx,
+        &ExecutionStatus::Success,
+        &withdraws,
+        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+            vec![],
+            Some(SequenceNumber::from_u64(2)),
+        )),
+        state.get_account_funds_read(),
+        state.execution_scheduler(),
+        &epoch_store,
+    ));
+
+    // With Sufficient (known from checkpoint), should return true immediately
+    // even at an unsettled accumulator version.
+    assert!(
+        checker.should_commit_object_funds_withdraws(
+            &tx,
+            &ExecutionStatus::Success,
+            &withdraws,
+            &ExecutionEnv::new()
+                .with_assigned_versions(AssignedVersions::new(
+                    vec![],
+                    Some(SequenceNumber::from_u64(2)),
+                ))
+                .with_sufficient_funds(),
+            state.get_account_funds_read(),
+            state.execution_scheduler(),
+            &epoch_store,
+        )
+    );
+
+    // The withdrawal should still be tracked in the checker's internal state.
+    assert!(!checker.is_empty());
+}
+
+#[tokio::test]
+async fn test_should_commit_known_sufficient_tracks_for_subsequent_checks() {
+    // Verify that when using the Sufficient fast path, the tracked withdrawal
+    // correctly affects subsequent MaybeSufficient (consensus) checks.
+    let account = ObjectID::random();
+    let funds_read = Arc::new(MockFundsRead::new(
+        SequenceNumber::from_u64(0),
+        BTreeMap::from([(account, 100)]),
+    ));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
+    let state = TestAuthorityBuilder::new().build().await;
+    let epoch_store = state.epoch_store_for_testing().clone();
+
+    let (sender, keypair) = get_account_key_pair();
+    let tx = VerifiedExecutableTransaction::new_for_testing(
+        TestTransactionBuilder::new(sender, random_object_ref(), 1).build(),
+        &keypair,
+    );
+    let withdraws_80 = BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 80)]);
+
+    // First: a checkpoint-known-sufficient transaction withdrawing 80 at settled version 0.
+    assert!(
+        checker.should_commit_object_funds_withdraws(
+            &tx,
+            &ExecutionStatus::Success,
+            &withdraws_80,
+            &ExecutionEnv::new()
+                .with_assigned_versions(AssignedVersions::new(
+                    vec![],
+                    Some(SequenceNumber::from_u64(0)),
+                ))
+                .with_sufficient_funds(),
+            &(Arc::new(MockFundsRead::new(
+                SequenceNumber::from_u64(0),
+                BTreeMap::from([(account, 100)]),
+            )) as Arc<dyn crate::accumulators::funds_read::AccountFundsRead>),
+            state.execution_scheduler(),
+            &epoch_store,
+        )
+    );
+
+    // Second: a consensus transaction trying to withdraw 30 at the same version.
+    // 80 + 30 = 110 > 100, so this should fail the check.
+    let status = checker.check_object_funds(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 30)]),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
+        panic!("Expected pending because cumulative 80+30=110 > 100");
+    };
+    let result = receiver.await.unwrap();
+    assert_eq!(result, FundsWithdrawStatus::Insufficient);
+
+    // A 20-unit withdrawal should succeed: 80 + 20 = 100 <= 100.
+    let status = checker.check_object_funds(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 20)]),
+        SequenceNumber::from_u64(0),
+        funds_read.as_ref(),
+    );
+    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
+}

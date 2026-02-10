@@ -805,6 +805,11 @@ impl ExecutionEnv {
         self
     }
 
+    pub fn with_sufficient_funds(mut self) -> Self {
+        self.funds_withdraw_status = FundsWithdrawStatus::Sufficient;
+        self
+    }
+
     pub fn with_insufficient_funds(mut self) -> Self {
         self.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
         self
