@@ -12,6 +12,7 @@
 // want to be able to use these constructs to write tests.
 #![allow(
     clippy::cast_possible_truncation,
+    clippy::unwrap_used,
     clippy::expect_used,
     clippy::indexing_slicing,
     clippy::new_without_default,

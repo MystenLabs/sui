@@ -14,7 +14,7 @@
     clippy::indexing_slicing,
     clippy::panic,
     clippy::unwrap_used,
-    unsafe_code,
+    unsafe_code
 )]
 #![cfg_attr(
     test,
