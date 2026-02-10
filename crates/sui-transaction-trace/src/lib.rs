@@ -146,10 +146,14 @@ impl TransactionTraceLogger {
         // Create channel for background flush task
         let (flush_tx, flush_rx) = tokio::sync::mpsc::unbounded_channel();
 
+        let mut buffer = Vec::with_capacity(config.buffer_capacity);
+        // Push initial AbsTime anchor
+        buffer.push(LogRecord::AbsTime(SystemTime::now()));
+
         let logger = Arc::new(Self {
             config: config.clone(),
             state: Mutex::new(LoggerState {
-                buffer: Vec::with_capacity(config.buffer_capacity),
+                buffer,
                 last_instant: Instant::now(),
                 last_flush: Instant::now(),
             }),
@@ -188,6 +192,33 @@ impl TransactionTraceLogger {
 
         let mut state = self.state.lock();
 
+        // Check if we need to flush BEFORE adding records
+        // Adding this event will add 2 records (time + event)
+        let would_exceed_capacity = state.buffer.len() + 2 > self.config.buffer_capacity;
+        let time_to_flush =
+            now.duration_since(state.last_flush).as_secs() >= self.config.flush_interval_secs;
+        let should_flush = (would_exceed_capacity || time_to_flush) && !state.buffer.is_empty();
+
+        if should_flush {
+            // Swap buffer with new empty one
+            let mut new_buffer = Vec::with_capacity(self.config.buffer_capacity);
+            std::mem::swap(&mut state.buffer, &mut new_buffer);
+            state.last_flush = now;
+
+            // Push AbsTime anchor to the new buffer and reset last_instant
+            // This correlates the wall-clock time with the start of the new buffer
+            state.buffer.push(LogRecord::AbsTime(SystemTime::now()));
+            state.last_instant = Instant::now();
+
+            // Send old buffer to flush task (must reacquire lock after sending)
+            drop(state);
+            if let Err(e) = self.flush_tx.send(new_buffer) {
+                tracing::error!("Failed to send buffer to flush task, data lost: {:?}", e);
+            }
+            // Reacquire lock to add current event
+            state = self.state.lock();
+        }
+
         // Calculate delta time since last record
         let elapsed = now.duration_since(state.last_instant);
         let micros = elapsed.as_micros();
@@ -205,24 +236,6 @@ impl TransactionTraceLogger {
             .push(LogRecord::TransactionEvent { digest, event_type });
 
         state.last_instant = now;
-
-        // Check if we need to flush
-        let should_flush = (state.buffer.len() >= state.buffer.capacity()
-            || now.duration_since(state.last_flush).as_secs() >= self.config.flush_interval_secs)
-            && !state.buffer.is_empty();
-
-        if should_flush {
-            // Swap buffer with new empty one
-            let mut new_buffer = Vec::with_capacity(self.config.buffer_capacity);
-            std::mem::swap(&mut state.buffer, &mut new_buffer);
-            state.last_flush = now;
-
-            // Send to flush task (drop lock before sending)
-            drop(state);
-            if let Err(e) = self.flush_tx.send(new_buffer) {
-                tracing::error!("Failed to send buffer to flush task, data lost: {:?}", e);
-            }
-        }
 
         Ok(())
     }
@@ -276,15 +289,8 @@ impl TransactionTraceLogger {
             Self::cleanup_old_files(config)?;
         }
 
-        // Write AbsTime anchor at the start of each flushed buffer
-        // This correlates the monotonic delta times with wall-clock time
+        // Write all records in the buffer
         if let Some(file) = &mut state.current_file {
-            let abs_time_record = LogRecord::AbsTime(SystemTime::now());
-            let encoded = bincode::serialize(&abs_time_record)?;
-            file.write_all(&encoded)?;
-            state.current_file_size += encoded.len();
-
-            // Write all records in the buffer
             for record in buffer {
                 let encoded = bincode::serialize(record)?;
                 file.write_all(&encoded)?;
@@ -391,7 +397,13 @@ mod tests {
         let logger = TransactionTraceLogger::new(config).unwrap();
 
         // Log events to fill buffer
-        for i in 0..3 {
+        // With capacity 4 and flush-before-add logic:
+        // - Initial: [AbsTime] (1)
+        // - Event 0: check (1+2>4? no), add -> [AbsTime, Delta, Event] (3)
+        // - Event 1: check (3+2>4? yes), flush, add -> new [AbsTime, Delta, Event] (3)
+        // - Event 2: check (3+2>4? yes), flush, add -> new [AbsTime, Delta, Event] (3)
+        // - Event 3: check (3+2>4? yes), flush, add -> new [AbsTime, Delta, Event] (3)
+        for i in 0..4 {
             let digest = [i as u8; 32];
             logger
                 .write_transaction_event(digest, TxEventType::ExecutionBegin)
