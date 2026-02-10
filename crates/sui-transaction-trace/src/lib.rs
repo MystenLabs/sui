@@ -151,7 +151,7 @@ pub struct TransactionTraceLogger {
     config: TraceLogConfig,
     state: Mutex<LoggerState>,
     /// Channel for async flushing (None in single-threaded runtime)
-    flush_tx: Option<tokio::sync::mpsc::UnboundedSender<Vec<LogRecord>>>,
+    flush_tx: Option<tokio::sync::mpsc::Sender<Vec<LogRecord>>>,
     /// Flush state for synchronous flushing in single-threaded mode
     sync_flush_state: Option<Mutex<FlushTaskState>>,
 }
@@ -186,7 +186,8 @@ impl TransactionTraceLogger {
             (None, Some(Mutex::new(flush_state)))
         } else {
             // Async flushing mode (production)
-            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+            // Use bounded channel to apply backpressure if flush task falls behind
+            let (tx, rx) = tokio::sync::mpsc::channel(1000);
             let config_clone = config.clone();
             tokio::task::spawn_blocking(move || {
                 Self::run_flush_task(config_clone, rx);
@@ -266,8 +267,9 @@ impl TransactionTraceLogger {
             if let Some(flush_tx) = &self.flush_tx {
                 // Async flush: send to background task
                 drop(state);
-                if let Err(e) = flush_tx.send(new_buffer) {
-                    tracing::error!("Failed to send buffer to flush task, data lost: {:?}", e);
+                // try_send drops message if channel is full (no backpressure on hot path)
+                if let Err(e) = flush_tx.try_send(new_buffer) {
+                    tracing::warn!("Failed to send buffer to flush task, data dropped: {:?}", e);
                 }
                 // Reacquire lock to add current event
                 state = self.state.lock();
@@ -308,10 +310,7 @@ impl TransactionTraceLogger {
     }
 
     /// Background task that flushes buffers to disk (runs on blocking thread)
-    fn run_flush_task(
-        config: TraceLogConfig,
-        mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<LogRecord>>,
-    ) {
+    fn run_flush_task(config: TraceLogConfig, mut rx: tokio::sync::mpsc::Receiver<Vec<LogRecord>>) {
         let mut state = FlushTaskState {
             current_file: None,
             current_file_size: 0,
@@ -360,8 +359,11 @@ impl TransactionTraceLogger {
         if let Some(file) = &mut state.current_file {
             for record in buffer {
                 let encoded = bincode::serialize(record)?;
+                // Write length prefix (u32) followed by data
+                let len = encoded.len() as u32;
+                file.write_all(&len.to_le_bytes())?;
                 file.write_all(&encoded)?;
-                state.current_file_size += encoded.len();
+                state.current_file_size += 4 + encoded.len();
             }
             file.flush()?;
         }
@@ -419,8 +421,8 @@ impl Drop for TransactionTraceLogger {
 
         if let Some(flush_tx) = &self.flush_tx {
             // Async mode: send to background task
-            // Ignore errors - task might already be shut down
-            let _ = flush_tx.send(buffer_to_flush);
+            // Use try_send to avoid blocking on drop
+            let _ = flush_tx.try_send(buffer_to_flush);
         } else if let Some(sync_flush_state) = &self.sync_flush_state {
             // Sync mode: flush immediately
             let mut flush_state = sync_flush_state.lock();
@@ -483,20 +485,29 @@ impl<'a> Iterator for LogReaderIterator<'a> {
     type Item = Result<TimestampedEvent>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        use std::io::Read;
+
         loop {
-            // Deserialize next record
-            let record: LogRecord = match bincode::deserialize_from(&mut self.reader.file) {
+            // Read length prefix (u32)
+            let mut len_buf = [0u8; 4];
+            match self.reader.file.read_exact(&mut len_buf) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return None,
+                Err(e) => return Some(Err(e.into())),
+            }
+            let len = u32::from_le_bytes(len_buf) as usize;
+
+            // Read record data
+            let mut data = vec![0u8; len];
+            match self.reader.file.read_exact(&mut data) {
+                Ok(()) => {}
+                Err(e) => return Some(Err(e.into())),
+            }
+
+            // Deserialize from buffer
+            let record: LogRecord = match bincode::deserialize(&data) {
                 Ok(r) => r,
-                Err(e) => {
-                    // EOF is expected, other errors should be reported
-                    if e.to_string().contains("unexpected end of file")
-                        || e.to_string()
-                            .contains("io error: failed to fill whole buffer")
-                    {
-                        return None;
-                    }
-                    return Some(Err(e.into()));
-                }
+                Err(e) => return Some(Err(e.into())),
             };
 
             match record {
