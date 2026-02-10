@@ -9,7 +9,6 @@ use sui::display::{Self, new};
 use sui::display_registry::{Self, DisplayRegistry, Display, SystemMigrationCap, DisplayCap};
 use sui::package::{Self, test_claim, Publisher};
 use sui::test_scenario::{Self, Scenario};
-use sui::vec_map;
 
 public struct MyKeyOnlyType has key { id: UID }
 public struct MyPotato {}
@@ -71,7 +70,8 @@ fun claim_legacy() {
         // manually migrate `MyKeyOnlyType` to the new registry, as if we were the system.
         registry.system_migration<MyKeyOnlyType>(
             &cap,
-            vec_map::empty(),
+            vector[],
+            vector[],
             scenario.ctx(),
         );
         scenario.next_tx(@0x1);
@@ -123,7 +123,8 @@ fun claim_with_publisher() {
         let cap = take_migration_cap(scenario);
         registry.system_migration<MyKeyOnlyType>(
             &cap,
-            vec_map::empty(),
+            vector[],
+            vector[],
             scenario.ctx(),
         );
         scenario.next_tx(@0x1);
@@ -187,7 +188,8 @@ fun migrate_twice_returns_silently() {
         let cap = take_migration_cap(scenario);
         registry.system_migration<MyKeyOnlyType>(
             &cap,
-            vec_map::empty(),
+            vector[DEMO_NAME_KEY.to_string()],
+            vector[DEMO_NAME_VALUE.to_string()],
             scenario.ctx(),
         );
         let effects = scenario.next_tx(@0x5);
@@ -199,13 +201,21 @@ fun migrate_twice_returns_silently() {
         // try to migrate again, should have no object creations.
         registry.system_migration<MyKeyOnlyType>(
             &cap,
-            vec_map::empty(),
+            vector[],
+            vector[],
             scenario.ctx(),
         );
         let effects = scenario.next_tx(@0x5);
 
         assert_eq!(effects.shared().length(), 0);
         assert_eq!(effects.created().length(), 0);
+
+        // We should have the state of the first migration.
+        let display = scenario.take_shared<Display<MyKeyOnlyType>>();
+        assert_eq!(display.fields().length(), 1);
+        assert_eq!(*display.fields().get(&DEMO_NAME_KEY.to_string()), DEMO_NAME_VALUE.to_string());
+
+        test_scenario::return_shared(display);
 
         cap.destroy_system_migration_cap();
     });
@@ -218,7 +228,8 @@ fun claim_cap_twice_fails() {
         let cap = take_migration_cap(scenario);
         registry.system_migration<MyKeyOnlyType>(
             &cap,
-            vec_map::empty(),
+            vector[],
+            vector[],
             scenario.ctx(),
         );
         scenario.next_tx(@0x1);
@@ -238,7 +249,8 @@ fun delete_legacy_before_migration_fails() {
         let cap = take_migration_cap(scenario);
         registry.system_migration<MyKeyOnlyType>(
             &cap,
-            vec_map::empty(),
+            vector[],
+            vector[],
             scenario.ctx(),
         );
         scenario.next_tx(@0x1);

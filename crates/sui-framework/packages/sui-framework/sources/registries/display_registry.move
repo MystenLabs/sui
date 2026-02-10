@@ -131,7 +131,8 @@ public fun claim_with_publisher<T: key>(
 public fun system_migration<T: key>(
     registry: &mut DisplayRegistry,
     _: &SystemMigrationCap,
-    fields: VecMap<String, String>,
+    keys: vector<String>,
+    values: vector<String>,
     _ctx: &mut TxContext,
 ) {
     let key = DisplayKey<T>();
@@ -141,7 +142,7 @@ public fun system_migration<T: key>(
 
     transfer::share_object(Display<T> {
         id: derived_object::claim(&mut registry.id, key),
-        fields,
+        fields: vec_map::from_keys_values(keys, values),
         cap_id: option::none(),
     });
 }
