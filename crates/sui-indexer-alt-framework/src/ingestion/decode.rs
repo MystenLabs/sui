@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prost::Message;
-use sui_rpc::proto::TryFromProtoError;
 use sui_rpc::proto::sui::rpc::v2 as proto;
+use sui_rpc::proto::TryFromProtoError;
 
 use crate::types::full_checkpoint_content::Checkpoint;
 
@@ -16,7 +16,7 @@ pub enum Error {
     Deserialization(#[from] prost::DecodeError),
 
     #[error("Failed to convert checkpoint protobuf to checkpoint data: {0}")]
-    ProtoConversion(#[from] TryFromProtoError),
+    ProtoConversion(#[from] Box<TryFromProtoError>),
 }
 
 impl Error {
@@ -34,5 +34,5 @@ impl Error {
 pub(crate) fn checkpoint(bytes: &[u8]) -> Result<Checkpoint, Error> {
     let decompressed = zstd::decode_all(bytes)?;
     let proto_checkpoint = proto::Checkpoint::decode(&decompressed[..])?;
-    Ok(Checkpoint::try_from(&proto_checkpoint)?)
+    Ok(Checkpoint::try_from(&proto_checkpoint).map_err(Box::new)?)
 }
