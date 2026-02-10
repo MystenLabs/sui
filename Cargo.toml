@@ -194,6 +194,7 @@ members = [
   "crates/sui-tool",
   "crates/sui-transaction-builder",
   "crates/sui-transaction-checks",
+  "crates/sui-transaction-trace",
   "crates/sui-transactional-test-runner",
   "crates/sui-types",
   "crates/sui-upgrade-compatibility-transactional-tests",

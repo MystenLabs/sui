@@ -17042,6 +17042,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-transaction-trace"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode 1.3.3",
+ "parking_lot 0.12.3",
+ "serde",
+ "sui-types",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
