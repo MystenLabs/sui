@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prost::Message;
-use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::TryFromProtoError;
+use sui_rpc::proto::sui::rpc::v2 as proto;
 
 use crate::types::full_checkpoint_content::Checkpoint;
 
