@@ -391,10 +391,12 @@ fn op_step_impl(
         Bytecode::Ret
         | Bytecode::CallGeneric(_)
         | Bytecode::DirectCall(_)
-        | Bytecode::VirtualCall(_) => partial_vm_error!(
-            UNREACHABLE,
-            "Call/Return instructions should be handled in `step`, not `op_step_impl`"
-        ),
+        | Bytecode::VirtualCall(_) => {
+            return Err(partial_vm_error!(
+                UNREACHABLE,
+                "Call/Return instructions should be handled in `step`, not `op_step_impl`"
+            ));
+        }
         // -- INTERNAL CONTROL FLOW --------------
         // These all update the current frame's program counter.
         Bytecode::BrTrue(offset) => {
@@ -775,7 +777,7 @@ fn op_step_impl(
         Bytecode::VecUnpack(ty_ptr, num) => {
             let vec_val = state.pop_operand_as::<Vector>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
-            gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views())?;
+            gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
             let elements = vec_val.unpack(&ty, *num)?;
             for value in elements {
                 state.push_operand(value)?;

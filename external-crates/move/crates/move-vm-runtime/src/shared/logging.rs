@@ -13,7 +13,7 @@ use tracing::error;
 
 pub fn expect_no_verification_errors(err: VMError) -> VMError {
     match err.status_type() {
-        status_type @ StatusType::Deserialization | status_type @ StatusType::Verification => {
+        status_type @ (StatusType::Deserialization | StatusType::Verification) => {
             let message = format!(
                 "Unexpected verifier/deserialization error! This likely means there is code \
                 stored on chain that is unverifiable!\nError: {:?}",
@@ -31,6 +31,8 @@ pub fn expect_no_verification_errors(err: VMError) -> VMError {
             let major_status = match status_type {
                 StatusType::Deserialization => StatusCode::UNEXPECTED_DESERIALIZATION_ERROR,
                 StatusType::Verification => StatusCode::UNEXPECTED_VERIFIER_ERROR,
+                // [SAFETY] This is logically unreachable because of the match above.
+                #[allow(clippy::unreachable)]
                 _ => unreachable!(),
             };
 

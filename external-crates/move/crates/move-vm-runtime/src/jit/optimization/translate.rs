@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    jit::optimization::ast, partial_vm_error, shared::SafeIndex as _,
-    validation::verification::ast as Input,
+    jit::optimization::ast, shared::SafeIndex as _, validation::verification::ast as Input,
 };
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
     checked_as,
     errors::PartialVMResult,
     file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex},
+    partial_vm_error,
 };
 use std::collections::BTreeMap;
 
