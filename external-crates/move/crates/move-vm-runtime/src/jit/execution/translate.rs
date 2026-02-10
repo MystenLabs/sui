@@ -28,7 +28,7 @@ use move_binary_format::{
         self as FF, CompiledModule, FunctionDefinition, FunctionDefinitionIndex,
         FunctionHandleIndex, SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
     },
-    partial_vm_error,
+    partial_vm_error, safe_unwrap,
 };
 use move_core_types::{
     identifier::Identifier, language_storage::ModuleId, resolver::IntraPackageName,
@@ -1110,7 +1110,11 @@ fn alloc_function(
     // Native functions do not have a code unit
     let (locals_len, locals) = match &def.code {
         Some(code) => {
-            let locals_len = parameters.len() + module.signature_at(code.locals).0.len();
+            let locals_len = safe_unwrap!(
+                parameters
+                    .len()
+                    .checked_add(module.signature_at(code.locals).0.len())
+            );
             let locals = context.arena_vec(
                 module
                     .signature_at(code.locals)

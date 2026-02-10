@@ -7,9 +7,11 @@
 //! It is a design goal for the Move VM to be independent of the Diem blockchain, so that
 //! other blockchains can use it as well. The VM isn't there yet, but hopefully will be there
 //! soon.
-
 #![deny(
     clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::arithmetic_side_effects,
     clippy::expect_used,
     clippy::indexing_slicing,
     clippy::panic,
@@ -19,7 +21,7 @@
 )]
 #![cfg_attr(
     test,
-    allow(clippy::indexing_slicing, clippy::cast_possible_truncation)
+    allow(clippy::indexing_slicing, clippy::cast_possible_truncation,)
 )]
 
 #[cfg(not(target_pointer_width = "64"))]

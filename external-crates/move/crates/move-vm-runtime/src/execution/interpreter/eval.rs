@@ -23,7 +23,7 @@ use crate::{
     jit::execution::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     shared::{
-        SafeIndex as _,
+        SafeArithmetic as _, SafeIndex as _,
         gas::{GasMeter, SimpleInstruction},
         vm_pointer::VMPointer,
     },
@@ -404,7 +404,7 @@ fn op_step_impl(
             state.call_stack.current_frame.pc = if state.pop_operand_as::<bool>()? {
                 *offset
             } else {
-                state.call_stack.current_frame.pc + 1
+                state.call_stack.current_frame.pc.safe_add(1)?
             };
         }
         Bytecode::BrFalse(offset) => {
@@ -412,7 +412,7 @@ fn op_step_impl(
             state.call_stack.current_frame.pc = if !state.pop_operand_as::<bool>()? {
                 *offset
             } else {
-                state.call_stack.current_frame.pc + 1
+                state.call_stack.current_frame.pc.safe_add(1)?
             };
         }
         Bytecode::Branch(offset) => {

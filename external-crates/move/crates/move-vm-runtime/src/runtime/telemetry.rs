@@ -407,17 +407,17 @@ impl TransactionTelemetryContext {
 
     pub(crate) fn record_load_time(&mut self, load_time: Duration, load_count: u64) {
         add_or_set!(self, load_time);
-        self.load_count += load_count;
+        self.load_count = self.load_count.saturating_add(load_count);
     }
 
     pub(crate) fn record_validation_time(&mut self, validation_time: Duration, valid_count: u64) {
         add_or_set!(self, validation_time);
-        self.validation_count += valid_count;
+        self.validation_count = self.validation_count.saturating_add(valid_count);
     }
 
     pub(crate) fn record_jit_time(&mut self, jit_time: Duration, jit_count: u64) {
         add_or_set!(self, jit_time);
-        self.jit_count += jit_count;
+        self.jit_count = self.jit_count.saturating_add(jit_count);
     }
 
     pub(crate) fn record_execution_time(&mut self, execution_time: Duration) {
@@ -429,11 +429,11 @@ impl TransactionTelemetryContext {
     }
 
     pub(crate) fn record_total_time(&mut self, total_time: Duration) {
-        self.total_time += total_time;
+        self.total_time = self.total_time.saturating_add(total_time);
     }
 
     pub(crate) fn record_redundant_compilation(&mut self) {
-        self.redundant_compilations += 1;
+        self.redundant_compilations = self.redundant_compilations.saturating_add(1);
     }
 }
 

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    jit::optimization::ast, shared::SafeIndex as _, validation::verification::ast as Input,
+    jit::optimization::ast,
+    shared::{SafeArithmetic as _, SafeIndex as _},
+    validation::verification::ast as Input,
 };
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
@@ -85,7 +87,7 @@ fn generate_basic_blocks(
             let label = label as ast::Label;
             // TODO: Try and make this code a bit nicer
             let code = input
-                .safe_get(start..(end + 1))?
+                .safe_get(start..(end.safe_add(1)?))?
                 .iter()
                 .map(bytecode)
                 .collect::<PartialVMResult<_>>()?;

@@ -7,7 +7,8 @@
     clippy::cast_possible_truncation,
     clippy::indexing_slicing,
     clippy::panic,
-    clippy::unreachable
+    clippy::unreachable,
+    clippy::arithmetic_side_effects
 )]
 
 use crate::{

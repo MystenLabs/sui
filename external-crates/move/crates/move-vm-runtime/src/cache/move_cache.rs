@@ -186,20 +186,22 @@ impl MoveCache {
         // Iterate over each package.
         for entry in self.package_cache.iter() {
             let package_arc = entry.value();
-            package_cache_count += 1;
+            package_cache_count = package_cache_count.saturating_add(1);
 
             // Dereference the runtime package.
             let runtime_pkg = &package_arc.runtime;
 
             // Sum up the number of modules.
-            module_count += runtime_pkg.loaded_modules.len() as u64;
+            module_count = module_count.saturating_add(runtime_pkg.loaded_modules.len() as u64);
 
             // Sum up the number of functions and types.
-            function_count += runtime_pkg.vtable.functions.len() as u64;
-            type_count += runtime_pkg.vtable.types.len() as u64;
+            function_count =
+                function_count.saturating_add(runtime_pkg.vtable.functions.len() as u64);
+            type_count = type_count.saturating_add(runtime_pkg.vtable.types.len() as u64);
 
             // Sum the memory usage reported by the arena.
-            total_arena_size += runtime_pkg.package_arena.allocated_bytes() as u64;
+            total_arena_size =
+                total_arena_size.saturating_add(runtime_pkg.package_arena.allocated_bytes() as u64);
         }
 
         let interner_size: u64 = self.interner.size() as u64;

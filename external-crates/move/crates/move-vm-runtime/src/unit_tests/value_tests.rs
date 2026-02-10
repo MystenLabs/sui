@@ -279,7 +279,7 @@ fn val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         Value::vector_u32([0, 1, 2]),
         Value::vector_u64([]),
         Value::vector_u128([1, 2, 3, 4]),
-        Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
+        Value::vector_u256([1u64, 2, 3, 4].iter().map(|q| U256::from(*q))),
         Value::make_struct([]),
         Value::make_struct([Value::u8(0), Value::bool(false)]),
         Vector::pack(VectorSpecialization::Container, [])?,

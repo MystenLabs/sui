@@ -34,7 +34,7 @@ pub fn instantiate_generic_function(
     // than MAX_TYPE_INSTANTIATION_NODES.
     let mut sum_nodes = 1u64;
     for ty in type_params.iter().chain(instantiation.iter()) {
-        sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
+        sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes()?);
         if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
             return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
         }
@@ -78,13 +78,13 @@ fn instantiate_datatype_common(
     // This prevents constructing larger and larger types via datatype instantiation.
     let mut sum_nodes = 1u64;
     for ty in type_params.iter() {
-        sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
+        sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes()?);
         if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
             return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
         }
     }
     for ty in ty_args.iter() {
-        sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
+        sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes()?);
         if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
             return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
         }

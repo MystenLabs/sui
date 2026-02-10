@@ -327,6 +327,7 @@ impl<'b> NativeContext<'_, 'b, '_> {
         self.gas_budget.saturating_sub(*self.gas_left.borrow())
     }
 
+    #[cfg(any(debug_assertions, feature = "testing"))]
     pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
         // If this native was a base invocation, it won't have a stack to speak of.
         if let Some(state) = self.state {

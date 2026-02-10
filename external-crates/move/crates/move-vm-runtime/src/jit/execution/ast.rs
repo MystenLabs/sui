@@ -12,6 +12,7 @@ use crate::{
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
+        SafeArithmetic as _,
         constants::TYPE_DEPTH_MAX,
         types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
@@ -1077,6 +1078,10 @@ impl Type {
     ///
     /// This kept only for legacy reasons.
     /// New applications should not use this.
+    ///
+    /// SAFETY: Addition over `AbstractMemorySize` is saturating and so this is safe against
+    /// overflow.
+    #[allow(clippy::arithmetic_side_effects)]
     pub fn size(&self) -> AbstractMemorySize {
         use Type::*;
 
@@ -1216,7 +1221,7 @@ macro_rules! impl_deep_subst {
     ($ty:ident) => {
         impl TypeSubst for $ty {
             fn clone_impl(&self, depth: usize) -> PartialVMResult<Type> {
-                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), depth + 1)
+                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), depth.safe_add(1)?)
             }
 
             fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
@@ -1237,19 +1242,21 @@ macro_rules! impl_deep_subst {
                     $ty::U256 => Type::U256,
                     $ty::Address => Type::Address,
                     $ty::Signer => Type::Signer,
-                    $ty::Vector(ty) => Type::Vector(Box::new(ty.apply_subst(subst, depth + 1)?)),
+                    $ty::Vector(ty) => {
+                        Type::Vector(Box::new(ty.apply_subst(subst, depth.safe_add(1)?)?))
+                    }
                     $ty::Reference(ty) => {
-                        Type::Reference(Box::new(ty.apply_subst(subst, depth + 1)?))
+                        Type::Reference(Box::new(ty.apply_subst(subst, depth.safe_add(1)?)?))
                     }
                     $ty::MutableReference(ty) => {
-                        Type::MutableReference(Box::new(ty.apply_subst(subst, depth + 1)?))
+                        Type::MutableReference(Box::new(ty.apply_subst(subst, depth.safe_add(1)?)?))
                     }
                     $ty::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
                     $ty::DatatypeInstantiation(def_inst) => {
                         let (def_idx, instantiation) = &**def_inst;
                         let inst = instantiation
                             .iter()
-                            .map(|ty| ty.apply_subst(subst, depth + 1))
+                            .map(|ty| ty.apply_subst(subst, depth.safe_add(1)?))
                             .collect::<PartialVMResult<Vec<_>>>()?;
                         Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
                     }
@@ -1287,33 +1294,30 @@ impl_deep_subst!(ArenaType);
 macro_rules! impl_count_type_nodes {
     ($ty:ident) => {
         impl TypeNodeCount for $ty {
-            fn count_type_nodes(&self) -> u64 {
+            fn count_type_nodes(&self) -> PartialVMResult<u64> {
                 let mut todo = vec![self];
-                let mut result = 0;
+                let mut result = 0u64;
                 while let Some(ty) = todo.pop() {
+                    result = result.safe_add(1)?;
                     match ty {
                         $ty::Vector(ty) | $ty::Reference(ty) | $ty::MutableReference(ty) => {
-                            result += 1;
                             todo.push(ty);
                         }
                         $ty::DatatypeInstantiation(struct_inst) => {
                             let (_, ty_args) = &**struct_inst;
-                            result += 1;
-                            todo.extend(ty_args.iter())
+                            todo.extend(ty_args.iter());
                         }
-                        _ => {
-                            result += 1;
-                        }
+                        _ => {}
                     }
                 }
-                result
+                Ok(result)
             }
         }
     };
 }
 
 pub trait TypeNodeCount {
-    fn count_type_nodes(&self) -> u64;
+    fn count_type_nodes(&self) -> PartialVMResult<u64>;
 }
 
 // Generated implementations.

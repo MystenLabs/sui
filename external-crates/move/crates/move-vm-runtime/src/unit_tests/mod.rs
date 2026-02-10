@@ -10,7 +10,8 @@
     clippy::panic,
     clippy::unreachable,
     clippy::unwrap_used,
-    unsafe_code
+    unsafe_code,
+    clippy::arithmetic_side_effects
 )]
 
 mod bad_entry_point_tests;
