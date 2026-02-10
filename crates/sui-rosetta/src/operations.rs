@@ -30,7 +30,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::internal_operation::{PayCoin, PaySui, Stake, WithdrawStake};
 use crate::types::{
@@ -363,6 +363,73 @@ impl Operations {
             }
             Some(vec![])
         }
+        fn into_balance_passthrough(
+            known_results: &[Vec<KnownValue>],
+            call: &MoveCall,
+        ) -> Option<Vec<KnownValue>> {
+            let args = &call.arguments;
+            if let Some(coin_arg) = args.first() {
+                match coin_arg.kind() {
+                    ArgumentKind::Result => {
+                        let cmd_idx = coin_arg.result?;
+                        let sub_idx = coin_arg.subresult.unwrap_or(0);
+                        let KnownValue::GasCoin(val) =
+                            resolve_result(known_results, cmd_idx, sub_idx)?;
+                        Some(vec![KnownValue::GasCoin(*val)])
+                    }
+                    // Input coin (e.g. remainder send_funds) — value unknown but
+                    // downstream send_funds to sender will ignore it anyway.
+                    _ => Some(vec![KnownValue::GasCoin(0)]),
+                }
+            } else {
+                Some(vec![KnownValue::GasCoin(0)])
+            }
+        }
+        fn send_funds_transfer(
+            aggregated_recipients: &mut HashMap<SuiAddress, u64>,
+            inputs: &[Input],
+            known_results: &[Vec<KnownValue>],
+            call: &MoveCall,
+            sender: SuiAddress,
+        ) -> Option<Vec<KnownValue>> {
+            let args = &call.arguments;
+            if args.len() < 2 {
+                return Some(vec![]);
+            }
+            let balance_arg = &args[0];
+            let recipient_arg = &args[1];
+
+            // Resolve the balance amount from into_balance result
+            let amount = match balance_arg.kind() {
+                ArgumentKind::Result => {
+                    let cmd_idx = balance_arg.result?;
+                    let sub_idx = balance_arg.subresult.unwrap_or(0);
+                    let KnownValue::GasCoin(val) = resolve_result(known_results, cmd_idx, sub_idx)?;
+                    *val
+                }
+                _ => return Some(vec![]),
+            };
+
+            // Resolve recipient address
+            let addr = match recipient_arg.kind() {
+                ArgumentKind::Input => {
+                    let input_idx = recipient_arg.input() as usize;
+                    let input = inputs.get(input_idx)?;
+                    if input.kind() == InputKind::Pure {
+                        bcs::from_bytes::<SuiAddress>(input.pure()).ok()?
+                    } else {
+                        return Some(vec![]);
+                    }
+                }
+                _ => return Some(vec![]),
+            };
+
+            // Only track transfers to non-sender addresses
+            if addr != sender {
+                *aggregated_recipients.entry(addr).or_insert(0) += amount;
+            }
+            Some(vec![])
+        }
         fn stake_call(
             inputs: &[Input],
             known_results: &[Vec<KnownValue>],
@@ -370,7 +437,7 @@ impl Operations {
         ) -> Result<Option<(Option<u64>, SuiAddress)>, Error> {
             let arguments = &call.arguments;
             let (amount, validator) = match &arguments[..] {
-                [_, coin, validator] => {
+                [system_state_arg, coin, validator] => {
                     let amount = match coin.kind() {
                         ArgumentKind::Result => {
                             let i = coin
@@ -384,11 +451,13 @@ impl Operations {
                         }
                         _ => return Ok(None),
                     };
+                    let system_state_idx = match system_state_arg.kind() {
+                        ArgumentKind::Input => system_state_arg.input(),
+                        _ => return Ok(None),
+                    };
                     let (some_amount, validator) = match validator.kind() {
-                        // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
-                        // We use the position of the validator arg as a indicator of if the rosetta stake
-                        // transaction is staking the whole wallet or not, if staking whole wallet,
-                        // we have to omit the amount value in the final operation output.
+                        // [WORKAROUND] - input ordering hack: validator BEFORE system_state
+                        // means a specific amount; system_state BEFORE validator means stake_all.
                         ArgumentKind::Input => {
                             let i = validator.input();
                             let validator_addr = match inputs.get(i as usize) {
@@ -397,7 +466,7 @@ impl Operations {
                                 }
                                 _ => None,
                             };
-                            (i == 1, Ok(validator_addr))
+                            (i < system_state_idx, Ok(validator_addr))
                         }
                         _ => return Ok(None),
                     };
@@ -414,7 +483,7 @@ impl Operations {
         fn unstake_call(inputs: &[Input], call: &MoveCall) -> Result<Option<ObjectID>, Error> {
             let arguments = &call.arguments;
             let id = match &arguments[..] {
-                [_, stake_id] => match stake_id.kind() {
+                [system_state_arg, stake_id] => match stake_id.kind() {
                     ArgumentKind::Input => {
                         let i = stake_id.input();
                         let id = match inputs.get(i as usize) {
@@ -425,9 +494,13 @@ impl Operations {
                             _ => None,
                         }
                         .ok_or_else(|| anyhow!("Cannot find stake id from input args."))?;
-                        // [WORKAROUND] - this is a hack to work out if the withdraw stake ops is for a selected stake or None (all stakes).
-                        // this hack is similar to the one in stake_call.
-                        let some_id = i % 2 == 1;
+                        // [WORKAROUND] - input ordering hack: system_state BEFORE stake_id
+                        // means specific stake IDs; stake_id BEFORE system_state means withdraw_all.
+                        let system_state_idx = match system_state_arg.kind() {
+                            ArgumentKind::Input => system_state_arg.input(),
+                            _ => return Ok(None),
+                        };
+                        let some_id = system_state_idx < i;
                         some_id.then_some(id)
                     }
                     _ => None,
@@ -486,6 +559,30 @@ impl Operations {
                 }
                 Some(Command::MergeCoins(_)) => {
                     // We don't care about merge-coins, we can just skip it.
+                    Some(vec![])
+                }
+                // Address-balance infrastructure calls
+                Some(Command::MoveCall(m)) if Self::is_balance_redeem_call(m) => Some(vec![]),
+                // coin::from_balance produces a Coin from a Balance — must return
+                // a KnownValue so downstream SplitCoins can resolve its source.
+                Some(Command::MoveCall(m)) if Self::is_coin_from_balance_call(m) => {
+                    Some(vec![KnownValue::GasCoin(0)])
+                }
+                Some(Command::MoveCall(m)) if Self::is_coin_into_balance_call(m) => {
+                    into_balance_passthrough(&known_results, m)
+                }
+                Some(Command::MoveCall(m)) if Self::is_balance_send_funds_call(m) => {
+                    send_funds_transfer(
+                        &mut aggregated_recipients,
+                        inputs,
+                        &known_results,
+                        m,
+                        sender,
+                    )
+                }
+                Some(Command::MoveCall(m))
+                    if Self::is_coin_destroy_zero_call(m) || Self::is_balance_join_call(m) =>
+                {
                     Some(vec![])
                 }
                 _ => None,
@@ -591,7 +688,70 @@ impl Operations {
 
         package_id == SUI_SYSTEM_PACKAGE_ID
             && tx.module() == SUI_SYSTEM_MODULE_NAME.as_str()
-            && tx.function() == WITHDRAW_STAKE_FUN_NAME.as_str()
+            && (tx.function() == WITHDRAW_STAKE_FUN_NAME.as_str()
+                || tx.function() == "request_withdraw_stake_non_entry")
+    }
+
+    /// Recognizes `balance::redeem_funds<T>` calls used for address-balance withdrawals.
+    fn is_balance_redeem_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_FRAMEWORK_PACKAGE_ID
+            && tx.module() == "balance"
+            && tx.function() == "redeem_funds"
+    }
+
+    /// Recognizes `coin::from_balance<T>` calls used for address-balance withdrawals.
+    fn is_coin_from_balance_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_FRAMEWORK_PACKAGE_ID
+            && tx.module() == "coin"
+            && tx.function() == "from_balance"
+    }
+
+    fn is_coin_into_balance_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_FRAMEWORK_PACKAGE_ID
+            && tx.module() == "coin"
+            && tx.function() == "into_balance"
+    }
+
+    fn is_balance_send_funds_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_FRAMEWORK_PACKAGE_ID
+            && tx.module() == "balance"
+            && tx.function() == "send_funds"
+    }
+
+    fn is_coin_destroy_zero_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_FRAMEWORK_PACKAGE_ID
+            && tx.module() == "coin"
+            && tx.function() == "destroy_zero"
+    }
+
+    fn is_balance_join_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_FRAMEWORK_PACKAGE_ID
+            && tx.module() == "balance"
+            && tx.function() == "join"
     }
 
     fn process_balance_change(
@@ -812,11 +972,9 @@ impl Operations {
             // System transactions don't have a gas_object.
             sender
         } else {
-            return Err(Error::DataError(format!(
-                "Non-system transaction (sender={}) missing gas_object: {}",
-                sender,
-                transaction.digest()
-            )));
+            // Address-balance gas payment: gas is paid from the sender's address balance,
+            // not from an explicit gas coin object. Use gas_payment owner from tx data.
+            SuiAddress::from_str(transaction.gas_payment().owner())?
         };
 
         let gas_summary = effects.gas_used();
@@ -1187,6 +1345,9 @@ mod tests {
             gas_price,
             budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
             currency: None,
+            address_balance_withdrawal: 0,
+            epoch: None,
+            chain_id: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
@@ -1196,6 +1357,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_operation_data_parsing_pay_coin() -> Result<(), anyhow::Error> {
+        use crate::types::internal_operation::pay_coin_pt;
+
         let gas = (
             ObjectID::random(),
             SequenceNumber::new(),
@@ -1209,20 +1372,9 @@ mod tests {
         );
 
         let sender = SuiAddress::random_for_testing_only();
+        let recipient = SuiAddress::random_for_testing_only();
 
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder
-                .pay(
-                    vec![coin],
-                    vec![SuiAddress::random_for_testing_only()],
-                    vec![10000],
-                )
-                .unwrap();
-            // the following is important in order to be able to transfer the coin type info between the various flow steps
-            builder.pure(serde_json::to_string(&SUI.clone())?)?;
-            builder.finish()
-        };
+        let pt = pay_coin_pt(sender, vec![recipient], vec![10000], &[coin], &[], 0, &SUI)?;
         let gas_price = 10;
         let data = TransactionData::new_programmable(
             sender,
@@ -1253,6 +1405,9 @@ mod tests {
             gas_price,
             budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
             currency: Some(SUI.clone()),
+            address_balance_withdrawal: 0,
+            epoch: None,
+            chain_id: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);

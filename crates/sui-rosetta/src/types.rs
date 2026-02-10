@@ -655,6 +655,15 @@ pub struct ConstructionMetadata {
     pub gas_price: u64,
     pub budget: u64,
     pub currency: Option<Currency>,
+    /// Amount to withdraw from address balance for payment
+    #[serde(default)]
+    pub address_balance_withdrawal: u64,
+    /// Current epoch, needed for ValidDuring expiration with address-balance gas
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epoch: Option<u64>,
+    /// Genesis checkpoint digest (base58), identifies the chain for address-balance gas
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_id: Option<String>,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
@@ -1004,6 +1013,9 @@ mod tests {
             gas_price: 0,
             budget: 0,
             currency: None,
+            address_balance_withdrawal: 0,
+            epoch: None,
+            chain_id: None,
         };
         let prod_metadata_json = serde_json::to_string(&prod_metadata).unwrap();
 

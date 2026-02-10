@@ -14,9 +14,12 @@ use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use tracing::info;
 
+use prost_types::FieldMask;
 use sui_rpc::client::Client;
-use sui_rpc::proto::sui::rpc::v2::GetCoinInfoRequest;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::{GetCoinInfoRequest, GetEpochRequest};
 use sui_sdk_types::{StructTag, TypeTag as SDKTypeTag};
+use sui_types::digests::ChainIdentifier;
 
 use crate::errors::Error;
 use crate::errors::Error::MissingMetadata;
@@ -35,6 +38,17 @@ pub mod operations;
 mod state;
 pub mod types;
 
+pub(crate) async fn get_current_epoch(client: &mut Client) -> Result<u64, Error> {
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["epoch"]));
+    Ok(client
+        .ledger_client()
+        .get_epoch(request)
+        .await?
+        .into_inner()
+        .epoch()
+        .epoch())
+}
+
 pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
     symbol: "SUI".to_string(),
     decimals: 9,
@@ -49,15 +63,16 @@ pub struct RosettaOnlineServer {
 }
 
 impl RosettaOnlineServer {
-    pub fn new(env: SuiEnv, client: Client) -> Self {
+    pub fn new(env: SuiEnv, client: Client, chain_id: ChainIdentifier) -> Self {
         let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(1000).unwrap());
         let blocks = Arc::new(CheckpointBlockProvider::new(
             client.clone(),
             coin_cache.clone(),
         ));
+
         Self {
             env,
-            context: OnlineServerContext::new(client, blocks, coin_cache),
+            context: OnlineServerContext::new(client, blocks, coin_cache, chain_id),
         }
     }
 

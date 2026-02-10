@@ -10,7 +10,7 @@ use prost_types::FieldMask;
 use sui_rpc::client::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{
-    GetBalanceRequest, GetCheckpointRequest, GetEpochRequest, ListOwnedObjectsRequest,
+    GetBalanceRequest, GetCheckpointRequest, ListOwnedObjectsRequest,
 };
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::SuiAddress;
@@ -117,7 +117,7 @@ async fn get_sub_account_balances(
     client: &mut Client,
     address: SuiAddress,
 ) -> Result<Vec<Amount>, Error> {
-    let current_epoch = get_current_epoch(client).await?;
+    let current_epoch = crate::get_current_epoch(client).await?;
     let address = Address::from(address);
     let delegated_stakes = client.list_delegated_stake(&address).await?;
 
@@ -199,16 +199,4 @@ pub async fn coins(
         block_identifier: context.blocks().current_block_identifier().await?,
         coins,
     })
-}
-
-pub async fn get_current_epoch(client: &mut Client) -> Result<u64, Error> {
-    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["epoch"]));
-
-    Ok(client
-        .ledger_client()
-        .get_epoch(request)
-        .await?
-        .into_inner()
-        .epoch()
-        .epoch())
 }
