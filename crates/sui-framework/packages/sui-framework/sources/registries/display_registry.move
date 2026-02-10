@@ -130,6 +130,10 @@ public fun new<T>(
 /// This is the primary way for package owners to create Display objects for their types.
 /// The Publisher must be valid for type T (created from the same package).
 /// 
+/// Note: The `publisher` parameter is `&mut` (rather than `&`) for API consistency
+/// and future-proofing, even though it's currently only read from. This provides
+/// flexibility for future enhancements while maintaining a consistent signature pattern.
+/// 
 /// # Returns
 /// - Display<T> - Must be shared via `share()` to make it publicly accessible
 /// - DisplayCap<T> - Used for managing the Display fields
@@ -160,6 +164,9 @@ public fun unset<T>(display: &mut Display<T>, _: &DisplayCap<T>, name: String) {
 }
 
 /// Set a value for the specified key, replacing any existing value.
+/// 
+/// Note: VecMap's `insert()` aborts if the key already exists, so we must
+/// remove any existing entry first to achieve upsert semantics.
 public fun set<T>(display: &mut Display<T>, _: &DisplayCap<T>, name: String, value: String) {
     if (display.fields.contains(&name)) {
         display.fields.remove(&name);
