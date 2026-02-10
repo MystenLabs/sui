@@ -17047,8 +17047,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "clap",
+ "hex",
  "parking_lot 0.12.3",
+ "reqwest",
  "serde",
+ "serde_json",
  "telemetry-subscribers",
  "tempfile",
  "tokio",

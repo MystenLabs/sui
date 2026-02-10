@@ -12,10 +12,14 @@ workspace = true
 [dependencies]
 bcs.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 parking_lot.workspace = true
-tokio = { workspace = true, features = ["sync", "rt", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["sync", "rt", "rt-multi-thread", "macros"] }
 anyhow.workspace = true
 tracing.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+clap = { workspace = true, features = ["derive"] }
+hex.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
