@@ -197,6 +197,19 @@ impl StateReader {
             .and_then(|o| o.load_value::<u128>().ok())
             .map(|balance| balance as u64)
     }
+
+    // Return the lowest available checkpoint watermark for which the RPC service can return proper
+    // responses for.
+    pub fn get_lowest_available_checkpoint(&self) -> Result<u64, crate::RpcError> {
+        // This is the lowest lowest_available_checkpoint from the checkpoint store
+        let lowest_available_checkpoint = self.inner().get_lowest_available_checkpoint()?;
+        // This is the lowest lowest_available_checkpoint from the perpetual store
+        let lowest_available_checkpoint_objects =
+            self.inner().get_lowest_available_checkpoint_objects()?;
+
+        // Return the higher of the two for our lower watermark
+        Ok(lowest_available_checkpoint.max(lowest_available_checkpoint_objects))
+    }
 }
 
 #[derive(Debug)]
