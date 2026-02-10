@@ -91,7 +91,7 @@ impl PackageContext<'_> {
         let funs = functions
             .into_iter()
             .map(|ptr| {
-                let name = ptr.name.inner_pkg_key;
+                let name = *ptr.name.inner_package_key();
                 (name, ptr)
             })
             .collect::<Vec<_>>();
@@ -120,17 +120,19 @@ impl PackageContext<'_> {
         vtable_entry: &VirtualTableKey,
     ) -> PartialVMResult<Option<VMPointer<Function>>> {
         // We are calling into a different package so we cannot resolve this to a direct call.
-        if vtable_entry.package_key != self.original_id {
+        if vtable_entry.package_key() != self.original_id {
             return Ok(None);
         }
-        match self.vtable_funs.get(&vtable_entry.inner_pkg_key) {
+        match self.vtable_funs.get(vtable_entry.inner_package_key()) {
             Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
             None => Err(partial_vm_error!(
                 FUNCTION_RESOLUTION_FAILURE,
                 "Function not found in vtable with name: {}::{}",
                 self.version_id,
-                self.interner
-                    .resolve_ident(&vtable_entry.inner_pkg_key.member_name, "function name")
+                self.interner.resolve_ident(
+                    &vtable_entry.inner_package_key().member_name,
+                    "function name"
+                )
             )),
         }
     }
@@ -512,7 +514,7 @@ fn datatypes(
     fn resolve_member_name(context: &PackageContext, name: &VirtualTableKey) -> Identifier {
         context
             .interner
-            .resolve_ident(&name.inner_pkg_key.member_name, "datatype name")
+            .resolve_ident(&name.inner_package_key().member_name, "datatype name")
     }
 
     // NB: It is the responsibility of the adapter to determine the correct type origin table,
@@ -524,7 +526,7 @@ fn datatypes(
     ) -> PartialVMResult<ModuleIdKey> {
         let defining_address = context
             .type_origin_table
-            .get(&name.inner_pkg_key)
+            .get(name.inner_package_key())
             .ok_or_else(|| {
                 partial_vm_error!(
                     LOOKUP_FAILED,
@@ -534,7 +536,7 @@ fn datatypes(
             })?;
         dbg_println!("Package ID: {:?}", version_id);
         dbg_println!("Defining Address: {:?}", defining_address);
-        let module_id = name.inner_pkg_key.module_name;
+        let module_id = name.inner_package_key().module_name;
         Ok(ModuleIdKey::from_parts(*defining_address, module_id))
     }
 
@@ -1090,17 +1092,10 @@ fn alloc_function(
         (None, false)
     };
     let name = {
+        let package_key = context.original_id;
         let module_name = *module_name;
         let member_name = context.interner.intern_ident_str(name_ident_str);
-        let inner_pkg_key = IntraPackageKey {
-            module_name,
-            member_name,
-        };
-        let package_key = context.original_id;
-        VirtualTableKey {
-            package_key,
-            inner_pkg_key,
-        }
+        VirtualTableKey::from_parts(package_key, module_name, member_name)
     };
     let parameters = module
         .signature_at(handle.parameters)
@@ -1617,13 +1612,8 @@ fn call(
     let module_handle = module.module_handle_at(func_handle.module);
     let original_id = module.module_id_for_handle(module_handle);
     let module_name = context.interner.intern_ident_str(original_id.name());
-    let vtable_key = VirtualTableKey {
-        package_key: *original_id.address(),
-        inner_pkg_key: IntraPackageKey {
-            module_name,
-            member_name,
-        },
-    };
+    let vtable_key = VirtualTableKey::from_parts(*original_id.address(), module_name, member_name);
+
     dbg_println!(flag: function_resolution, "Resolving function: {:?}", vtable_key);
     Ok(
         match context.try_resolve_direct_function_call(&vtable_key)? {
@@ -1675,13 +1665,8 @@ fn make_arena_type(
             let module_name = context
                 .interner
                 .intern_ident_str(module.identifier_at(module_handle.name));
-            let cache_idx = VirtualTableKey {
-                package_key: *original_address,
-                inner_pkg_key: IntraPackageKey {
-                    module_name,
-                    member_name: datatype_name,
-                },
-            };
+            let cache_idx =
+                VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
             ArenaType::Datatype(cache_idx)
         }
         SignatureToken::DatatypeInstantiation(inst) => {
@@ -1700,13 +1685,8 @@ fn make_arena_type(
             let module_name = context
                 .interner
                 .intern_ident_str(module.identifier_at(module_handle.name));
-            let cache_idx = VirtualTableKey {
-                package_key: *original_address,
-                inner_pkg_key: IntraPackageKey {
-                    module_name,
-                    member_name: datatype_name,
-                },
-            };
+            let cache_idx =
+                VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
             ArenaType::DatatypeInstantiation(context.arena_box((cache_idx, type_parameters))?)
         }
     };

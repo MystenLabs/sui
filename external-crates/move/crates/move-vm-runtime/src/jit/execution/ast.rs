@@ -37,6 +37,11 @@ use move_core_types::{
 // Package / Module Type Definitions
 // -------------------------------------------------------------------------------------------------
 
+// NB: Whenever possible, we want to keep the data defined here crate-private. Converting a type
+// to `pub` is a last-resort solution to a visibility problem and should be accompanied by a
+// comment explaining why the type needs to be public and why the fields of the type cannot be made
+// private.
+
 /// Representation of a loaded package.
 pub struct Package {
     pub version_id: VersionId,
@@ -47,7 +52,7 @@ pub struct Package {
     pub(crate) loaded_modules: IndexMap<IdentifierKey, Module>,
 
     // NB: Package functions and code are allocated into this arena.
-    pub package_arena: Arena,
+    pub(crate) package_arena: Arena,
     pub vtable: PackageVirtualTable,
 }
 
@@ -56,7 +61,10 @@ pub struct Package {
 // When code executes indexes in instructions are resolved against those runtime structure
 // so that any data needed for execution is immediately available
 #[derive(Debug)]
-pub struct Module {
+// The dead code warning is silenced on this struct as it these fields retain our only pointers to
+// the arena-allocated data. It seems prudent to track them here.
+#[allow(dead_code)]
+pub(crate) struct Module {
     pub id: ModuleId,
 
     /// Types as indexes into the package's vtable
@@ -107,8 +115,7 @@ pub struct Module {
 
     /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that represents it.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    #[allow(dead_code)]
-    pub(crate) instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
+    pub instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
 
     /// constant references carry an index into a global vector of values.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -127,7 +134,7 @@ impl Drop for Module {
 
 // A runtime constant
 #[derive(Debug)]
-pub struct Constant {
+pub(crate) struct Constant {
     pub(crate) value: ConstantValue,
     pub(crate) type_: ArenaType,
     // Size of constant -- used for gas charging.
@@ -137,16 +144,17 @@ pub struct Constant {
 // A runtime function
 // #[derive(Debug)]
 // https://github.com/rust-lang/rust/issues/70263
-pub struct Function {
+pub(crate) struct Function {
+    #[allow(dead_code)]
     pub file_format_version: u32,
     pub is_entry: bool,
     pub visibility: Visibility,
     pub index: FunctionDefinitionIndex,
-    pub(crate) code: ArenaVec<Bytecode>,
-    pub(crate) parameters: ArenaVec<ArenaType>,
-    pub(crate) locals: ArenaVec<ArenaType>,
-    pub(crate) return_: ArenaVec<ArenaType>,
-    pub(crate) type_parameters: ArenaVec<AbilitySet>,
+    pub code: ArenaVec<Bytecode>,
+    pub parameters: ArenaVec<ArenaType>,
+    pub locals: ArenaVec<ArenaType>,
+    pub return_: ArenaVec<ArenaType>,
+    pub type_parameters: ArenaVec<AbilitySet>,
     // NOTE: This field is manually dropped in Function::drop() to prevent Arc leaks
     // Any value holding a `Function` needs to ensure it is correctly dropped.
     pub native: Option<NativeFunction>,
@@ -166,7 +174,7 @@ impl Drop for Function {
 }
 
 // A variant jump table -- note that these are only full at the moment.
-pub type VariantJumpTable = ArenaVec<CodeOffset>;
+pub(crate) type VariantJumpTable = ArenaVec<CodeOffset>;
 
 //
 // Internal structures that are saved at the proper index in the proper tables to access
@@ -181,7 +189,7 @@ pub type VariantJumpTable = ArenaVec<CodeOffset>;
 //   (e.g., intra-package calls, or possibly calls to framework/well-known external packages).
 // - Virtual: the function is unknown and the index is the index in the global table of vtables
 //   that will be filled in at a later time before execution.
-pub enum CallType {
+pub(crate) enum CallType {
     Direct(VMPointer<Function>),
     Virtual(VirtualTableKey),
 }
@@ -191,29 +199,30 @@ pub enum CallType {
 // -----------------------------------------------
 
 #[derive(Debug)]
-pub struct StructDef {
+pub(crate) struct StructDef {
     pub def_vtable_key: VirtualTableKey,
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
-    pub(crate) fields: ArenaVec<ArenaType>,
-    pub(crate) field_names: ArenaVec<IdentifierKey>,
+    pub fields: ArenaVec<ArenaType>,
+    pub field_names: ArenaVec<IdentifierKey>,
 }
 
 #[derive(Debug)]
-pub struct EnumDef {
+pub(crate) struct EnumDef {
     pub def_vtable_key: VirtualTableKey,
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
+    #[allow(dead_code)]
     pub variant_count: u16,
     pub variants: ArenaVec<VariantDef>,
 }
 
 #[derive(Debug)]
-pub struct VariantDef {
+pub(crate) struct VariantDef {
     pub variant_tag: VariantTag,
-    pub(crate) variant_name: IdentifierKey,
-    pub(crate) fields: ArenaVec<ArenaType>,
-    pub(crate) field_names: ArenaVec<IdentifierKey>,
+    pub variant_name: IdentifierKey,
+    pub fields: ArenaVec<ArenaType>,
+    pub field_names: ArenaVec<IdentifierKey>,
     pub enum_def: VMPointer<EnumDef>,
 }
 
@@ -223,13 +232,13 @@ pub struct VariantDef {
 
 // A function instantiation.
 #[derive(Debug)]
-pub struct FunctionInstantiation {
+pub(crate) struct FunctionInstantiation {
     pub handle: CallType,
     pub(crate) instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
 #[derive(Debug)]
-pub struct StructInstantiation {
+pub(crate) struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     pub def_vtable_key: VirtualTableKey,
@@ -238,30 +247,31 @@ pub struct StructInstantiation {
 
 // A field handle. The offset is the only used information when operating on a field
 #[derive(Debug)]
-pub struct FieldHandle {
+pub(crate) struct FieldHandle {
     pub offset: usize,
     pub owner: VirtualTableKey,
 }
 
 // A field instantiation. The offset is the only used information when operating on a field
 #[derive(Debug)]
-pub struct FieldInstantiation {
+pub(crate) struct FieldInstantiation {
     pub offset: usize,
     pub owner: VirtualTableKey,
 }
 
 #[derive(Debug)]
-pub struct EnumInstantiation {
+pub(crate) struct EnumInstantiation {
     // enum variant count
+    #[allow(dead_code)]
     pub variant_count_map: ArenaVec<u16>,
     pub enum_def: VMPointer<EnumDef>,
     pub def_vtable_key: VirtualTableKey,
-    pub(crate) type_params: VMPointer<ArenaVec<ArenaType>>,
+    pub type_params: VMPointer<ArenaVec<ArenaType>>,
 }
 
 // A variant instantiation.
 #[derive(Debug)]
-pub struct VariantInstantiation {
+pub(crate) struct VariantInstantiation {
     pub enum_inst: VMPointer<EnumInstantiation>,
     pub variant: VMPointer<VariantDef>,
 }
@@ -289,21 +299,21 @@ pub(crate) enum ArenaType {
 }
 
 #[derive(Debug)]
-pub struct DatatypeDescriptor {
-    pub(crate) name: IdentifierKey,
+pub(crate) struct DatatypeDescriptor {
+    pub name: IdentifierKey,
     pub defining_id: ModuleIdKey,
     pub original_id: ModuleIdKey,
     pub datatype_info: ArenaBox<Datatype>,
 }
 
 #[derive(Debug)]
-pub enum Datatype {
+pub(crate) enum Datatype {
     Enum(VMPointer<EnumDef>),
     Struct(VMPointer<StructDef>),
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ModuleIdKey {
+pub(crate) struct ModuleIdKey {
     address: AccountAddress,
     name: IdentifierKey,
 }
@@ -313,10 +323,9 @@ pub struct ModuleIdKey {
 // -------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
-// TODO: These should not contain VirtualTableKeys, but rather be a more direct representation of
-// the type. This is currently the same as the instruction representation of types, but it would be
-// better to never hand VirtualTableKeys out of the runtime.
-// for things like
+// TODO: These should not contain VirtualTableKeys, but this is used and matched all over the
+// adapter. We would need to abstract away types similar to how we abstract away values to
+// accomplish this, which we leave as future work.
 pub enum Type {
     Bool,
     U8,
@@ -844,10 +853,11 @@ pub(crate) enum Bytecode {
 // -------------------------------------------------------------------------------------------------
 
 impl Function {
-    pub(crate) fn vtable_key(&self) -> &VirtualTableKey {
+    pub fn vtable_key(&self) -> &VirtualTableKey {
         &self.name
     }
 
+    #[allow(dead_code)]
     pub fn file_format_version(&self) -> u32 {
         self.file_format_version
     }
@@ -882,10 +892,11 @@ impl Function {
         self.name.member_name(interner)
     }
 
-    pub(crate) fn code(&self) -> &[Bytecode] {
+    pub fn code(&self) -> &[Bytecode] {
         &self.code
     }
 
+    #[allow(dead_code)]
     pub fn jump_tables(&self) -> &[VariantJumpTable] {
         &self.jump_tables
     }
@@ -898,6 +909,7 @@ impl Function {
         self.name.to_string(interner)
     }
 
+    #[allow(dead_code)]
     pub fn pretty_short_string(&self, interner: &IdentifierInterner) -> String {
         self.name.to_short_string(interner)
     }
@@ -998,6 +1010,7 @@ impl ModuleIdKey {
         Self { address, name }
     }
 
+    #[allow(dead_code)]
     pub fn as_id(&self, interner: &IdentifierInterner) -> ModuleId {
         let name = interner.resolve_ident(&self.name, "module id");
         ModuleId::new(self.address, name)
@@ -1051,8 +1064,8 @@ impl DatatypeDescriptor {
 
     pub(crate) fn intra_package_name(&self) -> IntraPackageKey {
         match self.datatype_info.inner_ref() {
-            Datatype::Enum(ptr) => ptr.def_vtable_key.inner_pkg_key,
-            Datatype::Struct(ptr) => ptr.def_vtable_key.inner_pkg_key,
+            Datatype::Enum(ptr) => *ptr.def_vtable_key.inner_package_key(),
+            Datatype::Struct(ptr) => *ptr.def_vtable_key.inner_package_key(),
         }
     }
 }

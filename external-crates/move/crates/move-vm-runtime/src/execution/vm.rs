@@ -5,10 +5,7 @@ use crate::{
     cache::identifier_interner::IdentifierInterner,
     dbg_println,
     execution::{
-        dispatch_tables::{IntraPackageKey, VMDispatchTables, VirtualTableKey},
-        interpreter,
-        tracing::tracer::VMTracer,
-        values::Value,
+        dispatch_tables::VMDispatchTables, interpreter, tracing::tracer::VMTracer, values::Value,
     },
     jit::execution::ast::{Function, Type},
     natives::extensions::NativeExtensions,
@@ -375,16 +372,11 @@ impl<'extensions> MoveVM<'extensions> {
         function_name: &IdentStr,
         ty_args: &[Type],
     ) -> VMResult<MoveVMFunction> {
-        let (package_key, module_id) = original_id.clone().into();
-        let module_name = self.interner.intern_identifier(&module_id);
-        let member_name = self.interner.intern_ident_str(function_name);
-        let vtable_key = VirtualTableKey {
-            package_key,
-            inner_pkg_key: IntraPackageKey {
-                module_name,
-                member_name,
-            },
-        };
+        let vtable_key = self.virtual_tables.to_virtual_table_key(
+            original_id.address(),
+            original_id.name(),
+            function_name,
+        );
         let function = self
             .virtual_tables
             .resolve_function(&vtable_key)
