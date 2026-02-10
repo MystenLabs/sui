@@ -59,9 +59,6 @@ public fun new<T>(
     _: internal::Permit<T>,
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
-    let key = DisplayKey<T>();
-    assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
-
     let (display, cap) = new_display!<T>(registry, ctx);
     (display, cap)
 }
@@ -72,9 +69,6 @@ public fun new_with_publisher<T>(
     publisher: &Publisher,
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
-    let key = DisplayKey<T>();
-
-    assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
     assert!(publisher.from_package<T>(), ENotValidPublisher);
     let (display, cap) = new_display!<T>(registry, ctx);
     (display, cap)
@@ -134,17 +128,16 @@ public fun claim_with_publisher<T: key>(
 /// values. The migration is performed once on launch of the DisplayRegistry,
 /// further migrations will have to be performed for each object, and will only
 /// be possible until legacy `display` methods are finally deprecated.
-public fun migrate_v1_to_v2_with_system_migration_cap<T: key>(
+public fun system_migration<T: key>(
     registry: &mut DisplayRegistry,
     _: &SystemMigrationCap,
     fields: VecMap<String, String>,
     _ctx: &mut TxContext,
 ) {
-    // System migration is only possible for V1 to V2.
-    // Should it keep V1 in Display originally?
     let key = DisplayKey<T>();
 
-    assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
+    // Gracefully error to avoid batching issues if someone migrates before our script.
+    if (derived_object::exists(&registry.id, key)) return;
 
     transfer::share_object(Display<T> {
         id: derived_object::claim(&mut registry.id, key),
@@ -160,9 +153,6 @@ public fun migrate_v1_to_v2<T: key>(
     legacy: LegacyDisplay<T>,
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
-    let key = DisplayKey<T>();
-    assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
-
     let (mut display, cap) = new_display!<T>(registry, ctx);
     display.fields = *legacy.fields();
     legacy.destroy();

@@ -69,7 +69,7 @@ fun claim_legacy() {
         let cap = take_migration_cap(scenario);
 
         // manually migrate `MyKeyOnlyType` to the new registry, as if we were the system.
-        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+        registry.system_migration<MyKeyOnlyType>(
             &cap,
             vec_map::empty(),
             scenario.ctx(),
@@ -121,7 +121,7 @@ fun claim_with_publisher() {
     test_tx!(|registry, scenario| {
         let mut publisher = package::test_claim(MY_OTW {}, scenario.ctx());
         let cap = take_migration_cap(scenario);
-        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+        registry.system_migration<MyKeyOnlyType>(
             &cap,
             vec_map::empty(),
             scenario.ctx(),
@@ -180,21 +180,34 @@ fun create_display_twice_fails() {
     });
 }
 
-#[test, expected_failure(abort_code = display_registry::EDisplayAlreadyExists), allow(dead_code)]
-fun migrate_twice_fails() {
+#[test]
+fun migrate_twice_returns_silently() {
     test_tx!(|registry, scenario| {
+        scenario.next_tx(@0x5);
         let cap = take_migration_cap(scenario);
-        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+        registry.system_migration<MyKeyOnlyType>(
             &cap,
             vec_map::empty(),
             scenario.ctx(),
         );
-        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+        let effects = scenario.next_tx(@0x5);
+
+        // we created Display for `MyKeyOnlyType`
+        assert_eq!(effects.shared().length(), 1);
+        assert_eq!(effects.created().length(), 1);
+
+        // try to migrate again, should have no object creations.
+        registry.system_migration<MyKeyOnlyType>(
             &cap,
             vec_map::empty(),
             scenario.ctx(),
         );
-        abort
+        let effects = scenario.next_tx(@0x5);
+
+        assert_eq!(effects.shared().length(), 0);
+        assert_eq!(effects.created().length(), 0);
+
+        cap.destroy_system_migration_cap();
     });
 }
 
@@ -203,7 +216,7 @@ fun claim_cap_twice_fails() {
     test_tx!(|registry, scenario| {
         let mut publisher = package::test_claim(MY_OTW {}, scenario.ctx());
         let cap = take_migration_cap(scenario);
-        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+        registry.system_migration<MyKeyOnlyType>(
             &cap,
             vec_map::empty(),
             scenario.ctx(),
@@ -223,7 +236,7 @@ fun claim_cap_twice_fails() {
 fun delete_legacy_before_migration_fails() {
     test_tx!(|registry, scenario| {
         let cap = take_migration_cap(scenario);
-        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+        registry.system_migration<MyKeyOnlyType>(
             &cap,
             vec_map::empty(),
             scenario.ctx(),
