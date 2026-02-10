@@ -48,7 +48,7 @@ fn main() -> Result<()> {
     println!("Transaction 2 (YCuWa3D...): T+150ms to T+250ms");
     println!();
     println!("Run the converter with:");
-    println!("  cargo run --bin trace-to-chrome -- -i test-traces -o trace.json --fake-data");
+    println!("  cargo run --bin trace_to_chrome -- -i test-traces -o trace.json --fake-data");
     println!("Then open chrome://tracing and load trace.json");
 
     Ok(())

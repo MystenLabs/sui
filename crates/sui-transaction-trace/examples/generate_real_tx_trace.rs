@@ -65,7 +65,7 @@ fn main() -> Result<()> {
     println!("Transaction 2: T+150ms to T+250ms");
     println!();
     println!("Run the converter with:");
-    println!("  cargo run --bin trace-to-chrome -- -i test-traces-real -o trace-real.json");
+    println!("  cargo run --bin trace_to_chrome -- -i test-traces-real -o trace-real.json");
     println!("Then open chrome://tracing and load trace-real.json");
 
     Ok(())
