@@ -941,6 +941,7 @@ impl IndexStoreTables {
         self.epochs.get(&epoch)
     }
 
+    #[allow(unused)]
     fn get_transaction_info(
         &self,
         digest: &TransactionDigest,
@@ -1458,13 +1459,6 @@ impl RpcIndexStore {
 
     pub fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>, TypedStoreError> {
         self.tables.get_epoch_info(epoch)
-    }
-
-    pub fn get_transaction_info(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<TransactionInfo>, TypedStoreError> {
-        self.tables.get_transaction_info(digest)
     }
 
     pub fn owner_iter(
