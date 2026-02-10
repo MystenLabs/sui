@@ -306,6 +306,8 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             written, events, ..
         } = inner_temporary_store;
 
+        println!("Written objects {:?}", written);
+
         self.store.insert_executed_transaction(
             transaction.clone(),
             effects.clone(),

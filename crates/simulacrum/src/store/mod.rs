@@ -35,23 +35,32 @@ pub trait SimulatorStore:
         self.insert_checkpoint(genesis.checkpoint());
         self.insert_checkpoint_contents(genesis.checkpoint_contents().clone());
         self.insert_committee(genesis.committee().clone());
-        self.insert_transaction(VerifiedTransaction::new_unchecked(
-            genesis.transaction().clone(),
-        ));
-        self.insert_transaction_effects(genesis.effects().clone());
-        self.insert_events(
-            genesis.effects().transaction_digest(),
-            genesis.events().clone(),
-        );
+        let tx = VerifiedTransaction::new_unchecked(genesis.transaction().clone());
+        let effects = genesis.effects().clone();
+        let events = genesis.events().clone();
+        let written_objects = genesis
+            .objects()
+            .iter()
+            .map(|o| (o.id(), o.clone()))
+            .collect();
+        self.insert_executed_transaction(tx, effects, events, written_objects);
+        // self.insert_transaction(VerifiedTransaction::new_unchecked(
+        //     genesis.transaction().clone(),
+        // ));
+        // self.insert_transaction_effects(genesis.effects().clone());
+        // self.insert_events(
+        //     genesis.effects().transaction_digest(),
+        //     genesis.events().clone(),
+        // );
 
-        self.update_objects(
-            genesis
-                .objects()
-                .iter()
-                .map(|o| (o.id(), o.clone()))
-                .collect(),
-            vec![],
-        );
+        // self.update_objects(
+        //     genesis
+        //         .objects()
+        //         .iter()
+        //         .map(|o| (o.id(), o.clone()))
+        //         .collect(),
+        //     vec![],
+        // );
     }
 
     fn get_checkpoint_by_sequence_number(
