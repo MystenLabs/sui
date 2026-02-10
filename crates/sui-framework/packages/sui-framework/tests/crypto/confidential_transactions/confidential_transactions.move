@@ -5,6 +5,7 @@ use sui::balance::Balance;
 use sui::coin::{Self, Coin};
 use sui::group_ops::Element;
 use sui::ristretto255::{Self, Point};
+use sui::table::{Self, Table};
 use sui::twisted_elgamal::{
     Self,
     g,
@@ -27,12 +28,10 @@ use sui::twisted_elgamal::{
     encrypted_amount_2_u_32_zero_verify_non_negative,
     encrypted_amount_4_u16_verify_range
 };
-use sui::vec_map::VecMap;
 
 const EAccountAlreadyRegistered: u64 = 0;
 const EInvalidInput: u64 = 1;
 
-const U16_MAX: u16 = 65535;
 const MAX_PENDING_BALANCES: u64 = 1000;
 
 // Singleton, per conf token (TBD: init)
@@ -41,34 +40,76 @@ const MAX_PENDING_BALANCES: u64 = 1000;
 public struct ConfidentialToken<phantom T> has key {
     id: UID,
     pool: Balance<T>,
-    accounts: VecMap<address, Account<T>>,
+    accounts: Table<address, Account<T>>,
     // auditor_key: Element<Point>, // assume there is a setter by the issuer/cap
+}
+
+public struct Account<phantom T> has store {
+    pk: Element<Point>,
+    is_active: bool,
+    balance: EncryptedAmount2U32Unverified,
+    pending_deposits: PendingDeposits<T>,
+}
+
+/// This represents a bounded encrypted amount: Each of the limbs is encrypted under the given PK and is a u16 amount (checked either in wrap or take_from_balance).
+/// Note that this represents an amount of the coin type T and should be handled carefully.
+public struct BoundedEncryptedAmount<phantom T> {
+    pk: Element<Point>,
+    amount: EncryptedAmount4U16,
+}
+
+/// Pending deposits for an [Account]. Deposits from other accounts shuold be added here first, and then merged into the main balance later.
+public struct PendingDeposits<phantom T> has store {
+    // number of deposits added to the last pending_balance.
+    // Once num_of_deposits = 2^16 we create a new pending balance.
+    // If pending_balance.len() > 1000, we reject the deposit.
+    num_of_deposits: u16,
+    pending_balances: vector<EncryptedAmount4U32>,
+}
+
+
+public fun register_account<T>(
+    ct: &mut ConfidentialToken<T>,
+    pk: Element<Point>,
+    ctx: &mut TxContext,
+) {
+    assert!(!ct.accounts.contains(ctx.sender()), EAccountAlreadyRegistered);
+    let account = Account {
+        is_active: true,
+        balance: encrypted_amount_2_u_32_zero(&pk),
+        pending_deposits: PendingDeposits {
+            num_of_deposits: 0,
+            pending_balances: vector[],
+        },
+        pk,
+    };
+    ct.accounts.add(ctx.sender(), account);
 }
 
 public fun new_token<T>(pool: Balance<T>, ctx: &mut TxContext): ConfidentialToken<T> {
     ConfidentialToken {
         id: object::new(ctx),
         pool,
-        accounts: sui::vec_map::empty(),
+        accounts: table::new(ctx),
     }
 }
 
 public fun freeze_deposits<T>(ct: &mut ConfidentialToken<T>, ctx: &mut TxContext) {
-    ct.accounts[&ctx.sender()].active = false;
+    ct.accounts[ctx.sender()].is_active = false;
 }
 
 public fun unfreeze_deposits<T>(ct: &mut ConfidentialToken<T>, ctx: &mut TxContext) {
-    ct.accounts[&ctx.sender()].active = true;
+    ct.accounts[ctx.sender()].is_active = true;
 }
 
 // public -> private
 public fun wrap<T>(
     ct: &mut ConfidentialToken<T>,
-    coins: Coin<T>,
+    coin: Coin<T>,
     pk: Element<Point>,
 ): BoundedEncryptedAmount<T> {
-    let value = coins.value();
-    coin::put(&mut ct.pool, coins);
+    let value = coin.value();
+    ct.pool.join(coin.into_balance());
     // TODO: Do we need an actual encryption (with randomness) here?
     let amount = encrypted_amount_4_u16_from_value(value, &pk);
     BoundedEncryptedAmount { pk, amount }
@@ -82,11 +123,11 @@ public fun unwrap<T>(
     proof: vector<u8>, // Sigma proof of the encrypted msg (DDH tuple for enc - H^{eamount})
     ctx: &mut TxContext,
 ): Coin<T> {
-    let account = &mut ct.accounts[&ctx.sender()];
+    let account = &mut ct.accounts[ctx.sender()];
     let BoundedEncryptedAmount { pk, amount: ea } = ea;
     assert!(account.pk == &pk, EInvalidInput);
     assert!(verify_value_proof(amount, &ea, &pk, proof));
-    sui::coin::take(&mut ct.pool, amount, ctx)
+    ct.pool.split(amount).into_coin(ctx)
 }
 
 /// Transfer an encrypted amount to another account. Initially, the amount is stored at the pending deposits of the destination account.
@@ -96,9 +137,9 @@ public fun transfer<T>(
     dest: address,
 ) {
     let BoundedEncryptedAmount { pk, amount } = amount;
-    let account = &mut ct.accounts[&dest];
+    let account = &mut ct.accounts[dest];
     assert!(&pk == &account.pk);
-    assert!(account.active);
+    assert!(account.is_active);
     account.pending_deposits.add_deposit(amount);
 }
 
@@ -110,7 +151,7 @@ public fun merge_pending_deposit<T>(
     ctx: &mut TxContext,
 ) {
     let new_balance = encrypted_amount_2_u32_unverified(new_balance);
-    let account = &mut ct.accounts[&ctx.sender()];
+    let account = &mut ct.accounts[ctx.sender()];
     let deposit = account.pending_deposits.take_deposit();
 
     // Verify that new_balance = old_balance + deposit
@@ -128,14 +169,14 @@ public fun add_to_balance<T>(
     ctx: &mut TxContext,
 ) {
     let new_balance = encrypted_amount_2_u32_unverified(new_balance);
-    let account = &mut ct.accounts[&ctx.sender()];
+    let account = &mut ct.accounts[ctx.sender()];
 
     let BoundedEncryptedAmount {
         pk,
         amount: deposit,
     } = amount;
 
-    assert!(account.pk == &pk, EInvalidInput);
+    assert!(&account.pk == &pk, EInvalidInput);
     assert!(
         verify_sum_proof(
             &new_balance,
@@ -163,7 +204,7 @@ public fun take_from_balance_to_other<T>(
     let new_balance = encrypted_amount_2_u32_unverified(new_balance);
     let taken_amount = encrypted_amount_4_u16(taken_amount);
 
-    let account = &mut ct.accounts[&ctx.sender()];
+    let account = &mut ct.accounts[ctx.sender()];
     let pk = &account.pk;
 
     let mut proofs = proofs;
@@ -230,7 +271,7 @@ public fun take_from_balance_to_self<T>(
     let new_balance = encrypted_amount_2_u32_unverified(new_balance);
     let taken_amount = encrypted_amount_4_u16(taken_amount);
 
-    let account = &mut ct.accounts[&ctx.sender()];
+    let account = &mut ct.accounts[ctx.sender()];
     let pk = &account.pk;
 
     let mut proofs = proofs;
@@ -265,25 +306,9 @@ public fun take_from_balance_to_self<T>(
     }
 }
 
-/// This represents a bounded encrypted amount: Each of the limbs is encrypted under the given PK and is a u16 amount (checked either in wrap or take_from_balance).
-/// Note that this represents an amount of the coin type T and should be handled carefully.
-public struct BoundedEncryptedAmount<phantom T> {
-    pk: Element<Point>,
-    amount: EncryptedAmount4U16,
-}
-
-/// Pending deposits for an [Account]. Deposits from other accounts shuold be added here first, and then merged into the main balance later.
-public struct PendingDeposits<phantom T> has store {
-    // number of deposits added to the last pending_balance.
-    // Once num_of_deposits = 2^16 we create a new pending balance.
-    // If pending_balance.len() > 1000, we reject the deposit.
-    num_of_deposits: u16,
-    pending_balances: vector<EncryptedAmount4U32>,
-}
-
 /// Add an encrypted amount to the pending deposits. The amount is expected to be well-formed (i.e., each limb is an u16 encryption).
 fun add_deposit<T>(self: &mut PendingDeposits<T>, amount: EncryptedAmount4U16) {
-    if (self.pending_balances.is_empty() || self.num_of_deposits == U16_MAX) {
+    if (self.pending_balances.is_empty() || self.num_of_deposits == std::u16::max_value!()) {
         // If we have enough pending balances, abort
         assert!(self.pending_balances.length() < MAX_PENDING_BALANCES);
 
@@ -307,50 +332,13 @@ fun take_deposit<T>(self: &mut PendingDeposits<T>): EncryptedAmount4U32 {
     deposit
 }
 
-public struct Account<phantom T> has store {
-    pk: Element<Point>,
-    active: bool,
-    balance: EncryptedAmount2U32Unverified,
-    pending_deposits: PendingDeposits<T>,
-}
-
-public fun register_account<T>(
-    ct: &mut ConfidentialToken<T>,
-    pk: Element<Point>,
-    ctx: &mut TxContext,
-) {
-    assert!(!ct.accounts.contains(&ctx.sender()), EAccountAlreadyRegistered);
-    let account = Account {
-        active: true,
-        balance: encrypted_amount_2_u_32_zero(&pk),
-        pending_deposits: PendingDeposits {
-            num_of_deposits: 0,
-            pending_balances: vector::empty(),
-        },
-        pk,
-    };
-    ct.accounts.insert(ctx.sender(), account);
-}
-
-#[test_only]
-fun destroy_account<T>(account: Account<T>) {
-    let Account {
-        pk: _,
-        active: _,
-        balance: _,
-        pending_deposits: PendingDeposits {
-            num_of_deposits: _,
-            pending_balances: _,
-        },
-    } = account;
-}
-
 #[test_only]
 public struct CONFIDENTIAL_TRANSACTIONS has drop {}
 
 #[test]
+#[allow(deprecated_usage)]
 fun test_flow() {
-    use sui::coin;
+    use std::unit_test;
 
     // Setup addresses
     let addr1 = @0xA;
@@ -468,17 +456,12 @@ fun test_flow() {
     assert!(confidential_token.pool.value() == 50);
     assert!(unwrapped.value() == 50);
 
-    let ConfidentialToken { mut accounts, pool, id } = confidential_token;
+    let ConfidentialToken { accounts, pool, id } = confidential_token;
 
     treasury.burn(unwrapped);
     id.delete();
 
-    while (!accounts.is_empty()) {
-        let (_addr, account) = accounts.pop();
-        destroy_account(account);
-    };
-
-    accounts.destroy_empty();
+    unit_test::destroy(accounts);
     pool.destroy_for_testing();
     metadata.destroy_metadata();
     treasury.treasury_into_supply().destroy_supply();
