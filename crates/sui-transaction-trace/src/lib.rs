@@ -112,11 +112,10 @@ impl TransactionTraceLogger {
             flush_tx,
         });
 
-        // Spawn background flush task on a dedicated thread
-        // Uses std::thread::spawn for a long-lived thread doing blocking I/O
-        let logger_clone = Arc::clone(&logger);
-        std::thread::spawn(move || {
-            logger_clone.run_flush_task(flush_rx);
+        // Spawn background flush task using tokio's blocking thread pool
+        let config_clone = config.clone();
+        tokio::task::spawn_blocking(move || {
+            Self::run_flush_task(config_clone, flush_rx);
         });
 
         Ok(logger)
@@ -169,14 +168,17 @@ impl TransactionTraceLogger {
     }
 
     /// Background task that flushes buffers to disk (runs on blocking thread)
-    fn run_flush_task(&self, mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<LogRecord>>) {
+    fn run_flush_task(
+        config: TraceLogConfig,
+        mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<LogRecord>>,
+    ) {
         let mut state = FlushTaskState {
             current_file: None,
             current_file_size: 0,
         };
 
         while let Some(buffer) = rx.blocking_recv() {
-            if let Err(e) = self.flush_buffer_to_disk(&buffer, &mut state) {
+            if let Err(e) = Self::flush_buffer_to_disk(&config, &buffer, &mut state) {
                 tracing::error!("Failed to flush transaction trace buffer: {}", e);
             }
         }
@@ -185,11 +187,15 @@ impl TransactionTraceLogger {
     }
 
     /// Flush a buffer to disk, handling file rotation
-    fn flush_buffer_to_disk(&self, buffer: &[LogRecord], state: &mut FlushTaskState) -> Result<()> {
+    fn flush_buffer_to_disk(
+        config: &TraceLogConfig,
+        buffer: &[LogRecord],
+        state: &mut FlushTaskState,
+    ) -> Result<()> {
         use std::io::Write;
 
         // Check if we need to rotate to a new file
-        if state.current_file.is_none() || state.current_file_size >= self.config.max_file_size {
+        if state.current_file.is_none() || state.current_file_size >= config.max_file_size {
             // Close current file
             state.current_file = None;
             state.current_file_size = 0;
@@ -198,10 +204,7 @@ impl TransactionTraceLogger {
             let timestamp = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)?
                 .as_secs();
-            let file_path = self
-                .config
-                .log_dir
-                .join(format!("tx-trace-{}.bin", timestamp));
+            let file_path = config.log_dir.join(format!("tx-trace-{}.bin", timestamp));
             let mut file = std::fs::File::create(&file_path)?;
 
             // Write AbsTime as first record
@@ -213,7 +216,7 @@ impl TransactionTraceLogger {
             state.current_file = Some(file);
 
             // Clean up old files if needed
-            self.cleanup_old_files()?;
+            Self::cleanup_old_files(config)?;
         }
 
         // Write buffer to current file
@@ -230,8 +233,8 @@ impl TransactionTraceLogger {
     }
 
     /// Remove old log files if we exceed max_file_count
-    fn cleanup_old_files(&self) -> Result<()> {
-        let mut entries: Vec<_> = std::fs::read_dir(&self.config.log_dir)?
+    fn cleanup_old_files(config: &TraceLogConfig) -> Result<()> {
+        let mut entries: Vec<_> = std::fs::read_dir(&config.log_dir)?
             .filter_map(|e| e.ok())
             .filter(|e| {
                 e.path()
@@ -242,7 +245,7 @@ impl TransactionTraceLogger {
             })
             .collect();
 
-        if entries.len() <= self.config.max_file_count {
+        if entries.len() <= config.max_file_count {
             return Ok(());
         }
 
@@ -250,7 +253,7 @@ impl TransactionTraceLogger {
         entries.sort_by_key(|e| e.metadata().ok().and_then(|m| m.modified().ok()));
 
         // Delete oldest files
-        let to_delete = entries.len() - self.config.max_file_count;
+        let to_delete = entries.len() - config.max_file_count;
         for entry in entries.iter().take(to_delete) {
             if let Err(e) = std::fs::remove_file(entry.path()) {
                 tracing::warn!(
@@ -271,6 +274,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_basic_logging() {
+        telemetry_subscribers::init_for_testing();
+
         let temp_dir = tempfile::tempdir().unwrap();
         let config = TraceLogConfig {
             log_dir: temp_dir.path().to_path_buf(),
