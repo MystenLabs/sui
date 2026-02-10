@@ -9,7 +9,7 @@
 //! soon.
 
 #![deny(
-    clippy::cast_possible_truncation
+    clippy::cast_possible_truncation,
     clippy::expect_used,
     clippy::indexing_slicing,
     clippy::panic,
