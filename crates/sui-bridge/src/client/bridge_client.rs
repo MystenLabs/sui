@@ -38,6 +38,7 @@ impl BridgeClient {
         let member = committee.member(&authority_name).unwrap();
         Ok(Self {
             inner: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
                 .timeout(std::time::Duration::from_secs(30))
                 .build()?,
             authority: authority_name.clone(),
