@@ -65,12 +65,13 @@ pub struct TransactionTraceLogger {
 struct LoggerState {
     /// Pre-allocated buffer for log records
     buffer: Vec<LogRecord>,
-    /// Last event time for delta calculations (monotonic)
-    last_instant: Instant,
+    /// Last event time for delta calculations (monotonic, uses virtual time in tests)
+    last_instant: tokio::time::Instant,
     /// Time of last flush
-    last_flush: Instant,
-    /// Current file size tracker
-    current_file_size: usize,
+    last_flush: tokio::time::Instant,
+    /// Initial time correlation for virtual time support
+    initial_system_time: SystemTime,
+    initial_instant: tokio::time::Instant,
 }
 
 impl TransactionTraceLogger {
@@ -101,6 +102,10 @@ pub struct TraceLogConfig {
 
     /// Flush interval in seconds (default: 15)
     pub flush_interval_secs: u64,
+
+    /// Use synchronous flushing (default: false, use async)
+    /// Set to true in tests with current_thread runtime
+    pub sync_flush: bool,
 }
 ```
 
@@ -123,11 +128,12 @@ pub struct TraceLogConfig {
    unlock mutex
    ```
 3. Background flush task:
-   - Receives full buffer via channel
-   - Serializes records with bincode
-   - Writes to disk
+   - Receives full buffer via bounded channel (capacity: 1000)
+   - Serializes records with BCS
+   - Writes to disk with length prefixes
    - Handles file rotation if needed
    - No mutex held during I/O
+   - If channel is full, drops messages (no backpressure on hot path)
 
 **Guarantees**:
 - Critical section only does: append, time check, conditional swap
@@ -138,8 +144,9 @@ pub struct TraceLogConfig {
 ### Operational Requirements
 
 **Time Source**:
-- Use `Instant::now()` for calculating deltas (monotonic, fast)
-- Use `SystemTime::now()` for `AbsTime` records (wall-clock time for log analysis)
+- Use `tokio::time::Instant::now()` for calculating deltas (monotonic, fast, respects virtual time in tests)
+- Use computed `SystemTime` for `AbsTime` records (wall-clock time for log analysis)
+- Virtual time correlation: track `initial_system_time` and `initial_instant` to compute SystemTime from elapsed virtual time
 
 **Buffering**: Highly buffered writes - durability is not critical, minimize overhead is priority
 
@@ -162,8 +169,8 @@ pub struct TraceLogConfig {
 - `AbsTime` anchors required at start of each log file
 
 ### Encoding Rules
-1. First record in each log file: `AbsTime(SystemTime::now())`
-2. Logger tracks last event time using `Instant` internally for delta calculations
+1. First record in each buffer: `AbsTime(computed from initial_system_time + elapsed virtual time)`
+2. Logger tracks last event time using `tokio::time::Instant` internally for delta calculations
 3. For each subsequent time point:
    - Calculate microseconds since last time record using `Instant::elapsed()`
    - If Δt ≤ 65,535 µs: emit `DeltaTime(delta_micros as u16)`
@@ -239,35 +246,54 @@ With delta encoding, subsequent transactions only add ~83 bytes each.
 
 ## Design Decisions (RESOLVED)
 
-1. **Time Source**: Dual approach ✓
-   - `SystemTime` for `AbsTime` records (wall-clock time, serializable)
-   - `Instant` for delta calculations (monotonic, fast)
-2. **Buffering**: Double-buffer with pre-allocated capacity ✓
+1. **Time Source**: Virtual time aware approach ✓
+   - `tokio::time::Instant` for delta calculations (monotonic, respects virtual time)
+   - Computed `SystemTime` from initial correlation + elapsed virtual time
+   - Ensures consistent timestamps across buffer flushes in tests
+2. **Serialization**: BCS (Binary Canonical Serialization) ✓
+   - Actively maintained by Mysten Labs
+   - Canonical/deterministic encoding
+   - Length-prefixed records for sequential reading
+3. **Buffering**: Double-buffer with pre-allocated capacity ✓
    - Pre-allocate Vec with large capacity (10K records default)
    - Swap buffers when full or after 15 seconds
+   - Bounded channel (1000) with try_send (drops on full, no backpressure)
    - Background task handles I/O
-3. **Synchronization**: Single `Mutex` with minimal critical section ✓
+4. **Synchronization**: Single `Mutex` with minimal critical section ✓
    - No I/O in critical section
    - No allocation in critical section (pre-allocated buffers)
    - Only operations: append, time check, conditional swap
-4. **File Rotation**: Size-based (100MB default) with count limit (10 default) ✓
-5. **Concurrency**: Shared logger via `Arc<>`, handles concurrent writes ✓
-6. **Interface**: Single method `write_transaction_event()` - logger handles time tracking ✓
+5. **File Rotation**: Size-based (100MB default) with count limit (10 default) ✓
+6. **Concurrency**: Shared logger via `Arc<>`, handles concurrent writes ✓
+7. **Interface**: Single method `write_transaction_event()` - logger handles time tracking ✓
+8. **Shutdown**: Drop impl flushes remaining buffered data ✓
+9. **Testing**: Synchronous flush mode for deterministic tests with virtual time ✓
 
-## Open Questions
+## Implementation Status
 
-1. **Crate Location**: Where should this live?
-   - Option A: New crate `sui-transaction-trace`
-   - Option B: Add to existing `sui-core`
-   - Option C: Add to `sui-types`
+**Completed:**
+- ✅ New crate `sui-transaction-trace` created
+- ✅ Core types and logging infrastructure implemented
+- ✅ Log reading and replay functionality with full timestamp reconstruction
+- ✅ Comprehensive tests with virtual time support (deterministic, fast)
+- ✅ BCS serialization with length-prefixed records
+- ✅ Bounded channel with no-backpressure semantics
+- ✅ Drop impl for shutdown flushing
+- ✅ Clippy clean with all lints passing
 
-2. **Node Config Integration**:
-   - Add `TraceLogConfig` to which config struct?
-   - Enable/disable via feature flag or runtime config?
+**Remaining Work:**
+1. **Node Integration**:
+   - Identify injection points in transaction execution pipeline
+   - Add instrumentation to execution flow
+   - Add `TraceLogConfig` to node configuration
+   - Feature flag or runtime config for enable/disable
 
-## Next Steps
-1. Get feedback on design
-2. Decide on crate location
-3. Implement core types and logging infrastructure
-4. Add basic tests
-5. Benchmark serialization overhead
+2. **Performance**:
+   - Benchmark serialization overhead
+   - Measure impact on transaction throughput
+   - Optimize if needed
+
+3. **Tooling**:
+   - Command-line log reader/parser utility
+   - Analysis tools (timeline visualization, statistics)
+   - Integration with monitoring systems
