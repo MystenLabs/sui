@@ -66,7 +66,7 @@ public fun new<T>(
 /// Create a new display object using the `Publisher` object.
 public fun new_with_publisher<T>(
     registry: &mut DisplayRegistry,
-    publisher: &Publisher,
+    publisher: &mut Publisher,
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
     assert!(publisher.from_package<T>(), ENotValidPublisher);

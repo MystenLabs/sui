@@ -168,13 +168,13 @@ fun update_field() {
 #[test, expected_failure(abort_code = display_registry::EDisplayAlreadyExists), allow(dead_code)]
 fun create_display_twice_fails() {
     test_tx!(|registry, scenario| {
-        let pub = new_publisher(scenario);
+        let mut pub = new_publisher(scenario);
         let (_display, _cap) = registry.new_with_publisher<MyKeyOnlyType>(
-            &pub,
+            &mut pub,
             scenario.ctx(),
         );
         let (__display, __cap) = registry.new_with_publisher<MyKeyOnlyType>(
-            &pub,
+            &mut pub,
             scenario.ctx(),
         );
         abort
@@ -303,8 +303,8 @@ fun fails_when_migrating_twice() {
 }
 
 fun new_display<T>(registry: &mut DisplayRegistry, scenario: &mut Scenario): DisplayCap<T> {
-    let publisher = new_publisher(scenario);
-    let (display, cap) = registry.new_with_publisher<T>(&publisher, scenario.ctx());
+    let mut publisher = new_publisher(scenario);
+    let (display, cap) = registry.new_with_publisher<T>(&mut publisher, scenario.ctx());
 
     publisher.burn();
     display.share();
