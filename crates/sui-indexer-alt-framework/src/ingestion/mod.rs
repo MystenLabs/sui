@@ -26,6 +26,7 @@ use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
 mod broadcaster;
+pub(crate) mod decode;
 pub mod error;
 pub mod ingestion_client;
 mod rpc_client;
