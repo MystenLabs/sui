@@ -120,16 +120,6 @@ pub fn simulate_transaction(
                 )
                 .map_err(anyhow::Error::from)?;
 
-            if !simulation_result.effects.status().is_ok() {
-                return Err(RpcError::new(
-                    tonic::Code::InvalidArgument,
-                    format!(
-                        "Budget estimation failed with status: {:?}.",
-                        simulation_result.effects.status()
-                    ),
-                ));
-            }
-
             let estimate = estimate_gas_budget_from_gas_cost(
                 simulation_result.effects.gas_cost_summary(),
                 reference_gas_price,
