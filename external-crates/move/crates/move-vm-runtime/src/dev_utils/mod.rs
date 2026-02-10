@@ -2,9 +2,22 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::new_without_default)]
-#![allow(clippy::indexing_slicing)]
-#![allow(clippy::cast_possible_truncation)]
+//!  Developer Utilities for writing move tests against the VM, etc.
+//!
+//!  THE UTILITIES IN THIS DIRECTORY ARE NOT FOR PRODUCTION USE. They are only for writing tests,
+//!  and they may use constructs that are not allowed in production code, such as panics, unwraps,
+//!  etc.
+
+// These are allowed because dev utilities are only used in test situations in this module, and we
+// want to be able to use these constructs to write tests.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::new_without_default,
+    clippy::panic
+)]
 
 pub(crate) mod dbg_print;
 pub mod in_memory_test_adapter;

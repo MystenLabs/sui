@@ -3,7 +3,6 @@
 
 use crate::shared::constants::IDENTIFIER_INTERNER_SIZE_LIMIT;
 
-use move_binary_format::{errors::PartialVMResult, partial_vm_error};
 use move_core_types::identifier::{IdentStr, Identifier};
 
 use lasso::{Spur, ThreadedRodeo};
@@ -35,23 +34,19 @@ impl IdentifierInterner {
     }
 
     // [SAFETY] The unsafe code is creating an identifier without checking its vailidity, but it
-    // was added as a valid identifier to the interner in the first place.
-    #[allow(unsafe_code)]
+    // was added as a valid identifier to the interner in the first place. If we fail to find the
+    // key or the key is not a valid identifier, this code will panic. This is preferred, however,
+    // as it indicates a serious runtime issue: interner keys ca no longer be trusted, and we
+    // should panic immediately rather than risk a network fork by propagating this issue.
+    #[allow(unsafe_code, clippy::panic)]
     /// Resolve an identifier in the interner or produce an invariant violation. This is for use
     /// when the key _must_ be there, as it produces an error when it is not found. The `key_type`
     /// is used to make a more-informative error message.
-    pub(crate) fn resolve_ident(
-        &self,
-        key: &IdentifierKey,
-        key_type: &str,
-    ) -> PartialVMResult<Identifier> {
+    pub(crate) fn resolve_ident(&self, key: &IdentifierKey, key_type: &str) -> Identifier {
         if let Some(result) = self.0.try_resolve(&key.0) {
-            unsafe { Ok(Identifier::new_unchecked(result)) }
+            unsafe { Identifier::new_unchecked(result) }
         } else {
-            Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Failed to find {key_type} key in ident interner."
-            ))
+            panic!("Failed to resolve {key_type} key in ident interner: {key:?}")
         }
     }
 
@@ -67,6 +62,11 @@ impl IdentifierInterner {
         self.get_or_intern_str_internal(ident_str.borrow_str())
     }
 
+    #[allow(clippy::panic)]
+    // [SAFETY] The unsafe code is inserting an identifier into the interner without ensuring it
+    // will fit. If it fails to fit, it will panic, but that's likely a serious OOM issue, and it's
+    // better to panic here than to propagate OOM errors throughout the VM and potentially risk a
+    // network fork.
     fn get_or_intern_str_internal(&self, string: &str) -> IdentifierKey {
         // Prefer to panic here rather than propagate OOM errors throughout the VM---reporting an
         // invariant violation during an OOM could result in a consensus issue.

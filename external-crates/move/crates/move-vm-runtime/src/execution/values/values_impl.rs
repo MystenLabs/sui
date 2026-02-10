@@ -2,6 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: Remove the panics. Some of these removals are currently in flight, so this PR does not
+// handle them.
+#![allow(clippy::panic)]
+
 use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
@@ -969,6 +973,7 @@ impl StructRef {
         let container = &mut *self.0.try_borrow_mut()?;
         match container {
             Value::Struct(fixed_vec) => {
+                // [SAFETY] Unsafe is fine here because we are testing.
                 fixed_vec.0.0[index] = mem_box;
                 Ok(())
             }
