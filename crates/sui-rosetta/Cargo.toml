@@ -40,6 +40,7 @@ prost-types.workspace = true
 chrono.workspace = true
 
 move-core-types.workspace = true
+rand.workspace = true
 
 telemetry-subscribers.workspace = true
 enum_dispatch.workspace = true
