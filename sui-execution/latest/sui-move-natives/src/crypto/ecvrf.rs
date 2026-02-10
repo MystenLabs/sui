@@ -64,7 +64,7 @@ pub fn ecvrf_verify(
     let alpha_string = pop_arg!(args, VectorRef);
     let hash_bytes = pop_arg!(args, VectorRef);
 
-    let alpha_string_len = alpha_string.as_bytes_ref().len();
+    let alpha_string_len = alpha_string.as_bytes_ref()?.len();
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
@@ -76,21 +76,21 @@ pub fn ecvrf_verify(
 
     let cost = context.gas_used();
 
-    let Ok(hash) = hash_bytes.as_bytes_ref().as_slice().try_into() else {
+    let Ok(hash) = hash_bytes.as_bytes_ref()?.as_slice().try_into() else {
         return Ok(NativeResult::err(cost, INVALID_ECVRF_HASH_LENGTH));
     };
 
     let Ok(public_key) =
-        bcs::from_bytes::<ECVRFPublicKey>(public_key_bytes.as_bytes_ref().as_slice())
+        bcs::from_bytes::<ECVRFPublicKey>(public_key_bytes.as_bytes_ref()?.as_slice())
     else {
         return Ok(NativeResult::err(cost, INVALID_ECVRF_PUBLIC_KEY));
     };
 
-    let Ok(proof) = bcs::from_bytes::<ECVRFProof>(proof_bytes.as_bytes_ref().as_slice()) else {
+    let Ok(proof) = bcs::from_bytes::<ECVRFProof>(proof_bytes.as_bytes_ref()?.as_slice()) else {
         return Ok(NativeResult::err(cost, INVALID_ECVRF_PROOF));
     };
 
-    let result = proof.verify_output(alpha_string.as_bytes_ref().as_slice(), &public_key, &hash);
+    let result = proof.verify_output(alpha_string.as_bytes_ref()?.as_slice(), &public_key, &hash);
     Ok(NativeResult::ok(
         cost,
         smallvec![Value::bool(result.is_ok())],

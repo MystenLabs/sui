@@ -34,7 +34,7 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     debug_assert!(args.len() == 1);
 
     let msg = pop_arg!(args, VectorRef);
-    let msg_ref = msg.as_bytes_ref();
+    let msg_ref = msg.as_bytes_ref()?;
 
     let block_size = block_size as usize;
 
@@ -50,7 +50,7 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::vector_u8(
-            H::digest(msg.as_bytes_ref().as_slice()).digest
+            H::digest(msg.as_bytes_ref()?.as_slice()).digest
         )],
     ))
 }

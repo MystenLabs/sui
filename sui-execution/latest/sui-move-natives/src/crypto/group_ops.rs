@@ -230,7 +230,7 @@ pub fn internal_validate(
     }
 
     let bytes_ref = pop_arg!(args, VectorRef);
-    let bytes = bytes_ref.as_bytes_ref();
+    let bytes = bytes_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -278,9 +278,9 @@ pub fn internal_add(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -329,9 +329,9 @@ pub fn internal_sub(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -380,9 +380,9 @@ pub fn internal_mul(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -446,9 +446,9 @@ pub fn internal_div(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -513,7 +513,7 @@ pub fn internal_hash_to(
     }
 
     let m_ref = pop_arg!(args, VectorRef);
-    let m = m_ref.as_bytes_ref();
+    let m = m_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     if m.is_empty() {
@@ -668,9 +668,9 @@ pub fn internal_multi_scalar_mul(
     }
 
     let elements_ref = pop_arg!(args, VectorRef);
-    let elements = elements_ref.as_bytes_ref();
+    let elements = elements_ref.as_bytes_ref()?;
     let scalars_ref = pop_arg!(args, VectorRef);
-    let scalars = scalars_ref.as_bytes_ref();
+    let scalars = scalars_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -738,9 +738,9 @@ pub fn internal_pairing(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -783,7 +783,7 @@ pub fn internal_convert(
     }
 
     let e_ref = pop_arg!(args, VectorRef);
-    let e = e_ref.as_bytes_ref();
+    let e = e_ref.as_bytes_ref()?;
     let to_type = pop_arg!(args, u8);
     let from_type = pop_arg!(args, u8);
 
@@ -880,7 +880,7 @@ pub fn internal_sum(
                         .and_then(Value::value_as::<VectorRef>)
                         .map_err(|_| FastCryptoError::InvalidInput)
                         .and_then(|v| {
-                            v.as_bytes_ref()
+                            v.as_bytes_ref()?
                                 .to_vec()
                                 .try_into()
                                 .map_err(|_| FastCryptoError::InvalidInput)
