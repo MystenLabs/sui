@@ -162,6 +162,7 @@ pub fn simulate_transaction(
         execution_result,
         mock_gas_id,
         unchanged_loaded_runtime_objects,
+        suggested_gas_price,
     } = executor
         .simulate_transaction(transaction.clone(), checks, allow_mock_gas_coin)
         .map_err(anyhow::Error::from)?;
@@ -252,6 +253,9 @@ pub fn simulate_transaction(
     let mut response = SimulateTransactionResponse::default();
     response.transaction = transaction;
     response.command_outputs = outputs;
+    if read_mask.contains(SimulateTransactionResponse::SUGGESTED_GAS_PRICE_FIELD) {
+        response.suggested_gas_price = suggested_gas_price;
+    }
     Ok(response)
 }
 
