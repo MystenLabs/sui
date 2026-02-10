@@ -802,6 +802,8 @@ impl LocalExec {
                 gas_data,
                 gas_status,
                 transaction_kind.clone(),
+                // Replay of coin reservations not supported in replay v1
+                None,
                 tx_info.sender,
                 *tx_digest,
                 &mut None,
@@ -892,6 +894,7 @@ impl LocalExec {
                                 protocol_config,
                             )?,
                             transaction_kind.clone(),
+                            None, // Replay of coin reservations not supported in replay v1
                             tx_info.sender,
                             tx_info.sender_signed_data.digest(),
                             skip_checks,
@@ -994,6 +997,8 @@ impl LocalExec {
             gas_data,
             gas_status,
             kind,
+            // Replay of coin reservations not supported in replay v1
+            None,
             signer,
             *executable.digest(),
             &mut None,
