@@ -1,7 +1,7 @@
 # Transaction Execution Trace Log - Implementation Plan
 
 ## Overview
-Efficient binary logging system for recording transaction execution timing in the Sui blockchain. The system uses a compact binary format with delta-time encoding to minimize storage overhead while capturing detailed execution traces.
+Efficient binary logging system for recording transaction execution timing in the Sui blockchain. The system uses BCS (Binary Canonical Serialization) with delta-time encoding to minimize storage overhead while capturing detailed execution traces.
 
 ## Design Goals
 1. **Compactness**: Binary format with efficient time encoding
@@ -12,7 +12,7 @@ Efficient binary logging system for recording transaction execution timing in th
 ## Core Data Structures
 
 ### LogRecord Enum
-Main enum serialized with bincode to the log file:
+Main enum serialized with BCS to the log file:
 
 ```rust
 #[derive(Serialize, Deserialize)]
@@ -218,23 +218,24 @@ TransactionEvent(tx2, ExecutionComplete)
 
 ### Binary Layout
 ```
-File: <sequence of bincode-serialized LogRecord>
+File: <sequence of length-prefixed BCS-serialized LogRecord>
+Each record: [4-byte length (u32 LE)][BCS-encoded LogRecord]
 ```
 
-Each `LogRecord` is independently serialized with bincode, written sequentially.
+Each `LogRecord` is serialized with BCS and prefixed with its length for sequential reading.
 
-### Size Estimates
-- `AbsTime`: ~16 bytes (Instant serialization)
-- `DeltaTime(u16)`: ~3 bytes (1 byte variant tag + 2 bytes u16)
-- `DeltaTimeLarge(Duration)`: ~13 bytes (1 byte tag + 12 bytes Duration)
-- `TransactionEvent`: ~34 bytes (1 byte tag + 32 bytes digest + 1 byte event type)
+### Size Estimates (with 4-byte length prefix per record)
+- `AbsTime`: ~4 (prefix) + ~24 bytes (BCS SystemTime encoding) = ~28 bytes
+- `DeltaTime(u16)`: ~4 (prefix) + ~3 bytes (variant + u16) = ~7 bytes
+- `DeltaTimeLarge(Duration)`: ~4 (prefix) + ~17 bytes (variant + Duration) = ~21 bytes
+- `TransactionEvent`: ~4 (prefix) + ~34 bytes (variant + 32 bytes digest + event type) = ~38 bytes
 
 Typical sequence (begin + complete):
 ```
-AbsTime(16) + TxEvent(34) + DeltaTime(3) + TxEvent(34) = 87 bytes per transaction
+AbsTime(28) + TxEvent(38) + DeltaTime(7) + TxEvent(38) = 111 bytes per transaction
 ```
 
-With delta encoding, subsequent transactions only add ~71 bytes each.
+With delta encoding, subsequent transactions only add ~83 bytes each.
 
 ## Design Decisions (RESOLVED)
 
