@@ -209,6 +209,7 @@ TransactionEvent(tx2, ExecutionComplete)
 - [x] Iterator interface for event stream
 - [x] Round-trip test verifying timestamp accuracy with virtual clock
 - [x] Fixed virtual time support using tokio::time::Instant throughout
+- [x] Integration test for file rotation and reconstruction
 
 ### Phase 2: Integration (CURRENT)
 - [ ] Identify injection points in transaction execution pipeline
@@ -216,9 +217,15 @@ TransactionEvent(tx2, ExecutionComplete)
 - [ ] Configuration and feature flags
 - [ ] Performance benchmarks
 
-### Phase 3: Tooling
-- [ ] Log reader/parser utility
-- [ ] Analysis tools (timeline visualization, statistics)
+### Phase 3: Tooling (IN PROGRESS)
+- [x] **Chrome Trace Viewer converter** (`trace-to-chrome` binary)
+  - Reads transaction trace logs and extracts digests
+  - Fetches transaction data from Sui GraphQL endpoint
+  - Maps each input object to a Chrome Trace "thread" (tid)
+  - Visualizes object utilization and contention patterns
+  - Supports fake data mode for testing
+  - Generates JSON loadable in chrome://tracing
+- [ ] Additional analysis tools (statistics, text reports)
 - [ ] Integration with monitoring systems
 
 ## File Format Specification
