@@ -17047,6 +17047,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "bs58 0.5.1",
  "clap",
  "hex",
  "parking_lot 0.12.3",
