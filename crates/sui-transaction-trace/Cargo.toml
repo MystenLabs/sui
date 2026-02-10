@@ -19,5 +19,5 @@ tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-tokio = { workspace = true, features = ["sync", "rt", "time", "macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["sync", "rt", "time", "macros", "test-util"] }
 telemetry-subscribers.workspace = true

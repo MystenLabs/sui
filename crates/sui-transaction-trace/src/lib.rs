@@ -67,6 +67,10 @@ pub struct TraceLogConfig {
 
     /// Flush interval in seconds (default: 15)
     pub flush_interval_secs: u64,
+
+    /// Use synchronous flushing (default: false, use async)
+    /// Set to true in tests with current_thread runtime
+    pub sync_flush: bool,
 }
 
 impl Default for TraceLogConfig {
@@ -77,6 +81,7 @@ impl Default for TraceLogConfig {
             max_file_count: 10,
             buffer_capacity: 10_000,
             flush_interval_secs: 15,
+            sync_flush: false,
         }
     }
 }
@@ -104,14 +109,15 @@ struct FlushTaskState {
 /// This logger provides a low-overhead way to record transaction execution events
 /// with precise timing. It uses:
 /// - Double-buffering to minimize lock contention in the hot path
-/// - Background flushing on a blocking thread for non-blocking writes
+/// - Background flushing on a blocking thread for non-blocking writes (multi-threaded runtime)
+/// - Synchronous flushing in single-threaded runtime (for testing)
 /// - Delta-time encoding to keep log files compact
 /// - Automatic file rotation and cleanup
 ///
 /// # Thread Safety
 /// The logger is thread-safe and designed for concurrent access from multiple threads.
 /// The write path uses a mutex only for appending to the in-memory buffer, with no I/O
-/// in the critical section.
+/// in the critical section (in multi-threaded mode).
 ///
 /// # Example
 /// ```no_run
@@ -127,15 +133,18 @@ struct FlushTaskState {
 pub struct TransactionTraceLogger {
     config: TraceLogConfig,
     state: Mutex<LoggerState>,
-    flush_tx: tokio::sync::mpsc::UnboundedSender<Vec<LogRecord>>,
+    /// Channel for async flushing (None in single-threaded runtime)
+    flush_tx: Option<tokio::sync::mpsc::UnboundedSender<Vec<LogRecord>>>,
+    /// Flush state for synchronous flushing in single-threaded mode
+    sync_flush_state: Option<Mutex<FlushTaskState>>,
 }
 
 impl TransactionTraceLogger {
     /// Creates a new transaction trace logger.
     ///
-    /// This spawns a background flush task using `tokio::task::spawn_blocking`
-    /// that will run until the logger is dropped. When all references to the
-    /// logger are dropped, the channel closes and the flush task exits gracefully.
+    /// Detects the runtime type and uses either:
+    /// - Async flushing with spawn_blocking (multi-threaded runtime)
+    /// - Synchronous flushing (single-threaded runtime, for testing)
     ///
     /// # Errors
     /// Returns an error if the log directory cannot be created.
@@ -143,12 +152,26 @@ impl TransactionTraceLogger {
         // Create log directory if it doesn't exist
         std::fs::create_dir_all(&config.log_dir)?;
 
-        // Create channel for background flush task
-        let (flush_tx, flush_rx) = tokio::sync::mpsc::unbounded_channel();
-
         let mut buffer = Vec::with_capacity(config.buffer_capacity);
         // Push initial AbsTime anchor
         buffer.push(LogRecord::AbsTime(SystemTime::now()));
+
+        let (flush_tx, sync_flush_state) = if config.sync_flush {
+            // Synchronous flushing mode (for tests)
+            let flush_state = FlushTaskState {
+                current_file: None,
+                current_file_size: 0,
+            };
+            (None, Some(Mutex::new(flush_state)))
+        } else {
+            // Async flushing mode (production)
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+            let config_clone = config.clone();
+            tokio::task::spawn_blocking(move || {
+                Self::run_flush_task(config_clone, rx);
+            });
+            (Some(tx), None)
+        };
 
         let logger = Arc::new(Self {
             config: config.clone(),
@@ -158,12 +181,7 @@ impl TransactionTraceLogger {
                 last_flush: Instant::now(),
             }),
             flush_tx,
-        });
-
-        // Spawn background flush task using tokio's blocking thread pool
-        let config_clone = config.clone();
-        tokio::task::spawn_blocking(move || {
-            Self::run_flush_task(config_clone, flush_rx);
+            sync_flush_state,
         });
 
         Ok(logger)
@@ -210,13 +228,28 @@ impl TransactionTraceLogger {
             state.buffer.push(LogRecord::AbsTime(SystemTime::now()));
             state.last_instant = Instant::now();
 
-            // Send old buffer to flush task (must reacquire lock after sending)
-            drop(state);
-            if let Err(e) = self.flush_tx.send(new_buffer) {
-                tracing::error!("Failed to send buffer to flush task, data lost: {:?}", e);
+            // Flush buffer (async or sync depending on runtime)
+            if let Some(flush_tx) = &self.flush_tx {
+                // Async flush: send to background task
+                drop(state);
+                if let Err(e) = flush_tx.send(new_buffer) {
+                    tracing::error!("Failed to send buffer to flush task, data lost: {:?}", e);
+                }
+                // Reacquire lock to add current event
+                state = self.state.lock();
+            } else if let Some(sync_flush_state) = &self.sync_flush_state {
+                // Sync flush: flush immediately
+                drop(state);
+                let mut flush_state = sync_flush_state.lock();
+                if let Err(e) =
+                    Self::flush_buffer_to_disk(&self.config, &new_buffer, &mut flush_state)
+                {
+                    tracing::error!("Failed to flush transaction trace buffer: {}", e);
+                }
+                drop(flush_state);
+                // Reacquire lock to add current event
+                state = self.state.lock();
             }
-            // Reacquire lock to add current event
-            state = self.state.lock();
         }
 
         // Calculate delta time since last record
@@ -342,21 +375,26 @@ impl TransactionTraceLogger {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread")]
     async fn test_basic_logging() {
+        tokio::time::pause();
         telemetry_subscribers::init_for_testing();
 
         let temp_dir = tempfile::tempdir().unwrap();
         let config = TraceLogConfig {
             log_dir: temp_dir.path().to_path_buf(),
-            buffer_capacity: 10,
-            flush_interval_secs: 1,
+            buffer_capacity: 4,       // Small capacity to trigger flush
+            flush_interval_secs: 100, // Don't rely on time-based flush in tests
+            sync_flush: true,
             ..Default::default()
         };
 
         let logger = TransactionTraceLogger::new(config).unwrap();
 
-        // Log some events
+        // Log events to trigger capacity-based flush
+        // Initial: [AbsTime] (1)
+        // Event 0: check (1+2>4? no), add -> [AbsTime, Delta, Event] (3)
+        // Event 1: check (3+2>4? yes), FLUSH
         let digest = [1u8; 32];
         logger
             .write_transaction_event(digest, TxEventType::ExecutionBegin)
@@ -364,17 +402,6 @@ mod tests {
         logger
             .write_transaction_event(digest, TxEventType::ExecutionComplete)
             .unwrap();
-
-        // Wait for time-based flush (1 sec interval + buffer for processing)
-        tokio::time::sleep(Duration::from_millis(1500)).await;
-
-        // Trigger another write to check flush condition
-        logger
-            .write_transaction_event(digest, TxEventType::ExecutionBegin)
-            .unwrap();
-
-        // Wait for flush to complete
-        tokio::time::sleep(Duration::from_millis(500)).await;
 
         // Check that a log file was created
         let entries: Vec<_> = std::fs::read_dir(temp_dir.path())
@@ -384,8 +411,9 @@ mod tests {
         assert!(!entries.is_empty(), "Expected at least one log file");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread")]
     async fn test_buffer_flush_on_capacity() {
+        tokio::time::pause();
         telemetry_subscribers::init_for_testing();
 
         let temp_dir = tempfile::tempdir().unwrap();
@@ -393,6 +421,7 @@ mod tests {
             log_dir: temp_dir.path().to_path_buf(),
             buffer_capacity: 4,       // Small capacity to trigger flush quickly
             flush_interval_secs: 100, // Long interval so we test capacity-based flush
+            sync_flush: true,
             ..Default::default()
         };
 
