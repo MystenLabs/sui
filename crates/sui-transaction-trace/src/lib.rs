@@ -222,91 +222,63 @@ impl TransactionTraceLogger {
 
     /// Records a transaction event with automatic time tracking.
     ///
-    /// This is the main logging interface. The logger automatically:
-    /// - Calculates time delta since the last event
-    /// - Adds appropriate time record (DeltaTime or DeltaTimeLarge)
-    /// - Appends the transaction event
-    /// - Triggers background flush if needed
-    ///
     /// # Performance
-    /// This method holds a mutex only for appending to the in-memory buffer.
-    /// No I/O is performed in this call - all disk writes happen on a background thread.
-    ///
-    /// # Errors
-    /// Returns an error only in exceptional cases (should not happen in normal operation).
+    /// Holds a mutex only for buffer operations. I/O happens on background thread.
     pub fn write_transaction_event(
         &self,
         digest: TransactionDigest,
         event_type: TxEventType,
     ) -> Result<()> {
         let now = tokio::time::Instant::now();
-
         let mut state = self.state.lock();
 
-        // Check if we need to flush BEFORE adding records
-        // Adding this event will add 2 records (time + event)
-        let would_exceed_capacity = state.buffer.len() + 2 > self.config.buffer_capacity;
-        let time_to_flush =
-            now.duration_since(state.last_flush).as_secs() >= self.config.flush_interval_secs;
-        let should_flush = (would_exceed_capacity || time_to_flush) && !state.buffer.is_empty();
+        // Check if flush needed before adding records
+        let should_flush = (state.buffer.len() + 2 > self.config.buffer_capacity
+            || now.duration_since(state.last_flush).as_secs() >= self.config.flush_interval_secs)
+            && !state.buffer.is_empty();
 
         if should_flush {
-            // Swap buffer with new empty one
-            let mut new_buffer = Vec::with_capacity(self.config.buffer_capacity);
-            std::mem::swap(&mut state.buffer, &mut new_buffer);
+            // Swap buffer and prepare new one
+            let old_buffer = std::mem::replace(
+                &mut state.buffer,
+                Vec::with_capacity(self.config.buffer_capacity),
+            );
             state.last_flush = now;
-
-            // Push AbsTime anchor to the new buffer and reset last_instant
-            // This correlates the wall-clock time with the start of the new buffer
-            // Use current_system_time to ensure consistency with virtual time
             let abs_time = Self::current_system_time(&state);
             state.buffer.push(LogRecord::AbsTime(abs_time));
             state.last_instant = tokio::time::Instant::now();
 
-            // Flush buffer (async or sync depending on runtime)
-            if let Some(flush_tx) = &self.flush_tx {
-                // Async flush: send to background task
-                drop(state);
-                // try_send drops message if channel is full (no backpressure on hot path)
-                if let Err(e) = flush_tx.try_send(new_buffer) {
-                    tracing::warn!("Failed to send buffer to flush task, data dropped: {:?}", e);
-                }
-                // Reacquire lock to add current event
-                state = self.state.lock();
-            } else if let Some(sync_flush_state) = &self.sync_flush_state {
-                // Sync flush: flush immediately
-                drop(state);
-                let mut flush_state = sync_flush_state.lock();
-                if let Err(e) =
-                    Self::flush_buffer_to_disk(&self.config, &new_buffer, &mut flush_state)
-                {
-                    tracing::error!("Failed to flush transaction trace buffer: {}", e);
-                }
-                drop(flush_state);
-                // Reacquire lock to add current event
-                state = self.state.lock();
-            }
+            // Flush without holding lock
+            drop(state);
+            self.flush_buffer(old_buffer);
+            state = self.state.lock();
         }
 
-        // Calculate delta time since last record
+        // Add time delta and event
         let elapsed = now.duration_since(state.last_instant);
-        let micros = elapsed.as_micros();
-
-        // Add time record
-        if micros <= u16::MAX as u128 {
-            state.buffer.push(LogRecord::DeltaTime(micros as u16));
-        } else {
-            state.buffer.push(LogRecord::DeltaTimeLarge(elapsed));
-        }
-
-        // Add transaction event
+        state
+            .buffer
+            .push(if elapsed.as_micros() <= u16::MAX as u128 {
+                LogRecord::DeltaTime(elapsed.as_micros() as u16)
+            } else {
+                LogRecord::DeltaTimeLarge(elapsed)
+            });
         state
             .buffer
             .push(LogRecord::TransactionEvent { digest, event_type });
-
         state.last_instant = now;
 
         Ok(())
+    }
+
+    /// Flush buffer to disk (async) or sync flush state
+    fn flush_buffer(&self, buffer: Vec<LogRecord>) {
+        if let Some(tx) = &self.flush_tx {
+            let _ = tx.try_send(buffer);
+        } else if let Some(sync_state) = &self.sync_flush_state {
+            let mut flush_state = sync_state.lock();
+            let _ = Self::flush_buffer_to_disk(&self.config, &buffer, &mut flush_state);
+        }
     }
 
     /// Background task that flushes buffers to disk (runs on blocking thread)
