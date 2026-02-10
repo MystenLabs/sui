@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use clap::Parser;
 use object_store::ClientOptions;
 use object_store::RetryConfig;
 use object_store::aws::{AmazonS3Builder, S3ConditionalPut};
@@ -18,28 +19,24 @@ use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_object_store::ObjectStore;
+use tracing::info;
 use url::Url;
 
 use sui_checkpoint_blob_indexer::CheckpointBcsPipeline;
 use sui_checkpoint_blob_indexer::CheckpointBlobPipeline;
 use sui_checkpoint_blob_indexer::EpochsPipeline;
+use sui_checkpoint_blob_indexer::IndexerConfig;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 
-#[derive(Debug, clap::Parser)]
+#[derive(Debug, Parser)]
 #[command(name = "sui-checkpoint-blob-indexer")]
 #[command(about = "Indexer that writes checkpoints as compressed proto blobs to object storage")]
 #[group(id = "store", required = true, multiple = false)]
 struct Args {
-    /// Number of concurrent checkpoint uploads
-    #[arg(long, default_value = "10")]
-    write_concurrency: usize,
-
-    /// Interval between watermark updates
-    #[arg(long, default_value = "1m", value_parser = humantime::parse_duration)]
-    watermark_interval: Duration,
-
-    /// Maximum random jitter to add to the watermark interval.
-    #[arg(long, default_value = "0s", value_parser = humantime::parse_duration)]
-    watermark_interval_jitter: Duration,
+    /// Path to TOML config file
+    #[arg(long)]
+    config: PathBuf,
 
     /// Write to AWS S3. Provide the bucket name or endpoint-and-bucket.
     /// (env: AWS_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION)
@@ -72,14 +69,6 @@ struct Args {
     #[arg(long)]
     compression_level: Option<i32>,
 
-    /// Maximum number of checkpoints to fetch concurrently
-    #[arg(long, default_value = "200")]
-    ingest_concurrency: usize,
-
-    /// Maximum size of checkpoint backlog across all workers
-    #[arg(long, default_value = "5000")]
-    checkpoint_buffer_size: usize,
-
     #[command(flatten)]
     metrics_args: MetricsArgs,
 
@@ -92,18 +81,18 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use clap::Parser;
-    use sui_indexer_alt_framework::ingestion::IngestionConfig;
-    use sui_indexer_alt_framework::pipeline::CommitterConfig;
-    use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
-    use tracing::info;
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
 
     let args = Args::parse();
 
-    tracing_subscriber::fmt::init();
+    let config_contents = tokio::fs::read_to_string(&args.config).await?;
+    let config: IndexerConfig = toml::from_str(&config_contents)?;
 
     info!("Starting checkpoint object store indexer");
     info!("Args: {:#?}", args);
+    info!("Config: {:#?}", config);
 
     let is_bounded_job = args.indexer_args.last_checkpoint.is_some();
     let client_options = ClientOptions::default().with_timeout(args.request_timeout);
@@ -159,47 +148,40 @@ async fn main() -> anyhow::Result<()> {
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
-    let config = ConcurrentConfig {
-        committer: CommitterConfig {
-            write_concurrency: args.write_concurrency,
-            watermark_interval_ms: args.watermark_interval.as_millis() as u64,
-            watermark_interval_jitter_ms: args.watermark_interval_jitter.as_millis() as u64,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    let ingestion_config = IngestionConfig {
-        ingest_concurrency: args.ingest_concurrency,
-        checkpoint_buffer_size: args.checkpoint_buffer_size,
-        ..Default::default()
-    };
-
     let mut indexer = Indexer::new(
         store.clone(),
         args.indexer_args,
         args.client_args,
-        ingestion_config,
+        config.ingestion.into(),
         None,
         &registry,
     )
     .await?;
+
+    let committer = config.committer.finish(CommitterConfig::default());
+    let base = ConcurrentConfig {
+        committer,
+        pruner: None,
+    };
 
     indexer
         .concurrent_pipeline(
             CheckpointBlobPipeline {
                 compression_level: args.compression_level,
             },
-            config.clone(),
+            config.pipeline.checkpoint_blob.finish(base.clone()),
         )
         .await?;
 
     indexer
-        .concurrent_pipeline(EpochsPipeline, config.clone())
+        .concurrent_pipeline(EpochsPipeline, config.pipeline.epochs.finish(base.clone()))
         .await?;
 
     indexer
-        .concurrent_pipeline(CheckpointBcsPipeline, config.clone())
+        .concurrent_pipeline(
+            CheckpointBcsPipeline,
+            config.pipeline.checkpoint_bcs.finish(base),
+        )
         .await?;
 
     let s_metrics = metrics_service.run().await?;

@@ -25,12 +25,13 @@ use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
-use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::PipelineLayer;
 use sui_kvstore::set_write_legacy_data;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
@@ -322,8 +323,9 @@ impl TestHarness {
             store,
             indexer_args,
             client_args,
-            ingestion_config,
-            ConcurrentConfig::default(),
+            ingestion_config.into(),
+            CommitterConfig::default(),
+            PipelineLayer::default(),
             &registry,
         )
         .await
