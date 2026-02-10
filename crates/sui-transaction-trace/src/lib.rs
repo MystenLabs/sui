@@ -386,6 +386,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_buffer_flush_on_capacity() {
+        telemetry_subscribers::init_for_testing();
+
         let temp_dir = tempfile::tempdir().unwrap();
         let config = TraceLogConfig {
             log_dir: temp_dir.path().to_path_buf(),
