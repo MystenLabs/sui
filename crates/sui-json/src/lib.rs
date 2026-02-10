@@ -575,9 +575,11 @@ pub fn primitive_type(
         SignatureToken::U128 => MoveTypeLayout::U128,
         SignatureToken::U256 => MoveTypeLayout::U256,
         SignatureToken::Address => MoveTypeLayout::Address,
+
         SignatureToken::Vector(inner) => {
             MoveTypeLayout::Vector(Box::new(primitive_type(view, type_args, inner)?))
         }
+
         SignatureToken::Datatype(struct_handle_idx) => {
             let resolved_struct = resolve_struct(view, *struct_handle_idx);
             if resolved_struct == RESOLVED_ASCII_STR {
@@ -591,6 +593,7 @@ pub fn primitive_type(
                 return None;
             }
         }
+
         SignatureToken::DatatypeInstantiation(struct_inst) => {
             let (idx, targs) = &**struct_inst;
             let resolved_struct = resolve_struct(view, *idx);
@@ -602,12 +605,16 @@ pub fn primitive_type(
                 return None;
             }
         }
+
         SignatureToken::TypeParameter(idx) => {
             layout_of_primitive_typetag(type_args.get(*idx as usize)?)?
         }
-        SignatureToken::Signer
-        | SignatureToken::Reference(_)
-        | SignatureToken::MutableReference(_) => return None,
+
+        SignatureToken::Reference(sig) | SignatureToken::MutableReference(sig) => {
+            primitive_type(view, type_args, sig)?
+        }
+
+        SignatureToken::Signer => return None,
     })
 }
 
