@@ -4,7 +4,7 @@
 //! Generate a test trace file with fake timing data for testing the Chrome Trace converter.
 
 use anyhow::Result;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use sui_transaction_trace::*;
 
 fn main() -> Result<()> {

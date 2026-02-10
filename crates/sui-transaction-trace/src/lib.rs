@@ -429,8 +429,8 @@ impl Drop for TransactionTraceLogger {
 /// use sui_transaction_trace::*;
 /// use std::path::Path;
 ///
-/// let reader = LogReader::new(Path::new("tx-trace-12345.bin")).unwrap();
-/// for event in reader {
+/// let mut reader = LogReader::new(Path::new("tx-trace-12345.bin")).unwrap();
+/// for event in reader.iter() {
 ///     let event = event.unwrap();
 ///     println!("{:?} at {:?}", event.event_type, event.timestamp);
 /// }
