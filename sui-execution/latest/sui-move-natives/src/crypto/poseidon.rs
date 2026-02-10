@@ -77,9 +77,7 @@ pub fn poseidon_bn254_internal(
     // The input is a reference to a vector of vector<u8>'s
     let inputs = pop_arg!(args, VectorRef);
 
-    let length = inputs
-        .len(&Type::Vector(Box::new(Type::U8)))?
-        .value_as::<u64>()?;
+    let length = inputs.len(&Type::vector_u8())?.value_as::<u64>()?;
 
     if length > MAX_POSEIDON_INPUTS {
         return Ok(NativeResult::err(context.gas_used(), TOO_MANY_INPUTS));
@@ -100,7 +98,7 @@ pub fn poseidon_bn254_internal(
     // Read the input vector
     let field_elements = (0..length)
         .map(|i| {
-            let reference = inputs.borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))?;
+            let reference = inputs.borrow_elem(i as usize, &Type::vector_u8())?;
             let value = reference.value_as::<VectorRef>()?.as_bytes_ref().clone();
             Ok(value)
         })

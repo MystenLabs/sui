@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::values::Value,
-    jit::execution::ast::Type,
+    execution::{types::Type, values::Value},
     natives::{
         functions::{NativeContext, NativeFunction, NativeResult},
         make_module_natives,
@@ -65,11 +64,11 @@ fn native_print(
         let mut out = "[debug] ".to_string();
         let ref_ = VMValueCast::<Reference>::cast(_val)?.read_ref()?;
 
-        testing::print_value(
+        testing::print_value_internal(
             _context,
             &mut out,
             ref_,
-            _ty,
+            _ty.into_inner(),
             &_move_std_addr,
             0,
             canonical,
@@ -196,7 +195,7 @@ pub fn make_all(
 mod testing {
     use crate::{
         execution::values::{VMValueCast, Value},
-        jit::execution::ast::Type,
+        jit::execution::ast::{AsInternalType, Type as InternalType},
         natives::functions::NativeContext,
         partial_vm_error,
     };
@@ -230,9 +229,11 @@ mod testing {
 
     fn get_annotated_struct_layout(
         context: &NativeContext,
-        ty: &Type,
+        ty: &InternalType,
     ) -> PartialVMResult<A::MoveDatatypeLayout> {
-        let annotated_type_layout = context.type_to_fully_annotated_layout(ty)?.unwrap();
+        let annotated_type_layout = context
+            .internal_type_to_fully_annotated_layout(ty)?
+            .unwrap();
         match annotated_type_layout {
             A::MoveTypeLayout::Struct(annotated_struct_layout) => {
                 Ok(A::MoveDatatypeLayout::Struct(annotated_struct_layout))
@@ -247,9 +248,9 @@ mod testing {
         }
     }
 
-    fn get_vector_inner_type(ty: &Type) -> PartialVMResult<&Type> {
-        match ty {
-            Type::Vector(ty) => Ok(ty),
+    fn get_vector_inner_type(ty: &InternalType) -> PartialVMResult<&InternalType> {
+        match ty.as_internal_type() {
+            InternalType::Vector(ty) => Ok(ty),
             _ => Err(partial_vm_error!(
                 INTERNAL_TYPE_ERROR,
                 "Could not get the inner Type of a vector's Type"
@@ -312,11 +313,14 @@ mod testing {
     }
 
     /// Prints any `Value` in a user-friendly manner.
-    pub(crate) fn print_value(
+    // FIXME: This function is a disaster. It should just grab the runtime type layout and/or
+    // annotated type layout and work from that, so we can just pass the external type in. Luckily,
+    // we currently only use this for testing.
+    pub(crate) fn print_value_internal(
         context: &NativeContext,
         out: &mut String,
         val: Value,
-        ty: Type,
+        ty: InternalType,
         move_std_addr: &AccountAddress,
         depth: usize,
         canonicalize: bool,
@@ -324,13 +328,13 @@ mod testing {
         include_int_types: bool,
     ) -> PartialVMResult<()> {
         // get type layout in VM format
-        let ty_layout = context.type_to_type_layout(&ty)?.unwrap();
+        let ty_layout = context.internal_type_to_type_layout(&ty)?.unwrap();
 
         match &ty_layout {
             R::MoveTypeLayout::Vector(_) => {
                 // get the inner type T of a vector<T>
                 let inner_ty = get_vector_inner_type(&ty)?;
-                let inner_tyl = context.type_to_type_layout(inner_ty)?.unwrap();
+                let inner_tyl = context.internal_type_to_type_layout(inner_ty)?.unwrap();
 
                 match inner_tyl {
                     // We cannot simply convert a `Value` (of type vector) to a `MoveValue` because
@@ -340,7 +344,9 @@ mod testing {
                     // `print_move_value`, or (2) a struct type, which we can decorate and forward
                     // to `print_move_value`.
                     R::MoveTypeLayout::Vector(_) | R::MoveTypeLayout::Struct(_) => {
-                        // `val` is either a `Vec<Vec<Value>>`, a `Vec<Struct>`,  or a `Vec<signer>`, so we cast `val` as a `Vec<Value>` and call ourselves recursively
+                        // `val` is either a `Vec<Vec<Value>>`, a `Vec<Struct>`,  or a
+                        // `Vec<signer>`, so we cast `val` as a `Vec<Value>` and call ourselves
+                        // recursively
                         let vec = VMValueCast::<Vec<Value>>::cast(val)?;
 
                         let print_inner_value =
@@ -351,7 +357,7 @@ mod testing {
                              canonicalize: bool,
                              single_line: bool,
                              include_int_types: bool| {
-                                print_value(
+                                print_value_internal(
                                     context,
                                     out,
                                     val,
@@ -379,7 +385,9 @@ mod testing {
                     // If the inner type T of this vector<T> is a primitive bool/unsigned integer/address type, we convert the
                     // vector<T> to a MoveValue and print it.
                     _ => {
-                        let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
+                        let ann_ty_layout = context
+                            .internal_type_to_fully_annotated_layout(&ty)?
+                            .unwrap();
                         let mv = val.as_move_value(&ty_layout)?.decorate(&ann_ty_layout);
                         print_move_value(
                             out,
@@ -458,7 +466,9 @@ mod testing {
             }
             // For non-structs, non-enums, and non-vectors, convert them to a MoveValue and print them
             _ => {
-                let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
+                let ann_ty_layout = context
+                    .internal_type_to_fully_annotated_layout(&ty)?
+                    .unwrap();
                 print_move_value(
                     out,
                     val.as_move_value(&ty_layout)?.decorate(&ann_ty_layout),

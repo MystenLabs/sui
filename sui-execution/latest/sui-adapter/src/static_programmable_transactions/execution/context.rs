@@ -19,6 +19,7 @@ use crate::{
         typing::ast::{self as T, Type},
     },
 };
+
 use indexmap::{IndexMap, IndexSet};
 use move_binary_format::{
     CompiledModule,
@@ -35,7 +36,7 @@ use move_core_types::{
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::{
     execution::{
-        Type as VMType, TypeSubst as _,
+        types::Type as VMType,
         values::{VMValueCast, Value as VMValue},
         vm::{LoadedFunctionInformation, MoveVM},
     },
@@ -46,6 +47,7 @@ use move_vm_runtime::{
     },
     validation::verification::ast::Package as VerifiedPackage,
 };
+
 use mysten_common::debug_fatal;
 use nonempty::nonempty;
 use quick_cache::unsync::Cache as QCache;

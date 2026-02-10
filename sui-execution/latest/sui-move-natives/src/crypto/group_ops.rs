@@ -15,7 +15,7 @@ use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
-        Type,
+        types::Type,
         values::{Value, VectorRef},
     },
     natives::functions::NativeResult,
@@ -847,7 +847,7 @@ pub fn internal_sum(
     let group_type = pop_arg!(args, u8);
 
     let length = inputs
-        .len(&Type::Vector(Box::new(Type::U8)))?
+        .len(&Type::vector_u8())?
         .value_as::<u64>()?;
 
     let result = match Groups::from_u8(group_type) {
@@ -876,7 +876,7 @@ pub fn internal_sum(
             (0..length)
                 .map(|i| {
                     inputs
-                        .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
+                        .borrow_elem(i as usize, &Type::vector_u8())
                         .and_then(Value::value_as::<VectorRef>)
                         .map_err(|_| FastCryptoError::InvalidInput)
                         .and_then(|v| {

@@ -1015,7 +1015,13 @@ pub(super) fn call_native_with_args(
 
     gas_meter.charge_native_function_before_execution(args.iter())?;
 
-    let result = native_function(&mut native_context, ty_args.to_vec(), args)?;
+    let result = {
+        let ty_args = ty_args
+            .iter()
+            .map(|ty| ty.clone().into())
+            .collect::<Vec<_>>();
+        native_function(&mut native_context, ty_args, args)?
+    };
 
     // Note(Gas): The order by which gas is charged / error gets returned MUST NOT be modified
     //            here or otherwise it becomes an incompatible change!!!

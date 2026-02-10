@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     execution::{
-        TypeSubst as _,
         dispatch_tables::VMDispatchTables,
         interpreter::locals::{BaseHeap, BaseHeapId},
+        types::Type,
         values::Value,
         vm::MoveVM,
     },
-    jit::execution::ast::Type,
+    jit::execution::ast::Type as InternalType,
     partial_vm_error,
     shared::gas::GasMeter,
 };
@@ -110,29 +110,32 @@ impl ValueFrame {
             .into_iter()
             .zip(serialized_args)
             .enumerate()
-            .map(|(idx, (arg_ty, arg_bytes))| match &arg_ty {
-                Type::MutableReference(inner_t) | Type::Reference(inner_t) => {
-                    // Each ref-arg value stored on the base heap, borrowed, and passed by
-                    // reference to the invoked function.
-                    let (ndx, value) = self
-                        .heap
-                        .allocate_and_borrow_loc(deserialize_value(vtables, inner_t, arg_bytes)?)?;
-                    match arg_ty {
-                        Type::Reference(_) => {
-                            // Record the immutable reference in the map
-                            assert!(self.heap_imm_refs.insert(idx as u16, ndx).is_none());
-                            assert!(!self.heap_mut_refs.contains_key(&(idx as u16)));
+            .map(|(idx, (arg_ty, arg_bytes))| {
+                let arg_ty = arg_ty.into_inner();
+                match &arg_ty {
+                    InternalType::MutableReference(inner_t) | InternalType::Reference(inner_t) => {
+                        // Each ref-arg value stored on the base heap, borrowed, and passed by
+                        // reference to the invoked function.
+                        let (ndx, value) = self.heap.allocate_and_borrow_loc(deserialize_value(
+                            vtables, inner_t, arg_bytes,
+                        )?)?;
+                        match arg_ty {
+                            InternalType::Reference(_) => {
+                                // Record the immutable reference in the map
+                                assert!(self.heap_imm_refs.insert(idx as u16, ndx).is_none());
+                                assert!(!self.heap_mut_refs.contains_key(&(idx as u16)));
+                            }
+                            InternalType::MutableReference(_) => {
+                                // Record the mutable reference in the map
+                                assert!(self.heap_mut_refs.insert(idx as u16, ndx).is_none());
+                                assert!(!self.heap_imm_refs.contains_key(&(idx as u16)));
+                            }
+                            _ => unreachable!(),
                         }
-                        Type::MutableReference(_) => {
-                            // Record the mutable reference in the map
-                            assert!(self.heap_mut_refs.insert(idx as u16, ndx).is_none());
-                            assert!(!self.heap_imm_refs.contains_key(&(idx as u16)));
-                        }
-                        _ => unreachable!(),
+                        Ok(value)
                     }
-                    Ok(value)
+                    _ => deserialize_value(vtables, &arg_ty, arg_bytes),
                 }
-                _ => deserialize_value(vtables, &arg_ty, arg_bytes),
             })
             .collect::<PartialVMResult<Vec<_>>>()?;
         self.values.extend(deserialized_args);
@@ -142,7 +145,7 @@ impl ValueFrame {
 
 fn deserialize_value(
     vtables: &VMDispatchTables,
-    ty: &Type,
+    ty: &InternalType,
     arg: impl Borrow<[u8]>,
 ) -> PartialVMResult<Value> {
     let layout = match vtables.type_to_type_layout(ty) {

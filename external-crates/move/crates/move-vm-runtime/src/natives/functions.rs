@@ -19,9 +19,12 @@
 
 use crate::{
     execution::{
-        dispatch_tables::VMDispatchTables, interpreter::state::MachineState, values::Value,
+        dispatch_tables::{TypeAbilities as _, VMDispatchTables},
+        interpreter::state::MachineState,
+        types::Type,
+        values::Value,
     },
-    jit::execution::ast::Type,
+    jit::execution::ast::{AsInternalType, Type as InternalType},
     natives::extensions::NativeContextExtensions,
     partial_vm_error,
 };
@@ -254,11 +257,11 @@ macro_rules! debug_writeln {
 
 impl<'b> NativeContext<'_, 'b, '_> {
     pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.vtables.type_to_type_tag(ty)
+        self.vtables.type_to_type_tag(ty.as_internal_type())
     }
 
     pub fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.vtables.type_to_runtime_type_tag(ty)
+        self.vtables.type_to_runtime_type_tag(ty.as_internal_type())
     }
 
     pub fn type_tag_to_type_layout(&self, ty: &TypeTag) -> Option<R::MoveTypeLayout> {
@@ -270,7 +273,14 @@ impl<'b> NativeContext<'_, 'b, '_> {
     }
 
     pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<R::MoveTypeLayout>> {
-        match self.vtables.type_to_type_layout(ty) {
+        self.internal_type_to_type_layout(&ty.as_internal_type())
+    }
+
+    pub(crate) fn internal_type_to_type_layout(
+        &self,
+        ty: &InternalType,
+    ) -> PartialVMResult<Option<R::MoveTypeLayout>> {
+        match self.vtables.type_to_type_layout(ty.as_internal_type()) {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
             Err(_) => Ok(None),
@@ -278,12 +288,19 @@ impl<'b> NativeContext<'_, 'b, '_> {
     }
 
     pub fn type_to_abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {
-        self.vtables.abilities(ty)
+        ty.abilities(self.vtables)
     }
 
     pub fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
+    ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
+        self.internal_type_to_fully_annotated_layout(&ty.as_internal_type())
+    }
+
+    pub(crate) fn internal_type_to_fully_annotated_layout(
+        &self,
+        ty: &InternalType,
     ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
         match self.vtables.type_to_fully_annotated_layout(ty) {
             Ok(ty_layout) => Ok(Some(ty_layout)),

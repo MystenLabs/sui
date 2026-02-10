@@ -201,7 +201,7 @@ impl Adapter {
     fn load_type_can_fail(&self, type_tag: &TypeTag) -> VMResult<Type> {
         let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
-        session.load_type(type_tag)
+        session.load_type(type_tag).map(|ty| ty.into_inner())
     }
 
     fn compute_depth_of_datatype(

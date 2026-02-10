@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::values::{Value, Vector, VectorRef},
-    jit::execution::ast::Type,
+    execution::{
+        types::Type,
+        values::{Value, Vector, VectorRef},
+    },
     native_charge_gas_early_exit,
     natives::{
         functions::{NativeContext, NativeFunction, NativeResult},

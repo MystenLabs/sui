@@ -9,10 +9,10 @@
 
 use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
-    execution::vm::DatatypeInfo,
+    execution::{types::Type as ExternalType, vm::DatatypeInfo},
     jit::execution::ast::{
-        ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
-        TypeSubst,
+        ArenaType, AsInternalType, Datatype, DatatypeDescriptor, Function, Module, Package,
+        Type as InternalType, TypeNodeCount, TypeSubst,
     },
     partial_vm_error,
     shared::{
@@ -262,26 +262,46 @@ impl VMDispatchTables {
 // Type-related functions over the VMDispatchTables.
 // ------------------------------------------------------------------------
 
+pub(crate) trait TypeAbilities {
+    fn abilities(&self, vtable: &VMDispatchTables) -> PartialVMResult<AbilitySet>;
+}
+
+impl TypeAbilities for InternalType {
+    fn abilities(&self, vtable: &VMDispatchTables) -> PartialVMResult<AbilitySet> {
+        vtable.abilities(self)
+    }
+}
+
+impl TypeAbilities for ExternalType {
+    fn abilities(&self, vtable: &VMDispatchTables) -> PartialVMResult<AbilitySet> {
+        vtable.abilities(self.as_internal_type())
+    }
+}
+
 impl VMDispatchTables {
     // -------------------------------------------
     // Helpers for loading and verification
     // -------------------------------------------
 
-    // Load a type from a TypeTag into a VM type.
-    // NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
-    // fail.
-    pub fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
+    /// Load a type from a TypeTag into a VM type.
+    /// NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
+    /// fail.
+    pub fn load_type(&self, type_tag: &TypeTag) -> VMResult<ExternalType> {
+        self.load_type_internal(type_tag).map(|ty| ty.into())
+    }
+
+    pub(crate) fn load_type_internal(&self, type_tag: &TypeTag) -> VMResult<InternalType> {
         Ok(match type_tag {
-            TypeTag::Bool => Type::Bool,
-            TypeTag::U8 => Type::U8,
-            TypeTag::U16 => Type::U16,
-            TypeTag::U32 => Type::U32,
-            TypeTag::U64 => Type::U64,
-            TypeTag::U128 => Type::U128,
-            TypeTag::U256 => Type::U256,
-            TypeTag::Address => Type::Address,
-            TypeTag::Signer => Type::Signer,
-            TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt)?)),
+            TypeTag::Bool => InternalType::Bool,
+            TypeTag::U8 => InternalType::U8,
+            TypeTag::U16 => InternalType::U16,
+            TypeTag::U32 => InternalType::U32,
+            TypeTag::U64 => InternalType::U64,
+            TypeTag::U128 => InternalType::U128,
+            TypeTag::U256 => InternalType::U256,
+            TypeTag::Address => InternalType::Address,
+            TypeTag::Signer => InternalType::Signer,
+            TypeTag::Vector(tt) => InternalType::Vector(Box::new(self.load_type_internal(tt)?)),
             // NB: Note that this tag is slightly misnamed and used for all Datatypes.
             TypeTag::Struct(struct_tag) => {
                 let defining_id = struct_tag.address;
@@ -309,11 +329,13 @@ impl VMDispatchTables {
                 // The computed runtime ID should match the runtime ID of the datatype that we have
                 // loaded.
                 if datatype.original_id.address() != &package_key {
-                    return Err(
-                        partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "Runtime ID resolution of {defining_id} => {package_key} does not match runtime ID of loaded type: {}",
-                                datatype.original_id.address())
-                            .finish(Location::Undefined),
-                    );
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Runtime ID resolution of {defining_id} \
+                            => {package_key} does not match runtime ID of loaded type: {}",
+                        datatype.original_id.address()
+                    )
+                    .finish(Location::Undefined));
                 }
                 // The defining ID should match the defining ID of the datatype that we
                 // have loaded.
@@ -326,15 +348,15 @@ impl VMDispatchTables {
                     .finish(Location::Package(defining_id)));
                 }
                 if datatype.type_parameters().is_empty() && struct_tag.type_params.is_empty() {
-                    Type::Datatype(key)
+                    InternalType::Datatype(key)
                 } else {
                     let mut type_params = vec![];
                     for ty_param in &struct_tag.type_params {
-                        type_params.push(self.load_type(ty_param)?);
+                        type_params.push(self.load_type_internal(ty_param)?);
                     }
                     self.verify_ty_args(datatype.type_param_constraints(), &type_params)
                         .map_err(|e| e.finish(Location::Package(defining_id)))?;
-                    Type::DatatypeInstantiation(Box::new((key, type_params)))
+                    InternalType::DatatypeInstantiation(Box::new((key, type_params)))
                 }
             }
         })
@@ -342,50 +364,57 @@ impl VMDispatchTables {
 
     // Verify the kind (constraints) of an instantiation.
     // Function invocations call this function to verify correctness of type arguments provided
-    pub fn verify_ty_args<'a, I>(&self, constraints: I, ty_args: &[Type]) -> PartialVMResult<()>
+    pub(crate) fn verify_ty_args<'a, I, T>(
+        &self,
+        constraints: I,
+        ty_args: &[T],
+    ) -> PartialVMResult<()>
     where
         I: IntoIterator<Item = &'a AbilitySet>,
         I::IntoIter: ExactSizeIterator,
+        T: TypeAbilities,
     {
         let constraints = constraints.into_iter();
         if constraints.len() != ty_args.len() {
             return Err(partial_vm_error!(NUMBER_OF_TYPE_ARGUMENTS_MISMATCH));
         }
         for (ty, expected_k) in ty_args.iter().zip(constraints) {
-            if !expected_k.is_subset(self.abilities(ty)?) {
+            if !expected_k.is_subset(ty.abilities(self)?) {
                 return Err(partial_vm_error!(CONSTRAINT_NOT_SATISFIED));
             }
         }
         Ok(())
     }
 
-    pub(crate) fn abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {
+    fn abilities(&self, ty: &InternalType) -> PartialVMResult<AbilitySet> {
         match ty {
-            Type::Bool
-            | Type::U8
-            | Type::U16
-            | Type::U32
-            | Type::U64
-            | Type::U128
-            | Type::U256
-            | Type::Address => Ok(AbilitySet::PRIMITIVES),
+            InternalType::Bool
+            | InternalType::U8
+            | InternalType::U16
+            | InternalType::U32
+            | InternalType::U64
+            | InternalType::U128
+            | InternalType::U256
+            | InternalType::Address => Ok(AbilitySet::PRIMITIVES),
 
             // Technically unreachable but, no point in erroring if we don't have to
-            Type::Reference(_) | Type::MutableReference(_) => Ok(AbilitySet::REFERENCES),
-            Type::Signer => Ok(AbilitySet::SIGNER),
+            InternalType::Reference(_) | InternalType::MutableReference(_) => {
+                Ok(AbilitySet::REFERENCES)
+            }
+            InternalType::Signer => Ok(AbilitySet::SIGNER),
 
-            Type::TyParam(_) => Err(partial_vm_error!(
+            InternalType::TyParam(_) => Err(partial_vm_error!(
                 UNREACHABLE,
-                "Unexpected TyParam type after translating from TypeTag to Type"
+                "Unexpected TyParam type after translating from TypeTag to InternalType"
             )),
 
-            Type::Vector(ty) => AbilitySet::polymorphic_abilities(
+            InternalType::Vector(ty) => AbilitySet::polymorphic_abilities(
                 AbilitySet::VECTOR,
                 vec![false],
                 vec![self.abilities(ty)?],
             ),
-            Type::Datatype(idx) => Ok(*self.resolve_type(idx)?.to_ref().abilities()),
-            Type::DatatypeInstantiation(inst) => {
+            InternalType::Datatype(idx) => Ok(*self.resolve_type(idx)?.to_ref().abilities()),
+            InternalType::DatatypeInstantiation(inst) => {
                 let (idx, type_args) = &**inst;
                 let datatype_type = self.resolve_type(idx)?.to_ref();
                 let declared_phantom_parameters = datatype_type
@@ -405,22 +434,25 @@ impl VMDispatchTables {
         }
     }
 
-    pub(crate) fn datatype_information(&self, ty: &Type) -> PartialVMResult<Option<DatatypeInfo>> {
+    pub(crate) fn datatype_information(
+        &self,
+        ty: &InternalType,
+    ) -> PartialVMResult<Option<DatatypeInfo>> {
         Ok(match ty {
-            Type::Bool
-            | Type::U8
-            | Type::U64
-            | Type::U128
-            | Type::Address
-            | Type::Signer
-            | Type::Vector(_)
-            | Type::Reference(_)
-            | Type::MutableReference(_)
-            | Type::TyParam(_)
-            | Type::U16
-            | Type::U32
-            | Type::U256 => None,
-            Type::Datatype(vtable_key) => {
+            InternalType::Bool
+            | InternalType::U8
+            | InternalType::U64
+            | InternalType::U128
+            | InternalType::Address
+            | InternalType::Signer
+            | InternalType::Vector(_)
+            | InternalType::Reference(_)
+            | InternalType::MutableReference(_)
+            | InternalType::TyParam(_)
+            | InternalType::U16
+            | InternalType::U32
+            | InternalType::U256 => None,
+            InternalType::Datatype(vtable_key) => {
                 let descriptor = self.resolve_type(vtable_key)?.to_ref();
                 Some(DatatypeInfo {
                     original_id: *descriptor.original_id.address(),
@@ -429,7 +461,7 @@ impl VMDispatchTables {
                     type_name: self.interner.resolve_ident(&descriptor.name, "type name"),
                 })
             }
-            Type::DatatypeInstantiation(inst) => {
+            InternalType::DatatypeInstantiation(inst) => {
                 let (idx, _) = &**inst;
                 let descriptor = self.resolve_type(idx)?.to_ref();
                 Some(DatatypeInfo {
@@ -443,7 +475,7 @@ impl VMDispatchTables {
     }
 
     // -------------------------------------------
-    // Type Depth Computations
+    // InternalType Depth Computations
     // -------------------------------------------
     // These functions compute the depth of the specified type, plus cache the depth formula of any
     // uncached subtypes they find along the way.
@@ -539,13 +571,13 @@ impl VMDispatchTables {
     }
 
     // -------------------------------------------
-    // Type Translation Helpers
+    // InternalType Translation Helpers
     // -------------------------------------------
 
     fn datatype_to_type_tag(
         &self,
         datatype_name: &VirtualTableKey,
-        ty_args: &[Type],
+        ty_args: &[InternalType],
         tag_type: DatatypeTagType,
     ) -> PartialVMResult<StructTag> {
         let type_params = ty_args
@@ -578,32 +610,34 @@ impl VMDispatchTables {
 
     fn type_to_type_tag_impl(
         &self,
-        ty: &Type,
+        ty: &InternalType,
         tag_type: DatatypeTagType,
     ) -> PartialVMResult<TypeTag> {
         Ok(match ty {
-            Type::Bool => TypeTag::Bool,
-            Type::U8 => TypeTag::U8,
-            Type::U16 => TypeTag::U16,
-            Type::U32 => TypeTag::U32,
-            Type::U64 => TypeTag::U64,
-            Type::U128 => TypeTag::U128,
-            Type::U256 => TypeTag::U256,
-            Type::Address => TypeTag::Address,
-            Type::Signer => TypeTag::Signer,
-            Type::Vector(ty) => {
+            InternalType::Bool => TypeTag::Bool,
+            InternalType::U8 => TypeTag::U8,
+            InternalType::U16 => TypeTag::U16,
+            InternalType::U32 => TypeTag::U32,
+            InternalType::U64 => TypeTag::U64,
+            InternalType::U128 => TypeTag::U128,
+            InternalType::U256 => TypeTag::U256,
+            InternalType::Address => TypeTag::Address,
+            InternalType::Signer => TypeTag::Signer,
+            InternalType::Vector(ty) => {
                 TypeTag::Vector(Box::new(self.type_to_type_tag_impl(ty, tag_type)?))
             }
-            Type::Datatype(gidx) => {
+            InternalType::Datatype(gidx) => {
                 TypeTag::Struct(Box::new(self.datatype_to_type_tag(gidx, &[], tag_type)?))
             }
-            Type::DatatypeInstantiation(struct_inst) => {
+            InternalType::DatatypeInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
                 TypeTag::Struct(Box::new(
                     self.datatype_to_type_tag(gidx, ty_args, tag_type)?,
                 ))
             }
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            InternalType::Reference(_)
+            | InternalType::MutableReference(_)
+            | InternalType::TyParam(_) => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "no type tag for {:?}",
@@ -616,7 +650,7 @@ impl VMDispatchTables {
     fn datatype_to_type_layout(
         &self,
         datatype_name: &VirtualTableKey,
-        ty_args: &[Type],
+        ty_args: &[InternalType],
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
@@ -664,34 +698,36 @@ impl VMDispatchTables {
 
     fn type_to_type_layout_impl(
         &self,
-        ty: &Type,
+        ty: &InternalType,
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
         self.check_count_and_depth(count, &depth)?;
         *count += 1;
         let result = match ty {
-            Type::Bool => runtime_value::MoveTypeLayout::Bool,
-            Type::U8 => runtime_value::MoveTypeLayout::U8,
-            Type::U16 => runtime_value::MoveTypeLayout::U16,
-            Type::U32 => runtime_value::MoveTypeLayout::U32,
-            Type::U64 => runtime_value::MoveTypeLayout::U64,
-            Type::U128 => runtime_value::MoveTypeLayout::U128,
-            Type::U256 => runtime_value::MoveTypeLayout::U256,
-            Type::Address => runtime_value::MoveTypeLayout::Address,
-            Type::Signer => runtime_value::MoveTypeLayout::Signer,
-            Type::Vector(ty) => runtime_value::MoveTypeLayout::Vector(Box::new(
+            InternalType::Bool => runtime_value::MoveTypeLayout::Bool,
+            InternalType::U8 => runtime_value::MoveTypeLayout::U8,
+            InternalType::U16 => runtime_value::MoveTypeLayout::U16,
+            InternalType::U32 => runtime_value::MoveTypeLayout::U32,
+            InternalType::U64 => runtime_value::MoveTypeLayout::U64,
+            InternalType::U128 => runtime_value::MoveTypeLayout::U128,
+            InternalType::U256 => runtime_value::MoveTypeLayout::U256,
+            InternalType::Address => runtime_value::MoveTypeLayout::Address,
+            InternalType::Signer => runtime_value::MoveTypeLayout::Signer,
+            InternalType::Vector(ty) => runtime_value::MoveTypeLayout::Vector(Box::new(
                 self.type_to_type_layout_impl(ty, count, depth + 1)?,
             )),
-            Type::Datatype(gidx) => self
+            InternalType::Datatype(gidx) => self
                 .datatype_to_type_layout(gidx, &[], count, depth)?
                 .into_layout(),
-            Type::DatatypeInstantiation(inst) => {
+            InternalType::DatatypeInstantiation(inst) => {
                 let (gidx, ty_args) = &**inst;
                 self.datatype_to_type_layout(gidx, ty_args, count, depth)?
                     .into_layout()
             }
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            InternalType::Reference(_)
+            | InternalType::MutableReference(_)
+            | InternalType::TyParam(_) => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "no type layout for {:?}",
@@ -706,7 +742,7 @@ impl VMDispatchTables {
     fn datatype_to_fully_annotated_layout(
         &self,
         datatype_name: &VirtualTableKey,
-        ty_args: &[Type],
+        ty_args: &[InternalType],
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<annotated_value::MoveDatatypeLayout> {
@@ -783,34 +819,36 @@ impl VMDispatchTables {
 
     fn type_to_fully_annotated_layout_impl(
         &self,
-        ty: &Type,
+        ty: &InternalType,
         count: &mut u64,
         depth: u64,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
         self.check_count_and_depth(count, &depth)?;
         *count += 1;
         let result = match ty {
-            Type::Bool => annotated_value::MoveTypeLayout::Bool,
-            Type::U8 => annotated_value::MoveTypeLayout::U8,
-            Type::U16 => annotated_value::MoveTypeLayout::U16,
-            Type::U32 => annotated_value::MoveTypeLayout::U32,
-            Type::U64 => annotated_value::MoveTypeLayout::U64,
-            Type::U128 => annotated_value::MoveTypeLayout::U128,
-            Type::U256 => annotated_value::MoveTypeLayout::U256,
-            Type::Address => annotated_value::MoveTypeLayout::Address,
-            Type::Signer => annotated_value::MoveTypeLayout::Signer,
-            Type::Vector(ty) => annotated_value::MoveTypeLayout::Vector(Box::new(
+            InternalType::Bool => annotated_value::MoveTypeLayout::Bool,
+            InternalType::U8 => annotated_value::MoveTypeLayout::U8,
+            InternalType::U16 => annotated_value::MoveTypeLayout::U16,
+            InternalType::U32 => annotated_value::MoveTypeLayout::U32,
+            InternalType::U64 => annotated_value::MoveTypeLayout::U64,
+            InternalType::U128 => annotated_value::MoveTypeLayout::U128,
+            InternalType::U256 => annotated_value::MoveTypeLayout::U256,
+            InternalType::Address => annotated_value::MoveTypeLayout::Address,
+            InternalType::Signer => annotated_value::MoveTypeLayout::Signer,
+            InternalType::Vector(ty) => annotated_value::MoveTypeLayout::Vector(Box::new(
                 self.type_to_fully_annotated_layout_impl(ty, count, depth + 1)?,
             )),
-            Type::Datatype(gidx) => self
+            InternalType::Datatype(gidx) => self
                 .datatype_to_fully_annotated_layout(gidx, &[], count, depth)?
                 .into_layout(),
-            Type::DatatypeInstantiation(inst) => {
+            InternalType::DatatypeInstantiation(inst) => {
                 let (gidx, ty_args) = &**inst;
                 self.datatype_to_fully_annotated_layout(gidx, ty_args, count, depth)?
                     .into_layout()
             }
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            InternalType::Reference(_)
+            | InternalType::MutableReference(_)
+            | InternalType::TyParam(_) => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "no type layout for {:?}",
@@ -822,17 +860,17 @@ impl VMDispatchTables {
         Ok(result)
     }
 
-    pub(crate) fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
+    pub(crate) fn type_to_type_tag(&self, ty: &InternalType) -> PartialVMResult<TypeTag> {
         self.type_to_type_tag_impl(ty, DatatypeTagType::Defining)
     }
 
-    pub(crate) fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
+    pub(crate) fn type_to_runtime_type_tag(&self, ty: &InternalType) -> PartialVMResult<TypeTag> {
         self.type_to_type_tag_impl(ty, DatatypeTagType::Runtime)
     }
 
     pub(crate) fn type_to_type_layout(
         &self,
-        ty: &Type,
+        ty: &InternalType,
     ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
         let mut count = 0;
         self.type_to_type_layout_impl(ty, &mut count, 1)
@@ -847,7 +885,7 @@ impl VMDispatchTables {
 
     pub(crate) fn type_to_fully_annotated_layout(
         &self,
-        ty: &Type,
+        ty: &InternalType,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
         let mut count = 0;
         self.type_to_fully_annotated_layout_impl(ty, &mut count, 1)
@@ -861,7 +899,7 @@ impl VMDispatchTables {
         &self,
         type_tag: &TypeTag,
     ) -> VMResult<runtime_value::MoveTypeLayout> {
-        let ty = self.load_type(type_tag)?;
+        let ty = self.load_type_internal(type_tag)?;
         self.type_to_type_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
     }
@@ -870,7 +908,7 @@ impl VMDispatchTables {
         &self,
         type_tag: &TypeTag,
     ) -> VMResult<annotated_value::MoveTypeLayout> {
-        let ty = self.load_type(type_tag)?;
+        let ty = self.load_type_internal(type_tag)?;
         self.type_to_fully_annotated_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
     }
@@ -1142,7 +1180,10 @@ impl<T> Default for DefinitionMap<T> {
 // Return an instantiated type given a generic and an instantiation.
 // Stopgap to avoid a recursion that is either taking too long or using too
 // much memory
-pub(crate) fn checked_subst(ty: &ArenaType, ty_args: &[Type]) -> PartialVMResult<Type> {
+pub(crate) fn checked_subst(
+    ty: &ArenaType,
+    ty_args: &[InternalType],
+) -> PartialVMResult<InternalType> {
     // Before instantiating the type, count the # of nodes of all type arguments plus
     // existing type instantiation.
     // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.

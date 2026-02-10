@@ -5,12 +5,13 @@ use crate::{
     cache::identifier_interner::IdentifierInterner,
     dbg_println,
     execution::{
-        dispatch_tables::{IntraPackageKey, VMDispatchTables, VirtualTableKey},
+        dispatch_tables::{IntraPackageKey, TypeAbilities as _, VMDispatchTables, VirtualTableKey},
         interpreter,
         tracing::tracer::VMTracer,
+        types::Type,
         values::Value,
     },
-    jit::execution::ast::{Function, Type},
+    jit::execution::ast::{AsInternalType as _, Function},
     natives::extensions::NativeExtensions,
     partial_vm_error,
     runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
@@ -214,7 +215,7 @@ impl<'extensions> MoveVM<'extensions> {
         let abilities = self.type_abilities(ty)?;
         let datatype_info = self
             .virtual_tables
-            .datatype_information(ty)
+            .datatype_information(ty.as_internal_type())
             .map_err(|e| e.finish(Location::Undefined))?;
         Ok(LoadedTypeInformation {
             abilities,
@@ -223,8 +224,7 @@ impl<'extensions> MoveVM<'extensions> {
     }
 
     pub fn type_abilities(&self, ty: &Type) -> VMResult<AbilitySet> {
-        self.virtual_tables
-            .abilities(ty)
+        ty.abilities(&self.virtual_tables)
             .map_err(|e| e.finish(Location::Undefined))
     }
 
@@ -232,7 +232,7 @@ impl<'extensions> MoveVM<'extensions> {
     /// `TypeTag` will use defining type IDs.
     pub fn type_tag_for_type_defining_ids(&self, ty: &Type) -> VMResult<TypeTag> {
         self.virtual_tables
-            .type_to_type_tag(ty)
+            .type_to_type_tag(ty.as_internal_type())
             .map_err(|e| e.finish(Location::Undefined))
     }
 
@@ -243,12 +243,13 @@ impl<'extensions> MoveVM<'extensions> {
     /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
     /// IDs) are not correct here.
     pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
-        self.virtual_tables.load_type(tag).map_err(|e| {
-            Self::convert_to_external_resolution_error(
+        match self.virtual_tables.load_type_internal(tag) {
+            Ok(ty) => Ok(ty.into()),
+            Err(e) => Err(Self::convert_to_external_resolution_error(
                 e,
                 format!("Failed to load VM type for {tag}",),
-            )
-        })
+            )),
+        }
     }
 
     /// Resolve a `TypeTag` to a runtime type layout using the VM's virtual tables.
@@ -382,13 +383,26 @@ impl<'extensions> MoveVM<'extensions> {
 
         let fun_ref = function.to_ref();
 
-        let parameters = fun_ref.parameters.iter().map(|ty| ty.to_type()).collect();
+        let parameters = fun_ref
+            .parameters
+            .iter()
+            .map(|ty| ty.to_type().into())
+            .collect();
 
-        let return_ = fun_ref.return_.iter().map(|ty| ty.to_type()).collect();
+        let return_ = fun_ref
+            .return_
+            .iter()
+            .map(|ty| ty.to_type().into())
+            .collect();
+
+        let ty_args = ty_args
+            .iter()
+            .map(|ty| ty.as_internal_type().clone())
+            .collect::<Vec<_>>();
 
         // verify type arguments
         self.virtual_tables
-            .verify_ty_args(fun_ref.type_parameters(), ty_args)
+            .verify_ty_args(fun_ref.type_parameters(), &ty_args)
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         let function = MoveVMFunction {
@@ -418,7 +432,10 @@ impl<'extensions> MoveVM<'extensions> {
             tracer,
             gas_meter,
             func,
-            ty_args,
+            ty_args
+                .into_iter()
+                .map(|t| t.into_inner())
+                .collect::<Vec<_>>(),
             args,
         )
     }

@@ -5,8 +5,10 @@
 //! Implementation of native functions for utf8 strings.
 
 use crate::{
-    execution::values::{Value, VectorRef},
-    jit::execution::ast::Type,
+    execution::{
+        types::Type,
+        values::{Value, VectorRef},
+    },
     native_charge_gas_early_exit,
     natives::{
         functions::{NativeContext, NativeFunction, NativeResult},

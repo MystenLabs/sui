@@ -31,15 +31,15 @@ fn get_simple_instruction_stack_change(
     match instr {
         // NB: The `Ret` pops are accounted for in `Call` instructions, so we say `Ret` has no pops.
         Nop | Ret => (0, 0, 0.into(), 0.into()),
-        BrTrue | BrFalse => (1, 0, Type::Bool.size(), 0.into()),
+        BrTrue | BrFalse => (1, 0, Type::bool().size(), 0.into()),
         Branch => (0, 0, 0.into(), 0.into()),
-        LdU8 => (0, 1, 0.into(), Type::U8.size()),
-        LdU16 => (0, 1, 0.into(), Type::U16.size()),
-        LdU32 => (0, 1, 0.into(), Type::U32.size()),
-        LdU64 => (0, 1, 0.into(), Type::U64.size()),
-        LdU128 => (0, 1, 0.into(), Type::U128.size()),
-        LdU256 => (0, 1, 0.into(), Type::U256.size()),
-        LdTrue | LdFalse => (0, 1, 0.into(), Type::Bool.size()),
+        LdU8 => (0, 1, 0.into(), Type::u8().size()),
+        LdU16 => (0, 1, 0.into(), Type::u16().size()),
+        LdU32 => (0, 1, 0.into(), Type::u32().size()),
+        LdU64 => (0, 1, 0.into(), Type::u64().size()),
+        LdU128 => (0, 1, 0.into(), Type::u128().size()),
+        LdU256 => (0, 1, 0.into(), Type::u256().size()),
+        LdTrue | LdFalse => (0, 1, 0.into(), Type::bool().size()),
         FreezeRef => (1, 1, REFERENCE_SIZE, REFERENCE_SIZE),
         ImmBorrowLoc | MutBorrowLoc => (0, 1, 0.into(), REFERENCE_SIZE),
         ImmBorrowField | MutBorrowField | ImmBorrowFieldGeneric | MutBorrowFieldGeneric => {
@@ -47,26 +47,46 @@ fn get_simple_instruction_stack_change(
         }
         // Since we don't have the size of the value being cast here we take a conservative
         // over-approximation: it is _always_ getting cast from the smallest integer type.
-        CastU8 => (1, 1, Type::U8.size(), Type::U8.size()),
-        CastU16 => (1, 1, Type::U8.size(), Type::U16.size()),
-        CastU32 => (1, 1, Type::U8.size(), Type::U32.size()),
-        CastU64 => (1, 1, Type::U8.size(), Type::U64.size()),
-        CastU128 => (1, 1, Type::U8.size(), Type::U128.size()),
-        CastU256 => (1, 1, Type::U8.size(), Type::U256.size()),
+        CastU8 => (1, 1, Type::u8().size(), Type::u8().size()),
+        CastU16 => (1, 1, Type::u8().size(), Type::u16().size()),
+        CastU32 => (1, 1, Type::u8().size(), Type::u32().size()),
+        CastU64 => (1, 1, Type::u8().size(), Type::u64().size()),
+        CastU128 => (1, 1, Type::u8().size(), Type::u128().size()),
+        CastU256 => (1, 1, Type::u8().size(), Type::u256().size()),
         // NB: We don't know the size of what integers we're dealing with, so we conservatively
         // over-approximate by popping the smallest integers, and push the largest.
-        Add | Sub | Mul | Mod | Div => (2, 1, Type::U8.size() + Type::U8.size(), Type::U256.size()),
-        BitOr | BitAnd | Xor => (2, 1, Type::U8.size() + Type::U8.size(), Type::U256.size()),
-        Shl | Shr => (2, 1, Type::U8.size() + Type::U8.size(), Type::U256.size()),
+        Add | Sub | Mul | Mod | Div => (
+            2,
+            1,
+            Type::u8().size() + Type::u8().size(),
+            Type::u256().size(),
+        ),
+        BitOr | BitAnd | Xor => (
+            2,
+            1,
+            Type::u8().size() + Type::u8().size(),
+            Type::u256().size(),
+        ),
+        Shl | Shr => (
+            2,
+            1,
+            Type::u8().size() + Type::u8().size(),
+            Type::u256().size(),
+        ),
         Or | And => (
             2,
             1,
-            Type::Bool.size() + Type::Bool.size(),
-            Type::Bool.size(),
+            Type::bool().size() + Type::bool().size(),
+            Type::bool().size(),
         ),
-        Lt | Gt | Le | Ge => (2, 1, Type::U8.size() + Type::U8.size(), Type::Bool.size()),
-        Not => (1, 1, Type::Bool.size(), Type::Bool.size()),
-        Abort => (1, 0, Type::U64.size(), 0.into()),
+        Lt | Gt | Le | Ge => (
+            2,
+            1,
+            Type::u8().size() + Type::u8().size(),
+            Type::bool().size(),
+        ),
+        Not => (1, 1, Type::bool().size(), Type::bool().size()),
+        Abort => (1, 0, Type::u64().size(), 0.into()),
     }
 }
 
@@ -284,7 +304,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
             1,
             1,
             2,
-            (Type::Bool.size() + size_reduction).into(),
+            (Type::bool().size() + size_reduction).into(),
             size_reduction.into(),
         )
     }
@@ -293,9 +313,9 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         let size_reduction = abstract_memory_size_with_traversal(&self.0, lhs)?
             + abstract_memory_size_with_traversal(&self.0, rhs)?;
         let size_increase = if enable_traverse_refs(self.0.gas_model_version) {
-            Type::Bool.size() + size_reduction
+            Type::bool().size() + size_reduction
         } else {
-            Type::Bool.size()
+            Type::bool().size()
         };
         self.0
             .charge(1, 1, 2, size_increase.into(), size_reduction.into())
@@ -314,7 +334,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_vec_len(&mut self) -> PartialVMResult<()> {
         self.0
-            .charge(1, 1, 1, Type::U64.size().into(), REFERENCE_SIZE.into())
+            .charge(1, 1, 1, Type::u64().size().into(), REFERENCE_SIZE.into())
     }
 
     fn charge_vec_borrow(&mut self, _is_mut: bool, _is_success: bool) -> PartialVMResult<()> {
@@ -323,7 +343,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
             1,
             2,
             REFERENCE_SIZE.into(),
-            (REFERENCE_SIZE + Type::U64.size()).into(),
+            (REFERENCE_SIZE + Type::u64().size()).into(),
         )
     }
 
@@ -348,7 +368,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
     }
 
     fn charge_vec_swap(&mut self) -> PartialVMResult<()> {
-        let size_decrease = REFERENCE_SIZE + Type::U64.size() + Type::U64.size();
+        let size_decrease = REFERENCE_SIZE + Type::u64().size() + Type::u64().size();
         let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
             (0, 3)
         } else {

@@ -24,7 +24,7 @@ use move_binary_format::{
     errors::PartialVMResult,
     file_format::{
         AbilitySet, CodeOffset, DatatypeTyParameter, FunctionDefinitionIndex, LocalIndex,
-        SignatureToken, VariantTag, Visibility,
+        VariantTag, Visibility,
     },
     file_format_common::Opcodes,
 };
@@ -313,10 +313,10 @@ pub struct ModuleIdKey {
 // -------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
-// TODO: These should not contain VirtualTableKeys, but rather be a more direct representation of
-// the type. This is currently the same as the instruction representation of types, but it would be
-// better to never hand VirtualTableKeys out of the runtime.
-// for things like
+// [SAFETY] This type is intentionally crate-restricted: it contains an internal representation of
+// type names as VirtualTableKeys and thus should not be used explicilty outside of the VM. To use
+// a Type outside of the VM, wrap it in an `execution::types::Type`, which is a safe and public
+// representation of types that can be used outside of the VM.
 pub enum Type {
     Bool,
     U8,
@@ -1064,7 +1064,7 @@ impl Type {
     ///
     /// This kept only for legacy reasons.
     /// New applications should not use this.
-    pub fn size(&self) -> AbstractMemorySize {
+    pub(crate) fn size(&self) -> AbstractMemorySize {
         use Type::*;
 
         match self {
@@ -1082,90 +1082,6 @@ impl Type {
             }
         }
     }
-
-    pub fn from_const_signature(constant_signature: &SignatureToken) -> PartialVMResult<Self> {
-        use SignatureToken as S;
-        use Type as L;
-
-        Ok(match constant_signature {
-            S::Bool => L::Bool,
-            S::U8 => L::U8,
-            S::U16 => L::U16,
-            S::U32 => L::U32,
-            S::U64 => L::U64,
-            S::U128 => L::U128,
-            S::U256 => L::U256,
-            S::Address => L::Address,
-            S::Vector(inner) => L::Vector(Box::new(Self::from_const_signature(inner)?)),
-            // Not yet supported
-            S::Datatype(_) | S::DatatypeInstantiation(_) => {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Unable to load const type signature"
-                ));
-            }
-            // Not allowed/Not meaningful
-            S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Unable to load const type signature"
-                ));
-            }
-        })
-    }
-
-    pub fn check_vec_ref(&self, inner_ty: &Type, is_mut: bool) -> PartialVMResult<Type> {
-        match self {
-            Type::MutableReference(inner) => match &**inner {
-                Type::Vector(inner) => {
-                    inner.check_eq(inner_ty)?;
-                    Ok(inner.as_ref().clone())
-                }
-                _ => Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "VecMutBorrow expects a vector reference"
-                )),
-            },
-            Type::Reference(inner) if !is_mut => match &**inner {
-                Type::Vector(inner) => {
-                    inner.check_eq(inner_ty)?;
-                    Ok(inner.as_ref().clone())
-                }
-                _ => Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "VecMutBorrow expects a vector reference"
-                )),
-            },
-            _ => Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "VecMutBorrow expects a vector reference"
-            )),
-        }
-    }
-
-    pub fn check_eq(&self, other: &Self) -> PartialVMResult<()> {
-        if self != other {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Type mismatch: expected {:?}, got {:?}",
-                self,
-                other
-            ));
-        }
-        Ok(())
-    }
-
-    pub fn check_ref_eq(&self, expected_inner: &Self) -> PartialVMResult<()> {
-        match self {
-            Type::MutableReference(inner) | Type::Reference(inner) => {
-                inner.check_eq(expected_inner)
-            }
-            _ => Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "VecMutBorrow expects a vector reference"
-            )),
-        }
-    }
 }
 
 impl DatatypeDescriptor {
@@ -1177,7 +1093,7 @@ impl DatatypeDescriptor {
         }
     }
 
-    pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
+    pub(crate) fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
         let type_params = match self.datatype_info.inner_ref() {
             Datatype::Enum(vmpointer) => &vmpointer.type_parameters,
             Datatype::Struct(vmpointer) => &vmpointer.type_parameters,
@@ -1190,12 +1106,24 @@ impl DatatypeDescriptor {
 // Type Substitution
 // -------------------------------------------------------------------------------------------------
 
+/// [SAFETY] THIS MUST NEVER BE EXPOSED TO USERS OF THE VM. This is only for internal use
+/// within the VM to convert external types to internal types for introspection.
+pub(crate) trait AsInternalType {
+    fn as_internal_type(&self) -> &Type;
+}
+
+impl AsInternalType for Type {
+    fn as_internal_type(&self) -> &Type {
+        self
+    }
+}
+
 pub trait TypeSubst {
     fn clone_impl(&self, depth: usize) -> PartialVMResult<Type>;
     fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
     where
         F: Fn(u16, usize) -> PartialVMResult<Type> + Copy;
-    fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type>;
+    fn subst<T: AsInternalType>(&self, ty_args: &[T]) -> PartialVMResult<Type>;
 }
 
 // Macro that generates the implementations.
@@ -1244,10 +1172,10 @@ macro_rules! impl_deep_subst {
                 Ok(res)
             }
 
-            fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
+            fn subst<T: AsInternalType>(&self, ty_args: &[T]) -> PartialVMResult<Type> {
                 self.apply_subst(
                     |idx, depth| match ty_args.get(idx as usize) {
-                        Some(ty) => ty.clone_impl(depth),
+                        Some(ty) => ty.as_internal_type().clone_impl(depth),
                         None => Err($crate::partial_vm_error!(
                             UNKNOWN_INVARIANT_VIOLATION_ERROR,
                             "type substitution failed: index out of bounds -- len {} got {}",

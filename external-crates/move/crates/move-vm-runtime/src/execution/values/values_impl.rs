@@ -8,7 +8,8 @@
 
 use crate::{
     cache::arena::{Arena, ArenaVec},
-    jit::execution::ast::Type,
+    execution::types::Type as ExternalType,
+    jit::execution::ast::{AsInternalType, Type},
     partial_vm_error,
     shared::{
         SafeIndex,
@@ -1039,7 +1040,12 @@ impl VariantRef {
 impl VectorRef {
     /// Borrows an element from the container, returning it as a reference wrapped in `ValueImpl::Reference`.
     /// The result is a `PartialVmResult<ValueImpl>` containing the element as a `Reference`.
-    pub fn borrow_elem(&self, index: usize, type_param: &Type) -> PartialVMResult<Value> {
+    #[allow(private_bounds)]
+    pub fn borrow_elem<T: AsInternalType + Debug>(
+        &self,
+        index: usize,
+        type_param: &T,
+    ) -> PartialVMResult<Value> {
         // Borrow the container inside the MemBox.
         let value = &*self.0.borrow();
         check_elem_layout(type_param, value)?;
@@ -1874,10 +1880,10 @@ pub const POP_EMPTY_VEC: u64 = NFE_VECTOR_ERROR_BASE + 2;
 pub const VEC_UNPACK_PARITY_MISMATCH: u64 = NFE_VECTOR_ERROR_BASE + 3;
 pub const VEC_SIZE_LIMIT_REACHED: u64 = NFE_VECTOR_ERROR_BASE + 4;
 
-fn check_elem_layout(ty: &Type, v: &Value) -> PartialVMResult<()> {
+fn check_elem_layout<T: AsInternalType + Debug>(ty: &T, v: &Value) -> PartialVMResult<()> {
     macro_rules! allowed_types {
         ($ty:expr; $v:expr; $($allowed:pat),+ $(,)?) => {
-            match $ty {
+            match $ty.as_internal_type() {
                 Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => Err(
                     partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "invalid type param for vector: {:?}", ty)
                 ),
@@ -1990,19 +1996,25 @@ impl std::ops::Deref for VecU8Ref<'_> {
     }
 }
 
+#[allow(private_bounds)]
 impl VectorRef {
-    pub fn len(&self, type_param: &Type) -> PartialVMResult<Value> {
+    pub fn len<T: AsInternalType + Debug>(&self, type_param: &T) -> PartialVMResult<Value> {
         let value = &*self.0.borrow();
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(type_param.as_internal_type(), value)?;
         value
             .vector_ref()
             .map(|vec| vec.len() as u64)
             .map(Value::U64)
     }
 
-    pub fn push_back(&self, e: Value, type_param: &Type, capacity: u64) -> PartialVMResult<()> {
+    pub fn push_back<T: AsInternalType + Debug>(
+        &self,
+        e: Value,
+        type_param: &T,
+        capacity: u64,
+    ) -> PartialVMResult<()> {
         let value = &mut *self.0.try_borrow_mut()?;
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(type_param.as_internal_type(), value)?;
         let vec = value.vector_mut_ref()?;
         let size = vec.len();
 
@@ -2042,7 +2054,7 @@ impl VectorRef {
         })
     }
 
-    pub fn pop(&self, type_param: &Type) -> PartialVMResult<Value> {
+    pub fn pop<T: AsInternalType + Debug>(&self, type_param: &T) -> PartialVMResult<Value> {
         let value = &mut *self.0.try_borrow_mut()?;
         check_elem_layout(type_param, value)?;
 
@@ -2074,7 +2086,12 @@ impl VectorRef {
         }
     }
 
-    pub fn swap(&self, idx1: usize, idx2: usize, type_param: &Type) -> PartialVMResult<()> {
+    pub fn swap<T: AsInternalType + Debug>(
+        &self,
+        idx1: usize,
+        idx2: usize,
+        type_param: &T,
+    ) -> PartialVMResult<()> {
         let value = &mut *self.0.try_borrow_mut()?;
         check_elem_layout(type_param, value)?;
 
@@ -2163,6 +2180,14 @@ impl TryFrom<&Type> for VectorSpecialization {
     }
 }
 
+impl TryFrom<&ExternalType> for VectorSpecialization {
+    type Error = PartialVMError;
+
+    fn try_from(ty: &crate::execution::types::Type) -> Result<Self, Self::Error> {
+        Self::try_from(ty.as_internal_type())
+    }
+}
+
 impl Vector {
     pub fn pack(
         specialization: VectorSpecialization,
@@ -2190,7 +2215,12 @@ impl Vector {
         Self::pack(specialization, vec![])
     }
 
-    pub fn unpack(self, type_param: &Type, expected_num: u64) -> PartialVMResult<Vec<Value>> {
+    #[allow(private_bounds)]
+    pub fn unpack<T: AsInternalType + Debug>(
+        self,
+        type_param: &T,
+        expected_num: u64,
+    ) -> PartialVMResult<Vec<Value>> {
         check_elem_layout(type_param, &self.0)?;
 
         use PrimVec as PV;
@@ -2222,7 +2252,8 @@ impl Vector {
         }
     }
 
-    pub fn destroy_empty(self, type_param: &Type) -> PartialVMResult<()> {
+    #[allow(private_bounds)]
+    pub fn destroy_empty<T: AsInternalType + Debug>(self, type_param: &T) -> PartialVMResult<()> {
         self.unpack(type_param, 0)?;
         Ok(())
     }
