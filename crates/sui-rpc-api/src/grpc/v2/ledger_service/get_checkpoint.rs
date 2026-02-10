@@ -19,6 +19,7 @@ use sui_rpc::proto::sui::rpc::v2::ObjectSet;
 use sui_rpc::proto::sui::rpc::v2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_sdk_types::Digest;
+use sui_types::balance_change::derive_balance_changes_2;
 
 pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
 
@@ -121,21 +122,15 @@ pub fn get_checkpoint(
                     .transactions
                     .into_iter()
                     .map(|t| {
-                        let balance_changes = submask
-                            .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
-                            .then(|| {
-                                service
-                                    .reader
-                                    .get_transaction_info(&t.transaction.digest())
-                                    .map(|info| {
-                                        info.balance_changes
-                                            .into_iter()
-                                            .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
-                                            .collect::<Vec<_>>()
-                                    })
-                            })
-                            .flatten()
-                            .unwrap_or_default();
+                        let balance_changes =
+                            if submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
+                                derive_balance_changes_2(&t.effects, &checkpoint_data.object_set)
+                                    .into_iter()
+                                    .map(Into::into)
+                                    .collect()
+                            } else {
+                                Vec::new()
+                            };
                         let mut transaction = ExecutedTransaction::merge_from(&t, &submask);
                         transaction.checkpoint = submask
                             .contains(ExecutedTransaction::CHECKPOINT_FIELD)
