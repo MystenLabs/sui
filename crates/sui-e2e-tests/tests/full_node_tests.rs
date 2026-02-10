@@ -534,7 +534,10 @@ async fn test_full_node_sync_flood_determinism() {
 }
 
 async fn do_test_full_node_sync_flood() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .build()
+        .await;
 
     // Start a new fullnode that is not on the write path
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
