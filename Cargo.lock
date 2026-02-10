@@ -17046,7 +17046,7 @@ name = "sui-transaction-trace"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bincode 1.3.3",
+ "bcs",
  "parking_lot 0.12.3",
  "serde",
  "telemetry-subscribers",

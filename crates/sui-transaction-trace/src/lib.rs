@@ -358,8 +358,8 @@ impl TransactionTraceLogger {
         // Write all records in the buffer
         if let Some(file) = &mut state.current_file {
             for record in buffer {
-                let encoded = bincode::serialize(record)?;
-                // Write length prefix (u32) followed by data
+                let encoded = bcs::to_bytes(record)?;
+                // Write length prefix (u32) so we can deserialize records sequentially
                 let len = encoded.len() as u32;
                 file.write_all(&len.to_le_bytes())?;
                 file.write_all(&encoded)?;
@@ -504,8 +504,8 @@ impl<'a> Iterator for LogReaderIterator<'a> {
                 Err(e) => return Some(Err(e.into())),
             }
 
-            // Deserialize from buffer
-            let record: LogRecord = match bincode::deserialize(&data) {
+            // Deserialize using BCS
+            let record: LogRecord = match bcs::from_bytes(&data) {
                 Ok(r) => r,
                 Err(e) => return Some(Err(e.into())),
             };

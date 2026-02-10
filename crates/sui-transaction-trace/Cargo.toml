@@ -10,7 +10,7 @@ publish = false
 workspace = true
 
 [dependencies]
-bincode.workspace = true
+bcs.workspace = true
 serde.workspace = true
 parking_lot.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "rt-multi-thread"] }
