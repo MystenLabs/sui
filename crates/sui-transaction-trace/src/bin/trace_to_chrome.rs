@@ -89,7 +89,7 @@ async fn fetch_transaction_data(
     let query = json!({
         "query": r#"
             query ($digest: String!) {
-                transactionBlock(digest: $digest) {
+                transaction(digest: $digest) {
                     digest
                     effects {
                         objectChanges {
@@ -123,8 +123,8 @@ async fn fetch_transaction_data(
     // Parse the response and extract input objects
     let tx_block = result
         .get("data")
-        .and_then(|d| d.get("transactionBlock"))
-        .context("No transactionBlock in response")?;
+        .and_then(|d| d.get("transaction"))
+        .context("No transaction in response")?;
 
     let mut input_objects = Vec::new();
     if let Some(effects) = tx_block.get("effects") {
@@ -259,10 +259,10 @@ async fn main() -> Result<()> {
 
     println!("Found {} events", all_events.len());
 
-    // Extract unique transaction digests
+    // Extract unique transaction digests (keep raw bytes)
     let mut tx_digests = HashSet::new();
     for event in &all_events {
-        tx_digests.insert(hex::encode(event.digest));
+        tx_digests.insert(event.digest);
     }
 
     println!("Found {} unique transactions", tx_digests.len());
@@ -271,15 +271,25 @@ async fn main() -> Result<()> {
     let client = reqwest::Client::new();
     let mut tx_data_map = HashMap::new();
 
-    for digest in tx_digests {
+    for digest_bytes in tx_digests {
+        let digest_hex = hex::encode(digest_bytes);
+        let digest_base58 = bs58::encode(digest_bytes).into_string();
+
         let tx_data = if args.fake_data {
-            get_fake_transaction_data(&digest)
+            get_fake_transaction_data(&digest_hex)
         } else {
-            println!("Fetching data for transaction {}", digest);
-            match fetch_transaction_data(&client, &args.graphql_url, &digest).await {
+            println!(
+                "Fetching data for transaction {} (base58: {})",
+                &digest_hex[..16],
+                digest_base58
+            );
+            match fetch_transaction_data(&client, &args.graphql_url, &digest_base58).await {
                 Ok(data) => data,
                 Err(e) => {
-                    eprintln!("Warning: Failed to fetch transaction {}: {}", digest, e);
+                    eprintln!(
+                        "Warning: Failed to fetch transaction {}: {}",
+                        digest_base58, e
+                    );
                     continue;
                 }
             }
@@ -287,10 +297,10 @@ async fn main() -> Result<()> {
 
         println!(
             "  Transaction {} uses {} objects",
-            &digest[..16],
+            &digest_hex[..16],
             tx_data.input_objects.len()
         );
-        tx_data_map.insert(digest, tx_data);
+        tx_data_map.insert(digest_hex, tx_data);
     }
 
     // Convert to Chrome Trace format
