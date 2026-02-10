@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
-use sui_types::digests::TransactionDigest;
+
+/// Transaction digest represented as a 32-byte array
+pub type TransactionDigest = [u8; 32];
 
 /// Log record types written to the trace file
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -274,7 +276,7 @@ mod tests {
         let logger = TransactionTraceLogger::new(config).unwrap();
 
         // Log some events
-        let digest = TransactionDigest::random();
+        let digest = [1u8; 32];
         logger
             .write_transaction_event(digest, TxEventType::ExecutionBegin)
             .unwrap();
@@ -314,8 +316,8 @@ mod tests {
         let logger = TransactionTraceLogger::new(config).unwrap();
 
         // Log events to fill buffer
-        for _ in 0..3 {
-            let digest = TransactionDigest::random();
+        for i in 0..3 {
+            let digest = [i as u8; 32];
             logger
                 .write_transaction_event(digest, TxEventType::ExecutionBegin)
                 .unwrap();

@@ -10,13 +10,13 @@ publish = false
 workspace = true
 
 [dependencies]
-sui-types.workspace = true
 bincode.workspace = true
 serde.workspace = true
 parking_lot.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["sync", "rt"] }
 anyhow.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "time", "macros", "rt-multi-thread"] }
