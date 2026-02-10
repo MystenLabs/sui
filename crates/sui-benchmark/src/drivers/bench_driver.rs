@@ -250,8 +250,11 @@ enum NextOp {
         /// The payload updated with the effects of the transaction
         payload: Box<dyn Payload>,
     },
-    // The transaction failed and could not be retried
-    Failure,
+    // The transaction failed and could not be retried.
+    // Payload is preserved so its gas coin can be recycled.
+    Failure {
+        payload: Box<dyn Payload>,
+    },
     Retry(RetryType),
 }
 
@@ -922,7 +925,7 @@ async fn run_bench_worker(
                             })
                             .is_err()
                         {
-                            NextOp::Failure
+                            NextOp::Failure { payload }
                         } else {
                             metrics
                                 .num_error
@@ -1149,9 +1152,10 @@ async fn run_bench_worker(
                             break;
                         }
                     }
-                    NextOp::Failure => {
-                        error!("Permanent failure to execute payload. May result in gas objects being leaked");
+                    NextOp::Failure { payload } => {
                         num_error_txes += 1;
+                        num_in_flight -= 1;
+                        free_pool.push_back(payload);
                         // Update total benchmark progress
                         if update_progress(1) {
                             break;
@@ -1209,12 +1213,7 @@ async fn run_bench_worker(
     );
     while let Some(result) = futures.next().await {
         let p = match result {
-            NextOp::Failure => {
-                error!(
-                    "Permanent failure to execute payload. May result in gas objects being leaked"
-                );
-                continue;
-            }
+            NextOp::Failure { payload } => payload,
             NextOp::Response {
                 latency: _,
                 num_commands: _,
@@ -1473,4 +1472,128 @@ fn stress_stats_collector(
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fmt;
+
+    /// Minimal mock payload for testing NextOp recycling behavior.
+    #[derive(Debug)]
+    struct MockPayload {
+        id: u64,
+    }
+
+    impl fmt::Display for MockPayload {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "MockPayload({})", self.id)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Payload for MockPayload {
+        fn make_new_payload(&mut self, _effects: &crate::ExecutionEffects) {}
+        fn make_transaction(&mut self) -> Transaction {
+            unimplemented!("not needed for recycling tests")
+        }
+    }
+
+    #[test]
+    fn test_failure_variant_carries_payload() {
+        let payload: Box<dyn Payload> = Box::new(MockPayload { id: 42 });
+        let op = NextOp::Failure { payload };
+
+        match op {
+            NextOp::Failure { payload } => {
+                assert_eq!(format!("{}", payload), "MockPayload(42)");
+            }
+            _ => panic!("expected NextOp::Failure"),
+        }
+    }
+
+    #[test]
+    fn test_failure_payload_recycled_to_free_pool() {
+        let mut free_pool: VecDeque<Box<dyn Payload>> = VecDeque::new();
+        let mut num_in_flight: u64 = 5;
+
+        // Simulate receiving a NextOp::Failure in the main loop
+        let op = NextOp::Failure {
+            payload: Box::new(MockPayload { id: 1 }),
+        };
+        match op {
+            NextOp::Failure { payload } => {
+                num_in_flight -= 1;
+                free_pool.push_back(payload);
+            }
+            _ => panic!("expected NextOp::Failure"),
+        }
+
+        assert_eq!(num_in_flight, 4);
+        assert_eq!(free_pool.len(), 1);
+        assert_eq!(format!("{}", free_pool[0]), "MockPayload(1)");
+    }
+
+    #[test]
+    fn test_drain_loop_extracts_payload_from_failure() {
+        let mut free_pool: VecDeque<Box<dyn Payload>> = VecDeque::new();
+
+        // Simulate the drain loop receiving mixed results
+        let results: Vec<NextOp> = vec![
+            NextOp::Failure {
+                payload: Box::new(MockPayload { id: 1 }),
+            },
+            NextOp::Response {
+                latency: Duration::from_millis(10),
+                num_commands: 1,
+                gas_used: 100,
+                payload: Box::new(MockPayload { id: 2 }),
+            },
+            NextOp::Failure {
+                payload: Box::new(MockPayload { id: 3 }),
+            },
+        ];
+
+        for result in results {
+            let p = match result {
+                NextOp::Failure { payload } => payload,
+                NextOp::Response { payload, .. } => payload,
+                NextOp::Retry(b) => b.1,
+            };
+            free_pool.push_back(p);
+        }
+
+        // All 3 payloads should be recovered, including both Failure variants
+        assert_eq!(free_pool.len(), 3);
+        assert_eq!(format!("{}", free_pool[0]), "MockPayload(1)");
+        assert_eq!(format!("{}", free_pool[1]), "MockPayload(2)");
+        assert_eq!(format!("{}", free_pool[2]), "MockPayload(3)");
+    }
+
+    #[test]
+    fn test_multiple_failures_dont_leak() {
+        let mut free_pool: VecDeque<Box<dyn Payload>> = VecDeque::new();
+        let mut num_in_flight: u64 = 10;
+        let mut num_error_txes: u64 = 0;
+
+        // Simulate a burst of failures (e.g., during epoch transition)
+        for i in 0..10 {
+            let op = NextOp::Failure {
+                payload: Box::new(MockPayload { id: i }),
+            };
+            match op {
+                NextOp::Failure { payload } => {
+                    num_error_txes += 1;
+                    num_in_flight -= 1;
+                    free_pool.push_back(payload);
+                }
+                _ => panic!("expected NextOp::Failure"),
+            }
+        }
+
+        // All coins recycled, none leaked
+        assert_eq!(num_in_flight, 0);
+        assert_eq!(num_error_txes, 10);
+        assert_eq!(free_pool.len(), 10);
+    }
 }
