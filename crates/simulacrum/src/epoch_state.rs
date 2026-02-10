@@ -156,6 +156,7 @@ impl EpochState {
                 gas_data,
                 gas_status,
                 kind,
+                None, // compat_args
                 signer,
                 tx_digest,
                 &mut None,

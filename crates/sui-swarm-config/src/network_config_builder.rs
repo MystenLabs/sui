@@ -747,6 +747,7 @@ mod test {
                 gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,
+                None, // compat_args
                 signer,
                 genesis_digest,
                 &mut None,
