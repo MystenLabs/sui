@@ -28,12 +28,10 @@ const ECapNotClaimed: vector<u8> =
     b"Cap for this display object has not been claimed so you cannot delete the legacy display yet.";
 
 /// The root of display, to enable derivation of addresses.
-/// We'll most likely deploy this into `0xd`
+/// The address is system-generated at `0xd`
 public struct DisplayRegistry has key { id: UID }
 
-/// A singleton capability object to enable migrating all V1 displays into
-/// V2. We don't wanna support indexing for legacy display objects,
-/// so this will forcefully move all existing display instances to use the registry.
+/// A singleton capability object to enable migrating all V1 displays into V2.
 public struct SystemMigrationCap has key { id: UID }
 
 /// This is the struct that holds the display values for a type T.
@@ -48,8 +46,7 @@ public struct Display<phantom T> has key {
 /// The capability object that is used to manage the display.
 public struct DisplayCap<phantom T> has key, store { id: UID }
 
-/// The key used for deriving the instance of `Display`. Contains the version of
-/// the Display language in it to separate concerns.
+/// The key used for deriving the instance of `Display`.
 public struct DisplayKey<phantom T>() has copy, drop, store;
 
 /// Create a new Display object for a given type `T` using `internal::Permit` to
@@ -80,7 +77,7 @@ public fun unset<T>(display: &mut Display<T>, _: &DisplayCap<T>, name: String) {
     display.fields.remove(&name);
 }
 
-/// Replace an existing key with the supplied one.
+/// Set a value for the specified key, replaces existing value if it exists.
 public fun set<T>(display: &mut Display<T>, _: &DisplayCap<T>, name: String, value: String) {
     if (display.fields.contains(&name)) {
         display.fields.remove(&name);
@@ -106,7 +103,7 @@ public fun claim<T: key>(
 ): DisplayCap<T> {
     assert!(display.cap_id.is_none(), ECapAlreadyClaimed);
     let cap = DisplayCap<T> { id: object::new(ctx) };
-    display.cap_id = option::some(cap.id.to_inner());
+    display.cap_id.fill(cap.id.to_inner());
     legacy.destroy();
     cap
 }
@@ -120,7 +117,7 @@ public fun claim_with_publisher<T: key>(
     assert!(display.cap_id.is_none(), ECapAlreadyClaimed);
     assert!(publisher.from_package<T>(), ENotValidPublisher);
     let cap = DisplayCap<T> { id: object::new(ctx) };
-    display.cap_id = option::some(cap.id.to_inner());
+    display.cap_id.fill(cap.id.to_inner());
     cap
 }
 
@@ -137,7 +134,7 @@ public fun system_migration<T: key>(
 ) {
     let key = DisplayKey<T>();
 
-    // Gracefully error to avoid batching issues if someone migrates before our script.
+    // Gracefully return to avoid batching issues if someone migrates before our script.
     if (derived_object::exists(&registry.id, key)) return;
 
     transfer::share_object(Display<T> {
