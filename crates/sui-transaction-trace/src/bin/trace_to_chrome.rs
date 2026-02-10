@@ -157,7 +157,8 @@ fn convert_to_chrome_trace(
     let mut tx_begin_times: HashMap<String, i64> = HashMap::new();
 
     for event in events {
-        let digest_str = hex::encode(event.digest);
+        let digest_hex = hex::encode(event.digest);
+        let digest_base58 = bs58::encode(event.digest).into_string();
 
         match event.event_type {
             TxEventType::ExecutionBegin => {
@@ -168,14 +169,14 @@ fn convert_to_chrome_trace(
                     .unwrap()
                     .as_micros() as i64;
 
-                tx_begin_times.insert(digest_str.clone(), ts);
+                tx_begin_times.insert(digest_hex.clone(), ts);
 
-                // Get input objects for this transaction
-                if let Some(tx_data) = tx_data_map.get(&digest_str) {
+                // Get input objects for this transaction (map key is hex)
+                if let Some(tx_data) = tx_data_map.get(&digest_hex) {
                     for object_id in &tx_data.input_objects {
                         // Create a Begin event for each object
                         chrome_events.push(ChromeTraceEvent {
-                            name: digest_str[..16].to_string(), // Shortened digest
+                            name: digest_base58.clone(),
                             cat: "transaction".to_string(),
                             ph: "B".to_string(),
                             ts,
@@ -183,7 +184,7 @@ fn convert_to_chrome_trace(
                             pid: 1,
                             tid: object_id.clone(),
                             args: Some(json!({
-                                "digest": &digest_str,
+                                "digest": &digest_base58,
                                 "object": object_id,
                             })),
                         });
@@ -197,12 +198,12 @@ fn convert_to_chrome_trace(
                     .unwrap()
                     .as_micros() as i64;
 
-                // Get input objects for this transaction
-                if let Some(tx_data) = tx_data_map.get(&digest_str) {
+                // Get input objects for this transaction (map key is hex)
+                if let Some(tx_data) = tx_data_map.get(&digest_hex) {
                     for object_id in &tx_data.input_objects {
                         // Create an End event for each object
                         chrome_events.push(ChromeTraceEvent {
-                            name: digest_str[..16].to_string(),
+                            name: digest_base58.clone(),
                             cat: "transaction".to_string(),
                             ph: "E".to_string(),
                             ts,
@@ -210,9 +211,9 @@ fn convert_to_chrome_trace(
                             pid: 1,
                             tid: object_id.clone(),
                             args: Some(json!({
-                                "digest": &digest_str,
+                                "digest": &digest_base58,
                                 "object": object_id,
-                                "duration_us": ts - tx_begin_times.get(&digest_str).unwrap_or(&ts),
+                                "duration_us": ts - tx_begin_times.get(&digest_hex).unwrap_or(&ts),
                             })),
                         });
                     }
