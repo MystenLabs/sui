@@ -114,85 +114,68 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
 
     if (z == 0) return; // Tested separately.
 
-    if (z == 1) {
-        assert_eq!(x.mul_div(y, z), x * y);
-        assert_eq!(x.mul_div_ceil(y, z), x * y);
-    };
-
     if (x == 0 || y == 0) {
         assert_eq!(x.mul_div(y, z), 0);
-        assert_eq!(y.mul_div(x, z), 0);
         assert_eq!(x.mul_div_ceil(y, z), 0);
-        assert_eq!(y.mul_div_ceil(x, z), 0);
         return
     };
 
-    if (x > max / y) return;
+    // Identity: x * y / y == x always holds, even when x * y overflows
+    assert_eq!(x.mul_div(y, y), x);
+    assert_eq!(x.mul_div_ceil(y, y), x);
 
-    assert_eq!(x.mul_div(y, z), (x * y) / z);
-    assert_eq!(y.mul_div(x, z), (y * x) / z);
-    // Test mul_div_ceil based on whether there's actually a remainder
-    let product = x * y;
-    if (product % z == 0) {
-        assert_eq!(x.mul_div_ceil(y, z), x.mul_div(y, z));
-    } else {
-        // When there's a remainder, mul_div_ceil should be mul_div + 1
-        assert_eq!(x.mul_div_ceil(y, z), x.mul_div(y, z) + 1);
-    };
-
-    if (x * y < z) {
-        assert_eq!(x.mul_div(y, z), 0);
-        // x * y > 0 (since we returned early if x == 0 || y == 0), so ceiling is 1
-        assert_eq!(x.mul_div_ceil(y, z), 1);
+    if (x <= max / y) {
+        // No overflow: verify against direct computation
+        assert_eq!(x.mul_div(y, z), (x * y) / z);
+        assert_eq!(y.mul_div(x, z), (x * y) / z);
+        if ((x * y) % z == 0) {
+            assert_eq!(x.mul_div_ceil(y, z), x.mul_div(y, z));
+        } else {
+            assert_eq!(x.mul_div_ceil(y, z), x.mul_div(y, z) + 1);
+        };
+        if (x * y < z) {
+            assert_eq!(x.mul_div(y, z), 0);
+            assert_eq!(x.mul_div_ceil(y, z), 1);
+        };
+        // Precision: mul_div is at least as good as dividing one operand first
+        assert!(x.mul_div(y, z) >= (x / z) * y);
+        assert!(x.mul_div(y, z) >= x * (y / z));
+    } else if (z >= y || z >= x) {
+        // Overflow: x * y overflows, but result fits because z >= one operand.
+        let r = x.mul_div(y, z);
+        let rc = x.mul_div_ceil(y, z);
+        assert_eq!(r, y.mul_div(x, z));
+        assert_eq!(rc, y.mul_div_ceil(x, z));
+        assert!(rc >= r);
+        assert!(rc - r <= 1);
+        if (z >= y) assert!(r <= x);
+        if (z >= x) assert!(r <= y);
+        // Precision: mul_div is at least as good as dividing one operand first
+        assert!(r >= (x / z) * y);
+        assert!(r >= x * (y / z));
     };
 }
 
-/// Tests overflow cases where x * y would overflow in the native type,
-/// but the result x * y / z fits. This is the key use case for mul_div.
-public(package) macro fun test_mul_div_overflow<$T>($max: $T) {
+/// Demonstrates that mul_div preserves more precision than (x / z) * y
+/// or x * (y / z), especially when x * y overflows.
+public(package) macro fun test_mul_div_precision<$T>($max: $T) {
     let max = $max;
-    // x * y overflows, but x * y / z fits (z cancels out y)
-    assert_eq!(max.mul_div(2, 2), max);
-    assert_eq!(max.mul_div(3, 3), max);
-    assert_eq!(max.mul_div(100, 100), max);
-    assert_eq!(max.mul_div(max, max), max);
 
-    // Verify mul_div_ceil also works with overflow
-    assert_eq!(max.mul_div_ceil(2, 2), max);
-    assert_eq!(max.mul_div_ceil(3, 3), max);
-
-    // x * y overflows, result fits but is less than max
-    // (max / 2 + 1) * 2 overflows, but (max / 2 + 1) * 2 / 2 = max / 2 + 1
+    // Overflow case: (max / 2 + 1) * 3 / 2 would fail with naive x * y / z
     let half_plus_one = max / 2 + 1;
-    assert_eq!(half_plus_one.mul_div(2, 2), half_plus_one);
-    assert_eq!(half_plus_one.mul_div(4, 4), half_plus_one);
-
-    // x * y overflows, and we actually need the division to make result fit
-    // (max / 2 + 1) * 3 / 2 should work and give a result near max * 3/4
-    // This would fail with naive (x * y) / z due to overflow
     let result = half_plus_one.mul_div(3, 2);
-    // The result should be (max / 2 + 1) * 3 / 2 ≈ max * 3/4
     assert!(result > max / 2);
     assert!(result < max);
 
-    // Demonstrate precision advantage over (x / z) * y approach
-    // (x / z) * y loses precision when x is not divisible by z
-    // mul_div(x, y, z) = (x * y) / z preserves more precision
-    let x = max / 3; // not perfectly divisible
-    let y: $T = 2;
-    let z: $T = 2;
-    // mul_div should give exact result: x * 2 / 2 = x
-    assert_eq!(x.mul_div(y, z), x);
-    // Alternative (x / z) * y would give: (x / 2) * 2 which loses the remainder
-    // when x is odd, so (x / 2) * 2 < x
-    let imprecise = (x / z) * y;
-    assert!(imprecise <= x.mul_div(y, z));
+    // mul_div(x, y, z) gives exact result even when (x / z) * y loses precision
+    // because x is not divisible by z
+    let x = max / 3;
+    assert_eq!(x.mul_div(2, 2), x);
+    // Alternative (x / 2) * 2 loses the remainder when x is odd
+    assert!((x / 2) * 2 <= x.mul_div(2, 2));
 
-    // Another precision test: 5 * 3 / 2 = 7 (rounded down)
-    // vs (5 / 2) * 3 = 2 * 3 = 6 (loses precision)
+    // 5 * 3 / 2 = 7, but (5 / 2) * 3 = 6
     assert_eq!((5: $T).mul_div(3, 2), 7);
-
-    // ceil variant: 5 * 3 / 2 = 8 (rounded up)
     assert_eq!((5: $T).mul_div_ceil(3, 2), 8);
 }
 
@@ -205,8 +188,8 @@ public(package) macro fun test_mul_div<$T>($max: $T, $cases: vector<$T>) {
         check_mul_div!(max, case_pred, case, case_succ);
     });
     check_mul_div!(max, max, max, max);
-    // Test overflow cases
-    test_mul_div_overflow!<$T>(max);
+    // Test precision advantage of mul_div over naive alternatives
+    test_mul_div_precision!<$T>(max);
 }
 
 public(package) macro fun slow_pow($base: _, $exp: u8): _ {
