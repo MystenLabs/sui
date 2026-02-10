@@ -112,10 +112,10 @@ impl TransactionTraceLogger {
             flush_tx,
         });
 
-        // Spawn background flush task
+        // Spawn background flush task on a blocking thread
         let logger_clone = Arc::clone(&logger);
-        tokio::spawn(async move {
-            logger_clone.run_flush_task(flush_rx).await;
+        std::thread::spawn(move || {
+            logger_clone.run_flush_task(flush_rx);
         });
 
         Ok(logger)
@@ -167,14 +167,14 @@ impl TransactionTraceLogger {
         Ok(())
     }
 
-    /// Background task that flushes buffers to disk
-    async fn run_flush_task(&self, mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<LogRecord>>) {
+    /// Background task that flushes buffers to disk (runs on blocking thread)
+    fn run_flush_task(&self, mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<LogRecord>>) {
         let mut state = FlushTaskState {
             current_file: None,
             current_file_size: 0,
         };
 
-        while let Some(buffer) = rx.recv().await {
+        while let Some(buffer) = rx.blocking_recv() {
             if let Err(e) = self.flush_buffer_to_disk(&buffer, &mut state) {
                 tracing::error!("Failed to flush transaction trace buffer: {}", e);
             }
