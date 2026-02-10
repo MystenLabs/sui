@@ -71,7 +71,7 @@ use std::{
     },
 };
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ObjectID, SuiAddress},
     committee::ProtocolVersion,
     effects::TransactionEffects,
     object::Object,
@@ -169,6 +169,16 @@ impl FileSystemStore {
         Ok(Self {
             node,
             base_path,
+            metrics: FsStoreMetrics::default(),
+            root_versions_map: RwLock::new(BTreeMap::new()),
+            checkpoint_versions_map: RwLock::new(BTreeMap::new()),
+        })
+    }
+
+    pub fn new_with_path(node: Node, full_path: PathBuf) -> Result<Self, Error> {
+        Ok(Self {
+            node,
+            base_path: full_path,
             metrics: FsStoreMetrics::default(),
             root_versions_map: RwLock::new(BTreeMap::new()),
             checkpoint_versions_map: RwLock::new(BTreeMap::new()),
@@ -426,12 +436,63 @@ impl FileSystemStore {
         Ok(())
     }
 
+    // TODO: this should not be pub, probably this should come from an indexer
+    pub fn get_objects_by_owner(&self, owner: SuiAddress) -> Result<Vec<Object>> {
+        let object_dir = self.objects_dir()?;
+        if !object_dir.exists() {
+            return Ok(vec![]);
+        }
+
+        let mut results = Vec::new();
+        for entry in fs::read_dir(&object_dir)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                let object_id_str = entry.file_name().to_string_lossy().to_string();
+                if let Ok(object_id) = ObjectID::from_hex_literal(&object_id_str) {
+                    if let Some((object, _version)) = self.get_object_latest(&object_id)? {
+                        if object.is_address_owned()
+                            && object.owner() == &sui_types::object::Owner::AddressOwner(owner)
+                        {
+                            results.push(object);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    // TODO: this should not be pub
+    pub fn get_object_latest(&self, object_id: &ObjectID) -> Result<Option<(Object, u64)>, Error> {
+        let object_dir = self.objects_dir()?.join(object_id.to_string());
+        if !object_dir.exists() {
+            return Ok(None);
+        }
+
+        let latest_version = fs::read_dir(&object_dir)?
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| entry.file_name().to_str()?.parse::<u64>().ok())
+            .max();
+
+        match latest_version {
+            Some(version) => self.get_object_by_version(object_id, version),
+            None => Ok(None),
+        }
+    }
+
     fn get_object_by_version(
         &self,
         object_id: &ObjectID,
         version: u64,
     ) -> Result<Option<(Object, u64)>, Error> {
         let object_dir = self.objects_dir()?.join(object_id.to_string());
+        println!(
+            "Looking up object {} at version {} in directory {}",
+            object_id,
+            version,
+            object_dir.display()
+        );
         let version_file = object_dir.join(version.to_string());
         if !version_file.exists() {
             return Ok(None);
@@ -445,6 +506,10 @@ impl FileSystemStore {
         object_id: &ObjectID,
         max_version: u64,
     ) -> Result<Option<(Object, u64)>, Error> {
+        println!(
+            "Looking up root version mapping for object {} with max_version {}",
+            object_id, max_version
+        );
         self.load_root_mapping(object_id)?;
         let maps = self.root_versions_map.read().unwrap();
         if let Some(map) = maps.get(object_id)

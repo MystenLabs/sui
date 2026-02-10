@@ -208,9 +208,6 @@ impl LedgerService for ForkingLedgerService {
             digests, read_mask, ..
         } = request.into_inner();
 
-        // println!("GRPC Digests len{:?}", digests.len());
-        // println!("GRPC Digests len{:?}", digests);
-
         let read_mask = {
             let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
             read_mask
@@ -272,20 +269,19 @@ impl ForkingLedgerService {
         object_id: ObjectID,
         version: Option<u64>,
     ) -> Result<sui_types::object::Object, RpcError> {
-        let mut sim = self.simulacrum.write().await;
-        let store = sim.store_mut();
-
+        println!("get_object_impl: object_id={object_id}, version={version:?}");
+        let sim = self.simulacrum.read().await;
+        let store = sim.store_static();
         let object = if let Some(version) = version {
-            store
-                .get_object_at_version(&object_id, version.into())
-                .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id.into(), version))?
+            store.get_object_at_version(&object_id, version.into())
         } else {
-            &store
-                .get_object_mut(&object_id)
-                .ok_or_else(|| ObjectNotFoundError::new(object_id.into()))?
+            store.get_object(&object_id)
         };
 
-        Ok(object.clone())
+        match object {
+            Some(obj) => Ok(obj.clone()),
+            None => Err(ObjectNotFoundError::new(object_id.into()).into()),
+        }
     }
 
     async fn get_transaction_impl(

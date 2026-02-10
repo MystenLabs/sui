@@ -10,6 +10,8 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
 use simulacrum::SimulatorStore;
 use sui_config::genesis::Genesis;
+use sui_types::message_envelope::{Envelope, VerifiedEnvelope};
+use sui_types::transaction::{SenderSignedData, Transaction};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
@@ -28,42 +30,37 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 
-// use crate::grpc::consistent_store::ForkingConsistentStore;
-use crate::grpc::ledger_service::ForkingLedgerService;
-// use crate::rpc::object_provider::ObjectProvider;
-use async_trait::async_trait;
-use sui_data_store::ObjectStore as _;
 use sui_data_store::stores::{DataStore, FileSystemStore, LruMemoryStore, ReadThroughStore};
+use sui_data_store::{
+    ObjectKey, ObjectStore as _, TransactionInfo, TransactionStore, TransactionStoreWriter,
+    VersionQuery,
+};
 use sui_types::storage::ReadStore;
-use tracing::info;
 
-// pub mod checkpoint_store;
-// pub mod object_store;
 pub mod rpc_data_store;
 
-#[derive(Clone)]
 pub struct ForkingStore {
     // Checkpoint data
     checkpoints: BTreeMap<CheckpointSequenceNumber, VerifiedCheckpoint>,
     checkpoint_digest_to_sequence_number: HashMap<CheckpointDigest, CheckpointSequenceNumber>,
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
 
-    // Transaction data
-    transactions: HashMap<TransactionDigest, VerifiedTransaction>,
-    effects: HashMap<TransactionDigest, TransactionEffects>,
-    events: HashMap<TransactionDigest, TransactionEvents>,
+    // // Transaction data
+    // transactions: HashMap<TransactionDigest, VerifiedTransaction>,
+    // effects: HashMap<TransactionDigest, TransactionEffects>,
+    // events: HashMap<TransactionDigest, TransactionEvents>,
 
     // Committee data
     epoch_to_committee: Vec<Committee>,
 
-    // Object data
-    // for object versions and other data, we need the normal indexer grpc reader
-    live_objects: HashMap<ObjectID, SequenceNumber>,
-    objects: HashMap<ObjectID, BTreeMap<SequenceNumber, Object>>,
+    // // Object data
+    // // for object versions and other data, we need the normal indexer grpc reader
+    fs_store: FileSystemStore,
+    object_store: ReadThroughStore<FileSystemStore, DataStore>,
 
-    // Fallback to RPC data store
-    rpc_data_store:
-        Arc<ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>>,
+    // // Fallback to RPC data store
+    // rpc_data_store:
+    //     Arc<ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>>,
 
     // The checkpoint at which this forked network was forked
     forked_at_checkpoint: u64,
@@ -73,12 +70,14 @@ impl ForkingStore {
     pub fn new(
         genesis: &Genesis,
         forked_at_checkpoint: u64,
-        rpc_data_store: Arc<
-            ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>,
-        >,
+        fs_store: FileSystemStore,
+        object_store: ReadThroughStore<FileSystemStore, DataStore>,
     ) -> Self {
-        let mut store =
-            Self::new_with_rpc_data_store_and_checkpoint(rpc_data_store, forked_at_checkpoint);
+        let mut store = Self::new_with_rpc_data_store_and_checkpoint(
+            fs_store,
+            object_store,
+            forked_at_checkpoint,
+        );
 
         println!(
             "Genesis transaction digest: {:?}",
@@ -88,35 +87,33 @@ impl ForkingStore {
         store
     }
 
+    pub(crate) fn object_store(&self) -> &ReadThroughStore<FileSystemStore, DataStore> {
+        &self.object_store
+    }
+
     fn new_with_rpc_data_store_and_checkpoint(
-        rpc_data_store: Arc<
-            ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>,
-        >,
+        fs_store: FileSystemStore,
+        object_store: ReadThroughStore<FileSystemStore, DataStore>,
         forked_at_checkpoint: u64,
     ) -> Self {
         Self {
             checkpoints: BTreeMap::new(),
             checkpoint_digest_to_sequence_number: HashMap::new(),
             checkpoint_contents: HashMap::new(),
-            transactions: HashMap::new(),
-            effects: HashMap::new(),
-            events: HashMap::new(),
             epoch_to_committee: vec![],
-            live_objects: HashMap::new(),
-            objects: HashMap::new(),
-            rpc_data_store,
+            fs_store,
+            object_store,
             forked_at_checkpoint,
         }
     }
 
-    pub fn get_rpc_data_store(
-        &self,
-    ) -> Arc<ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>> {
-        self.rpc_data_store.clone()
-    }
-
     pub fn get_objects(&self) -> &HashMap<ObjectID, BTreeMap<SequenceNumber, Object>> {
-        &self.objects
+        println!("TODO fetching all objects is currently not supported in ForkingStore");
+        todo!()
+    }
+    pub fn get_objects_by_keys(&self, object_keys: &[ObjectKey]) -> &HashMap<ObjectID, Object> {
+        println!("TODO fetching objects by keys is currently not supported in ForkingStore");
+        todo!()
     }
 
     pub fn get_checkpoint_by_sequence_number(
@@ -152,91 +149,81 @@ impl ForkingStore {
         self.epoch_to_committee.get(epoch as usize)
     }
 
-    pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction> {
-        self.transactions.get(digest)
+    pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
+        let tx = self
+            .fs_store
+            .transaction_data_and_effects(&digest.to_string())
+            .unwrap();
+
+        let tx = match tx {
+            None => return None,
+            Some(tx_info) => {
+                let sender_signed_data = SenderSignedData::new(tx_info.data, vec![]).clone();
+                let tx = Transaction::new(sender_signed_data);
+                let verified_tx = VerifiedTransaction::new_unchecked(tx);
+                verified_tx
+            }
+        };
+
+        Some(tx)
     }
 
     pub fn get_transaction_effects(
         &self,
         digest: &TransactionDigest,
-    ) -> Option<&TransactionEffects> {
-        self.effects.get(digest)
+    ) -> Option<TransactionEffects> {
+        let tx = self
+            .fs_store
+            .transaction_data_and_effects(&digest.to_string())
+            .unwrap();
+
+        tx.map(|tx_info| tx_info.effects)
     }
 
     pub fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<&TransactionEvents> {
-        self.events.get(digest)
+        println!("Fetching events for transaction digest: {:?}", digest);
+        todo!()
     }
 
-    pub fn get_object_mut(&mut self, id: &ObjectID) -> Option<Object> {
-        let version = self.live_objects.get(id);
-
-        if let Some(version) = version {
-            self.get_object_at_version(id, *version).cloned()
-        }
-        // TODO: forking
-        // Fallback to RPC data store if object not found in local store
-        else {
-            info!("Fallback to RPC data store for object: {:?}", id);
-            let objs = self
-                .rpc_data_store
-                .get_objects(&[sui_data_store::ObjectKey {
-                    object_id: *id,
-                    version_query: sui_data_store::VersionQuery::AtCheckpoint(
-                        self.forked_at_checkpoint,
-                    ),
-                }]);
-
-            if let Ok(objs) = objs {
-                let first = objs.first().cloned().flatten();
-                if let Some((object, version)) = first {
-                    let versions = BTreeMap::from([(version.into(), object.clone())]);
-                    self.objects.insert(object.id(), versions);
-                    Some(object)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
-    }
-
+    /// Tries to fetch the object at the latest version, and if not found, it will fetch it from
+    /// RPC at the forked checkpoint.
     pub fn get_object(&self, id: &ObjectID) -> Option<Object> {
-        let version = self.live_objects.get(id);
+        // fetch object at latest version from the primary cache (FileSystem).
+        let object = self.fs_store.get_object_latest(id).unwrap();
 
-        if let Some(version) = version {
-            self.get_object_at_version(id, *version).cloned()
+        if let Some((obj, _)) = object {
+            return Some(obj);
         }
-        // TODO: forking
-        // Fallback to RPC data store if object not found in local store
-        else {
-            info!("Fallback to RPC data store for object: {:?}", id);
-            let objs = self
-                .rpc_data_store
-                .get_objects(&[sui_data_store::ObjectKey {
-                    object_id: *id,
-                    version_query: sui_data_store::VersionQuery::AtCheckpoint(
-                        self.forked_at_checkpoint,
-                    ),
-                }]);
 
-            if let Ok(objs) = objs {
-                let first = objs.first().cloned().flatten();
-                if let Some((object, version)) = first {
-                    Some(object)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
+        // if object does not exist, then fetch it at forked checkpoint. The object store will
+        // first try in the primary cache (FileSystemStore) and then fallback to the RPC data store
+        // (DataStore) if not found, and it will be written back to the primary cache for future
+        // reads.
+        let objects = self
+            .object_store
+            .get_objects(&[ObjectKey {
+                object_id: *id,
+                version_query: sui_data_store::VersionQuery::AtCheckpoint(
+                    self.forked_at_checkpoint,
+                ),
+            }])
+            .unwrap();
+
+        let first = objects.first().and_then(|opt| opt.as_ref());
+        first.map(|(obj, _)| obj.clone())
     }
 
-    pub fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object> {
-        self.objects
-            .get(id)
-            .and_then(|versions| versions.get(&version))
+    pub fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
+        let objects = self
+            .object_store
+            .get_objects(&[ObjectKey {
+                object_id: *id,
+                version_query: sui_data_store::VersionQuery::Version(version.into()),
+            }])
+            .unwrap();
+        let first = objects.first().and_then(|opt| opt.as_ref());
+
+        first.map(|(obj, _)| obj.clone())
     }
 
     pub fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
@@ -250,13 +237,10 @@ impl ForkingStore {
             .expect("clock object should deserialize")
     }
 
-    pub fn owned_objects(&self, owner: SuiAddress) -> impl Iterator<Item = &Object> {
-        self.live_objects
-            .iter()
-            .flat_map(|(id, version)| self.get_object_at_version(id, *version))
-            .filter(
-                move |object| matches!(object.owner, Owner::AddressOwner(addr) if addr == owner),
-            )
+    pub fn owned_objects(&self, owner: SuiAddress) -> Vec<Object> {
+        println!("Fetching owned objects for address: {:?}", owner);
+        let objects = self.fs_store.get_objects_by_owner(owner).unwrap();
+        objects
     }
 }
 
@@ -305,24 +289,46 @@ impl ForkingStore {
         events: TransactionEvents,
         written_objects: BTreeMap<ObjectID, Object>,
     ) {
-        let deleted_objects = effects.deleted();
-        let tx_digest = *effects.transaction_digest();
-        self.insert_transaction(transaction);
-        self.insert_transaction_effects(effects);
-        self.insert_events(&tx_digest, events);
-        self.update_objects(written_objects, deleted_objects);
+        let tx_digest = effects.transaction_digest().to_string();
+        let tx_info = TransactionInfo {
+            data: transaction.data().inner().intent_message().value.clone(),
+            effects,
+            checkpoint: self.get_latest_checkpoint_sequence_number().unwrap(),
+        };
+        self.fs_store
+            .write_transaction(&tx_digest, tx_info)
+            .unwrap();
+
+        println!(
+            "Trying to see what written objects are {:?}",
+            written_objects
+        );
+
+        let objects = written_objects
+            .into_iter()
+            .map(|(id, object)| {
+                let version = object.version().into();
+                let key = ObjectKey {
+                    object_id: id,
+                    version_query: sui_data_store::VersionQuery::Version(version),
+                };
+                (key, object, version)
+            })
+            .collect();
+
+        self.object_store.write_objects(objects).unwrap();
     }
 
     pub fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
-        self.transactions.insert(*transaction.digest(), transaction);
+        todo!()
     }
 
     pub fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
-        self.effects.insert(*effects.transaction_digest(), effects);
+        todo!()
     }
 
     pub fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
-        self.events.insert(*tx_digest, events);
+        todo!()
     }
 
     pub fn update_objects(
@@ -330,18 +336,7 @@ impl ForkingStore {
         written_objects: BTreeMap<ObjectID, Object>,
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
-        for (object_id, _, _) in deleted_objects {
-            self.live_objects.remove(&object_id);
-        }
-
-        for (object_id, object) in written_objects {
-            let version = object.version();
-            self.live_objects.insert(object_id, version);
-            self.objects
-                .entry(object_id)
-                .or_default()
-                .insert(version, object);
-        }
+        todo!()
     }
 }
 
@@ -361,52 +356,95 @@ impl ChildObjectResolver for ForkingStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        println!("Reading child object: {:?} of parent: {:?}", child, parent);
-        let child_object = match self.get_object(child) {
-            None => return Ok(None),
-            Some(obj) => obj,
-        };
-
-        let parent = *parent;
-        if child_object.owner != Owner::ObjectOwner(parent.into()) {
-            return Err(SuiErrorKind::InvalidChildObjectAccess {
-                object: *child,
-                given_parent: parent,
-                actual_owner: child_object.owner.clone(),
-            }
-            .into());
-        }
+        // let child_object = match self.get_object(child) {
+        //     None => return Ok(None),
+        //     Some(obj) => obj,
+        // };
+        //
+        // let parent = *parent;
+        // if child_object.owner != Owner::ObjectOwner(parent.into()) {
+        //     return Err(SuiErrorKind::InvalidChildObjectAccess {
+        //         object: *child,
+        //         given_parent: parent,
+        //         actual_owner: child_object.owner.clone(),
+        //     }
+        //     .into());
+        // }
 
         println!(
-            "Child object version: {:?}, upper bound: {:?}",
-            child_object.version(),
-            child_version_upper_bound
+            "Reading child object: {:?} of parent: {:?} with version upper bound: {:?}",
+            child, parent, child_version_upper_bound
         );
 
-        // TODO: NO IDEA IF THIS IS CORRECT!
-        if child_object.version() > child_version_upper_bound {
-            let child_object = self
-                .rpc_data_store
-                .get_objects(&[sui_data_store::ObjectKey {
-                    object_id: child_object.id(),
-                    version_query: sui_data_store::VersionQuery::AtCheckpoint(
-                        self.forked_at_checkpoint,
-                    ),
-                }])
-                .unwrap();
+        let object_key = ObjectKey {
+            object_id: *child,
+            version_query: VersionQuery::RootVersion(child_version_upper_bound.value()),
+        };
+        let object = self.object_store.get_objects(&[object_key]).unwrap();
+        debug_assert!(object.len() == 1, "Expected one object for {}", child,);
+        let object = object
+            .into_iter()
+            .next()
+            .unwrap()
+            .map(|(obj, _version)| obj);
 
-            let first = child_object.first().cloned().flatten();
+        println!(
+            "Found object {:?} for child: {:?} of parent: {:?}",
+            object, child, parent
+        );
 
-            return Ok(first.map(|(object, _version)| object));
+        Ok(object)
 
-            // return Err(SuiErrorKind::UnsupportedFeatureError {
-            //     error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
-            //         .to_owned(),
-            // }
-            // .into());
-        }
-
-        Ok(Some(child_object))
+        // println!("Reading child object: {:?} of parent: {:?}", child, parent);
+        // let child_object = match self.get_object(child) {
+        //     None => return Ok(None),
+        //     Some(obj) => obj,
+        // };
+        //
+        // let parent = *parent;
+        // if child_object.owner != Owner::ObjectOwner(parent.into()) {
+        //     return Err(SuiErrorKind::InvalidChildObjectAccess {
+        //         object: *child,
+        //         given_parent: parent,
+        //         actual_owner: child_object.owner.clone(),
+        //     }
+        //     .into());
+        // }
+        //
+        // println!(
+        //     "Child object version: {:?}, upper bound: {:?}",
+        //     child_object.version(),
+        //     child_version_upper_bound
+        // );
+        //
+        // // TODO: NO IDEA IF THIS IS CORRECT!
+        // if child_object.version() > child_version_upper_bound {
+        //     let id = child_object.id();
+        //     let child_object = self
+        //         .object_store
+        //         .get_objects(&[sui_data_store::ObjectKey {
+        //             object_id: id,
+        //             version_query: sui_data_store::VersionQuery::AtCheckpoint(
+        //                 self.forked_at_checkpoint,
+        //             ),
+        //         }])
+        //         .unwrap();
+        //
+        //     let first = child_object
+        //         .first()
+        //         .and_then(|opt| opt.as_ref())
+        //         .map(|(obj, _)| obj.clone());
+        //
+        //     return Ok(first);
+        //
+        //     // return Err(SuiErrorKind::UnsupportedFeatureError {
+        //     //     error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
+        //     //         .to_owned(),
+        //     // }
+        //     // .into());
+        // }
+        //
+        // Ok(Some(child_object))
     }
 
     fn get_object_received_at_version(
@@ -416,7 +454,7 @@ impl ChildObjectResolver for ForkingStore {
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        let recv_object = match simulacrum::SimulatorStore::get_object(self, receiving_object_id) {
+        let recv_object = match self.get_object(receiving_object_id) {
             None => return Ok(None),
             Some(obj) => obj,
         };
@@ -430,17 +468,6 @@ impl ChildObjectResolver for ForkingStore {
         Ok(Some(recv_object))
     }
 }
-
-// impl GetModule for ForkingStore {
-//     type Error = SuiError;
-//     type Item = CompiledModule;
-//
-//     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
-//         Ok(self
-//             .get_module(id)?
-//             .map(|bytes| CompiledModule::deserialize_with_defaults(&bytes).unwrap()))
-//     }
-// }
 
 impl GetModule for ForkingStore {
     type Error = anyhow::Error;
@@ -473,7 +500,7 @@ impl ObjectStore for ForkingStore {
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
     ) -> Option<Object> {
-        self.get_object_at_version(object_id, version).cloned()
+        self.get_object_at_version(object_id, version)
     }
 }
 
@@ -515,11 +542,11 @@ impl SimulatorStore for ForkingStore {
     }
 
     fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
-        self.get_transaction(digest).cloned()
+        self.get_transaction(digest)
     }
 
     fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
-        self.get_transaction_effects(digest).cloned()
+        self.get_transaction_effects(digest)
     }
 
     fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
@@ -531,7 +558,7 @@ impl SimulatorStore for ForkingStore {
     }
 
     fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
-        self.get_object_at_version(id, version).cloned()
+        self.get_object_at_version(id, version)
     }
 
     fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
@@ -543,7 +570,7 @@ impl SimulatorStore for ForkingStore {
     }
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
-        Box::new(self.owned_objects(owner).cloned())
+        Box::new(self.owned_objects(owner).into_iter())
     }
 
     fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
@@ -680,13 +707,11 @@ impl ReadStore for ForkingStore {
     }
 
     fn get_transaction(&self, tx_digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
-        ForkingStore::get_transaction(self, tx_digest)
-            .cloned()
-            .map(Arc::new)
+        self.get_transaction(tx_digest).map(Arc::new)
     }
 
     fn get_transaction_effects(&self, tx_digest: &TransactionDigest) -> Option<TransactionEffects> {
-        ForkingStore::get_transaction_effects(self, tx_digest).cloned()
+        self.get_transaction_effects(tx_digest)
     }
 
     fn get_events(&self, tx_digest: &TransactionDigest) -> Option<TransactionEvents> {
