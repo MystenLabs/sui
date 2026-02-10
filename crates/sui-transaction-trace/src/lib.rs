@@ -119,6 +119,8 @@ struct FlushTaskState {
     current_file: Option<BufWriter<std::fs::File>>,
     /// Size of the current file in bytes
     current_file_size: usize,
+    /// Monotonic counter for file naming (avoids collisions with virtual time)
+    file_counter: u64,
 }
 
 /// Transaction trace logger for recording execution timing.
@@ -182,6 +184,7 @@ impl TransactionTraceLogger {
             let flush_state = FlushTaskState {
                 current_file: None,
                 current_file_size: 0,
+                file_counter: 0,
             };
             (None, Some(Mutex::new(flush_state)))
         } else {
@@ -286,6 +289,7 @@ impl TransactionTraceLogger {
         let mut state = FlushTaskState {
             current_file: None,
             current_file_size: 0,
+            file_counter: 0,
         };
 
         while let Some(buffer) = rx.blocking_recv() {
@@ -314,10 +318,12 @@ impl TransactionTraceLogger {
             state.current_file_size = 0;
 
             // Create new file with buffered writer
-            let timestamp = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)?
-                .as_secs();
-            let file_path = config.log_dir.join(format!("tx-trace-{}.bin", timestamp));
+            // Use monotonic counter to avoid collisions with virtual time in tests
+            let file_path = config
+                .log_dir
+                .join(format!("tx-trace-{}.bin", state.file_counter));
+            state.file_counter += 1;
+
             let file = std::fs::File::create(&file_path)?;
             let file = BufWriter::new(file);
 
