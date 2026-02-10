@@ -112,7 +112,8 @@ impl TransactionTraceLogger {
             flush_tx,
         });
 
-        // Spawn background flush task on a blocking thread
+        // Spawn background flush task on a dedicated thread
+        // Uses std::thread::spawn for a long-lived thread doing blocking I/O
         let logger_clone = Arc::clone(&logger);
         std::thread::spawn(move || {
             logger_clone.run_flush_task(flush_rx);
