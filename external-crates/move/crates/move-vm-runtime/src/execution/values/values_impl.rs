@@ -2,10 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: Remove the panics. Some of these removals are currently in flight, so this PR does not
-// handle them.
-#![allow(clippy::panic)]
-
 use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
@@ -3202,7 +3198,10 @@ impl Reference {
 impl Value {
     fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) -> PartialVMResult<()> {
         match self {
-            Value::Invalid => unreachable!("Should not be able to visit an invalid value"),
+            Value::Invalid => Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "cannot visit invalid value"
+            )),
             Value::U8(val) => visitor.visit_u8(depth, *val),
             Value::U16(val) => visitor.visit_u16(depth, *val),
             Value::U32(val) => visitor.visit_u32(depth, *val),
@@ -3349,7 +3348,11 @@ impl Vector {
                 match &self.container {
                     Value::Vec(v) => v.safe_get(self.ndx)?.borrow().visit(visitor),
                     Value::PrimVec(v) => v.visit_indexed(self.ndx, visitor, 0),
-                    _ => unreachable!(),
+                    _ => Err(partial_vm_error!(
+                        UNREACHABLE,
+                        "Expected a vector value for elem view, got {:?}",
+                        self.container
+                    )),
                 }
             }
         }
@@ -3401,7 +3404,11 @@ impl GlobalValue {
         impl<'b> ValueView for Wrapper<'b> {
             fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 let Value::Struct(struct_) = &*self.0.borrow() else {
-                    unreachable!()
+                    return Err(partial_vm_error!(
+                        UNREACHABLE,
+                        "Expected a struct value for global value, got {:?}",
+                        self.0.borrow()
+                    ));
                 };
                 if visitor.visit_struct(0, struct_.len())? {
                     for val in struct_.iter() {

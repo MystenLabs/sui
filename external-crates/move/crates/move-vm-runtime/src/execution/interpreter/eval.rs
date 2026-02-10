@@ -391,7 +391,10 @@ fn op_step_impl(
         Bytecode::Ret
         | Bytecode::CallGeneric(_)
         | Bytecode::DirectCall(_)
-        | Bytecode::VirtualCall(_) => unreachable!(),
+        | Bytecode::VirtualCall(_) => partial_vm_error!(
+            UNREACHABLE,
+            "Call/Return instructions should be handled in `step`, not `op_step_impl`"
+        ),
         // -- INTERNAL CONTROL FLOW --------------
         // These all update the current frame's program counter.
         Bytecode::BrTrue(offset) => {
