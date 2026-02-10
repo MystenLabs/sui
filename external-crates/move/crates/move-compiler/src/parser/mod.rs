@@ -9,7 +9,7 @@ pub(crate) mod filter;
 pub mod keywords;
 pub mod lexer;
 pub(crate) mod mode_attribute_filter;
-pub(crate) mod syntax;
+pub mod syntax;
 mod token_set;
 
 use crate::{

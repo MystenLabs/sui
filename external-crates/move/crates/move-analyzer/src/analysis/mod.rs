@@ -104,9 +104,17 @@ fn process_typed_modules<'a>(
     mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
     typing_symbolicator: &mut typing_analysis::TypingAnalysisContext<'a>,
 ) {
+    // TODO(extensions): Extension modules are skipped during parsing analysis because
+    // their location-based address map lookup fails in `pkg_symbols`. When full extension
+    // support is added, alias lengths should be computed for extensions and this
+    // fallback removed.
+    static EMPTY_ALIAS_LENGTHS: std::sync::LazyLock<BTreeMap<Position, usize>> =
+        std::sync::LazyLock::new(BTreeMap::new);
     for (module_ident, module_def) in typed_modules.key_cloned_iter() {
         let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
-        typing_symbolicator.alias_lengths = mod_to_alias_lengths.get(&mod_ident_str).unwrap();
+        typing_symbolicator.alias_lengths = mod_to_alias_lengths
+            .get(&mod_ident_str)
+            .unwrap_or(&EMPTY_ALIAS_LENGTHS);
         typing_symbolicator.visit_module(module_ident, module_def);
     }
 }
