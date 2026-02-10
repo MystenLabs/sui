@@ -9,6 +9,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+pub mod chrome_trace;
+
 /// Transaction digest represented as a 32-byte array
 pub type TransactionDigest = [u8; 32];
 

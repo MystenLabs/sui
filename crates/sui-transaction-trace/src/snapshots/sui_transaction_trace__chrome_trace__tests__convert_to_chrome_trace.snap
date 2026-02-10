@@ -1,0 +1,107 @@
+---
+source: crates/sui-transaction-trace/src/chrome_trace.rs
+assertion_line: 179
+expression: chrome_events
+---
+[
+  {
+    "name": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+    "cat": "transaction",
+    "ph": "B",
+    "ts": "[timestamp]",
+    "pid": 1,
+    "tid": "0x000000000000000000000000000000000000000000000000000000000000000a",
+    "args": {
+      "digest": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+      "object": "0x000000000000000000000000000000000000000000000000000000000000000a"
+    }
+  },
+  {
+    "name": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+    "cat": "transaction",
+    "ph": "B",
+    "ts": "[timestamp]",
+    "pid": 1,
+    "tid": "0x000000000000000000000000000000000000000000000000000000000000000b",
+    "args": {
+      "digest": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+      "object": "0x000000000000000000000000000000000000000000000000000000000000000b"
+    }
+  },
+  {
+    "name": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+    "cat": "transaction",
+    "ph": "B",
+    "ts": "[timestamp]",
+    "pid": 1,
+    "tid": "0x000000000000000000000000000000000000000000000000000000000000000b",
+    "args": {
+      "digest": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+      "object": "0x000000000000000000000000000000000000000000000000000000000000000b"
+    }
+  },
+  {
+    "name": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+    "cat": "transaction",
+    "ph": "B",
+    "ts": "[timestamp]",
+    "pid": 1,
+    "tid": "0x000000000000000000000000000000000000000000000000000000000000000c",
+    "args": {
+      "digest": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+      "object": "0x000000000000000000000000000000000000000000000000000000000000000c"
+    }
+  },
+  {
+    "name": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+    "cat": "transaction",
+    "ph": "E",
+    "ts": "[timestamp]",
+    "pid": 1,
+    "tid": "0x000000000000000000000000000000000000000000000000000000000000000a",
+    "args": {
+      "digest": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+      "object": "0x000000000000000000000000000000000000000000000000000000000000000a",
+      "duration_us": "[duration]"
+    }
+  },
+  {
+    "name": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+    "cat": "transaction",
+    "ph": "E",
+    "ts": "[timestamp]",
+    "pid": 1,
+    "tid": "0x000000000000000000000000000000000000000000000000000000000000000b",
+    "args": {
+      "digest": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+      "object": "0x000000000000000000000000000000000000000000000000000000000000000b",
+      "duration_us": "[duration]"
+    }
+  },
+  {
+    "name": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+    "cat": "transaction",
+    "ph": "E",
+    "ts": "[timestamp]",
+    "pid": 1,
+    "tid": "0x000000000000000000000000000000000000000000000000000000000000000b",
+    "args": {
+      "digest": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+      "object": "0x000000000000000000000000000000000000000000000000000000000000000b",
+      "duration_us": "[duration]"
+    }
+  },
+  {
+    "name": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+    "cat": "transaction",
+    "ph": "E",
+    "ts": "[timestamp]",
+    "pid": 1,
+    "tid": "0x000000000000000000000000000000000000000000000000000000000000000c",
+    "args": {
+      "digest": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+      "object": "0x000000000000000000000000000000000000000000000000000000000000000c",
+      "duration_us": "[duration]"
+    }
+  }
+]

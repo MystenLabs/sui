@@ -17050,6 +17050,7 @@ dependencies = [
  "bs58 0.5.1",
  "clap",
  "hex",
+ "insta",
  "parking_lot 0.12.3",
  "reqwest",
  "serde",

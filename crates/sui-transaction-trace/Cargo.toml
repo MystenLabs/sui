@@ -26,3 +26,4 @@ bs58 = "0.5"
 tempfile.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "time", "macros", "test-util"] }
 telemetry-subscribers.workspace = true
+insta = { workspace = true, features = ["json"] }

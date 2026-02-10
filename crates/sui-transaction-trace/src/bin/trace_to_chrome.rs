@@ -9,11 +9,11 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use sui_transaction_trace::{LogReader, TimestampedEvent, TxEventType};
+use sui_transaction_trace::LogReader;
+use sui_transaction_trace::chrome_trace::{TransactionData, convert_to_chrome_trace};
 
 #[derive(Parser)]
 #[command(name = "trace-to-chrome")]
@@ -36,25 +36,18 @@ struct Args {
     fake_data: bool,
 }
 
-/// Chrome Trace Event format
-#[derive(Debug, Serialize)]
-struct ChromeTraceEvent {
-    name: String,
-    cat: String,
-    ph: String, // Phase: "B" (begin), "E" (end), or "X" (complete)
-    ts: i64,    // Timestamp in microseconds
-    #[serde(skip_serializing_if = "Option::is_none")]
-    dur: Option<i64>, // Duration in microseconds (for "X" events)
-    pid: u32,   // Process ID
-    tid: String, // Thread ID (object ID)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    args: Option<serde_json::Value>,
+/// Transaction data from GraphQL response (internal deserialization format)
+#[derive(Debug)]
+struct GraphQLTransactionData {
+    input_objects: Vec<String>,
 }
 
-/// Transaction data from GraphQL
-#[derive(Debug, Deserialize)]
-struct TransactionData {
-    input_objects: Vec<String>,
+impl From<GraphQLTransactionData> for TransactionData {
+    fn from(data: GraphQLTransactionData) -> Self {
+        TransactionData {
+            input_objects: data.input_objects,
+        }
+    }
 }
 
 /// Fake transaction data for testing
@@ -77,7 +70,7 @@ fn get_fake_transaction_data(digest: &str) -> TransactionData {
         vec![format!("0x{:064x}", digest.len())]
     };
 
-    TransactionData { input_objects }
+    GraphQLTransactionData { input_objects }.into()
 }
 
 /// Fetch transaction data from GraphQL endpoint
@@ -145,84 +138,7 @@ async fn fetch_transaction_data(
         }
     }
 
-    Ok(TransactionData { input_objects })
-}
-
-/// Convert trace events to Chrome Trace format
-fn convert_to_chrome_trace(
-    events: Vec<TimestampedEvent>,
-    tx_data_map: HashMap<String, TransactionData>,
-) -> Vec<ChromeTraceEvent> {
-    let mut chrome_events = Vec::new();
-    let mut tx_begin_times: HashMap<String, i64> = HashMap::new();
-
-    for event in events {
-        let digest_hex = hex::encode(event.digest);
-        let digest_base58 = bs58::encode(event.digest).into_string();
-
-        match event.event_type {
-            TxEventType::ExecutionBegin => {
-                // Convert SystemTime to microseconds since epoch
-                let ts = event
-                    .timestamp
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_micros() as i64;
-
-                tx_begin_times.insert(digest_hex.clone(), ts);
-
-                // Get input objects for this transaction (map key is hex)
-                if let Some(tx_data) = tx_data_map.get(&digest_hex) {
-                    for object_id in &tx_data.input_objects {
-                        // Create a Begin event for each object
-                        chrome_events.push(ChromeTraceEvent {
-                            name: digest_base58.clone(),
-                            cat: "transaction".to_string(),
-                            ph: "B".to_string(),
-                            ts,
-                            dur: None,
-                            pid: 1,
-                            tid: object_id.clone(),
-                            args: Some(json!({
-                                "digest": &digest_base58,
-                                "object": object_id,
-                            })),
-                        });
-                    }
-                }
-            }
-            TxEventType::ExecutionComplete => {
-                let ts = event
-                    .timestamp
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_micros() as i64;
-
-                // Get input objects for this transaction (map key is hex)
-                if let Some(tx_data) = tx_data_map.get(&digest_hex) {
-                    for object_id in &tx_data.input_objects {
-                        // Create an End event for each object
-                        chrome_events.push(ChromeTraceEvent {
-                            name: digest_base58.clone(),
-                            cat: "transaction".to_string(),
-                            ph: "E".to_string(),
-                            ts,
-                            dur: None,
-                            pid: 1,
-                            tid: object_id.clone(),
-                            args: Some(json!({
-                                "digest": &digest_base58,
-                                "object": object_id,
-                                "duration_us": ts - tx_begin_times.get(&digest_hex).unwrap_or(&ts),
-                            })),
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    chrome_events
+    Ok(GraphQLTransactionData { input_objects }.into())
 }
 
 #[tokio::main]
