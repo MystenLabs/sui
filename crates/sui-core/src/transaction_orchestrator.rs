@@ -564,8 +564,6 @@ where
 
         loop {
             tokio::select! {
-                biased;
-
                 // Local effects might be available
                 all_effects_result = &mut local_effects_future => {
                     debug!(

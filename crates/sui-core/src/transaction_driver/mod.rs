@@ -319,8 +319,6 @@ where
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
-        let amplification_factor =
-            amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();

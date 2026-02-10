@@ -1151,7 +1151,7 @@ impl ValidatorService {
         Ok((tonic::Response::new(response), Weight::zero()))
     }
 
-    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, fields(consensus_position = ?request.consensus_position, fast_path_effects = tracing::field::Empty))]
+    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, fields(consensus_position = ?request.consensus_position))]
     async fn wait_for_effects_response(
         &self,
         request: WaitForEffectsRequest,
@@ -1187,8 +1187,6 @@ impl ValidatorService {
             };
 
         tokio::select! {
-            // Ensure that finalized effects are always prioritized.
-            biased;
             // We always wait for effects regardless of consensus position via
             // notify_read_executed_effects_may_fail. This is safe because we have separated
             // mysticeti fastpath outputs to a separate dirty cache
