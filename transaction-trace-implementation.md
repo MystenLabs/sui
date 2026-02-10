@@ -192,8 +192,18 @@ TransactionEvent(tx2, ExecutionComplete)
 - [x] Basic tests
 - [x] Double-buffering with background flush task
 - [x] File rotation and cleanup logic
+- [x] Synchronous flush mode for deterministic testing
+- [x] Virtual time support with tokio test-util
 
-### Phase 2: Integration
+### Phase 1.5: Log Reading and Replay (COMPLETED)
+- [x] Define `TimestampedEvent` struct for replayed events
+- [x] Implement `LogReader` for reading trace files
+- [x] Reconstruct full timestamps from AbsTime + deltas
+- [x] Iterator interface for event stream
+- [x] Round-trip test verifying timestamp accuracy with virtual clock
+- [x] Fixed virtual time support using tokio::time::Instant throughout
+
+### Phase 2: Integration (CURRENT)
 - [ ] Identify injection points in transaction execution pipeline
 - [ ] Add instrumentation to execution flow
 - [ ] Configuration and feature flags

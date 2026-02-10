@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::io::BufWriter;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 /// Transaction digest represented as a 32-byte array
 pub type TransactionDigest = [u8; 32];
@@ -40,12 +40,26 @@ pub enum LogRecord {
 }
 
 /// Transaction event types for lifecycle tracking.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TxEventType {
     /// Transaction execution started
     ExecutionBegin,
     /// Transaction execution completed
     ExecutionComplete,
+}
+
+/// A transaction event with its reconstructed wall-clock timestamp.
+///
+/// This is the output type from LogReader - it provides a fully reconstructed
+/// timestamp so consumers don't need to handle delta-time encoding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimestampedEvent {
+    /// Wall-clock time when this event occurred
+    pub timestamp: SystemTime,
+    /// Transaction digest
+    pub digest: TransactionDigest,
+    /// Event type
+    pub event_type: TxEventType,
 }
 
 /// Configuration for transaction trace logging.
@@ -91,9 +105,12 @@ struct LoggerState {
     /// Pre-allocated buffer for log records
     buffer: Vec<LogRecord>,
     /// Last event time for delta calculations (monotonic)
-    last_instant: Instant,
+    last_instant: tokio::time::Instant,
     /// Time of last flush
-    last_flush: Instant,
+    last_flush: tokio::time::Instant,
+    /// Initial correlation between SystemTime and Instant for virtual time support
+    initial_system_time: SystemTime,
+    initial_instant: tokio::time::Instant,
 }
 
 /// State for the background flush task
@@ -152,9 +169,13 @@ impl TransactionTraceLogger {
         // Create log directory if it doesn't exist
         std::fs::create_dir_all(&config.log_dir)?;
 
+        // Capture initial time correlation for virtual time support
+        let initial_system_time = SystemTime::now();
+        let initial_instant = tokio::time::Instant::now();
+
         let mut buffer = Vec::with_capacity(config.buffer_capacity);
         // Push initial AbsTime anchor
-        buffer.push(LogRecord::AbsTime(SystemTime::now()));
+        buffer.push(LogRecord::AbsTime(initial_system_time));
 
         let (flush_tx, sync_flush_state) = if config.sync_flush {
             // Synchronous flushing mode (for tests)
@@ -177,14 +198,25 @@ impl TransactionTraceLogger {
             config: config.clone(),
             state: Mutex::new(LoggerState {
                 buffer,
-                last_instant: Instant::now(),
-                last_flush: Instant::now(),
+                last_instant: initial_instant,
+                last_flush: initial_instant,
+                initial_system_time,
+                initial_instant,
             }),
             flush_tx,
             sync_flush_state,
         });
 
         Ok(logger)
+    }
+
+    /// Computes current SystemTime based on virtual time.
+    ///
+    /// This ensures AbsTime records are consistent with delta times when using virtual time
+    /// (e.g., in tests with tokio::time::pause()).
+    fn current_system_time(state: &LoggerState) -> SystemTime {
+        let elapsed = tokio::time::Instant::now() - state.initial_instant;
+        state.initial_system_time + elapsed
     }
 
     /// Records a transaction event with automatic time tracking.
@@ -206,7 +238,7 @@ impl TransactionTraceLogger {
         digest: TransactionDigest,
         event_type: TxEventType,
     ) -> Result<()> {
-        let now = Instant::now();
+        let now = tokio::time::Instant::now();
 
         let mut state = self.state.lock();
 
@@ -225,8 +257,10 @@ impl TransactionTraceLogger {
 
             // Push AbsTime anchor to the new buffer and reset last_instant
             // This correlates the wall-clock time with the start of the new buffer
-            state.buffer.push(LogRecord::AbsTime(SystemTime::now()));
-            state.last_instant = Instant::now();
+            // Use current_system_time to ensure consistency with virtual time
+            let abs_time = Self::current_system_time(&state);
+            state.buffer.push(LogRecord::AbsTime(abs_time));
+            state.last_instant = tokio::time::Instant::now();
 
             // Flush buffer (async or sync depending on runtime)
             if let Some(flush_tx) = &self.flush_tx {
@@ -371,6 +405,145 @@ impl TransactionTraceLogger {
     }
 }
 
+impl Drop for TransactionTraceLogger {
+    fn drop(&mut self) {
+        // Flush any remaining buffered data
+        let mut state = self.state.lock();
+        if state.buffer.is_empty() {
+            return;
+        }
+
+        let mut buffer_to_flush = Vec::new();
+        std::mem::swap(&mut state.buffer, &mut buffer_to_flush);
+        drop(state);
+
+        if let Some(flush_tx) = &self.flush_tx {
+            // Async mode: send to background task
+            // Ignore errors - task might already be shut down
+            let _ = flush_tx.send(buffer_to_flush);
+        } else if let Some(sync_flush_state) = &self.sync_flush_state {
+            // Sync mode: flush immediately
+            let mut flush_state = sync_flush_state.lock();
+            if let Err(e) =
+                Self::flush_buffer_to_disk(&self.config, &buffer_to_flush, &mut flush_state)
+            {
+                tracing::error!("Failed to flush buffer on drop: {}", e);
+            }
+        }
+    }
+}
+
+/// Reader for transaction trace log files.
+///
+/// Reads and parses binary log files, reconstructing full wall-clock timestamps
+/// from AbsTime anchors and delta-time records. Provides an iterator interface
+/// that yields TimestampedEvent structs.
+///
+/// # Example
+/// ```no_run
+/// use sui_transaction_trace::*;
+/// use std::path::Path;
+///
+/// let reader = LogReader::new(Path::new("tx-trace-12345.bin")).unwrap();
+/// for event in reader {
+///     let event = event.unwrap();
+///     println!("{:?} at {:?}", event.event_type, event.timestamp);
+/// }
+/// ```
+pub struct LogReader {
+    file: std::fs::File,
+    current_time: Option<SystemTime>,
+}
+
+impl LogReader {
+    /// Creates a new log reader for the specified file.
+    ///
+    /// # Errors
+    /// Returns an error if the file cannot be opened.
+    pub fn new(path: &std::path::Path) -> Result<Self> {
+        let file = std::fs::File::open(path)?;
+        Ok(Self {
+            file,
+            current_time: None,
+        })
+    }
+
+    /// Returns an iterator over timestamped events in the log file.
+    pub fn iter(&mut self) -> LogReaderIterator<'_> {
+        LogReaderIterator { reader: self }
+    }
+}
+
+/// Iterator over timestamped events from a log file.
+pub struct LogReaderIterator<'a> {
+    reader: &'a mut LogReader,
+}
+
+impl<'a> Iterator for LogReaderIterator<'a> {
+    type Item = Result<TimestampedEvent>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            // Deserialize next record
+            let record: LogRecord = match bincode::deserialize_from(&mut self.reader.file) {
+                Ok(r) => r,
+                Err(e) => {
+                    // EOF is expected, other errors should be reported
+                    if e.to_string().contains("unexpected end of file")
+                        || e.to_string()
+                            .contains("io error: failed to fill whole buffer")
+                    {
+                        return None;
+                    }
+                    return Some(Err(e.into()));
+                }
+            };
+
+            match record {
+                LogRecord::AbsTime(time) => {
+                    // New absolute time anchor
+                    self.reader.current_time = Some(time);
+                }
+                LogRecord::DeltaTime(micros) => {
+                    // Add delta to current time
+                    if let Some(current) = self.reader.current_time {
+                        self.reader.current_time =
+                            Some(current + Duration::from_micros(micros as u64));
+                    } else {
+                        return Some(Err(anyhow::anyhow!(
+                            "DeltaTime record without preceding AbsTime"
+                        )));
+                    }
+                }
+                LogRecord::DeltaTimeLarge(duration) => {
+                    // Add large delta to current time
+                    if let Some(current) = self.reader.current_time {
+                        self.reader.current_time = Some(current + duration);
+                    } else {
+                        return Some(Err(anyhow::anyhow!(
+                            "DeltaTimeLarge record without preceding AbsTime"
+                        )));
+                    }
+                }
+                LogRecord::TransactionEvent { digest, event_type } => {
+                    // Return event with reconstructed timestamp
+                    if let Some(timestamp) = self.reader.current_time {
+                        return Some(Ok(TimestampedEvent {
+                            timestamp,
+                            digest,
+                            event_type,
+                        }));
+                    } else {
+                        return Some(Err(anyhow::anyhow!(
+                            "TransactionEvent without preceding AbsTime"
+                        )));
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -450,5 +623,183 @@ mod tests {
             .filter_map(|e| e.ok())
             .collect();
         assert!(!entries.is_empty(), "Expected at least one log file");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_log_replay_round_trip() {
+        tokio::time::pause();
+        telemetry_subscribers::init_for_testing();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config = TraceLogConfig {
+            log_dir: temp_dir.path().to_path_buf(),
+            buffer_capacity: 10, // Small enough to trigger flush
+            flush_interval_secs: 100,
+            sync_flush: true,
+            ..Default::default()
+        };
+
+        let logger = TransactionTraceLogger::new(config.clone()).unwrap();
+
+        // Record events with known timing
+        let tx1 = [1u8; 32];
+        let tx2 = [2u8; 32];
+        let tx3 = [3u8; 32];
+
+        // Event 1: tx1 begins
+        logger
+            .write_transaction_event(tx1, TxEventType::ExecutionBegin)
+            .unwrap();
+
+        // Advance time by 100µs
+        tokio::time::advance(Duration::from_micros(100)).await;
+
+        // Event 2: tx2 begins (concurrent with tx1)
+        logger
+            .write_transaction_event(tx2, TxEventType::ExecutionBegin)
+            .unwrap();
+
+        // Advance time by 500µs
+        tokio::time::advance(Duration::from_micros(500)).await;
+
+        // Event 3: tx1 completes
+        logger
+            .write_transaction_event(tx1, TxEventType::ExecutionComplete)
+            .unwrap();
+
+        // Advance time by 200µs
+        tokio::time::advance(Duration::from_micros(200)).await;
+
+        // Event 4: tx2 completes
+        logger
+            .write_transaction_event(tx2, TxEventType::ExecutionComplete)
+            .unwrap();
+
+        // Advance time by 70ms (requires DeltaTimeLarge)
+        tokio::time::advance(Duration::from_millis(70)).await;
+
+        // Event 5: tx3 begins
+        logger
+            .write_transaction_event(tx3, TxEventType::ExecutionBegin)
+            .unwrap();
+
+        // Advance time by 100µs
+        tokio::time::advance(Duration::from_micros(100)).await;
+
+        // Event 6: tx3 completes
+        logger
+            .write_transaction_event(tx3, TxEventType::ExecutionComplete)
+            .unwrap();
+
+        // Force flush by filling buffer to capacity
+        drop(logger);
+
+        // Read back events
+        let log_files: Vec<_> = std::fs::read_dir(temp_dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.starts_with("tx-trace-") && s.ends_with(".bin"))
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        assert_eq!(log_files.len(), 1, "Expected exactly one log file");
+
+        let mut reader = LogReader::new(&log_files[0].path()).unwrap();
+        let events: Vec<_> = reader.iter().collect::<Result<Vec<_>>>().unwrap();
+
+        assert_eq!(events.len(), 6, "Expected 6 events");
+
+        // Verify events match
+        assert_eq!(events[0].digest, tx1);
+        assert_eq!(events[0].event_type, TxEventType::ExecutionBegin);
+
+        assert_eq!(events[1].digest, tx2);
+        assert_eq!(events[1].event_type, TxEventType::ExecutionBegin);
+
+        assert_eq!(events[2].digest, tx1);
+        assert_eq!(events[2].event_type, TxEventType::ExecutionComplete);
+
+        assert_eq!(events[3].digest, tx2);
+        assert_eq!(events[3].event_type, TxEventType::ExecutionComplete);
+
+        assert_eq!(events[4].digest, tx3);
+        assert_eq!(events[4].event_type, TxEventType::ExecutionBegin);
+
+        assert_eq!(events[5].digest, tx3);
+        assert_eq!(events[5].event_type, TxEventType::ExecutionComplete);
+
+        // Verify timestamps are reasonable (within tolerance due to encoding precision)
+        // The timestamps should be monotonically increasing
+        for i in 1..events.len() {
+            assert!(
+                events[i].timestamp >= events[i - 1].timestamp,
+                "Timestamps should be monotonically increasing"
+            );
+        }
+
+        // Check that time differences are approximately correct
+        // Note: We can't check exact equality because:
+        // 1. SystemTime::now() might advance slightly between events
+        // 2. Delta encoding has microsecond precision
+
+        // Time between event 0 and 1 should be ~100µs
+        let delta_01 = events[1]
+            .timestamp
+            .duration_since(events[0].timestamp)
+            .unwrap();
+        assert!(
+            delta_01 >= Duration::from_micros(90) && delta_01 <= Duration::from_micros(110),
+            "Expected ~100µs between events 0 and 1, got {:?}",
+            delta_01
+        );
+
+        // Time between event 1 and 2 should be ~500µs
+        let delta_12 = events[2]
+            .timestamp
+            .duration_since(events[1].timestamp)
+            .unwrap();
+        assert!(
+            delta_12 >= Duration::from_micros(490) && delta_12 <= Duration::from_micros(510),
+            "Expected ~500µs between events 1 and 2, got {:?}",
+            delta_12
+        );
+
+        // Time between event 3 and 4 should be ~200µs
+        let delta_23 = events[3]
+            .timestamp
+            .duration_since(events[2].timestamp)
+            .unwrap();
+        assert!(
+            delta_23 >= Duration::from_micros(190) && delta_23 <= Duration::from_micros(210),
+            "Expected ~200µs between events 2 and 3, got {:?}",
+            delta_23
+        );
+
+        // Time between event 4 and 5 should be ~70ms (tests DeltaTimeLarge)
+        let delta_34 = events[4]
+            .timestamp
+            .duration_since(events[3].timestamp)
+            .unwrap();
+        assert!(
+            delta_34 >= Duration::from_millis(69) && delta_34 <= Duration::from_millis(71),
+            "Expected ~70ms between events 3 and 4, got {:?}",
+            delta_34
+        );
+
+        // Time between event 5 and 6 should be ~100µs
+        let delta_45 = events[5]
+            .timestamp
+            .duration_since(events[4].timestamp)
+            .unwrap();
+        assert!(
+            delta_45 >= Duration::from_micros(90) && delta_45 <= Duration::from_micros(110),
+            "Expected ~100µs between events 4 and 5, got {:?}",
+            delta_45
+        );
     }
 }
