@@ -4604,7 +4604,6 @@ impl ProtocolConfig {
                 111 => {
                     cfg.feature_flags.validator_metadata_verify_v2 = true;
 
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
                         // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
                         cfg.feature_flags.enable_group_ops_native_functions = true;
                         cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
@@ -4625,11 +4624,14 @@ impl ProtocolConfig {
                         cfg.group_ops_ristretto_msm_base_cost_per_input = Some(1333);
                         cfg.group_ops_ristretto_msm_max_len = Some(1200);
 
-                        // TODO: Copied from blake2b - should update
+                    // TODO: Copied from blake2b - should update
+                    cfg.hash_sha3_512_cost_base = Some(52);
+                    cfg.hash_sha3_512_data_cost_per_byte = Some(2);
+                    cfg.hash_sha3_512_data_cost_per_block = Some(2);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_ristretto255_group_ops = true;
                         cfg.feature_flags.enable_sha3_512 = true;
-                        cfg.hash_sha3_512_cost_base = Some(52);
-                        cfg.hash_sha3_512_data_cost_per_byte = Some(2);
-                        cfg.hash_sha3_512_data_cost_per_block = Some(2);
                     }
                 }
                 // Use this template when making changes:

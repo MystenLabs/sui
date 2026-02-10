@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Group operations of BLS12-381.
+/// Only available in devnet.
 module sui::ristretto255;
 
 use sui::bcs;
@@ -74,56 +75,42 @@ public fun scalar_inv(e: &Element<Scalar>): Element<Scalar> {
     scalar_div(e, &scalar_one())
 }
 
-public fun hash_to_scalar(m: &vector<u8>): Element<Scalar> {
-    group_ops::hash_to(SCALAR_TYPE, m)
-}
-
 /////////////////////////////////
 ////// Point operations //////
 
-public fun point_from_bytes(bytes: &vector<u8>): Element<Point> {
+public fun g_from_bytes(bytes: &vector<u8>): Element<Point> {
     group_ops::from_bytes(POINT_TYPE, *bytes, false)
 }
 
-public fun identity(): Element<Point> {
+public fun g_identity(): Element<Point> {
     group_ops::from_bytes(POINT_TYPE, IDENTITY_BYTES, true)
 }
 
-public fun generator(): Element<Point> {
+public fun g_generator(): Element<Point> {
     group_ops::from_bytes(POINT_TYPE, GENERATOR_BYTES, true)
 }
 
-public fun point_add(e1: &Element<Point>, e2: &Element<Point>): Element<Point> {
+public fun g_add(e1: &Element<Point>, e2: &Element<Point>): Element<Point> {
     group_ops::add(POINT_TYPE, e1, e2)
 }
 
-public fun point_sub(e1: &Element<Point>, e2: &Element<Point>): Element<Point> {
+public fun g_sub(e1: &Element<Point>, e2: &Element<Point>): Element<Point> {
     group_ops::sub(POINT_TYPE, e1, e2)
 }
 
-public fun point_mul(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
+public fun g_mul(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
     group_ops::mul(POINT_TYPE, e1, e2)
 }
 
 /// Returns e2 / e1, fails if scalar is zero.
-public fun point_div(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
+public fun g_div(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
     group_ops::div(POINT_TYPE, e1, e2)
 }
 
-public fun point_neg(e: &Element<Point>): Element<Point> {
-    point_sub(&identity(), e)
+public fun g_neg(e: &Element<Point>): Element<Point> {
+    g_sub(&identity(), e)
 }
 
-public fun hash_to_point(m: &vector<u8>): Element<Point> {
+public fun hash_to_g(m: &vector<u8>): Element<Point> {
     group_ops::hash_to(POINT_TYPE, m)
-}
-
-/// Let 'scalars' be the vector [s1, s2, ..., sn] and 'elements' be the vector [e1, e2, ..., en].
-/// Returns s1*e1 + s2*e2 + ... + sn*en.
-/// Aborts with `EInputTooLong` if the vectors are larger than 32 (may increase in the future).
-public fun multi_scalar_multiplication(
-    scalars: &vector<Element<Scalar>>,
-    elements: &vector<Element<Point>>,
-): Element<Point> {
-    group_ops::multi_scalar_multiplication(POINT_TYPE, scalars, elements)
 }
