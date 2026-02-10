@@ -128,9 +128,9 @@ pub struct TraceLogConfig {
    unlock mutex
    ```
 3. Background flush task:
-   - Receives full buffer via bounded channel (capacity: 1000)
-   - Serializes records with BCS
-   - Writes to disk with length prefixes
+   - Receives full buffer (Vec<LogRecord>) via bounded channel (capacity: 1000)
+   - Serializes entire batch with BCS using `bcs::serialized_size` and `bcs::serialize_into`
+   - Writes single length prefix + batch to disk
    - Handles file rotation if needed
    - No mutex held during I/O
    - If channel is full, drops messages (no backpressure on hot path)
@@ -225,24 +225,25 @@ TransactionEvent(tx2, ExecutionComplete)
 
 ### Binary Layout
 ```
-File: <sequence of length-prefixed BCS-serialized LogRecord>
-Each record: [4-byte length (u32 LE)][BCS-encoded LogRecord]
+File: <sequence of length-prefixed batches>
+Each batch: [4-byte length (u32 LE)][BCS-encoded Vec<LogRecord>]
 ```
 
-Each `LogRecord` is serialized with BCS and prefixed with its length for sequential reading.
+Records are written in batches (one batch per buffer flush). Each batch contains a Vec<LogRecord> serialized with BCS and prefixed with a single length for the entire batch. This minimizes overhead compared to per-record length prefixes.
 
-### Size Estimates (with 4-byte length prefix per record)
-- `AbsTime`: ~4 (prefix) + ~24 bytes (BCS SystemTime encoding) = ~28 bytes
-- `DeltaTime(u16)`: ~4 (prefix) + ~3 bytes (variant + u16) = ~7 bytes
-- `DeltaTimeLarge(Duration)`: ~4 (prefix) + ~17 bytes (variant + Duration) = ~21 bytes
-- `TransactionEvent`: ~4 (prefix) + ~34 bytes (variant + 32 bytes digest + event type) = ~38 bytes
+### Size Estimates (batch format with single length prefix per flush)
+Individual record sizes (within batch):
+- `AbsTime`: ~24 bytes (BCS SystemTime encoding)
+- `DeltaTime(u16)`: ~3 bytes (variant + u16)
+- `DeltaTimeLarge(Duration)`: ~17 bytes (variant + Duration)
+- `TransactionEvent`: ~34 bytes (variant + 32 bytes digest + event type)
 
-Typical sequence (begin + complete):
+Typical sequence per transaction (begin + complete):
 ```
-AbsTime(28) + TxEvent(38) + DeltaTime(7) + TxEvent(38) = 111 bytes per transaction
+AbsTime(24) + TxEvent(34) + DeltaTime(3) + TxEvent(34) = 95 bytes per transaction
 ```
 
-With delta encoding, subsequent transactions only add ~83 bytes each.
+With delta encoding, subsequent transactions only add ~71 bytes each. Plus ~4 bytes overhead for the entire batch (length prefix), and small BCS Vec overhead (ULEB128 length).
 
 ## Design Decisions (RESOLVED)
 

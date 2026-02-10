@@ -355,16 +355,19 @@ impl TransactionTraceLogger {
             Self::cleanup_old_files(config)?;
         }
 
-        // Write all records in the buffer
+        // Write all records as a single batch with one length prefix
         if let Some(file) = &mut state.current_file {
-            for record in buffer {
-                let encoded = bcs::to_bytes(record)?;
-                // Write length prefix (u32) so we can deserialize records sequentially
-                let len = encoded.len() as u32;
-                file.write_all(&len.to_le_bytes())?;
-                file.write_all(&encoded)?;
-                state.current_file_size += 4 + encoded.len();
-            }
+            // Get serialized size without allocating
+            let size = bcs::serialized_size(buffer)?;
+
+            // Write length prefix (u32) for the entire batch
+            let len = size as u32;
+            file.write_all(&len.to_le_bytes())?;
+
+            // Serialize the entire Vec<LogRecord> directly
+            bcs::serialize_into(&mut *file, buffer)?;
+
+            state.current_file_size += 4 + size;
             file.flush()?;
         }
 
@@ -455,6 +458,10 @@ impl Drop for TransactionTraceLogger {
 pub struct LogReader {
     file: std::fs::File,
     current_time: Option<SystemTime>,
+    /// Buffered records from the current batch
+    buffered_records: Vec<LogRecord>,
+    /// Current position in the buffered records
+    buffer_pos: usize,
 }
 
 impl LogReader {
@@ -467,6 +474,8 @@ impl LogReader {
         Ok(Self {
             file,
             current_time: None,
+            buffered_records: Vec::new(),
+            buffer_pos: 0,
         })
     }
 
@@ -488,6 +497,55 @@ impl<'a> Iterator for LogReaderIterator<'a> {
         use std::io::Read;
 
         loop {
+            // If we have buffered records, process them first
+            if self.reader.buffer_pos < self.reader.buffered_records.len() {
+                let record = &self.reader.buffered_records[self.reader.buffer_pos];
+                self.reader.buffer_pos += 1;
+
+                // Process the record and update state
+                match record {
+                    LogRecord::AbsTime(time) => {
+                        self.reader.current_time = Some(*time);
+                        continue;
+                    }
+                    LogRecord::DeltaTime(micros) => {
+                        if let Some(current) = self.reader.current_time {
+                            self.reader.current_time =
+                                Some(current + Duration::from_micros(*micros as u64));
+                        } else {
+                            return Some(Err(anyhow::anyhow!(
+                                "DeltaTime record without preceding AbsTime"
+                            )));
+                        }
+                        continue;
+                    }
+                    LogRecord::DeltaTimeLarge(duration) => {
+                        if let Some(current) = self.reader.current_time {
+                            self.reader.current_time = Some(current + *duration);
+                        } else {
+                            return Some(Err(anyhow::anyhow!(
+                                "DeltaTimeLarge record without preceding AbsTime"
+                            )));
+                        }
+                        continue;
+                    }
+                    LogRecord::TransactionEvent { digest, event_type } => {
+                        if let Some(timestamp) = self.reader.current_time {
+                            return Some(Ok(TimestampedEvent {
+                                timestamp,
+                                digest: *digest,
+                                event_type: *event_type,
+                            }));
+                        } else {
+                            return Some(Err(anyhow::anyhow!(
+                                "TransactionEvent without preceding AbsTime"
+                            )));
+                        }
+                    }
+                }
+            }
+
+            // Need to read next batch
             // Read length prefix (u32)
             let mut len_buf = [0u8; 4];
             match self.reader.file.read_exact(&mut len_buf) {
@@ -497,60 +555,24 @@ impl<'a> Iterator for LogReaderIterator<'a> {
             }
             let len = u32::from_le_bytes(len_buf) as usize;
 
-            // Read record data
+            // Read batch data
             let mut data = vec![0u8; len];
             match self.reader.file.read_exact(&mut data) {
                 Ok(()) => {}
                 Err(e) => return Some(Err(e.into())),
             }
 
-            // Deserialize using BCS
-            let record: LogRecord = match bcs::from_bytes(&data) {
+            // Deserialize the entire batch
+            let records: Vec<LogRecord> = match bcs::from_bytes(&data) {
                 Ok(r) => r,
                 Err(e) => return Some(Err(e.into())),
             };
 
-            match record {
-                LogRecord::AbsTime(time) => {
-                    // New absolute time anchor
-                    self.reader.current_time = Some(time);
-                }
-                LogRecord::DeltaTime(micros) => {
-                    // Add delta to current time
-                    if let Some(current) = self.reader.current_time {
-                        self.reader.current_time =
-                            Some(current + Duration::from_micros(micros as u64));
-                    } else {
-                        return Some(Err(anyhow::anyhow!(
-                            "DeltaTime record without preceding AbsTime"
-                        )));
-                    }
-                }
-                LogRecord::DeltaTimeLarge(duration) => {
-                    // Add large delta to current time
-                    if let Some(current) = self.reader.current_time {
-                        self.reader.current_time = Some(current + duration);
-                    } else {
-                        return Some(Err(anyhow::anyhow!(
-                            "DeltaTimeLarge record without preceding AbsTime"
-                        )));
-                    }
-                }
-                LogRecord::TransactionEvent { digest, event_type } => {
-                    // Return event with reconstructed timestamp
-                    if let Some(timestamp) = self.reader.current_time {
-                        return Some(Ok(TimestampedEvent {
-                            timestamp,
-                            digest,
-                            event_type,
-                        }));
-                    } else {
-                        return Some(Err(anyhow::anyhow!(
-                            "TransactionEvent without preceding AbsTime"
-                        )));
-                    }
-                }
-            }
+            // Store records and reset position
+            self.reader.buffered_records = records;
+            self.reader.buffer_pos = 0;
+
+            // Continue loop to process first record from this batch
         }
     }
 }
