@@ -137,13 +137,54 @@ pub(crate) fn make_router(
 }
 
 impl axum::response::IntoResponse for BridgeError {
-    // TODO: distinguish client error.
     fn into_response(self) -> axum::response::Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {:?}", self),
-        )
-            .into_response()
+        let status = match &self {
+            BridgeError::InvalidTxHash
+            | BridgeError::UnknownTokenId(_)
+            | BridgeError::InvalidBridgeClientRequest(_)
+            | BridgeError::InvalidChainId
+            | BridgeError::ActionIsNotGovernanceAction(_)
+            | BridgeError::ActionIsNotTokenTransferAction
+            | BridgeError::GovernanceActionIsNotApproved => StatusCode::BAD_REQUEST,
+            BridgeError::TxNotFound | BridgeError::NoBridgeEventsInTxPosition => {
+                StatusCode::NOT_FOUND
+            }
+            BridgeError::TxNotFinalized => StatusCode::CONFLICT,
+            BridgeError::TransientProviderError(_) => StatusCode::SERVICE_UNAVAILABLE,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        let sanitized_error = match self {
+            BridgeError::InvalidTxHash => "InvalidTxHash",
+            BridgeError::OriginTxFailed => "OriginTxFailed",
+            BridgeError::TxNotFound => "TxNotFound",
+            BridgeError::TxNotFinalized => "TxNotFinalized",
+            BridgeError::NoBridgeEventsInTxPosition => "NoBridgeEventsInTxPosition",
+            BridgeError::BridgeEventInUnrecognizedEthContract => {
+                "BridgeEventInUnrecognizedEthContract"
+            }
+            BridgeError::BridgeEventInUnrecognizedSuiPackage => {
+                "BridgeEventInUnrecognizedSuiPackage"
+            }
+            BridgeError::BridgeEventNotActionable => "BridgeEventNotActionable",
+            BridgeError::UnknownTokenId(_) => "UnknownTokenId",
+            BridgeError::InvalidBridgeCommittee(_) => "InvalidBridgeCommittee",
+            BridgeError::InvalidBridgeAuthoritySignature(_) => "InvalidBridgeAuthoritySignature",
+            BridgeError::InvalidBridgeAuthority(_) => "InvalidBridgeAuthority",
+            BridgeError::InvalidAuthorityUrl(_) => "InvalidAuthorityUrl",
+            BridgeError::InvalidBridgeClientRequest(_) => "InvalidBridgeClientRequest",
+            BridgeError::InvalidChainId => "InvalidChainId",
+            BridgeError::MismatchedAuthoritySigner => "MismatchedAuthoritySigner",
+            BridgeError::MismatchedAction => "MismatchedAction",
+            BridgeError::ActionIsNotGovernanceAction(_) => "ActionIsNotGovernanceAction",
+            BridgeError::GovernanceActionIsNotApproved => "GovernanceActionIsNotApproved",
+            BridgeError::AuthoirtyUrlInvalid => "AuthoirtyUrlInvalid",
+            BridgeError::ActionIsNotTokenTransferAction => "ActionIsNotTokenTransferAction",
+            BridgeError::TransientProviderError(_) => "TransientProviderError",
+            _ => "InternalError",
+        };
+
+        (status, format!("BridgeError::{sanitized_error}")).into_response()
     }
 }
 
@@ -682,6 +723,7 @@ mod tests {
     use crate::server::mock_handler::BridgeRequestMockHandler;
     use crate::test_utils::get_test_authorities_and_run_mock_bridge_server;
     use crate::types::BridgeCommittee;
+    use axum::response::IntoResponse;
 
     #[tokio::test]
     async fn test_bridge_server_handle_blocklist_update_action_path() {
@@ -809,5 +851,18 @@ mod tests {
         let committee = BridgeCommittee::new(authorities).unwrap();
         let pub_key = committee.members().keys().next().unwrap();
         BridgeClient::new(pub_key.clone(), Arc::new(committee)).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_bridge_error_response_is_sanitized() {
+        let response = BridgeError::Generic("sensitive server detail".to_string()).into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert_eq!(body, "BridgeError::InternalError");
+        assert!(!body.contains("sensitive server detail"));
     }
 }
