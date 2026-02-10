@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use sui_sdk_types::{Address, Object, Version};
-use sui_sdk_types::{CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee};
-use sui_types::balance_change::BalanceChange;
-use sui_types::base_types::{ObjectID, ObjectType};
+use sui_sdk_types::{CheckpointSequenceNumber, EpochId, ValidatorCommittee};
 use sui_types::storage::ObjectKey;
+use sui_types::storage::ObjectStore;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
-use sui_types::storage::{ObjectStore, TransactionInfo};
 use tap::Pipe;
 
 use crate::Direction;
@@ -92,7 +89,8 @@ impl StateReader {
         &self,
         digest: sui_sdk_types::Digest,
     ) -> crate::Result<(
-        sui_sdk_types::SignedTransaction,
+        sui_types::transaction::TransactionData,
+        Vec<sui_types::signature::GenericSignature>,
         sui_types::effects::TransactionEffects,
         Option<sui_types::effects::TransactionEvents>,
     )> {
@@ -119,19 +117,11 @@ impl StateReader {
             None
         };
 
-        Ok((transaction.try_into()?, effects, events))
-    }
+        let transaction = transaction.into_data().into_inner();
+        let signatures = transaction.tx_signatures;
+        let transaction = transaction.intent_message.value;
 
-    #[tracing::instrument(skip(self))]
-    pub fn get_transaction_info(
-        &self,
-        digest: &sui_types::digests::TransactionDigest,
-    ) -> Option<TransactionInfo> {
-        self.inner()
-            .indexes()?
-            .get_transaction_info(digest)
-            .ok()
-            .flatten()
+        Ok((transaction, signatures, effects, events))
     }
 
     #[tracing::instrument(skip(self))]
@@ -139,26 +129,10 @@ impl StateReader {
         &self,
         digest: sui_sdk_types::Digest,
     ) -> crate::Result<TransactionRead> {
-        let (
-            SignedTransaction {
-                transaction,
-                signatures,
-            },
-            effects,
-            events,
-        ) = self.get_transaction(digest)?;
+        let (transaction, signatures, effects, events) = self.get_transaction(digest)?;
 
-        let (checkpoint, balance_changes, object_types) =
-            if let Some(info) = self.get_transaction_info(&(digest.into())) {
-                (
-                    Some(info.checkpoint),
-                    Some(info.balance_changes),
-                    Some(info.object_types),
-                )
-            } else {
-                let checkpoint = self.inner().get_transaction_checkpoint(&(digest.into()));
-                (checkpoint, None, None)
-            };
+        let checkpoint = self.inner().get_transaction_checkpoint(&(digest.into()));
+
         let timestamp_ms = if let Some(checkpoint) = checkpoint {
             self.inner()
                 .get_checkpoint_by_sequence_number(checkpoint)
@@ -172,15 +146,13 @@ impl StateReader {
             .get_unchanged_loaded_runtime_objects(&(digest.into()));
 
         Ok(TransactionRead {
-            digest: transaction.digest(),
+            digest,
             transaction,
             signatures,
             effects,
             events,
             checkpoint,
             timestamp_ms,
-            balance_changes,
-            object_types,
             unchanged_loaded_runtime_objects,
         })
     }
@@ -230,14 +202,13 @@ impl StateReader {
 #[derive(Debug)]
 pub struct TransactionRead {
     pub digest: sui_sdk_types::Digest,
-    pub transaction: sui_sdk_types::Transaction,
-    pub signatures: Vec<sui_sdk_types::UserSignature>,
+    pub transaction: sui_types::transaction::TransactionData,
+    pub signatures: Vec<sui_types::signature::GenericSignature>,
     pub effects: sui_types::effects::TransactionEffects,
     pub events: Option<sui_types::effects::TransactionEvents>,
+    #[allow(unused)]
     pub checkpoint: Option<u64>,
     pub timestamp_ms: Option<u64>,
-    pub balance_changes: Option<Vec<BalanceChange>>,
-    pub object_types: Option<HashMap<ObjectID, ObjectType>>,
     pub unchanged_loaded_runtime_objects: Option<Vec<ObjectKey>>,
 }
 

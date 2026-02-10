@@ -330,6 +330,8 @@ struct IndexStoreTables {
     ///
     /// Only contains entries for transactions which have yet to be pruned from the main database.
     #[default_options_override_fn = "default_table_options"]
+    #[allow(unused)]
+    #[deprecated]
     transactions: DBMap<TransactionDigest, TransactionInfo>,
 
     /// An index of object ownership.
@@ -438,11 +440,12 @@ impl IndexStoreTables {
             events_table_options(index_options.events_compaction_filter),
         );
 
-        IndexStoreTables::open_tables_read_write(
+        IndexStoreTables::open_tables_read_write_with_deprecation_option(
             path.into(),
             MetricConf::new("rpc-index"),
             None,
             Some(DBMapTableConfigMap::new(table_options)),
+            true, // remove deprecated tables
         )
     }
 
@@ -451,11 +454,12 @@ impl IndexStoreTables {
         options: typed_store::rocksdb::Options,
         table_options: Option<DBMapTableConfigMap>,
     ) -> Self {
-        IndexStoreTables::open_tables_read_write(
+        IndexStoreTables::open_tables_read_write_with_deprecation_option(
             path.into(),
             MetricConf::new("rpc-index"),
             Some(options),
             table_options,
+            true, // remove deprecated tables
         )
     }
 
@@ -510,7 +514,7 @@ impl IndexStoreTables {
         });
 
         if let Some(checkpoint_range) = checkpoint_range {
-            self.index_existing_transactions(
+            self.index_existing_checkpoints(
                 authority_store,
                 checkpoint_store,
                 checkpoint_range,
@@ -558,7 +562,7 @@ impl IndexStoreTables {
     }
 
     #[tracing::instrument(skip(self, authority_store, checkpoint_store, rpc_config))]
-    fn index_existing_transactions(
+    fn index_existing_checkpoints(
         &mut self,
         authority_store: &AuthorityStore,
         checkpoint_store: &CheckpointStore,
@@ -573,17 +577,19 @@ impl IndexStoreTables {
 
         checkpoint_range.into_par_iter().try_for_each(|seq| {
             let load_events = rpc_config.authenticated_events_indexing();
-            let checkpoint_data = sparse_checkpoint_data_for_backfill(
+            let Some(checkpoint_data) = sparse_checkpoint_data_for_epoch_backfill(
                 authority_store,
                 checkpoint_store,
                 seq,
                 load_events,
-            )?;
+            )?
+            else {
+                return Ok(());
+            };
 
-            let mut batch = self.transactions.batch();
+            let mut batch = self.epochs.batch();
 
             self.index_epoch(&checkpoint_data, &mut batch)?;
-            self.index_transactions(&checkpoint_data, &mut batch, load_events)?;
 
             batch
                 .write_opt(bulk_ingestion_write_options())
@@ -601,15 +607,10 @@ impl IndexStoreTables {
     fn prune(
         &self,
         pruned_checkpoint_watermark: u64,
-        checkpoint_contents_to_prune: &[CheckpointContents],
+        _checkpoint_contents_to_prune: &[CheckpointContents],
     ) -> Result<(), TypedStoreError> {
-        let mut batch = self.transactions.batch();
+        let mut batch = self.watermark.batch();
 
-        let transactions_to_prune = checkpoint_contents_to_prune
-            .iter()
-            .flat_map(|contents| contents.iter().map(|digests| digests.transaction));
-
-        batch.delete_batch(&self.transactions, transactions_to_prune)?;
         batch.insert_batch(
             &self.watermark,
             [(Watermark::Pruned, pruned_checkpoint_watermark)],
@@ -630,7 +631,7 @@ impl IndexStoreTables {
             "indexing checkpoint"
         );
 
-        let mut batch = self.transactions.batch();
+        let mut batch = self.owner.batch();
 
         self.index_epoch(checkpoint, &mut batch)?;
         self.index_transactions(
@@ -799,20 +800,18 @@ impl IndexStoreTables {
 
         // iterate in reverse order, process accumulator settlements first
         for (tx_idx, tx) in checkpoint.transactions.iter().enumerate().rev() {
-            let info = TransactionInfo::new(
-                tx.transaction.transaction_data(),
+            let balance_changes = sui_types::balance_change::derive_balance_changes(
                 &tx.effects,
                 &tx.input_objects,
                 &tx.output_objects,
-                cp,
-            );
-
-            let balance_changes = info.balance_changes.iter().filter_map(|change| {
-                if let TypeTag::Struct(coin_type) = &change.coin_type {
+            )
+            .into_iter()
+            .filter_map(|change| {
+                if let TypeTag::Struct(coin_type) = change.coin_type {
                     Some((
                         BalanceKey {
                             owner: change.address,
-                            coin_type: coin_type.as_ref().to_owned(),
+                            coin_type: *coin_type,
                         },
                         BalanceIndexInfo {
                             balance_delta: change.amount,
@@ -823,9 +822,6 @@ impl IndexStoreTables {
                 }
             });
             batch.partial_merge_batch(&self.balance, balance_changes)?;
-
-            let digest = tx.transaction.digest();
-            batch.insert_batch(&self.transactions, [(digest, info)])?;
 
             if index_events {
                 if let Some(version) = self.extract_accumulator_version(tx) {
@@ -939,13 +935,6 @@ impl IndexStoreTables {
 
     fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>, TypedStoreError> {
         self.epochs.get(&epoch)
-    }
-
-    fn get_transaction_info(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<TransactionInfo>, TypedStoreError> {
-        self.transactions.get(digest)
     }
 
     fn event_iter(
@@ -1460,13 +1449,6 @@ impl RpcIndexStore {
         self.tables.get_epoch_info(epoch)
     }
 
-    pub fn get_transaction_info(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<TransactionInfo>, TypedStoreError> {
-        self.tables.get_transaction_info(digest)
-    }
-
     pub fn owner_iter(
         &self,
         owner: SuiAddress,
@@ -1742,17 +1724,23 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
 
 // TODO figure out a way to dedup this logic. Today we'd need to do quite a bit of refactoring to
 // make it possible.
-fn sparse_checkpoint_data_for_backfill(
+fn sparse_checkpoint_data_for_epoch_backfill(
     authority_store: &AuthorityStore,
     checkpoint_store: &CheckpointStore,
     checkpoint: u64,
     load_events: bool,
-) -> Result<CheckpointData, StorageError> {
+) -> Result<Option<CheckpointData>, StorageError> {
     use sui_types::full_checkpoint_content::CheckpointTransaction;
 
     let summary = checkpoint_store
         .get_checkpoint_by_sequence_number(checkpoint)?
         .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint}")))?;
+
+    // Only load genesis and end of epoch checkpoints
+    if summary.end_of_epoch_data.is_none() && summary.sequence_number != 0 {
+        return Ok(None);
+    }
+
     let contents = checkpoint_store
         .get_checkpoint_contents(&summary.content_digest)?
         .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint}")))?;
@@ -1807,7 +1795,7 @@ fn sparse_checkpoint_data_for_backfill(
         transactions: full_transactions,
     };
 
-    Ok(checkpoint_data)
+    Ok(Some(checkpoint_data))
 }
 
 fn get_balance_and_type_if_coin(object: &Object) -> Result<Option<(StructTag, u64)>, StorageError> {

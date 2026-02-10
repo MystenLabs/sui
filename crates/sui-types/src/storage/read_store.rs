@@ -659,8 +659,6 @@ pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub trait RpcIndexes: Send + Sync {
     fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>>;
 
-    fn get_transaction_info(&self, digest: &TransactionDigest) -> Result<Option<TransactionInfo>>;
-
     fn owned_objects_iter(
         &self,
         owner: SuiAddress,
