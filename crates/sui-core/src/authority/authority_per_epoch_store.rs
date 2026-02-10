@@ -380,12 +380,6 @@ pub struct AuthorityPerEpochStore {
     /// will start with the new epoch(and will open instance of per-epoch store for a new epoch).
     epoch_alive: tokio::sync::RwLock<bool>,
     pub(crate) end_of_publish: Mutex<StakeAggregator<(), true>>,
-    /// Pending certificates that are waiting to be sequenced by the consensus.
-    /// This is an in-memory 'index' of a AuthorityPerEpochTables::pending_consensus_transactions.
-    /// We need to keep track of those in order to know when to send EndOfPublish message.
-    /// Lock ordering: this is a 'leaf' lock, no other locks should be acquired in the scope of this lock
-    /// In particular, this lock is always acquired after taking read or write lock on reconfig state
-    pending_consensus_certificates: RwLock<HashSet<TransactionDigest>>,
 
     /// MutexTable for transaction locks (prevent concurrent execution of same transaction)
     mutex_table: MutexTable<TransactionDigest>,
@@ -496,10 +490,6 @@ pub struct AuthorityEpochTables {
     /// another handle_consensus_transaction call for the given digest. This probably means at
     /// epoch change.
     consensus_message_processed: DBMap<SequencedConsensusTransactionKey, bool>,
-
-    /// Map stores pending transactions that this authority submitted to consensus
-    #[default_options_override_fn = "pending_consensus_transactions_table_default_config"]
-    pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
 
     /// The following table is used to store a single value (the corresponding key is a constant). The value
     /// represents the index of the latest consensus message this authority processed, running hash of
@@ -616,12 +606,6 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
     }
 }
 
-fn pending_consensus_transactions_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_write_throughput()
-        .optimize_for_large_values_no_scan(1 << 10)
-}
-
 impl AuthorityEpochTables {
     #[cfg(not(tidehunter))]
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
@@ -716,15 +700,6 @@ impl AuthorityEpochTables {
                     mutexes,
                     uniform_key,
                     bloom_config.clone(),
-                ),
-            ),
-            (
-                "pending_consensus_transactions".to_string(),
-                ThConfig::new_with_config_indexing(
-                    KeyIndexing::Hash,
-                    mutexes,
-                    uniform_key,
-                    KeySpaceConfig::default(),
                 ),
             ),
             (
@@ -909,14 +884,6 @@ impl AuthorityEpochTables {
         Ok(state)
     }
 
-    pub fn get_all_pending_consensus_transactions(&self) -> SuiResult<Vec<ConsensusTransaction>> {
-        Ok(self
-            .pending_consensus_transactions
-            .safe_iter()
-            .map(|item| item.map(|(_k, v)| v))
-            .collect::<Result<Vec<_>, _>>()?)
-    }
-
     /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
     /// It should only be used in one-off cases or tests after fully understanding the risk.
     pub fn remove_executed_tx_subtle(&self, digest: &TransactionDigest) -> SuiResult {
@@ -1075,19 +1042,7 @@ impl AuthorityPerEpochStore {
             .expect("Load reconfig state at initialization cannot fail");
 
         let epoch_alive_notify = NotifyOnce::new();
-        let pending_consensus_transactions = tables.get_all_pending_consensus_transactions()?;
-        let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
-            .iter()
-            .filter_map(|transaction| {
-                if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
-                    &transaction.kind
-                {
-                    Some(*certificate.digest())
-                } else {
-                    None
-                }
-            })
-            .collect();
+
         assert_eq!(
             epoch_start_configuration.epoch_start_state().epoch(),
             epoch_id
@@ -1254,7 +1209,6 @@ impl AuthorityPerEpochStore {
             running_root_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
-            pending_consensus_certificates: RwLock::new(pending_consensus_certificates),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             version_assignment_mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             epoch_open_time: current_time,
@@ -2287,13 +2241,6 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
-        self.tables()
-            .expect("recovery should not cross epoch boundary")
-            .get_all_pending_consensus_transactions()
-            .expect("failed to get pending consensus transactions")
-    }
-
     #[cfg(test)]
     pub fn get_next_object_version(
         &self,
@@ -2627,82 +2574,6 @@ impl AuthorityPerEpochStore {
         );
         let (_, assigned_versions) = assigned_versions.0.into_iter().next().unwrap();
         Ok(assigned_versions)
-    }
-
-    /// When submitting a certificate caller **must** provide a ReconfigState lock guard
-    /// and verify that it allows new user certificates
-    pub fn insert_pending_consensus_transactions(
-        &self,
-        transactions: &[ConsensusTransaction],
-        lock: Option<&RwLockReadGuard<ReconfigState>>,
-    ) -> SuiResult {
-        let key_value_pairs = transactions.iter().filter_map(|tx| {
-            if tx.is_user_transaction() {
-                // UserTransaction does not need to be resubmitted on recovery.
-                None
-            } else {
-                debug!("Inserting pending consensus transaction: {:?}", tx.key());
-                Some((tx.key(), tx))
-            }
-        });
-        self.tables()?
-            .pending_consensus_transactions
-            .multi_insert(key_value_pairs)?;
-
-        let digests: Vec<_> = transactions
-            .iter()
-            .filter_map(|tx| match &tx.kind {
-                ConsensusTransactionKind::CertifiedTransaction(cert) => Some(cert.digest()),
-                _ => None,
-            })
-            .collect();
-        if !digests.is_empty() {
-            let state = lock.expect("Must pass reconfiguration lock when storing certificate");
-            // Caller is responsible for performing graceful check
-            assert!(
-                state.should_accept_user_certs(),
-                "Reconfiguration state should allow accepting user transactions"
-            );
-            let mut pending_consensus_certificates = self.pending_consensus_certificates.write();
-            pending_consensus_certificates.extend(digests);
-        }
-
-        Ok(())
-    }
-
-    pub fn remove_pending_consensus_transactions(
-        &self,
-        keys: &[ConsensusTransactionKey],
-    ) -> SuiResult {
-        debug!("Removing pending consensus transactions: {:?}", keys);
-        self.tables()?
-            .pending_consensus_transactions
-            .multi_remove(keys)?;
-        let mut pending_consensus_certificates = self.pending_consensus_certificates.write();
-        for key in keys {
-            if let ConsensusTransactionKey::Certificate(digest) = key {
-                pending_consensus_certificates.remove(digest);
-            }
-        }
-        Ok(())
-    }
-
-    pub fn pending_consensus_certificates_count(&self) -> usize {
-        self.pending_consensus_certificates.read().len()
-    }
-
-    pub fn pending_consensus_certificates_empty(&self) -> bool {
-        self.pending_consensus_certificates.read().is_empty()
-    }
-
-    pub fn pending_consensus_certificates(&self) -> HashSet<TransactionDigest> {
-        self.pending_consensus_certificates.read().clone()
-    }
-
-    pub fn is_pending_consensus_certificate(&self, tx_digest: &TransactionDigest) -> bool {
-        self.pending_consensus_certificates
-            .read()
-            .contains(tx_digest)
     }
 
     pub fn deferred_transactions_empty(&self) -> bool {
@@ -3496,23 +3367,11 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    /// If reconfig state is RejectUserCerts, and there is no fastpath transaction left to be
-    /// finalized, send EndOfPublish to signal to other authorities that this authority is
-    /// not voting for or executing more transactions in this epoch.
+    /// If reconfig state is RejectUserCerts, send EndOfPublish to signal
+    /// to other authorities that this authority is not voting for more transactions in this epoch.
     pub(crate) fn should_send_end_of_publish(&self) -> bool {
         let reconfig_state = self.get_reconfig_state_read_lock_guard();
-        if !reconfig_state.is_reject_user_certs() {
-            // Still accepting user transactions, or already received 2f+1 EOP messages.
-            // Either way EOP cannot or does not need to be sent.
-            return false;
-        }
-
-        // EOP can only be sent after finalizing remaining transactions.
-        self.pending_consensus_certificates_empty()
-            && self
-                .consensus_tx_status_cache
-                .as_ref()
-                .is_none_or(|c| c.get_num_fastpath_certified() == 0)
+        reconfig_state.is_reject_user_certs()
     }
 
     pub(crate) fn write_pending_checkpoint(
