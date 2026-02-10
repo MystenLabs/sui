@@ -4,6 +4,7 @@
 use anyhow::Result;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::io::BufWriter;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -11,33 +12,45 @@ use std::time::{Duration, Instant, SystemTime};
 /// Transaction digest represented as a 32-byte array
 pub type TransactionDigest = [u8; 32];
 
-/// Log record types written to the trace file
+/// Log record types written to the trace file.
+///
+/// Records are serialized with bincode and written sequentially to binary log files.
+/// Time records (AbsTime, DeltaTime, DeltaTimeLarge) anchor transaction events to
+/// wall-clock time and record elapsed time between events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LogRecord {
-    /// Absolute timestamp anchor point (wall-clock time for log interpretation)
+    /// Absolute timestamp anchor point (wall-clock time for log interpretation).
+    /// Written at the start of each flushed buffer to correlate with wall-clock time.
     AbsTime(SystemTime),
 
-    /// Delta time in microseconds (0-65535 µs = 0-65.5ms)
+    /// Delta time in microseconds (0-65535 µs = 0-65.5ms).
+    /// Used for most time deltas as events are typically close together.
     DeltaTime(u16),
 
-    /// Large delta for gaps > 65.5ms
+    /// Large delta for gaps > 65.5ms.
+    /// Used when time between events exceeds u16::MAX microseconds.
     DeltaTimeLarge(Duration),
 
-    /// Transaction event with digest and event type
+    /// Transaction event with digest and event type.
+    /// Each event is self-contained with its own digest to support concurrent transactions.
     TransactionEvent {
         digest: TransactionDigest,
         event_type: TxEventType,
     },
 }
 
-/// Transaction event types
+/// Transaction event types for lifecycle tracking.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum TxEventType {
+    /// Transaction execution started
     ExecutionBegin,
+    /// Transaction execution completed
     ExecutionComplete,
 }
 
-/// Configuration for transaction trace logging
+/// Configuration for transaction trace logging.
+///
+/// Controls buffering, file rotation, and cleanup behavior.
 #[derive(Debug, Clone)]
 pub struct TraceLogConfig {
     /// Directory for log files
@@ -80,13 +93,37 @@ struct LoggerState {
 
 /// State for the background flush task
 struct FlushTaskState {
-    /// Current log file being written to
-    current_file: Option<std::fs::File>,
+    /// Current log file being written to (buffered for performance)
+    current_file: Option<BufWriter<std::fs::File>>,
     /// Size of the current file in bytes
     current_file_size: usize,
 }
 
-/// Transaction trace logger
+/// Transaction trace logger for recording execution timing.
+///
+/// This logger provides a low-overhead way to record transaction execution events
+/// with precise timing. It uses:
+/// - Double-buffering to minimize lock contention in the hot path
+/// - Background flushing on a blocking thread for non-blocking writes
+/// - Delta-time encoding to keep log files compact
+/// - Automatic file rotation and cleanup
+///
+/// # Thread Safety
+/// The logger is thread-safe and designed for concurrent access from multiple threads.
+/// The write path uses a mutex only for appending to the in-memory buffer, with no I/O
+/// in the critical section.
+///
+/// # Example
+/// ```no_run
+/// use sui_transaction_trace::*;
+///
+/// let config = TraceLogConfig::default();
+/// let logger = TransactionTraceLogger::new(config).unwrap();
+///
+/// let digest = [1u8; 32];
+/// logger.write_transaction_event(digest, TxEventType::ExecutionBegin).unwrap();
+/// logger.write_transaction_event(digest, TxEventType::ExecutionComplete).unwrap();
+/// ```
 pub struct TransactionTraceLogger {
     config: TraceLogConfig,
     state: Mutex<LoggerState>,
@@ -94,7 +131,14 @@ pub struct TransactionTraceLogger {
 }
 
 impl TransactionTraceLogger {
-    /// Create a new transaction trace logger
+    /// Creates a new transaction trace logger.
+    ///
+    /// This spawns a background flush task using `tokio::task::spawn_blocking`
+    /// that will run until the logger is dropped. When all references to the
+    /// logger are dropped, the channel closes and the flush task exits gracefully.
+    ///
+    /// # Errors
+    /// Returns an error if the log directory cannot be created.
     pub fn new(config: TraceLogConfig) -> Result<Arc<Self>> {
         // Create log directory if it doesn't exist
         std::fs::create_dir_all(&config.log_dir)?;
@@ -121,7 +165,20 @@ impl TransactionTraceLogger {
         Ok(logger)
     }
 
-    /// Main logging interface - records a transaction event
+    /// Records a transaction event with automatic time tracking.
+    ///
+    /// This is the main logging interface. The logger automatically:
+    /// - Calculates time delta since the last event
+    /// - Adds appropriate time record (DeltaTime or DeltaTimeLarge)
+    /// - Appends the transaction event
+    /// - Triggers background flush if needed
+    ///
+    /// # Performance
+    /// This method holds a mutex only for appending to the in-memory buffer.
+    /// No I/O is performed in this call - all disk writes happen on a background thread.
+    ///
+    /// # Errors
+    /// Returns an error only in exceptional cases (should not happen in normal operation).
     pub fn write_transaction_event(
         &self,
         digest: TransactionDigest,
@@ -150,8 +207,9 @@ impl TransactionTraceLogger {
         state.last_instant = now;
 
         // Check if we need to flush
-        let should_flush = state.buffer.len() >= state.buffer.capacity()
-            || now.duration_since(state.last_flush).as_secs() >= self.config.flush_interval_secs;
+        let should_flush = (state.buffer.len() >= state.buffer.capacity()
+            || now.duration_since(state.last_flush).as_secs() >= self.config.flush_interval_secs)
+            && !state.buffer.is_empty();
 
         if should_flush {
             // Swap buffer with new empty one
@@ -161,7 +219,9 @@ impl TransactionTraceLogger {
 
             // Send to flush task (drop lock before sending)
             drop(state);
-            let _ = self.flush_tx.send(new_buffer);
+            if let Err(e) = self.flush_tx.send(new_buffer) {
+                tracing::error!("Failed to send buffer to flush task, data lost: {:?}", e);
+            }
         }
 
         Ok(())
@@ -196,22 +256,19 @@ impl TransactionTraceLogger {
 
         // Check if we need to rotate to a new file
         if state.current_file.is_none() || state.current_file_size >= config.max_file_size {
-            // Close current file
-            state.current_file = None;
+            // Explicitly flush and close current file before rotation
+            if let Some(mut file) = state.current_file.take() {
+                file.flush()?;
+            }
             state.current_file_size = 0;
 
-            // Create new file
+            // Create new file with buffered writer
             let timestamp = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)?
                 .as_secs();
             let file_path = config.log_dir.join(format!("tx-trace-{}.bin", timestamp));
-            let mut file = std::fs::File::create(&file_path)?;
-
-            // Write AbsTime as first record
-            let abs_time_record = LogRecord::AbsTime(SystemTime::now());
-            let encoded = bincode::serialize(&abs_time_record)?;
-            file.write_all(&encoded)?;
-            state.current_file_size += encoded.len();
+            let file = std::fs::File::create(&file_path)?;
+            let file = BufWriter::new(file);
 
             state.current_file = Some(file);
 
@@ -219,8 +276,15 @@ impl TransactionTraceLogger {
             Self::cleanup_old_files(config)?;
         }
 
-        // Write buffer to current file
+        // Write AbsTime anchor at the start of each flushed buffer
+        // This correlates the monotonic delta times with wall-clock time
         if let Some(file) = &mut state.current_file {
+            let abs_time_record = LogRecord::AbsTime(SystemTime::now());
+            let encoded = bincode::serialize(&abs_time_record)?;
+            file.write_all(&encoded)?;
+            state.current_file_size += encoded.len();
+
+            // Write all records in the buffer
             for record in buffer {
                 let encoded = bincode::serialize(record)?;
                 file.write_all(&encoded)?;
