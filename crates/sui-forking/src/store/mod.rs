@@ -9,15 +9,12 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
 use simulacrum::SimulatorStore;
-use sui_config::genesis::Genesis;
-use sui_types::message_envelope::{Envelope, VerifiedEnvelope};
 use sui_types::transaction::{SenderSignedData, Transaction};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
     digests::{ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::SuiErrorKind,
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
         VerifiedCheckpoint,
@@ -30,14 +27,12 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 
-use sui_data_store::stores::{DataStore, FileSystemStore, LruMemoryStore, ReadThroughStore};
+use sui_data_store::stores::{DataStore, FileSystemStore, ReadThroughStore};
 use sui_data_store::{
     ObjectKey, ObjectStore as _, TransactionInfo, TransactionStore, TransactionStoreWriter,
     VersionQuery,
 };
 use sui_types::storage::ReadStore;
-
-pub mod rpc_data_store;
 
 pub struct ForkingStore {
     // Checkpoint data
@@ -68,22 +63,22 @@ pub struct ForkingStore {
 
 impl ForkingStore {
     pub fn new(
-        genesis: &Genesis,
+        // genesis: &Genesis,
         forked_at_checkpoint: u64,
         fs_store: FileSystemStore,
         object_store: ReadThroughStore<FileSystemStore, DataStore>,
     ) -> Self {
-        let mut store = Self::new_with_rpc_data_store_and_checkpoint(
+        let store = Self::new_with_rpc_data_store_and_checkpoint(
             fs_store,
             object_store,
             forked_at_checkpoint,
         );
 
-        println!(
-            "Genesis transaction digest: {:?}",
-            genesis.transaction().digest()
-        );
-        store.init_with_genesis(genesis);
+        // println!(
+        //     "Genesis transaction digest: {:?}",
+        //     genesis.transaction().digest()
+        // );
+        // store.init_with_genesis(genesis);
         store
     }
 
@@ -111,7 +106,7 @@ impl ForkingStore {
         println!("TODO fetching all objects is currently not supported in ForkingStore");
         todo!()
     }
-    pub fn get_objects_by_keys(&self, object_keys: &[ObjectKey]) -> &HashMap<ObjectID, Object> {
+    pub fn get_objects_by_keys(&self, _object_keys: &[ObjectKey]) -> &HashMap<ObjectID, Object> {
         println!("TODO fetching objects by keys is currently not supported in ForkingStore");
         todo!()
     }
@@ -180,7 +175,10 @@ impl ForkingStore {
         tx.map(|tx_info| tx_info.effects)
     }
 
-    pub fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<&TransactionEvents> {
+    pub fn get_transaction_events(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> Option<&TransactionEvents> {
         println!(
             "TODO fetching transaction events is currently not supported in ForkingStore, and it \
             retursn None"
@@ -232,7 +230,7 @@ impl ForkingStore {
     }
 
     pub fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
-        sui_types::sui_system_state::get_sui_system_state(self).expect("system state must exist")
+        todo!()
     }
 
     pub fn get_clock(&self) -> sui_types::clock::Clock {
@@ -291,7 +289,7 @@ impl ForkingStore {
         &mut self,
         transaction: VerifiedTransaction,
         effects: TransactionEffects,
-        events: TransactionEvents,
+        _events: TransactionEvents,
         written_objects: BTreeMap<ObjectID, Object>,
     ) {
         let tx_digest = effects.transaction_digest().to_string();
@@ -319,22 +317,22 @@ impl ForkingStore {
         self.object_store.write_objects(objects).unwrap();
     }
 
-    pub fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
+    pub fn insert_transaction(&mut self, _transaction: VerifiedTransaction) {
         todo!()
     }
 
-    pub fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
+    pub fn insert_transaction_effects(&mut self, _effects: TransactionEffects) {
         todo!()
     }
 
-    pub fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
+    pub fn insert_events(&mut self, _tx_digest: &TransactionDigest, _events: TransactionEvents) {
         todo!()
     }
 
     pub fn update_objects(
         &mut self,
-        written_objects: BTreeMap<ObjectID, Object>,
-        deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
+        _written_objects: BTreeMap<ObjectID, Object>,
+        _deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
         todo!()
     }

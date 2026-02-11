@@ -26,9 +26,8 @@ use tokio::sync::RwLock;
 
 use crate::store::ForkingStore;
 use fastcrypto::encoding::{Base58, Encoding};
-use simulacrum::EpochState;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
-use sui_rpc::proto::sui::rpc::v2::{Checkpoint, Epoch, ProtocolConfig, ValidatorCommittee};
+use sui_rpc::proto::sui::rpc::v2::{Checkpoint, Epoch, ValidatorCommittee};
 use sui_rpc_api::proto::sui::rpc::v2::ValidatorCommitteeMember;
 use sui_types::message_envelope::Message;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -305,12 +304,13 @@ impl LedgerService for ForkingLedgerService {
             }
         };
 
-        let sequence_number = checkpoint.sequence_number;
         let mut message = Checkpoint::default();
-        let content_digest = checkpoint.content_digest;
+        let _content_digest = checkpoint.content_digest;
 
         let summary = checkpoint.data();
         let signature = checkpoint.auth_sig();
+
+        println!("Auth sig: {:?}", signature);
 
         message.merge(summary, &read_mask);
         message.merge(signature.clone(), &read_mask);
@@ -329,6 +329,7 @@ impl LedgerService for ForkingLedgerService {
         //     || read_mask.contains(Checkpoint::OBJECTS_FIELD))
         //     && let Some(url) = checkpoint_bucket
         // {
+        //     let sequence_number = checkpoint.sequence_number;
         //     let client = create_remote_store_client(url, vec![], 60)?;
         //     let (checkpoint_data, _) =
         //         CheckpointReader::fetch_from_object_store(&client, sequence_number).await?;
@@ -347,7 +348,9 @@ impl LedgerService for ForkingLedgerService {
         request: tonic::Request<GetEpochRequest>,
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
         let GetEpochRequest {
-            epoch, read_mask, ..
+            epoch: _,
+            read_mask,
+            ..
         } = request.into_inner();
 
         let read_mask = {

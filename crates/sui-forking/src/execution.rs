@@ -15,7 +15,6 @@ use tracing::info;
 
 use crate::context::Context;
 use crate::store::ForkingStore;
-use sui_data_store::ObjectStore;
 
 /// Result of executing a transaction.
 pub struct ExecutionResult {
@@ -146,7 +145,7 @@ pub async fn fetch_input_objects(
 
 async fn fetch_and_cache_object_from_rpc(
     data_store: &ForkingStore,
-    context: &Context,
+    _context: &Context,
     object_id: &ObjectID,
 ) -> Result<(), anyhow::Error> {
     let obj = data_store.get_object(object_id);

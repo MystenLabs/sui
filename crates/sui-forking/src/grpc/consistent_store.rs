@@ -91,7 +91,7 @@ impl ConsistentService for ForkingConsistentStore {
 
         let address = owner.address();
         let sui_address = SuiAddress::from_str(address).unwrap();
-        let objects = data_store.owned_objects(sui_address);
+        let _objects = data_store.owned_objects(sui_address);
         todo!()
     }
 

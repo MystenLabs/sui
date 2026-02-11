@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap},
     net::SocketAddr,
     num::NonZeroUsize,
     path::PathBuf,
@@ -19,8 +18,6 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use diesel::pg::PgConnection;
-use diesel::prelude::*;
 use prometheus::Registry;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -28,21 +25,22 @@ use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use simulacrum::AdvanceEpochConfig;
+use simulacrum::{AdvanceEpochConfig, store::in_mem_store::KeyStore};
 use sui_data_store::{
     Node, ObjectKey, ObjectStore, VersionQuery,
     stores::{DataStore, FileSystemStore, NODE_MAPPING_FILE, ReadThroughStore},
 };
-use sui_indexer_alt_metrics::MetricsService;
-use sui_indexer_alt_reader::{
-    consistent_reader::ConsistentReaderArgs,
-    ledger_grpc_reader::{LedgerGrpcArgs, LedgerGrpcReader},
-};
-use sui_pg_db::{Db, DbArgs, reset_database};
+use sui_pg_db::{DbArgs, reset_database};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::ChainIdentifier,
     effects::TransactionEffectsAPI,
+    messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents, VerifiedCheckpoint},
+    sui_system_state::{
+        SuiSystemState, SuiSystemStateTrait,
+        sui_system_state_inner_v1::ValidatorSetV1,
+        sui_system_state_inner_v2::{self, SuiSystemStateInnerV2},
+    },
     supported_protocol_versions::{
         Chain::{self},
         ProtocolConfig,
@@ -76,6 +74,7 @@ pub struct ExecuteTxRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+
 pub struct ExecuteTxResponse {
     /// Base64 encoded transaction effects
     pub effects: String,
@@ -384,13 +383,38 @@ pub async fn start_server(
         .with_chain_override(chain)
         .build();
 
-    let store = ForkingStore::new(
-        &config.genesis,
-        at_checkpoint,
-        fs_transaction_store,
-        object_store,
+    let committee = config.committee_with_network();
+
+    // change the validator set to the sui system object to be the one in the new config we just
+    // built.
+    let checkpoint = fetch_checkpoint_from_graphql(client, Some(at_checkpoint)).await?;
+    let store = ForkingStore::new(at_checkpoint, fs_transaction_store, object_store);
+
+    let system_state = get_sui_system_state(&store).await.unwrap();
+
+    let mut inner = match system_state {
+        SuiSystemState::V2(inner) => inner,
+        _ => panic!("Unsupported system state version"),
+    };
+
+    inner.validators = match config.genesis.sui_system_object() {
+        SuiSystemState::V2(genesis_inner) => genesis_inner.validators,
+        _ => panic!("Unsupported system state version"),
+    };
+
+    let initial_sui_system_state = SuiSystemState::V2(inner);
+
+    let keystore = KeyStore::from_network_config(&config);
+
+    // let mut simulacrum = simulacrum::Simulacrum::new_with_network_config_store(&config, rng, store);
+    let mut simulacrum = simulacrum::Simulacrum::new_from_custom_state(
+        keystore,
+        checkpoint.0,
+        initial_sui_system_state,
+        &config,
+        store,
+        rng,
     );
-    let mut simulacrum = simulacrum::Simulacrum::new_with_network_config_store(&config, rng, store);
     simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
     println!("Data ingestion path: {:?}", data_ingestion_path);
 
@@ -400,8 +424,6 @@ pub async fn start_server(
         .context("Failed to create Prometheus registry.")
         .unwrap();
 
-    let metrics_args = sui_indexer_alt_metrics::MetricsArgs::default();
-    let metrics = MetricsService::new(metrics_args, registry.clone());
     let rpc_listen_address = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("RPC listening on {}", rpc_listen_address);
 
@@ -431,7 +453,7 @@ pub async fn start_server(
         .add_service(LedgerServiceServer::new(ledger_service))
         .add_service(SubscriptionServiceServer::new(subscription_service))
         .add_service(TransactionExecutionServiceServer::new(tx_execution_service));
-    let grpc_service = grpc.run().await?;
+    let _ = grpc.run().await?;
 
     let state =
         Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
@@ -481,6 +503,27 @@ pub async fn start_server(
     Ok(())
 }
 
+/// Fetch a checkpoint from the GraphQL RPC and deserialize it into a
+/// `VerifiedCheckpoint` and `CheckpointContents`.
+///
+/// We trust the RPC response, so the checkpoint is wrapped with
+/// `new_unchecked` rather than verifying signatures against a committee.
+pub async fn fetch_checkpoint_from_graphql(
+    client: GraphQLClient,
+    sequence_number: Option<u64>,
+) -> Result<(VerifiedCheckpoint, CheckpointContents)> {
+    let (summary_bytes, content_bytes) = client.fetch_checkpoint_bcs(sequence_number).await?;
+
+    let certified: CertifiedCheckpointSummary =
+        bcs::from_bytes(&summary_bytes).context("Failed to deserialize checkpoint summary")?;
+    let contents: CheckpointContents =
+        bcs::from_bytes(&content_bytes).context("Failed to deserialize checkpoint contents")?;
+
+    let verified = VerifiedCheckpoint::new_unchecked(certified);
+
+    Ok((verified, contents))
+}
+
 const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x5", "0x6"];
 
 /// Update system objects to the versions at the forking checkpoint
@@ -511,179 +554,9 @@ async fn update_system_objects(context: crate::context::Context) -> anyhow::Resu
     Ok(())
 }
 
-// /// Start the indexers: both the main indexer and the consistent store
-// async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> Result<()> {
-//     let registry = prometheus::Registry::new();
-//     let rocksdb_db_path = tempdir().unwrap().keep();
-//     let db_url_str = "postgres://postgres:postgrespw@localhost:5432";
-//     let db_url = Url::parse(&format!("{db_url_str}/sui_indexer_alt")).unwrap();
-//     // drop_and_recreate_db(db_url_str).unwrap();
-//     let indexer_config = IndexerConfig::new(db_url, data_ingestion_path.clone());
-//     let consistent_store_config = ConsistentStoreConfig::new(
-//         rocksdb_db_path.clone(),
-//         indexer_config.indexer_args.clone(),
-//         indexer_config.client_args.clone(),
-//     );
-//     let indexer = start_indexer(indexer_config, &registry).await?;
-//     let consistent_store =
-//         start_consistent_store(consistent_store_config, &registry, version).await?;
-//
-//     match indexer.attach(consistent_store).main().await {
-//         Ok(()) | Err(sui_futures::service::Error::Terminated) => {}
-//
-//         Err(sui_futures::service::Error::Aborted) => {
-//             std::process::exit(1);
-//         }
-//
-//         Err(sui_futures::service::Error::Task(_)) => {
-//             std::process::exit(2);
-//         }
-//     }
-//
-//     Ok(())
-// }
-
-// fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> {
-//     // Connect to the 'postgres' database (not your target database)
-//     let mut conn = PgConnection::establish(db_url)?;
-//
-//     info!("Dropping and recreating database sui_indexer_alt...");
-//     // // Drop the database
-//     diesel::sql_query("DROP DATABASE IF EXISTS sui_indexer_alt").execute(&mut conn)?;
-//
-//     // Recreate it
-//     diesel::sql_query("CREATE DATABASE sui_indexer_alt").execute(&mut conn)?;
-//
-//     Ok(())
-// }
-
-// /// Insert an object's version info into the obj_versions table
-// pub(crate) async fn insert_obj_version_into_db(
-//     db_writer: &sui_pg_db::Db,
-//     object: &sui_types::object::Object,
-//     cp_sequence_number: i64,
-// ) -> anyhow::Result<()> {
-//     use diesel::prelude::*;
-//     use sui_indexer_alt_schema::schema::obj_versions;
-//
-//     let object_id = object.id().to_vec();
-//     let object_version = object.version().value() as i64;
-//     let object_digest = Some(object.digest().into_inner().to_vec());
-//
-//     let mut conn = db_writer.connect().await?;
-//
-//     diesel_async::RunQueryDsl::execute(
-//         diesel::insert_into(obj_versions::table)
-//             .values((
-//                 obj_versions::object_id.eq(&object_id),
-//                 obj_versions::object_version.eq(object_version),
-//                 obj_versions::object_digest.eq(&object_digest),
-//                 obj_versions::cp_sequence_number.eq(cp_sequence_number),
-//             ))
-//             .on_conflict((obj_versions::object_id, obj_versions::object_version))
-//             .do_nothing(),
-//         &mut conn,
-//     )
-//     .await?;
-//
-//     info!(
-//         "Inserted obj_version for {} version {} into obj_versions table",
-//         object.id(),
-//         object_version
-//     );
-//
-//     Ok(())
-// }
-
-// /// Insert an object into the kv_objects table
-// pub(crate) async fn insert_kv_object_into_db(
-//     db_writer: &sui_pg_db::Db,
-//     object: &sui_types::object::Object,
-// ) -> anyhow::Result<()> {
-//     use diesel::prelude::*;
-//     use sui_indexer_alt_schema::schema::kv_objects;
-//
-//     let object_id = object.id().to_vec();
-//     let object_version = object.version().value() as i64;
-//     let serialized_object = Some(bcs::to_bytes(object)?);
-//
-//     let mut conn = db_writer.connect().await?;
-//
-//     diesel_async::RunQueryDsl::execute(
-//         diesel::insert_into(kv_objects::table)
-//             .values((
-//                 kv_objects::object_id.eq(&object_id),
-//                 kv_objects::object_version.eq(object_version),
-//                 kv_objects::serialized_object.eq(&serialized_object),
-//             ))
-//             .on_conflict((kv_objects::object_id, kv_objects::object_version))
-//             .do_nothing(),
-//         &mut conn,
-//     )
-//     .await?;
-//
-//     info!(
-//         "Inserted object {} version {} into kv_objects table",
-//         object.id(),
-//         object_version
-//     );
-//
-//     Ok(())
-// }
-
-// /// Insert an object's info into the obj_info table
-// pub(crate) async fn insert_obj_info_into_db(
-//     db_writer: &sui_pg_db::Db,
-//     object: &sui_types::object::Object,
-//     cp_sequence_number: i64,
-// ) -> anyhow::Result<()> {
-//     use diesel::prelude::*;
-//     use sui_indexer_alt_schema::objects::StoredOwnerKind;
-//     use sui_indexer_alt_schema::schema::obj_info;
-//     use sui_types::object::Owner;
-//
-//     let object_id = object.id().to_vec();
-//
-//     let (owner_kind, owner_id) = match object.owner() {
-//         Owner::AddressOwner(a) => (Some(StoredOwnerKind::Address), Some(a.to_vec())),
-//         Owner::ObjectOwner(o) => (Some(StoredOwnerKind::Object), Some(o.to_vec())),
-//         Owner::Shared { .. } => (Some(StoredOwnerKind::Shared), None),
-//         Owner::Immutable => (Some(StoredOwnerKind::Immutable), None),
-//         Owner::ConsensusAddressOwner { owner, .. } => {
-//             (Some(StoredOwnerKind::Address), Some(owner.to_vec()))
-//         }
-//     };
-//
-//     let type_ = object.struct_tag();
-//     let package: Option<Vec<u8>> = type_.as_ref().map(|t| t.address.to_vec());
-//     let module: Option<String> = type_.as_ref().map(|t| t.module.to_string());
-//     let name: Option<String> = type_.as_ref().map(|t| t.name.to_string());
-//     let instantiation: Option<Vec<u8>> = type_
-//         .as_ref()
-//         .map(|t| bcs::to_bytes(&t.type_params))
-//         .transpose()?;
-//
-//     let mut conn = db_writer.connect().await?;
-//
-//     diesel_async::RunQueryDsl::execute(
-//         diesel::insert_into(obj_info::table)
-//             .values((
-//                 obj_info::object_id.eq(&object_id),
-//                 obj_info::cp_sequence_number.eq(cp_sequence_number),
-//                 obj_info::owner_kind.eq(owner_kind),
-//                 obj_info::owner_id.eq(&owner_id),
-//                 obj_info::package.eq(&package),
-//                 obj_info::module.eq(&module),
-//                 obj_info::name.eq(&name),
-//                 obj_info::instantiation.eq(&instantiation),
-//             ))
-//             .on_conflict((obj_info::object_id, obj_info::cp_sequence_number))
-//             .do_nothing(),
-//         &mut conn,
-//     )
-//     .await?;
-//
-//     info!("Inserted obj_info for {} into obj_info table", object.id(),);
-//
-//     Ok(())
-// }
+async fn get_sui_system_state(
+    forking_store: &ForkingStore,
+) -> Result<SuiSystemState, anyhow::Error> {
+    let state = sui_types::sui_system_state::get_sui_system_state(forking_store)?;
+    Ok(state)
+}

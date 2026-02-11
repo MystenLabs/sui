@@ -8,7 +8,6 @@ use tokio::sync::RwLock;
 
 use crate::store::ForkingStore;
 use simulacrum::Simulacrum;
-use sui_pg_db::Db;
 use sui_types::supported_protocol_versions::Chain;
 
 #[derive(Clone)]
