@@ -4571,7 +4571,7 @@ impl ProtocolConfig {
                 }
                 111 => {
                     cfg.feature_flags.validator_metadata_verify_v2 = true;
-                    
+
                     // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
                     cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
                     cfg.group_ops_ristretto_decode_point_cost = Some(2848);
