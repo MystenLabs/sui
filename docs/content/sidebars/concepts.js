@@ -62,8 +62,11 @@ const concepts = [
 	{
 		type: 'category',
 		label: 'Accessing Data',
+		link: {
+			type: 'doc',
+			id: 'concepts/data-access/data-serving',
+		},
 		items: [
-			'concepts/data-access/data-serving',
 			'concepts/data-access/custom-indexers',
 			'concepts/data-access/grpc',
 			{
