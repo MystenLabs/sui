@@ -1672,8 +1672,10 @@ mod test {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
         // Create a temporary directory for trace logs
-        let tmpdir = sui_simulator::tempfile::TempDir::new().unwrap();
-        let trace_log_dir = tmpdir.path().join("transaction-traces");
+        // Use a persistent directory so we can inspect files after the test
+        let trace_log_dir = std::path::PathBuf::from("/tmp/sui-trace-test");
+        let _ = std::fs::remove_dir_all(&trace_log_dir); // Clean up from previous runs
+        std::fs::create_dir_all(&trace_log_dir).unwrap();
 
         // Create network config with transaction trace logging enabled
         let mut network_config = ConfigBuilder::new_with_temp_dir()
@@ -1690,9 +1692,9 @@ mod test {
                         log_dir: Some(trace_log_dir.clone()),
                         max_file_size: Some(10 * 1024 * 1024), // 10MB
                         max_file_count: Some(5),
-                        buffer_capacity: Some(1000),
+                        buffer_capacity: Some(10), // Small buffer to force frequent flushes
                         flush_interval_secs: Some(1), // Fast flush for testing
-                        sync_flush: Some(true), // Use synchronous flush for msim compatibility
+                        sync_flush: Some(true),    // Use synchronous flush for msim compatibility
                     });
             }
 
@@ -1799,13 +1801,18 @@ mod test {
 
         // Convert to Chrome trace format
         println!("\nConverting to Chrome trace format...");
-        let chrome_events =
-            sui_transaction_trace::chrome_trace::convert_to_chrome_trace(all_events, tx_data_map);
+        let chrome_events = sui_transaction_trace::chrome_trace::convert_to_chrome_trace(
+            all_events.clone(),
+            tx_data_map,
+        );
 
-        println!("Generated {} Chrome trace events", chrome_events.len());
+        println!(
+            "Generated {} Chrome trace events (may be empty without tx_data_map)",
+            chrome_events.len()
+        );
 
-        // Write Chrome trace output to tmpdir
-        let chrome_trace_output = tmpdir.path().join("trace.json");
+        // Write Chrome trace output
+        let chrome_trace_output = trace_log_dir.parent().unwrap().join("trace.json");
         let chrome_trace_json = serde_json::json!({
             "traceEvents": chrome_events,
             "displayTimeUnit": "ms",
@@ -1818,10 +1825,18 @@ mod test {
         .unwrap();
 
         println!("\n===========================================");
-        println!("Chrome trace written to:");
-        println!("{}", chrome_trace_output.display());
+        println!(
+            "Binary trace file: {}/tx-trace-0.bin",
+            trace_log_dir.display()
+        );
+        println!("Chrome trace file: {}", chrome_trace_output.display());
         println!("===========================================");
-        println!("\nTo view: Open chrome://tracing and load the file");
+        println!("\nBinary trace contains {} events", all_events.len());
+        println!("Note: Chrome trace requires tx_data_map to generate proper events");
+        println!(
+            "To view Chrome trace: Open chrome://tracing and load {}",
+            chrome_trace_output.display()
+        );
 
         // Verify the output file exists and is valid JSON
         let output_content = std::fs::read_to_string(&chrome_trace_output).unwrap();
