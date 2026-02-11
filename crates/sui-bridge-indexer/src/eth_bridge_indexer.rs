@@ -530,16 +530,21 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                             token_id: bridge_event.tokenID,
                             amount: bridge_event.suiAdjustedAmount,
                             is_finalized,
+                            message_timestamp_ms: None,
                         }),
                     }));
                 }
                 EthSuiBridgeEvents::TokensDepositedV2(bridge_event) => {
                     info!(
-                        "Observed Eth Deposit at block: {}, tx_hash: {}",
+                        "Observed Eth V2 Deposit at block: {}, tx_hash: {}",
                         log.block_number(),
                         log.tx_hash
                     );
                     self.metrics.total_eth_token_deposited.inc();
+                    // V2 event carries `timestampSeconds` from the EVM contract.
+                    // Convert seconds → milliseconds so the frontend can compare
+                    // against the 48-hour limiter-bypass window.
+                    let msg_timestamp_ms = bridge_event.timestampSeconds.to::<u64>() * 1000;
                     processed_txn_data.push(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.sourceChainID,
                         nonce: bridge_event.nonce,
@@ -558,6 +563,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                             token_id: bridge_event.tokenID,
                             amount: bridge_event.suiAdjustedAmount,
                             is_finalized,
+                            message_timestamp_ms: Some(msg_timestamp_ms),
                         }),
                     }));
                 }
