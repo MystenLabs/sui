@@ -2296,7 +2296,7 @@ pub fn open_tidehunter_invariant(
     rocks_path: &Path,
     metric_conf: MetricConf,
     opt_cfs: &[(&str, rocksdb::Options)],
-    registry_id: Option<prometheus::core::GenericGauge<prometheus::core::AtomicU64>>,
+    registry_id: Option<RegistryID>,
 ) -> Result<Arc<Database>, TypedStoreError> {
     let cfs = populate_missing_cfs(opt_cfs, rocks_path).map_err(typed_store_err_from_rocks_err)?;
     let mut options = default_db_options().options;
