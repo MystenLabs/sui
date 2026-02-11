@@ -15,10 +15,10 @@ const LONG_SCALAR_BYTES: vector<u8> =
     x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff0000000000";
 const SHORT_SCALAR_BYTES: vector<u8> =
     x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff0000";
-const LONG_G1_BYTES: vector<u8> =
-    x"97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bbbbbb";
-const SHORT_G1_BYTES: vector<u8> =
-    x"97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb";
+const LONG_G_BYTES: vector<u8> =
+    x"44f53520926ec81fbd5a387845beb7df85a96a24ece18738bdcfa6a7822a176dbb";
+const SHORT_G_BYTES: vector<u8> =
+    x"44f53520926ec81fbd5a387845beb7df85a96a24ece18738bdcfa6a7822a17";
 
 #[test]
 fun test_scalar_ops() {
@@ -196,4 +196,107 @@ fun test_invalid_scalar_div() {
 fun test_invalid_scalar_inv() {
     let a = ristretto255::scalar_from_u64(0);
     let _ = ristretto255::scalar_inv(&a);
+}
+
+#[test]
+fun test_g_ops() {
+    let id = ristretto255::g_identity();
+    let g = ristretto255::g_generator();
+
+    assert!(group_ops::equal(&id, &ristretto255::g_sub(&g, &g)));
+    assert!(group_ops::equal(&id, &ristretto255::g_sub(&id, &id)));
+    assert!(group_ops::equal(&g, &ristretto255::g_add(&id, &g)));
+    assert!(group_ops::equal(&g, &ristretto255::g_add(&g, &id)));
+
+    let two_g = ristretto255::g_add(&g, &g);
+    let four_g = ristretto255::g_add(&two_g, &two_g);
+
+    let another_four_g = ristretto255::g_add(&id, &four_g);
+    assert!(group_ops::equal(&four_g, &another_four_g));
+
+    let another_four_g = ristretto255::g_mul(&ristretto255::scalar_from_u64(4), &g);
+    assert!(group_ops::equal(&four_g, &another_four_g));
+
+    let another_id = ristretto255::g_mul(&ristretto255::scalar_from_u64(0), &g);
+    assert!(group_ops::equal(&id, &another_id));
+
+    let another_two_g = ristretto255::g_sub(&four_g, &two_g);
+    assert!(group_ops::equal(&two_g, &another_two_g));
+
+    let another_two_g = ristretto255::g_div(&ristretto255::scalar_from_u64(2), &four_g);
+    assert!(group_ops::equal(&two_g, &another_two_g));
+
+    let minus_two_g = ristretto255::g_neg(&two_g);
+    let another_two_g = ristretto255::g_add(&minus_two_g, &four_g);
+    assert!(group_ops::equal(&two_g, &another_two_g));
+
+    let order_minus_one = ristretto255::scalar_from_bytes(&ORDER_MINUS_ONE_BYTES);
+    let _ = ristretto255::g_mul(&order_minus_one, &g);
+
+    let msg = b"123";
+    let msg2 = b"321";
+    let hash1 = ristretto255::hash_to_g(&msg);
+    let hash2 = ristretto255::hash_to_g(&msg2);
+    let hash3 = ristretto255::hash_to_g(&msg);
+    assert!(!group_ops::equal(&hash1, &hash2));
+    assert!(group_ops::equal(&hash1, &hash3));
+}
+
+#[test]
+fun test_g_to_bytes_regression() {
+    let id = ristretto255::g_identity();
+    let id_bytes = *group_ops::bytes(&id);
+    let expected =
+        x"0000000000000000000000000000000000000000000000000000000000000000";
+    assert_eq!(expected, id_bytes);
+
+    let g = ristretto255::g_generator();
+    let g_bytes = *group_ops::bytes(&g);
+    let expected =
+        x"e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76";
+    assert_eq!(expected, g_bytes);
+
+    let h = ristretto255::g_mul(&ristretto255::scalar_from_u64(54321), &g);
+    let h_bytes = *group_ops::bytes(&h);
+    let expected =
+        x"6e94dc1325cae4b7cdbdaacf2686f0ae8fa67ec9c59fe818312f6d7eaea13e30";
+    assert_eq!(expected, h_bytes);
+}
+
+#[test]
+fun test_valid_g_from_bytes() {
+    let g = ristretto255::g_generator();
+    let g_from_bytes = ristretto255::g_from_bytes(group_ops::bytes(&g));
+    assert!(group_ops::equal(&g, &g_from_bytes));
+
+    let id = ristretto255::g_identity();
+    let id_from_bytes = ristretto255::g_from_bytes(group_ops::bytes(&id));
+    assert!(group_ops::equal(&id, &id_from_bytes));
+}
+
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
+fun test_invalid_g_too_short() {
+    let _ = ristretto255::g_from_bytes(&SHORT_G_BYTES);
+}
+
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
+fun test_invalid_g_empty() {
+    let _ = ristretto255::g_from_bytes(&vector[]);
+}
+
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
+fun test_invalid_g_too_long() {
+    let _ = ristretto255::g_from_bytes(&LONG_G_BYTES);
+}
+
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
+fun test_invalid_g_div() {
+    let a = ristretto255::scalar_from_u64(0);
+    let b = ristretto255::g_generator();
+    let _ = ristretto255::g_div(&a, &b);
+}
+
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
+fun test_invalid_g_empty_msg() {
+    let _ = ristretto255::hash_to_g(&vector[]);
 }
