@@ -212,10 +212,25 @@ TransactionEvent(tx2, ExecutionComplete)
 - [x] Integration test for file rotation and reconstruction
 
 ### Phase 2: Integration (CURRENT)
-- [ ] Identify injection points in transaction execution pipeline
-- [ ] Add instrumentation to execution flow
-- [ ] Configuration and feature flags
-- [ ] Performance benchmarks
+- [ ] **Configuration**
+  - Add `TraceLogConfig` to node configuration structure
+  - Make logging optional with enable/disable flag
+  - Default to disabled for production
+- [ ] **Logger Construction**
+  - Instantiate `TransactionTraceLogger` during node startup if enabled
+  - Share logger via `Arc<TransactionTraceLogger>` across components
+  - Handle graceful shutdown (flush on drop)
+- [ ] **Instrumentation Points**
+  - Transaction execution begin/complete in execution pipeline
+  - Transaction scheduling events in `ExecutionScheduler`
+  - Pass logger to execution and scheduling components
+- [ ] **Integration Testing**
+  - Test with real node startup
+  - Verify logs are written correctly
+  - Test with disabled configuration
+- [ ] **Performance Validation**
+  - Benchmark overhead on transaction throughput
+  - Verify minimal impact on execution latency
 
 ### Phase 3: Tooling (IN PROGRESS)
 - [x] **Chrome Trace Viewer converter** (`trace-to-chrome` binary)
@@ -432,19 +447,20 @@ This visualization makes it easy to identify:
 - ✅ Drop impl for shutdown flushing
 - ✅ Clippy clean with all lints passing
 
-**Remaining Work:**
-1. **Node Integration**:
-   - Identify injection points in transaction execution pipeline
-   - Add instrumentation to execution flow
-   - Add `TraceLogConfig` to node configuration
-   - Feature flag or runtime config for enable/disable
+**Current Work (Phase 2):**
+1. **Node Integration** (IN PROGRESS):
+   - Adding `TraceLogConfig` to node configuration
+   - Instantiating logger during node startup
+   - Instrumenting transaction execution pipeline
+   - Instrumenting `ExecutionScheduler` for scheduling events
 
-2. **Performance**:
+**Future Work:**
+1. **Performance Validation**:
    - Benchmark serialization overhead
    - Measure impact on transaction throughput
    - Optimize if needed
 
-3. **Tooling**:
+2. **Additional Tooling**:
    - Command-line log reader/parser utility
-   - Analysis tools (timeline visualization, statistics)
+   - Statistical analysis tools
    - Integration with monitoring systems
