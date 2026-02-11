@@ -44,6 +44,10 @@ pub enum LogRecord {
 /// Transaction event types for lifecycle tracking.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TxEventType {
+    /// Transaction enqueued in scheduler
+    Enqueued,
+    /// Transaction scheduled for execution (ready)
+    Scheduled,
     /// Transaction execution started
     ExecutionBegin,
     /// Transaction execution completed
@@ -152,8 +156,9 @@ struct FlushTaskState {
 /// logger.write_transaction_event(digest, TxEventType::ExecutionComplete).unwrap();
 /// ```
 pub struct TransactionTraceLogger {
+    enabled: bool,
     config: TraceLogConfig,
-    state: Mutex<LoggerState>,
+    state: Option<Mutex<LoggerState>>,
     /// Channel for async flushing (None in single-threaded runtime)
     flush_tx: Option<tokio::sync::mpsc::Sender<Vec<LogRecord>>>,
     /// Flush state for synchronous flushing in single-threaded mode
@@ -201,19 +206,34 @@ impl TransactionTraceLogger {
         };
 
         let logger = Arc::new(Self {
+            enabled: true,
             config: config.clone(),
-            state: Mutex::new(LoggerState {
+            state: Some(Mutex::new(LoggerState {
                 buffer,
                 last_instant: initial_instant,
                 last_flush: initial_instant,
                 initial_system_time,
                 initial_instant,
-            }),
+            })),
             flush_tx,
             sync_flush_state,
         });
 
         Ok(logger)
+    }
+
+    /// Creates a disabled logger that drops all events.
+    ///
+    /// This is useful when trace logging is not configured, allowing call sites
+    /// to unconditionally call trace methods without checking if the logger is enabled.
+    pub fn disabled() -> Arc<Self> {
+        Arc::new(Self {
+            enabled: false,
+            config: TraceLogConfig::default(),
+            state: None,
+            flush_tx: None,
+            sync_flush_state: None,
+        })
     }
 
     /// Computes current SystemTime based on virtual time.
@@ -234,8 +254,12 @@ impl TransactionTraceLogger {
         digest: TransactionDigest,
         event_type: TxEventType,
     ) -> Result<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
         let now = tokio::time::Instant::now();
-        let mut state = self.state.lock();
+        let mut state = self.state.as_ref().unwrap().lock();
 
         // Check if flush needed before adding records
         let should_flush = (state.buffer.len() + 2 > self.config.buffer_capacity
@@ -256,7 +280,7 @@ impl TransactionTraceLogger {
             // Flush without holding lock
             drop(state);
             self.flush_buffer(old_buffer);
-            state = self.state.lock();
+            state = self.state.as_ref().unwrap().lock();
         }
 
         // Add time delta and event
@@ -392,8 +416,12 @@ impl TransactionTraceLogger {
 
 impl Drop for TransactionTraceLogger {
     fn drop(&mut self) {
+        if !self.enabled {
+            return;
+        }
+
         // Flush any remaining buffered data
-        let mut state = self.state.lock();
+        let mut state = self.state.as_ref().unwrap().lock();
         if state.buffer.is_empty() {
             return;
         }

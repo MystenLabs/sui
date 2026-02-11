@@ -487,30 +487,26 @@ impl SuiNode {
         mysten_metrics::thread_stall_monitor::start_thread_stall_monitor();
 
         // Initialize transaction trace logger if enabled
-        let transaction_trace_logger = config
-            .transaction_trace_config
-            .as_ref()
-            .map(|trace_config| {
-                let log_dir = trace_config
-                    .log_dir
-                    .clone()
-                    .unwrap_or_else(|| config.db_path().join("transaction-traces"));
-                let trace_log_config = sui_transaction_trace::TraceLogConfig {
-                    log_dir,
-                    max_file_size: trace_config.max_file_size.unwrap_or(100 * 1024 * 1024),
-                    max_file_count: trace_config.max_file_count.unwrap_or(10),
-                    buffer_capacity: trace_config.buffer_capacity.unwrap_or(10_000),
-                    flush_interval_secs: trace_config.flush_interval_secs.unwrap_or(15),
-                    sync_flush: false,
-                };
-                sui_transaction_trace::TransactionTraceLogger::new(trace_log_config)
-            })
-            .transpose()
-            .context("Failed to initialize transaction trace logger")?;
-        let transaction_trace_logger = Arc::new(transaction_trace_logger);
-        if transaction_trace_logger.is_some() {
+        let transaction_trace_logger = if let Some(trace_config) = &config.transaction_trace_config
+        {
+            let log_dir = trace_config
+                .log_dir
+                .clone()
+                .unwrap_or_else(|| config.db_path().join("transaction-traces"));
+            let trace_log_config = sui_transaction_trace::TraceLogConfig {
+                log_dir,
+                max_file_size: trace_config.max_file_size.unwrap_or(100 * 1024 * 1024),
+                max_file_count: trace_config.max_file_count.unwrap_or(10),
+                buffer_capacity: trace_config.buffer_capacity.unwrap_or(10_000),
+                flush_interval_secs: trace_config.flush_interval_secs.unwrap_or(15),
+                sync_flush: false,
+            };
             info!("Transaction trace logging enabled");
-        }
+            sui_transaction_trace::TransactionTraceLogger::new(trace_log_config)
+                .context("Failed to initialize transaction trace logger")?
+        } else {
+            sui_transaction_trace::TransactionTraceLogger::disabled()
+        };
 
         let genesis = config.genesis()?.clone();
 

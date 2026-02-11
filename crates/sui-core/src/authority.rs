@@ -964,7 +964,7 @@ pub struct AuthorityState {
     pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
 
     /// Transaction execution trace logger for performance analysis
-    transaction_trace_logger: Arc<Option<sui_transaction_trace::TransactionTraceLogger>>,
+    transaction_trace_logger: Arc<sui_transaction_trace::TransactionTraceLogger>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1525,10 +1525,10 @@ impl AuthorityState {
         }
 
         let execution_start_time = Instant::now();
-        // TODO: Log ExecutionBegin event
-        // if let Some(logger) = self.transaction_trace_logger.as_ref() {
-        //     logger.write_transaction_event(*tx_digest, TxEventType::ExecutionBegin)?;
-        // }
+        let _ = self.transaction_trace_logger.write_transaction_event(
+            tx_digest.into_inner(),
+            sui_transaction_trace::TxEventType::ExecutionBegin,
+        );
 
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
@@ -1892,10 +1892,10 @@ impl AuthorityState {
         self.get_cache_writer()
             .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
 
-        // TODO: Log ExecutionComplete event
-        // if let Some(logger) = self.transaction_trace_logger.as_ref() {
-        //     logger.write_transaction_event(*tx_digest, TxEventType::ExecutionComplete)?;
-        // }
+        let _ = self.transaction_trace_logger.write_transaction_event(
+            tx_digest.into_inner(),
+            sui_transaction_trace::TxEventType::ExecutionComplete,
+        );
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
@@ -3514,7 +3514,7 @@ impl AuthorityState {
         policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
         pruner_watermarks: Arc<PrunerWatermarks>,
-        transaction_trace_logger: Arc<Option<sui_transaction_trace::TransactionTraceLogger>>,
+        transaction_trace_logger: Arc<sui_transaction_trace::TransactionTraceLogger>,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -3530,6 +3530,7 @@ impl AuthorityState {
             &epoch_store,
             config.funds_withdraw_scheduler_type,
             metrics.clone(),
+            transaction_trace_logger.clone(),
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 

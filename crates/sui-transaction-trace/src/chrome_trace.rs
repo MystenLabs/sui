@@ -48,6 +48,9 @@ pub fn convert_to_chrome_trace(
         let digest_base58 = bs58::encode(event.digest).into_string();
 
         match event.event_type {
+            TxEventType::Enqueued | TxEventType::Scheduled => {
+                // These events are not visualized in Chrome Trace format
+            }
             TxEventType::ExecutionBegin => {
                 // Convert SystemTime to microseconds since epoch
                 let ts = event

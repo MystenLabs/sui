@@ -373,7 +373,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             policy_config,
             firewall_config,
             Arc::new(PrunerWatermarks::default()),
-            Arc::new(None), // No transaction trace logging in tests
+            sui_transaction_trace::TransactionTraceLogger::disabled(),
         )
         .await;
 

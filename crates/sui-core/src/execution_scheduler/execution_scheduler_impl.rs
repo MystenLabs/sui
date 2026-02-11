@@ -94,6 +94,7 @@ pub struct ExecutionScheduler {
     address_funds_withdraw_scheduler: Arc<Mutex<Option<FundsWithdrawScheduler>>>,
     funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
     metrics: Arc<AuthorityMetrics>,
+    transaction_trace_logger: Arc<sui_transaction_trace::TransactionTraceLogger>,
 }
 
 struct PendingGuard<'a> {
@@ -135,6 +136,7 @@ impl ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
         metrics: Arc<AuthorityMetrics>,
+        transaction_trace_logger: Arc<sui_transaction_trace::TransactionTraceLogger>,
     ) -> Self {
         tracing::info!(
             ?funds_withdraw_scheduler_type,
@@ -156,6 +158,7 @@ impl ExecutionScheduler {
             )),
             funds_withdraw_scheduler_type,
             metrics,
+            transaction_trace_logger,
         }
     }
 
@@ -190,10 +193,10 @@ impl ExecutionScheduler {
         execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        // TODO: Log transaction enqueued event
-        // if let Some(logger) = &self.transaction_trace_logger {
-        //     logger.write_transaction_event(*cert.digest(), TxEventType::Enqueued)?;
-        // }
+        let _ = self.transaction_trace_logger.write_transaction_event(
+            cert.digest().into_inner(),
+            sui_transaction_trace::TxEventType::Enqueued,
+        );
 
         let enqueue_time = Instant::now();
         let tx_digest = cert.digest();
@@ -312,10 +315,10 @@ impl ExecutionScheduler {
         execution_env: ExecutionEnv,
         enqueue_time: Instant,
     ) {
-        // TODO: Log transaction scheduled event (ready for execution)
-        // if let Some(logger) = &self.transaction_trace_logger {
-        //     logger.write_transaction_event(*cert.digest(), TxEventType::Scheduled)?;
-        // }
+        let _ = self.transaction_trace_logger.write_transaction_event(
+            cert.digest().into_inner(),
+            sui_transaction_trace::TxEventType::Scheduled,
+        );
 
         let pending_cert = PendingCertificate {
             certificate: cert.clone(),
