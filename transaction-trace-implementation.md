@@ -252,6 +252,149 @@ AbsTime(24) + TxEvent(34) + DeltaTime(3) + TxEvent(34) = 95 bytes per transactio
 
 With delta encoding, subsequent transactions only add ~71 bytes each. Plus ~4 bytes overhead for the entire batch (length prefix), and small BCS Vec overhead (ULEB128 length).
 
+## Chrome Trace Viewer Converter
+
+The `trace_to_chrome` binary converts transaction trace logs into Chrome Trace Viewer format for visualization in `chrome://tracing`.
+
+### Purpose
+
+Visualize object utilization and contention patterns by mapping each object to a timeline ("thread" in Chrome Trace terminology). This allows identifying:
+- Which transactions use which objects
+- Object contention (multiple transactions accessing the same object)
+- Transaction execution overlaps
+- Object access patterns over time
+
+### Architecture
+
+**Module**: `sui_transaction_trace::chrome_trace`
+- `ChromeTraceEvent`: Chrome Trace format event structure
+- `TransactionData`: Transaction input objects
+- `convert_to_chrome_trace()`: Core conversion function with snapshot test
+
+**Binary**: `crates/sui-transaction-trace/src/bin/trace_to_chrome.rs`
+- Reads trace logs from files or directories
+- Fetches transaction data from Sui GraphQL endpoint
+- Converts to Chrome Trace format
+- Supports fake data mode for testing
+
+### Usage
+
+```bash
+# With real GraphQL data
+cargo run --bin trace_to_chrome -- \
+  -i <trace-log-dir> \
+  -o trace.json
+
+# With fake data (testing)
+cargo run --bin trace_to_chrome -- \
+  -i <trace-log-dir> \
+  -o trace.json \
+  --fake-data
+
+# Custom GraphQL endpoint
+cargo run --bin trace_to_chrome -- \
+  -i <trace-log-dir> \
+  -o trace.json \
+  --graphql-url https://graphql.testnet.sui.io/graphql
+```
+
+Then open `chrome://tracing` in Chrome and load the generated JSON file.
+
+### Output Format
+
+Chrome Trace JSON with the following structure:
+```json
+{
+  "traceEvents": [
+    {
+      "name": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",  // base58 digest
+      "cat": "transaction",
+      "ph": "B",  // Begin event
+      "ts": 1770767139103448,  // microseconds since epoch
+      "pid": 1,
+      "tid": "0x000...000a",  // hex object ID (thread)
+      "args": {
+        "digest": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+        "object": "0x000...000a"
+      }
+    },
+    {
+      "name": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+      "cat": "transaction",
+      "ph": "E",  // End event
+      "ts": 1770767139203448,
+      "pid": 1,
+      "tid": "0x000...000a",
+      "args": {
+        "digest": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+        "object": "0x000...000a",
+        "duration_us": 100000
+      }
+    }
+  ],
+  "displayTimeUnit": "ms"
+}
+```
+
+**Key format decisions:**
+- Transaction digests: base58-encoded (Sui standard for user-facing digests)
+- Object IDs: hex-encoded with `0x` prefix (Sui standard for addresses)
+- Each object maps to a Chrome Trace "thread" (tid)
+- Begin/End event pairs for each object used by a transaction
+
+### GraphQL Integration
+
+Fetches transaction input objects from Sui GraphQL endpoint:
+```graphql
+query ($digest: String!) {
+  transaction(digest: $digest) {
+    digest
+    effects {
+      objectChanges {
+        nodes {
+          inputState {
+            address
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Transactions are queried by base58-encoded digest. The response provides the list of input objects that the transaction accessed.
+
+### Testing
+
+**Snapshot test**: `chrome_trace::tests::test_convert_to_chrome_trace`
+- Verifies output format stability
+- Uses `cargo insta` for snapshot testing
+- Redacts timestamps and durations for deterministic comparisons
+
+**Example generation**:
+```bash
+# Generate test trace with fake digests
+cargo run --example generate_test_trace
+
+# Generate test trace with real transaction digests
+cargo run --example generate_real_tx_trace
+```
+
+### Visualization
+
+In Chrome Trace Viewer:
+- **Rows**: Each row represents an object (identified by hex address)
+- **Bars**: Colored bars show when a transaction is using the object
+- **Length**: Bar length represents transaction execution duration
+- **Overlap**: Overlapping bars on the same row indicate contention
+- **Hover**: Shows transaction digest, object ID, and duration
+
+This visualization makes it easy to identify:
+- Hot objects (frequently accessed)
+- Contention bottlenecks (multiple transactions waiting for same object)
+- Transaction parallelism opportunities
+- Object access patterns
+
 ## Design Decisions (RESOLVED)
 
 1. **Time Source**: Virtual time aware approach ✓
