@@ -190,6 +190,11 @@ impl ExecutionScheduler {
         execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
+        // TODO: Log transaction enqueued event
+        // if let Some(logger) = &self.transaction_trace_logger {
+        //     logger.write_transaction_event(*cert.digest(), TxEventType::Enqueued)?;
+        // }
+
         let enqueue_time = Instant::now();
         let tx_digest = cert.digest();
         let digests = [*tx_digest];
@@ -612,12 +617,6 @@ impl ExecutionScheduler {
                         None
                     }
                 });
-
-        // TODO: Log transaction enqueued event
-        // for each cert in pending_certs:
-        //   if let Some(logger) = &self.transaction_trace_logger {
-        //       logger.write_transaction_event(*cert.digest(), TxEventType::Enqueued)?;
-        //   }
 
         for (cert, execution_env) in pending_certs {
             let scheduler = self.clone();
