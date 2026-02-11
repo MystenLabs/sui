@@ -62,5 +62,6 @@ sui-framework-snapshot.workspace = true
 sui-macros.workspace = true
 sui-rpc.workspace = true
 sui-simulator.workspace = true
+sui-transaction-trace.workspace = true
 typed-store.workspace = true
 zstd.workspace = true
