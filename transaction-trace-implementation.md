@@ -40,8 +40,10 @@ Event types for transaction lifecycle:
 ```rust
 #[derive(Serialize, Deserialize)]
 enum TxEventType {
-    ExecutionBegin,
-    ExecutionComplete,
+    Enqueued,           // Transaction enqueued in scheduler
+    Scheduled,          // Transaction scheduled for execution (ready)
+    ExecutionBegin,     // Transaction execution started
+    ExecutionComplete,  // Transaction execution completed
     // Future: Add more event types as needed
     // - ConsensusReceived
     // - ValidationBegin/Complete
@@ -211,18 +213,24 @@ TransactionEvent(tx2, ExecutionComplete)
 - [x] Fixed virtual time support using tokio::time::Instant throughout
 - [x] Integration test for file rotation and reconstruction
 
-### Phase 2: Integration (CURRENT)
-- [ ] **Configuration**
-  - Add `TraceLogConfig` to node configuration structure
-  - Make logging optional with enable/disable flag
+### Phase 2: Integration (COMPLETED)
+- [x] **Configuration**
+  - Add `TransactionTraceConfig` to node configuration structure (`NodeConfig`)
+  - Make logging optional with enable/disable flag (absent config = disabled)
   - Default to disabled for production
-- [ ] **Logger Construction**
+- [x] **Logger Construction**
   - Instantiate `TransactionTraceLogger` during node startup if enabled
+  - Use `TransactionTraceLogger::disabled()` when not configured (no-op logger)
   - Share logger via `Arc<TransactionTraceLogger>` across components
   - Handle graceful shutdown (flush on drop)
-- [ ] **Instrumentation Points**
-  - Transaction execution begin/complete in execution pipeline
+  - Call sites can unconditionally call trace methods (no `if let` checks needed)
+- [x] **Instrumentation Points**
+  - Transaction execution begin/complete in `authority.rs`
+    - `ExecutionBegin`: After `execution_start_time` capture in `try_execute_immediately`
+    - `ExecutionComplete`: After `write_transaction_outputs` in `commit_certificate`
   - Transaction scheduling events in `ExecutionScheduler`
+    - `Enqueued`: Top of `schedule_transaction` function
+    - `Scheduled`: Inside `send_transaction_for_execution` function
   - Pass logger to execution and scheduling components
 - [ ] **Integration Testing**
   - Test with real node startup
@@ -447,12 +455,10 @@ This visualization makes it easy to identify:
 - ✅ Drop impl for shutdown flushing
 - ✅ Clippy clean with all lints passing
 
-**Current Work (Phase 2):**
-1. **Node Integration** (IN PROGRESS):
-   - Adding `TraceLogConfig` to node configuration
-   - Instantiating logger during node startup
-   - Instrumenting transaction execution pipeline
-   - Instrumenting `ExecutionScheduler` for scheduling events
+**Current Work:**
+1. **Testing and Validation** (Phase 2):
+   - Integration testing with real node startup
+   - Performance benchmarking
 
 **Future Work:**
 1. **Performance Validation**:
