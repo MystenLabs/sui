@@ -119,9 +119,9 @@ fragment TX on TransactionConnection {
   edges { cursor node { digest effects { checkpoint { sequenceNumber } } } }
 }
 
-//# run-graphql --cursors {"t":0,"c":4} {"t":1,"c":5}
-# Cursor pagination: cursor_0 is a checkpoint boundary (cp4,tx0),
-# cursor_1 is mid-checkpoint (cp5,tx1). Tests all first/last/after/before combos.
+//# run-graphql --cursors 5 7 20
+# Cursor pagination: cursor_0 is a checkpoint boundary (cp4,tx_seq=5),
+# cursor_1 is mid-checkpoint (cp5,tx_seq=7). Tests all first/last/after/before combos.
 {
   first2: scanTransactions(first: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
   last2: scanTransactions(last: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
@@ -134,6 +134,7 @@ fragment TX on TransactionConnection {
   windowFirst: scanTransactions(first: 10, after: "@{cursor_0}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
   windowLast: scanTransactions(last: 10, after: "@{cursor_0}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
+  nonexistentCursor: scanTransactions(last: 10, after: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
   invalidOrder: scanTransactions(first: 10, after: "@{cursor_1}", before: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
 }
 

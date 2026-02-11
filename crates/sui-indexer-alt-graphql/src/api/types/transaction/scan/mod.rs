@@ -2,45 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod bloom;
-mod lookup;
-mod paginate;
 
+use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 
+use anyhow::Context as _;
 use async_graphql::Context;
-use async_graphql::connection::Connection;
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
+use sui_types::base_types::ExecutionDigests;
+use sui_types::digests::TransactionDigest;
 
-use crate::api::types::transaction::SCTransaction;
-use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::filter::TransactionFilter;
-use crate::config::Limits;
 use crate::error::RpcError;
-use crate::error::bad_user_input;
-use crate::error::upcast;
 use crate::pagination::Page;
-use crate::scope::Scope;
 
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum ScanError {
-    #[error(
-        "Scan range of {requested} checkpoints exceeds maximum of {max}. \
-         Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to narrow the range."
-    )]
-    LimitExceeded { requested: u64, max: u64 },
-}
+pub(super) type TransactionsBySequenceNumbers =
+    BTreeMap<u64, (TransactionDigest, NativeTransactionContents)>;
 
 pub(crate) async fn transactions(
     ctx: &Context<'_>,
-    scope: Scope,
     filter: &TransactionFilter,
-    page: &Page<SCTransaction>,
+    page: &Page<CTransaction>,
     cp_bounds: RangeInclusive<u64>,
-    limits: &Limits,
-) -> Result<Connection<String, Transaction>, RpcError<ScanError>> {
-    let Some((cp_lo, cp_hi)) = validate_bounds(cp_bounds, page, limits)? else {
-        return Ok(Connection::new(false, false));
-    };
-
+) -> Result<TransactionsBySequenceNumbers, RpcError> {
+    let (cp_lo, cp_hi) = (*cp_bounds.start(), *cp_bounds.end());
     let filter_values = filter.bloom_probe_values();
     let candidate_cps = if filter_values.is_empty() {
         let limit = page.limit_with_overhead();
@@ -50,45 +37,57 @@ pub(crate) async fn transactions(
             (cp_lo..=cp_hi).rev().take(limit).collect()
         }
     } else {
-        bloom::candidate_cps(ctx, &filter_values, cp_lo, cp_hi, page)
-            .await
-            .map_err(upcast)?
+        bloom::candidate_cps(ctx, &filter_values, cp_lo, cp_hi, page).await?
     };
 
     if candidate_cps.is_empty() {
-        return Ok(Connection::new(false, false));
+        return Ok(BTreeMap::new());
     }
 
-    let (digests, transactions) = lookup::load_transactions(ctx, &candidate_cps)
-        .await
-        .map_err(upcast)?;
-
-    paginate::results(scope, filter, page, candidate_cps, digests, transactions)
+    transactions_by_sequence_numbers(ctx, &candidate_cps).await
 }
 
-fn validate_bounds(
-    cp_bounds: RangeInclusive<u64>,
-    page: &Page<SCTransaction>,
-    limits: &Limits,
-) -> Result<Option<(u64, u64)>, RpcError<ScanError>> {
-    let cp_lo = page.after().map_or(*cp_bounds.start(), |a| {
-        (*cp_bounds.start()).max(a.cp_sequence_number)
-    });
-    let cp_hi = page.before().map_or(*cp_bounds.end(), |b| {
-        (*cp_bounds.end()).min(b.cp_sequence_number)
-    });
+/// TODO: Refactor KV Loader from enum wrapping per-backend DataLoaders into a raw reader enum (KvReader) wrapped by a single DataLoader
+///       This function can then be kv_loader.load_many(CheckpointTransactionsKey).
+/// Load checkpoints by cp_sequence_number, then fetch all their transactions from KV,
+/// returning them keyed by global transaction sequence number.
+pub(super) async fn transactions_by_sequence_numbers(
+    ctx: &Context<'_>,
+    candidate_cps: &[u64],
+) -> Result<TransactionsBySequenceNumbers, RpcError> {
+    let kv_loader: &KvLoader = ctx.data()?;
 
-    if cp_lo > cp_hi {
-        return Ok(None);
-    }
+    let checkpoints = kv_loader
+        .load_many_checkpoints(candidate_cps.to_vec())
+        .await
+        .context("Failed to load checkpoint transactions")?;
 
-    let scan_range = cp_hi.saturating_sub(cp_lo).saturating_add(1);
-    if scan_range > limits.max_scan_limit {
-        return Err(bad_user_input(ScanError::LimitExceeded {
-            requested: scan_range,
-            max: limits.max_scan_limit,
-        }));
-    }
+    let sequenced_tx_digests: Vec<_> = checkpoints
+        .into_values()
+        .flat_map(|(summary, content, _)| {
+            content
+                .enumerate_transactions(&summary)
+                .map(|(tx_seq, &ExecutionDigests { transaction, .. })| (tx_seq, transaction))
+                .collect::<Vec<_>>()
+        })
+        .collect();
 
-    Ok(Some((cp_lo, cp_hi)))
+    let digests = sequenced_tx_digests
+        .iter()
+        .map(|(_, digest)| *digest)
+        .collect();
+    let mut transactions_by_digest = kv_loader
+        .load_many_transactions(digests)
+        .await
+        .context("Failed to load transactions")?;
+
+    sequenced_tx_digests
+        .into_iter()
+        .map(|(tx_seq, digest)| -> Result<_, RpcError> {
+            let contents = transactions_by_digest
+                .remove(&digest)
+                .with_context(|| format!("Failed to fetch Transaction with digest {digest}"))?;
+            Ok((tx_seq, (digest, contents)))
+        })
+        .collect()
 }
