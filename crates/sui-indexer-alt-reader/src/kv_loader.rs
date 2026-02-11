@@ -10,6 +10,7 @@ use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::TransactionData as KVTransactionData;
 use sui_kvstore::TransactionEventsData as KVTransactionEventsData;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
+use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::AuthorityQuorumSignInfo;
 use sui_types::digests::TransactionDigest;
@@ -74,6 +75,21 @@ pub enum TransactionContents {
 pub enum TransactionEventsContents {
     Deserialized(KVTransactionEventsData),
     Serialized(StoredTransactionEvents),
+}
+
+// A wrapper for balance changes, either from gRPC or from native type.
+pub enum BalanceChangeContents<'a> {
+    Grpc(&'a [grpc::BalanceChange]),
+    Native(&'a [NativeBalanceChange]),
+}
+
+impl BalanceChangeContents<'_> {
+    pub fn length(&self) -> usize {
+        match self {
+            BalanceChangeContents::Grpc(changes) => changes.len(),
+            BalanceChangeContents::Native(changes) => changes.len(),
+        }
+    }
 }
 
 impl KvLoader {
@@ -361,11 +377,13 @@ impl TransactionContents {
         }
     }
 
-    pub fn balance_changes(&self) -> Option<&[grpc::BalanceChange]> {
+    pub fn balance_changes(&self) -> Option<BalanceChangeContents> {
         match self {
             Self::ExecutedTransaction {
                 balance_changes, ..
-            } => Some(balance_changes),
+            } => Some(BalanceChangeContents::Grpc(balance_changes)),
+            Self::LedgerGrpc(txn) => Some(BalanceChangeContents::Grpc(&txn.balance_changes)),
+            Self::Bigtable(kv) => Some(BalanceChangeContents::Native(&kv.balance_changes)),
             _ => None,
         }
     }

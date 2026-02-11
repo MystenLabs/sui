@@ -8,6 +8,7 @@ use async_graphql::SimpleObject;
 use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
 use sui_rpc::proto::sui::rpc::v2::BalanceChange as GrpcBalanceChange;
 use sui_types::TypeTag;
+use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::object::Owner;
 
 use crate::api::scalars::big_int::BigInt;
@@ -69,6 +70,21 @@ impl BalanceChange {
         })
     }
 
+    /// Create a BalanceChange from a native BalanceChange (Bigtable).
+    pub(crate) fn from_native(scope: Scope, native: NativeBalanceChange) -> Result<Self, RpcError> {
+        let NativeBalanceChange {
+            address,
+            coin_type,
+            amount,
+        } = native;
+
+        Ok(Self {
+            owner: Some(Address::with_address(scope.clone(), address)),
+            coin_type: Some(MoveType::from_native(coin_type, scope)),
+            amount: Some(BigInt::from(amount)),
+        })
+    }
+
     /// Convert a stored BalanceChange to a gRPC BalanceChange.
     pub(crate) fn stored_to_grpc(stored: StoredBalanceChange) -> GrpcBalanceChange {
         let StoredBalanceChange::V1 {
@@ -90,6 +106,21 @@ impl BalanceChange {
             grpc.set_address(addr.to_string());
         }
         grpc.set_coin_type(coin_type);
+        grpc.set_amount(amount.to_string());
+        grpc
+    }
+
+    /// Convert a native BalanceChange to a gRPC BalanceChange.
+    pub(crate) fn native_to_grpc(native: &NativeBalanceChange) -> GrpcBalanceChange {
+        let NativeBalanceChange {
+            address,
+            coin_type,
+            amount,
+        } = native;
+
+        let mut grpc = GrpcBalanceChange::default();
+        grpc.set_address(address.to_string());
+        grpc.set_coin_type(coin_type.to_canonical_string(/* with_prefix */ true));
         grpc.set_amount(amount.to_string());
         grpc
     }

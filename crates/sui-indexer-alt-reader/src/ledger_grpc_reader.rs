@@ -35,6 +35,7 @@ pub struct CheckpointedTransaction {
     pub signatures: Vec<GenericSignature>,
     pub timestamp_ms: Option<u64>,
     pub cp_sequence_number: Option<u64>,
+    pub balance_changes: Vec<grpc::BalanceChange>,
 }
 
 /// A reader backed by gRPC LedgerService (sui-kv-rpc).
