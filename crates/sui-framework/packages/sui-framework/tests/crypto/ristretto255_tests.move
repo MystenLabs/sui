@@ -4,9 +4,10 @@
 #[allow(implicit_const_copy), test_only]
 module sui::ristretto255_tests;
 
-use sui::{group_ops, ristretto255};
 use std::unit_test::assert_eq;
+use sui::group_ops;
 use sui::random;
+use sui::ristretto255;
 
 const ORDER_BYTES: vector<u8> = x"edd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010";
 const ORDER_MINUS_ONE_BYTES: vector<u8> =
@@ -17,8 +18,7 @@ const SHORT_SCALAR_BYTES: vector<u8> =
     x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff0000";
 const LONG_G_BYTES: vector<u8> =
     x"44f53520926ec81fbd5a387845beb7df85a96a24ece18738bdcfa6a7822a176dbb";
-const SHORT_G_BYTES: vector<u8> =
-    x"44f53520926ec81fbd5a387845beb7df85a96a24ece18738bdcfa6a7822a17";
+const SHORT_G_BYTES: vector<u8> = x"44f53520926ec81fbd5a387845beb7df85a96a24ece18738bdcfa6a7822a17";
 
 #[test]
 fun test_scalar_ops() {
@@ -55,7 +55,10 @@ fun test_scalar_ops() {
 
     let minus_three = ristretto255::scalar_neg(&three);
     assert!(
-        group_ops::equal(&ristretto255::scalar_add(&minus_three, &six), &ristretto255::scalar_from_u64(3)),
+        group_ops::equal(
+            &ristretto255::scalar_add(&minus_three, &six),
+            &ristretto255::scalar_from_u64(3),
+        ),
     );
 
     let minus_zero = ristretto255::scalar_neg(&zero);
@@ -63,7 +66,10 @@ fun test_scalar_ops() {
 
     let inv_three = ristretto255::scalar_inv(&three);
     assert!(
-        group_ops::equal(&ristretto255::scalar_mul(&six, &inv_three), &ristretto255::scalar_from_u64(2)),
+        group_ops::equal(
+            &ristretto255::scalar_mul(&six, &inv_three),
+            &ristretto255::scalar_from_u64(2),
+        ),
     );
 
     let order_minus_one = ristretto255::scalar_from_bytes(&ORDER_MINUS_ONE_BYTES);
@@ -108,10 +114,18 @@ fun test_scalar_more_ops() {
     );
     let z_scalar = ristretto255::scalar_neg(&x_scalar);
     assert!(
-        group_ops::equal(&ristretto255::scalar_zero(), &ristretto255::scalar_add(&x_scalar, &z_scalar)),
+        group_ops::equal(
+            &ristretto255::scalar_zero(),
+            &ristretto255::scalar_add(&x_scalar, &z_scalar),
+        ),
     );
     let z_scalar = ristretto255::scalar_inv(&x_scalar);
-    assert!(group_ops::equal(&ristretto255::scalar_one(), &ristretto255::scalar_mul(&x_scalar, &z_scalar)));
+    assert!(
+        group_ops::equal(
+            &ristretto255::scalar_one(),
+            &ristretto255::scalar_mul(&x_scalar, &z_scalar),
+        ),
+    );
 
     let mut i = 0u64;
     let mut z = ristretto255::scalar_add(&x_scalar, &y_scalar);
@@ -246,20 +260,17 @@ fun test_g_ops() {
 fun test_g_to_bytes_regression() {
     let id = ristretto255::g_identity();
     let id_bytes = *group_ops::bytes(&id);
-    let expected =
-        x"0000000000000000000000000000000000000000000000000000000000000000";
+    let expected = x"0000000000000000000000000000000000000000000000000000000000000000";
     assert_eq!(expected, id_bytes);
 
     let g = ristretto255::g_generator();
     let g_bytes = *group_ops::bytes(&g);
-    let expected =
-        x"e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76";
+    let expected = x"e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76";
     assert_eq!(expected, g_bytes);
 
     let h = ristretto255::g_mul(&ristretto255::scalar_from_u64(54321), &g);
     let h_bytes = *group_ops::bytes(&h);
-    let expected =
-        x"6e94dc1325cae4b7cdbdaacf2686f0ae8fa67ec9c59fe818312f6d7eaea13e30";
+    let expected = x"6e94dc1325cae4b7cdbdaacf2686f0ae8fa67ec9c59fe818312f6d7eaea13e30";
     assert_eq!(expected, h_bytes);
 }
 
