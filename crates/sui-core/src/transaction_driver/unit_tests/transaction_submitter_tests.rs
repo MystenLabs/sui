@@ -303,8 +303,8 @@ async fn test_submit_transaction_with_amplification() {
                     },
                 }),
             );
-            // Ensure all requests reach validators before they reply.
-            mock_authority.set_response_delay(Duration::from_secs(5));
+            // Ensure all requests reach validators before they reply, but respond before backup delay (1s).
+            mock_authority.set_response_delay(Duration::from_millis(500));
         }
 
         let amplification_factor = gas_price / reference_gas_price;

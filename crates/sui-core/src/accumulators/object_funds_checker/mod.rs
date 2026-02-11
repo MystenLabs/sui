@@ -31,6 +31,7 @@ use crate::{
 
 #[cfg(test)]
 mod integration_tests;
+pub mod metrics;
 #[cfg(test)]
 mod unit_tests;
 
@@ -50,6 +51,7 @@ pub struct ObjectFundsChecker {
     last_settled_version_sender: watch::Sender<SequenceNumber>,
     last_settled_version_receiver: watch::Receiver<SequenceNumber>,
     inner: RwLock<Inner>,
+    metrics: Arc<metrics::ObjectFundsCheckerMetrics>,
 }
 
 #[derive(Default)]
@@ -68,13 +70,17 @@ struct Inner {
 }
 
 impl ObjectFundsChecker {
-    pub fn new(starting_accumulator_version: SequenceNumber) -> Self {
+    pub fn new(
+        starting_accumulator_version: SequenceNumber,
+        metrics: Arc<metrics::ObjectFundsCheckerMetrics>,
+    ) -> Self {
         let (last_settled_version_sender, last_settled_version_receiver) =
             watch::channel(starting_accumulator_version);
         Self {
             last_settled_version_sender,
             last_settled_version_receiver,
             inner: RwLock::new(Inner::default()),
+            metrics,
         }
     }
 
@@ -127,6 +133,10 @@ impl ObjectFundsChecker {
             // Sufficient funds, we can go ahead and commit the execution results as it is.
             ObjectFundsWithdrawStatus::SufficientFunds => {
                 debug!("Object funds sufficient, committing effects");
+                self.metrics
+                    .check_result
+                    .with_label_values(&["sufficient"])
+                    .inc();
                 true
             }
             // Currently insufficient funds. We need to wait until it reach a deterministic state
@@ -134,6 +144,9 @@ impl ObjectFundsChecker {
             // At that time we will have to re-enqueue the transaction for execution again.
             // Re-enqueue is handled here so the caller does not need to worry about it.
             ObjectFundsWithdrawStatus::Pending(receiver) => {
+                self.metrics.pending_checks.inc();
+                let timer = self.metrics.pending_check_latency.start_timer();
+                let pending_metrics = self.metrics.clone();
                 let scheduler = execution_scheduler.clone();
                 let cert = certificate.clone();
                 let mut execution_env = execution_env.clone();
@@ -142,6 +155,7 @@ impl ObjectFundsChecker {
                     // It is possible that checkpoint executor finished executing
                     // the current epoch and went ahead with epoch change asynchronously,
                     // while this is still waiting.
+                    let inner_metrics = pending_metrics.clone();
                     let _ = epoch_store
                         .within_alive_epoch(async move {
                             let tx_digest = cert.digest();
@@ -160,6 +174,10 @@ impl ObjectFundsChecker {
                                     // so that we could charge properly in the next execution when we
                                     // go through early error. Otherwise we would undercharge.
                                     execution_env = execution_env.with_insufficient_funds();
+                                    inner_metrics
+                                        .check_result
+                                        .with_label_values(&["insufficient"])
+                                        .inc();
                                     debug!(?tx_digest, "Object funds insufficient");
                                 }
                                 Err(e) => {
@@ -178,6 +196,8 @@ impl ObjectFundsChecker {
                             );
                         })
                         .await;
+                    timer.observe_duration();
+                    pending_metrics.pending_checks.dec();
                 });
                 false
             }
@@ -276,6 +296,12 @@ impl ObjectFundsChecker {
                 .or_default()
                 .insert(*obj_id);
         }
+        self.metrics
+            .unsettled_accounts
+            .set(inner.unsettled_withdraws.len() as i64);
+        self.metrics
+            .unsettled_versions
+            .set(inner.unsettled_accounts.len() as i64);
         true
     }
 
@@ -284,6 +310,9 @@ impl ObjectFundsChecker {
         self.last_settled_version_sender
             .send(next_accumulator_version)
             .unwrap();
+        self.metrics
+            .highest_settled_version
+            .set(next_accumulator_version.value() as i64);
     }
 
     pub fn commit_effects<'a>(
@@ -321,6 +350,12 @@ impl ObjectFundsChecker {
                 }
             }
         }
+        self.metrics
+            .unsettled_accounts
+            .set(inner.unsettled_withdraws.len() as i64);
+        self.metrics
+            .unsettled_versions
+            .set(inner.unsettled_accounts.len() as i64);
     }
 
     #[cfg(test)]

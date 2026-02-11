@@ -231,9 +231,8 @@ impl TestRunner {
         assign_versions_and_schedule(&self.authority_state, &executable).await;
         let effects = self
             .authority_state
-            .wait_for_transaction_execution(&executable, &epoch_store)
-            .await
-            .unwrap();
+            .wait_for_transaction_execution_for_testing(&executable, &epoch_store)
+            .await;
 
         if self.aggressive_pruning_enabled {
             self.authority_state

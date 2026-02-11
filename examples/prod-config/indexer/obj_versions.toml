@@ -4,4 +4,6 @@ ingest-concurrency = 20
 [committer]
 write-concurrency = 10
 
+# obj_versions pipeline pruning not yet supported
+
 [pipeline.obj_versions]

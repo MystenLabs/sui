@@ -12,8 +12,8 @@ use object_store::ObjectStoreExt as _;
 use object_store::memory::InMemory;
 use parquet::file::reader::FileReader;
 use prost::Message;
+use sui_analytics_indexer::config::CommitterLayer;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
-use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_indexer_alt_framework_store_traits::Connection;
@@ -78,6 +78,7 @@ fn default_pipeline_config(pipeline: Pipeline) -> PipelineConfig {
         batch_size: Some(BatchSizeConfig::Checkpoints(1)),
         output_prefix: None,
         force_batch_cut_after_secs: 600,
+        sequential: Default::default(),
     }
 }
 
@@ -189,16 +190,8 @@ impl TestHarness {
 
     fn default_config(&self) -> IndexerConfig {
         IndexerConfig {
-            client_metric_host: "127.0.0.1".to_string(),
-            client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.object_store.clone()),
-            remote_store_url: None,
-            streaming_url: None,
-            rpc_api_url: "http://localhost".to_string(),
-            rpc_username: None,
-            rpc_password: None,
             work_dir: None,
-            local_ingestion_path: Some(self.ingestion_dir.path().to_path_buf()),
             sf_account_identifier: None,
             sf_warehouse: None,
             sf_database: None,
@@ -211,9 +204,7 @@ impl TestHarness {
                 checkpoint_buffer_size: 100,
                 ..Default::default()
             },
-            sequential: SequentialConfig::default(),
-            first_checkpoint: None,
-            last_checkpoint: None,
+            committer: CommitterLayer::default(),
             migration_id: None,
             file_format: FileFormat::Parquet,
             max_pending_uploads: 10,
@@ -222,13 +213,41 @@ impl TestHarness {
         }
     }
 
-    async fn run_indexer(&self, config: IndexerConfig) {
+    fn default_client_args(&self) -> sui_indexer_alt_framework::ingestion::ClientArgs {
+        sui_indexer_alt_framework::ingestion::ClientArgs {
+            ingestion:
+                sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
+                    local_ingestion_path: Some(self.ingestion_dir.path().to_path_buf()),
+                    rpc_api_url: Some("http://localhost".parse().unwrap()),
+                    ..Default::default()
+                },
+            ..Default::default()
+        }
+    }
+
+    async fn run_indexer(
+        &self,
+        config: IndexerConfig,
+        first_checkpoint: Option<u64>,
+        last_checkpoint: Option<u64>,
+    ) {
+        let indexer_args = sui_indexer_alt_framework::IndexerArgs {
+            first_checkpoint,
+            last_checkpoint,
+            ..Default::default()
+        };
         let registry = prometheus::Registry::new();
         let metrics = Metrics::new(&registry);
 
-        let service = sui_analytics_indexer::build_analytics_indexer(config, metrics, registry)
-            .await
-            .expect("Failed to build indexer");
+        let service = sui_analytics_indexer::build_analytics_indexer(
+            config,
+            indexer_args,
+            self.default_client_args(),
+            metrics,
+            registry,
+        )
+        .await
+        .expect("Failed to build indexer");
 
         tokio::time::timeout(Duration::from_secs(10), async {
             tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -318,16 +337,8 @@ impl TestHarness {
             _ => panic!("Unknown pipeline: {}", pipeline),
         };
         let config = IndexerConfig {
-            client_metric_host: "127.0.0.1".to_string(),
-            client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.object_store.clone()),
-            remote_store_url: None,
-            streaming_url: None,
-            rpc_api_url: "http://localhost".to_string(),
-            rpc_username: None,
-            rpc_password: None,
             work_dir: None,
-            local_ingestion_path: None,
             sf_account_identifier: None,
             sf_warehouse: None,
             sf_database: None,
@@ -337,9 +348,7 @@ impl TestHarness {
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(pipeline_enum)],
             ingestion: IngestionConfig::default(),
-            sequential: SequentialConfig::default(),
-            first_checkpoint: None,
-            last_checkpoint: None,
+            committer: CommitterLayer::default(),
             migration_id: Some(migration_id.to_string()),
             file_format: FileFormat::Parquet,
             max_pending_uploads: 10,
@@ -462,16 +471,8 @@ impl MockTestHarness {
 
     fn default_config(&self) -> IndexerConfig {
         IndexerConfig {
-            client_metric_host: "127.0.0.1".to_string(),
-            client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.mock_store.clone()),
-            remote_store_url: None,
-            streaming_url: None,
-            rpc_api_url: "http://localhost".to_string(),
-            rpc_username: None,
-            rpc_password: None,
             work_dir: None,
-            local_ingestion_path: Some(self.ingestion_dir.path().to_path_buf()),
             sf_account_identifier: None,
             sf_warehouse: None,
             sf_database: None,
@@ -484,9 +485,7 @@ impl MockTestHarness {
                 checkpoint_buffer_size: 100,
                 ..Default::default()
             },
-            sequential: SequentialConfig::default(),
-            first_checkpoint: None,
-            last_checkpoint: None,
+            committer: CommitterLayer::default(),
             migration_id: None,
             file_format: FileFormat::Parquet,
             max_pending_uploads: 10,
@@ -495,14 +494,42 @@ impl MockTestHarness {
         }
     }
 
+    fn default_client_args(&self) -> sui_indexer_alt_framework::ingestion::ClientArgs {
+        sui_indexer_alt_framework::ingestion::ClientArgs {
+            ingestion:
+                sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
+                    local_ingestion_path: Some(self.ingestion_dir.path().to_path_buf()),
+                    rpc_api_url: Some("http://localhost".parse().unwrap()),
+                    ..Default::default()
+                },
+            ..Default::default()
+        }
+    }
+
     /// Run the indexer, returning whether it completed successfully.
-    async fn run_indexer(&self, config: IndexerConfig) -> bool {
+    async fn run_indexer(
+        &self,
+        config: IndexerConfig,
+        first_checkpoint: Option<u64>,
+        last_checkpoint: Option<u64>,
+    ) -> bool {
+        let indexer_args = sui_indexer_alt_framework::IndexerArgs {
+            first_checkpoint,
+            last_checkpoint,
+            ..Default::default()
+        };
         let registry = prometheus::Registry::new();
         let metrics = Metrics::new(&registry);
 
-        let service = sui_analytics_indexer::build_analytics_indexer(config, metrics, registry)
-            .await
-            .expect("Failed to build indexer");
+        let service = sui_analytics_indexer::build_analytics_indexer(
+            config,
+            indexer_args,
+            self.default_client_args(),
+            metrics,
+            registry,
+        )
+        .await
+        .expect("Failed to build indexer");
 
         let result = tokio::time::timeout(Duration::from_secs(30), async {
             tokio::time::sleep(Duration::from_millis(5000)).await;
@@ -566,16 +593,8 @@ impl MockTestHarness {
             _ => panic!("Unknown pipeline: {}", pipeline),
         };
         let config = IndexerConfig {
-            client_metric_host: "127.0.0.1".to_string(),
-            client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.inner_store.clone()),
-            remote_store_url: None,
-            streaming_url: None,
-            rpc_api_url: "http://localhost".to_string(),
-            rpc_username: None,
-            rpc_password: None,
             work_dir: None,
-            local_ingestion_path: None,
             sf_account_identifier: None,
             sf_warehouse: None,
             sf_database: None,
@@ -585,9 +604,7 @@ impl MockTestHarness {
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(pipeline_enum)],
             ingestion: IngestionConfig::default(),
-            sequential: SequentialConfig::default(),
-            first_checkpoint: None,
-            last_checkpoint: None,
+            committer: CommitterLayer::default(),
             migration_id: Some(migration_id.to_string()),
             file_format: FileFormat::Parquet,
             max_pending_uploads: 10,
@@ -608,10 +625,11 @@ async fn test_checkpoint_pipeline_basic() {
     let mut harness = TestHarness::new();
     let checkpoint_seq = harness.add_checkpoint();
 
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(checkpoint_seq);
+    let config = harness.default_config();
 
-    harness.run_indexer(config).await;
+    harness
+        .run_indexer(config, None, Some(checkpoint_seq))
+        .await;
 
     let files = harness.list_files("checkpoints/epoch_0").await;
     let parquet_files = filter_by_extension(&files, ".parquet");
@@ -641,10 +659,11 @@ async fn test_multiple_checkpoints_single_file() {
         harness.add_checkpoint();
     }
 
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(harness.last_checkpoint_seq);
+    let config = harness.default_config();
 
-    harness.run_indexer(config).await;
+    harness
+        .run_indexer(config, None, Some(harness.last_checkpoint_seq))
+        .await;
 
     let files = harness.list_files("checkpoints/epoch_0").await;
     let parquet_files = filter_by_extension(&files, ".parquet");
@@ -673,10 +692,11 @@ async fn test_multiple_checkpoints_batch_size_config() {
         harness.add_checkpoint();
     }
 
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(harness.last_checkpoint_seq);
+    let config = harness.default_config();
 
-    harness.run_indexer(config).await;
+    harness
+        .run_indexer(config, None, Some(harness.last_checkpoint_seq))
+        .await;
 
     let files = harness.list_files("checkpoints/epoch_0").await;
     let parquet_files = filter_by_extension(&files, ".parquet");
@@ -703,10 +723,9 @@ async fn test_epoch_boundary_creates_separate_files() {
     harness.advance_epoch();
     let last_seq = harness.add_checkpoint();
 
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
+    let config = harness.default_config();
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Epoch 0: 2 checkpoints + 1 epoch advance = 3 checkpoints
     // File count may vary due to timing, but total rows must be exact.
@@ -748,14 +767,15 @@ async fn test_csv_file_format() {
     let checkpoint_seq = harness.add_checkpoint();
 
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(checkpoint_seq);
     config.file_format = FileFormat::Csv;
     // Set pipeline config's file_format too (handler uses this, store uses the top-level one)
     for pipeline_config in &mut config.pipeline_configs {
         pipeline_config.file_format = FileFormat::Csv;
     }
 
-    harness.run_indexer(config).await;
+    harness
+        .run_indexer(config, None, Some(checkpoint_seq))
+        .await;
 
     let files = harness.list_files("checkpoints/epoch_0").await;
     let csv_files = filter_by_extension(&files, ".csv");
@@ -781,13 +801,14 @@ async fn test_multiple_pipelines() {
     let checkpoint_seq = harness.add_checkpoint();
 
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(checkpoint_seq);
     config.pipeline_configs = vec![
         default_pipeline_config(Pipeline::Checkpoint),
         default_pipeline_config(Pipeline::Transaction),
     ];
 
-    harness.run_indexer(config).await;
+    harness
+        .run_indexer(config, None, Some(checkpoint_seq))
+        .await;
 
     // File count may vary due to timing, but total rows must be exact.
     let checkpoint_files = harness.list_files("checkpoints/epoch_0").await;
@@ -837,10 +858,9 @@ async fn test_basic_backfill() {
     }
     let last_seq = harness.last_checkpoint_seq;
 
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
+    let config = harness.default_config();
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify epoch 0: 15 checkpoints
     let epoch_0_files = harness.list_files("checkpoints/epoch_0").await;
@@ -888,10 +908,10 @@ async fn test_basic_backfill() {
     // Run migration - should produce same file structure as before
     let mut backfill_config = harness.default_config();
     backfill_config.migration_id = Some("test-migration-1".to_string());
-    backfill_config.first_checkpoint = Some(0);
-    backfill_config.last_checkpoint = Some(last_seq);
 
-    harness.run_indexer(backfill_config).await;
+    harness
+        .run_indexer(backfill_config, Some(0), Some(last_seq))
+        .await;
 
     // Verify same file structure after backfill (backfill mode preserves exact file boundaries)
     let epoch_0_files_after = harness.list_files("checkpoints/epoch_0").await;
@@ -941,10 +961,9 @@ async fn test_backfill_epoch_boundary_cuts_file() {
 
     // Large batch size, but epoch 0 only has 3 checkpoints
     // File should still be cut at epoch boundary
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
+    let config = harness.default_config();
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify epoch 0 has 3 rows total (cut at epoch boundary, not batch size)
     let epoch_0_files = harness.list_files("checkpoints/epoch_0").await;
@@ -978,10 +997,10 @@ async fn test_backfill_epoch_boundary_cuts_file() {
     // Run migration and verify same structure
     let mut backfill_config = harness.default_config();
     backfill_config.migration_id = Some("test-migration".to_string());
-    backfill_config.first_checkpoint = Some(0);
-    backfill_config.last_checkpoint = Some(last_seq);
 
-    harness.run_indexer(backfill_config).await;
+    harness
+        .run_indexer(backfill_config, Some(0), Some(last_seq))
+        .await;
 
     // Migration should produce exact same file structure
     let epoch_0_files_after = harness.list_files("checkpoints/epoch_0").await;
@@ -1010,10 +1029,9 @@ async fn test_backfill_single_checkpoint_files() {
     }
     let last_seq = harness.last_checkpoint_seq;
 
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
+    let config = harness.default_config();
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     let files_before = harness.list_files("checkpoints/epoch_0").await;
     let parquet_before = filter_by_extension(&files_before, ".parquet");
@@ -1032,10 +1050,10 @@ async fn test_backfill_single_checkpoint_files() {
 
     let mut backfill_config = harness.default_config();
     backfill_config.migration_id = Some("test-migration".to_string());
-    backfill_config.first_checkpoint = Some(0);
-    backfill_config.last_checkpoint = Some(last_seq);
 
-    harness.run_indexer(backfill_config).await;
+    harness
+        .run_indexer(backfill_config, Some(0), Some(last_seq))
+        .await;
 
     let files_after = harness.list_files("checkpoints/epoch_0").await;
     let parquet_after = filter_by_extension(&files_after, ".parquet");
@@ -1066,10 +1084,9 @@ async fn test_backfill_multiple_files_across_epochs() {
     }
     let last_seq = harness.last_checkpoint_seq;
 
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
+    let config = harness.default_config();
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify epoch 0: 7 checkpoints (6 + 1 from advance_epoch)
     let epoch_0_files = harness.list_files("checkpoints/epoch_0").await;
@@ -1113,10 +1130,10 @@ async fn test_backfill_multiple_files_across_epochs() {
     // Run migration - should produce same file structure as before
     let mut backfill_config = harness.default_config();
     backfill_config.migration_id = Some("test-migration".to_string());
-    backfill_config.first_checkpoint = Some(0);
-    backfill_config.last_checkpoint = Some(last_seq);
 
-    harness.run_indexer(backfill_config).await;
+    harness
+        .run_indexer(backfill_config, Some(0), Some(last_seq))
+        .await;
 
     // Verify same file structure after migration (migration mode preserves exact file boundaries)
     let epoch_0_files_after = harness.list_files("checkpoints/epoch_0").await;
@@ -1172,9 +1189,8 @@ async fn test_migration_resume_after_crash() {
     let last_seq = harness.last_checkpoint_seq;
 
     // Initial run to create files (live mode - no migration)
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
-    harness.run_indexer(config).await;
+    let config = harness.default_config();
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify initial files exist
     let epoch_0_files = harness.list_files("checkpoints/epoch_0").await;
@@ -1189,11 +1205,11 @@ async fn test_migration_resume_after_crash() {
     let migration_id = "crash-test-migration";
     let mut backfill_phase1 = harness.default_config();
     backfill_phase1.migration_id = Some(migration_id.to_string());
-    backfill_phase1.first_checkpoint = Some(0);
-    backfill_phase1.last_checkpoint = Some(epoch_0_last);
     // Disable watermark rate limiting for test to ensure watermarks are written
     backfill_phase1.watermark_update_interval_secs = 0;
-    harness.run_indexer(backfill_phase1).await;
+    harness
+        .run_indexer(backfill_phase1, Some(0), Some(epoch_0_last))
+        .await;
 
     // Verify watermark after Phase 1: should be at epoch_0_last
     let watermark_phase1 = harness
@@ -1215,11 +1231,11 @@ async fn test_migration_resume_after_crash() {
     backfill_phase2.migration_id = Some(migration_id.to_string());
     // Note: We set first_checkpoint=0, but the watermark from metadata should
     // cause us to resume from epoch_0_last + 1
-    backfill_phase2.first_checkpoint = Some(0);
-    backfill_phase2.last_checkpoint = Some(last_seq);
     // Disable watermark rate limiting for test to ensure watermarks are written
     backfill_phase2.watermark_update_interval_secs = 0;
-    harness.run_indexer(backfill_phase2).await;
+    harness
+        .run_indexer(backfill_phase2, Some(0), Some(last_seq))
+        .await;
 
     // Verify watermark after Phase 2: should be at last_seq
     let watermark_phase2 = harness
@@ -1300,9 +1316,8 @@ async fn test_epoch_boundary_failure_recovery() {
     }
 
     // Run indexer - upload worker should retry the failed PUT and succeed
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
-    harness.run_indexer(config).await;
+    let config = harness.default_config();
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify all data was uploaded despite the transient failure
     let all_files = harness.list_files("checkpoints").await;
@@ -1356,9 +1371,10 @@ async fn test_watermark_flush_failure_recovery() {
     let last_seq = harness.last_checkpoint_seq;
 
     // Initial run to create files (live mode - no migration)
-    let mut initial_config = harness.default_config();
-    initial_config.last_checkpoint = Some(last_seq);
-    harness.run_indexer(initial_config).await;
+    let initial_config = harness.default_config();
+    harness
+        .run_indexer(initial_config, None, Some(last_seq))
+        .await;
 
     // Verify initial files exist
     let initial_files = harness.list_files("checkpoints/epoch_0").await;
@@ -1387,9 +1403,9 @@ async fn test_watermark_flush_failure_recovery() {
     let migration_id = "watermark-fail-test";
     let mut migration_config = harness.default_config();
     migration_config.migration_id = Some(migration_id.to_string());
-    migration_config.first_checkpoint = Some(0);
-    migration_config.last_checkpoint = Some(last_seq);
-    harness.run_indexer(migration_config).await;
+    harness
+        .run_indexer(migration_config, Some(0), Some(last_seq))
+        .await;
 
     // With incremental watermark updates, the watermark SHOULD exist
     // (first update failed, but subsequent file uploads updated it successfully)
@@ -1457,9 +1473,10 @@ async fn test_migration_retry_after_partial_failure() {
     let last_seq = harness.last_checkpoint_seq;
 
     // Initial run to create files (live mode)
-    let mut initial_config = harness.default_config();
-    initial_config.last_checkpoint = Some(last_seq);
-    harness.run_indexer(initial_config).await;
+    let initial_config = harness.default_config();
+    harness
+        .run_indexer(initial_config, None, Some(last_seq))
+        .await;
 
     // Verify both epochs have files
     let epoch_0_files = harness.list_files("checkpoints/epoch_0").await;
@@ -1494,11 +1511,11 @@ async fn test_migration_retry_after_partial_failure() {
     let migration_id = "partial-fail-test";
     let mut migration_config = harness.default_config();
     migration_config.migration_id = Some(migration_id.to_string());
-    migration_config.first_checkpoint = Some(0);
-    migration_config.last_checkpoint = Some(last_seq);
     // Disable watermark rate limiting for test to ensure watermarks are written
     migration_config.watermark_update_interval_secs = 0;
-    harness.run_indexer(migration_config.clone()).await;
+    harness
+        .run_indexer(migration_config.clone(), Some(0), Some(last_seq))
+        .await;
 
     // Check watermark - should be at or before first file boundary due to failure
     let _watermark_partial = harness
@@ -1515,7 +1532,9 @@ async fn test_migration_retry_after_partial_failure() {
     }
 
     // Retry migration
-    harness.run_indexer(migration_config).await;
+    harness
+        .run_indexer(migration_config, Some(0), Some(last_seq))
+        .await;
 
     // Verify watermark is at the end
     let watermark_final = harness
@@ -1606,9 +1625,8 @@ async fn test_files_uploaded_in_checkpoint_order() {
     let last_seq = harness.last_checkpoint_seq;
 
     // Run the indexer
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
-    harness.run_indexer(config).await;
+    let config = harness.default_config();
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Get the PUT order from the mock store
     let put_order = harness.failure_config().read().unwrap().put_order.clone();
@@ -1780,7 +1798,6 @@ async fn test_smoke_all_pipelines_parquet() {
     let last_seq = harness.last_checkpoint_seq;
 
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
     config.file_format = FileFormat::Parquet;
     config.pipeline_configs = pipelines_with_guaranteed_output()
         .into_iter()
@@ -1791,7 +1808,7 @@ async fn test_smoke_all_pipelines_parquet() {
         })
         .collect();
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify each pipeline produced output
     for pipeline in pipelines_with_guaranteed_output() {
@@ -1847,7 +1864,6 @@ async fn test_smoke_all_pipelines_csv() {
     let last_seq = harness.last_checkpoint_seq;
 
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
     config.file_format = FileFormat::Csv;
     config.pipeline_configs = pipelines_with_guaranteed_output()
         .into_iter()
@@ -1858,7 +1874,7 @@ async fn test_smoke_all_pipelines_csv() {
         })
         .collect();
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify each pipeline produced output
     for pipeline in pipelines_with_guaranteed_output() {
@@ -1906,10 +1922,11 @@ async fn test_checkpoint_pipeline_fields() {
     let checkpoint_seq = harness.add_checkpoint();
 
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(checkpoint_seq);
     config.pipeline_configs = vec![default_pipeline_config(Pipeline::Checkpoint)];
 
-    harness.run_indexer(config).await;
+    harness
+        .run_indexer(config, None, Some(checkpoint_seq))
+        .await;
 
     let files = harness.list_files("checkpoints/epoch_0").await;
     let parquet_files = filter_by_extension(&files, ".parquet");
@@ -1961,10 +1978,11 @@ async fn test_transaction_pipeline_fields() {
     let checkpoint_seq = harness.add_checkpoint();
 
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(checkpoint_seq);
     config.pipeline_configs = vec![default_pipeline_config(Pipeline::Transaction)];
 
-    harness.run_indexer(config).await;
+    harness
+        .run_indexer(config, None, Some(checkpoint_seq))
+        .await;
 
     let files = harness.list_files("transactions/epoch_0").await;
     let parquet_files = filter_by_extension(&files, ".parquet");
@@ -2009,10 +2027,11 @@ async fn test_transaction_bcs_pipeline_fields() {
     let checkpoint_seq = harness.add_checkpoint();
 
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(checkpoint_seq);
     config.pipeline_configs = vec![default_pipeline_config(Pipeline::TransactionBCS)];
 
-    harness.run_indexer(config).await;
+    harness
+        .run_indexer(config, None, Some(checkpoint_seq))
+        .await;
 
     let files = harness.list_files("transaction_bcs/epoch_0").await;
     let parquet_files = filter_by_extension(&files, ".parquet");
@@ -2050,7 +2069,6 @@ async fn test_checkpoint_csv_parseable() {
     let last_seq = harness.last_checkpoint_seq;
 
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
     config.file_format = FileFormat::Csv;
     config.pipeline_configs = vec![{
         let mut cfg = default_pipeline_config(Pipeline::Checkpoint);
@@ -2058,7 +2076,7 @@ async fn test_checkpoint_csv_parseable() {
         cfg
     }];
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     let files = harness.list_files("checkpoints/epoch_0").await;
     let csv_files = filter_by_extension(&files, ".csv");
@@ -2105,13 +2123,12 @@ async fn test_migration_snap_to_file_start() {
 
     // Initial run to create files with batch_size=10 (all in one file)
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
     config.pipeline_configs = vec![{
         let mut cfg = default_pipeline_config(Pipeline::Checkpoint);
         cfg.batch_size = Some(BatchSizeConfig::Checkpoints(10));
         cfg
     }];
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify we have one file: 0_10.parquet
     let files_before = harness.list_files("checkpoints/epoch_0").await;
@@ -2133,15 +2150,15 @@ async fn test_migration_snap_to_file_start() {
     // Should snap to 0 (file start) and rewrite the entire file
     let mut migration_config = harness.default_config();
     migration_config.migration_id = Some("snap-test".to_string());
-    migration_config.first_checkpoint = Some(5); // Mid-file!
-    migration_config.last_checkpoint = Some(last_seq);
     migration_config.pipeline_configs = vec![{
         let mut cfg = default_pipeline_config(Pipeline::Checkpoint);
         cfg.batch_size = Some(BatchSizeConfig::Checkpoints(10));
         cfg
     }];
     migration_config.watermark_update_interval_secs = 0;
-    harness.run_indexer(migration_config).await;
+    harness
+        .run_indexer(migration_config, Some(5), Some(last_seq))
+        .await;
 
     // Verify file was rewritten (modified time changed)
     let files_after = harness.list_files("checkpoints/epoch_0").await;
@@ -2195,9 +2212,8 @@ async fn test_migration_snap_forward_in_gap() {
     let last_seq = harness.last_checkpoint_seq;
 
     // Initial run with batch_size=6 to create files at epoch boundaries
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
-    harness.run_indexer(config).await;
+    let config = harness.default_config();
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify files exist in both epochs
     let epoch0_files = harness.list_files("checkpoints/epoch_0").await;
@@ -2226,10 +2242,14 @@ async fn test_migration_snap_forward_in_gap() {
     let epoch1_first_checkpoint = 6; // First checkpoint in epoch 1
     let mut migration_config = harness.default_config();
     migration_config.migration_id = Some("gap-test".to_string());
-    migration_config.first_checkpoint = Some(epoch1_first_checkpoint);
-    migration_config.last_checkpoint = Some(last_seq);
     migration_config.watermark_update_interval_secs = 0;
-    harness.run_indexer(migration_config).await;
+    harness
+        .run_indexer(
+            migration_config,
+            Some(epoch1_first_checkpoint),
+            Some(last_seq),
+        )
+        .await;
 
     // Verify watermark starts at epoch 1
     let watermark = harness
@@ -2277,15 +2297,25 @@ async fn test_migration_no_files_after_checkpoint_error() {
     // Try to run migration with first_checkpoint=100 (beyond all files)
     let mut migration_config = harness.default_config();
     migration_config.migration_id = Some("error-test".to_string());
-    migration_config.first_checkpoint = Some(100); // Beyond all files!
-    migration_config.last_checkpoint = Some(200);
 
+    let indexer_args = sui_indexer_alt_framework::IndexerArgs {
+        first_checkpoint: Some(100),
+        last_checkpoint: Some(200),
+        ..Default::default()
+    };
+    let client_args = sui_indexer_alt_framework::ingestion::ClientArgs::default();
     let registry = prometheus::Registry::new();
     let metrics = Metrics::new(&registry);
 
     // This should fail during indexer build (when loading file ranges)
-    let result =
-        sui_analytics_indexer::build_analytics_indexer(migration_config, metrics, registry).await;
+    let result = sui_analytics_indexer::build_analytics_indexer(
+        migration_config,
+        indexer_args,
+        client_args,
+        metrics,
+        registry,
+    )
+    .await;
 
     assert!(
         result.is_err(),
@@ -2319,12 +2349,11 @@ async fn test_multi_pipeline_different_file_boundaries() {
 
     // Initial run with both pipelines (same batch size for simplicity)
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
     config.pipeline_configs = vec![
         default_pipeline_config(Pipeline::Checkpoint),
         default_pipeline_config(Pipeline::Transaction),
     ];
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Verify files exist for both pipelines
     let checkpoint_files = harness.list_files("checkpoints/epoch_0").await;
@@ -2360,14 +2389,14 @@ async fn test_multi_pipeline_different_file_boundaries() {
     // Run migration with first_checkpoint=5 (mid-file for both)
     let mut migration_config = harness.default_config();
     migration_config.migration_id = Some("multi-pipeline-test".to_string());
-    migration_config.first_checkpoint = Some(5);
-    migration_config.last_checkpoint = Some(last_seq);
     migration_config.pipeline_configs = vec![
         default_pipeline_config(Pipeline::Checkpoint),
         default_pipeline_config(Pipeline::Transaction),
     ];
     migration_config.watermark_update_interval_secs = 0;
-    harness.run_indexer(migration_config).await;
+    harness
+        .run_indexer(migration_config, Some(5), Some(last_seq))
+        .await;
 
     // Verify watermarks for both pipelines
     let checkpoint_watermark = harness
@@ -2441,17 +2470,16 @@ async fn test_migration_first_checkpoint_zero() {
     let last_seq = harness.last_checkpoint_seq;
 
     // Initial run
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
-    harness.run_indexer(config).await;
+    let config = harness.default_config();
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Run migration with first_checkpoint=0
     let mut migration_config = harness.default_config();
     migration_config.migration_id = Some("zero-start-test".to_string());
-    migration_config.first_checkpoint = Some(0);
-    migration_config.last_checkpoint = Some(last_seq);
     migration_config.watermark_update_interval_secs = 0;
-    harness.run_indexer(migration_config).await;
+    harness
+        .run_indexer(migration_config, Some(0), Some(last_seq))
+        .await;
 
     // Verify watermark
     let watermark = harness
@@ -2483,17 +2511,16 @@ async fn test_migration_no_first_checkpoint() {
     let last_seq = harness.last_checkpoint_seq;
 
     // Initial run
-    let mut config = harness.default_config();
-    config.last_checkpoint = Some(last_seq);
-    harness.run_indexer(config).await;
+    let config = harness.default_config();
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     // Run migration WITHOUT first_checkpoint (should process from beginning)
     let mut migration_config = harness.default_config();
     migration_config.migration_id = Some("no-start-test".to_string());
-    migration_config.first_checkpoint = None; // No first_checkpoint!
-    migration_config.last_checkpoint = Some(last_seq);
     migration_config.watermark_update_interval_secs = 0;
-    harness.run_indexer(migration_config).await;
+    harness
+        .run_indexer(migration_config, None, Some(last_seq))
+        .await;
 
     // Verify watermark
     let watermark = harness
@@ -2521,14 +2548,14 @@ async fn test_time_based_batch_flush() {
         harness.add_checkpoint();
     }
 
+    let last_seq = harness.last_checkpoint_seq;
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(harness.last_checkpoint_seq);
     // Large batch size so size-based flush doesn't trigger
     config.pipeline_configs[0].batch_size = Some(BatchSizeConfig::Checkpoints(1000));
     // 0 seconds = flush immediately after first add
     config.pipeline_configs[0].force_batch_cut_after_secs = 0;
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     let files = harness.list_files("checkpoints/epoch_0").await;
     let parquet_files = filter_by_extension(&files, ".parquet");
@@ -2562,14 +2589,14 @@ async fn test_pending_batch_flushed_on_shutdown() {
         harness.add_checkpoint();
     }
 
+    let last_seq = harness.last_checkpoint_seq;
     let mut config = harness.default_config();
-    config.last_checkpoint = Some(harness.last_checkpoint_seq);
     // Large batch size so size-based flush doesn't trigger
     config.pipeline_configs[0].batch_size = Some(BatchSizeConfig::Checkpoints(1000));
     // Large time threshold so time-based flush doesn't trigger
     config.pipeline_configs[0].force_batch_cut_after_secs = 600;
 
-    harness.run_indexer(config).await;
+    harness.run_indexer(config, None, Some(last_seq)).await;
 
     let files = harness.list_files("checkpoints/epoch_0").await;
     let parquet_files = filter_by_extension(&files, ".parquet");

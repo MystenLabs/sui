@@ -4,13 +4,14 @@
 mod effects_certifier;
 mod error;
 mod metrics;
+mod reconfig_observer;
 mod request_retrier;
 mod transaction_submitter;
 
 /// Exports
 pub use error::TransactionDriverError;
 pub use metrics::*;
-use mysten_common::backoff::ExponentialBackoff;
+pub use reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 
 use std::{
     net::SocketAddr,
@@ -20,9 +21,11 @@ use std::{
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
+use mysten_common::backoff::ExponentialBackoff;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
 use rand::Rng;
+use sui_config::NodeConfig;
 use sui_types::{
     committee::EpochId,
     error::{ErrorCategory, UserInputError},
@@ -44,9 +47,6 @@ use crate::{
     },
 };
 
-pub mod reconfig_observer;
-pub use reconfig_observer::ReconfigObserver;
-
 /// Trait for components that can update their AuthorityAggregator during reconfiguration.
 /// Used by ReconfigObserver to notify components of epoch changes.
 pub trait AuthorityAggregatorUpdatable<A: Clone>: Send + Sync + 'static {
@@ -54,7 +54,7 @@ pub trait AuthorityAggregatorUpdatable<A: Clone>: Send + Sync + 'static {
     fn authority_aggregator(&self) -> Arc<AuthorityAggregator<A>>;
     fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>);
 }
-use sui_config::NodeConfig;
+
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
 pub struct SubmitTransactionOptions {
@@ -319,8 +319,6 @@ where
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
-        let amplification_factor =
-            amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();

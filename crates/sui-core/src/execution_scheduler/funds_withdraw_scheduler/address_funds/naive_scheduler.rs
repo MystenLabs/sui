@@ -183,6 +183,10 @@ impl FundsWithdrawSchedulerTrait for NaiveFundsWithdrawScheduler {
         debug!("Closing epoch in NaiveFundsWithdrawScheduler");
     }
 
+    fn num_tracked_accounts(&self) -> usize {
+        0
+    }
+
     #[cfg(test)]
     fn get_current_accumulator_version(&self) -> SequenceNumber {
         *self.accumulator_version_receiver.borrow()

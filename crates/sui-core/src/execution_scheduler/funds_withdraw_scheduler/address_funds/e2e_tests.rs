@@ -67,6 +67,7 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
         .with_starting_objects(&starting_objects)
         .build()
         .await;
+    let registry = prometheus::Registry::new();
     let scheduler = Arc::new(ExecutionScheduler::new(
         state.get_object_cache_reader().clone(),
         state.get_account_funds_read().clone(),
@@ -75,6 +76,7 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
         &state.epoch_store_for_testing(),
         FundsWithdrawSchedulerType::default(),
         state.metrics.clone(),
+        &registry,
     ));
     TestEnv {
         sender,

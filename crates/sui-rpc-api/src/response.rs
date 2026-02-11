@@ -45,22 +45,16 @@ pub async fn append_info_headers(
         );
     }
 
-    if let Ok(lowest_available_checkpoint) = state.reader.inner().get_lowest_available_checkpoint()
-    {
+    if let Ok(lowest_available_checkpoint) = state.reader.get_lowest_available_checkpoint() {
         headers.insert(
             X_SUI_LOWEST_AVAILABLE_CHECKPOINT,
             lowest_available_checkpoint.into(),
         );
-    }
 
-    if let Ok(lowest_available_checkpoint_objects) = state
-        .reader
-        .inner()
-        .get_lowest_available_checkpoint_objects()
-    {
+        // Still set the deprecated header
         headers.insert(
             X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS,
-            lowest_available_checkpoint_objects.into(),
+            lowest_available_checkpoint.into(),
         );
     }
 

@@ -40,7 +40,9 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
         .collect();
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .with_accounts(accounts)
         .build()
         .await;
@@ -307,7 +309,9 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
         .collect();
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .with_accounts(accounts)
         .build()
         .await;
@@ -515,7 +519,9 @@ async fn test_stake_with_coin_limit() -> Result<()> {
         .collect();
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .with_accounts(accounts)
         .build()
         .await;
