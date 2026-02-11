@@ -1,14 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::identifier::Identifier;
 use sui_macros::*;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{FullObjectRef, ObjectID, SequenceNumber, SuiAddress},
     coin_reservation::ParsedObjectRefWithdrawal,
+    digests::CheckpointDigest,
     effects::TransactionEffectsAPI,
+    gas_coin::GAS,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{Argument, Command, ObjectArg, TransactionData},
 };
-use test_cluster::addr_balance_test_env::TestEnvBuilder;
+use test_cluster::addr_balance_test_env::{TestEnvBuilder, get_sui_accumulator_object_id};
+
+// TODO: test cases for backward compat layer
+// - tx paying gas with coin reservation
+// - gas smashing transaction with no commands
+// - transaction with no commands, but non-gas coin reservations
+// - transaction using GAS_COIN CallArg
+// - add money to a fake coin
+// - deduct money from a fake coin
+// - transfer a fake coin away (with deduct/add money)
+// - transfer a fake coin to oneself (with deduct/add money)
+// - wrap a fake coin
+// - wrong ChainID
+// - non-SUI coin reservation in gas_payment
+// - deny list is enforced for coin reservations
+// - gas coin reservation not owned by gas_owner
+// - gas payment with mix of real/fake coins.
+//   - mix of owners
+// - gas payment is not enough for budget
 
 #[sim_test]
 async fn test_coin_reservation_validation() {
@@ -278,5 +302,138 @@ async fn test_valid_coin_reservation_gas_payments() {
     assert_eq!(
         final_sender_balance,
         initial_sender_balance as u64 - gas_charge as u64 - 1
+    );
+}
+
+#[sim_test]
+async fn test_gas_coin_callarg_with_coin_reservation_gas() {
+    // KEEP
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let budget = 5_000_000_000;
+    test_env
+        .fund_one_address_balance(sender, budget + 100)
+        .await;
+
+    let gas_reservation = test_env.encode_coin_reservation(sender, 0, budget);
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Use transfer_sui which internally does SplitCoins(GasCoin, [amount]) + TransferObjects.
+    // GasCoin should work with coin reservation gas.
+    let tx = TestTransactionBuilder::new(sender, gas_reservation, test_env.rgp)
+        .transfer_sui(Some(100), recipient)
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
+}
+
+#[sim_test]
+async fn test_wrong_chain_id() {
+    // KEEP
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    // Encode a coin reservation with a wrong chain identifier. Unmasking with the
+    // correct chain ID will produce a different (nonexistent) object ID.
+    let accumulator_obj_id = get_sui_accumulator_object_id(sender);
+    let wrong_chain_id = CheckpointDigest::from([42u8; 32]).into();
+    let coin_res = ParsedObjectRefWithdrawal::new(accumulator_obj_id, 0, 100)
+        .encode(SequenceNumber::new(), wrong_chain_id);
+
+    let err = test_env
+        .transfer_from_coin_to_address_balance(sender, coin_res, vec![(1, sender)])
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("not found"));
+}
+
+#[sim_test]
+async fn test_gas_payment_mix_of_real_and_fake_coins() {
+    // KEEP
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    test_env
+        .fund_one_address_balance(sender, 5_000_000_000)
+        .await;
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 5_000_000_000);
+
+    // Gas payment is a mix of real coin and coin reservation.
+    let ptb = ProgrammableTransactionBuilder::new();
+    let pt = ptb.finish();
+
+    let tx = TransactionData::new_programmable(
+        sender,
+        vec![gas, coin_reservation],
+        pt,
+        5_000_000_001,
+        test_env.rgp,
+    );
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
+    // TODO: verify balances
+}
+
+#[sim_test]
+async fn test_gas_payment_mix_of_owners() {
+    // KEEP (maybe?)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender2 = test_env.get_sender(1);
+
+    // Fund sender2's address balance so the accumulator exists
+    test_env
+        .fund_one_address_balance(sender2, 5_000_000_000)
+        .await;
+    let (sender1, gas1) = test_env.get_sender_and_gas(0);
+
+    // Create a coin reservation from sender2's accumulator
+    let coin_reservation_from_sender2 = test_env.encode_coin_reservation(sender2, 0, 5_000_000_000);
+
+    // sender1 is the sender, gas includes sender1's real coin + sender2's coin reservation.
+    // The coin reservation ownership check uses self.sender() = sender1.
+    let ptb = ProgrammableTransactionBuilder::new();
+    let pt = ptb.finish();
+
+    let tx = TransactionData::new_programmable(
+        sender1,
+        vec![gas1, coin_reservation_from_sender2],
+        pt,
+        5_000_000_000,
+        test_env.rgp,
+    );
+    let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+    assert!(
+        err.to_string()
+            .contains(format!("is owned by {}, not sender {}", sender2, sender1).as_str())
     );
 }
