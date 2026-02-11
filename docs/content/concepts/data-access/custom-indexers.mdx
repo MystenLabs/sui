@@ -1,28 +1,40 @@
 ---
-title: Custom Indexing
+title: Custom Indexers
 description: The `sui-indexer-alt-framework` is a powerful Rust framework for building high-performance, custom blockchain indexers on Sui. It provides customizable, production-ready components for data ingestion, processing, and storage.
-keywords: [ indexer, archival store, graphql, custom indexer ]
+keywords: [ indexer, custom indexer, data processing, blockchain indexer, sui-indexer-alt-framework ]
 ---
 
 Sui generates rich, complex data, including transactions, events, object changes, and more. While Sui provides standard APIs to access this data, many applications need customized data processing for workflows like tracking specific events, aggregating analytics, building dashboards, or creating specialized databases. Custom indexers let you extract, transform, and store the specific blockchain data you need. Instead of querying Sui APIs repeatedly or building complex filtering logic, you process the raw blockchain data once and store it in your preferred format.
 
-You can use custom indexers to enable use cases such as tracking DEX trading volumes, monitoring NFT collection activity, building analytics dashboards, or aggregating cross-chain data. To build your own pipelines for application-specific data, see [Building Your First Custom Indexer](/guides/developer/accessing-data/custom-indexer/build.mdx).
+Custom indexers enable use cases such as tracking DEX trading volumes, monitoring NFT collection activity, building analytics dashboards, or aggregating cross-chain data. You build custom indexers using the `sui-indexer-alt-framework`, a Rust framework that provides production-ready components for data ingestion, processing, and storage while giving you full control over your indexing logic.
 
-## Framework architecture
+## When to use
 
-To create a custom indexer, use the [`sui-indexer-alt-framework`](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) Rust framework. It provides production-ready components for data ingestion, processing, and storage while giving you full control over your indexing logic.
+Use custom indexers when your application's data needs cannot be fulfilled with managed services from RPC providers, or if the [General-Purpose Indexer](/concepts/data-access/graphql-rpc-gp-indexer.mdx) is too complex for your use case. Custom indexers are a good choice for app-specific or protocol-specific logic and data layout.
+
+Consider custom indexers when:
+
+- You need more control over the types, granularity, and retention period of data for your application.
+- You have specific query patterns that are not served with gRPC or GraphQL RPC.
+- You want to optimize storage costs through custom pruning strategies based on your retention needs.
+
+If you set up your own indexer, you are responsible for its ongoing maintenance and the related infrastructure and operational costs.
+
+## How custom indexers fit into the application stack
 
 At a high level, the indexing framework is a streaming pipeline that continuously polls for the latest available checkpoints from a predefined data source and streams that checkpoint data to your pipeline's processing logic.
 
 Checkpoints on Sui are batches of transactions that represent consistent blockchain state snapshots. Each checkpoint contains complete transaction details, events, object changes, and execution results with guaranteed ordering. See [Life of a Transaction](/concepts/transactions/transaction-lifecycle.mdx) for more information on checkpoints.
 
-![Overview](./images/overview.png)
+![Overview](images/overview.png)
 
-## Detailed architecture
+### Architecture overview
 
 The following diagram details the custom indexer architecture.
 
-![Custom indexer architecture](./images/architecture.png)
+![Custom indexer architecture](images/architecture.png)
+
+Your indexer runs as one executable program with multiple coordinated background tasks (threads). The ingestion layer polls for new checkpoints while your processing pipelines transform and store data, all within the same process.
 
 ### Data sources
 
@@ -60,12 +72,12 @@ Both the indexing framework and your code manage the processing layer, which is 
 
 The indexing framework abstracts database operations through a flexible storage layer. PostgreSQL comes with built-in support using Diesel ORM, providing production-ready database operations, connection pooling, migrations, and watermark management out of the box. For custom database implementations, you can implement the framework's storage interfaces to use any database, for example, [MongoDB](https://www.mongodb.com/) for document storage or [ClickHouse](https://clickhouse.com/) for analytics.
 
-## Single program, multiple threads
+## Building custom indexers
 
-Your indexer runs as one executable program with multiple coordinated background tasks (threads). The ingestion layer polls for new checkpoints while your processing pipelines transform and store data, all within the same process.
+To build your own pipelines for application-specific data, see [Building Your First Custom Indexer](/guides/developer/accessing-data/custom-indexer/build.mdx). You can also reach out to a [data indexer operator](/references/awesome-sui.mdx#indexers--data-services) that might already have set one up for your needs.
 
 ## Related links
 
-<RelatedLink to="/guides/developer/accessing-data/pipeline-architecture.mdx" />
+<RelatedLink to="/guides/developer/accessing-data/custom-indexer/build.mdx" />
+<RelatedLink to="/guides/developer/accessing-data/custom-indexer/pipeline-architecture.mdx" />
 <RelatedLink to="/concepts/transactions/transaction-lifecycle.mdx" />
-<RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework.mdx" />

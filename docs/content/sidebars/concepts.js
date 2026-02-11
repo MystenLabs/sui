@@ -62,14 +62,20 @@ const concepts = [
 	{
 		type: 'category',
 		label: 'Accessing Data',
-		link: {
-			type: 'doc',
-			id: 'concepts/data-access/data-serving',
-		},
 		items: [
-			'concepts/data-access/grpc',
+			'concepts/data-access/data-serving',
 			'concepts/data-access/custom-indexers',
-			'concepts/data-access/graphql-rpc',
+			'concepts/data-access/grpc',
+			{
+				type: 'category',
+				label: 'GraphQL RPC',
+				items: [
+					'concepts/data-access/graphql-rpc-gp-indexer',
+					'concepts/data-access/graphql-rpc',
+				],
+			},
+			'concepts/data-access/archival-store',
+
 		],
 	},
 	{

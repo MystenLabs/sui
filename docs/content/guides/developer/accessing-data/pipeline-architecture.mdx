@@ -1,5 +1,5 @@
 ---
-title: Indexer Pipeline Architecture
+title: Custom Indexer Pipeline Architecture
 description: The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understand the differences between the sequential and concurrent pipelines that the `sui-indexer-alt-framework` provides to decide which best suits your project needs.
 keywords: [ indexer, index data, sui-indexer, custom indexer, sequential pipeline, concurrent pipeline ]
 ---
@@ -482,7 +482,7 @@ Database connection limits are also in place. The `Committer` blocks when all co
 
 `Watermark` feedback provides application-level coordination by reporting progress to the `Broadcaster` through `Watermark` updates. Further coordination is provided through bounded ingestion, where the `Broadcaster` only signals fetches within a bounded range ahead of the current watermark.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" tag="bound" /> 
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" fun="spawn_aborting" /> 
     
 Finally, memory protection ensures the entire system operates within predictable memory bounds.
 

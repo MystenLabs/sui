@@ -133,8 +133,6 @@ const guides = [
     type: 'category',
     label: 'Accessing Data',
     items: [
-      'guides/developer/accessing-data/grpc-overview',
-      'guides/developer/accessing-data/query-with-graphql',
       {
         type: 'category',
         label: 'Custom Indexer Framework',
@@ -148,7 +146,15 @@ const guides = [
           'guides/developer/accessing-data/custom-indexer/build',
           'guides/developer/accessing-data/custom-indexer/indexer-runtime-perf',
           'guides/developer/accessing-data/custom-indexer/indexer-walrus',
-
+        ],
+      },
+      'guides/developer/accessing-data/grpc-overview',
+      {
+        type: 'category',
+        label: 'GraphQL RPC',
+        items: [
+              'guides/operator/indexer-stack-setup',
+              'guides/developer/accessing-data/query-with-graphql',
         ],
       },
       'guides/developer/accessing-data/archival-store',
@@ -289,7 +295,6 @@ const guides = [
       'guides/operator/archives',
       'guides/operator/exchange-integration',
       'guides/operator/bridge-node-configuration',
-      'guides/operator/indexer-stack-setup',
       {
         type: 'category',
         label: 'Sui Validator Nodes',

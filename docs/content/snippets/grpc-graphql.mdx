@@ -1,0 +1,18 @@
+### When to use gRPC or GraphQL with General-purpose Indexer
+
+You can use the high-level criteria mentioned in the following table to determine whether gRPC API or GraphQL RPC with General-purpose Indexer would better serve your use case. This is not an exhaustive list and either of the options could work suitably for some of the use cases.
+
+| Dimension | gRPC API | GraphQL RPC with General-purpose Indexer |
+| -------- | ------- | ------- |
+| Type of application or data consumer. | Ideal for Web3 exchanges, DeFi market maker apps, other DeFi protocols or apps with ultra low-latency needs. | Ideal for web application builders or builders with slightly relaxed latency needs. |
+| Query patterns. | Okay to read data from different endpoints separately and combine on the client-side; faster serialization, parsing, and validation because of binary format. | Allows easier decoupling of the client with the ability to combine data from different tables in a single request; returns consistent data from different tables across similar checkpoints, including for paginated results. |
+| Retention period requirements. | Default retention period is 2 weeks with actual configuration dependent on the full node operator and their needs and goals; see history-related information after the table. | Default retention period in Postgres database is 4 weeks with actual configuration depending on your needs or an RPC provider or data indexer operator's setup; see history-related information after the table. |
+| Streaming needs. | Includes a streaming or subscription API before beta release. | Subscription API is planned but is available after GA. |
+| Incremental costs. | Little to no incremental costs if already using full node JSON-RPC. | Somewhat significant incremental costs if already using full node JSON-RPC and if retention period and query patterns differences are insignificant. |
+
+This table only mentions the default retention period for both options. The expectation is that a full node operator, RPC provider, or data indexer operator can reasonably configure that to a few times higher without significantly impacting the performance. Also, by default, the GraphQL RPC service can directly connect to the Archival Store and Service for historical data beyond the retention period configured for the underlying Postgres database. In comparison, gRPC API does not have such direct connectivity to the Archival Store and Service and you must directly connect to one from your application.
+
+Refer to the following articles outlining general differences between gRPC and GraphQL. Validate the accuracy and authenticity of the differences using your own experiments.
+
+- https://stackoverflow.blog/2022/11/28/when-to-use-grpc-vs-graphql/
+- https://blog.postman.com/grpc-vs-graphql/

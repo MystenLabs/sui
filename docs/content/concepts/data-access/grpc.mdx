@@ -14,24 +14,50 @@ The [Sui Full Node gRPC API](/references/fullnode-protocol.mdx) provides a fast,
 
 :::
 
-## What is gRPC?
+gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client and server development across multiple languages. 
 
-gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client and server development across multiple languages. With built-in support for code generation, you can scaffold clients in TypeScript, Go, Rust, and more. This makes it ideal for scalable backend systems like indexers, blockchain explorers, and data-intensive decentralized apps.
+The [gRPC API](/concepts/data-access/grpc) replaces JSON-RPC on full nodes. JSON-RPC is **deprecated** and the gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
+
+- Use streaming or subscription API endpoints to consume real-time streaming data in your application without polling for those records. This support replaces the deprecated WebSocket support in JSON-RPC.
+
+- There is no implicit fallback on the [Sui Foundation-managed Archival Store for historical data](#archival-store-and-service). Full node operators, RPC providers, and data indexer operators are encouraged to run their own instance of a similar Archival Store that can be an explicit dependency to fetch historical data.
+
+## High-level release timeline
+
+The target times indicated below are tentative and subject to updates based on project progress and your feedback.
+
+| Tentative time | Milestone | Description |
+| -------- | ------- | ------- |
+| :heavy_check_mark: April 2025 | Beta release of initial set of polling-based APIs. | You can start validating the initial gRPC integration from your application and share feedback on the improvements you want to see. |
+| :heavy_check_mark: July 2025 | Beta release of streaming APIs and the remaining set of polling-based APIs. | If your use case requires streaming low-latency data, this is an apt time to start validating that integration. Also, the functionality of the API coverage is complete at this point, so you can start migrating your application in non-production environments. |
+| :heavy_check_mark: September-October 2025 | GA release of polling-based and streaming APIs. | Begin migration and cutover of your application in the production environment. **JSON-RPC is deprecated at this point and migration notice period starts.** |
+| July 2026 | End of migration timeline. | **JSON-RPC is fully deactivated at this point.** |
+
+:::warning
+The gRPC and GraphQL RPC APIs have replaced JSON-RPC. View the video below to learn more about the migration timeline and which API to use. 
+<iframe width="560" height="315" src="https://www.youtube.com/embed/_Ke9y8svtW8?si=ADqYvGiKMhKp1ap4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+:::
+
+## When to use 
+
+With built-in support for code generation, you can scaffold clients in TypeScript, Go, Rust, and more. This makes it ideal for scalable backend systems like indexers, blockchain explorers, and data-intensive decentralized apps.
 
 In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. This is especially useful in environments where you need to track events and transactions live. gRPC's binary format is significantly faster and lighter than JSON, saving bandwidth and improving latency.
 
-## gRPC services on Sui
+<ImportContent source="grpc-graphql.mdx" mode="snippet" />
 
-Protocol buffers define the gRPC interface. You can find the relevant `.proto` files at [`sui-apis` on Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), which apart from the gRPC messages (request and response payloads), include the following services:
+## How gRPC fits into the application stack
+
+The following gRPC services are available on Sui. Protocol buffers define the gRPC interface. You can find the relevant `.proto` files at [`sui-apis` on GitHub](https://github.com/MystenLabs/sui-apis/tree/main/proto), which apart from the gRPC messages (request and response payloads), include the following services:
 
 | Service | `.proto` file | Purpose |
 | --- | --- | --- |
 | `TransactionExecutionService` | `sui/rpc/v2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use this service to send user actions to the network. |
-| `LedgerService` | `sui/rpc/v2/ledger_service.proto` | Lookup specific checkpoints, transactions, objects, and more from the current state and recent history of the Sui network. History refers to the recent past, limited to what a full node retains. |
+| `LedgerService` | `sui/rpc/v2/ledger_service.proto` | Look up specific checkpoints, transactions, objects, and more from the current state and recent history of the Sui network. History refers to the recent past, limited to what a full node retains. |
 | `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. It also supports dry-run simulations for transactions. |
-| `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. Refer to [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
+| `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. See [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
 | `MovePackageService` | `sui/rpc/v2/move_package_service.proto` | Access metadata and the content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
-| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that might include [zklogin](/concepts/cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
+| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that might include [zkLogin](/concepts/cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
 | `NameService` | `sui/rpc/v2/name_service.proto` | Resolve human-readable SuiNS names to their underlying name records, and perform reverse lookups from Sui addresses back to linked names. |
 
 Use these definitions to generate client libraries in various programming languages.
@@ -60,7 +86,7 @@ If you omit `read_mask`, it defaults to `*` (all fields), unless documented othe
 
 ### Field presence
 
-When using gRPC with Sui, it's important to understand how [field presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md) works, especially when dealing with `proto3` syntax. In `proto3`, primitive fields like numbers, booleans, and strings are always initialized to a default value if not present in the message. This means you can't tell whether a value is explicitly set or just left out. To give you that distinction, Sui marks all fields as `optional`, even if they're required by the API.
+When using gRPC with Sui, it's important to understand how [field presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md) works, especially when dealing with `proto3` syntax. In `proto3`, primitive fields like numbers, booleans, and strings are always initialized to a default value if not present in the message. This means you cannot tell whether a value is explicitly set or just left out. To give you that distinction, Sui marks all fields as `optional`, even if they are required by the API.
 
 As a user of the API, this lets you detect whether a field value is actually provided or just defaulted and write clients that can perform partial updates or simulate intent like distinguishing between an explicitly empty input versus a missing one.
 
@@ -86,7 +112,7 @@ When using gRPC APIs that return lists of data like account balances, owned obje
 
 In the request, provide a `page_size` to control how many items you want returned. If you leave this unset or set it to 0, the API uses a sensible default. You can also include a `page_token` in the request, which tells the server where to continue from. You get this token from the previous response.
 
-The response includes a list of results and a `next_page_token` value, which you can pass into your next request to get the next page. When the server returns an empty `next_page_token`, you've reached the end of the list.
+The response includes a list of results and a `next_page_token` value, which you can pass into your next request to get the next page. When the server returns an empty `next_page_token`, you have reached the end of the list.
 
 Make sure to keep all other parameters in your request the same between paginated calls. Otherwise, the server might reject the request with an `INVALID_ARGUMENT` error.
 
@@ -130,9 +156,9 @@ Streaming APIs are useful for building indexers, dashboards, or bots that need t
 
 ## Handling pruned data
 
-If a full node doesn't return a specific object, transaction, or event, it's likely that the data has been pruned based on the node's retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store and Service](/guides/developer/accessing-data/archival-store.mdx). The Archival Store retains historical data for the network.
+If a full node does not return a specific object, transaction, or event, the data has likely been pruned based on the node's retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store and Service](/guides/developer/accessing-data/archival-store.mdx). The Archival Store retains historical data for the network.
 
-You can reuse the same gRPC `LedgerService` methods for this lookup. Simply change the endpoint in your client from the full node's address to the archival service endpoint. This ensures that your application can access both recent and historical data reliably, regardless of a full node's pruning settings.
+You can reuse the same gRPC `LedgerService` methods for this lookup. Simply change the endpoint in your client from the full node's address to the Archival Service endpoint. This ensures that your application can access both recent and historical data reliably, regardless of a full node's pruning settings.
 
 ## Best practices
 
@@ -170,6 +196,5 @@ Full nodes might vary in which services and retention they support. Some service
 
 ## Related links
 
-- [Using gRPC](/guides/developer/accessing-data/grpc-overview.mdx): Instructions for using and building gRPC clients in TypeScript, Go, and Python.
-
-- [Full Node Operator Configuration](/guides/operator/sui-full-node.mdx#considerations-to-enable-grpc): Configuration options for enabling gRPC on your full node.
+<RelatedLink to="/guides/developer/accessing-data/grpc-overview" label="Instructions for using and building gRPC clients in TypeScript, Go, and Python." />
+<RelatedLink to="/guides/operator/sui-full-node#considerations-to-enable-grpc" label="Configuration options for enabling gRPC on your full node." />
