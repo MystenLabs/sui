@@ -1526,7 +1526,7 @@ impl AuthorityState {
 
         let execution_start_time = Instant::now();
         let _ = self.transaction_trace_logger.write_transaction_event(
-            tx_digest,
+            tx_digest.inner(),
             sui_transaction_trace::TxEventType::ExecutionBegin,
         );
 
@@ -1893,7 +1893,7 @@ impl AuthorityState {
             .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
 
         let _ = self.transaction_trace_logger.write_transaction_event(
-            tx_digest,
+            tx_digest.inner(),
             sui_transaction_trace::TxEventType::ExecutionComplete,
         );
 

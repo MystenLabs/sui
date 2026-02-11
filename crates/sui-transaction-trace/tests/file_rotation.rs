@@ -30,7 +30,7 @@ async fn test_file_rotation_and_reconstruction() {
 
             // Record begin event
             logger
-                .write_transaction_event(digest, TxEventType::ExecutionBegin)
+                .write_transaction_event(&digest, TxEventType::ExecutionBegin)
                 .unwrap();
             expected_events.push((digest, TxEventType::ExecutionBegin));
 
@@ -39,7 +39,7 @@ async fn test_file_rotation_and_reconstruction() {
 
             // Record complete event
             logger
-                .write_transaction_event(digest, TxEventType::ExecutionComplete)
+                .write_transaction_event(&digest, TxEventType::ExecutionComplete)
                 .unwrap();
             expected_events.push((digest, TxEventType::ExecutionComplete));
 

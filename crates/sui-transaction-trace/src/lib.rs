@@ -152,8 +152,8 @@ struct FlushTaskState {
 /// let logger = TransactionTraceLogger::new(config).unwrap();
 ///
 /// let digest = [1u8; 32];
-/// logger.write_transaction_event(digest, TxEventType::ExecutionBegin).unwrap();
-/// logger.write_transaction_event(digest, TxEventType::ExecutionComplete).unwrap();
+/// logger.write_transaction_event(&digest, TxEventType::ExecutionBegin).unwrap();
+/// logger.write_transaction_event(&digest, TxEventType::ExecutionComplete).unwrap();
 /// ```
 pub struct TransactionTraceLogger {
     enabled: bool,
@@ -251,7 +251,7 @@ impl TransactionTraceLogger {
     /// Holds a mutex only for buffer operations. I/O happens on background thread.
     pub fn write_transaction_event(
         &self,
-        digest: impl AsRef<[u8; 32]>,
+        digest: &[u8; 32],
         event_type: TxEventType,
     ) -> Result<()> {
         if !self.enabled {
@@ -293,7 +293,7 @@ impl TransactionTraceLogger {
                 LogRecord::DeltaTimeLarge(elapsed)
             });
         state.buffer.push(LogRecord::TransactionEvent {
-            digest: *digest.as_ref(),
+            digest: *digest,
             event_type,
         });
         state.last_instant = now;
@@ -612,10 +612,10 @@ mod tests {
         // Event 1: check (3+2>4? yes), FLUSH
         let digest = [1u8; 32];
         logger
-            .write_transaction_event(digest, TxEventType::ExecutionBegin)
+            .write_transaction_event(&digest, TxEventType::ExecutionBegin)
             .unwrap();
         logger
-            .write_transaction_event(digest, TxEventType::ExecutionComplete)
+            .write_transaction_event(&digest, TxEventType::ExecutionComplete)
             .unwrap();
 
         // Check that a log file was created
@@ -652,7 +652,7 @@ mod tests {
         for i in 0..4 {
             let digest = [i as u8; 32];
             logger
-                .write_transaction_event(digest, TxEventType::ExecutionBegin)
+                .write_transaction_event(&digest, TxEventType::ExecutionBegin)
                 .unwrap();
         }
 
@@ -690,7 +690,7 @@ mod tests {
 
         // Event 1: tx1 begins
         logger
-            .write_transaction_event(tx1, TxEventType::ExecutionBegin)
+            .write_transaction_event(&tx1, TxEventType::ExecutionBegin)
             .unwrap();
 
         // Advance time by 100µs
@@ -698,7 +698,7 @@ mod tests {
 
         // Event 2: tx2 begins (concurrent with tx1)
         logger
-            .write_transaction_event(tx2, TxEventType::ExecutionBegin)
+            .write_transaction_event(&tx2, TxEventType::ExecutionBegin)
             .unwrap();
 
         // Advance time by 500µs
@@ -706,7 +706,7 @@ mod tests {
 
         // Event 3: tx1 completes
         logger
-            .write_transaction_event(tx1, TxEventType::ExecutionComplete)
+            .write_transaction_event(&tx1, TxEventType::ExecutionComplete)
             .unwrap();
 
         // Advance time by 200µs
@@ -714,7 +714,7 @@ mod tests {
 
         // Event 4: tx2 completes
         logger
-            .write_transaction_event(tx2, TxEventType::ExecutionComplete)
+            .write_transaction_event(&tx2, TxEventType::ExecutionComplete)
             .unwrap();
 
         // Advance time by 70ms (requires DeltaTimeLarge)
@@ -722,7 +722,7 @@ mod tests {
 
         // Event 5: tx3 begins
         logger
-            .write_transaction_event(tx3, TxEventType::ExecutionBegin)
+            .write_transaction_event(&tx3, TxEventType::ExecutionBegin)
             .unwrap();
 
         // Advance time by 100µs
@@ -730,7 +730,7 @@ mod tests {
 
         // Event 6: tx3 completes
         logger
-            .write_transaction_event(tx3, TxEventType::ExecutionComplete)
+            .write_transaction_event(&tx3, TxEventType::ExecutionComplete)
             .unwrap();
 
         // Force flush by filling buffer to capacity

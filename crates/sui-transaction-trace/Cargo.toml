@@ -27,3 +27,9 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "time", "macros", "test-util"] }
 telemetry-subscribers.workspace = true
 insta = { workspace = true, features = ["json"] }
+sui-macros.workspace = true
+sui-swarm-config.workspace = true
+sui-types.workspace = true
+sui-config.workspace = true
+test-cluster.workspace = true
+sui-protocol-config.workspace = true

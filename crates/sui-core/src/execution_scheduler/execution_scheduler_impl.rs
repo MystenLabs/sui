@@ -193,9 +193,10 @@ impl ExecutionScheduler {
         execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        let _ = self
-            .transaction_trace_logger
-            .write_transaction_event(cert.digest(), sui_transaction_trace::TxEventType::Enqueued);
+        let _ = self.transaction_trace_logger.write_transaction_event(
+            cert.digest().inner(),
+            sui_transaction_trace::TxEventType::Enqueued,
+        );
 
         let enqueue_time = Instant::now();
         let tx_digest = cert.digest();
@@ -314,9 +315,10 @@ impl ExecutionScheduler {
         execution_env: ExecutionEnv,
         enqueue_time: Instant,
     ) {
-        let _ = self
-            .transaction_trace_logger
-            .write_transaction_event(cert.digest(), sui_transaction_trace::TxEventType::Scheduled);
+        let _ = self.transaction_trace_logger.write_transaction_event(
+            cert.digest().inner(),
+            sui_transaction_trace::TxEventType::Scheduled,
+        );
 
         let pending_cert = PendingCertificate {
             certificate: cert.clone(),
