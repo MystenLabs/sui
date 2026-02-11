@@ -1734,12 +1734,26 @@ mod test {
             .collect::<Vec<_>>();
 
         println!("Found {} trace log files", trace_files.len());
-        assert!(!trace_files.is_empty(), "No trace log files found");
+        assert!(
+            !trace_files.is_empty(),
+            "No trace log files found in {}",
+            trace_log_dir.display()
+        );
 
         // Read all events from trace logs
         let mut all_events = Vec::new();
         for trace_file in &trace_files {
             println!("Reading trace file: {}", trace_file.display());
+
+            // Verify file is not empty
+            let file_size = std::fs::metadata(trace_file).unwrap().len();
+            println!("  File size: {} bytes", file_size);
+            assert!(
+                file_size > 0,
+                "Trace file {} is empty",
+                trace_file.display()
+            );
+
             let mut reader = sui_transaction_trace::LogReader::new(trace_file).unwrap();
             for event_result in reader.iter() {
                 let event = event_result.unwrap();
@@ -1749,6 +1763,35 @@ mod test {
 
         println!("\nRead {} total trace events", all_events.len());
         assert!(!all_events.is_empty(), "No trace events found");
+
+        // Verify we have different event types
+        let enqueued_count = all_events
+            .iter()
+            .filter(|e| e.event_type == sui_transaction_trace::TxEventType::Enqueued)
+            .count();
+        let scheduled_count = all_events
+            .iter()
+            .filter(|e| e.event_type == sui_transaction_trace::TxEventType::Scheduled)
+            .count();
+        let complete_count = all_events
+            .iter()
+            .filter(|e| e.event_type == sui_transaction_trace::TxEventType::ExecutionComplete)
+            .count();
+
+        println!(
+            "Event breakdown: Enqueued={}, Scheduled={}, Complete={}",
+            enqueued_count, scheduled_count, complete_count
+        );
+
+        // At minimum we should have some scheduled and complete events from the workload
+        assert!(
+            scheduled_count > 0,
+            "Expected some TransactionScheduled events, but found 0"
+        );
+        assert!(
+            complete_count > 0,
+            "Expected some ExecutionComplete events, but found 0"
+        );
 
         // For this test, we'll use a simplified transaction data map
         // In production, this would come from GraphQL or gRPC queries
