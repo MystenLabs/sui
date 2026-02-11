@@ -110,7 +110,3 @@ public fun g_div(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
 public fun g_neg(e: &Element<Point>): Element<Point> {
     g_sub(&identity(), e)
 }
-
-public fun hash_to_g(m: &vector<u8>): Element<Point> {
-    group_ops::hash_to(POINT_TYPE, m)
-}

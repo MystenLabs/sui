@@ -12,7 +12,3 @@ public native fun blake2b256(data: &vector<u8>): vector<u8>;
 /// @param data: Arbitrary binary data to hash
 /// Hash the input bytes using keccak256 and returns 32 bytes.
 public native fun keccak256(data: &vector<u8>): vector<u8>;
-
-/// @param data: Arbitrary binary data to hash
-/// Hash the input bytes using Sha3-512 and returns 64 bytes.
-public native fun sha3_512(data: &vector<u8>): vector<u8>;

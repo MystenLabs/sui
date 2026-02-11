@@ -1611,11 +1611,6 @@ pub struct ProtocolConfig {
     hash_keccak256_data_cost_per_byte: Option<u64>,
     hash_keccak256_data_cost_per_block: Option<u64>,
 
-    // hash::sha3_512
-    hash_sha3_512_cost_base: Option<u64>,
-    hash_sha3_512_data_cost_per_byte: Option<u64>,
-    hash_sha3_512_data_cost_per_block: Option<u64>,
-
     // poseidon::poseidon_bn254
     poseidon_bn254_cost_base: Option<u64>,
     poseidon_bn254_cost_per_block: Option<u64>,
@@ -1667,13 +1662,6 @@ pub struct ProtocolConfig {
     group_ops_ristretto_point_mul_cost: Option<u64>,
     group_ops_ristretto_scalar_div_cost: Option<u64>,
     group_ops_ristretto_point_div_cost: Option<u64>,
-    group_ops_ristretto_scalar_hash_to_base_cost: Option<u64>,
-    group_ops_ristretto_scalar_hash_to_cost_per_byte: Option<u64>,
-    group_ops_ristretto_point_hash_to_base_cost: Option<u64>,
-    group_ops_ristretto_point_hash_to_cost_per_byte: Option<u64>,
-    group_ops_ristretto_msm_base_cost: Option<u64>,
-    group_ops_ristretto_msm_base_cost_per_input: Option<u64>,
-    group_ops_ristretto_msm_max_len: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -3022,11 +3010,6 @@ impl ProtocolConfig {
             hash_keccak256_data_cost_per_byte: Some(2),
             hash_keccak256_data_cost_per_block: Some(2),
 
-            // hash::sha3_512
-            hash_sha3_512_cost_base: None,
-            hash_sha3_512_data_cost_per_byte: None,
-            hash_sha3_512_data_cost_per_block: None,
-
             poseidon_bn254_cost_base: None,
             poseidon_bn254_cost_per_block: None,
 
@@ -3082,13 +3065,6 @@ impl ProtocolConfig {
             group_ops_ristretto_point_mul_cost: None,
             group_ops_ristretto_scalar_div_cost: None,
             group_ops_ristretto_point_div_cost: None,
-            group_ops_ristretto_scalar_hash_to_base_cost: None,
-            group_ops_ristretto_scalar_hash_to_cost_per_byte: None,
-            group_ops_ristretto_point_hash_to_base_cost: None,
-            group_ops_ristretto_point_hash_to_cost_per_byte: None,
-            group_ops_ristretto_msm_base_cost: None,
-            group_ops_ristretto_msm_base_cost_per_input: None,
-            group_ops_ristretto_msm_max_len: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -4602,36 +4578,20 @@ impl ProtocolConfig {
                     }
                 }
                 111 => {
-                    cfg.feature_flags.validator_metadata_verify_v2 = true;
-
-                        // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
-                        cfg.feature_flags.enable_group_ops_native_functions = true;
-                        cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
-                        cfg.group_ops_ristretto_decode_point_cost = Some(2848);
-                        cfg.group_ops_ristretto_scalar_add_cost = Some(10);
-                        cfg.group_ops_ristretto_point_add_cost = Some(1556);
-                        cfg.group_ops_ristretto_scalar_sub_cost = Some(10);
-                        cfg.group_ops_ristretto_point_sub_cost = Some(1550);
-                        cfg.group_ops_ristretto_scalar_mul_cost = Some(11);
-                        cfg.group_ops_ristretto_point_mul_cost = Some(4842);
-                        cfg.group_ops_ristretto_scalar_div_cost = Some(91);
-                        cfg.group_ops_ristretto_point_div_cost = Some(5091);
-                        cfg.group_ops_ristretto_scalar_hash_to_base_cost = Some(100);
-                        cfg.group_ops_ristretto_scalar_hash_to_cost_per_byte = Some(2);
-                        cfg.group_ops_ristretto_point_hash_to_base_cost = Some(2962);
-                        cfg.group_ops_ristretto_point_hash_to_cost_per_byte = Some(2);
-                        cfg.group_ops_ristretto_msm_base_cost = Some(62648);
-                        cfg.group_ops_ristretto_msm_base_cost_per_input = Some(1333);
-                        cfg.group_ops_ristretto_msm_max_len = Some(1200);
-
-                    // TODO: Copied from blake2b - should update
-                    cfg.hash_sha3_512_cost_base = Some(52);
-                    cfg.hash_sha3_512_data_cost_per_byte = Some(2);
-                    cfg.hash_sha3_512_data_cost_per_block = Some(2);
+                    // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
+                    cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
+                    cfg.group_ops_ristretto_decode_point_cost = Some(2848);
+                    cfg.group_ops_ristretto_scalar_add_cost = Some(10);
+                    cfg.group_ops_ristretto_point_add_cost = Some(1556);
+                    cfg.group_ops_ristretto_scalar_sub_cost = Some(10);
+                    cfg.group_ops_ristretto_point_sub_cost = Some(1550);
+                    cfg.group_ops_ristretto_scalar_mul_cost = Some(11);
+                    cfg.group_ops_ristretto_point_mul_cost = Some(4842);
+                    cfg.group_ops_ristretto_scalar_div_cost = Some(91);
+                    cfg.group_ops_ristretto_point_div_cost = Some(5091);
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_ristretto255_group_ops = true;
-                        cfg.feature_flags.enable_sha3_512 = true;
                     }
                 }
                 // Use this template when making changes:
