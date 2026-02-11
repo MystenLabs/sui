@@ -1088,8 +1088,7 @@ mod test {
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
                 },
-                // TODO: Set this to 1 once party object is enabled in mainnet protocol config.
-                party_weight: 0,
+                party_weight: 1,
                 conflicting_transfer_weight: 0,
                 num_contested_objects: 2,
                 composite_weight: 1,
