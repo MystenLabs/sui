@@ -22,6 +22,7 @@ use crate::{
     },
     jit::execution::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
+    runtime::telemetry::TransactionTelemetryContext,
     shared::{
         SafeIndex as _,
         gas::{GasMeter, SimpleInstruction},
@@ -70,6 +71,7 @@ impl RunContext<'_, '_, '_, '_, '_> {
 pub(super) fn run(
     start_state: MachineState,
     vtables: &mut VMDispatchTables,
+    telemetry: &mut TransactionTelemetryContext,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
     tracer: &mut Option<VMTracer<'_>>,
@@ -107,12 +109,21 @@ pub(super) fn run(
         operand_stack,
         call_stack,
         interner: _,
+        callstack_highwatermark,
+        valuestack_highwatermark,
     } = state;
     let CallStack {
         mut heap,
         current_frame,
         frames,
     } = call_stack;
+
+    // Record telemetry -- and just pass max so we don't interreupt with a telemetry error if we
+    // fail here.
+    telemetry.record_callstack_size(callstack_highwatermark.try_into().unwrap_or(u64::MAX));
+    telemetry.record_valuestack_size(valuestack_highwatermark.try_into().unwrap_or(u64::MAX));
+
+    // Cleanup
     heap.free_stack_frame(current_frame.stack_frame)
         .map_err(|e| e.finish(Location::Undefined))?;
     debug_assert!(

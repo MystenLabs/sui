@@ -51,6 +51,8 @@ pub(crate) struct MachineState {
     /// Operand stack, where Move `Value`s are stored for stack operations.
     pub(crate) operand_stack: ValueStack,
     pub(crate) interner: Arc<IdentifierInterner>,
+    pub(crate) callstack_highwatermark: usize,
+    pub(crate) valuestack_highwatermark: usize,
 }
 
 /// The operand stack.
@@ -85,10 +87,13 @@ pub(crate) struct CallFrame {
 
 impl MachineState {
     pub(super) fn new(interner: Arc<IdentifierInterner>, call_stack: CallStack) -> Self {
+        let callstack_highwatermark = call_stack.heap.cur_size();
         MachineState {
             operand_stack: ValueStack::new(),
             call_stack,
             interner,
+            callstack_highwatermark,
+            valuestack_highwatermark: 0,
         }
     }
 
@@ -96,7 +101,9 @@ impl MachineState {
     /// otherwise.
     #[inline]
     pub fn push_operand(&mut self, value: Value) -> PartialVMResult<()> {
-        self.operand_stack.push(value)
+        self.operand_stack.push(value)?;
+        self.valuestack_highwatermark = self.valuestack_highwatermark.max(self.operand_stack.len());
+        Ok(())
     }
 
     /// Pop a `Value` off the stack or abort execution if the stack is empty.
@@ -140,7 +147,11 @@ impl MachineState {
         args: Vec<Value>,
     ) -> VMResult<()> {
         self.call_stack
-            .push_call(&self.interner, function, ty_args, args)
+            .push_call(&self.interner, function, ty_args, args)?;
+        self.callstack_highwatermark = self
+            .callstack_highwatermark
+            .max(self.call_stack.heap.cur_size());
+        Ok(())
     }
 
     /// Returns true if there is a frame to pop.

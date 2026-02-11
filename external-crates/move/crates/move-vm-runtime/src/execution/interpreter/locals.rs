@@ -29,7 +29,10 @@ pub struct BaseHeapId(usize);
 /// like. Note that this isn't a _true_ heap (crrently), it only allows for allocating and freeing
 /// stackframes.
 #[derive(Debug)]
-pub struct MachineHeap {}
+pub struct MachineHeap {
+    /// Tracks the current stack frame slots on the heap
+    cur_size: usize,
+}
 
 /// A stack frame is an allocated frame. It was allocated starting at `start` in the heap. When it
 /// is freed, we need to check that we are freeing the one on the end of the heap.
@@ -124,7 +127,11 @@ impl BaseHeap {
 
 impl MachineHeap {
     pub fn new() -> Self {
-        Self {}
+        Self { cur_size: 0 }
+    }
+
+    pub fn cur_size(&self) -> usize {
+        self.cur_size
     }
 
     /// Allocates a stack frame with the given size.
@@ -142,6 +149,14 @@ impl MachineHeap {
             )
         })?;
 
+        self.cur_size = self.cur_size.checked_add(size).ok_or_else(|| {
+            partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Heap overflow: cannot allocate stack frame of size {}",
+                size
+            )
+        })?;
+
         // Initialize the stack frame with the provided parameters and fill remaining slots with `Invalid`
         let local_values = params
             .into_iter()
@@ -155,7 +170,16 @@ impl MachineHeap {
     }
 
     /// Frees the given stack frame, ensuring that it is the last frame on the heap.
-    pub fn free_stack_frame(&mut self, _frame: StackFrame) -> PartialVMResult<()> {
+    pub fn free_stack_frame(&mut self, frame: StackFrame) -> PartialVMResult<()> {
+        self.cur_size = self
+            .cur_size
+            .checked_sub(frame.slice.len())
+            .ok_or_else(|| {
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Attempting to free more stack frame slots than are allocated"
+                )
+            })?;
         Ok(())
     }
 }

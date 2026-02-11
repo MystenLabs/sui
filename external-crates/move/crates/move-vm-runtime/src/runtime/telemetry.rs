@@ -65,6 +65,10 @@ pub struct MoveRuntimeTelemetry {
     pub total_interpreter_time: u64,
     /// Interpreter Count -- Number of interpreter calls
     pub interpreter_count: u64,
+    /// Max Callstack Size -- the maximum callstack size observed across all transactions
+    pub max_callstack_size: u64,
+    /// Max Value Stack Size -- the maximum value stack size observed across all transactions
+    pub max_valuestack_size: u64,
     /// Total Time (ms)
     pub total_time: u64,
     /// Total Count -- Records all interactions with the runtime, including loading for publish; VM
@@ -110,6 +114,10 @@ pub(crate) struct TelemetryContext {
     /// Total number of packages that were compiled, but later thrown away since they were already
     /// cached when we went to insert them into it (i.e., redundant compilations)
     pub(crate) redundant_compilations: AtomicU64,
+    /// Max Callstack Size -- the maximum callstack size observed for this transactions
+    pub(crate) max_callstack_size: AtomicU64,
+    /// Max Value Stack Size -- the maximum value stack size observed for this transaction
+    pub(crate) max_valuestack_size: AtomicU64,
 }
 
 /// Transaction Telemetry Information
@@ -128,6 +136,8 @@ pub(crate) struct TransactionTelemetryContext {
     pub interpreter_time: Option<Duration>,
     pub total_time: Duration,
     pub redundant_compilations: u64,
+    pub max_callstack_size: u64,
+    pub max_valuestack_size: u64,
     // TODO(vm-rewrite): Add value sizes, type sizes, etc?
 }
 
@@ -196,6 +206,8 @@ impl TelemetryContext {
             total_time: AtomicU64::new(0),
             total_count: AtomicU64::new(0),
             redundant_compilations: AtomicU64::new(0),
+            max_callstack_size: AtomicU64::new(0),
+            max_valuestack_size: AtomicU64::new(0),
         }
     }
 
@@ -240,7 +252,16 @@ impl TelemetryContext {
             interpreter_time,
             total_time,
             redundant_compilations,
+            max_callstack_size,
+            max_valuestack_size,
         } = transaction;
+
+        let _ = self
+            .max_callstack_size
+            .fetch_max(max_callstack_size, Ordering::Release);
+        let _ = self
+            .max_valuestack_size
+            .fetch_max(max_valuestack_size, Ordering::Release);
 
         update_duration_field!(load_time, load_count, total_load_time, load_count);
         update_duration_field!(
@@ -279,6 +300,8 @@ impl TelemetryContext {
         let execution_count = self.execution_count.load(Ordering::Relaxed);
         let total_interpreter_time = self.total_interpreter_time.load(Ordering::Relaxed);
         let interpreter_count = self.interpreter_count.load(Ordering::Relaxed);
+        let max_callstack_size = self.max_callstack_size.load(Ordering::Relaxed);
+        let max_valuestack_size = self.max_valuestack_size.load(Ordering::Relaxed);
         let total_time = self.total_time.load(Ordering::Relaxed);
         let total_count = self.total_count.load(Ordering::Relaxed);
 
@@ -318,6 +341,8 @@ impl TelemetryContext {
             execution_count,
             total_interpreter_time,
             interpreter_count,
+            max_callstack_size,
+            max_valuestack_size,
             total_time,
             total_count,
         }
@@ -343,6 +368,8 @@ impl TransactionTelemetryContext {
             interpreter_time: None,
             total_time: Duration::new(0, 0),
             redundant_compilations: 0,
+            max_callstack_size: 0,
+            max_valuestack_size: 0,
         }
     }
 
@@ -434,6 +461,14 @@ impl TransactionTelemetryContext {
 
     pub(crate) fn record_redundant_compilation(&mut self) {
         self.redundant_compilations += 1;
+    }
+
+    pub(crate) fn record_callstack_size(&mut self, callstack_size: u64) {
+        self.max_callstack_size = self.max_callstack_size.max(callstack_size);
+    }
+
+    pub(crate) fn record_valuestack_size(&mut self, valuestack_size: u64) {
+        self.max_valuestack_size = self.max_valuestack_size.max(valuestack_size);
     }
 }
 
