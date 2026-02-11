@@ -1681,12 +1681,6 @@ impl AuthorityState {
                 .execution_gas_latency_ratio
                 .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed_us);
         };
-
-        // TODO: Log ExecutionComplete event
-        // if let Some(logger) = self.transaction_trace_logger.as_ref() {
-        //     logger.write_transaction_event(*tx_digest, TxEventType::ExecutionComplete)?;
-        // }
-
         ExecutionOutput::Success((effects, execution_error_opt))
     }
 
@@ -1897,6 +1891,11 @@ impl AuthorityState {
 
         self.get_cache_writer()
             .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
+
+        // TODO: Log ExecutionComplete event
+        // if let Some(logger) = self.transaction_trace_logger.as_ref() {
+        //     logger.write_transaction_event(*tx_digest, TxEventType::ExecutionComplete)?;
+        // }
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
