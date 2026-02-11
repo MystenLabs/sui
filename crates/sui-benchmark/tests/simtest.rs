@@ -56,6 +56,7 @@ mod test {
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
+    use sui_types::transaction::TransactionDataAPI;
     use test_cluster::{TestCluster, TestClusterBuilder};
     use tracing::{error, info, trace};
     use typed_store::traits::Map;
@@ -1795,21 +1796,93 @@ mod test {
             "Expected some ExecutionComplete events, but found 0"
         );
 
-        // For this test, we'll use a simplified transaction data map
-        // In production, this would come from GraphQL or gRPC queries
-        let tx_data_map = std::collections::HashMap::new();
+        // Build transaction data map by reading from the node's state
+        println!("\nBuilding transaction data map from node state...");
+        let unique_digests: std::collections::HashSet<_> =
+            all_events.iter().map(|e| e.digest).collect();
+        println!("Found {} unique transaction digests", unique_digests.len());
+
+        let tx_data_map = test_cluster.fullnode_handle.sui_node.with(|node| {
+            let state = node.state();
+            let cache_reader = state.get_transaction_cache_reader();
+            let mut map = std::collections::HashMap::new();
+
+            for digest_bytes in unique_digests {
+                let digest = sui_types::digests::TransactionDigest::new(digest_bytes);
+
+                // Get transaction from cache
+                if let Some(tx) = cache_reader.get_transaction_block(&digest) {
+                    // Extract input object IDs
+                    let input_objects: Vec<String> = tx
+                        .data()
+                        .intent_message()
+                        .value
+                        .input_objects()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|obj_kind| match obj_kind {
+                            sui_types::transaction::InputObjectKind::ImmOrOwnedMoveObject(
+                                obj_ref,
+                            ) => obj_ref.0.to_string(),
+                            sui_types::transaction::InputObjectKind::SharedMoveObject {
+                                id,
+                                ..
+                            } => id.to_string(),
+                            sui_types::transaction::InputObjectKind::MovePackage(id) => {
+                                id.to_string()
+                            }
+                        })
+                        .collect();
+
+                    map.insert(
+                        digest.base58_encode(),
+                        sui_transaction_trace::chrome_trace::TransactionData { input_objects },
+                    );
+                }
+            }
+
+            map
+        });
+
+        let num_unique = all_events
+            .iter()
+            .map(|e| e.digest)
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        println!(
+            "Populated tx_data_map with {} transactions out of {} unique digests",
+            tx_data_map.len(),
+            num_unique
+        );
+        assert!(
+            !tx_data_map.is_empty(),
+            "tx_data_map should not be empty - found {} unique digests but loaded {} transactions",
+            num_unique,
+            tx_data_map.len()
+        );
 
         // Convert to Chrome trace format
         println!("\nConverting to Chrome trace format...");
         let chrome_events = sui_transaction_trace::chrome_trace::convert_to_chrome_trace(
             all_events.clone(),
-            tx_data_map,
+            tx_data_map.clone(),
         );
 
         println!(
-            "Generated {} Chrome trace events (may be empty without tx_data_map)",
-            chrome_events.len()
+            "Generated {} Chrome trace events from {} source events and {} transactions",
+            chrome_events.len(),
+            all_events.len(),
+            tx_data_map.len()
         );
+
+        // Debug: check a sample transaction
+        if let Some((digest, tx_data)) = tx_data_map.iter().next() {
+            println!(
+                "Sample transaction {}: {} input objects",
+                digest,
+                tx_data.input_objects.len()
+            );
+        }
 
         // Write Chrome trace output
         let chrome_trace_output = trace_log_dir.parent().unwrap().join("trace.json");
