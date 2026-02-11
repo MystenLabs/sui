@@ -495,16 +495,15 @@ impl ModuleResolver for PersistedStore {
         Ok(packages)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        ids.iter()
-            .map(|id| {
-                self.get_package_object(&ObjectID::from(*id))
-                    .map(|x| x.map(|pkg| pkg.move_package().into_serialized_move_package()))
-            })
-            .collect()
+        ids.map(|id| {
+            self.get_package_object(&ObjectID::from(*id))
+                .map(|x| x.map(|pkg| pkg.move_package().into_serialized_move_package()))
+        })
+        .collect()
     }
 }
 

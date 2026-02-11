@@ -17,12 +17,10 @@ use crate::{
     validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
 
-use move_binary_format::{
-    errors::{Location, VMResult},
-    partial_vm_error,
-};
+use move_binary_format::errors::VMResult;
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
+use tracing::error;
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -131,29 +129,27 @@ impl MoveRuntime {
             let instance = try_block! {
                 let linkage_hash = link_context.to_linkage_hash();
 
-                let virtual_tables = if let Some(vtables) =
+                let mut virtual_tables = if let Some(vtables) =
                     self.cache.cached_linkage_tables_at(&linkage_hash)  {
                     vtables
                 } else {
                     self.load_and_cache_vtables(
-                        package_store, txn_telemetry, &link_context, linkage_hash
+                        &package_store, txn_telemetry, &link_context, &linkage_hash
                     )?
                 };
 
                 // This is more a sanity check than anything else. The VMDispatchTables should
                 // never have precomputed type depths, as those are computed on-demand.
-                if !virtual_tables.type_depths.is_empty() {
-                    return Err(
-                        partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "VMDispatchTables has precomputed type depths")
-                        .finish(Location::Undefined)
-                    );
-                }
-
-                if link_context != *virtual_tables.link_context {
-                    return Err(
-                        partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "Cached VMDispatchTables linkage did not match hashed linkage")
-                        .finish(Location::Undefined)
-                    );
+                // If for some reason the cached VTables have precomputed type depths, or the
+                // linkage context does not match the expected linkage context, then we drop the
+                // cached VTables and reload them. This should never happen, but if it does, we
+                // want to recover gracefully rather than erroring out with an invariant violation.
+                if !virtual_tables.type_depths.is_empty() || link_context != *virtual_tables.link_context {
+                    error!("Cached VTables for linkage context {:?} have precomputed type depths or do not match the expected linkage context. Dropping cached VTables and reloading.", link_context);
+                    self.cache.drop_all_cached_linkage_tables();
+                    virtual_tables = self.load_and_cache_vtables(
+                        &package_store, txn_telemetry, &link_context, &linkage_hash
+                    )?;
                 }
 
                 // Called and checked linkage, etc.
@@ -184,10 +180,10 @@ impl MoveRuntime {
     /// If there is an error loading or verifying the packages, an error is returned instead.
     fn load_and_cache_vtables(
         &self,
-        package_store: impl ModuleResolver,
+        package_store: &impl ModuleResolver,
         txn_telemetry: &mut crate::runtime::telemetry::TransactionTelemetryContext,
         link_context: &LinkageContext,
-        linkage_hash: crate::shared::linkage_context::LinkageHash,
+        linkage_hash: &crate::shared::linkage_context::LinkageHash,
     ) -> Result<VMDispatchTables, move_binary_format::errors::VMError> {
         let all_packages = link_context.all_packages()?;
         let packages = package_resolution::resolve_packages(
@@ -213,7 +209,7 @@ impl MoveRuntime {
             runtime_packages,
         )?;
         self.cache
-            .add_linkage_tables_to_cache(linkage_hash, vtables.clone());
+            .add_linkage_tables_to_cache(linkage_hash.clone(), vtables.clone());
         Ok(vtables)
     }
 

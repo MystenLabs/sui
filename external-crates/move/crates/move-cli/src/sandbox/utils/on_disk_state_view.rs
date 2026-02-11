@@ -443,11 +443,11 @@ impl ModuleResolver for OnDiskStateView {
         Ok(packages)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        ids.iter().map(|id| self.get_package(id)).collect()
+        ids.map(|id| self.get_package(id)).collect()
     }
 }
 

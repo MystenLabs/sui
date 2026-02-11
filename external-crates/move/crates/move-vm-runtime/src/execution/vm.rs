@@ -19,6 +19,7 @@ use crate::{
     try_block,
 };
 use move_binary_format::{
+    checked_as,
     errors::{Location, VMError, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility},
     partial_vm_error,
@@ -191,16 +192,8 @@ impl<'extensions> MoveVM<'extensions> {
                     format!("Failed to find function {module_id}::{function_name}"),
                 )
             })?;
-        let instruction_count =
-                CodeOffset::try_from(function.to_ref().code.len()).map_err(
-                |e| {
-                    partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "Function {module_id}::{function_name} has too many instructions and overflowed `CodeOffset` with error: {e:?}"
-                    )
-                    .finish(Location::Undefined)
-                },
-            )?;
+        let instruction_count = checked_as!(function.to_ref().code.len(), CodeOffset)
+            .map_err(|e| e.finish(Location::Module(module_id.clone())))?;
 
         Ok(LoadedFunctionInformation {
             is_entry: function.to_ref().is_entry,

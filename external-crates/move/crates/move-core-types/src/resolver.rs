@@ -76,9 +76,9 @@ pub trait ModuleResolver {
     /// Given a list of storage IDs for a package, return the `SerializedPackage` for each ID.
     /// A result is returned for every ID requested. `None` if the package did not exist, and
     /// `Some(..)` if the package was found.
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error>;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -96,9 +96,9 @@ impl<T: ModuleResolver + ?Sized> ModuleResolver for &T {
         (**self).get_packages_static(ids)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         (**self).get_packages(ids)
     }
@@ -118,9 +118,9 @@ impl<T: ModuleResolver + ?Sized> ModuleResolver for Arc<T> {
         (**self).get_packages_static(ids)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         (**self).get_packages(ids)
     }

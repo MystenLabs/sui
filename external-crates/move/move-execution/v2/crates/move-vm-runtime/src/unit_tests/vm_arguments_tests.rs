@@ -165,9 +165,9 @@ impl ModuleResolver for RemoteStore {
         unreachable!("Should never be called in v2")
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        _ids: &[AccountAddress],
+        _ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         unreachable!("Should never be called in v2")
     }

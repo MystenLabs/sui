@@ -25,22 +25,6 @@ use move_core_types::{
 };
 use std::fmt::{self, Debug, Display, Formatter};
 
-macro_rules! debug_write {
-    ($($toks: tt)*) => {
-        write!($($toks)*).map_err(|_|
-            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "failed to write to buffer")
-        )
-    };
-}
-
-macro_rules! debug_writeln {
-    ($($toks: tt)*) => {
-        writeln!($($toks)*).map_err(|_|
-            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "failed to write to buffer")
-        )
-    };
-}
-
 // -------------------------------------------------------------------------------------------------
 // Value Types
 // -------------------------------------------------------------------------------------------------
@@ -1097,6 +1081,14 @@ impl SignerRef {
                 }
                 // Retrieve the 0th element.
                 let field = fixed_vec.safe_get(0)?;
+                // Check that the field is an address.
+                let Value::Address(_) = &*field.borrow() else {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Signer struct field must be an address"
+                    ));
+                };
+
                 // Return it as a reference by cloning its pointer.
                 Ok(Value::Reference(Reference::Value(field.ptr_clone())))
             }
@@ -1863,23 +1855,28 @@ pub const VEC_SIZE_LIMIT_REACHED: u64 = NFE_VECTOR_ERROR_BASE + 4;
 
 fn check_elem_layout(ty: &Type, v: &Value) -> PartialVMResult<()> {
     macro_rules! allowed_types {
-        ($ty:expr; $v:expr; $($allowed:pat),+ $(,)?) => {
+        ($ty:expr; $v:expr; $allowed:pat) => {
             match $ty {
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => Err(
-                    partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "invalid type param for vector: {:?}", ty)
-                ),
-                $(
-                    $allowed => Ok(()),
-                )+
-                _ => Err(
-                    partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "vector elem layout mismatch, expected {:?}, got {:?}", $ty, $v)
-                ),
+                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                    Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "invalid type param for vector: {:?}",
+                        ty
+                    ))
+                }
+                $allowed => Ok(()),
+                _ => Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "vector elem layout mismatch, expected {:?}, got {:?}",
+                    $ty,
+                    $v
+                )),
             }
         };
     }
     match v {
         Value::Vec(_) => {
-            allowed_types!(ty; v; Type::Vector(_), Type::Datatype(_), Type::Signer, Type::DatatypeInstantiation(_))
+            allowed_types!(ty; v; Type::Vector(_) | Type::Datatype(_) | Type::Signer | Type::DatatypeInstantiation(_))
         }
         Value::PrimVec(prim_vec) => match prim_vec {
             PrimVec::VecU8(_) => allowed_types!(ty; v; Type::U8),
@@ -2260,8 +2257,8 @@ impl GlobalValueImpl {
             container @ Value::Struct(_) => Ok(Self::Filled(MemBox::new(container))),
             val => Err((
                 partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "failed to publish fresh: not a resource"
+                    INTERNAL_TYPE_ERROR,
+                    "Tried to fill a global value with a non-struct value: {val:#?}",
                 ),
                 val,
             )),
@@ -2279,6 +2276,13 @@ impl GlobalValueImpl {
                     return Err(partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "global value is not empty"
+                    ));
+                }
+                if !matches!(&*container.borrow(), Value::Struct(_)) {
+                    return Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "global value is not a struct: {:#?}",
+                        container.borrow()
                     ));
                 }
                 container
@@ -2308,6 +2312,13 @@ impl GlobalValueImpl {
         match self {
             Self::Empty => Err(partial_vm_error!(MISSING_DATA)),
             GlobalValueImpl::Filled(container) => {
+                if !matches!(&*container.borrow(), Value::Struct(_)) {
+                    return Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "borrow_global: global value is not a struct: {:#?}",
+                        container.borrow()
+                    ));
+                }
                 Ok(Value::Reference(Reference::Value(container.ptr_clone())))
             }
         }
@@ -2514,46 +2525,68 @@ impl fmt::Display for ConstantContainer {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 pub mod debug {
     use crate::execution::interpreter::locals::StackFrame;
 
     use super::*;
     use std::fmt::Write;
 
+    macro_rules! debug_write {
+        ($($toks: tt)*) => {
+            write!($($toks)*).expect("failed to write to buffer")
+        };
+    }
+
+    macro_rules! debug_writeln {
+        ($($toks: tt)*) => {
+            writeln!($($toks)*).expect("failed to write to buffer")
+        };
+    }
+
     fn print_invalid<B: Write>(buf: &mut B) -> PartialVMResult<()> {
-        debug_write!(buf, "-")
+        debug_write!(buf, "-");
+        Ok(())
     }
 
     fn print_u8<B: Write>(buf: &mut B, x: &u8) -> PartialVMResult<()> {
-        debug_write!(buf, "{}", x)
+        debug_write!(buf, "{}", x);
+        Ok(())
     }
 
     fn print_u16<B: Write>(buf: &mut B, x: &u16) -> PartialVMResult<()> {
-        debug_write!(buf, "{}", x)
+        debug_write!(buf, "{}", x);
+        Ok(())
     }
 
     fn print_u32<B: Write>(buf: &mut B, x: &u32) -> PartialVMResult<()> {
-        debug_write!(buf, "{}", x)
+        debug_write!(buf, "{}", x);
+        Ok(())
     }
 
     fn print_u64<B: Write>(buf: &mut B, x: &u64) -> PartialVMResult<()> {
-        debug_write!(buf, "{}", x)
+        debug_write!(buf, "{}", x);
+        Ok(())
     }
 
     fn print_u128<B: Write>(buf: &mut B, x: &u128) -> PartialVMResult<()> {
-        debug_write!(buf, "{}", x)
+        debug_write!(buf, "{}", x);
+        Ok(())
     }
 
     fn print_u256<B: Write>(buf: &mut B, x: &u256::U256) -> PartialVMResult<()> {
-        debug_write!(buf, "{}", x)
+        debug_write!(buf, "{}", x);
+        Ok(())
     }
 
     fn print_bool<B: Write>(buf: &mut B, x: &bool) -> PartialVMResult<()> {
-        debug_write!(buf, "{}", x)
+        debug_write!(buf, "{}", x);
+        Ok(())
     }
 
     fn print_address<B: Write>(buf: &mut B, x: &AccountAddress) -> PartialVMResult<()> {
-        debug_write!(buf, "{}", x)
+        debug_write!(buf, "{}", x);
+        Ok(())
     }
 
     fn print_value_impl<B: Write>(buf: &mut B, val: &Value) -> PartialVMResult<()> {
@@ -2568,7 +2601,7 @@ pub mod debug {
             Value::Bool(x) => print_bool(buf, x),
             Value::Address(x) => print_address(buf, x),
             Value::Reference(r) => {
-                debug_write!(buf, "(&) ")?;
+                debug_write!(buf, "(&) ");
                 print_value_impl(buf, &r.copy_value().read_ref()?)
             }
             Value::Vec(items) => print_list(buf, "[", items.iter(), print_box_value_impl, "]"),
@@ -2618,16 +2651,16 @@ pub mod debug {
         I: IntoIterator<Item = &'a X>,
         F: Fn(&mut B, &X) -> PartialVMResult<()>,
     {
-        debug_write!(buf, "{}", begin)?;
+        debug_write!(buf, "{}", begin);
         let mut it = items.into_iter();
         if let Some(x) = it.next() {
             print(buf, x)?;
             for x in it {
-                debug_write!(buf, ", ")?;
+                debug_write!(buf, ", ");
                 print(buf, x)?;
             }
         }
-        debug_write!(buf, "{}", end)?;
+        debug_write!(buf, "{}", end);
         Ok(())
     }
 
@@ -2637,9 +2670,9 @@ pub mod debug {
     ) -> PartialVMResult<()> {
         // REVIEW: The number of spaces in the indent is currently hard coded.
         for (idx, val) in stack_frame.iter().enumerate() {
-            debug_write!(buf, "            [{}] ", idx)?;
+            debug_write!(buf, "            [{}] ", idx);
             print_value_impl(buf, &val.borrow())?;
-            debug_writeln!(buf)?;
+            debug_writeln!(buf);
         }
         Ok(())
     }
