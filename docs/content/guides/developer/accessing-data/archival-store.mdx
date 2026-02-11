@@ -22,7 +22,7 @@ This service has strict rate limits.
 
 - **gRPC APIs**: Apps can query the Archival Service directly when gRPC on full nodes returns retention-related errors. This approach provides a graceful fallback without requiring the app or full node to store historical data itself. Access the Archival Service in the same way you access [gRPC `LedgerService` APIs](./grpc-overview.mdx) on a full node. Replace the full node URL with the Archival Service endpoint.
 
-- **GraphQL RPC**: GraphQL RPC delegates historical lookups to the Archival Service using the planned integration. It enables cost-efficient setup of a General-Purpose Indexer database with limited retention.
+- **GraphQL RPC**: GraphQL RPC delegates historical lookups to the Archival Service using the planned integration. It enables cost-efficient setup of a General-purpose Indexer database with limited retention.
 
 ## Operating the Archival Store and Service 
 
