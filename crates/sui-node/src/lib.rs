@@ -499,7 +499,7 @@ impl SuiNode {
                 max_file_count: trace_config.max_file_count.unwrap_or(10),
                 buffer_capacity: trace_config.buffer_capacity.unwrap_or(10_000),
                 flush_interval_secs: trace_config.flush_interval_secs.unwrap_or(15),
-                sync_flush: false,
+                sync_flush: trace_config.sync_flush.unwrap_or(false),
             };
             info!("Transaction trace logging enabled");
             sui_transaction_trace::TransactionTraceLogger::new(trace_log_config)

@@ -77,6 +77,10 @@ pub struct TransactionTraceConfig {
     /// Flush interval in seconds (default: 15)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flush_interval_secs: Option<u64>,
+
+    /// Use synchronous flushing instead of spawn_blocking (for msim compatibility, default: false)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_flush: Option<bool>,
 }
 
 #[serde_as]

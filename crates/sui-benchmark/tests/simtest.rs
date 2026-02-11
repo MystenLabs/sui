@@ -1678,7 +1678,7 @@ mod test {
         // Create network config with transaction trace logging enabled
         let mut network_config = ConfigBuilder::new_with_temp_dir()
             .committee_size(NonZeroUsize::new(4).unwrap())
-            .with_epoch_duration(10_000)
+            .with_epoch_duration(60_000) // Use 60 seconds to match other tests
             .build();
 
         // Enable transaction trace logging on only the first validator and configure authority overload for all
@@ -1692,6 +1692,7 @@ mod test {
                         max_file_count: Some(5),
                         buffer_capacity: Some(1000),
                         flush_interval_secs: Some(1), // Fast flush for testing
+                        sync_flush: Some(true), // Use synchronous flush for msim compatibility
                     });
             }
 
