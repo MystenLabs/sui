@@ -962,6 +962,9 @@ pub struct AuthorityState {
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
 
     pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
+
+    /// Transaction execution trace logger for performance analysis
+    transaction_trace_logger: Arc<Option<sui_transaction_trace::TransactionTraceLogger>>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -3502,6 +3505,7 @@ impl AuthorityState {
         policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
         pruner_watermarks: Arc<PrunerWatermarks>,
+        transaction_trace_logger: Arc<Option<sui_transaction_trace::TransactionTraceLogger>>,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -3589,6 +3593,7 @@ impl AuthorityState {
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
             object_funds_checker: ArcSwapOption::empty(),
+            transaction_trace_logger,
         });
         state.init_object_funds_checker().await;
 
