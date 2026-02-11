@@ -387,21 +387,8 @@ async fn test_execute_transaction_grpc_errors() {
         .await
         .unwrap();
 
-    // data should be null when there's a BAD_USER_INPUT error
-    assert_eq!(result.get("data"), Some(&serde_json::Value::Null));
-
-    // GraphQL errors should be returned with BAD_USER_INPUT code and InvalidArgument message
-    let code = result
-        .pointer("/errors/0/extensions/code")
-        .and_then(|v| v.as_str());
-    assert_eq!(code, Some("BAD_USER_INPUT"));
-
-    let message = result.pointer("/errors/0/message").and_then(|v| v.as_str());
-    assert!(
-        message.is_some_and(|m| m.starts_with("Invalid argument:")),
-        "Expected InvalidArgument error, got: {:?}",
-        message
-    );
+    // Verify the error response structure with a snapshot
+    insta::assert_json_snapshot!("execute_transaction_grpc_error", &result);
 }
 
 #[sim_test]

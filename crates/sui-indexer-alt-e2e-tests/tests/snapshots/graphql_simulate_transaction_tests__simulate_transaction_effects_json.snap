@@ -88,5 +88,5 @@ expression: "result.pointer(\"/data/simulateTransaction\")"
         "amount": "1000000"
       }
     ]
-  },
+  }
 }
