@@ -3,7 +3,9 @@
 
 use move_core_types::account_address::AccountAddress;
 use move_vm_config::runtime::VMConfig;
-use move_vm_runtime::native_functions::NativeFunctionTable;
+use move_vm_runtime::{
+    native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
+};
 use move_vm_test_utils::gas_schedule::{Gas, GasStatus, unit_cost_schedule};
 use move_vm_types::gas::GasMeter;
 
@@ -11,10 +13,18 @@ pub trait VMTestSetup {
     type Meter<'a>: GasMeter + Send
     where
         Self: 'a;
+    type Extensions<'a>
+    where
+        Self: 'a;
     fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a>;
     fn used_gas<'a>(&'a self, execution_bound: u64, meter: Self::Meter<'a>) -> u64;
     fn vm_config(&self) -> VMConfig;
     fn native_function_table(&self) -> NativeFunctionTable;
+    fn new_extensions<'a>(&'a self) -> Self::Extensions<'a>;
+    fn new_native_context_extensions<'a, 'ext>(
+        &'a self,
+        ext: &'ext Self::Extensions<'a>,
+    ) -> NativeContextExtensions<'ext>;
 }
 
 pub struct DefaultVMTestSetup {
@@ -47,6 +57,7 @@ impl DefaultVMTestSetup {
 
 impl VMTestSetup for DefaultVMTestSetup {
     type Meter<'a> = GasStatus<'a>;
+    type Extensions<'a> = ();
 
     fn new_meter(&self, execution_bound: Option<u64>) -> Self::Meter<'_> {
         if let Some(bound) = execution_bound {
@@ -71,5 +82,11 @@ impl VMTestSetup for DefaultVMTestSetup {
 
     fn native_function_table(&self) -> NativeFunctionTable {
         self.native_function_table.clone()
+    }
+
+    fn new_extensions<'a>(&'a self) -> Self::Extensions<'a> {}
+
+    fn new_native_context_extensions<'ext>(&self, _: &'ext ()) -> NativeContextExtensions<'ext> {
+        NativeContextExtensions::default()
     }
 }

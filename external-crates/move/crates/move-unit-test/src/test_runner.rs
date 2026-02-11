@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    extensions, format_module_id,
+    format_module_id,
     test_reporter::{
         FailureReason, MoveError, TestFailure, TestResults, TestRunInfo, TestStatistics,
     },
@@ -24,7 +24,6 @@ use move_compiler::{
 };
 use move_core_types::{
     account_address::AccountAddress,
-    effects::ChangeSet,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     runtime_value::{MoveValue, serialize_values},
@@ -38,8 +37,6 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 use regex::Regex;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
-
-use move_vm_runtime::native_extensions::NativeContextExtensions;
 
 /// Test state common to all tests
 pub struct SharedTestingConfig<V: VMTestSetup> {
@@ -241,12 +238,7 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
         test_plan: &ModuleTestPlan,
         function_name: &str,
         arguments: Vec<MoveValue>,
-    ) -> (
-        VMResult<ChangeSet>,
-        VMResult<NativeContextExtensions<'_>>,
-        VMResult<Vec<Vec<u8>>>,
-        TestRunInfo,
-    ) {
+    ) -> (VMResult<Vec<Vec<u8>>>, TestRunInfo) {
         // Allow loading of unpublishable modules for the purpose of running tests.
         let vm_config = {
             let mut vm_config = self.vm_test_setup.vm_config();
@@ -257,7 +249,10 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
         };
         let natives = self.vm_test_setup.native_function_table();
         let move_vm = MoveVM::new_with_config(natives, vm_config).unwrap();
-        let extensions = extensions::new_extensions();
+        let extensions = self.vm_test_setup.new_extensions();
+        let native_context_extensions = self
+            .vm_test_setup
+            .new_native_context_extensions(&extensions);
 
         let mut move_tracer = MoveTraceBuilder::new();
         let tracer = if self.trace_location.is_some() {
@@ -266,8 +261,8 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
             None
         };
 
-        let mut session =
-            move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
+        let mut session = move_vm
+            .new_session_with_extensions(&self.starting_storage_state, native_context_extensions);
         let mut gas_meter = self.vm_test_setup.new_meter(Some(self.execution_bound));
 
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
@@ -301,10 +296,8 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
             self.vm_test_setup.used_gas(self.execution_bound, gas_meter),
             trace,
         );
-        match session.finish_with_extensions().0 {
-            Ok((cs, extensions)) => (Ok(cs), Ok(extensions), return_result, test_run_info),
-            Err(err) => (Err(err.clone()), Err(err), return_result, test_run_info),
-        }
+        session.finish().0.unwrap();
+        (return_result, test_run_info)
     }
 
     fn exec_module_tests_with_move_vm(
@@ -418,7 +411,7 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
         prng_seed: Option<u64>,
         is_last_execution_of_test: bool,
     ) -> bool {
-        let (_cs_result, _ext_result, exec_result, test_run_info) =
+        let (exec_result, test_run_info) =
             self.execute_via_move_vm(test_plan, function_name, arguments);
 
         // Save the trace -- one per test -- for each test that we have traced (and if tracing is
