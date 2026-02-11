@@ -163,7 +163,7 @@ impl SuiVMTestSetup {
 
 impl VMTestSetup for SuiVMTestSetup {
     type Meter<'a> = SuiGasMeter<SuiGasStatusTestWrapper>;
-    type Extensions<'a> = InMemoryTestStore;
+    type ExtensionsBuilder<'a> = InMemoryTestStore;
 
     fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a> {
         SuiGasMeter(SuiGasStatusTestWrapper(
@@ -193,7 +193,7 @@ impl VMTestSetup for SuiVMTestSetup {
         self.native_function_table.clone()
     }
 
-    fn new_extensions(&self) -> InMemoryTestStore {
+    fn new_extensions_builder(&self) -> InMemoryTestStore {
         InMemoryTestStore(RefCell::new(InMemoryStorage::default()))
     }
 
@@ -205,8 +205,6 @@ impl VMTestSetup for SuiVMTestSetup {
         // Use a throwaway metrics registry for testing.
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
-        // let store = InMemoryTestStore(RefCell::new(InMemoryStorage::default()));
-        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
 
         ext.add(ObjectRuntime::new(
             store,
@@ -216,7 +214,9 @@ impl VMTestSetup for SuiVMTestSetup {
             metrics,
             0, // epoch id
         ));
-        ext.add(NativesCostTable::from_protocol_config(&protocol_config));
+        ext.add(NativesCostTable::from_protocol_config(
+            &self.protocol_config,
+        ));
         let tx_context = TxContext::new_from_components(
             &SuiAddress::ZERO,
             &TransactionDigest::default(),
@@ -226,7 +226,7 @@ impl VMTestSetup for SuiVMTestSetup {
             0,
             0,
             None,
-            &protocol_config,
+            &self.protocol_config,
         );
         ext.add(TransactionContext::new_for_testing(Rc::new(RefCell::new(
             tx_context,

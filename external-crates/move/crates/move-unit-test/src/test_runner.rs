@@ -249,10 +249,10 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
         };
         let natives = self.vm_test_setup.native_function_table();
         let move_vm = MoveVM::new_with_config(natives, vm_config).unwrap();
-        let extensions = self.vm_test_setup.new_extensions();
+        let extensions_builder = self.vm_test_setup.new_extensions_builder();
         let native_context_extensions = self
             .vm_test_setup
-            .new_native_context_extensions(&extensions);
+            .new_native_context_extensions(&extensions_builder);
 
         let mut move_tracer = MoveTraceBuilder::new();
         let tracer = if self.trace_location.is_some() {

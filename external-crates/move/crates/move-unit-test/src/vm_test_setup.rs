@@ -13,17 +13,17 @@ pub trait VMTestSetup {
     type Meter<'a>: GasMeter + Send
     where
         Self: 'a;
-    type Extensions<'a>
+    type ExtensionsBuilder<'a>
     where
         Self: 'a;
     fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a>;
     fn used_gas<'a>(&'a self, execution_bound: u64, meter: Self::Meter<'a>) -> u64;
     fn vm_config(&self) -> VMConfig;
     fn native_function_table(&self) -> NativeFunctionTable;
-    fn new_extensions<'a>(&'a self) -> Self::Extensions<'a>;
+    fn new_extensions_builder<'a>(&'a self) -> Self::ExtensionsBuilder<'a>;
     fn new_native_context_extensions<'a, 'ext>(
         &'a self,
-        ext: &'ext Self::Extensions<'a>,
+        extensions_builder: &'ext Self::ExtensionsBuilder<'a>,
     ) -> NativeContextExtensions<'ext>;
 }
 
@@ -57,7 +57,7 @@ impl DefaultVMTestSetup {
 
 impl VMTestSetup for DefaultVMTestSetup {
     type Meter<'a> = GasStatus<'a>;
-    type Extensions<'a> = ();
+    type ExtensionsBuilder<'a> = ();
 
     fn new_meter(&self, execution_bound: Option<u64>) -> Self::Meter<'_> {
         if let Some(bound) = execution_bound {
@@ -84,9 +84,9 @@ impl VMTestSetup for DefaultVMTestSetup {
         self.native_function_table.clone()
     }
 
-    fn new_extensions<'a>(&'a self) -> Self::Extensions<'a> {}
+    fn new_extensions_builder(&self) {}
 
-    fn new_native_context_extensions<'ext>(&self, _: &'ext ()) -> NativeContextExtensions<'ext> {
+    fn new_native_context_extensions<'ext>(&self, (): &'ext ()) -> NativeContextExtensions<'ext> {
         NativeContextExtensions::default()
     }
 }
