@@ -3607,7 +3607,7 @@ shuffle
 Scalar
 	public struct
 	0x2::ristretto255
-Point
+G
 	public struct
 	0x2::ristretto255
 scalar_from_bytes
