@@ -3,7 +3,7 @@
 
 use fastcrypto::hash::{Blake2b256, HashFunction};
 use move_core_types::u256::U256;
-use sui_types::accumulator_root::{EventCommitment, EventStreamHead, build_event_merkle_root};
+use sui_types::accumulator_root::{EventCommitment, EventStreamHead, try_build_event_merkle_root};
 
 const U256_ZERO: U256 = U256::zero();
 
@@ -48,7 +48,8 @@ pub fn apply_stream_updates(
 
         // TODO: checkpoint_seq in EventCommitment is always 0, so we don't validate it
 
-        let digest = build_event_merkle_root(&cp_events);
+        let digest =
+            try_build_event_merkle_root(&cp_events).expect("Failed to build event merkle root");
         let merkle_root = U256::from_le_bytes(&digest.into_inner());
         add_to_stream(&mut new_head.mmr, merkle_root);
         new_head.num_events += cp_events.len() as u64;

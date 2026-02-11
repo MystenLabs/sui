@@ -10,7 +10,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::accumulator_root::{
-    AccumulatorObjId, AccumulatorValue, update_account_balance_for_testing,
+    AccumulatorObjId, AccumulatorValue, try_update_account_balance_for_testing,
 };
 use sui_types::balance::Balance;
 use sui_types::base_types::ObjectID;
@@ -55,7 +55,8 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
         .into_iter()
         .map(|(type_tag, balance)| {
             let type_tag = Balance::type_(type_tag);
-            AccumulatorValue::create_for_testing(sender, type_tag.into(), balance)
+            AccumulatorValue::try_create_for_testing(sender, type_tag.into(), balance)
+                .expect("Failed to create accumulator value for testing")
         })
         .collect();
     let account_objects = starting_objects.iter().map(|o| o.id()).collect();
@@ -185,7 +186,8 @@ impl TestEnv {
                 .get_object_cache_reader()
                 .get_object(object_id.inner())
                 .unwrap();
-            update_account_balance_for_testing(&mut account_object, funds_change);
+            try_update_account_balance_for_testing(&mut account_object, funds_change)
+                .expect("Failed to update account balance for testing");
             account_object
                 .data
                 .try_as_move_mut()

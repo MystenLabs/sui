@@ -11,7 +11,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
     ACCUMULATOR_ROOT_SETTLE_U128_FUNC, ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC,
-    ACCUMULATOR_SETTLEMENT_MODULE, AccumulatorObjId, EventCommitment, build_event_merkle_root,
+    ACCUMULATOR_SETTLEMENT_MODULE, AccumulatorObjId, EventCommitment, try_build_event_merkle_root,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::base_types::SequenceNumber;
@@ -144,7 +144,9 @@ impl From<MergedValueIntermediate> for MergedValue {
             MergedValueIntermediate::SumU128U128(v1, v2) => MergedValue::SumU128U128(v1, v2),
             MergedValueIntermediate::Events(events) => {
                 let event_count = events.len() as u64;
-                MergedValue::EventDigest(build_event_merkle_root(&events), event_count)
+                let digest = try_build_event_merkle_root(&events)
+                    .expect("Failed to build event merkle root");
+                MergedValue::EventDigest(digest, event_count)
             }
         }
     }

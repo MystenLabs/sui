@@ -235,7 +235,17 @@ impl AccumulatorValue {
         .map(|o| o.into_object()))
     }
 
+    #[deprecated(note = "Use try_create_for_testing and handle errors explicitly")]
     pub fn create_for_testing(owner: SuiAddress, type_tag: TypeTag, balance: u64) -> Object {
+        Self::try_create_for_testing(owner, type_tag, balance)
+            .expect("Failed to create accumulator value for testing")
+    }
+
+    pub fn try_create_for_testing(
+        owner: SuiAddress,
+        type_tag: TypeTag,
+        balance: u64,
+    ) -> SuiResult<Object> {
         let key = AccumulatorKey { owner };
         let value = U128 {
             value: balance as u128,
@@ -246,16 +256,14 @@ impl AccumulatorValue {
             key,
             AccumulatorKey::get_type_tag(std::slice::from_ref(&type_tag)),
         );
-        let field = field_key.into_field(value).unwrap();
-        let move_object = field
-            .into_move_object_unsafe_for_testing(SequenceNumber::new())
-            .unwrap();
+        let field = field_key.into_field(value)?;
+        let move_object = field.into_move_object_unsafe_for_testing(SequenceNumber::new())?;
 
-        Object::new_move(
+        Ok(Object::new_move(
             move_object,
             Owner::ObjectOwner(SUI_ACCUMULATOR_ROOT_ADDRESS.into()),
             TransactionDigest::genesis_marker(),
-        )
+        ))
     }
 }
 
@@ -298,15 +306,37 @@ impl TryFrom<&MoveObject> for (AccumulatorKey, AccumulatorValue) {
     }
 }
 
+#[deprecated(note = "Use try_update_account_balance_for_testing and handle errors explicitly")]
 pub fn update_account_balance_for_testing(account_object: &mut Object, balance_change: i128) {
-    let current_balance_field = DynamicFieldObject::<AccumulatorKey>::new(account_object.clone())
-        .load_field::<U128>()
-        .unwrap();
+    try_update_account_balance_for_testing(account_object, balance_change)
+        .expect("Failed to update account balance for testing")
+}
+
+pub fn try_update_account_balance_for_testing(
+    account_object: &mut Object,
+    balance_change: i128,
+) -> SuiResult<()> {
+    let current_balance_field =
+        DynamicFieldObject::<AccumulatorKey>::new(account_object.clone()).load_field::<U128>()?;
 
     let current_balance = current_balance_field.value.value;
 
-    assert!(current_balance <= i128::MAX as u128);
-    assert!(current_balance as i128 >= balance_change.abs());
+    if current_balance > i128::MAX as u128 {
+        return Err(SuiErrorKind::TypeError {
+            error: format!("Balance {} exceeds i128::MAX", current_balance),
+        }
+        .into());
+    }
+
+    if (current_balance as i128) < balance_change.abs() {
+        return Err(SuiErrorKind::TypeError {
+            error: format!(
+                "Insufficient balance {} for change {}",
+                current_balance, balance_change
+            ),
+        }
+        .into());
+    }
 
     let new_balance = U128 {
         value: (current_balance as i128 + balance_change) as u128,
@@ -316,11 +346,17 @@ pub fn update_account_balance_for_testing(account_object: &mut Object, balance_c
         &current_balance_field.id,
         &current_balance_field.name,
         new_balance,
-    )
-    .unwrap();
+    )?;
 
-    let move_object = account_object.data.try_as_move_mut().unwrap();
+    let move_object =
+        account_object
+            .data
+            .try_as_move_mut()
+            .ok_or_else(|| SuiErrorKind::TypeError {
+                error: "Object is not a Move object".to_string(),
+            })?;
     move_object.set_contents_unsafe(new_field);
+    Ok(())
 }
 
 pub(crate) fn accumulator_value_balance_type_maybe(s: &StructTag) -> Option<TypeTag> {
@@ -455,7 +491,13 @@ impl Ord for EventCommitment {
     }
 }
 
+#[deprecated(note = "Use try_build_event_merkle_root and handle errors explicitly")]
 pub fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
+    try_build_event_merkle_root(events)
+        .expect("failed to serialize event commitments for merkle root")
+}
+
+pub fn try_build_event_merkle_root(events: &[EventCommitment]) -> SuiResult<Digest> {
     use fastcrypto::hash::Blake2b256;
     use fastcrypto::merkle::MerkleTree;
 
@@ -464,9 +506,229 @@ pub fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
         "Events must be ordered by (checkpoint_seq, transaction_idx, event_idx)"
     );
 
-    let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
-        .expect("failed to serialize event commitments for merkle root");
+    let merkle_tree =
+        MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec()).map_err(|e| {
+            SuiErrorKind::GenericAuthorityError {
+                error: format!(
+                    "Failed to serialize event commitments for merkle root: {}",
+                    e
+                ),
+            }
+        })?;
     let root_node = merkle_tree.root();
     let root_digest = root_node.bytes();
-    Digest::new(root_digest)
+    Ok(Digest::new(root_digest))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gas_coin::GAS;
+
+    #[test]
+    fn test_build_event_merkle_root_success() {
+        let events = vec![
+            EventCommitment::new(1, 0, 0, Digest::random()),
+            EventCommitment::new(1, 0, 1, Digest::random()),
+            EventCommitment::new(2, 0, 0, Digest::random()),
+        ];
+
+        let result = try_build_event_merkle_root(&events);
+        assert!(result.is_ok());
+        let digest = result.unwrap();
+        let bytes: &[u8] = digest.as_ref();
+        assert_eq!(bytes.len(), 32);
+    }
+
+    #[test]
+    fn test_build_event_merkle_root_empty() {
+        let events = vec![];
+        let result = try_build_event_merkle_root(&events);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_build_event_merkle_root_single_event() {
+        let events = vec![EventCommitment::new(1, 0, 0, Digest::random())];
+        let result = try_build_event_merkle_root(&events);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_for_testing_success() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let balance = 1000u64;
+
+        let result = AccumulatorValue::try_create_for_testing(owner, type_tag, balance);
+        assert!(result.is_ok());
+
+        let obj = result.unwrap();
+        assert!(obj.is_child_object());
+        assert_eq!(
+            obj.owner,
+            Owner::ObjectOwner(SUI_ACCUMULATOR_ROOT_ADDRESS.into())
+        );
+    }
+
+    #[test]
+    fn test_create_for_testing_zero_balance() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let balance = 0u64;
+
+        let result = AccumulatorValue::try_create_for_testing(owner, type_tag, balance);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_for_testing_max_balance() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let balance = u64::MAX;
+
+        let result = AccumulatorValue::try_create_for_testing(owner, type_tag, balance);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_balance_success_positive_change() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let initial_balance = 1000u64;
+
+        let mut obj =
+            AccumulatorValue::try_create_for_testing(owner, type_tag, initial_balance).unwrap();
+        let result = try_update_account_balance_for_testing(&mut obj, 500);
+        assert!(result.is_ok());
+
+        let move_obj = obj.data.try_as_move().unwrap();
+        let field: Field<AccumulatorKey, U128> = move_obj.to_rust().unwrap();
+        assert_eq!(field.value.value, 1500);
+    }
+
+    #[test]
+    fn test_update_balance_success_negative_change() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let initial_balance = 1000u64;
+
+        let mut obj =
+            AccumulatorValue::try_create_for_testing(owner, type_tag, initial_balance).unwrap();
+        let result = try_update_account_balance_for_testing(&mut obj, -500);
+        assert!(result.is_ok());
+
+        let move_obj = obj.data.try_as_move().unwrap();
+        let field: Field<AccumulatorKey, U128> = move_obj.to_rust().unwrap();
+        assert_eq!(field.value.value, 500);
+    }
+
+    #[test]
+    fn test_update_balance_success_zero_change() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let initial_balance = 1000u64;
+
+        let mut obj =
+            AccumulatorValue::try_create_for_testing(owner, type_tag, initial_balance).unwrap();
+        let result = try_update_account_balance_for_testing(&mut obj, 0);
+        assert!(result.is_ok());
+
+        let move_obj = obj.data.try_as_move().unwrap();
+        let field: Field<AccumulatorKey, U128> = move_obj.to_rust().unwrap();
+        assert_eq!(field.value.value, 1000);
+    }
+
+    #[test]
+    fn test_update_balance_insufficient_balance_error() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let initial_balance = 500u64;
+
+        let mut obj =
+            AccumulatorValue::try_create_for_testing(owner, type_tag, initial_balance).unwrap();
+        let result = try_update_account_balance_for_testing(&mut obj, -1000);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(*err, SuiErrorKind::TypeError { .. }));
+        assert!(err.to_string().contains("Insufficient balance"));
+    }
+
+    #[test]
+    fn test_update_balance_exact_withdrawal() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let initial_balance = 1000u64;
+
+        let mut obj =
+            AccumulatorValue::try_create_for_testing(owner, type_tag, initial_balance).unwrap();
+        let result = try_update_account_balance_for_testing(&mut obj, -1000);
+        assert!(result.is_ok());
+
+        let move_obj = obj.data.try_as_move().unwrap();
+        let field: Field<AccumulatorKey, U128> = move_obj.to_rust().unwrap();
+        assert_eq!(field.value.value, 0);
+    }
+
+    #[test]
+    fn test_update_balance_to_zero() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let initial_balance = 100u64;
+
+        let mut obj =
+            AccumulatorValue::try_create_for_testing(owner, type_tag, initial_balance).unwrap();
+        let result = try_update_account_balance_for_testing(&mut obj, -100);
+
+        assert!(result.is_ok());
+        let move_obj = obj.data.try_as_move().unwrap();
+        let field: Field<AccumulatorKey, U128> = move_obj.to_rust().unwrap();
+        assert_eq!(field.value.value, 0);
+    }
+
+    #[test]
+    fn test_event_commitment_ordering() {
+        let event1 = EventCommitment::new(1, 0, 0, Digest::random());
+        let event2 = EventCommitment::new(1, 0, 1, Digest::random());
+        let event3 = EventCommitment::new(1, 1, 0, Digest::random());
+        let event4 = EventCommitment::new(2, 0, 0, Digest::random());
+
+        assert!(event1 < event2);
+        assert!(event2 < event3);
+        assert!(event3 < event4);
+    }
+
+    #[test]
+    fn test_accumulator_value_as_u128() {
+        let value = AccumulatorValue::U128(U128 { value: 12345 });
+        assert_eq!(value.as_u128(), Some(12345));
+    }
+
+    #[test]
+    fn test_event_stream_head_default() {
+        let head = EventStreamHead::default();
+        assert_eq!(head.num_events(), 0);
+        assert_eq!(head.checkpoint_seq(), 0);
+        assert!(head.mmr().is_empty());
+    }
+
+    #[test]
+    fn test_derive_event_stream_head_object_id() {
+        let stream_id = SuiAddress::random_for_testing_only();
+        let result = derive_event_stream_head_object_id(stream_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_legacy_api_signatures() {
+        let owner = SuiAddress::random_for_testing_only();
+        let type_tag = GAS::type_tag();
+        let events = vec![EventCommitment::new(1, 0, 0, Digest::random())];
+
+        let mut obj: Object = AccumulatorValue::create_for_testing(owner, type_tag, 100);
+        let _: () = update_account_balance_for_testing(&mut obj, 1);
+        let _digest: Digest = build_event_merkle_root(&events);
+    }
 }
