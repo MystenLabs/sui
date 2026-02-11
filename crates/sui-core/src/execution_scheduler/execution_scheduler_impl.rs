@@ -254,12 +254,6 @@ impl ExecutionScheduler {
                 .with_label_values(&["ready"])
                 .inc();
             debug!(?tx_digest, "Input objects already available");
-
-            // TODO: Log transaction scheduled event (ready for execution)
-            // if let Some(logger) = &self.transaction_trace_logger {
-            //     logger.write_transaction_event(*tx_digest, TxEventType::Scheduled)?;
-            // }
-
             self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
             return;
         }
@@ -291,12 +285,6 @@ impl ExecutionScheduler {
                         .transaction_manager_transaction_queue_age_s
                         .observe(enqueue_time.elapsed().as_secs_f64());
                     debug!(?tx_digest, "Input objects available");
-
-                    // TODO: Log transaction scheduled event (ready after waiting for dependencies)
-                    // if let Some(logger) = &self.transaction_trace_logger {
-                    //     logger.write_transaction_event(*tx_digest, TxEventType::Scheduled)?;
-                    // }
-
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     self.send_transaction_for_execution(
                         &cert,
@@ -319,6 +307,11 @@ impl ExecutionScheduler {
         execution_env: ExecutionEnv,
         enqueue_time: Instant,
     ) {
+        // TODO: Log transaction scheduled event (ready for execution)
+        // if let Some(logger) = &self.transaction_trace_logger {
+        //     logger.write_transaction_event(*cert.digest(), TxEventType::Scheduled)?;
+        // }
+
         let pending_cert = PendingCertificate {
             certificate: cert.clone(),
             execution_env,
