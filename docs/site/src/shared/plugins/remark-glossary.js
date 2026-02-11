@@ -98,7 +98,7 @@ function remarkGlossary(options = {}) {
     const INLINE_SKIP = new Set(["inlineCode", "link", "linkReference"]);
 
     return function transformer(tree) {
-        
+
         // Track which terms have been processed on this page (case-insensitive)
         const processedTerms = new Set();
 
