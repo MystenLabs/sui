@@ -555,10 +555,6 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_poseidon: bool,
 
-    // Enable the sha3_512 hash function
-    #[serde(skip_serializing_if = "is_false")]
-    enable_sha3_512: bool,
-
     // If true, enable the coin deny list.
     #[serde(skip_serializing_if = "is_false")]
     enable_coin_deny_list: bool,
@@ -2129,10 +2125,6 @@ impl ProtocolConfig {
 
     pub fn enable_poseidon(&self) -> bool {
         self.feature_flags.enable_poseidon
-    }
-
-    pub fn enable_sha3_512(&self) -> bool {
-        self.feature_flags.enable_sha3_512
     }
 
     pub fn enable_coin_deny_list_v1(&self) -> bool {
@@ -4578,6 +4570,8 @@ impl ProtocolConfig {
                     }
                 }
                 111 => {
+                    cfg.feature_flags.validator_metadata_verify_v2 = true;
+                    
                     // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
                     cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
                     cfg.group_ops_ristretto_decode_point_cost = Some(2848);

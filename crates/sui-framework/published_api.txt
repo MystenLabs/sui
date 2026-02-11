@@ -1636,9 +1636,6 @@ blake2b256
 keccak256
 	public fun
 	0x2::hash
-sha3_512
-	public fun
-	0x2::hash
 BCS
 	public struct
 	0x2::bcs
@@ -3643,37 +3640,28 @@ scalar_neg
 scalar_inv
 	public fun
 	0x2::ristretto255
-hash_to_scalar
+g_from_bytes
 	public fun
 	0x2::ristretto255
-point_from_bytes
+g_identity
 	public fun
 	0x2::ristretto255
-identity
+g_generator
 	public fun
 	0x2::ristretto255
-generator
+g_add
 	public fun
 	0x2::ristretto255
-point_add
+g_sub
 	public fun
 	0x2::ristretto255
-point_sub
+g_mul
 	public fun
 	0x2::ristretto255
-point_mul
+g_div
 	public fun
 	0x2::ristretto255
-point_div
-	public fun
-	0x2::ristretto255
-point_neg
-	public fun
-	0x2::ristretto255
-hash_to_point
-	public fun
-	0x2::ristretto255
-multi_scalar_multiplication
+g_neg
 	public fun
 	0x2::ristretto255
 TableVec

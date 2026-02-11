@@ -3,6 +3,7 @@ title: Module `sui::ristretto255`
 ---
 
 Group operations of BLS12-381.
+Only available in devnet.
 
 
 -  [Struct `Scalar`](#sui_ristretto255_Scalar)
@@ -18,17 +19,14 @@ Group operations of BLS12-381.
 -  [Function `scalar_div`](#sui_ristretto255_scalar_div)
 -  [Function `scalar_neg`](#sui_ristretto255_scalar_neg)
 -  [Function `scalar_inv`](#sui_ristretto255_scalar_inv)
--  [Function `hash_to_scalar`](#sui_ristretto255_hash_to_scalar)
--  [Function `point_from_bytes`](#sui_ristretto255_point_from_bytes)
--  [Function `identity`](#sui_ristretto255_identity)
--  [Function `generator`](#sui_ristretto255_generator)
--  [Function `point_add`](#sui_ristretto255_point_add)
--  [Function `point_sub`](#sui_ristretto255_point_sub)
--  [Function `point_mul`](#sui_ristretto255_point_mul)
--  [Function `point_div`](#sui_ristretto255_point_div)
--  [Function `point_neg`](#sui_ristretto255_point_neg)
--  [Function `hash_to_point`](#sui_ristretto255_hash_to_point)
--  [Function `multi_scalar_multiplication`](#sui_ristretto255_multi_scalar_multiplication)
+-  [Function `g_from_bytes`](#sui_ristretto255_g_from_bytes)
+-  [Function `g_identity`](#sui_ristretto255_g_identity)
+-  [Function `g_generator`](#sui_ristretto255_g_generator)
+-  [Function `g_add`](#sui_ristretto255_g_add)
+-  [Function `g_sub`](#sui_ristretto255_g_sub)
+-  [Function `g_mul`](#sui_ristretto255_g_mul)
+-  [Function `g_div`](#sui_ristretto255_g_div)
+-  [Function `g_neg`](#sui_ristretto255_g_neg)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -388,13 +386,13 @@ Returns e2/e1, fails if a is zero.
 
 </details>
 
-<a name="sui_ristretto255_hash_to_scalar"></a>
+<a name="sui_ristretto255_g_from_bytes"></a>
 
-## Function `hash_to_scalar`
+## Function `g_from_bytes`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_hash_to_scalar">hash_to_scalar</a>(m: &vector&lt;u8&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">sui::ristretto255::Scalar</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_from_bytes">g_from_bytes</a>(bytes: &vector&lt;u8&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
 </code></pre>
 
 
@@ -403,31 +401,7 @@ Returns e2/e1, fails if a is zero.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_hash_to_scalar">hash_to_scalar</a>(m: &vector&lt;u8&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_hash_to">group_ops::hash_to</a>(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, m)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_ristretto255_point_from_bytes"></a>
-
-## Function `point_from_bytes`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_from_bytes">point_from_bytes</a>(bytes: &vector&lt;u8&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_from_bytes">point_from_bytes</a>(bytes: &vector&lt;u8&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_from_bytes">g_from_bytes</a>(bytes: &vector&lt;u8&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
     <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_POINT_TYPE">POINT_TYPE</a>, *bytes, <b>false</b>)
 }
 </code></pre>
@@ -436,13 +410,13 @@ Returns e2/e1, fails if a is zero.
 
 </details>
 
-<a name="sui_ristretto255_identity"></a>
+<a name="sui_ristretto255_g_identity"></a>
 
-## Function `identity`
+## Function `g_identity`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_identity">identity</a>(): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_identity">g_identity</a>(): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
 </code></pre>
 
 
@@ -451,7 +425,7 @@ Returns e2/e1, fails if a is zero.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_identity">identity</a>(): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_identity">g_identity</a>(): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
     <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_POINT_TYPE">POINT_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_IDENTITY_BYTES">IDENTITY_BYTES</a>, <b>true</b>)
 }
 </code></pre>
@@ -460,13 +434,13 @@ Returns e2/e1, fails if a is zero.
 
 </details>
 
-<a name="sui_ristretto255_generator"></a>
+<a name="sui_ristretto255_g_generator"></a>
 
-## Function `generator`
+## Function `g_generator`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_generator">generator</a>(): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_generator">g_generator</a>(): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
 </code></pre>
 
 
@@ -475,7 +449,7 @@ Returns e2/e1, fails if a is zero.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_generator">generator</a>(): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_generator">g_generator</a>(): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
     <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_POINT_TYPE">POINT_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_GENERATOR_BYTES">GENERATOR_BYTES</a>, <b>true</b>)
 }
 </code></pre>
@@ -484,13 +458,13 @@ Returns e2/e1, fails if a is zero.
 
 </details>
 
-<a name="sui_ristretto255_point_add"></a>
+<a name="sui_ristretto255_g_add"></a>
 
-## Function `point_add`
+## Function `g_add`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_add">point_add</a>(e1: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;, e2: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_add">g_add</a>(e1: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;, e2: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
 </code></pre>
 
 
@@ -499,7 +473,7 @@ Returns e2/e1, fails if a is zero.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_add">point_add</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_add">g_add</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
     <a href="../sui/group_ops.md#sui_group_ops_add">group_ops::add</a>(<a href="../sui/ristretto255.md#sui_ristretto255_POINT_TYPE">POINT_TYPE</a>, e1, e2)
 }
 </code></pre>
@@ -508,13 +482,13 @@ Returns e2/e1, fails if a is zero.
 
 </details>
 
-<a name="sui_ristretto255_point_sub"></a>
+<a name="sui_ristretto255_g_sub"></a>
 
-## Function `point_sub`
+## Function `g_sub`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_sub">point_sub</a>(e1: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;, e2: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_sub">g_sub</a>(e1: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;, e2: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
 </code></pre>
 
 
@@ -523,7 +497,7 @@ Returns e2/e1, fails if a is zero.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_sub">point_sub</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_sub">g_sub</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
     <a href="../sui/group_ops.md#sui_group_ops_sub">group_ops::sub</a>(<a href="../sui/ristretto255.md#sui_ristretto255_POINT_TYPE">POINT_TYPE</a>, e1, e2)
 }
 </code></pre>
@@ -532,13 +506,13 @@ Returns e2/e1, fails if a is zero.
 
 </details>
 
-<a name="sui_ristretto255_point_mul"></a>
+<a name="sui_ristretto255_g_mul"></a>
 
-## Function `point_mul`
+## Function `g_mul`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_mul">point_mul</a>(e1: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">sui::ristretto255::Scalar</a>&gt;, e2: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_mul">g_mul</a>(e1: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">sui::ristretto255::Scalar</a>&gt;, e2: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
 </code></pre>
 
 
@@ -547,7 +521,7 @@ Returns e2/e1, fails if a is zero.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_mul">point_mul</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_mul">g_mul</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
     <a href="../sui/group_ops.md#sui_group_ops_mul">group_ops::mul</a>(<a href="../sui/ristretto255.md#sui_ristretto255_POINT_TYPE">POINT_TYPE</a>, e1, e2)
 }
 </code></pre>
@@ -556,14 +530,14 @@ Returns e2/e1, fails if a is zero.
 
 </details>
 
-<a name="sui_ristretto255_point_div"></a>
+<a name="sui_ristretto255_g_div"></a>
 
-## Function `point_div`
+## Function `g_div`
 
 Returns e2 / e1, fails if scalar is zero.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_div">point_div</a>(e1: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">sui::ristretto255::Scalar</a>&gt;, e2: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_div">g_div</a>(e1: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">sui::ristretto255::Scalar</a>&gt;, e2: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
 </code></pre>
 
 
@@ -572,7 +546,7 @@ Returns e2 / e1, fails if scalar is zero.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_div">point_div</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_div">g_div</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
     <a href="../sui/group_ops.md#sui_group_ops_div">group_ops::div</a>(<a href="../sui/ristretto255.md#sui_ristretto255_POINT_TYPE">POINT_TYPE</a>, e1, e2)
 }
 </code></pre>
@@ -581,13 +555,13 @@ Returns e2 / e1, fails if scalar is zero.
 
 </details>
 
-<a name="sui_ristretto255_point_neg"></a>
+<a name="sui_ristretto255_g_neg"></a>
 
-## Function `point_neg`
+## Function `g_neg`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_neg">point_neg</a>(e: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_neg">g_neg</a>(e: &<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
 </code></pre>
 
 
@@ -596,62 +570,8 @@ Returns e2 / e1, fails if scalar is zero.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_point_neg">point_neg</a>(e: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
-    <a href="../sui/ristretto255.md#sui_ristretto255_point_sub">point_sub</a>(&<a href="../sui/ristretto255.md#sui_ristretto255_identity">identity</a>(), e)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_ristretto255_hash_to_point"></a>
-
-## Function `hash_to_point`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_hash_to_point">hash_to_point</a>(m: &vector&lt;u8&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_hash_to_point">hash_to_point</a>(m: &vector&lt;u8&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_hash_to">group_ops::hash_to</a>(<a href="../sui/ristretto255.md#sui_ristretto255_POINT_TYPE">POINT_TYPE</a>, m)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_ristretto255_multi_scalar_multiplication"></a>
-
-## Function `multi_scalar_multiplication`
-
-Let 'scalars' be the vector [s1, s2, ..., sn] and 'elements' be the vector [e1, e2, ..., en].
-Returns s1*e1 + s2*e2 + ... + sn*en.
-Aborts with <code>EInputTooLong</code> if the vectors are larger than 32 (may increase in the future).
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_multi_scalar_multiplication">multi_scalar_multiplication</a>(scalars: &vector&lt;<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">sui::ristretto255::Scalar</a>&gt;&gt;, elements: &vector&lt;<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;&gt;): <a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">sui::ristretto255::Point</a>&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_multi_scalar_multiplication">multi_scalar_multiplication</a>(
-    scalars: &vector&lt;Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;&gt;,
-    elements: &vector&lt;Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;&gt;,
-): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_multi_scalar_multiplication">group_ops::multi_scalar_multiplication</a>(<a href="../sui/ristretto255.md#sui_ristretto255_POINT_TYPE">POINT_TYPE</a>, scalars, elements)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_neg">g_neg</a>(e: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Point">Point</a>&gt; {
+    <a href="../sui/ristretto255.md#sui_ristretto255_g_sub">g_sub</a>(&<a href="../sui/ristretto255.md#sui_ristretto255_g_identity">g_identity</a>(), e)
 }
 </code></pre>
 

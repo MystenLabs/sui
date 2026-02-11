@@ -14,6 +14,9 @@ use sui::group_ops::{Self, Element};
 public struct Scalar has store {}
 public struct Point has store {}
 
+// Scalars are encoded using little-endian byte order and is always 32 bytes.
+// Points are encoded as described in https://www.rfc-editor.org/rfc/rfc9496.html#name-encode.
+
 // Const elements.
 const SCALAR_ZERO_BYTES: vector<u8> =
     x"0000000000000000000000000000000000000000000000000000000000000000";
@@ -108,5 +111,5 @@ public fun g_div(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
 }
 
 public fun g_neg(e: &Element<Point>): Element<Point> {
-    g_sub(&identity(), e)
+    g_sub(&g_identity(), e)
 }

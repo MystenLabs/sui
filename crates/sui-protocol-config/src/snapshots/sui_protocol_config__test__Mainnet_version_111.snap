@@ -141,7 +141,6 @@ feature_flags:
   disable_entry_point_signature_check: true
   restrict_hot_or_not_entry_functions: true
   consensus_always_accept_system_transactions: true
-  validator_metadata_verify_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -376,6 +375,16 @@ group_ops_bls12381_uncompressed_g1_to_g1_cost: 677
 group_ops_bls12381_uncompressed_g1_sum_base_cost: 77
 group_ops_bls12381_uncompressed_g1_sum_cost_per_term: 26
 group_ops_bls12381_uncompressed_g1_sum_max_terms: 1200
+group_ops_ristretto_decode_scalar_cost: 7
+group_ops_ristretto_decode_point_cost: 2848
+group_ops_ristretto_scalar_add_cost: 10
+group_ops_ristretto_point_add_cost: 1556
+group_ops_ristretto_scalar_sub_cost: 10
+group_ops_ristretto_point_sub_cost: 1550
+group_ops_ristretto_scalar_mul_cost: 11
+group_ops_ristretto_point_mul_cost: 4842
+group_ops_ristretto_scalar_div_cost: 91
+group_ops_ristretto_point_div_cost: 5091
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
