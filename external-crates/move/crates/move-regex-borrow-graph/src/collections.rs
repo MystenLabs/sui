@@ -443,6 +443,8 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     // Ref API
     //**********************************************************************************************
 
+    /// Removes the specified reference and all edges to/from it.
+    /// Notes that removing the edges is O(E)
     pub fn release<M: Meter>(&mut self, r: Ref, meter: &mut M) -> MeterResult<(), M::Error> {
         self.check_invariants();
         meter.visit_nodes(self.nodes.len())?;
@@ -459,6 +461,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         Ok(())
     }
 
+    /// Removes all references and edges from the graph
     pub fn release_all(&mut self) {
         self.nodes.clear();
         self.graph.clear();
@@ -682,6 +685,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         }
     }
 
+    /// Check that nodes have exactly one self edge and that it is epsilon
     pub fn check_self_epsilon_invariant(&self, r: NodeIndex) {
         #[cfg(debug_assertions)]
         {
