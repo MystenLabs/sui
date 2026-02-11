@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::crypto::group_ops::NOT_SUPPORTED_ERROR;
-use crate::object_runtime::ObjectRuntime;
 use crate::{NativesCostTable, get_extension};
-use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256, Sha3_512};
+use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};

@@ -41,7 +41,6 @@ use self::{
     validator::ValidatorValidateMetadataBcsCostParams,
 };
 use crate::crypto::group_ops::GroupOpsCostParams;
-use crate::crypto::hash::HashSha3_512CostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
@@ -176,7 +175,6 @@ pub struct NativesCostTable {
     // hash
     pub hash_blake2b256_cost_params: HashBlake2b256CostParams,
     pub hash_keccak256_cost_params: HashKeccak256CostParams,
-    pub hash_sha3_512_cost_params: HashSha3_512CostParams,
 
     // poseidon
     pub poseidon_bn254_cost_params: PoseidonBN254CostParams,
@@ -354,15 +352,6 @@ impl NativesCostTable {
                     .into(),
                 hash_keccak256_data_cost_per_block: protocol_config
                     .hash_keccak256_data_cost_per_block()
-                    .into(),
-            },
-            hash_sha3_512_cost_params: HashSha3_512CostParams {
-                hash_sha3_512_cost_base: protocol_config.hash_sha3_512_cost_base().into(),
-                hash_sha3_512_data_cost_per_byte: protocol_config
-                    .hash_sha3_512_data_cost_per_byte()
-                    .into(),
-                hash_sha3_512_data_cost_per_block: protocol_config
-                    .hash_sha3_512_data_cost_per_block()
                     .into(),
             },
             transfer_transfer_internal_cost_params: TransferInternalCostParams {
@@ -966,7 +955,6 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ("address", "to_u256", make_native!(address::to_u256)),
         ("address", "from_u256", make_native!(address::from_u256)),
         ("hash", "blake2b256", make_native!(hash::blake2b256)),
-        ("hash", "sha3_512", make_native!(hash::sha3_512)),
         (
             "bls12381",
             "bls12381_min_sig_verify",
