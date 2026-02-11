@@ -873,18 +873,20 @@ pub fn internal_sum(
             );
 
             // Read the input vector
-            (0..length)
+            let input_values: Vec<Vec<u8>> = (0..length)
                 .map(|i| {
                     inputs
                         .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
                         .and_then(Value::value_as::<VectorRef>)
+                        .and_then(|v| Ok(v.as_bytes_ref()?.to_vec()))
+                })
+                .collect::<PartialVMResult<Vec<_>>>()?;
+
+            input_values
+                .into_iter()
+                .map(|v| {
+                    v.try_into()
                         .map_err(|_| FastCryptoError::InvalidInput)
-                        .and_then(|v| {
-                            v.as_bytes_ref()?
-                                .to_vec()
-                                .try_into()
-                                .map_err(|_| FastCryptoError::InvalidInput)
-                        })
                         .map(bls::G1ElementUncompressed::from_trusted_byte_array)
                 })
                 .collect::<FastCryptoResult<Vec<_>>>()

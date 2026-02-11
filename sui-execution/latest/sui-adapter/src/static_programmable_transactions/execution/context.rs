@@ -1984,7 +1984,7 @@ pub fn finish(
             let value = match accum_event.value {
                 MoveAccumulatorValue::U64(amount) => AccumulatorValue::Integer(amount),
                 MoveAccumulatorValue::EventRef(event_idx) => {
-                    let Some(event) = user_events.get(event_idx as usize) else {
+                    let Some(event) = user_events.get(checked_as!(event_idx, usize)?) else {
                         invariant_violation!(
                             "Could not find authenticated event at index {}",
                             event_idx
