@@ -201,12 +201,13 @@ pub(crate) struct ObserverBlockStreamItem {
 
 /// Observer block stream type.
 #[allow(dead_code)]
-pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send>>;
+pub(crate) type ObserverBlockStream =
+    Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send + 'static>>;
 
 /// Observer block request stream type for bidirectional streaming.
 #[allow(dead_code)]
 pub(crate) type BlockRequestStream =
-    Pin<Box<dyn Stream<Item = crate::network::observer::BlockStreamRequest> + Send>>;
+    Pin<Box<dyn Stream<Item = crate::network::observer::BlockStreamRequest> + Send + 'static>>;
 
 /// Observer network service for handling requests from observer nodes.
 /// Unlike NetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
