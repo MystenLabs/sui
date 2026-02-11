@@ -284,9 +284,8 @@ impl VMDispatchTables {
                     )
                     .finish(Location::Undefined)
                 })?;
-                let module_name = self.interner.intern_identifier(&struct_tag.module);
-                let member_name = self.interner.intern_identifier(&struct_tag.name);
-                let key = VirtualTableKey::from_parts(package_key, module_name, member_name);
+                let key =
+                    self.to_virtual_table_key(&package_key, &struct_tag.module, &struct_tag.name);
                 let datatype = self
                     .resolve_type(&key)
                     .map_err(|e| e.finish(Location::Undefined))?
@@ -1056,7 +1055,7 @@ impl VirtualTableKey {
     }
 
     /// [SAFETY] This cannot be ade public, because it may lead to panics in the interner.
-    pub(crate) fn inner_package_key(&self) -> &IntraPackageKey {
+    pub(crate) fn intra_package_key(&self) -> &IntraPackageKey {
         &self.0.inner_pkg_key
     }
 

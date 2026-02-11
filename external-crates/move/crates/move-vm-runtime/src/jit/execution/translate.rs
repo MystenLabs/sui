@@ -91,7 +91,7 @@ impl PackageContext<'_> {
         let funs = functions
             .into_iter()
             .map(|ptr| {
-                let name = *ptr.name.inner_package_key();
+                let name = *ptr.name.intra_package_key();
                 (name, ptr)
             })
             .collect::<Vec<_>>();
@@ -105,7 +105,7 @@ impl PackageContext<'_> {
         let datatypes = datatype_descriptors
             .into_iter()
             .map(|ptr| {
-                let name = ptr.intra_package_name();
+                let name = ptr.intra_package_key();
                 (name, ptr)
             })
             .collect::<Vec<_>>();
@@ -123,14 +123,14 @@ impl PackageContext<'_> {
         if vtable_entry.package_key() != self.original_id {
             return Ok(None);
         }
-        match self.vtable_funs.get(vtable_entry.inner_package_key()) {
+        match self.vtable_funs.get(vtable_entry.intra_package_key()) {
             Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
             None => Err(partial_vm_error!(
                 FUNCTION_RESOLUTION_FAILURE,
                 "Function not found in vtable with name: {}::{}",
                 self.version_id,
                 self.interner.resolve_ident(
-                    &vtable_entry.inner_package_key().member_name,
+                    &vtable_entry.intra_package_key().member_name,
                     "function name"
                 )
             )),
@@ -514,7 +514,7 @@ fn datatypes(
     fn resolve_member_name(context: &PackageContext, name: &VirtualTableKey) -> Identifier {
         context
             .interner
-            .resolve_ident(&name.inner_package_key().member_name, "datatype name")
+            .resolve_ident(&name.intra_package_key().member_name, "datatype name")
     }
 
     // NB: It is the responsibility of the adapter to determine the correct type origin table,
@@ -526,7 +526,7 @@ fn datatypes(
     ) -> PartialVMResult<ModuleIdKey> {
         let defining_address = context
             .type_origin_table
-            .get(name.inner_package_key())
+            .get(name.intra_package_key())
             .ok_or_else(|| {
                 partial_vm_error!(
                     LOOKUP_FAILED,
@@ -536,7 +536,7 @@ fn datatypes(
             })?;
         dbg_println!("Package ID: {:?}", version_id);
         dbg_println!("Defining Address: {:?}", defining_address);
-        let module_id = name.inner_package_key().module_name;
+        let module_id = name.intra_package_key().module_name;
         Ok(ModuleIdKey::from_parts(*defining_address, module_id))
     }
 

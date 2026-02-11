@@ -1055,17 +1055,17 @@ impl DatatypeDescriptor {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn qualified_name(&self) -> VirtualTableKey {
+    pub(crate) fn virtual_key(&self) -> VirtualTableKey {
         match self.datatype_info.inner_ref() {
             Datatype::Enum(ptr) => ptr.to_ref().def_vtable_key.clone(),
             Datatype::Struct(ptr) => ptr.to_ref().def_vtable_key.clone(),
         }
     }
 
-    pub(crate) fn intra_package_name(&self) -> IntraPackageKey {
+    pub(crate) fn intra_package_key(&self) -> IntraPackageKey {
         match self.datatype_info.inner_ref() {
-            Datatype::Enum(ptr) => *ptr.def_vtable_key.inner_package_key(),
-            Datatype::Struct(ptr) => *ptr.def_vtable_key.inner_package_key(),
+            Datatype::Enum(ptr) => *ptr.def_vtable_key.intra_package_key(),
+            Datatype::Struct(ptr) => *ptr.def_vtable_key.intra_package_key(),
         }
     }
 }
