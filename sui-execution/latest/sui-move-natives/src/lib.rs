@@ -781,25 +781,6 @@ impl NativesCostTable {
                 ristretto_point_div_cost: protocol_config
                     .group_ops_ristretto_point_div_cost_as_option()
                     .map(Into::into),
-                ristretto_scalar_hash_to_base_cost: protocol_config
-                    .group_ops_ristretto_scalar_hash_to_base_cost_as_option()
-                    .map(Into::into),
-                ristretto_scalar_hash_to_cost_per_byte: protocol_config
-                    .group_ops_ristretto_scalar_hash_to_cost_per_byte_as_option()
-                    .map(Into::into),
-                ristretto_point_hash_to_base_cost: protocol_config
-                    .group_ops_ristretto_point_hash_to_base_cost_as_option()
-                    .map(Into::into),
-                ristretto_point_hash_to_cost_per_byte: protocol_config
-                    .group_ops_ristretto_point_hash_to_cost_per_byte_as_option()
-                    .map(Into::into),
-                ristretto_msm_base_cost: protocol_config
-                    .group_ops_ristretto_msm_base_cost_as_option()
-                    .map(Into::into),
-                ristretto_msm_base_cost_per_input: protocol_config
-                    .group_ops_ristretto_msm_base_cost_per_input_as_option()
-                    .map(Into::into),
-                ristretto_msm_max_len: protocol_config.group_ops_ristretto_msm_max_len_as_option(),
             },
             vdf_cost_params: VDFCostParams {
                 vdf_verify_cost: protocol_config

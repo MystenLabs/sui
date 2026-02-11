@@ -147,17 +147,6 @@ pub struct GroupOpsCostParams {
     // costs for decode, div, and encode output
     pub ristretto_scalar_div_cost: Option<InternalGas>,
     pub ristretto_point_div_cost: Option<InternalGas>,
-    // costs for hashing
-    pub ristretto_scalar_hash_to_base_cost: Option<InternalGas>,
-    pub ristretto_scalar_hash_to_cost_per_byte: Option<InternalGas>,
-    pub ristretto_point_hash_to_base_cost: Option<InternalGas>,
-    pub ristretto_point_hash_to_cost_per_byte: Option<InternalGas>,
-    // costs for encoding the output + base cost for MSM (the |q| doublings) but not decoding
-    pub ristretto_msm_base_cost: Option<InternalGas>,
-    // cost that is multiplied with the approximated number of additions
-    pub ristretto_msm_base_cost_per_input: Option<InternalGas>,
-    // limit the length of the input vectors for MSM
-    pub ristretto_msm_max_len: Option<u64>,
 }
 
 macro_rules! native_charge_gas_early_exit_option {
@@ -688,38 +677,6 @@ pub fn internal_hash_to(
                 .to_byte_array()
                 .to_vec())
         }
-        Some(Groups::RistrettoScalar) => {
-            if !is_ristretto_supported(context)? {
-                return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-            }
-            native_charge_gas_early_exit_option!(
-                context,
-                cost_params
-                    .ristretto_scalar_hash_to_base_cost
-                    .and_then(|base_cost| cost_params
-                        .ristretto_scalar_hash_to_cost_per_byte
-                        .map(|per_byte| base_cost + per_byte * (m.len() as u64).into()))
-            );
-            Ok(ristretto::RistrettoScalar::hash_to_group_element(&m)
-                .to_byte_array()
-                .to_vec())
-        }
-        Some(Groups::RistrettoPoint) => {
-            if !is_ristretto_supported(context)? {
-                return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-            }
-            native_charge_gas_early_exit_option!(
-                context,
-                cost_params
-                    .ristretto_point_hash_to_base_cost
-                    .and_then(|base_cost| cost_params
-                        .ristretto_point_hash_to_cost_per_byte
-                        .map(|per_byte| base_cost + per_byte * (m.len() as u64).into()))
-            );
-            Ok(ristretto::RistrettoPoint::hash_to_group_element(&m)
-                .to_byte_array()
-                .to_vec())
-        }
         _ => Err(FastCryptoError::InvalidInput),
     };
 
@@ -881,25 +838,6 @@ pub fn internal_multi_scalar_mul(
             scalars.as_ref(),
             elements.as_ref(),
         ),
-        Some(Groups::RistrettoPoint) => {
-            if !is_ristretto_supported(context)? {
-                return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-            }
-            multi_scalar_mul::<
-                ristretto::RistrettoPoint,
-                { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH },
-                { ristretto::RISTRETTO_POINT_BYTE_LENGTH },
-            >(
-                context,
-                cost_params.ristretto_decode_scalar_cost,
-                cost_params.ristretto_decode_point_cost,
-                cost_params.ristretto_msm_base_cost,
-                cost_params.ristretto_msm_base_cost_per_input,
-                max_len,
-                scalars.as_ref(),
-                elements.as_ref(),
-            )
-        }
         _ => Ok(NativeResult::err(
             v2_native_charge(context, cost)?,
             INVALID_INPUT_ERROR,
