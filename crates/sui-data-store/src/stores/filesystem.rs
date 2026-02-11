@@ -487,12 +487,6 @@ impl FileSystemStore {
         version: u64,
     ) -> Result<Option<(Object, u64)>, Error> {
         let object_dir = self.objects_dir()?.join(object_id.to_string());
-        println!(
-            "Looking up object {} at version {} in directory {}",
-            object_id,
-            version,
-            object_dir.display()
-        );
         let version_file = object_dir.join(version.to_string());
         if !version_file.exists() {
             return Ok(None);
@@ -506,10 +500,6 @@ impl FileSystemStore {
         object_id: &ObjectID,
         max_version: u64,
     ) -> Result<Option<(Object, u64)>, Error> {
-        println!(
-            "Looking up root version mapping for object {} with max_version {}",
-            object_id, max_version
-        );
         self.load_root_mapping(object_id)?;
         let maps = self.root_versions_map.read().unwrap();
         if let Some(map) = maps.get(object_id)

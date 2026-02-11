@@ -89,9 +89,6 @@ where
 {
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let cached_objects = self.primary.get_objects(keys)?;
-        println!("Cached objects: {:?}", cached_objects);
-
-        println!("Keys to fetch: {:?}", keys);
 
         let mut keys_to_fetch = Vec::new();
         let mut none_object_idx = Vec::new();
@@ -104,7 +101,6 @@ where
 
         let mut objects = cached_objects;
         if !keys_to_fetch.is_empty() {
-            println!("Need to fetch keys from secondary: {:?}", keys_to_fetch);
             let fetched_objects = self.secondary.get_objects(&keys_to_fetch)?;
 
             // Sanity checks: the three vectors must align one-to-one
@@ -116,15 +112,9 @@ where
                 .zip(keys_to_fetch.iter())
                 .zip(fetched_objects.iter())
             {
-                println!("Key {:?}, fetched object: {:?}", key, fetched);
                 // REVIEW: should we cache `None` to avoid repeated misses? Doing so would
                 // require API changes to represent cached-miss entries.
                 if let Some((object, actual_version)) = fetched {
-                    println!(
-                        "Writing object to primary: id {:?}, version {}",
-                        object.id(),
-                        actual_version
-                    );
                     self.primary
                         .write_object(key, object.clone(), *actual_version)?;
                     objects[*idx] = Some((object.clone(), *actual_version));
@@ -139,12 +129,6 @@ impl<P: ReadWriteDataStore, S: ReadDataStore> ReadThroughStore<P, S> {
     /// Write a batch of objects to the primary store.
     pub fn write_objects(&self, objects: Vec<(ObjectKey, Object, u64)>) -> Result<(), Error> {
         for (key, object, actual_version) in objects {
-            println!(
-                "GREP: Writing objects to primary: key{:?}, id {:?}, version {}",
-                key,
-                object.id(),
-                actual_version
-            );
             self.primary.write_object(&key, object, actual_version)?;
         }
         Ok(())
