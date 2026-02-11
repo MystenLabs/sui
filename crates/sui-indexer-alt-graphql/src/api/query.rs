@@ -55,11 +55,10 @@ use crate::api::types::protocol_configs::ProtocolConfigs;
 use crate::api::types::service_config::ServiceConfig;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
-use crate::api::types::transaction::SCTransaction;
+use crate::api::types::transaction::ScanError;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
-use crate::api::types::transaction::scan::ScanError;
 use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::zklogin;
 use crate::api::types::zklogin::ZkLoginIntentScope;
@@ -727,9 +726,9 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<SCTransaction>,
+        after: Option<CTransaction>,
         last: Option<u64>,
-        before: Option<SCTransaction>,
+        before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
     ) -> Option<Result<Connection<String, Transaction>, RpcError<ScanError>>> {
         Some(

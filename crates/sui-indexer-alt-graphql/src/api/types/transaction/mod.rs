@@ -14,8 +14,6 @@ use diesel::sql_types::BigInt;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
-use serde::Deserialize;
-use serde::Serialize;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_indexer_alt_reader::pg_reader::PgReader;
@@ -49,6 +47,7 @@ use crate::api::types::transaction_kind::TransactionKind;
 use crate::api::types::user_signature::UserSignature;
 use crate::config::Limits;
 use crate::error::RpcError;
+use crate::error::bad_user_input;
 use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
@@ -61,8 +60,14 @@ pub(crate) mod scan;
 /// Cursor for transaction pagination
 pub(crate) type CTransaction = JsonCursor<u64>;
 
-/// Cursor for transaction scanning
-pub(crate) type SCTransaction = JsonCursor<TransactionCursor>;
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum ScanError {
+    #[error(
+        "Scan range of {requested} checkpoints exceeds maximum of {max}. \
+         Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to narrow the range."
+    )]
+    LimitExceeded { requested: u64, max: u64 },
+}
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -74,14 +79,6 @@ pub(crate) struct Transaction {
 pub(crate) struct TransactionContents {
     pub(crate) scope: Scope,
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Copy)]
-pub(crate) struct TransactionCursor {
-    #[serde(rename = "t")]
-    pub tx_sequence_number: u64,
-    #[serde(rename = "c")]
-    pub cp_sequence_number: u64,
 }
 
 /// Description of a transaction, the unit of activity on Sui.
@@ -320,9 +317,9 @@ impl Transaction {
     pub(crate) async fn scan(
         ctx: &Context<'_>,
         scope: Scope,
-        page: Page<SCTransaction>,
+        page: Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<Connection<String, Transaction>, RpcError<scan::ScanError>> {
+    ) -> Result<Connection<String, Transaction>, RpcError<ScanError>> {
         let limits: &Limits = ctx.data()?;
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
@@ -346,7 +343,35 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         };
 
-        scan::transactions(ctx, scope, &filter, &page, cp_bounds, limits).await
+        if page.after().map_or(0, |c| **c) > page.before().map_or(u64::MAX, |c| **c) {
+            return Ok(Connection::new(false, false));
+        }
+
+        let scan_range = cp_bounds.end() - cp_bounds.start() + 1;
+        if scan_range > limits.max_scan_limit {
+            return Err(bad_user_input(ScanError::LimitExceeded {
+                requested: scan_range,
+                max: limits.max_scan_limit,
+            }));
+        }
+
+        let transactions = scan::transactions(ctx, &filter, &page, cp_bounds)
+            .await
+            .map_err(upcast)?;
+
+        page.paginate_filtered(
+            &transactions,
+            |(_, contents)| filter.matches(contents),
+            |(digest, contents)| {
+                Ok::<_, RpcError<ScanError>>(Transaction {
+                    digest: *digest,
+                    contents: TransactionContents {
+                        scope: scope.clone(),
+                        contents: Some(Arc::new(contents.clone())),
+                    },
+                })
+            },
+        )
     }
 }
 

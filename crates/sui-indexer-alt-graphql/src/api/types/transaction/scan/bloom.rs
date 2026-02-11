@@ -17,7 +17,7 @@ use sui_indexer_alt_schema::cp_blooms::CpBloomFilter;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 
-use crate::api::types::transaction::SCTransaction;
+use crate::api::types::transaction::CTransaction;
 use crate::error::RpcError;
 use crate::pagination::Page;
 
@@ -33,7 +33,7 @@ pub(super) async fn candidate_cps(
     filter_values: &[[u8; 32]],
     cp_lo: u64,
     cp_hi_inclusive: u64,
-    page: &Page<SCTransaction>,
+    page: &Page<CTransaction>,
 ) -> Result<Vec<u64>, RpcError> {
     let pg_reader: &PgReader = ctx.data()?;
     let mut conn = pg_reader
@@ -52,8 +52,8 @@ pub(super) async fn candidate_cps(
             .map(move |probe| (id, probe))
     });
 
-    let block_probes = cp_block_probes(probes_by_block);
-    let bloom_check = cp_bloom_check(&CpBloomFilter::probe(filter_values));
+    let q_block_probes = cp_block_probes_sql(probes_by_block);
+    let q_bloom_check = cp_bloom_check_sql(&CpBloomFilter::probe(filter_values));
 
     let block_size = CP_BLOCK_SIZE as i64;
     let adjusted_limit = (page.limit_with_overhead() as f64 * OVERFETCH_MULTIPLIER) as i64;
@@ -125,7 +125,7 @@ pub(super) async fn candidate_cps(
             FROM
                 cp_blooms cb
             WHERE
-                cb.cp_sequence_number BETWEEN mb.cp_lo AND mb.cp_hi_inclusive
+                cb.cp_sequence_number BETWEEN GREATEST(mb.cp_lo, {BigInt}) AND LEAST(mb.cp_hi_inclusive, {BigInt})
                 AND {}
             ORDER BY
                 cb.cp_sequence_number {}
@@ -133,9 +133,11 @@ pub(super) async fn candidate_cps(
         LIMIT
             {BigInt}
         "#,
-        block_probes,
+        q_block_probes,
         matched_blocks,
-        bloom_check,
+        cp_lo as i64,
+        cp_hi_inclusive as i64,
+        q_bloom_check,
         page.order_by_direction(),
         adjusted_limit,
     );
@@ -157,7 +159,7 @@ pub(super) async fn candidate_cps(
 }
 
 /// SQL fragment that produces rows of probes (cp_block_index, bloom_idx, byte_pos, bit_mask) using UNNEST
-fn cp_block_probes(probes: impl Iterator<Item = (i64, BlockedBloomProbe)>) -> Query<'static> {
+fn cp_block_probes_sql(probes: impl Iterator<Item = (i64, BlockedBloomProbe)>) -> Query<'static> {
     let mut cp_block_indices = vec![];
     let mut bloom_idxs = vec![];
     let mut byte_offsets = vec![];
@@ -188,16 +190,15 @@ fn cp_block_probes(probes: impl Iterator<Item = (i64, BlockedBloomProbe)>) -> Qu
 }
 
 /// Check if all filter values are present in a checkpoint's bloom filter.
-fn cp_bloom_check(probe: &BloomProbe) -> Query<'static> {
+fn cp_bloom_check_sql(probe: &BloomProbe) -> Query<'static> {
     if probe.bit_probes.is_empty() {
         return query!("TRUE");
     }
 
     let mut condition = query!("TRUE");
     for &(offset, mask) in &probe.bit_probes {
-        condition = query!(
-            "{} AND (get_byte(cb.bloom_filter, {Integer} % length(cb.bloom_filter)) & {Integer}) = {Integer}",
-            condition,
+        condition += query!(
+            " AND (get_byte(cb.bloom_filter, {Integer} % length(cb.bloom_filter)) & {Integer}) = {Integer}",
             offset as i32,
             mask as i32,
             mask as i32,

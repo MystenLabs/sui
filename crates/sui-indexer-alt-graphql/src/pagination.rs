@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::ops::Bound;
 
 use async_graphql::OutputType;
 use async_graphql::connection::Connection;
@@ -233,6 +234,19 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
         node: impl Fn(T) -> Result<N, E>,
     ) -> Result<Connection<String, N>, E> {
         let edges: Vec<_> = results.into_iter().map(|r| (cursor(&r), r)).collect();
+        self.build_connection(edges, node)
+    }
+
+    /// Validate cursors, detect has_previous_page/has_next_page, trim boundary elements,
+    /// and build a GraphQL `Connection` from pre-paired `(cursor, value)` entries.
+    ///
+    /// `edges` should contain elements in order, including up to one record either side of the
+    /// page (the `after` and `before` cursor elements) used for boundary detection.
+    fn build_connection<T, N: OutputType, E>(
+        &self,
+        edges: Vec<(C, T)>,
+        node: impl Fn(T) -> Result<N, E>,
+    ) -> Result<Connection<String, N>, E> {
         let first = edges.first().map(|(c, _)| c.clone());
         let last = edges.last().map(|(c, _)| c.clone());
 
@@ -311,6 +325,56 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
         }
 
         Ok(conn)
+    }
+}
+
+impl<C: Ord + Copy> Page<JsonCursor<C>> {
+    /// Paginate over entries in `map` that match `filter`, clamped to the `this` cursor bounds, to
+    /// produce a page of results in ASC order of the keys with `limit_with_head` results to detect the presence of a previous or next page.
+    /// `node` is used to convert the values in the page into
+    pub(crate) fn paginate_filtered<V, N: OutputType, E>(
+        &self,
+        map: &BTreeMap<C, V>,
+        filter: impl Fn(&V) -> bool,
+        node: impl Fn(&V) -> Result<N, E>,
+    ) -> Result<Connection<String, N>, E>
+    where
+        JsonCursor<C>: CursorType,
+    {
+        let lo = self
+            .after()
+            .map_or(Bound::Unbounded, |c| Bound::Included(**c));
+        let hi = self
+            .before()
+            .map_or(Bound::Unbounded, |c| Bound::Included(**c));
+
+        if let (Bound::Included(lo), Bound::Included(hi)) = (lo, hi)
+            && lo > hi
+        {
+            return Ok(Connection::new(false, false));
+        }
+
+        let limit = self.limit_with_overhead();
+        let bounded = map.range((lo, hi));
+
+        let edges: Vec<_> = if self.is_from_front() {
+            bounded
+                .filter(|(_, v)| filter(v))
+                .take(limit)
+                .map(|(&c, v)| (JsonCursor::new(c), v))
+                .collect()
+        } else {
+            let mut v: Vec<_> = bounded
+                .rev()
+                .filter(|(_, v)| filter(v))
+                .take(limit)
+                .map(|(&c, v)| (JsonCursor::new(c), v))
+                .collect();
+            v.reverse();
+            v
+        };
+
+        self.build_connection(edges, node)
     }
 }
 
