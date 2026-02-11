@@ -16,14 +16,22 @@ use sui_rpc::proto::sui::rpc::v2::{
 };
 use sui_rpc_api::grpc::v2::ledger_service::validate_get_object_requests;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc_api::{ErrorReason, ObjectNotFoundError, RpcError, TransactionNotFoundError};
+use sui_rpc_api::{
+    CheckpointNotFoundError, ErrorReason, ObjectNotFoundError, RpcError, TransactionNotFoundError,
+};
 use sui_sdk_types::Digest;
 use sui_types::base_types::ObjectID;
-use sui_types::digests::ChainIdentifier;
+use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 use tokio::sync::RwLock;
 
 use crate::store::ForkingStore;
 use fastcrypto::encoding::{Base58, Encoding};
+use simulacrum::EpochState;
+use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
+use sui_rpc::proto::sui::rpc::v2::{Checkpoint, Epoch, ProtocolConfig, ValidatorCommittee};
+use sui_rpc_api::proto::sui::rpc::v2::ValidatorCommitteeMember;
+use sui_types::message_envelope::Message;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tracing::info;
 
 const READ_MASK_DEFAULT: &str = "digest";
@@ -85,7 +93,7 @@ impl LedgerService for ForkingLedgerService {
             ..
         } = request.into_inner();
 
-        info!(
+        println!(
             "Received get_object request for object_id: {:?}, version: {:?}",
             object_id, version
         );
@@ -116,7 +124,7 @@ impl LedgerService for ForkingLedgerService {
             ..
         } = request.into_inner();
 
-        info!(
+        println!(
             "Received batch_get_object request for ids {:?}",
             requests.iter().map(|o| o.object_id()).collect::<Vec<_>>()
         );
@@ -246,20 +254,170 @@ impl LedgerService for ForkingLedgerService {
 
     async fn get_checkpoint(
         &self,
-        _request: tonic::Request<GetCheckpointRequest>,
+        request: tonic::Request<GetCheckpointRequest>,
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented(
-            "get_checkpoint not yet implemented",
-        ))
+        let simulacrum = self.simulacrum.read().await;
+        let store = simulacrum.store_static();
+
+        let GetCheckpointRequest {
+            checkpoint_id,
+            read_mask,
+            ..
+        } = request.into_inner();
+
+        let read_mask = {
+            let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
+            read_mask.validate::<Checkpoint>().map_err(|path| {
+                let fv = FieldViolation::new("read_mask")
+                    .with_description(format!("invalid read_mask path: {path}"))
+                    .with_reason(ErrorReason::FieldInvalid);
+                tonic::Status::from(RpcError::from(fv))
+            })?;
+            FieldMaskTree::from(read_mask)
+        };
+
+        let checkpoint = match checkpoint_id {
+            Some(CheckpointId::Digest(digest)) => {
+                let digest = digest.parse::<CheckpointDigest>().map_err(|e| {
+                    let fv = FieldViolation::new("digest")
+                        .with_description(format!("invalid digest: {e}"))
+                        .with_reason(ErrorReason::FieldInvalid);
+                    tonic::Status::from(RpcError::from(fv))
+                })?;
+
+                store.get_checkpoint_by_digest(&digest).ok_or_else(|| {
+                    let error = CheckpointNotFoundError::digest(digest.into());
+                    tonic::Status::from(RpcError::from(error))
+                })?
+            }
+            Some(CheckpointId::SequenceNumber(sequence_number)) => {
+                // Default to latest checkpoint
+                store
+                    .get_checkpoint_by_sequence_number(sequence_number)
+                    .ok_or_else(|| {
+                        let error = CheckpointNotFoundError::sequence_number(sequence_number);
+                        tonic::Status::from(RpcError::from(error))
+                    })?
+            }
+            _ => {
+                println!("TODO");
+                todo!()
+            }
+        };
+
+        let sequence_number = checkpoint.sequence_number;
+        let mut message = Checkpoint::default();
+        let content_digest = checkpoint.content_digest;
+
+        let summary = checkpoint.data();
+        let signature = checkpoint.auth_sig();
+
+        message.merge(summary, &read_mask);
+        message.merge(signature.clone(), &read_mask);
+        //
+        if read_mask.contains(Checkpoint::CONTENTS_FIELD.name) {
+            let checkpoint_contents = store
+                .get_checkpoint_contents(&summary.content_digest)
+                .ok_or_else(|| {
+                    let error = CheckpointNotFoundError::digest((summary.digest()).into());
+                    tonic::Status::from(RpcError::from(error))
+                })?;
+            message.merge(checkpoint_contents, &read_mask);
+        }
+        //
+        // if (read_mask.contains(Checkpoint::TRANSACTIONS_FIELD)
+        //     || read_mask.contains(Checkpoint::OBJECTS_FIELD))
+        //     && let Some(url) = checkpoint_bucket
+        // {
+        //     let client = create_remote_store_client(url, vec![], 60)?;
+        //     let (checkpoint_data, _) =
+        //         CheckpointReader::fetch_from_object_store(&client, sequence_number).await?;
+        //     let checkpoint = sui_types::full_checkpoint_content::Checkpoint::from(
+        //         std::sync::Arc::into_inner(checkpoint_data).unwrap(),
+        //     );
+        //
+        //     message.merge(&checkpoint, &read_mask);
+        // }
+
+        Ok(tonic::Response::new(GetCheckpointResponse::new(message)))
     }
 
     async fn get_epoch(
         &self,
-        _request: tonic::Request<GetEpochRequest>,
+        request: tonic::Request<GetEpochRequest>,
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented(
-            "get_epoch not yet implemented",
-        ))
+        let GetEpochRequest {
+            epoch, read_mask, ..
+        } = request.into_inner();
+
+        let read_mask = {
+            let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
+            read_mask.validate::<Epoch>().map_err(|path| {
+                let fv = FieldViolation::new("read_mask")
+                    .with_description(format!("invalid read_mask path: {path}"))
+                    .with_reason(ErrorReason::FieldInvalid);
+                tonic::Status::from(RpcError::from(fv))
+            })?;
+            FieldMaskTree::from(read_mask)
+        };
+
+        let simulacrum = self.simulacrum.read().await;
+        let epoch_start_state = simulacrum.epoch_start_state();
+
+        let mut message = Epoch::default();
+
+        if read_mask.contains(Epoch::EPOCH_FIELD.name) {
+            message.epoch = Some(epoch_start_state.epoch());
+        }
+        // if read_mask.contains(Epoch::FIRST_CHECKPOINT_FIELD.name) {
+        //     message.first_checkpoint = epoch_info.start_checkpoint;
+        // }
+        if read_mask.contains(Epoch::LAST_CHECKPOINT_FIELD.name) {
+            message.last_checkpoint = simulacrum
+                .store()
+                .get_highest_checkpint()
+                .map(|cp| cp.sequence_number.into());
+        }
+        if read_mask.contains(Epoch::START_FIELD.name) {
+            message.start = Some(sui_rpc_api::proto::timestamp_ms_to_proto(
+                epoch_start_state.epoch_start_timestamp_ms(),
+            ));
+        }
+        // if read_mask.contains(Epoch::END_FIELD.name) {
+        //     message.end = epoch_info.end_timestamp_ms.map(timestamp_ms_to_proto);
+        // }
+        if read_mask.contains(Epoch::REFERENCE_GAS_PRICE_FIELD.name) {
+            message.reference_gas_price = Some(simulacrum.reference_gas_price());
+        }
+        // if let (Some(submask), Some(version)) = (
+        //     read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name),
+        //     simulacrum.protocol_version,
+        //     // epoch_info.protocol_version,
+        // ) {
+        //     let protocol_config =
+        //         ProtocolConfig::get_for_version_if_supported(version.into(), chain);
+        //     message.protocol_config = protocol_config.map(|config| {
+        //         RpcProtocolConfig::merge_from(protocol_config_to_proto(config), &submask)
+        //     });
+        // }
+        if read_mask.contains(Epoch::COMMITTEE_FIELD.name) {
+            let committee = epoch_start_state.get_sui_committee();
+            let members: Vec<_> = committee
+                .members()
+                .map(|(key, voting)| {
+                    let mut member = ValidatorCommitteeMember::default();
+                    member.public_key = Some(key.0.to_vec().into());
+                    member.weight = Some(*voting);
+                    member
+                })
+                .collect();
+
+            let mut committee = ValidatorCommittee::default();
+            committee.epoch = Some(epoch_start_state.epoch());
+            committee.members = members.clone();
+            message.committee = Some(committee);
+        }
+        Ok(tonic::Response::new(GetEpochResponse::new(message)))
     }
 }
 
@@ -275,6 +433,7 @@ impl ForkingLedgerService {
         let object = if let Some(version) = version {
             store.get_object_at_version(&object_id, version.into())
         } else {
+            println!("Trying to get latest version of object {object_id}");
             store.get_object(&object_id)
         };
 

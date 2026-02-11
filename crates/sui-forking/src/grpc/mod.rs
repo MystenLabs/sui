@@ -29,6 +29,7 @@ mod error;
 pub mod ledger_service;
 mod metrics;
 mod middleware;
+pub mod subscription_service;
 pub mod transaction_execution_service;
 
 #[derive(clap::Args, Clone, Debug)]
@@ -189,6 +190,7 @@ impl<'d> RpcService<'d> {
         router = add_service(router, health_service);
         router = router
             .layer(CallbackLayer::new(MakeMetricsHandler::new(metrics.clone())))
+            .layer(tower_http::trace::TraceLayer::new_for_grpc())
             .layer(axum::middleware::from_fn_with_state(
                 Version(version),
                 middleware::version::set_version,

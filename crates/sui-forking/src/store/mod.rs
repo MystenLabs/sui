@@ -181,8 +181,13 @@ impl ForkingStore {
     }
 
     pub fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<&TransactionEvents> {
-        println!("Fetching events for transaction digest: {:?}", digest);
-        todo!()
+        println!(
+            "TODO fetching transaction events is currently not supported in ForkingStore, and it \
+            retursn None"
+        );
+        None
+        // println!("Fetching events for transaction digest: {:?}", digest);
+        // todo!()
     }
 
     /// Tries to fetch the object at the latest version, and if not found, it will fetch it from
@@ -298,11 +303,6 @@ impl ForkingStore {
         self.fs_store
             .write_transaction(&tx_digest, tx_info)
             .unwrap();
-
-        println!(
-            "Trying to see what written objects are {:?}",
-            written_objects
-        );
 
         let objects = written_objects
             .into_iter()
@@ -743,30 +743,3 @@ impl ReadStore for ForkingStore {
         None
     }
 }
-// impl RpcStateReader for ForkingStore {
-//     fn get_lowest_available_checkpoint_objects(
-//         &self,
-//     ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
-//         Ok(0)
-//     }
-//
-//     fn get_chain_identifier(&self) -> sui_types::storage::error::Result<ChainIdentifier> {
-//         todo!()
-//     }
-//
-//     fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
-//         // No indexes available for forking store
-//         None
-//     }
-//
-//     fn get_struct_layout(
-//         &self,
-//         _type_tag: &move_core_types::language_storage::StructTag,
-//     ) -> sui_types::storage::error::Result<Option<move_core_types::annotated_value::MoveTypeLayout>>
-//     {
-//         // Type layout resolution not implemented for forking store
-//         Ok(None)
-//     }
-// }
-//
-// spin up this KvLoader based on gRPC ledger service and custom package resolver

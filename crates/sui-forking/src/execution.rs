@@ -15,6 +15,7 @@ use tracing::info;
 
 use crate::context::Context;
 use crate::store::ForkingStore;
+use sui_data_store::ObjectStore;
 
 /// Result of executing a transaction.
 pub struct ExecutionResult {
@@ -112,7 +113,7 @@ pub async fn dry_run_transaction(
 /// Fetch and cache all input objects for a transaction.
 pub async fn fetch_input_objects(
     context: &Context,
-    data_store: &mut ForkingStore,
+    data_store: &ForkingStore,
     tx_data: &TransactionData,
 ) -> Result<(), RpcError> {
     let input_objs = tx_data.input_objects().map_err(|e| {
@@ -144,9 +145,13 @@ pub async fn fetch_input_objects(
 }
 
 async fn fetch_and_cache_object_from_rpc(
-    data_store: &mut ForkingStore,
+    data_store: &ForkingStore,
     context: &Context,
     object_id: &ObjectID,
 ) -> Result<(), anyhow::Error> {
-    todo!()
+    let obj = data_store.get_object(object_id);
+
+    obj.ok_or_else(|| anyhow::anyhow!("Object {} not found in store during execution", object_id))?;
+
+    Ok(())
 }

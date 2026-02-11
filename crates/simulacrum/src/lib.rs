@@ -21,7 +21,7 @@ use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_framework_snapshot::load_bytecode_snapshot;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc;
@@ -53,7 +53,7 @@ use sui_types::{
     transaction::{Transaction, VerifiedTransaction},
 };
 
-use self::epoch_state::EpochState;
+pub use self::epoch_state::EpochState;
 pub use self::store::SimulatorStore;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
@@ -62,6 +62,7 @@ use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairP
 use sui_types::execution::ExecutionResult;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -257,6 +258,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &mut self,
         transaction_data: TransactionData,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        println!(
+            "Executing transaction impersonating sender: {:?}",
+            transaction_data.sender()
+        );
         // Create dummy signatures for each required signer
         let pk = SuiKeyPair::Ed25519(get_key_pair().1);
         let sig = pk.sign(transaction_data.sender().as_ref());
@@ -605,6 +610,14 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         self.epoch_state.epoch_start_state()
     }
 
+    pub fn system_state(&self) -> SuiSystemState {
+        self.store.get_system_state()
+    }
+
+    pub fn protocol_config(&self) -> ProtocolConfig {
+        self.epoch_state.protocol_config().clone()
+    }
+
     /// Return a handle to the internally held RNG.
     ///
     /// Returns a handle to the RNG used to create this Simulacrum for use as a source of
@@ -796,6 +809,7 @@ impl<'a> CommitteeWithKeys<'a> {
 
 impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
     fn get_validator_key(&self, name: &AuthorityName) -> &dyn Signer<AuthoritySignature> {
+        println!("Getting key for validator {name}");
         self.keystore.validator(name).unwrap()
     }
 

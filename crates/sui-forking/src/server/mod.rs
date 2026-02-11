@@ -42,6 +42,7 @@ use sui_pg_db::{Db, DbArgs, reset_database};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::ChainIdentifier,
+    effects::TransactionEffectsAPI,
     supported_protocol_versions::{
         Chain::{self},
         ProtocolConfig,
@@ -49,15 +50,18 @@ use sui_types::{
     transaction::Transaction,
 };
 
-use crate::grpc::TlsArgs as GrpcTlsArgs;
 use crate::grpc::transaction_execution_service::ForkingTransactionExecutionService;
 use crate::grpc::{RpcArgs as GrpcArgs, ledger_service::ForkingLedgerService};
 use crate::grpc::{RpcService as GrpcRpcService, consistent_store::ForkingConsistentStore};
+use crate::grpc::{TlsArgs as GrpcTlsArgs, subscription_service::ForkingSubscriptionService};
 use crate::{graphql::GraphQLClient, store::ForkingStore};
 
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer;
-use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer;
+use sui_rpc::proto::sui::rpc::v2::{
+    ledger_service_server::LedgerServiceServer,
+    subscription_service_server::SubscriptionServiceServer,
+};
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -283,6 +287,7 @@ async fn faucet(
 
     match response {
         Ok(effects) => {
+            println!("Effects {:?}", effects.created());
             let effects_bytes = bcs::to_bytes(&effects).unwrap();
             let effects_base64 =
                 base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &effects_bytes);
@@ -412,6 +417,7 @@ pub async fn start_server(
         protocol_version,
     };
 
+    let subscription_service = ForkingSubscriptionService::new(context.clone());
     let consistent_store = ForkingConsistentStore::new(context.clone());
     let ledger_service = ForkingLedgerService::new(simulacrum.clone(), ChainIdentifier::random());
     let tx_execution_service = ForkingTransactionExecutionService::new(context.clone());
@@ -423,6 +429,7 @@ pub async fn start_server(
         )
         .add_service(ConsistentServiceServer::new(consistent_store))
         .add_service(LedgerServiceServer::new(ledger_service))
+        .add_service(SubscriptionServiceServer::new(subscription_service))
         .add_service(TransactionExecutionServiceServer::new(tx_execution_service));
     let grpc_service = grpc.run().await?;
 
@@ -474,7 +481,7 @@ pub async fn start_server(
     Ok(())
 }
 
-const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6"];
+const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x5", "0x6"];
 
 /// Update system objects to the versions at the forking checkpoint
 async fn update_system_objects(context: crate::context::Context) -> anyhow::Result<()> {

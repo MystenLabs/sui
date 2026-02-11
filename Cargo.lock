@@ -14861,6 +14861,7 @@ dependencies = [
  "tap",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "tokio-util 0.7.18",
  "tonic 0.14.3",
  "tonic-health",
