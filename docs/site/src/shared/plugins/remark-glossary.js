@@ -99,8 +99,7 @@ function remarkGlossary(options = {}) {
     const INLINE_SKIP = new Set(["inlineCode", "link", "linkReference"]);
 
     return function transformer(tree) {
-        console.log(">>> Processing file with", entries.length, "glossary entries");
-
+        
         // Track which terms have been processed on this page (case-insensitive)
         const processedTerms = new Set();
 

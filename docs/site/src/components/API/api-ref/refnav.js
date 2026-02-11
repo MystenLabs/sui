@@ -9,38 +9,37 @@ const RefNav = (props) => {
   const { json, apis } = props;
 
   return (
-    <div className="mb-8">
+    <div className="mb-8 api-nav">
       <div className="sticky -top-12 -mt-8 pt-8 pb-2 bg-white dark:bg-ifm-background-color-dark">
-        <NetworkSelect />
+        <div className="api-card api-card-pad">
+          <NetworkSelect />
+        </div>
       </div>
 
       {apis.map((api) => {
+        const apiId = api.replaceAll(/\s/g, "-").toLowerCase();
         return (
-          <div key={`${api.replaceAll(/\s/g, "-").toLowerCase()}`}>
+          <div key={apiId} className="api-nav-group">
             <Link
-              href={`#${api.replaceAll(/\s/g, "-").toLowerCase()}`}
-              data-to-scrollspy-id={`${api
-                .replaceAll(/\s/g, "-")
-                .toLowerCase()}`}
-              className="hover:no-underline pt-4 block text-black dark:text-white hover:text-sui-blue dark:hover:text-sui-blue"
+              href={`#${apiId}`}
+              data-to-scrollspy-id={apiId}
+              className="api-nav-link api-nav-title"
             >
               {api}
             </Link>
+
             {json["methods"]
-              .filter((method) => method.tags[0].name == api)
-              .map((method) => {
-                return (
-                  <Link
-                    className="my-1 pl-4 block text-sui-gray-95 dark:text-sui-grey-35 hover:no-underline dark:hover:text-sui-blue"
-                    key={`link-${method.name.toLowerCase()}`}
-                    href={`#${method.name.toLowerCase()}`}
-                    data-to-scrollspy-id={`${method.name.toLowerCase()}`}
-                  >
-                    {method.name}
-                  </Link>
-                );
-              })}
-              
+              .filter((method) => method.tags[0].name === api)
+              .map((method) => (
+                <Link
+                  key={`link-${method.name.toLowerCase()}`}
+                  href={`#${method.name.toLowerCase()}`}
+                  data-to-scrollspy-id={method.name.toLowerCase()}
+                  className="api-nav-link"
+                >
+                  {method.name}
+                </Link>
+              ))}
           </div>
         );
       })}
