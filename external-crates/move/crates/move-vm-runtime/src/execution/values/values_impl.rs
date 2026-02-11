@@ -2004,7 +2004,20 @@ impl VectorRef {
     pub fn as_bytes_ref(&self) -> PartialVMResult<std::cell::Ref<'_, Vec<u8>>> {
         let borrowed = self.0.borrow();
         match &*borrowed {
-            Value::PrimVec(PrimVec::VecU8(_)) => (),
+            Value::PrimVec(PrimVec::VecU8(_)) => {
+                #[allow(clippy::unreachable)]
+                // We just checked the type, so this match should always succeed. If it fails, who knows:
+                // we should just panic full stop.
+                Ok(std::cell::Ref::map(borrowed, |value| {
+                    match value {
+                        Value::PrimVec(PrimVec::VecU8(vec)) => vec,
+                        // We already checked, but provide a safe fallback
+                        _ => unreachable!(
+                            "INTERNAL PANIC: Value changed between matching and borrowing."
+                        ),
+                    }
+                }))
+            }
             Value::PrimVec(_)
             | Value::Invalid
             | Value::U8(_)
@@ -2018,24 +2031,12 @@ impl VectorRef {
             | Value::Vec(_)
             | Value::Struct(_)
             | Value::Variant(_)
-            | Value::Reference(_) => {
-                return Err(partial_vm_error!(
-                    INTERNAL_TYPE_ERROR,
-                    "expected vector<u8>, found {:?}",
-                    self
-                ));
-            }
-        };
-        #[allow(clippy::unreachable)]
-        // We just checked the type, so this match should always succeed. If it fails, who knows:
-        // we should just panic full stop.
-        Ok(std::cell::Ref::map(borrowed, |value| {
-            match value {
-                Value::PrimVec(PrimVec::VecU8(vec)) => vec,
-                // We already checked, but provide a safe fallback
-                _ => unreachable!("INTERNAL PANIC: Value changed between matching and borrowing."),
-            }
-        }))
+            | Value::Reference(_) => Err(partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "expected vector<u8>, found {:?}",
+                self
+            )),
+        }
     }
 
     pub fn pop(&self, type_param: &Type) -> PartialVMResult<Value> {
