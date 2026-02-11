@@ -4950,6 +4950,8 @@ impl ProtocolConfig {
 
     pub fn enable_coin_reservation_for_testing(&mut self) {
         self.feature_flags.enable_coin_reservation_obj_refs = true;
+        self.feature_flags
+            .convert_withdrawal_compatibility_ptb_arguments = true;
     }
 
     pub fn create_root_accumulator_object_for_testing(&mut self) {
