@@ -6,12 +6,14 @@
 use crate::crypto::{BridgeAuthorityPublicKeyBytes, verify_signed_bridge_action};
 use crate::error::{BridgeError, BridgeResult};
 use crate::server::APPLICATION_JSON;
-use crate::types::{BridgeAction, BridgeCommittee, VerifiedSignedBridgeAction};
+use crate::types::{BridgeAction, BridgeCommittee, SignedBridgeAction, VerifiedSignedBridgeAction};
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::ToFromBytes;
 use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
+
+const MAX_BRIDGE_CLIENT_RESPONSE_SIZE: usize = 1024 * 1024;
 
 // Note: `base_url` is `Option<Url>` because `quorum_map_then_reduce_with_timeout_and_prefs`
 // uses `[]` to get Client based on key. Therefore even when the URL is invalid we need to
@@ -223,7 +225,10 @@ impl BridgeClient {
             .await?;
         if !resp.status().is_success() {
             let error_status = format!("{:?}", resp.error_for_status_ref());
-            let resp_text = resp.text().await?;
+            let resp_text = String::from_utf8_lossy(
+                &read_limited_response_bytes(resp, MAX_BRIDGE_CLIENT_RESPONSE_SIZE).await?,
+            )
+            .to_string();
             return match resp_text {
                 text if text.contains(&format!("{:?}", BridgeError::TxNotFinalized)) => {
                     Err(BridgeError::TxNotFinalized)
@@ -234,7 +239,12 @@ impl BridgeClient {
                 ))),
             };
         }
-        let signed_bridge_action = resp.json().await?;
+        let signed_bridge_action: SignedBridgeAction = serde_json::from_slice(
+            &read_limited_response_bytes(resp, MAX_BRIDGE_CLIENT_RESPONSE_SIZE).await?,
+        )
+        .map_err(|e| {
+            BridgeError::RestAPIError(format!("Failed to deserialize bridge action response: {e}"))
+        })?;
         verify_signed_bridge_action(
             &action,
             signed_bridge_action,
@@ -242,6 +252,33 @@ impl BridgeClient {
             &self.committee,
         )
     }
+}
+
+async fn read_limited_response_bytes(
+    mut response: reqwest::Response,
+    max_size: usize,
+) -> BridgeResult<Vec<u8>> {
+    if let Some(content_length) = response.content_length()
+        && content_length as usize > max_size
+    {
+        return Err(BridgeError::RestAPIError(format!(
+            "Response too large: {} bytes (max: {})",
+            content_length, max_size
+        )));
+    }
+
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await? {
+        if bytes.len() + chunk.len() > max_size {
+            return Err(BridgeError::RestAPIError(format!(
+                "Response too large: exceeded {} bytes",
+                max_size
+            )));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -638,5 +675,32 @@ mod tests {
             BridgeClient::bridge_action_to_path(&action),
             "sign/add_tokens_on_evm/12/0/1/99,100,101/0x0101010101010101010101010101010101010101,0x0202020202020202020202020202020202020202,0x0303030303030303030303030303030303030303/5,6,7/1000000000,2000000000,3000000000",
         );
+    }
+
+    #[tokio::test]
+    async fn test_read_limited_response_bytes_rejects_oversized_response() {
+        let app = axum::Router::new().route(
+            "/large",
+            axum::routing::get(|| async { "a".repeat(MAX_BRIDGE_CLIENT_RESPONSE_SIZE + 1) }),
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let response = reqwest::Client::new()
+            .get(format!("http://{addr}/large"))
+            .send()
+            .await
+            .unwrap();
+
+        let err = read_limited_response_bytes(response, MAX_BRIDGE_CLIENT_RESPONSE_SIZE)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, BridgeError::RestAPIError(_)));
+
+        server.abort();
     }
 }
