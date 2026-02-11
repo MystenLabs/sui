@@ -1677,12 +1677,12 @@ mod test {
 
         // Create network config with transaction trace logging enabled
         let mut network_config = ConfigBuilder::new_with_temp_dir()
-            .with_num_validators(4)
-            .with_epoch_duration_ms(10_000)
+            .committee_size(NonZeroUsize::new(4).unwrap())
+            .with_epoch_duration(10_000)
             .build();
 
-        // Enable transaction trace logging for all validators
-        for validator_config in network_config.validator_configs_mut() {
+        // Enable transaction trace logging and configure authority overload for all validators
+        for validator_config in &mut network_config.validator_configs {
             validator_config.transaction_trace_config =
                 Some(sui_config::node::TransactionTraceConfig {
                     log_dir: Some(trace_log_dir.clone()),
@@ -1691,17 +1691,22 @@ mod test {
                     buffer_capacity: Some(1000),
                     flush_interval_secs: Some(1), // Fast flush for testing
                 });
+
+            // Configure authority overload settings
+            validator_config
+                .authority_overload_config
+                .check_system_overload_at_execution = false;
+            validator_config
+                .authority_overload_config
+                .check_system_overload_at_signing = false;
         }
 
-        // Build test cluster with transaction tracing enabled
+        // Build test cluster with transaction tracing enabled.
+        // We use set_network_config to provide the custom config.
+        // Note: We can't use with_authority_overload_config or with_submit_delay_step_override_millis
+        // after set_network_config as they assert network_config.is_none().
         let test_cluster = TestClusterBuilder::new()
             .set_network_config(network_config)
-            .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_execution: false,
-                check_system_overload_at_signing: false,
-                ..Default::default()
-            })
-            .with_submit_delay_step_override_millis(3000)
             .disable_fullnode_pruning()
             .with_synthetic_execution_time_injection()
             .build()
@@ -1731,8 +1736,8 @@ mod test {
         let mut all_events = Vec::new();
         for trace_file in &trace_files {
             println!("Reading trace file: {}", trace_file.display());
-            let reader = sui_transaction_trace::LogReader::new(trace_file).unwrap();
-            for event_result in reader {
+            let mut reader = sui_transaction_trace::LogReader::new(trace_file).unwrap();
+            for event_result in reader.iter() {
                 let event = event_result.unwrap();
                 all_events.push(event);
             }
@@ -1748,7 +1753,7 @@ mod test {
         // Convert to Chrome trace format
         println!("\nConverting to Chrome trace format...");
         let chrome_events =
-            sui_transaction_trace::chrome_trace::convert_to_chrome_trace(&all_events, &tx_data_map);
+            sui_transaction_trace::chrome_trace::convert_to_chrome_trace(all_events, tx_data_map);
 
         println!("Generated {} Chrome trace events", chrome_events.len());
 
