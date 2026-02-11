@@ -318,8 +318,11 @@ fn convert_minor_code_to_sub_status_code(
         sp!(_, KA::MinorCode_::Value(value)) => Some(MoveErrorType::Code(*value)),
         sp!(loc, KA::MinorCode_::Constant(module, member)) => {
             let Some(module_constants) = context.constants().get(module) else {
-                // NB: Name resolution _should_ have already complained about this.
-                debug_assert!(context.env.has_errors());
+                context.add_diag(diag!(
+                    Attributes::InvalidValue,
+                    (*loc, INVALID_VALUE),
+                    (module.loc, format!("Unbound module '{module}'")),
+                ));
                 return None;
             };
             let Some(constant) = module_constants.get_(&member.value) else {
