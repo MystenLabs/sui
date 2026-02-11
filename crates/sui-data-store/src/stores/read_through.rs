@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::{Error, Result};
 use sui_types::{
-    base_types::ObjectID, object::Object, supported_protocol_versions::ProtocolConfig,
+    object::Object, supported_protocol_versions::ProtocolConfig,
 };
 
 /// A read-through store that composes a primary (cache) and a secondary (source) store.
