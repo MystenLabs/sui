@@ -1298,16 +1298,19 @@ macro_rules! impl_count_type_nodes {
                 let mut todo = vec![self];
                 let mut result = 0u64;
                 while let Some(ty) = todo.pop() {
-                    result = result.safe_add(1)?;
                     match ty {
                         $ty::Vector(ty) | $ty::Reference(ty) | $ty::MutableReference(ty) => {
+                            result = result.safe_add(1)?;
                             todo.push(ty);
                         }
                         $ty::DatatypeInstantiation(struct_inst) => {
                             let (_, ty_args) = &**struct_inst;
+                            result = result.safe_add(1)?;
                             todo.extend(ty_args.iter());
                         }
-                        _ => {}
+                        _ => {
+                            result = result.safe_add(1)?;
+                        }
                     }
                 }
                 Ok(result)

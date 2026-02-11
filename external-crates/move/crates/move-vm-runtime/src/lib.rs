@@ -8,10 +8,10 @@
 //! other blockchains can use it as well. The VM isn't there yet, but hopefully will be there
 //! soon.
 #![deny(
+    clippy::arithmetic_side_effects,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    clippy::arithmetic_side_effects,
     clippy::expect_used,
     clippy::indexing_slicing,
     clippy::panic,
