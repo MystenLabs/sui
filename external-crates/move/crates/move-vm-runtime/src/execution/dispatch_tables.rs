@@ -11,8 +11,7 @@ use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
     execution::vm::DatatypeInfo,
     jit::execution::ast::{
-        ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
-        TypeSubst,
+        ArenaType, Datatype, DatatypeDescriptor, Function, Package, Type, TypeNodeCount, TypeSubst,
     },
     shared::{
         constants::{
@@ -33,7 +32,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     annotated_value,
-    identifier::Identifier,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     runtime_value,
 };
@@ -100,23 +99,24 @@ pub struct PackageVirtualTable {
 /// modules. It exposes an intentionally spartan interface to prevent any unexpected behavior
 /// (e.g., unstable iteration ordering) that Rust's standard collections run afoul of.
 #[derive(Debug)]
-pub struct DefinitionMap<Value>(HashMap<IntraPackageKey, Value>);
+pub(crate) struct DefinitionMap<Value>(HashMap<IntraPackageKey, Value>);
 
 /// original_address::module_name::function_name
 /// NB: This relies on no boxing -- if this introduces boxes, the arena allocation in the execution
 /// AST will leak memory.
-/// TODO: This key should be private to the VM, but it is currently used in a few representations
-/// that are handed out of the VM. For now, the fields are private.
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
-pub struct VirtualTableKey {
-    pub(crate) package_key: OriginalId,
-    pub(crate) inner_pkg_key: IntraPackageKey,
+struct VirtualTableKey_ {
+    package_key: OriginalId,
+    inner_pkg_key: IntraPackageKey,
 }
 
-/// TODO: This key should be private to the VM, but it is currently used in a few representations
-/// that are handed out of the VM. For now, the fields are private.
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+#[repr(transparent)]
+/// original_address::module_name::function_name
+pub struct VirtualTableKey(VirtualTableKey_);
+
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
-pub struct IntraPackageKey {
+pub(crate) struct IntraPackageKey {
     pub(crate) module_name: IdentifierKey,
     pub(crate) member_name: IdentifierKey,
 }
@@ -194,38 +194,18 @@ impl VMDispatchTables {
             .ok_or_else(|| partial_vm_error!(VTABLE_KEY_LOOKUP_ERROR, "Package {} not found", id))
     }
 
-    pub fn resolve_loaded_module(
-        &self,
-        original_id: &ModuleId,
-    ) -> PartialVMResult<VMPointer<Module>> {
-        let (package, module_id) = original_id.into();
-        let package = self.loaded_packages.get(package).ok_or_else(|| {
-            partial_vm_error!(VTABLE_KEY_LOOKUP_ERROR, "Package {} not found", package)
-        })?;
-
-        let interned = self.interner.intern_identifier(module_id);
-
-        package
-            .loaded_modules
-            .get(&interned)
-            .map(VMPointer::from_ref)
-            .ok_or_else(|| {
-                partial_vm_error!(VTABLE_KEY_LOOKUP_ERROR, "Module {} not found", module_id)
-            })
-    }
-
-    pub fn resolve_function(
+    pub(crate) fn resolve_function(
         &self,
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<Function>> {
-        let Some(pkg) = self.loaded_packages.get(&vtable_key.package_key) else {
+        let Some(pkg) = self.loaded_packages.get(&vtable_key.0.package_key) else {
             return Err(partial_vm_error!(
                 VTABLE_KEY_LOOKUP_ERROR,
                 "Could not find package {}",
-                vtable_key.package_key
+                vtable_key.0.package_key
             ));
         };
-        if let Some(function_) = pkg.vtable.functions.get(&vtable_key.inner_pkg_key) {
+        if let Some(function_) = pkg.vtable.functions.get(&vtable_key.0.inner_pkg_key) {
             Ok(function_.ptr_clone())
         } else {
             Err(partial_vm_error!(
@@ -236,18 +216,18 @@ impl VMDispatchTables {
         }
     }
 
-    pub fn resolve_type(
+    pub(crate) fn resolve_type(
         &self,
         vtable_key: &VirtualTableKey,
     ) -> PartialVMResult<VMPointer<DatatypeDescriptor>> {
-        let Some(pkg) = self.loaded_packages.get(&vtable_key.package_key) else {
+        let Some(pkg) = self.loaded_packages.get(&vtable_key.0.package_key) else {
             return Err(partial_vm_error!(
                 VTABLE_KEY_LOOKUP_ERROR,
                 "Could not find package {}",
-                vtable_key.package_key
+                vtable_key.0.package_key
             ));
         };
-        if let Some(type_) = pkg.vtable.types.get(&vtable_key.inner_pkg_key) {
+        if let Some(type_) = pkg.vtable.types.get(&vtable_key.0.inner_pkg_key) {
             Ok(type_.ptr_clone())
         } else {
             Err(partial_vm_error!(
@@ -256,6 +236,17 @@ impl VMDispatchTables {
                 vtable_key.to_string(&self.interner)
             ))
         }
+    }
+
+    pub fn to_virtual_table_key(
+        &self,
+        package_id: &OriginalId,
+        module: &IdentStr,
+        name: &IdentStr,
+    ) -> VirtualTableKey {
+        let module_name = self.interner.intern_ident_str(module);
+        let member_name = self.interner.intern_ident_str(name);
+        VirtualTableKey::from_parts(*package_id, module_name, member_name)
     }
 }
 
@@ -293,15 +284,8 @@ impl VMDispatchTables {
                     )
                     .finish(Location::Undefined)
                 })?;
-                let module_name = self.interner.intern_identifier(&struct_tag.module);
-                let member_name = self.interner.intern_identifier(&struct_tag.name);
-                let key = VirtualTableKey {
-                    package_key,
-                    inner_pkg_key: IntraPackageKey {
-                        module_name,
-                        member_name,
-                    },
-                };
+                let key =
+                    self.to_virtual_table_key(&package_key, &struct_tag.module, &struct_tag.name);
                 let datatype = self
                     .resolve_type(&key)
                     .map_err(|e| e.finish(Location::Undefined))?
@@ -310,11 +294,13 @@ impl VMDispatchTables {
                 // The computed runtime ID should match the runtime ID of the datatype that we have
                 // loaded.
                 if datatype.original_id.address() != &package_key {
-                    return Err(
-                        partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "Runtime ID resolution of {defining_id} => {package_key} does not match runtime ID of loaded type: {}",
-                                datatype.original_id.address())
-                            .finish(Location::Undefined),
-                    );
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Runtime ID resolution of {defining_id} \
+                            => {package_key} does not match runtime ID of loaded type: {}",
+                        datatype.original_id.address()
+                    )
+                    .finish(Location::Undefined));
                 }
                 // The defining ID should match the defining ID of the datatype that we
                 // have loaded.
@@ -996,7 +982,7 @@ impl DepthFormula {
 // ------------------------------------------------------------------------
 
 impl PackageVirtualTable {
-    pub fn new(
+    pub(crate) fn new(
         functions: DefinitionMap<VMPointer<Function>>,
         types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
     ) -> Self {
@@ -1023,11 +1009,6 @@ impl<T> DefinitionMap<T> {
         Self(HashMap::new())
     }
 
-    /// Indicates if the DefinitionMap is empty or not.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
     /// Returns the number of entries in the map
     pub fn len(&self) -> usize {
         self.0.len()
@@ -1050,22 +1031,6 @@ impl<T> DefinitionMap<T> {
         Ok(())
     }
 
-    /// Creates a new DefintionMap, producing an error if a duplicate key is found.
-    pub fn from_unique(
-        items: impl IntoIterator<Item = (IntraPackageKey, T)>,
-    ) -> PartialVMResult<Self> {
-        let mut map = HashMap::new();
-        for (name, value) in items {
-            if map.insert(name, value).is_some() {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Duplicate vtable key when making new vtable"
-                ));
-            }
-        }
-        Ok(Self(map))
-    }
-
     /// Retrieve a key from the definition map.
     pub fn get(&self, key: &IntraPackageKey) -> Option<&T> {
         self.0.get(key)
@@ -1073,53 +1038,58 @@ impl<T> DefinitionMap<T> {
 }
 
 impl VirtualTableKey {
-    pub fn new(package_key: OriginalId, inner_pkg_key: IntraPackageKey) -> Self {
-        Self {
-            package_key,
-            inner_pkg_key,
-        }
-    }
-
+    /// [SAFETY] This cannot be ade public, because it may lead to panics in the interner.
     pub(crate) fn from_parts(
         package_key: OriginalId,
         module_name: IdentifierKey,
         member_name: IdentifierKey,
     ) -> Self {
-        Self {
+        let inner = VirtualTableKey_ {
             package_key,
             inner_pkg_key: IntraPackageKey {
                 module_name,
                 member_name,
             },
-        }
+        };
+        VirtualTableKey(inner)
+    }
+
+    /// [SAFETY] This cannot be ade public, because it may lead to panics in the interner.
+    pub(crate) fn intra_package_key(&self) -> &IntraPackageKey {
+        &self.0.inner_pkg_key
+    }
+
+    /// [SAFETY] This cannot be ade public, because it may lead to panics in the interner.
+    pub(crate) fn package_key(&self) -> OriginalId {
+        self.0.package_key
     }
 
     pub fn module_id(&self, interner: &IdentifierInterner) -> ModuleId {
-        let module_name = interner.resolve_ident(&self.inner_pkg_key.module_name, "module name");
-        ModuleId::new(self.package_key, module_name)
+        let module_name = interner.resolve_ident(&self.0.inner_pkg_key.module_name, "module name");
+        ModuleId::new(self.0.package_key, module_name)
     }
 
     pub fn member_name(&self, interner: &IdentifierInterner) -> Identifier {
-        interner.resolve_ident(&self.inner_pkg_key.member_name, "member name")
+        interner.resolve_ident(&self.0.inner_pkg_key.member_name, "member name")
     }
 
     pub fn to_string(&self, interner: &IdentifierInterner) -> String {
-        let inner_name = self.inner_pkg_key.to_string(interner);
-        format!("{}::{}", self.package_key, inner_name)
+        let inner_name = self.0.inner_pkg_key.to_string(interner);
+        format!("{}::{}", self.0.package_key, inner_name)
     }
 
     pub fn to_short_string(&self, interner: &IdentifierInterner) -> String {
-        let inner_name = self.inner_pkg_key.to_string(interner);
+        let inner_name = self.0.inner_pkg_key.to_string(interner);
         format!(
             "0x{}::{}",
-            self.package_key.short_str_lossless(),
+            self.0.package_key.short_str_lossless(),
             inner_name,
         )
     }
 }
 
 impl IntraPackageKey {
-    pub fn to_string(&self, interner: &IdentifierInterner) -> String {
+    pub fn to_string(self, interner: &IdentifierInterner) -> String {
         let module_name = interner.resolve_ident(&self.module_name, "module name");
         let member_name = interner.resolve_ident(&self.member_name, "member name");
         format!("{}::{}", module_name, member_name)

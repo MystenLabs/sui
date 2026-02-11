@@ -12,10 +12,7 @@ use crate::{
         storage::{InMemoryStorage, StoredPackage},
         vm_test_adapter::VMTestAdapter,
     },
-    execution::{
-        dispatch_tables::{DepthFormula, IntraPackageKey, VirtualTableKey},
-        values::Value,
-    },
+    execution::{dispatch_tables::DepthFormula, values::Value},
     jit::execution::ast::Type,
     natives::functions::NativeFunctions,
     runtime::MoveRuntime,
@@ -211,15 +208,14 @@ impl Adapter {
     ) -> DepthFormula {
         let vm = self.runtime_adapter.write();
         let mut session = vm.make_vm(self.store.linkage.clone()).unwrap();
+        let key = session.virtual_tables.to_virtual_table_key(
+            module_id.address(),
+            module_id.name(),
+            struct_name,
+        );
         session
             .virtual_tables
-            .calculate_depth_of_type(&VirtualTableKey {
-                package_key: *module_id.address(),
-                inner_pkg_key: IntraPackageKey {
-                    module_name: session.interner.intern_ident_str(module_id.name()),
-                    member_name: session.interner.intern_ident_str(struct_name),
-                },
-            })
+            .calculate_depth_of_type(&key)
             .expect("computing depth of datatype should succeed")
     }
 
