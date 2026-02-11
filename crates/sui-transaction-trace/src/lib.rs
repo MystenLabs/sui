@@ -251,7 +251,7 @@ impl TransactionTraceLogger {
     /// Holds a mutex only for buffer operations. I/O happens on background thread.
     pub fn write_transaction_event(
         &self,
-        digest: TransactionDigest,
+        digest: impl AsRef<[u8; 32]>,
         event_type: TxEventType,
     ) -> Result<()> {
         if !self.enabled {
@@ -292,9 +292,10 @@ impl TransactionTraceLogger {
             } else {
                 LogRecord::DeltaTimeLarge(elapsed)
             });
-        state
-            .buffer
-            .push(LogRecord::TransactionEvent { digest, event_type });
+        state.buffer.push(LogRecord::TransactionEvent {
+            digest: *digest.as_ref(),
+            event_type,
+        });
         state.last_instant = now;
 
         Ok(())
