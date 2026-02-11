@@ -1834,8 +1834,13 @@ mod test {
                         })
                         .collect();
 
+                    // Use hex encoding to match chrome_trace converter expectations
+                    let digest_hex = digest_bytes
+                        .iter()
+                        .map(|b| format!("{:02x}", b))
+                        .collect::<String>();
                     map.insert(
-                        digest.base58_encode(),
+                        digest_hex,
                         sui_transaction_trace::chrome_trace::TransactionData { input_objects },
                     );
                 }
