@@ -214,6 +214,31 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         }
     }
 
+    pub fn new_from_custom_state(
+        keystore: KeyStore,
+        checkpoint: VerifiedCheckpoint,
+        system_state: SuiSystemState,
+        config: &NetworkConfig,
+        store: S,
+        rng: R,
+    ) -> Self {
+        let checkpoint_builder = MockCheckpointBuilder::new(checkpoint);
+        let epoch_state = EpochState::new(system_state);
+        Self {
+            rng,
+            keystore,
+            // this genesis is not used whatsoever, but it's required.
+            genesis: config.genesis.clone(),
+            store,
+            checkpoint_builder,
+            epoch_state,
+            deny_config: TransactionDenyConfig::default(),
+            verifier_signing_config: VerifierSigningConfig::default(),
+            certificate_deny_config: CertificateDenyConfig::default(),
+            data_ingestion_path: None,
+        }
+    }
+
     // TODO: forking: move this to main
     /// Execute a transaction while impersonating a specific sender.
     ///
@@ -577,6 +602,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             epoch_commitments: vec![],
         };
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
+        println!(
+            "Creating checkpoint for end of epoch {} with committee {:?}",
+            next_epoch, committee.committee
+        );
         let (checkpoint, contents, _) = self.checkpoint_builder.build_end_of_epoch(
             &committee,
             self.store.get_clock().timestamp_ms(),
