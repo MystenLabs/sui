@@ -474,14 +474,13 @@ pub fn compute_symbols_typed_program(
             if let Some(mod_defs) = computation_data
                 .mod_outer_defs
                 .get(&parsing_info.mod_ident_str)
+                && *fhash != mod_defs.fhash
             {
-                if *fhash != mod_defs.fhash {
-                    let ext_path = compiled_pkg_info.mapped_files.file_path(fhash);
-                    file_mods
-                        .entry(ext_path.to_path_buf())
-                        .or_default()
-                        .insert(mod_defs.clone());
-                }
+                let ext_path = compiled_pkg_info.mapped_files.file_path(fhash);
+                file_mods
+                    .entry(ext_path.to_path_buf())
+                    .or_default()
+                    .insert(mod_defs.clone());
             }
         }
     }

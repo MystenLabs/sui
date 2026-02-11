@@ -135,10 +135,10 @@ impl<'a> ParsingAnalysisContext<'a> {
 
             // Set cursor.module if cursor is in this module (works for extensions too
             // since during parsing each extension is a separate module definition)
-            if let Some(cursor) = &mut self.cursor {
-                if mod_def.loc.contains(&cursor.loc) {
-                    cursor.module = Some(mod_ident);
-                }
+            if let Some(cursor) = &mut self.cursor
+                && mod_def.loc.contains(&cursor.loc)
+            {
+                cursor.module = Some(mod_ident);
             }
 
             // Set up per-module parsing data, keyed by file hash and module location
@@ -956,14 +956,13 @@ impl<'a> ParsingAnalysisContext<'a> {
                 }
             }
             B::Var(_, var) => {
-                if !explicitly_typed {
-                    if let Some(ref current_location) = self.current_location
-                        && let Some(mod_map) =
-                            self.mod_parsing_info.get_mut(&current_location.file_hash)
-                        && let Some(mod_parsing_info) = mod_map.get_mut(&current_location.mod_loc)
-                    {
-                        mod_parsing_info.untyped_defs.insert(var.loc());
-                    }
+                if !explicitly_typed
+                    && let Some(ref current_location) = self.current_location
+                    && let Some(mod_map) =
+                        self.mod_parsing_info.get_mut(&current_location.file_hash)
+                    && let Some(mod_parsing_info) = mod_map.get_mut(&current_location.mod_loc)
+                {
+                    mod_parsing_info.untyped_defs.insert(var.loc());
                 }
             }
         }
