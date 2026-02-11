@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{identifier::Identifier, u256::U256};
-use rand::{Rng, seq::SliceRandom};
+use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 use shared_crypto::intent::Intent;
 use std::{
     path::PathBuf,
@@ -3180,6 +3180,7 @@ async fn address_balance_stress_test() {
 
     // Spawn 8 tasks (2 per address)
     let mut handles = Vec::new();
+    let mut task_index: u64 = 0;
     for addr in addresses.iter().cloned() {
         let gas_objects = test_cluster
             .wallet
@@ -3193,16 +3194,18 @@ async fn address_balance_stress_test() {
             let coin_types = coin_types.clone();
             let success_count = Arc::clone(&success_count);
             let failure_count = Arc::clone(&failure_count);
+            let task_seed = task_index;
+            task_index += 1;
 
             let handle = tokio::spawn(async move {
+                // Use deterministic RNG seeded by task index for reproducibility
+                let mut rng = StdRng::seed_from_u64(task_seed);
                 let start_time = std::time::Instant::now();
                 let duration = std::time::Duration::from_secs(60);
                 let mut current_gas = gas_obj;
 
                 while start_time.elapsed() < duration {
                     let (selected_types, recipients) = {
-                        let mut rng = rand::thread_rng();
-
                         // Pick 1-5 random coin types
                         let num_coin_types = rng.gen_range(1..=5);
                         let mut selected_types = coin_types.clone();
@@ -3235,7 +3238,7 @@ async fn address_balance_stress_test() {
                         let mut transfers = Vec::new();
                         for recipient in &recipients {
                             // Amount between 100 and 1500 - sometimes will exceed balance
-                            let amount = rand::thread_rng().gen_range(100..=1500);
+                            let amount = rng.gen_range(100..=1500);
                             transfers.push((amount, *recipient));
                             *total_reservation_per_type
                                 .entry(coin_type.clone())
