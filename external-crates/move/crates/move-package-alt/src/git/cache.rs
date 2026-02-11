@@ -245,8 +245,8 @@ impl GitTree {
                 "--porcelain",
                 "--",
                 path_in_repo,
-                ":!*/Move.lock",
-                ":!*/Published.toml",
+                ":!*Move.lock",
+                ":!*Published.toml",
             ])
             .await
         else {

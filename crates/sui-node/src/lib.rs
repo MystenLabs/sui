@@ -636,7 +636,7 @@ impl SuiNode {
         );
 
         let index_store = if is_full_node && config.enable_index_processing {
-            info!("creating index store");
+            info!("creating jsonrpc index store");
             Some(Arc::new(IndexStore::new(
                 config.db_path().join("indexes"),
                 &prometheus_registry,
@@ -650,6 +650,7 @@ impl SuiNode {
         };
 
         let rpc_index = if is_full_node && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
+            info!("creating rpc index store");
             Some(Arc::new(
                 RpcIndexStore::new(
                     &config.db_path(),
@@ -1188,7 +1189,7 @@ impl SuiNode {
                 quic_config.crypto_buffer_size = Some(1 << 20);
             }
             if quic_config.max_idle_timeout_ms.is_none() {
-                quic_config.max_idle_timeout_ms = Some(30_000);
+                quic_config.max_idle_timeout_ms = Some(10_000);
             }
             if quic_config.keep_alive_interval_ms.is_none() {
                 quic_config.keep_alive_interval_ms = Some(5_000);
@@ -2384,6 +2385,8 @@ async fn build_http_servers(
     if config.consensus_config().is_some() {
         return Ok((HttpServers::default(), None));
     }
+
+    info!("starting rpc service with config: {:?}", config.rpc);
 
     let mut router = axum::Router::new();
 

@@ -32,19 +32,19 @@ simple_visitor!(
         _function_name: FunctionName,
         fdef: &T::Function,
     ) -> bool {
+        // TODO link to docs about hot or not cliques
+        const PUBLIC_ENTRY_NOTE: &str = "`public` functions can be called from PTBs. `entry` can \
+            be used to allow non-`public` (private or `public(package)`) functions to be called \
+            from PTBs, although there will be additional restrictions on the input arguments to \
+            such functions.";
         let is_entry = fdef.entry.is_some();
         let is_public = matches!(fdef.visibility, Visibility::Public(_));
 
         if is_entry && is_public {
-            let mut d = diag!(
-                PUBLIC_ENTRY_DIAG,
-                (
-                    fdef.entry.unwrap(),
-                    "`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios."
-                )
-            );
-
-            d.add_note("`public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.");
+            let msg = "`entry` on `public` is meaningless. In conjunction with `public`, `entry` \
+                adds no additional permissions or restrictions.";
+            let mut d = diag!(PUBLIC_ENTRY_DIAG, (fdef.entry.unwrap(), msg));
+            d.add_note(PUBLIC_ENTRY_NOTE);
             self.add_diag(d);
             return true;
         }

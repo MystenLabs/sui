@@ -242,7 +242,7 @@ fn command<Mode: ExecutionMode>(
                 result_tys.len() == 1,
                 "make move vec should return exactly one vector"
             );
-            let T::Type::Vector(inner) = &result_tys[0] else {
+            let T::Type::Vector(inner) = result_tys.first().unwrap() else {
                 anyhow::bail!("make move vec should return a vector type, got {result_tys:?}");
             };
             anyhow::ensure!(
@@ -263,7 +263,7 @@ fn command<Mode: ExecutionMode>(
                 );
                 let cap = &env.upgrade_cap_type()?;
                 anyhow::ensure!(
-                    cap == &result_tys[0],
+                    cap == result_tys.first().unwrap(),
                     "publish should return {cap:?}, got {result_tys:?}",
                 );
             }
@@ -276,7 +276,7 @@ fn command<Mode: ExecutionMode>(
                 "upgrade should return exactly one receipt"
             );
             anyhow::ensure!(
-                receipt == &result_tys[0],
+                receipt == result_tys.first().unwrap(),
                 "upgrade should return {receipt:?}, got {result_tys:?}"
             );
         }

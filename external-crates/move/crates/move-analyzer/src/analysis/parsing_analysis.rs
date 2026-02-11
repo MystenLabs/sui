@@ -96,6 +96,10 @@ impl<'a> ParsingAnalysisContext<'a> {
             // we may have a module at parsing but no longer at typing
             // in case there is a name conflict with a dependency (and
             // mod_named_address_maps comes from typing modules)
+            // TODO(extensions): This location-based lookup fails for extension modules because
+            // extensions have different locations than the merged typed module. Extensions share
+            // the same NamedAddressMap as their base module, so we could use pkg_def.named_address_map
+            // to look up directly from parsing-level NamedAddressMaps instead.
             let Some(pkg_addresses) = typed_mod_named_address_maps.get(&mod_def.loc) else {
                 eprintln!(
                     "no typing-level named address maps for module {}",

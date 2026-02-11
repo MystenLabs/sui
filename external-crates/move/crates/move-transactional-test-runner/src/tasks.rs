@@ -354,7 +354,7 @@ impl<
 #[derive(Debug, Parser, Default)]
 pub struct EmptyCommand;
 
-fn parse_qualified_module_access(s: &str) -> Result<(ParsedAddress, Identifier, Identifier)> {
+pub fn parse_qualified_module_access(s: &str) -> Result<(ParsedAddress, Identifier, Identifier)> {
     let [addr_str, module_str, struct_str]: [&str; 3] =
         s.split("::").collect::<Vec<_>>().try_into().map_err(|e| {
             anyhow!(

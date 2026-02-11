@@ -3,7 +3,7 @@ module ModuleExt::M1 {
     #[test]
     fun test() {
         ModuleExt::M2::bar();
-        Symbols::M1::baz();
+        ModIdentUniform::M1::baz();
     }
 }
 

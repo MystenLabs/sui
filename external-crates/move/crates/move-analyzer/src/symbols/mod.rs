@@ -104,6 +104,7 @@ pub mod cursor;
 pub mod def_info;
 pub mod ide_strings;
 pub mod mod_defs;
+pub mod mod_extensions;
 pub mod requests;
 pub mod runner;
 pub mod use_def;
@@ -221,7 +222,6 @@ pub fn compute_symbols(
     let manifest_hash = compiled_pkg_info.manifest_hash;
     let cached_dep_opt = compiled_pkg_info.cached_deps.clone();
     let dep_hashes = compiled_pkg_info.dep_hashes.clone();
-    let edition = compiled_pkg_info.edition;
     let compiler_analysis_info = compiled_pkg_info.compiler_analysis_info.clone();
     let lsp_diags = compiled_pkg_info.lsp_diags.clone();
     let file_paths = compiled_pkg_info
@@ -278,7 +278,6 @@ pub fn compute_symbols(
                     program: Arc::new(program),
                     file_paths: Arc::new(file_paths),
                     user_file_hashes: Arc::new(user_file_hashes),
-                    edition,
                     compiler_analysis_info,
                     lsp_diags,
                 }),
@@ -486,10 +485,10 @@ fn update_file_use_defs(
     file_use_defs: &mut FileUseDefs,
 ) {
     for (fhash, use_defs) in &computation_data.use_defs {
-        let fpath = match mapped_files.file_name_mapping().get(fhash) {
-            Some(p) => p.as_path().to_string_lossy().to_string(),
-            None => return,
+        let Some(fpath) = mapped_files.file_name_mapping().get(fhash) else {
+            continue;
         };
+        let fpath = fpath.as_path().to_string_lossy().to_string();
 
         let fpath_buffer =
             dunce::canonicalize(fpath.clone()).unwrap_or_else(|_| PathBuf::from(fpath.as_str()));
@@ -637,7 +636,7 @@ fn pre_process_typed_modules(
     use_defs: &mut BTreeMap<FileHash, UseDefMap>,
     references: &mut References,
     def_info: &mut DefMap,
-    edition: &Option<Edition>,
+    edition: &Edition,
     mut cursor_context: Option<&mut CursorContext>,
     compiler_analysis_info: &CompilerAnalysisInfo,
 ) {
@@ -780,7 +779,7 @@ fn get_mod_outer_defs(
     files: &MappedFiles,
     references: &mut References,
     def_info: &mut DefMap,
-    edition: &Option<Edition>,
+    edition: &Edition,
     compiler_analysis_info: &CompilerAnalysisInfo,
 ) -> (ModuleDefs, UseDefMap) {
     let mut structs = BTreeMap::new();
@@ -816,9 +815,7 @@ fn get_mod_outer_defs(
                 },
             },
         );
-        let pub_struct = edition
-            .map(|e| e.supports(FeatureGate::PositionalFields))
-            .unwrap_or(false);
+        let pub_struct = edition.supports(FeatureGate::PositionalFields);
         let visibility = if pub_struct {
             // fake location OK as this is for display purposes only
             Visibility::Public(Loc::invalid())

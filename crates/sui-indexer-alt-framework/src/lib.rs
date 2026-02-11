@@ -156,10 +156,6 @@ pub struct Indexer<S: Store> {
     /// unless overridden by [Self::default_next_checkpoint].
     first_ingestion_checkpoint: u64,
 
-    /// The minimum next_checkpoint across all sequential pipelines. This is used to initialize
-    /// the regulator to prevent ingestion from running too far ahead of sequential pipelines.
-    next_sequential_checkpoint: Option<u64>,
-
     /// The service handles for every pipeline, used to manage lifetimes and graceful shutdown.
     pipelines: Vec<Service>,
 }
@@ -237,7 +233,6 @@ impl<S: Store> Indexer<S> {
             },
             added_pipelines: BTreeSet::new(),
             first_ingestion_checkpoint: u64::MAX,
-            next_sequential_checkpoint: None,
             pipelines: vec![],
         })
     }
@@ -271,13 +266,6 @@ impl<S: Store> Indexer<S> {
         })
     }
 
-    /// The minimum next checkpoint across all sequential pipelines. This value is used to
-    /// initialize the ingestion regulator's high watermark to prevent ingestion from running
-    /// too far ahead of sequential pipelines.
-    pub fn next_sequential_checkpoint(&self) -> Option<u64> {
-        self.next_sequential_checkpoint
-    }
-
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     ///
@@ -296,13 +284,15 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
+        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe();
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
             next_checkpoint,
             config,
             self.store.clone(),
             self.task.clone(),
-            self.ingestion_service.subscribe().0,
+            checkpoint_rx,
+            commit_hi_tx,
             self.metrics.clone(),
         ));
 
@@ -327,12 +317,10 @@ impl<S: Store> Indexer<S> {
 
         info!(self.first_ingestion_checkpoint, last_checkpoint = ?self.last_checkpoint, "Ingestion range");
 
+        let regulated = true;
         let mut service = self
             .ingestion_service
-            .run(
-                self.first_ingestion_checkpoint..=last_checkpoint,
-                self.next_sequential_checkpoint,
-            )
+            .run(self.first_ingestion_checkpoint..=last_checkpoint, regulated)
             .await
             .context("Failed to start ingestion service")?;
 
@@ -419,13 +407,7 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
-        // Track the minimum next_checkpoint across all sequential pipelines
-        self.next_sequential_checkpoint = Some(
-            self.next_sequential_checkpoint
-                .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
-        );
-
-        let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
+        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe();
 
         self.pipelines.push(sequential::pipeline::<H>(
             handler,
@@ -433,7 +415,7 @@ impl<T: TransactionalStore> Indexer<T> {
             config,
             self.store.clone(),
             checkpoint_rx,
-            watermark_tx,
+            commit_hi_tx,
             self.metrics.clone(),
         ));
 
@@ -1827,11 +1809,10 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify next_sequential_checkpoint is set correctly (10 + 1 = 11)
+        // Verify first ingestion checkpoint is set correctly (10 + 1 = 11)
         assert_eq!(
-            indexer.next_sequential_checkpoint(),
-            Some(11),
-            "next_sequential_checkpoint should be 11"
+            indexer.first_ingestion_checkpoint, 11,
+            "first_ingestion_checkpoint should be 11"
         );
 
         // Add second sequential pipeline
@@ -1845,9 +1826,8 @@ mod tests {
 
         // Should change to 6 (minimum of 6 and 11)
         assert_eq!(
-            indexer.next_sequential_checkpoint(),
-            Some(6),
-            "next_sequential_checkpoint should still be 6"
+            indexer.first_ingestion_checkpoint, 6,
+            "first_ingestion_checkpoint should still be 6"
         );
 
         // Run indexer to verify it can make progress past the initial hi and finish ingesting.

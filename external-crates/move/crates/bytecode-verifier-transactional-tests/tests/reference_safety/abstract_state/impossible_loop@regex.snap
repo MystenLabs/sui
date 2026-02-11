@@ -1,0 +1,115 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, line 45:
+//# view-abstract-state 0x2::loopy::t
+{
+  "0": {
+    "local_root": "ROOT",
+    "locals": {},
+    "graph": {
+      "nodes": {
+        "ROOT": true
+      },
+      "outgoing": {}
+    }
+  },
+  "2": {
+    "local_root": "ROOT",
+    "locals": {
+      "cur": {
+        "Reference": "r#cur"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#cur": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#cur": [
+            {
+              "labels": [
+                "s"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "s"
+              ],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "4": {
+    "local_root": "ROOT",
+    "locals": {
+      "cur": {
+        "Reference": "r#cur"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#cur": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#cur": [
+            {
+              "labels": [
+                "s"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "s"
+              ],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "13": {
+    "local_root": "ROOT",
+    "locals": {
+      "cur": {
+        "Reference": "r#cur"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#cur": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#cur": [
+            {
+              "labels": [
+                "s"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "s"
+              ],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}

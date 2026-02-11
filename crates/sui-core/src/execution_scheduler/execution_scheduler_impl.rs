@@ -24,7 +24,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
-use sui_config::node::AuthorityOverloadConfig;
+use sui_config::node::{AuthorityOverloadConfig, FundsWithdrawSchedulerType};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     base_types::{FullObjectID, ObjectID},
@@ -92,6 +92,7 @@ pub struct ExecutionScheduler {
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     address_funds_withdraw_scheduler: Arc<Mutex<Option<FundsWithdrawScheduler>>>,
+    funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
     metrics: Arc<AuthorityMetrics>,
 }
 
@@ -132,13 +133,18 @@ impl ExecutionScheduler {
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        tracing::info!("Creating new ExecutionScheduler");
+        tracing::info!(
+            ?funds_withdraw_scheduler_type,
+            "Creating new ExecutionScheduler"
+        );
         let address_funds_withdraw_scheduler = Self::initialize_funds_withdraw_scheduler(
             epoch_store,
             &object_cache_read,
             account_funds_read,
+            funds_withdraw_scheduler_type,
         );
         Self {
             object_cache_read,
@@ -148,6 +154,7 @@ impl ExecutionScheduler {
             address_funds_withdraw_scheduler: Arc::new(Mutex::new(
                 address_funds_withdraw_scheduler,
             )),
+            funds_withdraw_scheduler_type,
             metrics,
         }
     }
@@ -156,6 +163,7 @@ impl ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         object_cache_read: &Arc<dyn ObjectCacheRead>,
         account_funds_read: Arc<dyn AccountFundsRead>,
+        scheduler_type: FundsWithdrawSchedulerType,
     ) -> Option<FundsWithdrawScheduler> {
         let withdraw_scheduler_enabled =
             epoch_store.is_validator() && epoch_store.accumulators_enabled();
@@ -166,8 +174,11 @@ impl ExecutionScheduler {
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .expect("Accumulator root object must be present if funds accumulator is enabled")
             .version();
-        let address_funds_withdraw_scheduler =
-            FundsWithdrawScheduler::new(account_funds_read.clone(), starting_accumulator_version);
+        let address_funds_withdraw_scheduler = FundsWithdrawScheduler::new(
+            account_funds_read.clone(),
+            starting_accumulator_version,
+            scheduler_type,
+        );
 
         Some(address_funds_withdraw_scheduler)
     }
@@ -634,6 +645,7 @@ impl ExecutionScheduler {
             new_epoch_store,
             &self.object_cache_read,
             account_funds_read.clone(),
+            self.funds_withdraw_scheduler_type,
         );
         let mut guard = self.address_funds_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
@@ -672,7 +684,10 @@ impl ExecutionScheduler {
 
 #[cfg(test)]
 mod test {
-    use super::{BarrierDependencyBuilder, ExecutionScheduler, PendingCertificate};
+    use super::{
+        BarrierDependencyBuilder, ExecutionScheduler, FundsWithdrawSchedulerType,
+        PendingCertificate,
+    };
     use crate::authority::ExecutionEnv;
     use crate::authority::shared_object_version_manager::AssignedVersions;
     use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
@@ -713,6 +728,7 @@ mod test {
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),
+            FundsWithdrawSchedulerType::default(),
             state.metrics.clone(),
         );
 

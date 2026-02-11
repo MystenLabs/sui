@@ -2957,8 +2957,6 @@ impl TransactionDataAPI for TransactionDataV1 {
         }
 
         if !self.is_system_tx() {
-            let cost_table = SuiCostTable::new(config, self.gas_data.price);
-
             fp_ensure!(
                 !check_for_gas_price_too_high(config.gas_model_version())
                     || self.gas_data.price < config.max_gas_price(),
@@ -2967,6 +2965,7 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
                 .into()
             );
+            let cost_table = SuiCostTable::new(config, self.gas_data.price);
 
             fp_ensure!(
                 self.gas_data.budget <= cost_table.max_gas_budget,

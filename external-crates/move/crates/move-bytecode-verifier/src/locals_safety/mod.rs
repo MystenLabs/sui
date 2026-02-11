@@ -31,7 +31,8 @@ pub(crate) fn verify<'a>(
         meter,
         &mut LocalsSafetyAnalysis(),
         initial_state,
-    )
+    )?;
+    Ok(())
 }
 
 fn execute_inner(

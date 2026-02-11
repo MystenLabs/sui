@@ -659,11 +659,13 @@ impl Payload for CompositePayload {
             }
         }
         // we have to be conservative and include unknown rejections here
-        assert!(
-            permanent_failure_count + unknown_rejection_count
-                >= self.current_batch_num_conflicting_transactions,
-            "failure count should be greater than or equal to the number of conflicting transactions"
-        );
+        if permanent_failure_count + unknown_rejection_count
+            < self.current_batch_num_conflicting_transactions
+        {
+            debug_fatal!(
+                "failure count should be greater than or equal to the number of conflicting transactions"
+            );
+        }
         self.current_batch_op_sets.clear();
     }
 }

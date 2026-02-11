@@ -19,7 +19,6 @@ use crate::bigtable::proto::bigtable::v2::{Mutation, mutation};
 pub mod checkpoints;
 pub mod checkpoints_by_digest;
 pub mod epochs;
-pub mod object_types;
 pub mod objects;
 pub mod transactions;
 pub mod watermarks;
