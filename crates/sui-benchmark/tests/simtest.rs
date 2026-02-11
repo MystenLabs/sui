@@ -1681,18 +1681,21 @@ mod test {
             .with_epoch_duration(10_000)
             .build();
 
-        // Enable transaction trace logging and configure authority overload for all validators
-        for validator_config in &mut network_config.validator_configs {
-            validator_config.transaction_trace_config =
-                Some(sui_config::node::TransactionTraceConfig {
-                    log_dir: Some(trace_log_dir.clone()),
-                    max_file_size: Some(10 * 1024 * 1024), // 10MB
-                    max_file_count: Some(5),
-                    buffer_capacity: Some(1000),
-                    flush_interval_secs: Some(1), // Fast flush for testing
-                });
+        // Enable transaction trace logging on only the first validator and configure authority overload for all
+        for (idx, validator_config) in network_config.validator_configs.iter_mut().enumerate() {
+            // Only enable transaction tracing on the first validator
+            if idx == 0 {
+                validator_config.transaction_trace_config =
+                    Some(sui_config::node::TransactionTraceConfig {
+                        log_dir: Some(trace_log_dir.clone()),
+                        max_file_size: Some(10 * 1024 * 1024), // 10MB
+                        max_file_count: Some(5),
+                        buffer_capacity: Some(1000),
+                        flush_interval_secs: Some(1), // Fast flush for testing
+                    });
+            }
 
-            // Configure authority overload settings
+            // Configure authority overload settings for all validators
             validator_config
                 .authority_overload_config
                 .check_system_overload_at_execution = false;
