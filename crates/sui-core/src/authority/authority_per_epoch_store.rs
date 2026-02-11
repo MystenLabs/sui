@@ -1925,6 +1925,13 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    /// Fire an in-memory notification that a barrier transaction has been executed.
+    /// Unlike `insert_tx_key`, this does NOT persist to the DB, avoiding crash
+    /// inconsistency where the key survives restart but the effects do not.
+    pub(crate) fn notify_barrier_executed(&self, key: TransactionKey, digest: TransactionDigest) {
+        self.executed_digests_notify_read.notify(&key, &digest);
+    }
+
     pub fn tx_key_to_digest(&self, key: &TransactionKey) -> SuiResult<Option<TransactionDigest>> {
         let tables = self.tables()?;
         if let TransactionKey::Digest(digest) = key {
@@ -1985,7 +1992,9 @@ impl AuthorityPerEpochStore {
             let BarrierRegistration::Waiting(tx) = registration else {
                 fatal!("Barrier registration should be waiting");
             };
-            tx.send(txn).unwrap();
+            // Receiver may have been dropped if the scheduler cancelled its wait
+            // (e.g. checkpoint executor already executed this transaction).
+            tx.send(txn).ok();
         } else {
             registrations.insert(tx_key, BarrierRegistration::Ready(Box::new(txn)));
         }
