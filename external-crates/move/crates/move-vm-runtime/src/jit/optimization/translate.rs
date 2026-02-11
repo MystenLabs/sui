@@ -9,6 +9,7 @@ use move_binary_format::{
     checked_as,
     errors::PartialVMResult,
     file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex},
+    partial_vm_error,
 };
 use std::collections::BTreeMap;
 
@@ -87,15 +88,15 @@ fn generate_basic_blocks(
                 .safe_get(start..(end + 1))?
                 .iter()
                 .map(bytecode)
-                .collect();
+                .collect::<PartialVMResult<_>>()?;
             Ok((label, code))
         })
         .collect::<PartialVMResult<BTreeMap<ast::Label, Vec<ast::Bytecode>>>>()
 }
 
-fn bytecode(code: &FF::Bytecode) -> ast::Bytecode {
+fn bytecode(code: &FF::Bytecode) -> PartialVMResult<ast::Bytecode> {
     use ast::Bytecode;
-    match code {
+    let code = match code {
         FF::Bytecode::Call(ndx) => Bytecode::Call(*ndx),
         FF::Bytecode::CallGeneric(ndx) => Bytecode::CallGeneric(*ndx),
 
@@ -196,7 +197,11 @@ fn bytecode(code: &FF::Bytecode) -> ast::Bytecode {
         | FF::Bytecode::MutBorrowGlobalGenericDeprecated(_)
         | FF::Bytecode::ImmBorrowGlobalDeprecated(_)
         | FF::Bytecode::ImmBorrowGlobalGenericDeprecated(_) => {
-            unreachable!("Global bytecodes deprecated")
+            return Err(partial_vm_error!(
+                UNREACHABLE,
+                "Global bytecodes deprecated, should have been filtered out by verification"
+            ));
         }
-    }
+    };
+    Ok(code)
 }

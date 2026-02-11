@@ -2,10 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: Remove the panics. Some of these removals are currently in flight, so this PR does not
-// handle them.
-#![allow(clippy::panic)]
-
 use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
@@ -2005,9 +2001,23 @@ impl VectorRef {
         Ok(())
     }
 
-    pub fn as_bytes_ref(&self) -> std::cell::Ref<'_, Vec<u8>> {
-        std::cell::Ref::map(self.0.borrow(), |value| match value {
-            Value::PrimVec(PrimVec::VecU8(vec)) => vec,
+    pub fn as_bytes_ref(&self) -> PartialVMResult<std::cell::Ref<'_, Vec<u8>>> {
+        let borrowed = self.0.borrow();
+        match &*borrowed {
+            Value::PrimVec(PrimVec::VecU8(_)) => {
+                #[allow(clippy::unreachable)]
+                // We just checked the type, so this match should always succeed. If it fails, who knows:
+                // we should just panic full stop.
+                Ok(std::cell::Ref::map(borrowed, |value| {
+                    match value {
+                        Value::PrimVec(PrimVec::VecU8(vec)) => vec,
+                        // We already checked, but provide a safe fallback
+                        _ => unreachable!(
+                            "INTERNAL PANIC: Value changed between matching and borrowing."
+                        ),
+                    }
+                }))
+            }
             Value::PrimVec(_)
             | Value::Invalid
             | Value::U8(_)
@@ -2021,8 +2031,12 @@ impl VectorRef {
             | Value::Vec(_)
             | Value::Struct(_)
             | Value::Variant(_)
-            | Value::Reference(_) => panic!("can only be called on vector<u8>"),
-        })
+            | Value::Reference(_) => Err(partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "expected vector<u8>, found {:?}",
+                self
+            )),
+        }
     }
 
     pub fn pop(&self, type_param: &Type) -> PartialVMResult<Value> {
@@ -3189,8 +3203,7 @@ impl Reference {
                 Reference::Indexed(entry) => {
                     let (vec, ndx) = entry.as_ref();
                     vec.borrow()
-                        .prim_vec_ref()
-                        .unwrap_or_else(|_| panic!("Indexed ref that is not a prim vec: {:?}", vec))
+                        .prim_vec_ref()?
                         .visit_indexed(*ndx, visitor, depth + 1)?
                 }
             }
@@ -3202,7 +3215,10 @@ impl Reference {
 impl Value {
     fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) -> PartialVMResult<()> {
         match self {
-            Value::Invalid => unreachable!("Should not be able to visit an invalid value"),
+            Value::Invalid => Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "cannot visit invalid value"
+            )),
             Value::U8(val) => visitor.visit_u8(depth, *val),
             Value::U16(val) => visitor.visit_u16(depth, *val),
             Value::U32(val) => visitor.visit_u32(depth, *val),
@@ -3330,15 +3346,14 @@ impl Variant {
 }
 
 impl Vector {
-    pub fn elem_len(&self) -> usize {
-        self.0
-            .vector_ref()
-            .unwrap_or_else(|_| panic!("Expected a vector, got {:?}", self))
-            .len()
+    pub fn elem_len(&self) -> PartialVMResult<usize> {
+        Ok(self.0.vector_ref()?.len())
     }
 
     #[allow(clippy::needless_lifetimes)]
-    pub fn elem_views<'a>(&'a self) -> impl ExactSizeIterator<Item = impl ValueView + 'a> {
+    pub fn elem_views<'a>(
+        &'a self,
+    ) -> PartialVMResult<impl ExactSizeIterator<Item = impl ValueView + 'a>> {
         struct ElemView<'b> {
             container: &'b Value,
             ndx: usize,
@@ -3349,20 +3364,21 @@ impl Vector {
                 match &self.container {
                     Value::Vec(v) => v.safe_get(self.ndx)?.borrow().visit(visitor),
                     Value::PrimVec(v) => v.visit_indexed(self.ndx, visitor, 0),
-                    _ => unreachable!(),
+                    _ => Err(partial_vm_error!(
+                        UNREACHABLE,
+                        "Expected a vector value for elem view, got {:?}",
+                        self.container
+                    )),
                 }
             }
         }
 
-        let container = self
-            .0
-            .vector_ref()
-            .unwrap_or_else(|_| panic!("Expected a vector, got {:?}", self));
+        let container = self.0.vector_ref()?;
         let len = container.len();
-        (0..len).map(move |ndx| ElemView {
+        Ok((0..len).map(move |ndx| ElemView {
             container: &self.0,
             ndx,
-        })
+        }))
     }
 }
 
@@ -3379,7 +3395,11 @@ impl Reference {
                     Reference::Indexed(entry) => {
                         let (vec, ndx) = entry.as_ref();
                         let Value::PrimVec(prim_vec) = &*vec.borrow() else {
-                            panic!("Expected prim vec for indexed reference, got {:?}", vec);
+                            return Err(partial_vm_error!(
+                                UNREACHABLE,
+                                "Expected prim vec for indexed reference, got {:?}",
+                                vec
+                            ));
                         };
                         prim_vec.visit_indexed(*ndx, visitor, 0)
                     }
@@ -3401,7 +3421,11 @@ impl GlobalValue {
         impl<'b> ValueView for Wrapper<'b> {
             fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 let Value::Struct(struct_) = &*self.0.borrow() else {
-                    unreachable!()
+                    return Err(partial_vm_error!(
+                        UNREACHABLE,
+                        "Expected a struct value for global value, got {:?}",
+                        self.0.borrow()
+                    ));
                 };
                 if visitor.visit_struct(0, struct_.len())? {
                     for val in struct_.iter() {
@@ -3626,13 +3650,19 @@ impl Value {
                         | L::U256),
                         vec,
                     ) => {
-                        panic!("Mismatched type {:?} for primitive vector {:?}", ty, vec);
+                        return Err(partial_vm_error!(
+                            UNREACHABLE,
+                            "Mismatched type {:?} for primitive vector {:?}",
+                            ty,
+                            vec
+                        ));
                     }
                     (L::Signer | L::Vector(_) | L::Struct(_) | L::Enum(_), _) => {
-                        panic!(
+                        return Err(partial_vm_error!(
+                            UNREACHABLE,
                             "Expected a primitive type for the primitive vector, got {:?}",
                             inner_layout.as_ref()
-                        );
+                        ));
                     }
                 }
             }
@@ -3640,15 +3670,32 @@ impl Value {
             // Signer case: just dereferencing the box and checking for address
             (L::Signer, Value::Struct(values)) => {
                 if values.len() != 1 {
-                    panic!("Unexpected signer layout: {:?}", values);
+                    return Err(partial_vm_error!(
+                        UNREACHABLE,
+                        "Unexpected signer layout: {:?}",
+                        values
+                    ));
                 }
                 match &*values.safe_get(0)?.borrow() {
                     Value::Address(a) => RuntimeValue::Signer(**a),
-                    v => panic!("Unexpected non-address while converting signer: {:?}", v),
+                    v => {
+                        return Err(partial_vm_error!(
+                            UNREACHABLE,
+                            "Unexpected non-address while converting signer: {:?}",
+                            v
+                        ));
+                    }
                 }
             }
 
-            (layout, val) => panic!("Cannot convert value {:?} as {:?}", val, layout),
+            (layout, val) => {
+                return Err(partial_vm_error!(
+                    UNREACHABLE,
+                    "Cannot convert value {:?} as {:?}",
+                    val,
+                    layout
+                ));
+            }
         })
     }
 }
@@ -3792,12 +3839,7 @@ impl Reference {
                                 (L::Address, PrimVec::VecAddress(xs)) => {
                                     Some(AV::Vector(xs.iter().map(|a| AV::Address(*a)).collect()))
                                 }
-                                (ty, vec) => {
-                                    panic!(
-                                        "Mismatched type {:?} for primitive vector {:?}",
-                                        ty, vec
-                                    )
-                                }
+                                (_ty, _vec) => None,
                             },
                             _ => None,
                         }

@@ -607,7 +607,10 @@ fn structs(
             dbg_println!("Indexing type {:?} at {:?}", name, struct_module_handle);
 
             let StructFieldInformation::Declared(fields) = &struct_def.field_information else {
-                unreachable!("native structs have been removed");
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Expected declared fields for struct definition, found native struct"
+                ));
             };
 
             let fields = fields

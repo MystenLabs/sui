@@ -85,7 +85,7 @@ pub fn load_nitro_attestation_internal(
 
     let current_timestamp = pop_arg!(args, u64);
     let attestation_ref = pop_arg!(args, VectorRef);
-    let attestation_bytes = attestation_ref.as_bytes_ref();
+    let attestation_bytes = attestation_ref.as_bytes_ref()?;
 
     let cost_params = get_extension!(context, NativesCostTable)?
         .nitro_attestation_cost_params

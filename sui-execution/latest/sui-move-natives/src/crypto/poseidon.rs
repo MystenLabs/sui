@@ -101,7 +101,7 @@ pub fn poseidon_bn254_internal(
     let field_elements = (0..length)
         .map(|i| {
             let reference = inputs.borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))?;
-            let value = reference.value_as::<VectorRef>()?.as_bytes_ref().clone();
+            let value = reference.value_as::<VectorRef>()?.as_bytes_ref()?.clone();
             Ok(value)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;

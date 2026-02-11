@@ -58,8 +58,8 @@ pub fn hmac_sha3_256(
     let message = pop_arg!(args, VectorRef);
     let key = pop_arg!(args, VectorRef);
 
-    let msg_len = message.as_bytes_ref().len();
-    let key_len = key.as_bytes_ref().len();
+    let msg_len = message.as_bytes_ref()?.len();
+    let key_len = key.as_bytes_ref()?.len();
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
@@ -72,14 +72,14 @@ pub fn hmac_sha3_256(
                     .into()
     );
 
-    let hmac_key = hmac::HmacKey::from_bytes(&key.as_bytes_ref())
+    let hmac_key = hmac::HmacKey::from_bytes(&key.as_bytes_ref()?)
         .expect("HMAC key can be of any length and from_bytes should always succeed");
     let cost = context.gas_used();
 
     Ok(NativeResult::ok(
         cost,
         smallvec![Value::vector_u8(
-            hmac::hmac_sha3_256(&hmac_key, &message.as_bytes_ref()).to_vec()
+            hmac::hmac_sha3_256(&hmac_key, &message.as_bytes_ref()?).to_vec()
         )],
     ))
 }
