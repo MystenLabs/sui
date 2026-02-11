@@ -329,9 +329,13 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
 }
 
 impl<C: Ord + Copy> Page<JsonCursor<C>> {
-    /// Paginate over entries in `map` that match `filter`, clamped to the `this` cursor bounds, to
-    /// produce a page of results in ASC order of the keys with `limit_with_head` results to detect the presence of a previous or next page.
-    /// `node` is used to convert the values in the page into
+    /// Paginate over entries in a map, filtered.
+    ///
+    /// Iterates over `map` entries between `self`'s cursor bounds, keeping only those where
+    /// `filter` returns true, up to the page limit (with overhead to detect previous/next pages).
+    ///
+    /// `node` converts a matched value into a GraphQL node. Returns a GraphQL `Connection`
+    /// populated with edges derived from the matching entries.
     pub(crate) fn paginate_filtered<V, N: OutputType, E>(
         &self,
         map: &BTreeMap<C, V>,

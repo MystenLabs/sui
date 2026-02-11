@@ -717,11 +717,11 @@ impl Query {
         )
     }
 
-    /// Scan for transactions matching a combination of filters (AND semantics).
+    /// The transactions that exist in the network, optionally filtered by multiple transaction filters.
     ///
-    /// Unlike `transactions`, which supports a single filter backed by indexed lookups,
-    /// `scanTransactions` supports combining filters (e.g. `affectedAddress` AND `function`)
-    /// but requires a checkpoint range bounded by `ServiceConfig.maxScanLimit`.
+    /// Supports combining filters (e.g. `affectedAddress` AND `function`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `afterCheckpoint`, `beforeCheckpoint`, or `atCheckpoint` to narrow it. Supports a longer retention than `Query.transactions`.
+    ///
+    /// Note that this differs from `Query.transactions`, which supports a single filter with an optional sender filter, with no checkpoint range restriction and generally a shorter retention.
     async fn scan_transactions(
         &self,
         ctx: &Context<'_>,
@@ -735,7 +735,7 @@ impl Query {
             async {
                 let scope = self.scope(ctx)?;
                 let pagination: &PaginationConfig = ctx.data()?;
-                let limits = pagination.limits("Query", "transactions");
+                let limits = pagination.limits("Query", "scanTransactions");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
                 let filter = filter.unwrap_or_default();

@@ -54,8 +54,8 @@ use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
+pub(crate) mod bloom;
 pub(crate) mod filter;
-pub(crate) mod scan;
 
 /// Cursor for transaction pagination
 pub(crate) type CTransaction = JsonCursor<u64>;
@@ -355,7 +355,7 @@ impl Transaction {
             }));
         }
 
-        let transactions = scan::transactions(ctx, &filter, &page, cp_bounds)
+        let transactions = bloom::transactions(ctx, &filter, &page, cp_bounds)
             .await
             .map_err(upcast)?;
 
