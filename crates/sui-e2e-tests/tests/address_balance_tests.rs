@@ -3268,7 +3268,7 @@ async fn address_balance_stress_test() {
                         }
                         Err(err) => {
                             let err_str = err.to_string();
-                            if err_str.contains("Available balance for object id") {
+                            if err_str.contains("Available amount in account for object id") {
                                 failure_count.fetch_add(1, Ordering::Relaxed);
                             }
                         }
