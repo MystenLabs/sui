@@ -54,6 +54,31 @@ pub enum FundsWithdrawSchedulerType {
     Eager,
 }
 
+/// Configuration for transaction execution trace logging.
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct TransactionTraceConfig {
+    /// Directory for log files
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_dir: Option<PathBuf>,
+
+    /// Maximum size per log file in bytes (default: 100MB)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_file_size: Option<usize>,
+
+    /// Maximum number of log files to keep (default: 10)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_file_count: Option<usize>,
+
+    /// Buffer capacity in records (default: 10,000)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub buffer_capacity: Option<usize>,
+
+    /// Flush interval in seconds (default: 15)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flush_interval_secs: Option<u64>,
+}
+
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -242,6 +267,11 @@ pub struct NodeConfig {
     /// Configuration for the transaction driver.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_driver_config: Option<TransactionDriverConfig>,
+
+    /// Configuration for transaction execution trace logging.
+    /// When enabled, logs transaction execution timing to binary files for analysis.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_trace_config: Option<TransactionTraceConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
