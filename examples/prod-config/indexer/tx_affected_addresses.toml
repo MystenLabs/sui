@@ -7,4 +7,4 @@ write-concurrency = 10
 [pruner]
 retention = 31104000
 
-[pipeline.tx_affected_addresses]
+[pipeline.tx_affected_addresses.pruner]
