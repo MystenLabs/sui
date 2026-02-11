@@ -596,7 +596,7 @@ pub fn internal_div(
             }
             native_charge_gas_early_exit_option!(context, cost_params.ristretto_scalar_div_cost);
             binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(
-                |a, b| Ok(b * a),
+                |a, b| b / a,
                 &e1,
                 &e2,
             )
@@ -605,13 +605,13 @@ pub fn internal_div(
             if !is_ristretto_supported(context)? {
                 return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
             }
-            native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_mul_cost);
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_div_cost);
             binary_op_diff::<
                 ristretto::RistrettoScalar,
                 ristretto::RistrettoPoint,
                 { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH },
                 { ristretto::RISTRETTO_POINT_BYTE_LENGTH },
-            >(|a, b| Ok(b * a), &e1, &e2)
+            >(|a, b| b / a, &e1, &e2)
         }
         _ => Err(FastCryptoError::InvalidInput),
     };

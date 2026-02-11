@@ -12,7 +12,7 @@ use sui::group_ops::{Self, Element};
 ////// Elliptic curve operations //////
 
 public struct Scalar has store {}
-public struct Point has store {}
+public struct G has store {}
 
 // Scalars are encoded using little-endian byte order and is always 32 bytes.
 // Points are encoded as described in https://www.rfc-editor.org/rfc/rfc9496.html#name-encode.
@@ -29,7 +29,7 @@ const GENERATOR_BYTES: vector<u8> =
 
 // Internal types used by group_ops' native functions.
 const SCALAR_TYPE: u8 = 5;
-const POINT_TYPE: u8 = 6;
+const G_TYPE: u8 = 6;
 
 ///////////////////////////////
 ////// Scalar operations //////
@@ -81,35 +81,35 @@ public fun scalar_inv(e: &Element<Scalar>): Element<Scalar> {
 /////////////////////////////////
 ////// Point operations //////
 
-public fun g_from_bytes(bytes: &vector<u8>): Element<Point> {
-    group_ops::from_bytes(POINT_TYPE, *bytes, false)
+public fun g_from_bytes(bytes: &vector<u8>): Element<G> {
+    group_ops::from_bytes(G_TYPE, *bytes, false)
 }
 
-public fun g_identity(): Element<Point> {
-    group_ops::from_bytes(POINT_TYPE, IDENTITY_BYTES, true)
+public fun g_identity(): Element<G> {
+    group_ops::from_bytes(G_TYPE, IDENTITY_BYTES, true)
 }
 
-public fun g_generator(): Element<Point> {
-    group_ops::from_bytes(POINT_TYPE, GENERATOR_BYTES, true)
+public fun g_generator(): Element<G> {
+    group_ops::from_bytes(G_TYPE, GENERATOR_BYTES, true)
 }
 
-public fun g_add(e1: &Element<Point>, e2: &Element<Point>): Element<Point> {
-    group_ops::add(POINT_TYPE, e1, e2)
+public fun g_add(e1: &Element<G>, e2: &Element<G>): Element<G> {
+    group_ops::add(G_TYPE, e1, e2)
 }
 
-public fun g_sub(e1: &Element<Point>, e2: &Element<Point>): Element<Point> {
-    group_ops::sub(POINT_TYPE, e1, e2)
+public fun g_sub(e1: &Element<G>, e2: &Element<G>): Element<G> {
+    group_ops::sub(G_TYPE, e1, e2)
 }
 
-public fun g_mul(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
-    group_ops::mul(POINT_TYPE, e1, e2)
+public fun g_mul(e1: &Element<Scalar>, e2: &Element<G>): Element<G> {
+    group_ops::mul(G_TYPE, e1, e2)
 }
 
 /// Returns e2 / e1, fails if scalar is zero.
-public fun g_div(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
-    group_ops::div(POINT_TYPE, e1, e2)
+public fun g_div(e1: &Element<Scalar>, e2: &Element<G>): Element<G> {
+    group_ops::div(G_TYPE, e1, e2)
 }
 
-public fun g_neg(e: &Element<Point>): Element<Point> {
+public fun g_neg(e: &Element<G>): Element<G> {
     g_sub(&g_identity(), e)
 }
