@@ -64,7 +64,7 @@ impl Locals {
                 // If the value is None, we leave the local invalid
                 None => heap.allocate_value(VMValue::invalid()),
             };
-            locations.insert(i as u16, alloc_idx);
+            locations.insert(checked_as!(i, u16)?, alloc_idx);
         }
         Ok(Self { heap, locations })
     }
@@ -75,7 +75,7 @@ impl Locals {
         let mut locations = BTreeMap::new();
         for i in 0..n {
             let alloc_idx = heap.allocate_value(VMValue::invalid());
-            locations.insert(i as u16, alloc_idx);
+            locations.insert(checked_as!(i, u16)?, alloc_idx);
         }
         Ok(Self { heap, locations })
     }
