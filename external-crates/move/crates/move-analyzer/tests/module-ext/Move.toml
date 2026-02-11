@@ -4,7 +4,7 @@ edition = "2024.alpha"
 
 [dependencies]
 MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
-ModIdentUniform = { local = "../mod-ident-uniform/" }
+Enums = { local = "../enums/" }
 
 [addresses]
 ParseError = "0xCAFE"

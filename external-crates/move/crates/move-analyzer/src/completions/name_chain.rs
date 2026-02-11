@@ -367,9 +367,13 @@ fn datatype_completion(
     // always add a completion for the datatype itself (for type completion)
     let mut completions = vec![completion_item(&field_container, kind)];
 
+    // Return early if cursor.module is None (cursor is outside any module)
+    let Some(cursor_module) = cursor.module.as_ref() else {
+        return completions;
+    };
+
     let defining_mod_ident_str = expansion_mod_ident_to_map_key(defining_mod_ident);
-    let current_mod_ident_str =
-        expansion_mod_ident_to_map_key(&cursor.module.as_ref().unwrap().value);
+    let current_mod_ident_str = expansion_mod_ident_to_map_key(&cursor_module.value);
 
     // only add fields if there are some and we are in the same module as the datatype
     if field_names.is_empty() || defining_mod_ident_str != current_mod_ident_str {
