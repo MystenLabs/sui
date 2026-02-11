@@ -48,6 +48,7 @@ sui-json-rpc-api.workspace = true
 sui-protocol-config.workspace = true
 sui-snapshot.workspace = true
 sui-telemetry.workspace = true
+sui-transaction-trace.workspace = true
 sui-types.workspace = true
 mysten-metrics.workspace = true
 mysten-service.workspace = true
