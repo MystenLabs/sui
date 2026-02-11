@@ -8,8 +8,9 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
 };
 
-const SUBMIT_TRANSACTION_RETRIES_BUCKETS: &[f64] = &[
-    0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 30.0,
+const REQUEST_COUNT_BUCKETS: &[f64] = &[
+    0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 30.0, 60.0, 90.0, 120.0,
+    150.0,
 ];
 
 // TODO(mysticeti-fastpath): For validator names, use display name instead of concise name.
@@ -19,6 +20,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) drive_transaction_errors: IntCounterVec,
     pub(crate) total_transactions_submitted: IntCounterVec,
     pub(crate) submit_transaction_retries: Histogram,
+    pub(crate) submit_transaction_backups: Histogram,
     pub(crate) submit_transaction_latency: HistogramVec,
     pub(crate) validator_submit_transaction_errors: IntCounterVec,
     pub(crate) validator_submit_transaction_successes: IntCounterVec,
@@ -64,7 +66,14 @@ impl TransactionDriverMetrics {
             submit_transaction_retries: register_histogram_with_registry!(
                 "transaction_driver_submit_transaction_retries",
                 "Number of retries needed for successful transaction submission",
-                SUBMIT_TRANSACTION_RETRIES_BUCKETS.to_vec(),
+                REQUEST_COUNT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            submit_transaction_backups: register_histogram_with_registry!(
+                "transaction_driver_submit_transaction_backups",
+                "Number of backup requests sent for a transaction submission",
+                REQUEST_COUNT_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -122,7 +131,7 @@ impl TransactionDriverMetrics {
                 "transaction_driver_transaction_retries",
                 "Number of retries per transaction attempt in drive_transaction",
                 &["result", "tx_type", "ping"],
-                SUBMIT_TRANSACTION_RETRIES_BUCKETS.to_vec(),
+                REQUEST_COUNT_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

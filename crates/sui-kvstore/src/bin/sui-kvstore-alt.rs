@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
-use sui_indexer_alt_framework::ingestion::IngestionConfig;
-use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_kvstore::BIGTABLE_MAX_MUTATIONS;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
+use sui_kvstore::IndexerConfig;
 use sui_kvstore::set_max_mutations;
 use sui_kvstore::set_write_legacy_data;
 use telemetry_subscribers::TelemetryConfig;
@@ -34,28 +34,20 @@ fn parse_max_mutations(s: &str) -> Result<usize, String> {
 #[command(name = "sui-kvstore-alt")]
 #[command(about = "KVStore indexer using sui-indexer-alt-framework")]
 struct Args {
+    /// Path to TOML config file
+    #[arg(long)]
+    config: PathBuf,
+
     /// BigTable instance ID
     instance_id: String,
+
+    /// GCP project ID for the BigTable instance (defaults to the token provider's project)
+    #[arg(long)]
+    bigtable_project: Option<String>,
 
     /// BigTable app profile ID
     #[arg(long)]
     app_profile_id: Option<String>,
-
-    /// Number of concurrent checkpoint writes
-    #[arg(long)]
-    write_concurrency: Option<usize>,
-
-    /// Interval between watermark updates
-    #[arg(long, value_parser = humantime::parse_duration)]
-    watermark_interval: Option<Duration>,
-
-    /// Maximum number of checkpoints to fetch concurrently
-    #[arg(long)]
-    ingest_concurrency: Option<usize>,
-
-    /// Maximum size of checkpoint backlog across all workers
-    #[arg(long)]
-    checkpoint_buffer_size: Option<usize>,
 
     /// Maximum mutations per BigTable batch (must be < 100k)
     #[arg(long, value_parser = parse_max_mutations)]
@@ -87,6 +79,10 @@ async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
 
     let args = Args::parse();
+
+    let config_contents = tokio::fs::read_to_string(&args.config).await?;
+    let config: IndexerConfig = toml::from_str(&config_contents)?;
+
     let is_bounded = args.indexer_args.last_checkpoint.is_some();
     set_write_legacy_data(args.write_legacy_data);
     if let Some(v) = args.max_mutations {
@@ -95,9 +91,11 @@ async fn main() -> Result<()> {
 
     info!("Starting sui-kvstore-alt indexer");
     info!(instance_id = %args.instance_id);
+    info!("Config: {:#?}", config);
 
     let client = BigTableClient::new_remote(
         args.instance_id,
+        args.bigtable_project,
         false,
         None,
         "sui-kvstore-alt".to_string(),
@@ -112,28 +110,14 @@ async fn main() -> Result<()> {
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
-    let mut ingestion_config = IngestionConfig::default();
-    if let Some(v) = args.ingest_concurrency {
-        ingestion_config.ingest_concurrency = v;
-    }
-    if let Some(v) = args.checkpoint_buffer_size {
-        ingestion_config.checkpoint_buffer_size = v;
-    }
-
-    let mut config = ConcurrentConfig::default();
-    if let Some(v) = args.write_concurrency {
-        config.committer.write_concurrency = v;
-    }
-    if let Some(v) = args.watermark_interval {
-        config.committer.watermark_interval_ms = v.as_millis() as u64;
-    }
-
+    let committer = config.committer.finish(CommitterConfig::default());
     let bigtable_indexer = BigTableIndexer::new(
         store,
         args.indexer_args,
         args.client_args,
-        ingestion_config,
-        config,
+        config.ingestion,
+        committer,
+        config.pipeline,
         &registry,
     )
     .await?;

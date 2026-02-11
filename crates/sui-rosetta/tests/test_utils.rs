@@ -199,22 +199,26 @@ pub async fn execute_transaction(
         .with_signatures(signatures)
         .with_read_mask(FieldMask::from_paths(["*"]));
 
-    let response = client
-        .execute_transaction_and_wait_for_checkpoint(exec_request, Duration::from_secs(20))
+    let response = match client
+        .execute_transaction_and_wait_for_checkpoint(exec_request, Duration::from_secs(30))
         .await
-        .inspect_err(|e| {
-            if let sui_rpc::client::ExecuteAndWaitError::CheckpointTimeout(response) = e {
-                eprintln!(
-                    "txn status: {:?}",
-                    response.get_ref().transaction().effects().status()
-                );
-            }
-        })
-        .ok() // errors can be huge, avoid printing them if unwrap fails
-        .unwrap()
-        .into_inner()
-        .transaction()
-        .to_owned();
+    {
+        Ok(response) => response,
+        Err(sui_rpc::client::ExecuteAndWaitError::CheckpointTimeout(response)) => {
+            eprintln!(
+                "txn status: {:?}",
+                response.get_ref().transaction().effects().status()
+            );
+            wait_for_transaction(client, &signed_transaction.digest().to_string())
+                .await
+                .unwrap();
+            response
+        }
+        Err(_) => panic!("txn failed to execute"),
+    }
+    .into_inner()
+    .transaction()
+    .to_owned();
 
     Ok(response)
 }

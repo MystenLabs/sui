@@ -8,7 +8,7 @@ use crate::tasks::{
     InitCommand, PrintBytecodeCommand, PublishAndCallsCommand, PublishCommand, PublishRunCommand,
     RunCommand, SyntaxChoice, TaskCommand, TaskInput, taskify,
 };
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::file_format::CompiledModule;
@@ -37,7 +37,6 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
 };
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
-use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
 use move_vm_runtime::dev_utils::vm_arguments::ValueFrame;
 use std::{
@@ -59,6 +58,7 @@ pub struct CompiledState {
     edition: Edition,
     flavor: Flavor,
     modules: BTreeMap<ModuleId, CompiledModule>,
+    source_maps: BTreeMap<ModuleId, SourceMap>,
     temp_files: BTreeMap<String, NamedTempFile>,
 }
 
@@ -211,6 +211,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                 panic!("The 'init' command is optional. But if used, it must be the first command")
             }
             TaskCommand::PrintBytecode(PrintBytecodeCommand { syntax }) => {
+                // TODO this should really work over published modules, not source
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 let (warnings_opt, _data, (output, modules)) = compile_any(
                     self,
@@ -226,22 +227,21 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                 )
                 .await?;
                 let output = merge_output(output, warnings_opt);
-                let output = modules.into_iter().fold(output, |output, m| {
+                let output = modules.into_iter().try_fold(output, |output, m| {
                     let MaybeNamedCompiledModule {
                         module, source_map, ..
                     } = m;
-                    let source_mapping = match source_map {
-                        Some(m) => SourceMapping::new(m, &module),
-                        None => SourceMapping::new_without_source_map(
-                            &module,
-                            Spanned::unsafe_no_loc(()).loc,
-                        )
-                        .expect("Unable to build dummy source mapping"),
+                    let Some(source_map) = source_map else {
+                        bail!("No source map available for {}", module.self_id())
                     };
+                    let source_mapping = SourceMapping::new(source_map, &module);
                     let disassembler =
                         Disassembler::new(source_mapping, DisassemblerOptions::new());
-                    merge_output(output, Some(disassembler.disassemble().unwrap()))
-                });
+                    Ok(merge_output(
+                        output,
+                        Some(disassembler.disassemble().unwrap()),
+                    ))
+                })?;
                 Ok(output)
             }
 
@@ -526,6 +526,7 @@ impl CompiledState {
             pre_compiled_program_info_opt: pre_compiled_deps.clone(),
             pre_compiled_ids,
             modules: BTreeMap::new(),
+            source_maps: BTreeMap::new(),
             compiled_module_named_address_mapping: BTreeMap::new(),
             named_address_mapping,
             edition: compiler_edition.unwrap_or(Edition::LEGACY),
@@ -555,6 +556,10 @@ impl CompiledState {
         self.temp_files.keys()
     }
 
+    pub fn source_map(&self, id: &ModuleId) -> Option<&SourceMap> {
+        self.source_maps.get(id)
+    }
+
     pub fn add_with_source_file(
         &mut self,
         modules: Vec<MaybeNamedCompiledModule>,
@@ -566,6 +571,7 @@ impl CompiledState {
             let MaybeNamedCompiledModule {
                 named_address: named_addr_opt,
                 module,
+                source_map,
                 ..
             } = m;
             let id = module.self_id();
@@ -574,11 +580,18 @@ impl CompiledState {
                 self.compiled_module_named_address_mapping
                     .insert(id.clone(), named_addr);
             }
-            self.modules.insert(id, module);
+            self.modules.insert(id.clone(), module);
+            if let Some(source_map) = source_map {
+                self.source_maps.insert(id, source_map);
+            }
         }
     }
 
-    pub fn add_and_generate_interface_file(&mut self, module: CompiledModule) {
+    pub fn add_and_generate_interface_file(
+        &mut self,
+        module: CompiledModule,
+        source_map: Option<SourceMap>,
+    ) {
         let id = module.self_id();
         self.check_not_precompiled(&id);
         let interface_file = NamedTempFile::new().unwrap();
@@ -595,7 +608,10 @@ impl CompiledState {
             .unwrap();
         let prev = self.temp_files.insert(path, interface_file);
         assert!(prev.is_none());
-        self.modules.insert(id, module);
+        self.modules.insert(id.clone(), module);
+        if let Some(source_map) = source_map {
+            self.source_maps.insert(id, source_map);
+        }
     }
 
     fn add_precompiled(&mut self, named_addr_opt: Option<Symbol>, module: CompiledModule) {
@@ -674,12 +690,12 @@ where
             (modules, warnings_opt)
         }
         SyntaxChoice::IR => {
-            let module = compile_ir_module(state, data.path())?;
+            let (module, source_map) = compile_ir_module(state, data.path())?;
             (
                 vec![MaybeNamedCompiledModule {
                     named_address: None,
                     module,
-                    source_map: None,
+                    source_map: Some(source_map),
                 }],
                 None,
             )
@@ -703,10 +719,10 @@ pub fn store_modules<'a, A: MoveTestAdapter<'a>>(
                 .add_with_source_file(modules, (path, data))
         }
         SyntaxChoice::IR => {
-            let module = modules.pop().unwrap().module;
+            let module = modules.pop().unwrap();
             test_adapter
                 .compiled_state()
-                .add_and_generate_interface_file(module);
+                .add_and_generate_interface_file(module.module, module.source_map);
         }
     }
 }
@@ -765,7 +781,7 @@ pub fn compile_source_units(
 pub fn compile_ir_module(
     state: &CompiledState,
     file_name: impl AsRef<Path>,
-) -> Result<CompiledModule> {
+) -> Result<(CompiledModule, SourceMap)> {
     use move_ir_compiler::Compiler as IRCompiler;
     let code = std::fs::read_to_string(file_name).unwrap();
     let named_addresses = state
@@ -776,7 +792,7 @@ pub fn compile_ir_module(
     // TODO this mapping does not work well with upgrades since they have the same original ID
     IRCompiler::new(state.dep_modules().collect())
         .with_named_addresses(named_addresses)
-        .into_compiled_module(&code)
+        .into_compiled_module_with_source_map(&code)
 }
 
 /// Creates an adapter for the given tasks, using the first task command to initialize the adapter

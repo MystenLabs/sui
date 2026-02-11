@@ -6,9 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
-
 [dependencies]
 anyhow.workspace = true
+clap.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 bytes.workspace = true
@@ -33,7 +33,6 @@ futures.workspace = true
 parquet.workspace = true
 arrow-array.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
-mysten-metrics.workspace = true
 sui-analytics-indexer-derive.workspace = true
 eyre.workspace = true
 tempfile.workspace = true

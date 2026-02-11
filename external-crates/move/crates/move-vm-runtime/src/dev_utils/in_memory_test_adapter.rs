@@ -26,7 +26,7 @@ use move_core_types::{
     resolver::{ModuleResolver, SerializedPackage},
 };
 use move_vm_config::runtime::VMConfig;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 pub struct InMemoryTestAdapter {
     runtime: MoveRuntime,
@@ -65,6 +65,10 @@ impl InMemoryTestAdapter {
             .finish(Location::Package(*original_id)));
         };
         Ok(pkg)
+    }
+
+    pub fn vm_config(&self) -> Arc<VMConfig> {
+        self.runtime.vm_config()
     }
 
     /// Compute all of the transitive dependencies for a `root_package`, including itself.

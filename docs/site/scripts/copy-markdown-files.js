@@ -38,6 +38,9 @@ function cleanMdxComponents(content) {
   // Remove self-closing JSX tags
   cleaned = cleaned.replace(/<\w+[^>]*\/>/g, '');
 
+  // Replace .mdx with .md in markdown links to ensure internal links work
+  cleaned = cleaned.replace(/\[([^\]]+)\]\(([^)]+)\.mdx((?:#[^)]*)?)\)/g, '[$1]($2.md$3)');
+
   // Clean up excessive newlines
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
 

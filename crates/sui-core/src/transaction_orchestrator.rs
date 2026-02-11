@@ -40,7 +40,7 @@ use tracing::{Instrument, debug, error_span, info, instrument, warn};
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use crate::transaction_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
+use crate::transaction_driver::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::transaction_driver::{
     QuorumTransactionResponse, SubmitTransactionOptions, TransactionDriver, TransactionDriverError,
     TransactionDriverMetrics,
@@ -240,6 +240,13 @@ where
             auxiliary_data,
         };
 
+        let request_latency = timer.elapsed().as_secs_f64();
+        if request_latency > 10.0 {
+            warn!(
+                ?tx_digest,
+                "Request latency {} is too high", request_latency,
+            );
+        }
         self.inner
             .metrics
             .request_latency
@@ -248,7 +255,7 @@ where
                 "execute_transaction_block",
                 executed_locally.to_string().as_str(),
             ])
-            .observe(timer.elapsed().as_secs_f64());
+            .observe(request_latency);
 
         Ok((response, executed_locally))
     }
@@ -416,12 +423,58 @@ where
                             );
                         }
                     };
+                    tracing::debug!("Wait for {:.3}s before next retry", delay.as_secs_f32());
                     sleep(delay).await;
                 }
             });
         }
 
         result
+    }
+
+    fn build_response_from_local_effects(
+        &self,
+        effects: sui_types::effects::TransactionEffects,
+        include_events: bool,
+        include_input_objects: bool,
+        include_output_objects: bool,
+    ) -> Result<QuorumTransactionResponse, TransactionSubmissionError> {
+        let epoch = effects.executed_epoch();
+        let events = if include_events {
+            if effects.events_digest().is_some() {
+                Some(
+                    self.validator_state
+                        .get_transaction_events(effects.transaction_digest())
+                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?,
+                )
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let input_objects = include_input_objects
+            .then(|| self.validator_state.get_transaction_input_objects(&effects))
+            .transpose()
+            .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
+        let output_objects = include_output_objects
+            .then(|| {
+                self.validator_state
+                    .get_transaction_output_objects(&effects)
+            })
+            .transpose()
+            .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
+
+        Ok(QuorumTransactionResponse {
+            effects: FinalizedEffects {
+                effects,
+                finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
+            },
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data: None,
+        })
     }
 
     /// Shared implementation for executing transactions with parallel local effects waiting
@@ -478,6 +531,26 @@ where
         let include_input_objects = request.include_input_objects;
         let include_output_objects = request.include_output_objects;
         let include_auxiliary_data = request.include_auxiliary_data;
+
+        // Check if transaction has already been executed locally and return cached results
+        if let Some(effects) = self
+            .validator_state
+            .get_transaction_cache_reader()
+            .get_executed_effects(&tx_digest)
+        {
+            self.metrics.early_cached_response.inc();
+            debug!(
+                ?tx_digest,
+                "Returning cached results for already-executed transaction"
+            );
+            let response = self.build_response_from_local_effects(
+                effects,
+                include_events,
+                include_input_objects,
+                include_output_objects,
+            )?;
+            return Ok((response, true));
+        }
 
         let finality_timeout = std::env::var("WAIT_FOR_FINALITY_TIMEOUT_SECS")
             .ok()
@@ -545,7 +618,7 @@ where
         let mut local_effects_future = self
             .validator_state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(
+            .notify_read_executed_effects_may_fail(
                 "TransactionOrchestrator::notify_read_execute_transaction_with_effects_waiting",
                 &digests,
             )
@@ -556,48 +629,27 @@ where
 
         loop {
             tokio::select! {
-                biased;
-
                 // Local effects might be available
-                all_effects = &mut local_effects_future => {
+                all_effects_result = &mut local_effects_future => {
+                    let all_effects = all_effects_result
+                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
+                    if all_effects.len() != 1 {
+                        break Err(TransactionSubmissionError::TransactionDriverInternalError(
+                            SuiErrorKind::Unknown(format!("Unexpected number of effects found: {}", all_effects.len())).into()
+                        ));
+                    }
                     debug!(
                         "Effects became available while execution was running"
                     );
-                    if all_effects.len() != 1 {
-                        break Err(TransactionSubmissionError::TransactionDriverInternalError(SuiErrorKind::Unknown(format!("Unexpected number of effects found: {}", all_effects.len())).into()));
-                    }
                     self.metrics.concurrent_execution.inc();
 
                     let effects = all_effects.into_iter().next().unwrap();
-                    let epoch = effects.executed_epoch();
-                    let events = if include_events {
-                        if effects.events_digest().is_some() {
-                            Some(self.validator_state.get_transaction_events(effects.transaction_digest())
-                                .map_err(TransactionSubmissionError::TransactionDriverInternalError)?)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-                    let input_objects = include_input_objects
-                        .then(|| self.validator_state.get_transaction_input_objects(&effects))
-                        .transpose()
-                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
-                    let output_objects = include_output_objects
-                        .then(|| self.validator_state.get_transaction_output_objects(&effects))
-                        .transpose()
-                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
-                    let response = QuorumTransactionResponse {
-                        effects: FinalizedEffects {
-                            effects,
-                            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-                        },
-                        events,
-                        input_objects,
-                        output_objects,
-                        auxiliary_data: None,
-                    };
+                    let response = self.build_response_from_local_effects(
+                        effects,
+                        include_events,
+                        include_input_objects,
+                        include_output_objects,
+                    )?;
                     break Ok((response, true));
                 }
 
@@ -660,9 +712,8 @@ where
         client_addr: Option<SocketAddr>,
         finality_timeout: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionSubmissionError> {
-        debug!("TO Received transaction execution request.");
-
         let timer = Instant::now();
+        let tx_digest = *verified_transaction.digest();
         let tx_type = if verified_transaction.is_consensus_tx() {
             TxType::SharedObject
         } else {
@@ -696,6 +747,12 @@ where
         self.metrics.wait_for_finality_finished.inc();
 
         let elapsed = timer.elapsed().as_secs_f64();
+        if elapsed > 10.0 {
+            warn!(
+                ?tx_digest,
+                "Settlement finality latency {} is too high", elapsed,
+            );
+        }
         self.metrics
             .settlement_finality_latency
             .with_label_values(&[tx_type.as_str(), driver_type])
@@ -716,8 +773,6 @@ where
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionSubmissionError> {
         let tx_digest = *verified_transaction.digest();
-        debug!("Using TransactionDriver for transaction {:?}", tx_digest);
-
         let td_response = td
             .drive_transaction(
                 SubmitTxRequest::new_transaction(request.transaction.clone()),
@@ -747,7 +802,7 @@ where
 
         match td_response {
             Err(e) => {
-                warn!("TransactionDriver error: {e:?}");
+                warn!(?tx_digest, "TransactionDriver error: {e:?}");
                 Err(e)
             }
             Ok(quorum_transaction_response) => {
@@ -926,6 +981,7 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
 
+    early_cached_response: IntCounter,
     concurrent_execution: IntCounter,
 
     early_validation_rejections: IntCounterVec,
@@ -1020,6 +1076,12 @@ impl TransactionOrchestratorMetrics {
             local_execution_timeout: register_int_counter_with_registry!(
                 "tx_orchestrator_local_execution_timeout",
                 "Total number of timed-out local execution txns Transaction Orchestrator handles",
+                registry,
+            )
+            .unwrap(),
+            early_cached_response: register_int_counter_with_registry!(
+                "tx_orchestrator_early_cached_response",
+                "Total number of requests returning cached results for already-executed transactions",
                 registry,
             )
             .unwrap(),

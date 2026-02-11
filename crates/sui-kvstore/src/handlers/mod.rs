@@ -7,7 +7,6 @@ pub use epochs_end::EpochEndPipeline;
 pub use epochs_legacy::{EpochLegacyBatch, EpochLegacyPipeline, PrevEpochUpdate};
 pub use epochs_start::EpochStartPipeline;
 pub use handler::{BIGTABLE_MAX_MUTATIONS, BigTableHandler, BigTableProcessor, set_max_mutations};
-pub use object_types::ObjectTypesPipeline;
 pub use objects::ObjectsPipeline;
 pub use transactions::TransactionsPipeline;
 
@@ -17,6 +16,5 @@ mod epochs_end;
 mod epochs_legacy;
 mod epochs_start;
 mod handler;
-mod object_types;
 mod objects;
 mod transactions;

@@ -18,7 +18,7 @@ The following steps align with those in the diagram:
 
 1. After assembling the certificate, the client sends it back to all validators, who check its validity and acknowledge its receipt to the client.
     
-    1. If the transaction involves [owned objects] exclusively, Sui can process the transaction certificate immediately and execute it without waiting for the [consensus engine](/concepts/sui-architecture/consensus.mdx). This is known as the **direct fast path**.
+    1. If the transaction involves [owned objects](/guides/developer/objects/object-ownership/address-owned.mdx) or immutable objects exclusively, Sui can process the transaction certificate immediately and execute it without waiting for the [consensus engine](/concepts/sui-architecture/consensus.mdx).
 
 1. All certificates are forwarded to the Sui DAG-based consensus protocol, which also operated by the validators. Consensus outputs a complete order of certificates; the validators check and execute those that contain [shared objects].
 
@@ -66,7 +66,7 @@ If fewer than 1/3 of the validators are dishonest, then the set of signers for a
 
 Full nodes send transactions that have a certificate to validators for execution. Each validator verifies the signatures on the certificate. If the certificate signatures are valid, then the validator can be sure that the transaction passed all validity checks and is not attempting to double-spend any objects.
 
-If the transaction does not access any shared input objects, the validator executes it immediately. If it does access shared input objects, the validator submits the transaction to Sui's consensus layer, which orders the transaction with respect to other transactions using the same shared objects and then executes it.
+The validator submits the transaction to Sui's consensus layer, which orders the transaction with respect to other transactions using the same shared objects and then executes it. Transactions that don't overlap on inputs at all can be verified and executed completely in parallel.
 
 ## Transaction effects and finality
 

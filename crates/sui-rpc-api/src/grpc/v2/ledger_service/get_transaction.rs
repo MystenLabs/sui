@@ -20,6 +20,7 @@ use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::Digest;
+use sui_types::balance_change::derive_balance_changes_2;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
 pub const READ_MASK_DEFAULT: &str = "digest";
@@ -70,14 +71,20 @@ pub fn get_transaction(
         .inner()
         .get_latest_checkpoint()?
         .sequence_number;
+    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
 
-    if transaction_checkpoint > latest_checkpoint {
+    if !(lowest_available_checkpoint..=latest_checkpoint).contains(&transaction_checkpoint) {
         return Err(TransactionNotFoundError(transaction_digest).into());
     }
 
     let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
 
-    let transaction = transaction_to_response(service, transaction_read, &read_mask);
+    let transaction = render_executed_transaction(
+        service,
+        transaction_read,
+        transaction_checkpoint,
+        &read_mask,
+    )?;
 
     Ok(GetTransactionResponse::new(transaction))
 }
@@ -113,6 +120,7 @@ pub fn batch_get_transactions(
         .inner()
         .get_latest_checkpoint()?
         .sequence_number;
+    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
 
     let transactions = digests
         .into_iter()
@@ -132,17 +140,19 @@ pub fn batch_get_transactions(
                 return Err(TransactionNotFoundError(digest).into());
             };
 
-            if transaction_checkpoint > latest_checkpoint {
+            if !(lowest_available_checkpoint..=latest_checkpoint).contains(&transaction_checkpoint)
+            {
                 return Err(TransactionNotFoundError(digest).into());
             }
 
             let transaction_read = service.reader.get_transaction_read(digest)?;
 
-            Ok(transaction_to_response(
+            render_executed_transaction(
                 service,
                 transaction_read,
+                transaction_checkpoint,
                 &read_mask,
-            ))
+            )
         })
         .map(|result| match result {
             Ok(transaction) => GetTransactionResult::new_transaction(transaction),
@@ -153,65 +163,105 @@ pub fn batch_get_transactions(
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
-fn transaction_to_response(
+fn render_executed_transaction(
     service: &RpcService,
-    source: crate::reader::TransactionRead,
+    crate::reader::TransactionRead {
+        digest,
+        transaction,
+        signatures,
+        effects,
+        events,
+        checkpoint: _,
+        timestamp_ms,
+        unchanged_loaded_runtime_objects,
+    }: crate::reader::TransactionRead,
+    checkpoint: u64,
     mask: &FieldMaskTree,
-) -> ExecutedTransaction {
+) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
 
-    if mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
-        message.digest = Some(source.digest.to_string());
+    if mask.contains(ExecutedTransaction::DIGEST_FIELD) {
+        message.digest = Some(digest.to_string());
     }
 
-    if let Some(submask) = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD.name) {
-        message.transaction = Some(Transaction::merge_from(source.transaction, &submask));
+    if let Some(submask) = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD) {
+        message.transaction = Some(Transaction::merge_from(&transaction, &submask));
     }
 
-    if let Some(submask) = mask.subtree(ExecutedTransaction::SIGNATURES_FIELD.name) {
-        message.signatures = source
-            .signatures
+    if let Some(submask) = mask.subtree(ExecutedTransaction::SIGNATURES_FIELD) {
+        message.signatures = signatures
             .into_iter()
-            .map(|s| UserSignature::merge_from(s, &submask))
+            .map(|s| UserSignature::merge_from(&s, &submask))
             .collect();
     }
 
-    if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
+    let unchanged_loaded_runtime_objects = unchanged_loaded_runtime_objects.unwrap_or_default();
+
+    let objects: sui_types::full_checkpoint_content::ObjectSet = if mask
+        .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
+        || mask.contains(ExecutedTransaction::EFFECTS_FIELD)
+    {
+        let mut objects = sui_types::full_checkpoint_content::ObjectSet::default();
+
+        let object_keys = sui_types::storage::get_transaction_object_set(
+            &transaction,
+            &effects,
+            &unchanged_loaded_runtime_objects,
+        )
+        .into_iter()
+        .collect::<Vec<_>>();
+
+        for (o, object_key) in service
+            .reader
+            .inner()
+            .multi_get_objects_by_key(&object_keys)
+            .into_iter()
+            .zip(object_keys.into_iter())
+        {
+            if let Some(o) = o {
+                objects.insert(o);
+            } else {
+                return Err(RpcError::new(
+                    tonic::Code::Internal,
+                    format!("unable to fetch object {object_key:?} for transaction {digest}"),
+                ));
+            }
+        }
+
+        objects
+    } else {
+        Default::default()
+    };
+
+    if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD) {
         let effects = service.render_effects_to_proto(
-            &source.effects,
-            &source.unchanged_loaded_runtime_objects.unwrap_or_default(),
-            |object_id| {
-                source
-                    .object_types
-                    .as_ref()
-                    .and_then(|types| types.get(object_id).cloned())
-            },
+            &effects,
+            &unchanged_loaded_runtime_objects,
+            &objects,
             &submask,
         );
 
         message.effects = Some(effects);
     }
 
-    if let Some(submask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD.name) {
-        message.events = source
-            .events
-            .map(|events| service.render_events_to_proto(&events, &submask));
+    if let Some(submask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD) {
+        message.events = events.map(|events| service.render_events_to_proto(&events, &submask));
     }
 
-    if mask.contains(ExecutedTransaction::CHECKPOINT_FIELD.name) {
-        message.checkpoint = source.checkpoint;
+    if mask.contains(ExecutedTransaction::CHECKPOINT_FIELD) {
+        message.set_checkpoint(checkpoint);
     }
 
-    if mask.contains(ExecutedTransaction::TIMESTAMP_FIELD.name) {
-        message.timestamp = source.timestamp_ms.map(timestamp_ms_to_proto);
+    if mask.contains(ExecutedTransaction::TIMESTAMP_FIELD) {
+        message.timestamp = timestamp_ms.map(timestamp_ms_to_proto);
     }
 
-    if mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
-        message.balance_changes = source
-            .balance_changes
-            .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
-            .unwrap_or_default();
+    if mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
+        message.balance_changes = derive_balance_changes_2(&effects, &objects)
+            .into_iter()
+            .map(Into::into)
+            .collect();
     }
 
-    message
+    Ok(message)
 }

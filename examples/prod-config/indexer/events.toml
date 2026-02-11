@@ -1,0 +1,6 @@
+[pruner]
+retention = 31104000
+
+[pipeline.ev_emit_mod.pruner]
+
+[pipeline.ev_struct_inst.pruner]

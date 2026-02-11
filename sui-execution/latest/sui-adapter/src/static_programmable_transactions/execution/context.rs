@@ -72,7 +72,7 @@ use sui_types::{
         SuiAddress, TxContext,
     },
     effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
-    error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+    error::{ExecutionError, ExecutionErrorKind, SafeIndex, command_argument_error},
     event::Event,
     execution::{ExecutionResults, ExecutionResultsV2},
     execution_status::{CommandArgumentError, PackageUpgradeError},
@@ -259,7 +259,7 @@ impl Locations {
             }
             T::Location::PureInput(i) => {
                 let local = self.pure_inputs.local(i)?;
-                let metadata = &self.pure_input_metadata[i as usize];
+                let metadata = &self.pure_input_metadata.safe_get(i as usize)?;
                 let bytes = self
                     .pure_input_bytes
                     .get_index(metadata.byte_index)
@@ -277,7 +277,7 @@ impl Locations {
                 }
             }
             T::Location::ReceivingInput(i) => ResolvedLocation::Receiving {
-                metadata: &self.receiving_input_metadata[i as usize],
+                metadata: self.receiving_input_metadata.safe_get(i as usize)?,
                 local: self.receiving_inputs.local(i)?,
             },
         })
@@ -398,7 +398,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             .into_iter()
             .enumerate()
             .map(|(i, (_, m))| {
-                let v_opt = object_inputs.local(i as u16)?.move_if_valid()?;
+                let v_opt = object_inputs.local(checked_as!(i, u16)?)?.move_if_valid()?;
                 Ok((m, v_opt))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
@@ -1052,7 +1052,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 &vm,
                 version_mid,
                 fdef_idx,
-                fdef.code.as_ref().map(|c| c.code.len() as u16).unwrap_or(0),
+                fdef.code
+                    .as_ref()
+                    .map(|c| checked_as!(c.code.len(), u16))
+                    .transpose()?
+                    .unwrap_or(0),
                 linkage,
             )?;
             assert_invariant!(
@@ -1074,7 +1078,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     ) -> Result<ObjectID, ExecutionError> {
         let original_id = if <Mode>::packages_are_predefined() {
             // do not calculate or substitute id for predefined packages
-            (*modules[0].self_id().address()).into()
+            (*modules.safe_get(0)?.self_id().address()).into()
         } else {
             // It should be fine that this does not go through the object runtime since it does not
             // need to know about new packages created, since Move objects and Move packages
@@ -1302,21 +1306,31 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             T::Location::TxContext => return Ok(None),
             T::Location::GasCoin => TxArgument::GasCoin,
             T::Location::Result(i, j) => TxArgument::NestedResult(i, j),
-            T::Location::ObjectInput(i) => {
-                TxArgument::Input(self.locations.input_object_metadata[i as usize].0.0)
-            }
+            T::Location::ObjectInput(i) => TxArgument::Input(
+                self.locations
+                    .input_object_metadata
+                    .safe_get(i as usize)?
+                    .0
+                    .0,
+            ),
             T::Location::WithdrawalInput(i) => TxArgument::Input(
-                self.locations.input_withdrawal_metadata[i as usize]
+                self.locations
+                    .input_withdrawal_metadata
+                    .safe_get(i as usize)?
                     .original_input_index
                     .0,
             ),
             T::Location::PureInput(i) => TxArgument::Input(
-                self.locations.pure_input_metadata[i as usize]
+                self.locations
+                    .pure_input_metadata
+                    .safe_get(i as usize)?
                     .original_input_index
                     .0,
             ),
             T::Location::ReceivingInput(i) => TxArgument::Input(
-                self.locations.receiving_input_metadata[i as usize]
+                self.locations
+                    .receiving_input_metadata
+                    .safe_get(i as usize)?
                     .original_input_index
                     .0,
             ),

@@ -46,7 +46,9 @@ async fn test_pay_with_many_small_coins() -> Result<()> {
         .collect();
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .with_accounts(accounts)
         .build()
         .await;
@@ -271,7 +273,9 @@ async fn test_limit_many_small_coins() -> Result<()> {
         .collect();
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .with_accounts(accounts)
         .build()
         .await;
@@ -487,7 +491,9 @@ async fn test_limit_many_small_coins() -> Result<()> {
 #[tokio::test]
 async fn test_pay_with_many_small_coins_with_budget() -> Result<()> {
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .build()
         .await;
     let sender = test_cluster.get_address_0();
@@ -710,7 +716,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
         .collect();
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .with_accounts(accounts)
         .build()
         .await;
@@ -901,7 +909,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
 #[tokio::test]
 async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() -> Result<()> {
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .build()
         .await;
     let sender = test_cluster.get_address_0();
@@ -1088,7 +1098,9 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
 #[tokio::test]
 async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()> {
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .build()
         .await;
     let sender = test_cluster.get_address_0();

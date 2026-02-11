@@ -19,7 +19,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
 };
 
-type Graph = move_regex_borrow_graph::collections::Graph<(), Label>;
+pub(super) type Graph = move_regex_borrow_graph::collections::Graph<(), Label>;
 type Paths = move_regex_borrow_graph::collections::Paths<(), Label>;
 
 /// AbstractValue represents a reference or a non reference value, both on the stack and stored
@@ -91,7 +91,7 @@ impl ValueKind {
 
 /// Label is used to specify path extensions
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-enum Label {
+pub(super) enum Label {
     /// A reference created by borrowing a local variable
     Local(LocalIndex),
     /// A reference that is the struct field extension of another reference
@@ -122,7 +122,7 @@ pub(crate) const JOIN_ITEM_COST: u128 = 4;
 
 /// AbstractState is the analysis state over which abstract interpretation is performed.
 #[derive(Clone, Debug)]
-pub(crate) struct AbstractState {
+pub struct AbstractState {
     current_function: Option<FunctionDefinitionIndex>,
     local_root: Ref,
     locals: BTreeMap<LocalIndex, Ref>,
@@ -157,6 +157,18 @@ impl AbstractState {
         };
         state.canonicalize()?;
         Ok(state)
+    }
+
+    pub(super) fn local_root(&self) -> Ref {
+        self.local_root
+    }
+
+    pub(super) fn locals(&self) -> &BTreeMap<LocalIndex, Ref> {
+        &self.locals
+    }
+
+    pub(super) fn graph(&self) -> &Graph {
+        &self.graph
     }
 
     pub(crate) fn graph_size(&self) -> usize {
@@ -321,14 +333,14 @@ impl AbstractState {
     //**********************************************************************************************
 
     /// destroys local@idx
-    pub fn release_value(&mut self, value: AbstractValue) -> PartialVMResult<()> {
+    pub(crate) fn release_value(&mut self, value: AbstractValue) -> PartialVMResult<()> {
         match value {
             AbstractValue::Reference(r) => Ok(self.graph.release(r)?),
             AbstractValue::NonReference => Ok(()),
         }
     }
 
-    pub fn copy_loc(
+    pub(crate) fn copy_loc(
         &mut self,
         _offset: CodeOffset,
         local: LocalIndex,
@@ -344,7 +356,7 @@ impl AbstractState {
         }
     }
 
-    pub fn move_loc(
+    pub(crate) fn move_loc(
         &mut self,
         offset: CodeOffset,
         local: LocalIndex,
@@ -359,7 +371,7 @@ impl AbstractState {
         }
     }
 
-    pub fn st_loc(
+    pub(crate) fn st_loc(
         &mut self,
         offset: CodeOffset,
         local: LocalIndex,
@@ -380,7 +392,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn freeze_ref(
+    pub(crate) fn freeze_ref(
         &mut self,
         _offset: CodeOffset,
         r: Ref,
@@ -391,7 +403,7 @@ impl AbstractState {
         Ok(AbstractValue::Reference(frozen))
     }
 
-    pub fn comparison(
+    pub(crate) fn comparison(
         &mut self,
         _offset: CodeOffset,
         v1: AbstractValue,
@@ -402,12 +414,16 @@ impl AbstractState {
         Ok(AbstractValue::NonReference)
     }
 
-    pub fn read_ref(&mut self, _offset: CodeOffset, r: Ref) -> PartialVMResult<AbstractValue> {
+    pub(crate) fn read_ref(
+        &mut self,
+        _offset: CodeOffset,
+        r: Ref,
+    ) -> PartialVMResult<AbstractValue> {
         self.graph.release(r)?;
         Ok(AbstractValue::NonReference)
     }
 
-    pub fn write_ref(
+    pub(crate) fn write_ref(
         &mut self,
         offset: CodeOffset,
         r: Ref,
@@ -421,7 +437,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn borrow_loc(
+    pub(crate) fn borrow_loc(
         &mut self,
         _offset: CodeOffset,
         mut_: bool,
@@ -433,7 +449,7 @@ impl AbstractState {
         Ok(AbstractValue::Reference(new_r))
     }
 
-    pub fn borrow_field(
+    pub(crate) fn borrow_field(
         &mut self,
         _offset: CodeOffset,
         mut_: bool,
@@ -446,7 +462,7 @@ impl AbstractState {
         Ok(AbstractValue::Reference(new_r))
     }
 
-    pub fn unpack_enum_variant_ref(
+    pub(crate) fn unpack_enum_variant_ref(
         &mut self,
         _offset: CodeOffset,
         enum_def_idx: EnumDefinitionIndex,
@@ -478,7 +494,7 @@ impl AbstractState {
         Ok(field_borrows)
     }
 
-    pub fn vector_op(
+    pub(crate) fn vector_op(
         &mut self,
         offset: CodeOffset,
         vector: AbstractValue,
@@ -493,7 +509,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn call(
+    pub(crate) fn call(
         &mut self,
         offset: CodeOffset,
         arguments: Vec<AbstractValue>,
@@ -545,7 +561,7 @@ impl AbstractState {
         Ok(return_values)
     }
 
-    pub fn ret(
+    pub(crate) fn ret(
         &mut self,
         offset: CodeOffset,
         values: Vec<AbstractValue>,
@@ -576,7 +592,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn abort(&mut self) {
+    pub(crate) fn abort(&mut self) {
         // release all references
         self.locals.clear();
         self.graph.release_all()
@@ -586,7 +602,7 @@ impl AbstractState {
     // Abstract Interpreter Entry Points
     //**********************************************************************************************
 
-    pub fn canonicalize(&mut self) -> PartialVMResult<()> {
+    pub(crate) fn canonicalize(&mut self) -> PartialVMResult<()> {
         self.check_invariants();
         let mut old_to_new = BTreeMap::new();
         old_to_new.insert(self.local_root, 0);
@@ -604,7 +620,7 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn refresh(&mut self) -> PartialVMResult<()> {
+    pub(crate) fn refresh(&mut self) -> PartialVMResult<()> {
         self.check_invariants();
         self.local_root = self.local_root.refresh()?;
         for old in self.locals.values_mut() {
@@ -615,19 +631,19 @@ impl AbstractState {
         Ok(())
     }
 
-    pub fn is_canonical(&self) -> bool {
+    pub(crate) fn is_canonical(&self) -> bool {
         self.local_root.is_canonical()
             && self.locals.values().copied().all(|r| r.is_canonical())
             && self.graph.is_canonical()
     }
 
-    pub fn is_fresh(&self) -> bool {
+    pub(crate) fn is_fresh(&self) -> bool {
         self.local_root.is_fresh()
             && self.locals.values().copied().all(|r| r.is_fresh())
             && self.graph.is_fresh()
     }
 
-    pub fn check_invariants(&self) {
+    pub(crate) fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {
             self.graph.check_invariants();
@@ -657,7 +673,7 @@ impl AbstractState {
         }
     }
 
-    pub fn join_(&mut self, other: &Self) -> PartialVMResult</* changed */ bool> {
+    pub(crate) fn join_(&mut self, other: &Self) -> PartialVMResult</* changed */ bool> {
         let mut changed = false;
         safe_assert!(self.current_function == other.current_function);
         safe_assert!(self.local_root == other.local_root);

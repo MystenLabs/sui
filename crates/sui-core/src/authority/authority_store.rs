@@ -1460,7 +1460,6 @@ impl AuthorityStore {
             &self.perpetual_tables,
             checkpoint_store,
             rpc_index,
-            None,
             pruning_config,
             AuthorityStorePruningMetrics::new_for_test(),
             EPOCH_DURATION_MS_FOR_TESTING,

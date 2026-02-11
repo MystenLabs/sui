@@ -16,7 +16,9 @@ use sui_types::{
 };
 
 use crate::{
-    accumulators::object_funds_checker::{ObjectFundsChecker, ObjectFundsWithdrawStatus},
+    accumulators::object_funds_checker::{
+        ObjectFundsChecker, ObjectFundsWithdrawStatus, metrics::ObjectFundsCheckerMetrics,
+    },
     authority::{
         ExecutionEnv, shared_object_version_manager::AssignedVersions,
         test_authority_builder::TestAuthorityBuilder,
@@ -31,7 +33,10 @@ async fn test_sufficient_balance() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     let status = checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
         SequenceNumber::from_u64(0),
@@ -47,7 +52,10 @@ async fn test_insufficient_balance() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     let status = checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(0),
@@ -69,7 +77,10 @@ async fn test_pending_wait() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     // Attempt to withdraw 101 at version 2.
     let status = checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
@@ -95,7 +106,10 @@ async fn test_pending_then_sufficient() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     let status = checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(1),
@@ -129,7 +143,10 @@ async fn test_pending_then_insufficient() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     let status = checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 102)]),
         SequenceNumber::from_u64(1),
@@ -168,7 +185,10 @@ async fn test_multiple_withdraws() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account1, 100), (account2, 100)]),
     ));
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     let status = checker.check_object_funds(
         BTreeMap::from([
             (AccumulatorObjId::new_unchecked(account1), 100),
@@ -182,7 +202,10 @@ async fn test_multiple_withdraws() {
 
 #[tokio::test]
 async fn test_settle_accumulator_version() {
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     checker.settle_accumulator_version(SequenceNumber::from_u64(1));
     assert_eq!(
         checker.get_current_accumulator_version(),
@@ -203,7 +226,10 @@ async fn test_account_version_ahead_of_schedule() {
             SequenceNumber::from_u64(1),
         )
         .await;
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     let result = checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(0),
@@ -230,7 +256,10 @@ async fn test_settle_ahead_of_schedule() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     checker.settle_accumulator_version(SequenceNumber::from_u64(1));
     let result = checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
@@ -256,7 +285,10 @@ async fn test_check_out_of_order() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account1, 100), (account2, 100)]),
     ));
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     let status = checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account1), 100)]),
         SequenceNumber::from_u64(0),
@@ -290,7 +322,10 @@ async fn test_commit() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     assert!(checker.is_empty());
     checker.check_object_funds(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
@@ -304,7 +339,10 @@ async fn test_commit() {
 
 #[tokio::test]
 async fn test_should_commit_early_exits() {
-    let checker = ObjectFundsChecker::new(SequenceNumber::from_u64(0));
+    let checker = ObjectFundsChecker::new(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
     let state = TestAuthorityBuilder::new().build().await;
     let epoch_store = state.epoch_store_for_testing().clone();
 

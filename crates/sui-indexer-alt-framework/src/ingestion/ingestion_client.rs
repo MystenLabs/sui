@@ -17,11 +17,9 @@ use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
-use prost::Message;
 use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
-use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
 use tracing::debug;
 use tracing::error;
 use tracing::warn;
@@ -30,6 +28,7 @@ use url::Url;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::Result as IngestionResult;
+use crate::ingestion::decode;
 use crate::ingestion::store_client::StoreIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IngestionMetrics;
@@ -174,16 +173,19 @@ impl IngestionClient {
     /// Construct a new ingestion client. Its source is determined by `args`.
     pub fn new(args: IngestionClientArgs, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
         // TODO: Support stacking multiple ingestion clients for redundancy/failover.
+        let retry = super::store_client::retry_config();
         let client = if let Some(url) = args.remote_store_url.as_ref() {
             let store = HttpBuilder::new()
                 .with_url(url.to_string())
                 .with_client_options(args.client_options().with_allow_http(true))
+                .with_retry(retry)
                 .build()
                 .map(Arc::new)?;
             IngestionClient::with_store(store, metrics.clone())?
         } else if let Some(bucket) = args.remote_store_s3.as_ref() {
             let store = AmazonS3Builder::from_env()
                 .with_client_options(args.client_options())
+                .with_retry(retry)
                 .with_imdsv1_fallback()
                 .with_bucket_name(bucket)
                 .build()
@@ -192,6 +194,7 @@ impl IngestionClient {
         } else if let Some(bucket) = args.remote_store_gcs.as_ref() {
             let store = GoogleCloudStorageBuilder::from_env()
                 .with_client_options(args.client_options())
+                .with_retry(retry)
                 .with_bucket_name(bucket)
                 .build()
                 .map(Arc::new)?;
@@ -199,6 +202,7 @@ impl IngestionClient {
         } else if let Some(container) = args.remote_store_azure.as_ref() {
             let store = MicrosoftAzureBuilder::from_env()
                 .with_client_options(args.client_options())
+                .with_retry(retry)
                 .with_container_name(container)
                 .build()
                 .map(Arc::new)?;
@@ -341,27 +345,10 @@ impl IngestionClient {
                     FetchData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
 
-                        let decompressed = zstd::decode_all(&bytes[..]).map_err(|e| {
+                        decode::checkpoint(&bytes).map_err(|e| {
                             self.metrics.inc_retry(
                                 checkpoint,
-                                "decompression",
-                                IngestionError::DeserializationError(checkpoint, e.into()),
-                            )
-                        })?;
-
-                        let proto_checkpoint =
-                            ProtoCheckpoint::decode(&decompressed[..]).map_err(|e| {
-                                self.metrics.inc_retry(
-                                    checkpoint,
-                                    "deserialization",
-                                    IngestionError::DeserializationError(checkpoint, e.into()),
-                                )
-                            })?;
-
-                        Checkpoint::try_from(&proto_checkpoint).map_err(|e| {
-                            self.metrics.inc_retry(
-                                checkpoint,
-                                "proto_conversion",
+                                e.reason(),
                                 IngestionError::DeserializationError(checkpoint, e.into()),
                             )
                         })?

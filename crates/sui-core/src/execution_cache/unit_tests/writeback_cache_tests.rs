@@ -990,6 +990,7 @@ async fn test_concurrent_readers() {
 }
 
 #[tokio::test]
+#[cfg(not(tidehunter))] // something about metrics initialization in this test does not work w/ tidheunter build and cause 'AlreadyReg' error
 async fn latest_object_cache_race_test() {
     telemetry_subscribers::init_for_testing();
     let authority = TestAuthorityBuilder::new().build().await;

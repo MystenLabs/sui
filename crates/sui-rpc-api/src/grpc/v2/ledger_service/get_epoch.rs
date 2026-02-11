@@ -16,6 +16,7 @@ use sui_rpc::proto::sui::rpc::v2::GetEpochResponse;
 use sui_rpc::proto::sui::rpc::v2::ProtocolConfig;
 use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::EpochId;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 
 pub const READ_MASK_DEFAULT: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
 
@@ -35,47 +36,79 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
 
     let mut message = Epoch::default();
 
-    let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+    let current_system_state = service.reader.get_system_state()?;
+    let current_epoch = current_system_state.epoch();
+
     let epoch = request.epoch.unwrap_or(current_epoch);
 
-    let mut system_state =
-        if epoch == current_epoch && read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name) {
-            Some(service.reader.get_system_state()?)
-        } else {
-            None
-        };
-
     if read_mask.contains(Epoch::EPOCH_FIELD.name) {
-        message.epoch = Some(epoch);
+        message.set_epoch(epoch);
     }
 
-    if let Some(epoch_info) = service
+    // Fetch epoch info, if indexing is available.
+    let mut epoch_info = service
         .reader
         .inner()
         .indexes()
-        .and_then(|indexes| indexes.get_epoch_info(epoch).ok().flatten())
-    {
-        if read_mask.contains(Epoch::FIRST_CHECKPOINT_FIELD.name) {
+        .and_then(|indexes| indexes.get_epoch_info(epoch).ok().flatten());
+
+    let system_state = if epoch == current_epoch {
+        Some(current_system_state)
+    } else {
+        epoch_info
+            .as_mut()
+            .and_then(|info| info.system_state.take())
+    };
+
+    if let Some(system_state) = system_state {
+        if let Some(submask) = read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD) {
+            let chain = service.reader.inner().get_chain_identifier()?.chain();
+            let config = get_protocol_config(system_state.protocol_version(), chain)?;
+
+            message.set_protocol_config(ProtocolConfig::merge_from(config, &submask));
+        }
+
+        if read_mask.contains(Epoch::START_FIELD) {
+            message.set_start(timestamp_ms_to_proto(
+                system_state.epoch_start_timestamp_ms(),
+            ));
+        }
+
+        if read_mask.contains(Epoch::REFERENCE_GAS_PRICE_FIELD) {
+            message.set_reference_gas_price(system_state.reference_gas_price());
+        }
+
+        if read_mask.contains(Epoch::SYSTEM_STATE_FIELD) {
+            message.system_state = Some(Box::new(system_state.into()));
+        }
+    }
+
+    if let Some(epoch_info) = epoch_info {
+        if read_mask.contains(Epoch::FIRST_CHECKPOINT_FIELD) {
             message.first_checkpoint = epoch_info.start_checkpoint;
         }
 
-        if read_mask.contains(Epoch::LAST_CHECKPOINT_FIELD.name) {
+        if read_mask.contains(Epoch::LAST_CHECKPOINT_FIELD) {
             message.last_checkpoint = epoch_info.end_checkpoint;
         }
 
-        if read_mask.contains(Epoch::START_FIELD.name) {
+        if read_mask.contains(Epoch::START_FIELD) && message.start.is_none() {
             message.start = epoch_info.start_timestamp_ms.map(timestamp_ms_to_proto);
         }
 
-        if read_mask.contains(Epoch::END_FIELD.name) {
+        if read_mask.contains(Epoch::END_FIELD) {
             message.end = epoch_info.end_timestamp_ms.map(timestamp_ms_to_proto);
         }
 
-        if read_mask.contains(Epoch::REFERENCE_GAS_PRICE_FIELD.name) {
+        if read_mask.contains(Epoch::REFERENCE_GAS_PRICE_FIELD.name)
+            && message.reference_gas_price.is_none()
+        {
             message.reference_gas_price = epoch_info.reference_gas_price;
         }
 
-        if let Some(submask) = read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name) {
+        if let Some(submask) = read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name)
+            && message.protocol_config.is_none()
+        {
             let chain = service.reader.inner().get_chain_identifier()?.chain();
             let protocol_config = epoch_info
                 .protocol_version
@@ -85,18 +118,6 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
             message.protocol_config =
                 protocol_config.map(|config| ProtocolConfig::merge_from(config, &submask));
         }
-
-        // If we're not loading the current epoch then grab the indexed snapshot of the system
-        // state at the start of the epoch.
-        if system_state.is_none() {
-            system_state = epoch_info.system_state;
-        }
-    }
-
-    if let Some(system_state) = system_state
-        && read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name)
-    {
-        message.system_state = Some(Box::new(system_state.into()));
     }
 
     if read_mask.contains(Epoch::COMMITTEE_FIELD.name) {

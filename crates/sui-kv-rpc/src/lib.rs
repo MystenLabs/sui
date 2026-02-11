@@ -26,6 +26,7 @@ pub struct KvRpcServer {
 impl KvRpcServer {
     pub async fn new(
         instance_id: String,
+        project_id: Option<String>,
         app_profile_id: Option<String>,
         checkpoint_bucket: Option<String>,
         server_version: Option<ServerVersion>,
@@ -33,6 +34,7 @@ impl KvRpcServer {
     ) -> anyhow::Result<Self> {
         let mut client = BigTableClient::new_remote(
             instance_id,
+            project_id,
             false,
             None,
             "sui-kv-rpc".to_string(),

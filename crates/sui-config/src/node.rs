@@ -46,6 +46,14 @@ pub const DEFAULT_VALIDATOR_GAS_PRICE: u64 = sui_types::transaction::DEFAULT_VAL
 /// Default commission rate of 2%
 pub const DEFAULT_COMMISSION_RATE: u64 = 200;
 
+/// The type of funds withdraw scheduler to use.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FundsWithdrawSchedulerType {
+    Naive,
+    #[default]
+    Eager,
+}
+
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -189,6 +197,12 @@ pub struct NodeConfig {
     #[serde(skip)]
     #[serde(default = "bool_true")]
     pub state_accumulator_v2: bool,
+
+    /// The type of funds withdraw scheduler to use.
+    /// Default is Eager. Not exposed to file configuration.
+    #[serde(skip)]
+    #[serde(default)]
+    pub funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
 
     #[serde(default = "bool_true")]
     pub enable_soft_bundle: bool,
@@ -1122,13 +1136,6 @@ pub struct AuthorityStorePruningConfig {
     pub killswitch_tombstone_pruning: bool,
     #[serde(default = "default_smoothing", skip_serializing_if = "is_true")]
     pub smooth: bool,
-    /// Enables the compaction filter for pruning the objects table.
-    /// If disabled, a range deletion approach is used instead.
-    /// While it is generally safe to switch between the two modes,
-    /// switching from the compaction filter approach back to range deletion
-    /// may result in some old versions that will never be pruned.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub enable_compaction_filter: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_indexes: Option<u64>,
 }
@@ -1170,7 +1177,6 @@ impl Default for AuthorityStorePruningConfig {
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,
-            enable_compaction_filter: cfg!(test) || cfg!(msim),
             num_epochs_to_retain_for_indexes: None,
         }
     }

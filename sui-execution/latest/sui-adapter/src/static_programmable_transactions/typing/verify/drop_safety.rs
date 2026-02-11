@@ -147,7 +147,7 @@ mod refine {
             let Some(cur_command) = ast.commands.len().checked_sub(1) else {
                 invariant_violation!("cannot be zero commands with a conversion")
             };
-            let cur_command = cur_command as u16;
+            let cur_command = checked_as!(cur_command, u16)?;
             let T::WithdrawalCompatibilityConversion {
                 owner,
                 conversion_result,
@@ -167,7 +167,7 @@ mod refine {
                 "owner pure input index out of bounds"
             );
             assert_invariant!(
-                ast.pure[owner_pure_idx as usize].ty == T::Type::Address,
+                ast.pure.get(owner_pure_idx as usize).unwrap().ty == T::Type::Address,
                 "owner pure input should be an address"
             );
             let Some(conversion_ty) = conversion_command.value.result_type.first() else {
@@ -213,7 +213,7 @@ mod verify {
             typing::ast::{self as T, Type},
         },
     };
-    use sui_types::error::{ExecutionError, ExecutionErrorKind};
+    use sui_types::error::{ExecutionError, ExecutionErrorKind, SafeIndex};
 
     #[must_use]
     struct Value;
@@ -253,16 +253,19 @@ mod verify {
             })
         }
 
-        fn location(&mut self, l: T::Location) -> &mut Option<Value> {
-            match l {
+        fn location(&mut self, l: T::Location) -> Result<&mut Option<Value>, ExecutionError> {
+            Ok(match l {
                 T::Location::TxContext => &mut self.tx_context,
                 T::Location::GasCoin => &mut self.gas_coin,
-                T::Location::ObjectInput(i) => &mut self.objects[i as usize],
-                T::Location::WithdrawalInput(i) => &mut self.withdrawals[i as usize],
-                T::Location::PureInput(i) => &mut self.pure[i as usize],
-                T::Location::ReceivingInput(i) => &mut self.receiving[i as usize],
-                T::Location::Result(i, j) => &mut self.results[i as usize][j as usize],
-            }
+                T::Location::ObjectInput(i) => self.objects.safe_get_mut(i as usize)?,
+                T::Location::WithdrawalInput(i) => self.withdrawals.safe_get_mut(i as usize)?,
+                T::Location::PureInput(i) => self.pure.safe_get_mut(i as usize)?,
+                T::Location::ReceivingInput(i) => self.receiving.safe_get_mut(i as usize)?,
+                T::Location::Result(i, j) => self
+                    .results
+                    .safe_get_mut(i as usize)?
+                    .safe_get_mut(j as usize)?,
+            })
         }
     }
 
@@ -413,8 +416,8 @@ mod verify {
             };
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::UnusedValueWithoutDrop {
-                    result_idx: i as u16,
-                    secondary_idx: j as u16,
+                    result_idx: checked_as!(i, u16)?,
+                    secondary_idx: checked_as!(j, u16)?,
                 },
                 msg,
             ));
@@ -438,7 +441,7 @@ mod verify {
     }
 
     fn move_value(context: &mut Context, l: T::Location) -> Result<Value, ExecutionError> {
-        let Some(value) = context.location(l).take() else {
+        let Some(value) = context.location(l)?.take() else {
             invariant_violation!("memory safety should have failed")
         };
         Ok(value)
@@ -446,7 +449,7 @@ mod verify {
 
     fn copy_value(context: &mut Context, l: T::Location) -> Result<Value, ExecutionError> {
         assert_invariant!(
-            context.location(l).is_some(),
+            context.location(l)?.is_some(),
             "memory safety should have failed"
         );
         Ok(Value)
@@ -454,7 +457,7 @@ mod verify {
 
     fn borrow_location(context: &mut Context, l: T::Location) -> Result<Value, ExecutionError> {
         assert_invariant!(
-            context.location(l).is_some(),
+            context.location(l)?.is_some(),
             "memory safety should have failed"
         );
         Ok(Value)

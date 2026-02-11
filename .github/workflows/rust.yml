@@ -115,6 +115,40 @@ jobs:
       - run: scripts/changed-files.sh
         shell: bash
 
+  test-tidehunter:
+    needs: [diff, rustfmt, clippy]
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ ubuntu-ghcloud ]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
+        with:
+          swap-size-gb: 256
+      - name: cargo test with tidehunter
+        run: |
+          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci -p sui-core --features typed-store/tidehunter
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
+        shell: bash
+
   test-extra:
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'

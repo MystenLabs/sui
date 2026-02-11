@@ -4,24 +4,26 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object};
+use async_graphql::Context;
+use async_graphql::Object;
 use futures::future::try_join_all;
-use sui_name_service::{Domain as NativeDomain, NameRecord as NativeNameRecord, NameServiceConfig};
-use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::Field};
+use sui_name_service::Domain as NativeDomain;
+use sui_name_service::NameRecord as NativeNameRecord;
+use sui_name_service::NameServiceConfig;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::dynamic_field::Field;
 
-use crate::{
-    api::scalars::uint53::UInt53,
-    error::{RpcError, upcast},
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::{
-    address::{self, Address},
-    move_type::MoveType,
-    move_value::MoveValue,
-    object::{self, Object},
-};
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address;
+use crate::api::types::address::Address;
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
+use crate::api::types::object;
+use crate::api::types::object::Object;
+use crate::error::RpcError;
+use crate::error::upcast;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) struct NameRecord {
     pub(crate) super_: MoveValue,

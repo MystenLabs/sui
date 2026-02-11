@@ -4,13 +4,14 @@
 mod effects_certifier;
 mod error;
 mod metrics;
+mod reconfig_observer;
 mod request_retrier;
 mod transaction_submitter;
 
 /// Exports
 pub use error::TransactionDriverError;
 pub use metrics::*;
-use mysten_common::backoff::ExponentialBackoff;
+pub use reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 
 use std::{
     net::SocketAddr,
@@ -20,9 +21,11 @@ use std::{
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
+use mysten_common::backoff::ExponentialBackoff;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
 use rand::Rng;
+use sui_config::NodeConfig;
 use sui_types::{
     committee::EpochId,
     error::{ErrorCategory, UserInputError},
@@ -44,9 +47,6 @@ use crate::{
     },
 };
 
-pub mod reconfig_observer;
-pub use reconfig_observer::ReconfigObserver;
-
 /// Trait for components that can update their AuthorityAggregator during reconfiguration.
 /// Used by ReconfigObserver to notify components of epoch changes.
 pub trait AuthorityAggregatorUpdatable<A: Clone>: Send + Sync + 'static {
@@ -54,7 +54,7 @@ pub trait AuthorityAggregatorUpdatable<A: Clone>: Send + Sync + 'static {
     fn authority_aggregator(&self) -> Arc<AuthorityAggregator<A>>;
     fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>);
 }
-use sui_config::NodeConfig;
+
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
 pub struct SubmitTransactionOptions {
@@ -213,6 +213,14 @@ where
                             .settlement_finality_latency
                             .with_label_values(&[tx_type.as_str(), ping_label])
                             .observe(settlement_finality_latency);
+                        let is_out_of_expected_range = settlement_finality_latency >= 8.0
+                            || settlement_finality_latency <= 0.1;
+                        tracing::debug!(
+                            ?tx_type,
+                            ?is_out_of_expected_range,
+                            "Settlement finality latency: {:.3} seconds",
+                            settlement_finality_latency
+                        );
                         // Record the number of retries for successful transaction
                         self.metrics
                             .transaction_retries
@@ -237,18 +245,20 @@ where
                                 .observe(attempts as f64);
                             if request.transaction.is_some() {
                                 tracing::info!(
-                                    "User transaction failed to finalize (attempt {}), with non-retriable error: {}",
+                                    "User transaction failed to finalize (attempt {}), with non-retriable error: {} ({})",
                                     attempts,
-                                    e
+                                    e,
+                                    Into::<&str>::into(e.categorize())
                                 );
                             }
                             return Err(e);
                         }
                         if request.transaction.is_some() {
                             tracing::info!(
-                                "User transaction failed to finalize (attempt {}): {}. Retrying ...",
+                                "User transaction failed to finalize (attempt {}): {} ({}). Retrying ...",
                                 attempts,
-                                e
+                                e,
+                                Into::<&str>::into(e.categorize())
                             );
                         }
                         // Buffer the latest retriable error to be returned in case of timeout
@@ -268,6 +278,8 @@ where
                 } else {
                     backoff.next().unwrap()
                 };
+
+                tracing::debug!("Retrying after {:.3}s", delay.as_secs_f32());
                 sleep(delay).await;
 
                 attempts += 1;
@@ -307,8 +319,6 @@ where
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
-        let amplification_factor =
-            amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();

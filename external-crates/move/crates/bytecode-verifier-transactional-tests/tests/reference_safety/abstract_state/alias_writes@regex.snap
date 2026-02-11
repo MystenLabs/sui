@@ -1,0 +1,89 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, line 35:
+//# view-abstract-state 0x2::alias_after_join::t
+{
+  "0": {
+    "local_root": "ROOT",
+    "locals": {},
+    "graph": {
+      "nodes": {
+        "ROOT": true
+      },
+      "outgoing": {}
+    }
+  },
+  "6": {
+    "local_root": "ROOT",
+    "locals": {},
+    "graph": {
+      "nodes": {
+        "ROOT": true
+      },
+      "outgoing": {}
+    }
+  },
+  "11": {
+    "local_root": "ROOT",
+    "locals": {},
+    "graph": {
+      "nodes": {
+        "ROOT": true
+      },
+      "outgoing": {}
+    }
+  },
+  "16": {
+    "local_root": "ROOT",
+    "locals": {
+      "x": {
+        "Reference": "r#x"
+      },
+      "y": {
+        "Reference": "r#y"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#x": true,
+        "r#y": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#x": [
+            {
+              "labels": [
+                "a"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "b"
+              ],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#y": [
+            {
+              "labels": [
+                "a"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "b"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

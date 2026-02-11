@@ -171,7 +171,7 @@ fn unpack_struct<const N: usize>(s: Value) -> PartialVMResult<[Value; N]> {
 fn unpack_option(option: Value, type_param: &Type) -> PartialVMResult<Option<Value>> {
     let [vec_value]: [Value; 1] = unpack_struct(option)?;
     let vec: Vector = vec_value.value_as()?;
-    Ok(if vec.elem_len() == 0 {
+    Ok(if vec.elem_len()? == 0 {
         None
     } else {
         let [elem]: [Value; 1] = vec.unpack(type_param, 1)?.try_into().map_err(|e| {
