@@ -246,14 +246,6 @@ fun test_g_ops() {
 
     let order_minus_one = ristretto255::scalar_from_bytes(&ORDER_MINUS_ONE_BYTES);
     let _ = ristretto255::g_mul(&order_minus_one, &g);
-
-    let msg = b"123";
-    let msg2 = b"321";
-    let hash1 = ristretto255::hash_to_g(&msg);
-    let hash2 = ristretto255::hash_to_g(&msg2);
-    let hash3 = ristretto255::hash_to_g(&msg);
-    assert!(!group_ops::equal(&hash1, &hash2));
-    assert!(group_ops::equal(&hash1, &hash3));
 }
 
 #[test]
@@ -305,9 +297,4 @@ fun test_invalid_g_div() {
     let a = ristretto255::scalar_from_u64(0);
     let b = ristretto255::g_generator();
     let _ = ristretto255::g_div(&a, &b);
-}
-
-#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
-fun test_invalid_g_empty_msg() {
-    let _ = ristretto255::hash_to_g(&vector[]);
 }

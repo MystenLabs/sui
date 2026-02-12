@@ -4572,17 +4572,16 @@ impl ProtocolConfig {
                 111 => {
                     cfg.feature_flags.validator_metadata_verify_v2 = true;
 
-                    // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
                     cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
-                    cfg.group_ops_ristretto_decode_point_cost = Some(2848);
+                    cfg.group_ops_ristretto_decode_point_cost = Some(200);
                     cfg.group_ops_ristretto_scalar_add_cost = Some(10);
-                    cfg.group_ops_ristretto_point_add_cost = Some(1556);
+                    cfg.group_ops_ristretto_point_add_cost = Some(500);
                     cfg.group_ops_ristretto_scalar_sub_cost = Some(10);
-                    cfg.group_ops_ristretto_point_sub_cost = Some(1550);
+                    cfg.group_ops_ristretto_point_sub_cost = Some(500);
                     cfg.group_ops_ristretto_scalar_mul_cost = Some(11);
-                    cfg.group_ops_ristretto_point_mul_cost = Some(4842);
-                    cfg.group_ops_ristretto_scalar_div_cost = Some(91);
-                    cfg.group_ops_ristretto_point_div_cost = Some(5091);
+                    cfg.group_ops_ristretto_point_mul_cost = Some(1200);
+                    cfg.group_ops_ristretto_scalar_div_cost = Some(151);
+                    cfg.group_ops_ristretto_point_div_cost = Some(2500);
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_ristretto255_group_ops = true;
