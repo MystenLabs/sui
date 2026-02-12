@@ -32,7 +32,7 @@ pub trait BigTableProcessor: Processor<Value = Entry> {
     const TABLE: &'static str;
 
     /// How much concurrency to use when processing checkpoint data (default: 10).
-    const FANOUT: usize = 16;
+    const FANOUT: usize = 128;
 
     /// Minimum rows before eager commit (default: 50).
     const MIN_EAGER_ROWS: usize = 50;

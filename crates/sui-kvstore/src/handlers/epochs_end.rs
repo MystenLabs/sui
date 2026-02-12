@@ -27,7 +27,6 @@ impl Processor for EpochEndPipeline {
 
 impl BigTableProcessor for EpochEndPipeline {
     const TABLE: &'static str = tables::epochs::NAME;
-    const FANOUT: usize = 100;
     const MIN_EAGER_ROWS: usize = 1;
 
     fn process_sync(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {

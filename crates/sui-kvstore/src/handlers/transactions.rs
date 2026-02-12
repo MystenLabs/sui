@@ -28,7 +28,6 @@ impl Processor for TransactionsPipeline {
 
 impl BigTableProcessor for TransactionsPipeline {
     const TABLE: &'static str = tables::transactions::NAME;
-    const FANOUT: usize = 100;
 
     fn process_sync(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
         let timestamp_ms = checkpoint.summary.timestamp_ms;

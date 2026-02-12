@@ -26,7 +26,6 @@ impl Processor for CheckpointsPipeline {
 
 impl BigTableProcessor for CheckpointsPipeline {
     const TABLE: &'static str = tables::checkpoints::NAME;
-    const FANOUT: usize = 100;
 
     fn process_sync(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
         let summary = checkpoint.summary.data();
