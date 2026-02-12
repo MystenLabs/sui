@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 LOG=$(mktemp)
 
 # Remove generated framework docs if they exist
