@@ -183,8 +183,8 @@ impl Ref {
 }
 
 impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
+    #[cfg(debug_assertions)]
     pub(crate) fn check_invariants(&self) {
-        #[cfg(debug_assertions)]
         {
             let mut calculated_size = 0;
             for regex in self.regexes.keys() {
