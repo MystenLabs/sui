@@ -21,6 +21,16 @@ impl Processor for EpochEndPipeline {
     type Value = Entry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+        self.process_sync(checkpoint)
+    }
+}
+
+impl BigTableProcessor for EpochEndPipeline {
+    const TABLE: &'static str = tables::epochs::NAME;
+    const FANOUT: usize = 100;
+    const MIN_EAGER_ROWS: usize = 1;
+
+    fn process_sync(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
         let Some(epoch_info) = checkpoint.epoch_info()? else {
             return Ok(vec![]);
         };
@@ -46,10 +56,4 @@ impl Processor for EpochEndPipeline {
 
         Ok(vec![entry])
     }
-}
-
-impl BigTableProcessor for EpochEndPipeline {
-    const TABLE: &'static str = tables::epochs::NAME;
-    const FANOUT: usize = 100;
-    const MIN_EAGER_ROWS: usize = 1;
 }

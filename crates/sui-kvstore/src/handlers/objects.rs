@@ -21,6 +21,15 @@ impl Processor for ObjectsPipeline {
     type Value = Entry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+        self.process_sync(checkpoint)
+    }
+}
+
+impl BigTableProcessor for ObjectsPipeline {
+    const TABLE: &'static str = tables::objects::NAME;
+    const FANOUT: usize = 100;
+
+    fn process_sync(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
         let timestamp_ms = checkpoint.summary.timestamp_ms;
         let mut entries = Vec::with_capacity(checkpoint.object_set.len());
 
@@ -36,9 +45,4 @@ impl Processor for ObjectsPipeline {
 
         Ok(entries)
     }
-}
-
-impl BigTableProcessor for ObjectsPipeline {
-    const TABLE: &'static str = tables::objects::NAME;
-    const FANOUT: usize = 100;
 }

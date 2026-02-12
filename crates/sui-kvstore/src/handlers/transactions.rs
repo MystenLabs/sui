@@ -22,6 +22,15 @@ impl Processor for TransactionsPipeline {
     type Value = Entry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+        self.process_sync(checkpoint)
+    }
+}
+
+impl BigTableProcessor for TransactionsPipeline {
+    const TABLE: &'static str = tables::transactions::NAME;
+    const FANOUT: usize = 100;
+
+    fn process_sync(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
         let timestamp_ms = checkpoint.summary.timestamp_ms;
         let checkpoint_number = checkpoint.summary.sequence_number;
         let mut entries = Vec::with_capacity(checkpoint.transactions.len());
@@ -50,9 +59,4 @@ impl Processor for TransactionsPipeline {
 
         Ok(entries)
     }
-}
-
-impl BigTableProcessor for TransactionsPipeline {
-    const TABLE: &'static str = tables::transactions::NAME;
-    const FANOUT: usize = 100;
 }

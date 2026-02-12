@@ -21,6 +21,15 @@ impl Processor for CheckpointsByDigestPipeline {
     type Value = Entry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+        self.process_sync(checkpoint)
+    }
+}
+
+impl BigTableProcessor for CheckpointsByDigestPipeline {
+    const TABLE: &'static str = tables::checkpoints_by_digest::NAME;
+    const FANOUT: usize = 100;
+
+    fn process_sync(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
         let summary = checkpoint.summary.data();
         let timestamp_ms = summary.timestamp_ms;
 
@@ -32,9 +41,4 @@ impl Processor for CheckpointsByDigestPipeline {
 
         Ok(vec![entry])
     }
-}
-
-impl BigTableProcessor for CheckpointsByDigestPipeline {
-    const TABLE: &'static str = tables::checkpoints_by_digest::NAME;
-    const FANOUT: usize = 100;
 }

@@ -24,6 +24,9 @@ const DEFAULT_MAX_MUTATIONS: usize = 10_000;
 static MAX_MUTATIONS: OnceLock<usize> = OnceLock::new();
 
 /// Extension of `Processor` that specifies a BigTable table name.
+///
+/// Implementors define [`Self::process_sync`] with their CPU-bound serialization logic.
+/// The async [`Processor::process`] method should just delegate to `process_sync`.
 pub trait BigTableProcessor: Processor<Value = Entry> {
     /// The BigTable table to write rows to.
     const TABLE: &'static str;
@@ -33,13 +36,17 @@ pub trait BigTableProcessor: Processor<Value = Entry> {
 
     /// Minimum rows before eager commit (default: 50).
     const MIN_EAGER_ROWS: usize = 50;
+
+    /// Synchronous checkpoint processing. Called on a blocking thread pool to avoid
+    /// starving the tokio async worker threads.
+    fn process_sync(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>>;
 }
 
 /// Generic wrapper that implements `concurrent::Handler` for any `BigTableProcessor`.
 ///
 /// This adapter wraps a `BigTableProcessor` and provides the common batching and commit logic
 /// for writing entries to BigTable. Individual pipelines implement `BigTableProcessor`.
-pub struct BigTableHandler<P>(P);
+pub struct BigTableHandler<P>(Arc<P>);
 
 /// Batch of BigTable entries.
 /// Uses RwLock for interior mutability so we can remove succeeded entries on partial write failures.
@@ -59,7 +66,7 @@ where
     P: BigTableProcessor,
 {
     pub fn new(processor: P) -> Self {
-        Self(processor)
+        Self(Arc::new(processor))
     }
 }
 
@@ -73,7 +80,9 @@ where
     type Value = Entry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
-        self.0.process(checkpoint).await
+        let processor = Arc::clone(&self.0);
+        let checkpoint = Arc::clone(checkpoint);
+        tokio::task::spawn_blocking(move || processor.process_sync(&checkpoint)).await?
     }
 }
 
@@ -174,13 +183,17 @@ mod tests {
         const NAME: &'static str = "test_pipeline";
         type Value = Entry;
 
-        async fn process(&self, _: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
-            Ok(vec![])
+        async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
+            self.process_sync(checkpoint)
         }
     }
 
     impl BigTableProcessor for TestProcessor {
         const TABLE: &'static str = "test_table";
+
+        fn process_sync(&self, _: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
+            Ok(vec![])
+        }
     }
 
     fn make_entry(key: &[u8]) -> Entry {

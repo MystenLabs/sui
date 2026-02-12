@@ -20,6 +20,15 @@ impl Processor for CheckpointsPipeline {
     type Value = Entry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+        self.process_sync(checkpoint)
+    }
+}
+
+impl BigTableProcessor for CheckpointsPipeline {
+    const TABLE: &'static str = tables::checkpoints::NAME;
+    const FANOUT: usize = 100;
+
+    fn process_sync(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Entry>> {
         let summary = checkpoint.summary.data();
         let signatures = checkpoint.summary.auth_sig();
         let timestamp_ms = summary.timestamp_ms;
@@ -32,9 +41,4 @@ impl Processor for CheckpointsPipeline {
 
         Ok(vec![entry])
     }
-}
-
-impl BigTableProcessor for CheckpointsPipeline {
-    const TABLE: &'static str = tables::checkpoints::NAME;
-    const FANOUT: usize = 100;
 }
