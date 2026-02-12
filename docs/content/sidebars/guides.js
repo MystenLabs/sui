@@ -139,7 +139,7 @@ const guides = [
       'guides/developer/accessing-data/using-events',
       'guides/developer/accessing-data/custom-indexer/build',
       'guides/developer/accessing-data/custom-indexer/indexer-walrus',
-      'guides/developer/accessing-data/custom-indexer/bring-your-own-storage',
+      'guides/developer/accessing-data/custom-indexer/bring-your-own-store',
     ],
   },
   {
