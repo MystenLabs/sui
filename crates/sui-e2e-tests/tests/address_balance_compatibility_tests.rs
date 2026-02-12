@@ -16,24 +16,6 @@ use sui_types::{
 };
 use test_cluster::addr_balance_test_env::{TestEnvBuilder, get_sui_accumulator_object_id};
 
-// TODO: test cases for backward compat layer
-// - tx paying gas with coin reservation
-// - gas smashing transaction with no commands
-// - transaction with no commands, but non-gas coin reservations
-// - transaction using GAS_COIN CallArg
-// - add money to a fake coin
-// - deduct money from a fake coin
-// - transfer a fake coin away (with deduct/add money)
-// - transfer a fake coin to oneself (with deduct/add money)
-// - wrap a fake coin
-// - wrong ChainID
-// - non-SUI coin reservation in gas_payment
-// - deny list is enforced for coin reservations
-// - gas coin reservation not owned by gas_owner
-// - gas payment with mix of real/fake coins.
-//   - mix of owners
-// - gas payment is not enough for budget
-
 #[sim_test]
 async fn test_coin_reservation_validation() {
     let mut test_env = TestEnvBuilder::new()
@@ -307,7 +289,6 @@ async fn test_valid_coin_reservation_gas_payments() {
 
 #[sim_test]
 async fn test_gas_coin_callarg_with_coin_reservation_gas() {
-    // KEEP
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -332,6 +313,87 @@ async fn test_gas_coin_callarg_with_coin_reservation_gas() {
         .build();
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok());
+
+    // TODO:
+    // - verify the sender's address balance is decreased by the amount of the gas reservation + gas charges.
+    // - and the recipient receives a coin with balance 100
+}
+
+#[sim_test]
+async fn test_add_money_to_fake_coin() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    let (_, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    let gas = all_gas.pop().unwrap();
+    let real_coin = all_gas.pop().unwrap();
+
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 100);
+
+    let tx_builder = test_env.tx_builder_with_gas(sender, gas);
+    // TODO:
+    // - add "merge_coins" method to TestTransactionBuilder
+    // - use it to merge `real_coin` into `coin_reservation`
+    // - verify the sender's address balance is increased by the amount of `real_coin`
+}
+
+#[sim_test]
+async fn test_split_from_fake_coin() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 100);
+
+    let tx = test_env
+        .tx_builder(sender)
+        .split_coin(coin_reservation, vec![100]);
+
+    // TODO:
+    // - send tx, should succeed
+    // - assert that the sender received a new coin with balance 100
+}
+
+#[sim_test]
+async fn test_coin_reservation_enforced_when_not_used() {
+    // TODO:
+    // - use a coin reservation that is greater than the sender's address balance
+    // - build tx with 0 commands.
+    // - send tx, assert it fails.
+}
+
+#[sim_test]
+async fn test_non_sui_coin_reservation_in_gas() {
+    // TODO:
+    // - move `publish_and_mint_trusted_coin` to address_balance_test_env.rs
+    // - call `publish_and_mint_trusted_coin` to publish the `trusted_coin` package.
+    //   this will fund the sender's address balance with 1000000 of the trusted coin.
+    // - make a coin reservation for the trusted coin
+    // - attempt to use it as a gas coin
+    // - verify tx is rejected
+}
+
+#[sim_test]
+async fn test_deny_list_enforced_for_coin_reservation() {
+    // TODO:
+    // - try to find e2e deny list tests and link to them in comments here.
+    // - they may be using the sui-e2e-tests/tests/move_test_code/sources/regulated_coin.move module.
+    // - do not do any further implementation beyond the above.
 }
 
 #[sim_test]
@@ -363,38 +425,42 @@ async fn test_wrong_chain_id() {
 }
 
 #[sim_test]
-async fn test_gas_payment_mix_of_real_and_fake_coins() {
-    // KEEP
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+async fn test_gas_smash_into_fake_coin() {
+    // TODO:
+    // - build a transaction with 0 commands.
+    // - for the gas payment, make the first coin a coin reservation, i.e. fake coin.
+    // - make the second gas payment a real coin.
+    // - send tx, should succeed
+    // - verify the sender's address balance is increased by the amount of the real coin, and the real coin is deleted.
+}
 
-    let (sender, _) = test_env.get_sender_and_gas(0);
-    test_env
-        .fund_one_address_balance(sender, 5_000_000_000)
-        .await;
-    let (sender, gas) = test_env.get_sender_and_gas(0);
+#[sim_test]
+async fn test_gas_smash_multiple_fake_coins() {
+    // TODO:
+    // - build a transaction with 0 commands.
+    // - for the gas payment, make the first 2 coins coin reservations, i.e. fake coins.
+    // - make the third gas payment a real coin.
+    // - send tx, should succeed
+    // - verify the sender's address balance is increased by the amount of the real coin, and the real coin is deleted.
+    // - verify the 2 fake coins are deleted.
+}
 
-    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 5_000_000_000);
+#[sim_test]
+async fn test_gas_smash_from_fake_coin() {
+    // TODO:
+    // - build a transaction with 0 commands.
+    // - make the first gas coin a real coin.
+    // - make the second gas coin a coin reservation, i.e. fake coin.
+    // - send tx, should succeed
+    // - verify the sender's address balance is decreased by the amount of the fake coin, and the real coin
+    //   increases by the value of the fake coin, minus the gas charge.
+}
 
-    // Gas payment is a mix of real coin and coin reservation.
-    let ptb = ProgrammableTransactionBuilder::new();
-    let pt = ptb.finish();
-
-    let tx = TransactionData::new_programmable(
-        sender,
-        vec![gas, coin_reservation],
-        pt,
-        5_000_000_001,
-        test_env.rgp,
-    );
-    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
-    assert!(effects.status().is_ok());
-    // TODO: verify balances
+#[sim_test]
+async fn test_gas_coin_not_owned_by_gas_owner() {
+    // TODO:
+    // - send a transaction using a coin reservation that is not owned by the sender
+    // - verify tx is rejected
 }
 
 #[sim_test]
