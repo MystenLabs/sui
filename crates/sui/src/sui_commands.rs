@@ -632,7 +632,11 @@ impl SuiCommand {
                         .await?;
 
                         let mut root_pkg = if let Some(pubfile_path) = pubfile_path {
-                            let chain_id = context.grpc_client()?.get_chain_identifier().await?.to_string();
+                            let chain_id = context
+                                .grpc_client()?
+                                .get_chain_identifier()
+                                .await?
+                                .to_string();
                             let modes = build_config.mode_set();
                             load_root_pkg_for_ephemeral_publish_or_upgrade(
                                 &rerooted_path,
