@@ -296,6 +296,7 @@ const MAX_PROTOCOL_VERSION: u64 = 111;
 //              split_checkpoints_in_consensus_handler in devnet
 //              Enable additional validation on zkLogin public identifier.
 // Version 111: Validator metadata
+//              Enable Ristretto255 in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -565,6 +566,10 @@ struct FeatureFlags {
     // Enable native function for msm.
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_function_msm: bool,
+
+    // Enable group operations for Ristretto255
+    #[serde(skip_serializing_if = "is_false")]
+    enable_ristretto255_group_ops: bool,
 
     // Enable nitro attestation.
     #[serde(skip_serializing_if = "is_false")]
@@ -1643,6 +1648,17 @@ pub struct ProtocolConfig {
     group_ops_bls12381_uncompressed_g1_sum_cost_per_term: Option<u64>,
     group_ops_bls12381_uncompressed_g1_sum_max_terms: Option<u64>,
 
+    group_ops_ristretto_decode_scalar_cost: Option<u64>,
+    group_ops_ristretto_decode_point_cost: Option<u64>,
+    group_ops_ristretto_scalar_add_cost: Option<u64>,
+    group_ops_ristretto_point_add_cost: Option<u64>,
+    group_ops_ristretto_scalar_sub_cost: Option<u64>,
+    group_ops_ristretto_point_sub_cost: Option<u64>,
+    group_ops_ristretto_scalar_mul_cost: Option<u64>,
+    group_ops_ristretto_point_mul_cost: Option<u64>,
+    group_ops_ristretto_scalar_div_cost: Option<u64>,
+    group_ops_ristretto_point_div_cost: Option<u64>,
+
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
@@ -2161,6 +2177,10 @@ impl ProtocolConfig {
 
     pub fn enable_group_ops_native_function_msm(&self) -> bool {
         self.feature_flags.enable_group_ops_native_function_msm
+    }
+
+    pub fn enable_ristretto255_group_ops(&self) -> bool {
+        self.feature_flags.enable_ristretto255_group_ops
     }
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
@@ -2976,6 +2996,7 @@ impl ProtocolConfig {
             hash_blake2b256_cost_base: Some(52),
             hash_blake2b256_data_cost_per_byte: Some(2),
             hash_blake2b256_data_cost_per_block: Some(2),
+
             // hash::keccak256
             hash_keccak256_cost_base: Some(52),
             hash_keccak256_data_cost_per_byte: Some(2),
@@ -3025,6 +3046,17 @@ impl ProtocolConfig {
             group_ops_bls12381_uncompressed_g1_sum_base_cost: None,
             group_ops_bls12381_uncompressed_g1_sum_cost_per_term: None,
             group_ops_bls12381_uncompressed_g1_sum_max_terms: None,
+
+            group_ops_ristretto_decode_scalar_cost: None,
+            group_ops_ristretto_decode_point_cost: None,
+            group_ops_ristretto_scalar_add_cost: None,
+            group_ops_ristretto_point_add_cost: None,
+            group_ops_ristretto_scalar_sub_cost: None,
+            group_ops_ristretto_point_sub_cost: None,
+            group_ops_ristretto_scalar_mul_cost: None,
+            group_ops_ristretto_point_mul_cost: None,
+            group_ops_ristretto_scalar_div_cost: None,
+            group_ops_ristretto_point_div_cost: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -4539,6 +4571,21 @@ impl ProtocolConfig {
                 }
                 111 => {
                     cfg.feature_flags.validator_metadata_verify_v2 = true;
+
+                    cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
+                    cfg.group_ops_ristretto_decode_point_cost = Some(200);
+                    cfg.group_ops_ristretto_scalar_add_cost = Some(10);
+                    cfg.group_ops_ristretto_point_add_cost = Some(500);
+                    cfg.group_ops_ristretto_scalar_sub_cost = Some(10);
+                    cfg.group_ops_ristretto_point_sub_cost = Some(500);
+                    cfg.group_ops_ristretto_scalar_mul_cost = Some(11);
+                    cfg.group_ops_ristretto_point_mul_cost = Some(1200);
+                    cfg.group_ops_ristretto_scalar_div_cost = Some(151);
+                    cfg.group_ops_ristretto_point_div_cost = Some(2500);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_ristretto255_group_ops = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

@@ -269,7 +269,7 @@ impl RandomnessManager {
             ),
             nodes,
             t,
-            fastcrypto_tbls::random_oracle::RandomOracle::new(prefix_str.as_str()),
+            fastcrypto::random_oracle::RandomOracle::new(prefix_str.as_str()),
             &mut rand::thread_rng(),
         ) {
             Ok(party) => party,
