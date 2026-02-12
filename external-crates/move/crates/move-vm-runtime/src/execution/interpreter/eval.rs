@@ -1211,7 +1211,10 @@ pub(crate) fn check_reference_args_unique(
         // also the same, then we have two references (at least one of which is mutable) that point
         // to the same location, which is a violation.
         let i = all_ref_ptrs.partition_point(|p| p < mptr);
-        if i + 1 < ref_ptrs_len && all_ref_ptrs.safe_get(i)? == all_ref_ptrs.safe_get(i + 1)? {
+        let i_plus_1 = 1.safe_add(i)?;
+        if i_plus_1 < ref_ptrs_len
+            && all_ref_ptrs.safe_get(i)? == all_ref_ptrs.safe_get(i_plus_1)?
+        {
             return Err(partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 "mutable reference argument aliases another reference in function call"
