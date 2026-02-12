@@ -263,6 +263,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config.clone(),
         collector_rx,
         collector_tx,
+        committer_tx.clone(),
         main_reader_lo.clone(),
         metrics.clone(),
         collector_peak_fill.clone(),

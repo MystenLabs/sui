@@ -76,6 +76,7 @@ pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
+    watermark_tx: mpsc::Sender<Vec<WatermarkPart>>,
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
@@ -210,11 +211,29 @@ pub(super) fn collector<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .set(reader_lo as i64);
 
-                    pending_rows += indexed.len();
-                    pending.insert(indexed.checkpoint(), indexed.into());
+                    if indexed.values.is_empty() {
+                        // No data to commit — send watermark directly to the
+                        // watermark task, bypassing the batch/commit pipeline.
+                        let watermark = WatermarkPart {
+                            watermark: indexed.watermark,
+                            batch_rows: 0,
+                            total_rows: 0,
+                        };
+                        checkpoint_lag_reporter.report_lag(
+                            watermark.checkpoint(),
+                            watermark.timestamp_ms(),
+                        );
+                        if watermark_tx.send(vec![watermark]).await.is_err() {
+                            info!(pipeline = H::NAME, "Watermark closed channel, stopping collector");
+                            break;
+                        }
+                    } else {
+                        pending_rows += indexed.len();
+                        pending.insert(indexed.checkpoint(), indexed.into());
 
-                    if pending_rows >= H::MIN_EAGER_ROWS {
-                        poll.reset_immediately()
+                        if pending_rows >= H::MIN_EAGER_ROWS {
+                            poll.reset_immediately()
+                        }
                     }
                 }
                 // docs::/#collector
@@ -326,11 +345,13 @@ mod tests {
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let handler = Arc::new(TestHandler);
+        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -367,11 +388,13 @@ mod tests {
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let handler = Arc::new(TestHandler);
+        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let mut collector = collector::<TestHandler>(
             handler,
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            watermark_tx,
             main_reader_lo,
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -408,11 +431,13 @@ mod tests {
         let metrics = test_metrics();
 
         let handler = Arc::new(TestHandler);
+        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            watermark_tx,
             main_reader_lo.clone(),
             metrics.clone(),
             Arc::new(AtomicUsize::new(0)),
@@ -463,11 +488,13 @@ mod tests {
             ..CommitterConfig::default()
         };
         let handler = Arc::new(TestHandler);
+        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             config,
             processor_rx,
             collector_tx,
+            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -518,11 +545,13 @@ mod tests {
             ..CommitterConfig::default()
         };
         let handler = Arc::new(TestHandler);
+        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             config,
             processor_rx,
             collector_tx,
+            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -562,11 +591,13 @@ mod tests {
             ..CommitterConfig::default()
         };
         let handler = Arc::new(TestHandler);
+        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             config,
             processor_rx,
             collector_tx,
+            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -598,6 +629,7 @@ mod tests {
         let main_reader_lo = Arc::new(SetOnce::new());
 
         let handler = Arc::new(TestHandler);
+        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let collector = collector(
             handler,
             CommitterConfig {
@@ -608,6 +640,7 @@ mod tests {
             },
             processor_rx,
             collector_tx,
+            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -645,6 +678,7 @@ mod tests {
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(5))));
         let metrics = test_metrics();
 
+        let (watermark_tx, mut watermark_rx) = mpsc::channel(10);
         let collector = collector(
             Arc::new(TestHandler),
             CommitterConfig {
@@ -655,6 +689,7 @@ mod tests {
             },
             processor_rx,
             collector_tx,
+            watermark_tx,
             main_reader_lo.clone(),
             metrics.clone(),
             Arc::new(AtomicUsize::new(0)),
@@ -671,9 +706,19 @@ mod tests {
         }
         let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
 
-        // Make sure that we are advancing watermarks.
-        assert_eq!(batch.watermark.len(), 6);
-        // And reporting the checkpoints as received.
+        // Only non-skipped checkpoints (5, 6) go through the batch path.
+        assert_eq!(batch.watermark.len(), 2);
+        assert_eq!(batch.batch_len, eager_rows_plus_one * 2);
+
+        // The 4 skipped checkpoints (1, 2, 3, 4) bypass the committer and send
+        // their watermarks directly to the watermark channel.
+        let mut bypassed = 0;
+        while let Ok(parts) = watermark_rx.try_recv() {
+            bypassed += parts.len();
+        }
+        assert_eq!(bypassed, 4);
+
+        // All 6 checkpoints are reported as received.
         assert_eq!(
             metrics
                 .total_collector_checkpoints_received
@@ -681,7 +726,7 @@ mod tests {
                 .get(),
             6
         );
-        // But the collector should filter out four checkpoints: (1, 2, 3, 4)
+        // 4 checkpoints were skipped (below reader_lo).
         assert_eq!(
             metrics
                 .total_collector_skipped_checkpoints
@@ -689,8 +734,6 @@ mod tests {
                 .get(),
             4
         );
-        // And that we only have values from two checkpoints (5, 6)
-        assert_eq!(batch.batch_len, eager_rows_plus_one * 2);
 
         collector.shutdown().await.unwrap();
     }
@@ -707,11 +750,13 @@ mod tests {
 
         let metrics = test_metrics();
 
+        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let collector = collector(
             Arc::new(TestHandler),
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            watermark_tx,
             main_reader_lo.clone(),
             metrics.clone(),
             Arc::new(AtomicUsize::new(0)),
