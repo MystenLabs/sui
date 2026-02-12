@@ -95,7 +95,7 @@ where
     type Batch = BigTableBatch;
 
     const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
-    const MAX_PENDING_ROWS: usize = usize::MAX;
+    const MAX_PENDING_ROWS: usize = 50_000;
 
     fn batch(
         &self,
