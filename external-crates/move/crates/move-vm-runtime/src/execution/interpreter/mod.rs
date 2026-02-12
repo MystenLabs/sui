@@ -17,6 +17,7 @@ use crate::{
 use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
 use std::sync::Arc;
+use tracing::instrument;
 
 mod eval;
 pub(crate) mod helpers;
@@ -25,6 +26,7 @@ pub(crate) mod state;
 
 /// Entrypoint into the interpreter. All external calls need to be routed through this
 /// function.
+#[instrument(level = "trace", skip_all)]
 pub(crate) fn run(
     vtables: &mut VMDispatchTables,
     telemetry: &mut TransactionTelemetryContext,
@@ -36,6 +38,7 @@ pub(crate) fn run(
     ty_args: Vec<Type>,
     args: Vec<Value>,
 ) -> VMResult<Vec<Value>> {
+    tracing::trace!("starting interpreter execution");
     let interpreter_timer = telemetry.make_timer(crate::runtime::telemetry::TimerKind::Interpreter);
     let fun_ref = function.to_ref();
     trace!(tracer, |tracer| {

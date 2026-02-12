@@ -19,6 +19,7 @@ use move_binary_format::{
 };
 use move_core_types::resolver::SerializedPackage;
 use move_vm_config::runtime::VMConfig;
+use tracing::instrument;
 
 use self::verification::linkage::verify_linkage_and_cyclic_checks;
 
@@ -28,6 +29,7 @@ use self::verification::linkage::verify_linkage_and_cyclic_checks;
 
 /// Verify a package for publication, including ensuring it is valid against its dependencies for
 /// linkage.
+#[instrument(level = "trace", skip_all)]
 pub(crate) fn validate_for_publish(
     natives: &NativeFunctions,
     vm_config: &VMConfig,
@@ -35,6 +37,10 @@ pub(crate) fn validate_for_publish(
     package: SerializedPackage,
     dependencies: BTreeMap<VersionId, &verification::ast::Package>,
 ) -> VMResult<verification::ast::Package> {
+    tracing::trace!(
+        original_id = %original_id,
+        "validating package for publication"
+    );
     dbg_println!(
         "doing verification with linkage context {:#?}\nand type origins {:#?}",
         package.linkage_table,
@@ -60,6 +66,7 @@ pub(crate) fn validate_for_publish(
 }
 
 /// Verify a set of packages for VM execution, ensuring linkage is correct and there are no cycles.
+#[instrument(level = "trace", skip_all, ret)]
 pub(crate) fn validate_for_vm_execution(
     packages: BTreeMap<VersionId, &verification::ast::Package>,
 ) -> VMResult<()> {
@@ -68,11 +75,18 @@ pub(crate) fn validate_for_vm_execution(
 
 /// Deserialize and internally verify the package.
 /// NB: Does not perform cyclic dependency verification or linkage checking.
+#[instrument(level = "trace", skip_all)]
 pub fn validate_package(
     natives: &NativeFunctions,
     vm_config: &VMConfig,
     package: SerializedPackage,
 ) -> VMResult<verification::ast::Package> {
+    tracing::trace!(
+        version_id = %package.version_id,
+        original_id = %package.original_id,
+        version = %package.version,
+        "validating package"
+    );
     let pkg = deserialization::translate::package(vm_config, package)?;
 
     // NB: We don't check for cycles inside of the package just yet since we may need to load
