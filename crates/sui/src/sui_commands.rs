@@ -628,6 +628,7 @@ impl SuiCommand {
                             &rerooted_path,
                             build_config.environment.clone(),
                             &context,
+                            false,
                         )
                         .await?;
 

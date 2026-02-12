@@ -903,6 +903,7 @@ impl SuiClientCommands {
             SuiClientCommands::Upgrade(args) => {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "upgrade")?;
+                verify_no_build_env(&args.build_config, "upgrade")?;
                 let _ = context.cache_chain_id().await?;
                 upgrade_command(args, context, false).await?
             }
@@ -915,6 +916,7 @@ impl SuiClientCommands {
             SuiClientCommands::Publish(args) => {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "publish")?;
+                verify_no_build_env(&args.build_config, "publish")?;
                 let _ = context.cache_chain_id().await?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
                     context,
@@ -1669,9 +1671,13 @@ impl SuiClientCommands {
                     (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
                 };
 
-                let environment =
-                    find_environment(&package_path, build_config.environment.clone(), context)
-                        .await?;
+                let environment = find_environment(
+                    &package_path,
+                    build_config.environment.clone(),
+                    context,
+                    false,
+                )
+                .await?;
 
                 let mut root_pkg =
                     load_root_pkg_for_publish_upgrade(context, &build_config, &package_path)
@@ -3484,7 +3490,8 @@ pub async fn load_root_pkg_for_publish_upgrade(
     build_config: &MoveBuildConfig,
     path: &Path,
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
-    let env = find_environment(path, build_config.environment.clone(), wallet).await?;
+    let env = find_environment(path, build_config.environment.clone(), wallet, true).await?;
+
     Ok(build_config.package_loader(path, &env).load().await?)
 }
 
@@ -3906,6 +3913,15 @@ fn verify_no_pubfile_path(build_config: &MoveBuildConfig, command: &str) -> anyh
             ),
         }
         .into());
+    }
+    Ok(())
+}
+
+fn verify_no_build_env(build_config: &MoveBuildConfig, command: &str) -> anyhow::Result<()> {
+    if build_config.environment.is_some() {
+        bail!(
+            "The `--build-env` argument is not allowed for `sui move {command}`; when publishing you must build for the environment that you are publishing for."
+        );
     }
     Ok(())
 }
