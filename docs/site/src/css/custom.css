@@ -2079,3 +2079,112 @@ button.tocCollapsibleButton_zfLF {
   border: 2px solid rgba(0, 0, 0, 0.2) !important;
   border-radius: 8px !important;
 }
+
+/* Protocol reference styling */
+.protoCard {
+  margin-top: 1.25rem;
+  border-radius: 16px;
+  border: 1px solid rgba(120, 120, 120, 0.25);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 10px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+html[data-theme='dark'] .protoCard {
+  border-color: rgba(120, 120, 120, 0.18);
+  background: rgba(20, 22, 24, 0.65);
+  box-shadow: 0 1px 14px rgba(0, 0, 0, 0.28);
+}
+
+.protoCardHeader {
+  padding: 20px 24px 8px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.protoCardDesc {
+  padding: 0 24px 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  opacity: 0.85;
+}
+
+.protoGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-top: 1px solid rgba(120, 120, 120, 0.18);
+}
+
+html[data-theme='dark'] .protoGrid {
+  border-top-color: rgba(120, 120, 120, 0.14);
+}
+
+.protoGridTitle {
+  grid-column: 1 / -1;
+  padding: 12px 24px;
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+  background: rgba(120, 120, 120, 0.08);
+  border-bottom: 1px solid rgba(120, 120, 120, 0.18);
+}
+
+html[data-theme='dark'] .protoGridTitle {
+  background: rgba(120, 120, 120, 0.12);
+  border-bottom-color: rgba(120, 120, 120, 0.14);
+}
+
+.protoKey {
+  grid-column: span 2;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  border-right: 1px solid rgba(120, 120, 120, 0.14);
+  border-bottom: 1px solid rgba(120, 120, 120, 0.14);
+  overflow-wrap: anywhere;
+}
+
+.protoVal {
+  grid-column: span 4;
+  padding: 12px 24px;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(120, 120, 120, 0.14);
+}
+
+.protoValMuted {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.85;
+  line-height: 1.5;
+}
+
+/* Badges */
+.protoBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 120, 120, 0.22);
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
+  margin-top: 8px;
+  background: rgba(120, 120, 120, 0.08);
+}
+
+html[data-theme='dark'] .protoBadge {
+  border-color: rgba(120, 120, 120, 0.18);
+  background: rgba(120, 120, 120, 0.14);
+}
+
+.protoBadgeOptional {
+  border-color: rgba(41, 141, 255, 0.35);
+  background: rgba(41, 141, 255, 0.12);
+}
+
+.protoBadgeRepeated {
+  border-color: rgba(255, 184, 77, 0.35);
+  background: rgba(255, 184, 77, 0.14);
+}
