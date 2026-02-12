@@ -1,0 +1,16 @@
+
+```sh
+Create signature using the private key for the given address (or its alias) in sui keystore. Any
+signature commits to a [struct IntentMessage] consisting of the Base64 encoded of the BCS serialized
+transaction bytes itself and its intent. If intent is absent, default will be used
+
+Usage: sui keytool sign [OPTIONS] --address <ADDRESS> --data <DATA>
+
+Options:
+      --address <ADDRESS>  
+      --data <DATA>        
+      --json               Return command outputs in json format
+      --intent <INTENT>    
+  -h, --help               Print help
+  -V, --version            Print version
+```

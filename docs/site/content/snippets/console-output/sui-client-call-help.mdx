@@ -1,0 +1,87 @@
+
+```sh
+Call Move function
+
+Usage: sui client call [OPTIONS] --package <PACKAGE> --module <MODULE> --function <FUNCTION>
+
+Options:
+      --package <PACKAGE>
+          Object ID of the package, which contains the module
+
+      --module <MODULE>
+          The name of the module in the package
+
+      --function <FUNCTION>
+          Function name in module
+
+      --type-args <TYPE_ARGS>...
+          Type arguments to the generic function being called. All must be specified, or the call
+          will fail
+
+      --args <ARGS>...
+          Simplified ordered args like in the function syntax ObjectIDs, Addresses must be hex
+          strings
+
+      --gas <GAS>...
+          IDs of gas objects to be used for gas payment. If none are provided, coins are selected
+          automatically to cover the gas budget
+
+      --gas-budget <GAS_BUDGET>
+          An optional gas budget for this transaction (in MIST). If gas budget is not provided, the
+          tool will first perform a dry run to estimate the gas cost, and then it will execute the
+          transaction. Please note that this incurs a small cost in performance due to the
+          additional dry run call
+
+      --gas-price <GAS_PRICE>
+          An optional gas price for this transaction (in MIST). If gas price is not provided, the
+          tool will use the current reference gas price from RPC.
+          
+          Transactions with a gas price lower than the reference will not be signed by enough
+          validators to execute. Transactions accessing congested shared objects are prioritized by
+          gas price, so setting a higher gas price higher than the reference can ensure the
+          transaction accesses the shared object sooner.
+
+      --gas-sponsor <GAS_SPONSOR>
+          An optional field to specify a gas sponsor address. If provided, the gas owner is set to
+          this address, rather than the transaction's sender.
+          
+          Note that if the CLI does not have access to the sponsor's keys, it will not be able to
+          sign and execute transactions that have a sponsor set.
+
+      --tx-digest
+          Compute the transaction digest and print it out, but do not execute the transaction
+
+      --dry-run
+          Perform a dry run of the transaction, without executing it
+
+      --dev-inspect
+          Perform a dev inspect
+
+      --serialize-unsigned-transaction
+          Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction
+          data (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The
+          string can be used to execute transaction with `sui client execute-signed-tx --tx-bytes
+          <TX_BYTES>`
+
+      --serialize-signed-transaction
+          Instead of executing the transaction, serialize the bcs bytes of the signed transaction
+          data (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>.
+          The string can be used to execute transaction with `sui client execute-combined-signed-tx
+          --signed-tx-bytes <SIGNED_TX_BYTES>`
+
+      --sender <SENDER>
+          Set the transaction sender to this address. When not specified, the sender is inferred by
+          finding the owner of the gas payment. Note that when setting this field, the transaction
+          will fail to execute if the sender's private key is not in the keystore; similarly, it
+          will fail when using this with `--serialize-signed-transaction` flag if the private key
+          corresponding to this address is not in keystore
+
+      --json
+          Return command outputs in json format
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+```
