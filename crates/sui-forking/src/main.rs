@@ -3,13 +3,9 @@
 
 mod cli;
 mod context;
-// mod data_layer;
 mod execution;
 mod graphql;
 mod grpc;
-// mod indexers;
-// mod rpc;
-// mod seeds;
 mod server;
 mod store;
 

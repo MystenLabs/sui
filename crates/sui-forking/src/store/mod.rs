@@ -230,7 +230,7 @@ impl ForkingStore {
     }
 
     pub fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
-        todo!()
+        sui_types::sui_system_state::get_sui_system_state(self).expect("system state should exist")
     }
 
     pub fn get_clock(&self) -> sui_types::clock::Clock {

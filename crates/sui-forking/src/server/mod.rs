@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use axum::{
     Json, Router,
     extract::State,
@@ -25,7 +25,7 @@ use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use simulacrum::{AdvanceEpochConfig, store::in_mem_store::KeyStore};
+use simulacrum::{AdvanceEpochConfig, Simulacrum, store::in_mem_store::KeyStore};
 use sui_data_store::{
     Node, ObjectKey, ObjectStore, VersionQuery,
     stores::{DataStore, FileSystemStore, NODE_MAPPING_FILE, ReadThroughStore},
@@ -33,9 +33,13 @@ use sui_data_store::{
 use sui_pg_db::{DbArgs, reset_database};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    digests::ChainIdentifier,
+    crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo, AuthorityStrongQuorumSignInfo},
+    digests::{ChainIdentifier, get_mainnet_chain_identifier, get_testnet_chain_identifier},
     effects::TransactionEffectsAPI,
-    messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents, VerifiedCheckpoint},
+    message_envelope::Envelope,
+    messages_checkpoint::{
+        CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
+    },
     sui_system_state::{
         SuiSystemState, SuiSystemStateTrait,
         sui_system_state_inner_v1::ValidatorSetV1,
@@ -54,8 +58,13 @@ use crate::grpc::{RpcService as GrpcRpcService, consistent_store::ForkingConsist
 use crate::grpc::{TlsArgs as GrpcTlsArgs, subscription_service::ForkingSubscriptionService};
 use crate::{graphql::GraphQLClient, store::ForkingStore};
 
+use rand::rngs::OsRng;
+use roaring::RoaringBitmap;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer;
-use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer;
+use sui_rpc::proto::sui::rpc::v2::{
+    CheckpointSummary as CKS,
+    transaction_execution_service_server::TransactionExecutionServiceServer,
+};
 use sui_rpc::proto::sui::rpc::v2::{
     ledger_service_server::LedgerServiceServer,
     subscription_service_server::SubscriptionServiceServer,
@@ -313,7 +322,6 @@ async fn faucet(
 
 /// Start the forking server
 pub async fn start_server(
-    // accounts: InitialAccounts,
     chain: Chain,
     checkpoint: Option<u64>,
     host: String,
@@ -341,96 +349,9 @@ pub async fn start_server(
         reset_database(database_url.clone(), DbArgs::default(), None).await?;
     }
 
-    let node = match chain {
-        Chain::Mainnet => Node::Mainnet,
-        Chain::Testnet => Node::Testnet,
-        Chain::Unknown => todo!("Add support for custom chains"),
-    };
-
-    let forking_path = format!(
-        "forking/{}/forked_at_checkpoint_{}",
-        chain.as_str(),
-        at_checkpoint
-    );
-
-    let fs_base_path = FileSystemStore::base_path().unwrap().join(forking_path);
-    let fs = FileSystemStore::new_with_path(node.clone(), fs_base_path.clone()).unwrap();
-    let gql_rpc_store = DataStore::new(node.clone(), version).unwrap();
-    let fs_transaction_store =
-        FileSystemStore::new_with_path(node.clone(), fs_base_path.clone()).unwrap();
-    let object_store = ReadThroughStore::new(fs, gql_rpc_store);
-
-    info!("Fs base path {:?}", fs_base_path.display());
-    let node_mapping_file = fs_base_path.join(NODE_MAPPING_FILE);
-    if !fs_base_path.exists() {
-        std::fs::create_dir_all(fs_base_path).unwrap();
-    }
-    info!("Node mapping file path: {:?}", node_mapping_file.display());
-    if !node_mapping_file.exists() {
-        std::fs::write(
-            node_mapping_file,
-            format!("{},{}", node.network_name(), chain_str),
-        )
-        .unwrap();
-    }
-
-    let mut rng = rand::rngs::OsRng;
-    let config = ConfigBuilder::new_with_temp_dir()
-        .rng(&mut rng)
-        .with_chain_start_timestamp_ms(0)
-        .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
-        .with_protocol_version(protocol_version.into())
-        .with_chain_override(chain)
-        .build();
-
-    let committee = config.committee_with_network();
-
-    // change the validator set to the sui system object to be the one in the new config we just
-    // built.
-    let checkpoint = fetch_checkpoint_from_graphql(client, Some(at_checkpoint)).await?;
-    let store = ForkingStore::new(at_checkpoint, fs_transaction_store, object_store);
-
-    let system_state = get_sui_system_state(&store).await.unwrap();
-
-    let mut inner = match system_state {
-        SuiSystemState::V2(inner) => inner,
-        _ => panic!("Unsupported system state version"),
-    };
-
-    inner.validators = match config.genesis.sui_system_object() {
-        SuiSystemState::V2(genesis_inner) => genesis_inner.validators,
-        _ => panic!("Unsupported system state version"),
-    };
-
-    let initial_sui_system_state = SuiSystemState::V2(inner);
-
-    let keystore = KeyStore::from_network_config(&config);
-
-    // let mut simulacrum = simulacrum::Simulacrum::new_with_network_config_store(&config, rng, store);
-    let mut simulacrum = simulacrum::Simulacrum::new_from_custom_state(
-        keystore,
-        checkpoint.0,
-        initial_sui_system_state,
-        &config,
-        store,
-        rng,
-    );
-    simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
-    println!("Data ingestion path: {:?}", data_ingestion_path);
-
+    let simulacrum =
+        initialize_simulacrum(at_checkpoint, &client, protocol_version, chain, version).await?;
     let simulacrum = Arc::new(RwLock::new(simulacrum));
-
-    let registry = Registry::new_custom(Some("sui_forking".into()), None)
-        .context("Failed to create Prometheus registry.")
-        .unwrap();
-
-    let rpc_listen_address = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("RPC listening on {}", rpc_listen_address);
-
-    let grpc_args = GrpcArgs {
-        rpc_listen_address,
-        tls: GrpcTlsArgs::default(),
-    };
 
     let context = crate::context::Context {
         simulacrum: simulacrum.clone(),
@@ -439,21 +360,17 @@ pub async fn start_server(
         protocol_version,
     };
 
-    let subscription_service = ForkingSubscriptionService::new(context.clone());
-    let consistent_store = ForkingConsistentStore::new(context.clone());
-    let ledger_service = ForkingLedgerService::new(simulacrum.clone(), ChainIdentifier::random());
-    let tx_execution_service = ForkingTransactionExecutionService::new(context.clone());
-    let grpc = GrpcRpcService::new(grpc_args, version, &registry)
-        .await?
-        .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
-        .register_encoded_file_descriptor_set(
-            sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::FILE_DESCRIPTOR_SET,
-        )
-        .add_service(ConsistentServiceServer::new(consistent_store))
-        .add_service(LedgerServiceServer::new(ledger_service))
-        .add_service(SubscriptionServiceServer::new(subscription_service))
-        .add_service(TransactionExecutionServiceServer::new(tx_execution_service));
-    let _ = grpc.run().await?;
+    let chain_id = match chain {
+        Chain::Mainnet => get_mainnet_chain_identifier(),
+        Chain::Testnet => get_testnet_chain_identifier(),
+        _ => bail!("Only mainnet and testnet are supported for now"),
+    };
+
+    let registry = Registry::new_custom(Some("sui_forking".into()), None)
+        .context("Failed to create Prometheus registry.")
+        .unwrap();
+
+    start_grpc_services(context.clone(), chain_id, version, &registry);
 
     let state =
         Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
@@ -509,22 +426,20 @@ pub async fn start_server(
 /// We trust the RPC response, so the checkpoint is wrapped with
 /// `new_unchecked` rather than verifying signatures against a committee.
 pub async fn fetch_checkpoint_from_graphql(
-    client: GraphQLClient,
+    client: &GraphQLClient,
     sequence_number: Option<u64>,
-) -> Result<(VerifiedCheckpoint, CheckpointContents)> {
+) -> Result<(CheckpointSummary, CheckpointContents)> {
     let (summary_bytes, content_bytes) = client.fetch_checkpoint_bcs(sequence_number).await?;
 
-    let certified: CertifiedCheckpointSummary =
-        bcs::from_bytes(&summary_bytes).context("Failed to deserialize checkpoint summary")?;
-    let contents: CheckpointContents =
-        bcs::from_bytes(&content_bytes).context("Failed to deserialize checkpoint contents")?;
+    let summary: CheckpointSummary = bcs::from_bytes(&summary_bytes)
+        .context("Failed to deserialize checkpoint summary from GraphQL")?;
+    let contents: CheckpointContents = bcs::from_bytes(&content_bytes)
+        .context("Failed to deserialize checkpoint contents from GraphQL")?;
 
-    let verified = VerifiedCheckpoint::new_unchecked(certified);
-
-    Ok((verified, contents))
+    Ok((summary, contents))
 }
 
-const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x5", "0x6"];
+const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6"];
 
 /// Update system objects to the versions at the forking checkpoint
 async fn update_system_objects(context: crate::context::Context) -> anyhow::Result<()> {
@@ -560,3 +475,170 @@ async fn get_sui_system_state(
     let state = sui_types::sui_system_state::get_sui_system_state(forking_store)?;
     Ok(state)
 }
+
+/// Start the gRPC services for the forking server
+async fn start_grpc_services(
+    context: crate::context::Context,
+    chain: ChainIdentifier,
+    version: &'static str,
+    registry: &Registry,
+) -> Result<(), anyhow::Error> {
+    let grpc_listen_address = SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("RPC listening on {}", grpc_listen_address);
+
+    let grpc_args = GrpcArgs {
+        rpc_listen_address: grpc_listen_address,
+        tls: GrpcTlsArgs::default(),
+    };
+
+    let simulacrum = context.simulacrum.clone();
+    let subscription_service = ForkingSubscriptionService::new(context.clone());
+    let consistent_store = ForkingConsistentStore::new(context.clone());
+    let ledger_service = ForkingLedgerService::new(simulacrum.clone(), ChainIdentifier::random());
+    let tx_execution_service = ForkingTransactionExecutionService::new(context.clone());
+    let grpc = GrpcRpcService::new(grpc_args, version, &registry)
+        .await?
+        .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(
+            sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::FILE_DESCRIPTOR_SET,
+        )
+        .add_service(ConsistentServiceServer::new(consistent_store))
+        .add_service(LedgerServiceServer::new(ledger_service))
+        .add_service(SubscriptionServiceServer::new(subscription_service))
+        .add_service(TransactionExecutionServiceServer::new(tx_execution_service));
+    let _ = grpc.run().await?;
+    Ok(())
+}
+
+async fn initialize_simulacrum(
+    at_checkpoint: u64,
+    client: &GraphQLClient,
+    protocol_version: u64,
+    chain: Chain,
+    version: &'static str,
+) -> Result<Simulacrum<OsRng, ForkingStore>, anyhow::Error> {
+    let node = match chain {
+        Chain::Mainnet => Node::Mainnet,
+        Chain::Testnet => Node::Testnet,
+        Chain::Unknown => todo!("Add support for custom chains"),
+    };
+    let mut rng = rand::rngs::OsRng;
+    let config = ConfigBuilder::new_with_temp_dir()
+        .rng(&mut rng)
+        .with_chain_start_timestamp_ms(0)
+        .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
+        .with_protocol_version(protocol_version.into())
+        .with_chain_override(chain)
+        .build();
+
+    let committee = config.committee_with_network();
+
+    // change the validator set to the sui system object to be the one in the new config we just
+    // built.
+    let checkpoint = fetch_checkpoint_from_graphql(client, Some(at_checkpoint)).await?;
+    let info = AuthorityQuorumSignInfo::<true> {
+        epoch: checkpoint.0.epoch,
+        signature: Default::default(),
+        signers_map: RoaringBitmap::new(),
+    };
+    let env_checkpoint = Envelope::new_from_data_and_sig(checkpoint.0, info);
+
+    let verified_checkpoint = VerifiedCheckpoint::new_unchecked(env_checkpoint);
+
+    let (fs_transaction_store, object_store) = initialize_data_store(chain, at_checkpoint, version);
+    let mut store = ForkingStore::new(at_checkpoint, fs_transaction_store, object_store);
+    store.insert_checkpoint(verified_checkpoint.clone());
+    store.insert_checkpoint_contents(checkpoint.1.clone());
+
+    // Fetch the system store at this forked checkpoint and update the validator set to match the
+    // one in our custom config, because we do not have the actual validators' keys from network.
+    let system_state = get_sui_system_state(&store).await.unwrap();
+    let mut inner = match system_state {
+        SuiSystemState::V2(inner) => inner,
+        _ => panic!("Unsupported system state version, expected SuiSystemState::V2"),
+    };
+    inner.validators = match config.genesis.sui_system_object() {
+        SuiSystemState::V1(genesis_inner) => genesis_inner.validators,
+        SuiSystemState::V2(genesis_inner) => genesis_inner.validators,
+    };
+    let initial_sui_system_state = SuiSystemState::V2(inner);
+
+    let keystore = KeyStore::from_network_config(&config);
+
+    let mut simulacrum = Simulacrum::new_from_custom_state(
+        keystore,
+        verified_checkpoint,
+        initial_sui_system_state,
+        &config,
+        store,
+        rng,
+    );
+
+    // simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
+    // println!("Data ingestion path: {:?}", data_ingestion_path);
+    Ok(simulacrum)
+}
+
+/// Create the data stores for the forking server, including a file system store for transactions
+/// and a read-through store for objects that combines the file system store and the GraphQL RPC
+/// store.
+fn initialize_data_store(
+    chain: Chain,
+    at_checkpoint: u64,
+    version: &'static str,
+) -> (
+    FileSystemStore,
+    ReadThroughStore<FileSystemStore, DataStore>,
+) {
+    let forking_path = format!(
+        "forking/{}/forked_at_checkpoint_{}",
+        chain.as_str(),
+        at_checkpoint
+    );
+
+    let node = match chain {
+        Chain::Mainnet => Node::Mainnet,
+        Chain::Testnet => Node::Testnet,
+        Chain::Unknown => todo!("Add support for custom chains"),
+    };
+
+    let fs_base_path = FileSystemStore::base_path().unwrap().join(forking_path);
+    let fs = FileSystemStore::new_with_path(node.clone(), fs_base_path.clone()).unwrap();
+    let gql_rpc_store = DataStore::new(node.clone(), version).unwrap();
+    let fs_transaction_store =
+        FileSystemStore::new_with_path(node.clone(), fs_base_path.clone()).unwrap();
+    let object_store = ReadThroughStore::new(fs, gql_rpc_store);
+
+    info!("Fs base path {:?}", fs_base_path.display());
+    let node_mapping_file = fs_base_path.join(NODE_MAPPING_FILE);
+    if !fs_base_path.exists() {
+        std::fs::create_dir_all(fs_base_path).unwrap();
+    }
+    info!("Node mapping file path: {:?}", node_mapping_file.display());
+    if !node_mapping_file.exists() {
+        std::fs::write(
+            node_mapping_file,
+            format!("{},{}", node.network_name(), chain.as_str()),
+        )
+        .unwrap();
+    }
+
+    (fs_transaction_store, object_store)
+}
+
+// Where are we at
+// - new sui system state from forked checkpoint, with the validator set updated to match a custom
+// one in the config
+// - the system should start now from the forked checkpoint itself
+//
+// Next
+// - don't forget to look into if we need to init_with_genesis for the new stuff
+// - wrong shared initial object error when running a transaction, so start looking into that
+// - finalize the checkpoint stream implementation
+// - make sure
+//  - execute faucet tx
+//  - execute advance checkpoint
+//  - execute advance epoch
+//  - execute advance clock
+//  - execute pay-sui tx
+//

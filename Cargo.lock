@@ -14830,6 +14830,7 @@ dependencies = [
  "prost-types 0.14.1",
  "rand 0.8.5",
  "reqwest",
+ "roaring 0.10.9",
  "schemars 0.8.21",
  "serde",
  "serde_json",
