@@ -4,6 +4,8 @@
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::AbstractMemorySize};
 
+use crate::shared::SafeArithmetic as _;
+
 // -------------------------------------------------------------------------------------------------
 // Abstract Memory Size
 // -------------------------------------------------------------------------------------------------
@@ -23,6 +25,10 @@ pub trait ValueView {
     fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()>;
 
     /// Returns the abstract memory size of the value.
+    ///
+    /// SAFETY: This uses the addition over `AbstractMemorySize` which is implemented as a
+    /// saturating addition. This means that if the value is too large, it will not overflow.
+    #[allow(clippy::arithmetic_side_effects)]
     fn abstract_memory_size(&self, config: &SizeConfig) -> PartialVMResult<AbstractMemorySize> {
         /// The size for primitives smaller than u128
         const PRIMITIVE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
@@ -215,7 +221,7 @@ pub trait ValueVisitor {
     fn visit_vec_u8(&mut self, depth: usize, vals: &[u8]) -> PartialVMResult<()> {
         self.visit_vec(depth, vals.len())?;
         for val in vals {
-            self.visit_u8(depth + 1, *val)?;
+            self.visit_u8(depth.safe_add(1)?, *val)?;
         }
         Ok(())
     }
@@ -223,7 +229,7 @@ pub trait ValueVisitor {
     fn visit_vec_u16(&mut self, depth: usize, vals: &[u16]) -> PartialVMResult<()> {
         self.visit_vec(depth, vals.len())?;
         for val in vals {
-            self.visit_u16(depth + 1, *val)?;
+            self.visit_u16(depth.safe_add(1)?, *val)?;
         }
         Ok(())
     }
@@ -231,7 +237,7 @@ pub trait ValueVisitor {
     fn visit_vec_u32(&mut self, depth: usize, vals: &[u32]) -> PartialVMResult<()> {
         self.visit_vec(depth, vals.len())?;
         for val in vals {
-            self.visit_u32(depth + 1, *val)?;
+            self.visit_u32(depth.safe_add(1)?, *val)?;
         }
         Ok(())
     }
@@ -239,7 +245,7 @@ pub trait ValueVisitor {
     fn visit_vec_u64(&mut self, depth: usize, vals: &[u64]) -> PartialVMResult<()> {
         self.visit_vec(depth, vals.len())?;
         for val in vals {
-            self.visit_u64(depth + 1, *val)?;
+            self.visit_u64(depth.safe_add(1)?, *val)?;
         }
         Ok(())
     }
@@ -247,7 +253,7 @@ pub trait ValueVisitor {
     fn visit_vec_u128(&mut self, depth: usize, vals: &[u128]) -> PartialVMResult<()> {
         self.visit_vec(depth, vals.len())?;
         for val in vals {
-            self.visit_u128(depth + 1, *val)?;
+            self.visit_u128(depth.safe_add(1)?, *val)?;
         }
         Ok(())
     }
@@ -259,7 +265,7 @@ pub trait ValueVisitor {
     ) -> PartialVMResult<()> {
         self.visit_vec(depth, vals.len())?;
         for val in vals {
-            self.visit_u256(depth + 1, *val)?;
+            self.visit_u256(depth.safe_add(1)?, *val)?;
         }
         Ok(())
     }
@@ -267,7 +273,7 @@ pub trait ValueVisitor {
     fn visit_vec_bool(&mut self, depth: usize, vals: &[bool]) -> PartialVMResult<()> {
         self.visit_vec(depth, vals.len())?;
         for val in vals {
-            self.visit_bool(depth + 1, *val)?;
+            self.visit_bool(depth.safe_add(1)?, *val)?;
         }
         Ok(())
     }
@@ -275,7 +281,7 @@ pub trait ValueVisitor {
     fn visit_vec_address(&mut self, depth: usize, vals: &[AccountAddress]) -> PartialVMResult<()> {
         self.visit_vec(depth, vals.len())?;
         for val in vals {
-            self.visit_address(depth + 1, *val)?;
+            self.visit_address(depth.safe_add(1)?, *val)?;
         }
         Ok(())
     }

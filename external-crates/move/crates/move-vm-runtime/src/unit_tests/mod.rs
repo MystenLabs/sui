@@ -5,6 +5,7 @@
 // These are allowed because we are in test situations in this module, and we want to be able to
 // use these constructs to write tests. In production code, these are not allowed.
 #![allow(
+    clippy::arithmetic_side_effects,
     clippy::expect_used,
     clippy::indexing_slicing,
     clippy::panic,

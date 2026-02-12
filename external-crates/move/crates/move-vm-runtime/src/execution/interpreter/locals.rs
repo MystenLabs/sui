@@ -3,9 +3,12 @@
 
 #![allow(unsafe_code)]
 
-use crate::execution::values::{MemBox, values_impl::Value};
+use crate::{
+    execution::values::{MemBox, values_impl::Value},
+    shared::SafeArithmetic as _,
+};
 
-use move_binary_format::{errors::PartialVMResult, partial_vm_error};
+use move_binary_format::{errors::PartialVMResult, partial_vm_error, safe_assert};
 
 use std::collections::HashMap;
 
@@ -57,11 +60,12 @@ impl BaseHeap {
     }
 
     /// Allocate a slot for the value in the base heap
-    pub fn allocate_value(&mut self, value: Value) -> BaseHeapId {
+    pub fn allocate_value(&mut self, value: Value) -> PartialVMResult<BaseHeapId> {
         let next_id = BaseHeapId(self.next_id);
-        self.next_id += 1;
-        self.values.insert(next_id, MemBox::new(value));
-        next_id
+        self.next_id = self.next_id.safe_add(1)?;
+        let previous = self.values.insert(next_id, MemBox::new(value));
+        safe_assert!(previous.is_none());
+        Ok(next_id)
     }
 
     /// Allocate a slot for the value in the base heap, and then borrow it
@@ -69,7 +73,7 @@ impl BaseHeap {
         &mut self,
         value: Value,
     ) -> PartialVMResult<(BaseHeapId, Value)> {
-        let id = self.allocate_value(value);
+        let id = self.allocate_value(value)?;
         let ref_ = self.borrow_loc(id)?;
         Ok((id, ref_))
     }

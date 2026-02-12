@@ -6,7 +6,7 @@ use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
     shared::{
-        SafeIndex,
+        SafeArithmetic as _, SafeIndex,
         views::{ValueView, ValueVisitor},
     },
 };
@@ -1581,33 +1581,33 @@ macro_rules! shift_op {
                     if n_bits >= 8 {
                         return Err(partial_vm_error!(ARITHMETIC_ERROR));
                     }
-                    IntegerValue::U8(x $op n_bits)
+                    IntegerValue::U8(x.$op(n_bits)?)
                 }
                 U16(x) => {
                     if n_bits >= 16 {
                         return Err(partial_vm_error!(ARITHMETIC_ERROR));
                     }
-                    IntegerValue::U16(x $op n_bits)
+                    IntegerValue::U16(x.$op(n_bits)?)
                 }
                 U32(x) => {
                     if n_bits >= 32 {
                         return Err(partial_vm_error!(ARITHMETIC_ERROR));
                     }
-                    IntegerValue::U32(x $op n_bits)
+                    IntegerValue::U32(x.$op(n_bits)?)
                 }
                 U64(x) => {
                     if n_bits >= 64 {
                         return Err(partial_vm_error!(ARITHMETIC_ERROR));
                     }
-                    IntegerValue::U64(x $op n_bits)
+                    IntegerValue::U64(x.$op(n_bits)?)
                 }
                 U128(x) => {
                     if n_bits >= 128 {
                         return Err(partial_vm_error!(ARITHMETIC_ERROR));
                     }
-                    IntegerValue::U128(x $op n_bits)
+                    IntegerValue::U128(x.$op(n_bits)?)
                 }
-                U256(x) => IntegerValue::U256(x $op n_bits),
+                U256(x) => IntegerValue::U256(x.$op(n_bits)?),
             })
         }
     };
@@ -1709,8 +1709,16 @@ impl IntegerValue {
     simple_bitwise_op!(bit_xor, ^, "Cannot bit_xor {:?} and {:?}");
 
     // Define the shift operations using the shift_op! macro
-    shift_op!(shl_checked, <<, "Cannot left shift {:?} by {:?}");
-    shift_op!(shr_checked, >>, "Cannot right shift {:?} by {:?}");
+    shift_op!(
+        shl_checked,
+        safe_shift_left,
+        "Cannot left shift {:?} by {:?}"
+    );
+    shift_op!(
+        shr_checked,
+        safe_shift_right,
+        "Cannot right shift {:?} by {:?}"
+    );
 
     // Define the comparison operations using the comparison_op! macro
     comparison_op!(lt, <, "Cannot compare {:?} and {:?}: incompatible integer types");
@@ -3204,7 +3212,7 @@ impl Reference {
                     let (vec, ndx) = entry.as_ref();
                     vec.borrow()
                         .prim_vec_ref()?
-                        .visit_indexed(*ndx, visitor, depth + 1)?
+                        .visit_indexed(*ndx, visitor, depth.safe_add(1)?)?
                 }
             }
         }
@@ -3231,7 +3239,7 @@ impl Value {
             Value::Vec(items) => {
                 if visitor.visit_vec(depth, items.len())? {
                     for item in items {
-                        item.borrow().visit_impl(visitor, depth + 1)?;
+                        item.borrow().visit_impl(visitor, depth.safe_add(1)?)?;
                     }
                 }
                 Ok(())
@@ -3249,7 +3257,7 @@ impl Value {
             Value::Struct(struct_) => {
                 if visitor.visit_struct(depth, struct_.len())? {
                     for item in struct_.iter() {
-                        item.borrow().visit_impl(visitor, depth + 1)?;
+                        item.borrow().visit_impl(visitor, depth.safe_add(1)?)?;
                     }
                 }
                 Ok(())
@@ -3258,7 +3266,7 @@ impl Value {
                 let (_tag, fields) = entry.as_ref();
                 if visitor.visit_struct(depth, fields.len())? {
                     for item in fields.iter() {
-                        item.borrow().visit_impl(visitor, depth + 1)?;
+                        item.borrow().visit_impl(visitor, depth.safe_add(1)?)?;
                     }
                 }
                 Ok(())

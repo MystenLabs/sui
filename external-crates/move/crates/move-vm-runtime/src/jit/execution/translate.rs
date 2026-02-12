@@ -15,7 +15,7 @@ use crate::{
     jit::{execution::ast::*, optimization::ast as input},
     natives::functions::NativeFunctions,
     shared::{
-        SafeIndex as _,
+        SafeArithmetic as _, SafeIndex as _,
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
         vm_pointer::VMPointer,
@@ -1110,7 +1110,9 @@ fn alloc_function(
     // Native functions do not have a code unit
     let (locals_len, locals) = match &def.code {
         Some(code) => {
-            let locals_len = parameters.len() + module.signature_at(code.locals).0.len();
+            let locals_len = parameters
+                .len()
+                .safe_add(module.signature_at(code.locals).0.len())?;
             let locals = context.arena_vec(
                 module
                     .signature_at(code.locals)

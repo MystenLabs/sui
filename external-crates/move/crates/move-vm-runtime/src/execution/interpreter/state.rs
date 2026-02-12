@@ -13,7 +13,7 @@ use crate::{
     },
     jit::execution::ast::{Function, InternedDisplay, Type},
     shared::{
-        SafeIndex as _,
+        SafeArithmetic as _, SafeIndex as _,
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         vm_pointer::VMPointer,
     },
@@ -160,7 +160,7 @@ impl MachineState {
     // Debugging and logging helpers.
     //
 
-    #[allow(dead_code)]
+    #[cfg(any(debug_assertions, feature = "testing"))]
     pub(super) fn debug_print_frame<B: Write>(
         &self,
         buf: &mut B,
@@ -206,7 +206,7 @@ impl MachineState {
 
         if pc < code.len() {
             let before = pc.saturating_sub(3);
-            let after = min(code.len(), pc + 4);
+            let after = min(code.len(), pc.saturating_add(4));
 
             for (ndx, instr) in code.iter().enumerate().take(pc).skip(before) {
                 debug_write!(buf, "            [{}] ", ndx)?;
@@ -218,7 +218,12 @@ impl MachineState {
                 .fmt(&mut *buf, &vtables.interner)
                 .map_err(fmt_err)?;
             debug_writeln!(buf)?;
-            for (ndx, instr) in code.iter().enumerate().take(after).skip(pc + 1) {
+            for (ndx, instr) in code
+                .iter()
+                .enumerate()
+                .take(after)
+                .skip(pc.saturating_add(1))
+            {
                 debug_write!(buf, "            [{}] ", ndx)?;
                 instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
                 debug_writeln!(buf)?;
@@ -248,7 +253,7 @@ impl MachineState {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    #[cfg(any(debug_assertions, feature = "testing"))]
     pub(crate) fn debug_print_stack_trace<B: Write>(
         &self,
         vtables: &VMDispatchTables,
@@ -257,7 +262,7 @@ impl MachineState {
         debug_writeln!(buf, "Call Stack:")?;
         self.debug_print_frame(buf, vtables, 0, &self.call_stack.current_frame)?;
         for (i, frame) in self.call_stack.frames.iter().enumerate() {
-            self.debug_print_frame(buf, vtables, i + 1, frame)?;
+            self.debug_print_frame(buf, vtables, i.saturating_add(1), frame)?;
         }
         debug_writeln!(buf, "Operand Stack:")?;
         for (idx, val) in self.operand_stack.value.iter().enumerate() {
@@ -349,7 +354,7 @@ impl ValueStack {
                 "Failed to get last n arguments on the argument stack"
             ));
         }
-        Ok(self.value.safe_get((self.value.len() - n)..)?.iter())
+        Ok(self.value.safe_get(self.value.len().safe_sub(n)?..)?.iter())
     }
 
     pub(crate) fn len(&self) -> usize {

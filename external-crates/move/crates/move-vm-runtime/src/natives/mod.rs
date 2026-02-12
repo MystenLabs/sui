@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::arithmetic_side_effects)]
+
 pub mod extensions;
 pub mod functions;
 pub mod move_stdlib;

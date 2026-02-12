@@ -14,6 +14,7 @@ use crate::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Package, Type, TypeNodeCount, TypeSubst,
     },
     shared::{
+        SafeArithmetic as _,
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
             VALUE_DEPTH_MAX,
@@ -612,7 +613,7 @@ impl VMDispatchTables {
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(einfo) => {
                 let mut variant_layouts = vec![];
-                *count += einfo.variants.len() as u64;
+                *count = count.safe_add(einfo.variants.len() as u64)?;
                 for variant in einfo.variants.iter() {
                     let field_tys = variant
                         .fields
@@ -621,7 +622,7 @@ impl VMDispatchTables {
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     let field_layouts = field_tys
                         .iter()
-                        .map(|ty| self.type_to_type_layout_impl(ty, count, depth + 1))
+                        .map(|ty| self.type_to_type_layout_impl(ty, count, depth.safe_add(1)?))
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     variant_layouts.push(field_layouts);
                 }
@@ -637,7 +638,7 @@ impl VMDispatchTables {
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let field_layouts = field_tys
                     .iter()
-                    .map(|ty| self.type_to_type_layout_impl(ty, count, depth + 1))
+                    .map(|ty| self.type_to_type_layout_impl(ty, count, depth.safe_add(1)?))
                     .collect::<PartialVMResult<Vec<_>>>()?;
 
                 runtime_value::MoveDatatypeLayout::Struct(Box::new(
@@ -656,7 +657,7 @@ impl VMDispatchTables {
         depth: u64,
     ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
         self.check_count_and_depth(count, &depth)?;
-        *count += 1;
+        *count = count.safe_add(1)?;
         let result = match ty {
             Type::Bool => runtime_value::MoveTypeLayout::Bool,
             Type::U8 => runtime_value::MoveTypeLayout::U8,
@@ -668,7 +669,7 @@ impl VMDispatchTables {
             Type::Address => runtime_value::MoveTypeLayout::Address,
             Type::Signer => runtime_value::MoveTypeLayout::Signer,
             Type::Vector(ty) => runtime_value::MoveTypeLayout::Vector(Box::new(
-                self.type_to_type_layout_impl(ty, count, depth + 1)?,
+                self.type_to_type_layout_impl(ty, count, depth.safe_add(1)?)?,
             )),
             Type::Datatype(gidx) => self
                 .datatype_to_type_layout(gidx, &[], count, depth)?
@@ -705,7 +706,7 @@ impl VMDispatchTables {
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(enum_type) => {
                 let mut variant_layouts = BTreeMap::new();
-                *count += enum_type.variants.len() as u64;
+                *count = count.safe_add(enum_type.variants.len() as u64)?;
                 for variant in enum_type.variants.iter() {
                     if variant.fields.len() != variant.field_names.len() {
                         return Err(partial_vm_error!(
@@ -720,8 +721,11 @@ impl VMDispatchTables {
                         .map(|(n, ty)| {
                             let n = self.interner.resolve_ident(n, "field name");
                             let ty = checked_subst(ty, ty_args)?;
-                            let l =
-                                self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
+                            let l = self.type_to_fully_annotated_layout_impl(
+                                &ty,
+                                count,
+                                depth.safe_add(1)?,
+                            )?;
                             Ok(annotated_value::MoveFieldLayout::new(n, l))
                         })
                         .collect::<PartialVMResult<Vec<_>>>()?;
@@ -755,7 +759,11 @@ impl VMDispatchTables {
                     .map(|(n, ty)| {
                         let n = self.interner.resolve_ident(n, "field name");
                         let ty = checked_subst(ty, ty_args)?;
-                        let l = self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
+                        let l = self.type_to_fully_annotated_layout_impl(
+                            &ty,
+                            count,
+                            depth.safe_add(1)?,
+                        )?;
                         Ok(annotated_value::MoveFieldLayout::new(n, l))
                     })
                     .collect::<PartialVMResult<Vec<_>>>()?;
@@ -775,7 +783,7 @@ impl VMDispatchTables {
         depth: u64,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
         self.check_count_and_depth(count, &depth)?;
-        *count += 1;
+        *count = count.safe_add(1)?;
         let result = match ty {
             Type::Bool => annotated_value::MoveTypeLayout::Bool,
             Type::U8 => annotated_value::MoveTypeLayout::U8,
@@ -787,7 +795,7 @@ impl VMDispatchTables {
             Type::Address => annotated_value::MoveTypeLayout::Address,
             Type::Signer => annotated_value::MoveTypeLayout::Signer,
             Type::Vector(ty) => annotated_value::MoveTypeLayout::Vector(Box::new(
-                self.type_to_fully_annotated_layout_impl(ty, count, depth + 1)?,
+                self.type_to_fully_annotated_layout_impl(ty, count, depth.safe_add(1)?)?,
             )),
             Type::Datatype(gidx) => self
                 .datatype_to_fully_annotated_layout(gidx, &[], count, depth)?
@@ -1122,13 +1130,13 @@ pub(crate) fn checked_subst(ty: &ArenaType, ty_args: &[Type]) -> PartialVMResult
         let (_, type_params) = &**inst;
         let mut sum_nodes = 1u64;
         for ty in type_params.iter() {
-            sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
+            sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes()?);
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
             }
         }
         for ty in ty_args.iter() {
-            sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes());
+            sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes()?);
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
             }

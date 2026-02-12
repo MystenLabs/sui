@@ -4,6 +4,7 @@
 // This code is only enabled when the `tracing` feature is enabled and is not enabled in prod, so
 // direct use of these are fine.
 #![allow(
+    clippy::arithmetic_side_effects,
     clippy::cast_possible_truncation,
     clippy::indexing_slicing,
     clippy::panic,

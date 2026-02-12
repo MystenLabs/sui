@@ -265,7 +265,7 @@ impl MoveRuntime {
                 )?;
                 let valdation_timer = txn_telemetry.make_timer_with_count(
                     crate::runtime::telemetry::TimerKind::Validation,
-                    pkg_dependencies.len() as u64 + 1,
+                    (pkg_dependencies.len() as u64).saturating_add(1),
                 );
                 let verified_pkg = {
                     let deps = pkg_dependencies

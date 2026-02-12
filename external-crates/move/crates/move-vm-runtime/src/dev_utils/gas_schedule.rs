@@ -8,7 +8,7 @@
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
 use crate::shared::{
-    SafeIndex,
+    SafeArithmetic as _, SafeIndex,
     gas::{GasMeter, SimpleInstruction},
     views::{SizeConfig, ValueView},
 };
@@ -32,10 +32,7 @@ use move_core_types::{
     u256,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    ops::{Add, Mul},
-    sync::LazyLock,
-};
+use std::{ops::Mul, sync::LazyLock};
 
 pub enum GasUnit {}
 
@@ -81,7 +78,8 @@ impl CostTable {
     pub fn instruction_cost(&self, instr_index: u8) -> PartialVMResult<&GasCost> {
         // The instruction index starts at 1.
         debug_assert!(instr_index > 0 && instr_index <= (self.instruction_table.len() as u8));
-        self.instruction_table.safe_get((instr_index - 1) as usize)
+        self.instruction_table
+            .safe_get(instr_index.safe_sub(1)? as usize)
     }
 }
 
@@ -104,8 +102,8 @@ impl GasCost {
 
     /// Convert a GasCost to a total gas charge in `InternalGas`.
     #[inline]
-    pub fn total(&self) -> u64 {
-        self.instruction_gas.add(self.memory_gas)
+    pub fn total(&self) -> PartialVMResult<u64> {
+        self.instruction_gas.safe_add(self.memory_gas)
     }
 }
 
@@ -180,7 +178,7 @@ impl<'a> GasStatus<'a> {
         self.deduct_gas(
             self.cost_table
                 .instruction_cost(opcode as u8)?
-                .total()
+                .total()?
                 .into(),
         )
     }
@@ -195,7 +193,7 @@ impl<'a> GasStatus<'a> {
         let size = std::cmp::max(1.into(), size);
         self.deduct_gas(
             InternalGasPerAbstractMemoryUnit::new(
-                self.cost_table.instruction_cost(opcode as u8)?.total(),
+                self.cost_table.instruction_cost(opcode as u8)?.total()?,
             )
             .mul(size),
         )

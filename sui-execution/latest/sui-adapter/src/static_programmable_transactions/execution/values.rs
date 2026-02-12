@@ -63,7 +63,8 @@ impl Locals {
                 Some(v) => heap.allocate_value(v.0),
                 // If the value is None, we leave the local invalid
                 None => heap.allocate_value(VMValue::invalid()),
-            };
+            }
+            .map_err(iv("allocate local"))?;
             locations.insert(checked_as!(i, u16)?, alloc_idx);
         }
         Ok(Self { heap, locations })
@@ -74,7 +75,9 @@ impl Locals {
         let mut heap = VMBaseHeap::new();
         let mut locations = BTreeMap::new();
         for i in 0..n {
-            let alloc_idx = heap.allocate_value(VMValue::invalid());
+            let alloc_idx = heap
+                .allocate_value(VMValue::invalid())
+                .map_err(iv("allocate local"))?;
             locations.insert(checked_as!(i, u16)?, alloc_idx);
         }
         Ok(Self { heap, locations })

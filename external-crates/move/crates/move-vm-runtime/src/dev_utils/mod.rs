@@ -12,12 +12,15 @@
 // want to be able to use these constructs to write tests.
 #![allow(
     clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::arithmetic_side_effects,
+    clippy::unwrap_used,
     clippy::expect_used,
     clippy::indexing_slicing,
     clippy::new_without_default,
     clippy::panic,
-    clippy::unreachable,
-    clippy::unwrap_used
+    clippy::unreachable
 )]
 
 pub(crate) mod dbg_print;
