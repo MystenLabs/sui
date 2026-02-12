@@ -547,6 +547,7 @@ impl Reference {
         }
     }
 
+    /// Used in the crate to ensure pointer uniqueness for mut refs at callsites.
     pub(crate) fn ref_ptr(&self) -> usize {
         match self {
             Reference::Value(mem_box) => mem_box.as_ptr(),

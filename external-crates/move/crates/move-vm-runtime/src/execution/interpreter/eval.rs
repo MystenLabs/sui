@@ -1143,51 +1143,6 @@ fn push_call_frame(
     state.push_call(function, ty_args, args)
 }
 
-/// Checks that mutable reference arguments to a function call point to distinct memory locations.
-/// A mutable reference's pointer must not appear in any other reference argument (mutable or
-/// immutable). Multiple immutable references to the same location are allowed.
-/// The borrow checker should guarantee this statically, so a violation is an invariant error.
-pub(crate) fn check_reference_args_unique(
-    args: &[Value],
-    parameters: &[ArenaType],
-) -> PartialVMResult<()> {
-    if args.len() != parameters.len() {
-        return Err(partial_vm_error!(
-            UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            "argument count ({}) does not match parameter count ({})",
-            args.len(),
-            parameters.len()
-        ));
-    }
-    let mut all_ref_ptrs = SmallVec::<[usize; 256]>::new();
-    let mut mut_ref_ptrs = SmallVec::<[usize; 256]>::new();
-    for (arg, param_ty) in args.iter().zip(parameters.iter()) {
-        if let Value::Reference(reference) = arg {
-            let ptr = reference.ref_ptr();
-            all_ref_ptrs.push(ptr);
-            if matches!(param_ty, ArenaType::MutableReference(_)) {
-                mut_ref_ptrs.push(ptr);
-            }
-        }
-    }
-    if mut_ref_ptrs.is_empty() {
-        // No mutable references, so no possibility of aliasing violations.
-        return Ok(());
-    }
-    all_ref_ptrs.sort_unstable();
-    for mptr in &mut_ref_ptrs {
-        let first = all_ref_ptrs.partition_point(|p| p < mptr);
-        let last = all_ref_ptrs.partition_point(|p| p <= mptr);
-        if last - first > 1 {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "mutable reference argument aliases another reference in function call"
-            ));
-        }
-    }
-    Ok(())
-}
-
 fn partial_error_to_error<T>(
     state: &MachineState,
     run_context: &RunContext,
@@ -1205,6 +1160,64 @@ fn partial_error_to_error<T>(
         ));
         finalize_execution_error(err)
     })
+}
+
+/// Checks that mutable reference arguments to a function call point to distinct memory locations.
+/// A mutable reference's pointer must not appear in any other reference argument (mutable or
+/// immutable). Multiple immutable references to the same location are allowed.
+/// The borrow checker should guarantee this statically, so a violation is an invariant error.
+pub(crate) fn check_reference_args_unique(
+    args: &[Value],
+    parameters: &[ArenaType],
+) -> PartialVMResult<()> {
+    if args.len() != parameters.len() {
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "argument count ({}) does not match parameter count ({})",
+            args.len(),
+            parameters.len()
+        ));
+    }
+
+    let mut mut_ref_ptrs = SmallVec::<[usize; 256]>::new();
+    let mut all_ref_ptrs = args
+        .iter()
+        .zip(parameters.iter())
+        .filter_map(|(arg, param_ty)| {
+            if let Value::Reference(reference) = arg {
+                let ptr = reference.ref_ptr();
+                if matches!(param_ty, ArenaType::MutableReference(_)) {
+                    mut_ref_ptrs.push(ptr);
+                }
+                Some(ptr)
+            } else {
+                None
+            }
+        })
+        .collect::<SmallVec<[usize; 256]>>();
+
+    if mut_ref_ptrs.is_empty() {
+        // No mutable references, so no possibility of aliasing violations.
+        return Ok(());
+    }
+    // Sort here because `partition_point` below works via binary search.
+    all_ref_ptrs.sort_unstable();
+
+    let ref_ptrs_len = all_ref_ptrs.len();
+    for mptr in &mut_ref_ptrs {
+        // The search here finds the lowest index `i` such that `all_ref_ptrs[i] >= mptr`. Since
+        // `mptr` is in there, we know `all_ref_ptrs[i] == mptr`, and if `all_ref_ptrs[i + 1]` is
+        // also the same, then we have two references (at least one of which is mutable) that point
+        // to the same location, which is a violation.
+        let i = all_ref_ptrs.partition_point(|p| p < mptr);
+        if i + 1 < ref_ptrs_len && all_ref_ptrs.safe_get(i)? == all_ref_ptrs.safe_get(i + 1)? {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "mutable reference argument aliases another reference in function call"
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn check_depth_of_type(run_context: &mut RunContext, ty: &Type) -> PartialVMResult<u64> {
