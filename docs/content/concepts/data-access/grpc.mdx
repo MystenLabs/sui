@@ -44,8 +44,6 @@ With built-in support for code generation, you can scaffold clients in TypeScrip
 
 In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. This is especially useful in environments where you need to track events and transactions live. gRPC's binary format is significantly faster and lighter than JSON, saving bandwidth and improving latency.
 
-<ImportContent source="grpc-graphql.mdx" mode="snippet" />
-
 ## How gRPC fits into the application stack
 
 The following gRPC services are available on Sui. Protocol buffers define the gRPC interface. You can find the relevant `.proto` files at [`sui-apis` on GitHub](https://github.com/MystenLabs/sui-apis/tree/main/proto), which apart from the gRPC messages (request and response payloads), include the following services:

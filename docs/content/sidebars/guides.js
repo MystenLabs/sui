@@ -133,32 +133,13 @@ const guides = [
     type: 'category',
     label: 'Accessing Data',
     items: [
-      {
-        type: 'category',
-        label: 'Custom Indexer Framework',
-        link: {
-          type: 'doc',
-          id: 'guides/developer/accessing-data/custom-indexing-framework',
-        },
-        items: [
-          'guides/developer/accessing-data/pipeline-architecture',
-          'guides/developer/accessing-data/custom-indexer/indexer-data-integration',
-          'guides/developer/accessing-data/custom-indexer/build',
-          'guides/developer/accessing-data/custom-indexer/indexer-runtime-perf',
-          'guides/developer/accessing-data/custom-indexer/indexer-walrus',
-        ],
-      },
       'guides/developer/accessing-data/grpc-overview',
-      {
-        type: 'category',
-        label: 'GraphQL RPC',
-        items: [
-              'guides/operator/indexer-stack-setup',
-              'guides/developer/accessing-data/query-with-graphql',
-        ],
-      },
+      'guides/developer/accessing-data/query-with-graphql',
       'guides/developer/accessing-data/archival-store',
       'guides/developer/accessing-data/using-events',
+      'guides/developer/accessing-data/custom-indexer/build',
+      'guides/developer/accessing-data/custom-indexer/indexer-walrus',
+      'guides/developer/accessing-data/bring-your-own-storage',
     ],
   },
   {
@@ -295,6 +276,7 @@ const guides = [
       'guides/operator/archives',
       'guides/operator/exchange-integration',
       'guides/operator/bridge-node-configuration',
+      'guides/operator/indexer-stack-setup',
       {
         type: 'category',
         label: 'Sui Validator Nodes',
