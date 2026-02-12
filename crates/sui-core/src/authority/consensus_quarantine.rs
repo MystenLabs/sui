@@ -94,6 +94,10 @@ pub(crate) struct ConsensusCommitOutput {
 
     // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
     owned_object_locks: HashMap<ObjectRef, LockDetails>,
+
+    // True when the checkpoint queue had no pending roots after this commit's flush.
+    // Used by quarantine to determine safe commit boundaries on restart.
+    checkpoint_queue_drained: bool,
 }
 
 impl ConsensusCommitOutput {
@@ -273,6 +277,10 @@ impl ConsensusCommitOutput {
         object_debts: Vec<(ObjectID, u64)>,
     ) {
         self.congestion_control_randomness_object_debts = object_debts;
+    }
+
+    pub fn set_checkpoint_queue_drained(&mut self, drained: bool) {
+        self.checkpoint_queue_drained = drained;
     }
 
     pub fn set_owned_object_locks(&mut self, locks: HashMap<ObjectRef, LockDetails>) {
@@ -688,43 +696,57 @@ impl ConsensusOutputQuarantine {
             .protocol_config()
             .split_checkpoints_in_consensus_handler();
 
-        while !self.output_queue.is_empty() {
-            // A consensus commit can have more than one pending checkpoint (a regular one and a randomness one).
-            // We can only write the consensus commit if the highest pending checkpoint associated with it has
-            // been processed by the builder.
-            let output = self.output_queue.front().unwrap();
-            let highest_in_commit = if split_checkpoints_in_consensus_handler {
-                // In V2, use the checkpoint_height from stats which represents the consensus
-                // commit height watermark.
-                output
+        if split_checkpoints_in_consensus_handler {
+            // V2: only commit outputs up to the last one where the checkpoint queue
+            // was fully drained (no pending roots). If the queue is empty after an
+            // output, there are no roots that could be lost on restart. Any outputs
+            // after the last drain point stay in the quarantine and get full-replayed
+            // on restart with correct root reconstruction.
+            let mut last_drain_idx = None;
+            for (i, output) in self.output_queue.iter().enumerate() {
+                let stats = output
                     .consensus_commit_stats
                     .as_ref()
-                    .expect("consensus_commit_stats must be set")
-                    .height
-            } else {
-                // In V1, use the highest pending checkpoint height from the output.
-                let Some(h) = output.get_highest_pending_checkpoint_height() else {
-                    // if highest is none, we have already written the pending checkpoint for the final epoch,
-                    // so there is no more data that needs to be committed.
+                    .expect("consensus_commit_stats must be set");
+                if stats.height > highest_committed_height {
+                    break;
+                }
+                if output.checkpoint_queue_drained {
+                    last_drain_idx = Some(i);
+                }
+            }
+            if let Some(idx) = last_drain_idx {
+                for _ in 0..=idx {
+                    let output = self.output_queue.pop_front().unwrap();
+                    info!("committing drain-boundary output");
+                    self.remove_shared_object_next_versions(&output);
+                    self.remove_processed_consensus_messages(&output);
+                    self.remove_congestion_control_debts(&output);
+                    self.remove_owned_object_locks(&output);
+                    output.write_to_batch(epoch_store, batch)?;
+                }
+            }
+        } else {
+            while !self.output_queue.is_empty() {
+                let output = self.output_queue.front().unwrap();
+                let Some(highest_in_commit) = output.get_highest_pending_checkpoint_height() else {
                     break;
                 };
-                h
-            };
 
-            if highest_in_commit <= highest_committed_height {
-                info!(
-                    "committing output with highest pending checkpoint height {:?}",
-                    highest_in_commit
-                );
-                let output = self.output_queue.pop_front().unwrap();
-                self.remove_shared_object_next_versions(&output);
-                self.remove_processed_consensus_messages(&output);
-                self.remove_congestion_control_debts(&output);
-                self.remove_owned_object_locks(&output);
-
-                output.write_to_batch(epoch_store, batch)?;
-            } else {
-                break;
+                if highest_in_commit <= highest_committed_height {
+                    info!(
+                        "committing output with highest pending checkpoint height {:?}",
+                        highest_in_commit
+                    );
+                    let output = self.output_queue.pop_front().unwrap();
+                    self.remove_shared_object_next_versions(&output);
+                    self.remove_processed_consensus_messages(&output);
+                    self.remove_congestion_control_debts(&output);
+                    self.remove_owned_object_locks(&output);
+                    output.write_to_batch(epoch_store, batch)?;
+                } else {
+                    break;
+                }
             }
         }
 
