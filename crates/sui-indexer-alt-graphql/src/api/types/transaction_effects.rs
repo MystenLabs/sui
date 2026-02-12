@@ -11,12 +11,13 @@ use async_graphql::connection::Connection;
 use async_graphql::dataloader::DataLoader;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use sui_indexer_alt_reader::kv_loader::BalanceChangeContents;
+use sui_indexer_alt_reader::kv_loader::BalanceChangeContents as KvBalanceChangeContents;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_balance_changes::TxBalanceChangeKey;
 use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
+use sui_rpc::proto::sui::rpc::v2::BalanceChange as GrpcBalanceChange;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
@@ -32,6 +33,7 @@ use crate::api::scalars::digest::Digest;
 use crate::api::scalars::json::Json;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::balance_change::BalanceChange;
+use crate::api::types::balance_change::BalanceChangeContents;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::Event;
@@ -237,17 +239,12 @@ impl EffectsContents {
 
                 // First try to get balance changes from execution context (content)
                 if let Some(balance_changes) = content.balance_changes() {
-                    return page.paginate_indices(
-                        balance_changes.length(),
-                        |i| match balance_changes {
-                            BalanceChangeContents::Grpc(changes) => {
-                                BalanceChange::from_grpc(self.scope.clone(), &changes[i])
-                            }
-                            BalanceChangeContents::Native(changes) => {
-                                BalanceChange::from_native(self.scope.clone(), changes[i].clone())
-                            }
-                        },
-                    );
+                    return page.paginate_indices(balance_changes.len(), |i| {
+                        Ok(BalanceChange::from_kv_content(
+                            self.scope.clone(),
+                            balance_changes[i].clone(),
+                        ))
+                    });
                 }
 
                 // Fall back to loading from database
@@ -269,7 +266,10 @@ impl EffectsContents {
                         .context("Failed to deserialize balance changes")?;
 
                 page.paginate_indices(balance_changes.len(), |i| {
-                    BalanceChange::from_stored(self.scope.clone(), balance_changes[i].clone())
+                    Ok(BalanceChange::from_stored(
+                        self.scope.clone(),
+                        balance_changes[i].clone(),
+                    ))
                 })
             }
             .await,
@@ -284,13 +284,16 @@ impl EffectsContents {
             async {
                 // First try to get balance changes from execution context
                 if let Some(balance_changes) = content.balance_changes() {
-                    let grpc_balance_changes = match balance_changes {
-                        BalanceChangeContents::Grpc(changes) => changes.to_vec(),
-                        BalanceChangeContents::Native(changes) => changes
-                            .iter()
-                            .map(BalanceChange::native_to_grpc)
-                            .collect::<Vec<_>>(),
-                    };
+                    let grpc_balance_changes: Vec<GrpcBalanceChange> = balance_changes
+                        .into_iter()
+                        .map(|kv_content| match kv_content {
+                            KvBalanceChangeContents::Grpc(grpc) => grpc,
+                            KvBalanceChangeContents::Native(native) => {
+                                let content = BalanceChangeContents::Native(native);
+                                GrpcBalanceChange::from(content)
+                            }
+                        })
+                        .collect();
                     let json_value = serde_json::to_value(grpc_balance_changes)
                         .context("Failed to serialize balance changes to JSON")?;
                     return json_value.try_into();
@@ -315,9 +318,12 @@ impl EffectsContents {
                     bcs::from_bytes(&stored_balance_changes.balance_changes)
                         .context("Failed to deserialize balance changes")?;
 
-                let grpc_balance_changes: Vec<_> = balance_changes
+                let grpc_balance_changes: Vec<GrpcBalanceChange> = balance_changes
                     .into_iter()
-                    .map(BalanceChange::stored_to_grpc)
+                    .map(|stored| {
+                        let content = BalanceChangeContents::Stored(stored);
+                        GrpcBalanceChange::from(content)
+                    })
                     .collect();
 
                 let json_value = serde_json::to_value(&grpc_balance_changes)

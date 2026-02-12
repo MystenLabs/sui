@@ -77,19 +77,11 @@ pub enum TransactionEventsContents {
     Serialized(StoredTransactionEvents),
 }
 
-// A wrapper for balance changes, either from gRPC or from native type.
-pub enum BalanceChangeContents<'a> {
-    Grpc(&'a [grpc::BalanceChange]),
-    Native(&'a [NativeBalanceChange]),
-}
-
-impl BalanceChangeContents<'_> {
-    pub fn length(&self) -> usize {
-        match self {
-            BalanceChangeContents::Grpc(changes) => changes.len(),
-            BalanceChangeContents::Native(changes) => changes.len(),
-        }
-    }
+// A wrapper for a single balance change, either from gRPC or from native type.
+#[derive(Clone)]
+pub enum BalanceChangeContents {
+    Grpc(grpc::BalanceChange),
+    Native(NativeBalanceChange),
 }
 
 impl KvLoader {
@@ -377,13 +369,28 @@ impl TransactionContents {
         }
     }
 
-    pub fn balance_changes(&self) -> Option<BalanceChangeContents> {
+    pub fn balance_changes(&self) -> Option<Vec<BalanceChangeContents>> {
         match self {
             Self::ExecutedTransaction {
                 balance_changes, ..
-            } => Some(BalanceChangeContents::Grpc(balance_changes)),
-            Self::LedgerGrpc(txn) => Some(BalanceChangeContents::Grpc(&txn.balance_changes)),
-            Self::Bigtable(kv) => Some(BalanceChangeContents::Native(&kv.balance_changes)),
+            } => Some(
+                balance_changes
+                    .iter()
+                    .map(|c| BalanceChangeContents::Grpc(c.clone()))
+                    .collect(),
+            ),
+            Self::LedgerGrpc(txn) => Some(
+                txn.balance_changes
+                    .iter()
+                    .map(|c| BalanceChangeContents::Grpc(c.clone()))
+                    .collect(),
+            ),
+            Self::Bigtable(kv) => Some(
+                kv.balance_changes
+                    .iter()
+                    .map(|c| BalanceChangeContents::Native(c.clone()))
+                    .collect(),
+            ),
             _ => None,
         }
     }
