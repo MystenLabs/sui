@@ -1,4 +1,4 @@
-fn main()  {
+fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo::rerun-if-env-changed=USE_TIDEHUNTER");
     println!("cargo::rustc-check-cfg=cfg(tidehunter)");
