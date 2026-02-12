@@ -1,4 +1,4 @@
-name: Docs CI
+name: Build and Deploy docs.sui.io 
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       - name: Install Nodejs
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # pin@v6.2.0
         with:
-          node-version: '18'
+          node-version: '24'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -27,3 +27,7 @@ jobs:
       - name: Build
         run: pnpm build
         working-directory: ./docs/site
+      - name: 'notify vercel'
+        uses: 'vercel/repository-dispatch/actions/status@v1'
+        with: 
+          name: 'Vercel - sui-docs: Check for build success'
