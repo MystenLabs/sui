@@ -12,7 +12,7 @@ use crate::{
     dbg_println, jit,
     natives::functions::NativeFunctions,
     runtime::telemetry::TransactionTelemetryContext,
-    shared::{SafeIndex, logging::expect_no_verification_errors, types::VersionId},
+    shared::{logging::expect_no_verification_errors, safe_ops::SafeIndex as _, types::VersionId},
     validation::{validate_package, verification},
 };
 use move_binary_format::{

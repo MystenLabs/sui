@@ -12,7 +12,7 @@ use crate::{
     },
     pop_arg,
     shared::{
-        SafeIndex,
+        safe_ops::SafeIndex as _,
         views::{SizeConfig, ValueView},
     },
 };

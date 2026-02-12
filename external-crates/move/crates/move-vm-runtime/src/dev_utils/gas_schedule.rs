@@ -8,8 +8,8 @@
 //! operations or other native operations; the cost of each native operation will be returned by the
 //! native function itself.
 use crate::shared::{
-    SafeArithmetic as _, SafeIndex,
     gas::{GasMeter, SimpleInstruction},
+    safe_ops::{SafeArithmetic as _, SafeIndex as _},
     views::{SizeConfig, ValueView},
 };
 use move_binary_format::{

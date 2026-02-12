@@ -14,12 +14,12 @@ use crate::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Package, Type, TypeNodeCount, TypeSubst,
     },
     shared::{
-        SafeArithmetic as _,
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
             VALUE_DEPTH_MAX,
         },
         linkage_context::LinkageContext,
+        safe_ops::SafeArithmetic as _,
         types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },

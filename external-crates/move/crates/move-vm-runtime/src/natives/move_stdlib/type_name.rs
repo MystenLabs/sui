@@ -6,7 +6,7 @@ use crate::{
     jit::execution::ast::Type,
     native_charge_gas_early_exit,
     natives::functions::{NativeContext, NativeFunction, NativeResult},
-    shared::SafeIndex,
+    shared::safe_ops::SafeIndex as _,
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{

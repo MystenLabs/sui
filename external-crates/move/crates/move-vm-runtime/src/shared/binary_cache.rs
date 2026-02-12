@@ -5,7 +5,7 @@ use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use move_binary_format::errors::PartialVMResult;
 
-use crate::shared::SafeIndex;
+use crate::shared::safe_ops::SafeIndex as _;
 
 // A simple cache that offers both a HashMap and a Vector lookup.
 // Values are forced into a `Arc` so they can be used from multiple thread.

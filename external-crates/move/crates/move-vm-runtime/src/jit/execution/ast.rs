@@ -12,8 +12,8 @@ use crate::{
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
-        SafeArithmetic as _,
         constants::TYPE_DEPTH_MAX,
+        safe_ops::SafeArithmetic as _,
         types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
     },

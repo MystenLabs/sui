@@ -13,7 +13,7 @@ use crate::{
         make_module_natives,
     },
     pop_arg,
-    shared::SafeIndex as _,
+    shared::safe_ops::SafeIndex as _,
 };
 use move_binary_format::{checked_as, errors::PartialVMResult};
 use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};

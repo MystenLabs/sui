@@ -4,7 +4,7 @@
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::AbstractMemorySize};
 
-use crate::shared::SafeArithmetic as _;
+use crate::shared::safe_ops::SafeArithmetic as _;
 
 // -------------------------------------------------------------------------------------------------
 // Abstract Memory Size
