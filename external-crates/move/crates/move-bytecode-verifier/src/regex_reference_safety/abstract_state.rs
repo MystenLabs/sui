@@ -20,7 +20,6 @@ use std::{
 };
 
 pub(super) type Graph = move_regex_borrow_graph::collections::Graph<(), Label>;
-type Paths = move_regex_borrow_graph::collections::Paths<(), Label>;
 
 /// AbstractValue represents a reference or a non reference value, both on the stack and stored
 /// in a local
@@ -118,7 +117,14 @@ pub(crate) const JOIN_BASE_COST: u128 = 10;
 
 pub(crate) const PER_GRAPH_ITEM: u128 = 4;
 
-pub(crate) const JOIN_ITEM_COST: u128 = 4;
+// pub(crate) const JOIN_ITEM_COST: u128 = 4;
+
+// Macro for making a "g"raph "m"eter
+macro_rules! gm {
+    ($meter:ident) => {
+        &mut GraphMeter($meter)
+    };
+}
 
 /// AbstractState is the analysis state over which abstract interpretation is performed.
 #[derive(Clone, Debug)]
@@ -131,7 +137,10 @@ pub struct AbstractState {
 
 impl AbstractState {
     /// create a new abstract state
-    pub fn new(function_context: &FunctionContext) -> PartialVMResult<Self> {
+    pub fn new(
+        function_context: &FunctionContext,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<Self> {
         let param_refs = function_context
             .parameters()
             .0
@@ -146,8 +155,23 @@ impl AbstractState {
                 let idx = idx as LocalIndex;
                 Some((idx, (), mutable))
             });
-        let (mut graph, locals) = Graph::new(param_refs)?;
-        let local_root = graph.extend_by_epsilon((), std::iter::empty(), /* is_mut */ true)?;
+        // count number of references at the end of a block (parameters + locals + 1 for local root)
+        let num_canonical_refs = function_context
+            .parameters()
+            .0
+            .iter()
+            .chain(&function_context.locals().0)
+            .filter(|ty| {
+                matches!(
+                    ty,
+                    SignatureToken::Reference(_) | SignatureToken::MutableReference(_)
+                )
+            })
+            .count()
+            + 1;
+        let (mut graph, locals) = Graph::new(num_canonical_refs, param_refs)?;
+        let local_root =
+            graph.extend_by_epsilon((), std::iter::empty(), /* is_mut */ true, gm!(meter))?;
 
         let mut state = AbstractState {
             current_function: function_context.index(),
@@ -169,14 +193,6 @@ impl AbstractState {
 
     pub(super) fn graph(&self) -> &Graph {
         &self.graph
-    }
-
-    pub(crate) fn graph_size(&self) -> usize {
-        self.graph.abstract_size()
-    }
-
-    pub(crate) fn reference_size(&self, r: Ref) -> PartialVMResult<usize> {
-        Ok(self.graph.reference_size(r)?)
     }
 
     fn error(&self, status: StatusCode, offset: CodeOffset) -> PartialVMError {
@@ -201,11 +217,10 @@ impl AbstractState {
     // No extensions
     fn is_writable(&self, r: Ref, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<bool> {
         debug_assert!(self.graph.is_mutable(r)?);
-        charge_graph_size(self.graph_size(), meter)?;
 
         Ok(self
             .graph
-            .borrowed_by(r)?
+            .borrowed_by(r, gm!(meter))?
             .values()
             .all(|paths| paths.iter().all(|path| path.is_epsilon())))
     }
@@ -219,18 +234,17 @@ impl AbstractState {
         let borrows = refs
             .iter()
             .copied()
-            .map(|r| Ok((r, self.graph.borrowed_by(r)?)))
+            .map(|r| Ok((r, self.graph.borrowed_by(r, gm!(meter))?)))
             .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
-        charge_graph_size(all_borrowed_by_size(&borrows), meter)?;
-        let mut_refs = refs
-            .iter()
-            .copied()
-            .filter_map(|r| match self.graph.is_mutable(r) {
-                Ok(true) => Some(Ok(r)),
-                Ok(false) => None,
-                Err(e) => Some(Err(e.into())),
-            })
-            .collect::<PartialVMResult<BTreeSet<_>>>()?;
+        let mut_refs = {
+            let mut s = BTreeSet::new();
+            for r in refs.iter().copied() {
+                if self.graph.is_mutable(r)? {
+                    s.insert(r);
+                }
+            }
+            s
+        };
         for (r, borrowed_by) in borrows {
             let is_mut = mut_refs.contains(&r);
             for (borrower, paths) in borrowed_by {
@@ -263,8 +277,7 @@ impl AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<bool> {
         let lbl = Label::Local(idx);
-        let borrowed_by = self.graph.borrowed_by(self.local_root)?;
-        charge_graph_size(borrowed_by_size(&borrowed_by), meter)?;
+        let borrowed_by = self.graph.borrowed_by(self.local_root, gm!(meter))?;
         let mut paths = borrowed_by.values().flatten();
         Ok(if exclude_alias {
             // the path starts with the label but is not the label itself
@@ -277,8 +290,10 @@ impl AbstractState {
 
     /// checks if any local#_ is borrowed
     fn is_any_local_borrowed(&self, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<bool> {
-        charge_graph_size(self.graph_size(), meter)?;
-        Ok(!self.graph.borrowed_by(self.local_root)?.is_empty())
+        Ok(!self
+            .graph
+            .borrowed_by(self.local_root, gm!(meter))?
+            .is_empty())
     }
 
     //**********************************************************************************************
@@ -291,11 +306,9 @@ impl AbstractState {
         is_mut: bool,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Ref> {
-        let size = self.graph_size();
         let new_r = self
             .graph
-            .extend_by_epsilon((), std::iter::once(r), is_mut)?;
-        charge_graph_size_increase(size, self.graph_size(), meter)?;
+            .extend_by_epsilon((), std::iter::once(r), is_mut, gm!(meter))?;
         Ok(new_r)
     }
 
@@ -306,11 +319,9 @@ impl AbstractState {
         extension: Label,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Ref> {
-        let size = self.graph_size();
-        let new_r = self
-            .graph
-            .extend_by_label((), std::iter::once(r), is_mut, extension)?;
-        charge_graph_size_increase(size, self.graph_size(), meter)?;
+        let new_r =
+            self.graph
+                .extend_by_label((), std::iter::once(r), is_mut, extension, gm!(meter))?;
         Ok(new_r)
     }
 
@@ -320,11 +331,9 @@ impl AbstractState {
         mutabilities: Vec<bool>,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Vec<Ref>> {
-        let size = self.graph_size();
         let new_refs =
             self.graph
-                .extend_by_dot_star_for_call((), sources.iter().copied(), mutabilities)?;
-        charge_graph_size_increase(size, self.graph_size(), meter)?;
+                .extend_by_dot_star_for_call((), sources, mutabilities, gm!(meter))?;
         Ok(new_refs)
     }
 
@@ -333,9 +342,13 @@ impl AbstractState {
     //**********************************************************************************************
 
     /// destroys local@idx
-    pub(crate) fn release_value(&mut self, value: AbstractValue) -> PartialVMResult<()> {
+    pub(crate) fn release_value(
+        &mut self,
+        value: AbstractValue,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<()> {
         match value {
-            AbstractValue::Reference(r) => Ok(self.graph.release(r)?),
+            AbstractValue::Reference(r) => Ok(self.graph.release(r, gm!(meter))?),
             AbstractValue::NonReference => Ok(()),
         }
     }
@@ -383,7 +396,7 @@ impl AbstractState {
         }
 
         if let Some(old_r) = self.locals.remove(&local) {
-            self.graph.release(old_r)?;
+            self.graph.release(old_r, gm!(meter))?;
         }
         if let Some(new_r) = new_value.to_ref() {
             let old = self.locals.insert(local, new_r);
@@ -399,7 +412,7 @@ impl AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<AbstractValue> {
         let frozen = self.extend_by_epsilon(r, /* is_mut */ false, meter)?;
-        self.graph.release(r)?;
+        self.graph.release(r, gm!(meter))?;
         Ok(AbstractValue::Reference(frozen))
     }
 
@@ -408,9 +421,10 @@ impl AbstractState {
         _offset: CodeOffset,
         v1: AbstractValue,
         v2: AbstractValue,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<AbstractValue> {
-        self.release_value(v1)?;
-        self.release_value(v2)?;
+        self.release_value(v1, meter)?;
+        self.release_value(v2, meter)?;
         Ok(AbstractValue::NonReference)
     }
 
@@ -418,8 +432,9 @@ impl AbstractState {
         &mut self,
         _offset: CodeOffset,
         r: Ref,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<AbstractValue> {
-        self.graph.release(r)?;
+        self.graph.release(r, gm!(meter))?;
         Ok(AbstractValue::NonReference)
     }
 
@@ -433,7 +448,7 @@ impl AbstractState {
             return Err(self.error(StatusCode::WRITEREF_EXISTS_BORROW_ERROR, offset));
         }
 
-        self.graph.release(r)?;
+        self.graph.release(r, gm!(meter))?;
         Ok(())
     }
 
@@ -458,7 +473,7 @@ impl AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<AbstractValue> {
         let new_r = self.extend_by_label(r, mut_, Label::Field(field), meter)?;
-        self.graph.release(r)?;
+        self.graph.release(r, gm!(meter))?;
         Ok(AbstractValue::Reference(new_r))
     }
 
@@ -472,7 +487,6 @@ impl AbstractState {
         r: Ref,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Vec<AbstractValue>> {
-        charge_graph_size(self.reference_size(r)?, meter)?;
         let field_label =
             |field_index| Label::VariantField(enum_def_idx, variant_tag, field_index as u16);
         let field_borrows = variant_def
@@ -485,12 +499,13 @@ impl AbstractState {
                     std::iter::once(r),
                     mut_,
                     field_label(field_index),
+                    gm!(meter),
                 )?;
                 Ok(AbstractValue::Reference(new_r))
             })
             .collect::<PartialVMResult<_>>()?;
 
-        self.graph.release(r)?;
+        self.graph.release(r, gm!(meter))?;
         Ok(field_borrows)
     }
 
@@ -505,7 +520,7 @@ impl AbstractState {
         if mut_ && !self.is_writable(r, meter)? {
             return Err(self.error(StatusCode::VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR, offset));
         }
-        self.graph.release(r)?;
+        self.graph.release(r, gm!(meter))?;
         Ok(())
     }
 
@@ -517,7 +532,6 @@ impl AbstractState {
         meter: &mut (impl Meter + ?Sized),
         code: StatusCode,
     ) -> PartialVMResult<Vec<AbstractValue>> {
-        charge_graph_size(self.graph_size(), meter)?;
         // Check mutable references can be transferred
         let sources = arguments
             .iter()
@@ -556,7 +570,7 @@ impl AbstractState {
 
         // Release input references
         for r in sources {
-            self.graph.release(r)?
+            self.graph.release(r, gm!(meter))?
         }
         Ok(return_values)
     }
@@ -569,7 +583,7 @@ impl AbstractState {
     ) -> PartialVMResult<()> {
         // release all local variables
         for (_, r) in std::mem::take(&mut self.locals) {
-            self.graph.release(r)?
+            self.graph.release(r, gm!(meter))?
         }
 
         // Check that no local or global is borrowed
@@ -586,7 +600,7 @@ impl AbstractState {
             return Err(self.error(StatusCode::RET_BORROWED_MUTABLE_REFERENCE_ERROR, offset));
         }
         for r in returned_refs {
-            self.graph.release(r)?
+            self.graph.release(r, gm!(meter))?
         }
 
         Ok(())
@@ -607,7 +621,7 @@ impl AbstractState {
         let mut old_to_new = BTreeMap::new();
         old_to_new.insert(self.local_root, 0);
         for (&local, old_r) in &self.locals {
-            let new_r = (local as usize) + 1;
+            let new_r = safe_unwrap!((local as u32).checked_add(1));
             let old_value = old_to_new.insert(*old_r, new_r);
             safe_assert!(old_value.is_none());
         }
@@ -646,6 +660,7 @@ impl AbstractState {
     pub(crate) fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {
+            let dummy_meter = &mut move_regex_borrow_graph::meter::DummyMeter;
             self.graph.check_invariants();
             debug_assert!(self.is_canonical() || self.is_fresh());
             let refs: BTreeSet<_> = self.graph.keys().collect();
@@ -658,11 +673,15 @@ impl AbstractState {
                 debug_assert!(refs.contains(r), "local ref {r} not in graph");
             }
             // local root should only be gone if the graph is empty from an abort
-            debug_assert!(self.graph.abstract_size() == 0 || refs.contains(&self.local_root));
+            debug_assert!(self.graph.is_empty() || refs.contains(&self.local_root));
             // the local root is not borrowed by epsilon or dotstar, i.e. all extensions of the
             // local root begin with a label
             if refs.contains(&self.local_root) {
-                for (borrower, paths) in self.graph.borrowed_by(self.local_root).unwrap() {
+                for (borrower, paths) in self
+                    .graph
+                    .borrowed_by(self.local_root, dummy_meter)
+                    .unwrap()
+                {
                     debug_assert_ne!(borrower, self.local_root);
                     for path in paths {
                         debug_assert!(!path.is_epsilon());
@@ -673,7 +692,11 @@ impl AbstractState {
         }
     }
 
-    pub(crate) fn join_(&mut self, other: &Self) -> PartialVMResult</* changed */ bool> {
+    pub(crate) fn join_(
+        &mut self,
+        other: &Self,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult</* changed */ bool> {
         let mut changed = false;
         safe_assert!(self.current_function == other.current_function);
         safe_assert!(self.local_root == other.local_root);
@@ -684,14 +707,14 @@ impl AbstractState {
         for (local, r) in self.locals.clone() {
             if !other.locals.contains_key(&local) {
                 self.locals.remove(&local);
-                self.graph.release(r)?;
+                self.graph.release(r, gm!(meter))?;
                 changed = true;
             } else {
                 safe_assert!(Some(r) == other.locals.get(&local).copied());
             }
         }
 
-        let graph_changed = self.graph.join(&other.graph)?;
+        let graph_changed = self.graph.join(&other.graph, gm!(meter))?;
         changed = changed || graph_changed;
         safe_assert!(self.is_canonical());
         self.check_invariants();
@@ -707,13 +730,8 @@ impl AbstractDomain for AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
         meter.add(Scope::Function, JOIN_BASE_COST)?;
-        let self_size = self.graph_size();
-        let state_size = state.graph_size();
-        let changed = Self::join_(self, state)?;
+        let changed = Self::join_(self, state, meter)?;
         meter.add(Scope::Function, JOIN_BASE_COST)?;
-        let max_size = max(max(self_size, state_size), self.graph_size());
-        charge_join(self_size, state_size, meter)?;
-        charge_graph_size(max_size, meter)?;
         if changed {
             Ok(JoinResult::Changed)
         } else {
@@ -722,42 +740,59 @@ impl AbstractDomain for AbstractState {
     }
 }
 
-fn charge_graph_size(size: usize, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
-    let size = max(size, 1);
-    meter.add_items(Scope::Function, PER_GRAPH_ITEM, size)
+pub struct GraphMeter<'a, M: Meter + ?Sized>(&'a mut M);
+
+impl<M: Meter + ?Sized> move_regex_borrow_graph::meter::Meter for GraphMeter<'_, M> {
+    type Error = PartialVMError;
+
+    fn visit_nodes_impl(&mut self, num_nodes: usize) -> Result<(), Self::Error> {
+        let num_nodes = max(num_nodes, 1);
+        self.0.add_items(Scope::Function, PER_GRAPH_ITEM, num_nodes)
+    }
+
+    fn visit_edges_impl(&mut self, total_edge_size: usize) -> Result<(), Self::Error> {
+        let total_edge_size = max(total_edge_size, 1);
+        self.0
+            .add_items(Scope::Function, PER_GRAPH_ITEM, total_edge_size)
+    }
 }
 
-fn charge_graph_size_increase(
-    previous: usize,
-    current: usize,
-    meter: &mut (impl Meter + ?Sized),
-) -> PartialVMResult<()> {
-    let increase = max(current.saturating_sub(previous), 1);
-    charge_graph_size(increase, meter)
-}
+// fn charge_graph_size(size: usize, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
+//     let size = max(size, 1);
+//     meter.add_items(Scope::Function, PER_GRAPH_ITEM, size)
+// }
 
-fn charge_join(
-    size1: usize,
-    size2: usize,
-    meter: &mut (impl Meter + ?Sized),
-) -> PartialVMResult<()> {
-    let size1 = max(size1, 1);
-    let size2 = max(size2, 1);
-    let size = size1.saturating_add(size2);
-    meter.add_items(Scope::Function, JOIN_ITEM_COST, size)
-}
+// fn charge_graph_size_increase(
+//     previous: usize,
+//     current: usize,
+//     meter: &mut (impl Meter + ?Sized),
+// ) -> PartialVMResult<()> {
+//     let increase = max(current.saturating_sub(previous), 1);
+//     charge_graph_size(increase, meter)
+// }
 
-fn all_borrowed_by_size(borrows_map: &BTreeMap<Ref, BTreeMap<Ref, Paths>>) -> usize {
-    borrows_map
-        .iter()
-        .flat_map(|(_, paths_map)| paths_map.values())
-        .flatten()
-        .fold(0, |acc, path| acc.saturating_add(path.abstract_size()))
-}
+// fn charge_join(
+//     size1: usize,
+//     size2: usize,
+//     meter: &mut (impl Meter + ?Sized),
+// ) -> PartialVMResult<()> {
+//     let size1 = max(size1, 1);
+//     let size2 = max(size2, 1);
+//     let size = size1.saturating_add(size2);
+//     meter.add_items(Scope::Function, JOIN_ITEM_COST, size)
+// }
 
-fn borrowed_by_size(paths_map: &BTreeMap<Ref, Paths>) -> usize {
-    paths_map
-        .iter()
-        .flat_map(|(_, paths)| paths)
-        .fold(0, |acc, path| acc.saturating_add(path.abstract_size()))
-}
+// fn all_borrowed_by_size(borrows_map: &BTreeMap<Ref, BTreeMap<Ref, Paths>>) -> usize {
+//     borrows_map
+//         .iter()
+//         .flat_map(|(_, paths_map)| paths_map.values())
+//         .flatten()
+//         .fold(0, |acc, path| acc.saturating_add(path.abstract_size()))
+// }
+
+// fn borrowed_by_size(paths_map: &BTreeMap<Ref, Paths>) -> usize {
+//     paths_map
+//         .iter()
+//         .flat_map(|(_, paths)| paths)
+//         .fold(0, |acc, path| acc.saturating_add(path.abstract_size()))
+// }
