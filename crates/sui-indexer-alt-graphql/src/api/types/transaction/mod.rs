@@ -314,6 +314,9 @@ impl Transaction {
         )
     }
 
+    /// Scan a bounded checkpoint range for transactions matching the filter. Uses bloom filters to
+    /// find candidate checkpoints that may contain matching transaction, then fetches and returns
+    /// transactions that match the filter.
     pub(crate) async fn scan(
         ctx: &Context<'_>,
         scope: Scope,
