@@ -12,6 +12,7 @@ use sui_indexer_alt_graphql::config::RpcLayer;
 use sui_indexer_alt_graphql::start_rpc;
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_metrics::uptime;
+use telemetry_subscribers::TelemetryConfig;
 use tokio::fs;
 
 // Define the `GIT_REVISION` const
@@ -32,7 +33,10 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Enable tracing, configured by environment variables.
-    let _guard = telemetry_subscribers::TelemetryConfig::new()
+    let _guard = TelemetryConfig::new()
+        // ErrorLayer is disabled by default in TelemetryConfig, but enabled by default in GraphQL
+        // to give useful error output for debugging request timeouts.
+        .with_enable_error_layer(true)
         .with_env()
         .init();
 
