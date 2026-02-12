@@ -354,21 +354,6 @@ impl ChildObjectResolver for ForkingStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        // let child_object = match self.get_object(child) {
-        //     None => return Ok(None),
-        //     Some(obj) => obj,
-        // };
-        //
-        // let parent = *parent;
-        // if child_object.owner != Owner::ObjectOwner(parent.into()) {
-        //     return Err(SuiErrorKind::InvalidChildObjectAccess {
-        //         object: *child,
-        //         given_parent: parent,
-        //         actual_owner: child_object.owner.clone(),
-        //     }
-        //     .into());
-        // }
-
         println!(
             "Reading child object: {:?} of parent: {:?} with version upper bound: {:?}",
             child, parent, child_version_upper_bound
@@ -392,57 +377,6 @@ impl ChildObjectResolver for ForkingStore {
         );
 
         Ok(object)
-
-        // println!("Reading child object: {:?} of parent: {:?}", child, parent);
-        // let child_object = match self.get_object(child) {
-        //     None => return Ok(None),
-        //     Some(obj) => obj,
-        // };
-        //
-        // let parent = *parent;
-        // if child_object.owner != Owner::ObjectOwner(parent.into()) {
-        //     return Err(SuiErrorKind::InvalidChildObjectAccess {
-        //         object: *child,
-        //         given_parent: parent,
-        //         actual_owner: child_object.owner.clone(),
-        //     }
-        //     .into());
-        // }
-        //
-        // println!(
-        //     "Child object version: {:?}, upper bound: {:?}",
-        //     child_object.version(),
-        //     child_version_upper_bound
-        // );
-        //
-        // // TODO: NO IDEA IF THIS IS CORRECT!
-        // if child_object.version() > child_version_upper_bound {
-        //     let id = child_object.id();
-        //     let child_object = self
-        //         .object_store
-        //         .get_objects(&[sui_data_store::ObjectKey {
-        //             object_id: id,
-        //             version_query: sui_data_store::VersionQuery::AtCheckpoint(
-        //                 self.forked_at_checkpoint,
-        //             ),
-        //         }])
-        //         .unwrap();
-        //
-        //     let first = child_object
-        //         .first()
-        //         .and_then(|opt| opt.as_ref())
-        //         .map(|(obj, _)| obj.clone());
-        //
-        //     return Ok(first);
-        //
-        //     // return Err(SuiErrorKind::UnsupportedFeatureError {
-        //     //     error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
-        //     //         .to_owned(),
-        //     // }
-        //     // .into());
-        // }
-        //
-        // Ok(Some(child_object))
     }
 
     fn get_object_received_at_version(
