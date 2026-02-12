@@ -22,16 +22,18 @@ impl Processor for ObjectsPipeline {
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
         let timestamp_ms = checkpoint.summary.timestamp_ms;
-        let mut entries = Vec::with_capacity(checkpoint.object_set.len());
+        let mut entries = vec![];
 
-        for object in checkpoint.object_set.iter() {
-            let object_key = ObjectKey(object.id(), object.version());
-            let entry = tables::make_entry(
-                tables::objects::encode_key(&object_key),
-                tables::objects::encode(object)?,
-                Some(timestamp_ms),
-            );
-            entries.push(entry);
+        for txn in &checkpoint.transactions {
+            for object in txn.output_objects(&checkpoint.object_set) {
+                let object_key = ObjectKey(object.id(), object.version());
+                let entry = tables::make_entry(
+                    tables::objects::encode_key(&object_key),
+                    tables::objects::encode(object)?,
+                    Some(timestamp_ms),
+                );
+                entries.push(entry);
+            }
         }
 
         Ok(entries)
