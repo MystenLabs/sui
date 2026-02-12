@@ -6,6 +6,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+permissions:
+  statuses: write
+  
 jobs:
   build:
     name: Lint, Build, and Test
