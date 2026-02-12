@@ -1366,7 +1366,7 @@ async fn get_display_fields(
 
         match sui_display::v2::Display::parse(limits, display_object.fields()) {
             Ok(display) => match display
-                .display(
+                .display::<Json>(
                     *MAX_DISPLAY_MOVE_VALUE_DEPTH,
                     *MAX_DISPLAY_OUTPUT_SIZE,
                     &interpreter,

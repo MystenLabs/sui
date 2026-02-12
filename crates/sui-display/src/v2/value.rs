@@ -34,6 +34,7 @@ use sui_types::object::rpc_visitor::Writer as _;
 use crate::v2::error::FormatError;
 use crate::v2::parser::Base64Modifier;
 use crate::v2::parser::Transform;
+use crate::v2::writer::JsonValue;
 use crate::v2::writer::JsonWriter;
 use crate::v2::writer::StringWriter;
 
@@ -197,10 +198,7 @@ impl Value<'_> {
     ///
     /// This operation can fail if the output is too large. If it succeeds, `w` will be modified to
     /// account for the size of the written data, which will be returned.
-    pub(crate) fn format_json(
-        self,
-        mut w: JsonWriter<'_>,
-    ) -> Result<serde_json::Value, FormatError> {
+    pub(crate) fn format_json<V: JsonValue>(self, mut w: JsonWriter<V>) -> Result<V, FormatError> {
         match self {
             Value::Address(a) => w.write_str(a.to_canonical_string(true)),
             Value::Bool(b) => w.write_bool(b),
@@ -459,7 +457,7 @@ impl OwnedSlice {
 }
 
 impl Slice<'_> {
-    fn format_json(self, w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
+    fn format_json<V: JsonValue>(self, w: JsonWriter<V>) -> Result<V, FormatError> {
         A::MoveValue::visit_deserialize(self.bytes, self.layout, &mut RV::RpcVisitor::new(w))
     }
 }
@@ -508,8 +506,8 @@ impl Vector<'_> {
         TypeTag::Vector(Box::new(self.type_.clone().into_owned()))
     }
 
-    fn format_json(self, mut w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
-        let mut elems = vec![];
+    fn format_json<V: JsonValue>(self, mut w: JsonWriter<V>) -> Result<V, FormatError> {
+        let mut elems = V::Vec::default();
         let mut nested = w.nest()?;
         for e in self.elements {
             let json = e.format_json(nested)?;
@@ -521,8 +519,8 @@ impl Vector<'_> {
 }
 
 impl Struct<'_> {
-    fn format_json(self, mut w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
-        let mut map = serde_json::Map::new();
+    fn format_json<V: JsonValue>(self, mut w: JsonWriter<V>) -> Result<V, FormatError> {
+        let mut map = V::Map::default();
         let nested = w.nest()?;
         self.fields.format_json(nested, &mut map)?;
         w.write_map(map)
@@ -530,8 +528,8 @@ impl Struct<'_> {
 }
 
 impl Enum<'_> {
-    fn format_json(self, mut w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
-        let mut map = serde_json::Map::new();
+    fn format_json<V: JsonValue>(self, mut w: JsonWriter<V>) -> Result<V, FormatError> {
+        let mut map = V::Map::default();
         let mut nested = w.nest()?;
 
         let name = match self.variant_name {
@@ -575,10 +573,10 @@ impl<'s> Fields<'s> {
         }
     }
 
-    fn format_json(
+    fn format_json<V: JsonValue>(
         self,
-        mut w: JsonWriter<'_>,
-        map: &mut serde_json::Map<String, serde_json::Value>,
+        mut w: JsonWriter<V>,
+        map: &mut V::Map,
     ) -> Result<(), FormatError> {
         match self {
             Fields::Positional(values) => {
@@ -825,6 +823,8 @@ pub(crate) mod tests {
     use sui_types::dynamic_field::derive_dynamic_field_id;
     use sui_types::id::ID;
     use sui_types::id::UID;
+
+    use crate::v2::writer::JsonWriter;
 
     use super::*;
 
@@ -1413,7 +1413,7 @@ pub(crate) mod tests {
         assert_eq!(values.len(), json.len());
         for (value, expect) in values.into_iter().zip(json.into_iter()) {
             let used = AtomicUsize::new(0);
-            let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+            let writer: JsonWriter = JsonWriter::new(&used, usize::MAX, usize::MAX);
             let actual = value.format_json(writer).unwrap();
             assert_eq!(actual, expect);
         }
@@ -1446,7 +1446,7 @@ pub(crate) mod tests {
         });
 
         let used = AtomicUsize::new(0);
-        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+        let writer: JsonWriter = JsonWriter::new(&used, usize::MAX, usize::MAX);
 
         assert_eq!(expect, literal.format_json(writer).unwrap());
         assert_eq!(expect, slice.format_json(writer).unwrap());
@@ -1476,7 +1476,7 @@ pub(crate) mod tests {
         });
 
         let used = AtomicUsize::new(0);
-        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+        let writer: JsonWriter = JsonWriter::new(&used, usize::MAX, usize::MAX);
 
         assert_eq!(expect, literal.format_json(writer).unwrap());
         assert_eq!(expect, slice.format_json(writer).unwrap());
@@ -1498,7 +1498,7 @@ pub(crate) mod tests {
         });
 
         let used = AtomicUsize::new(0);
-        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+        let writer: JsonWriter = JsonWriter::new(&used, usize::MAX, usize::MAX);
         assert_eq!(expect, literal.format_json(writer).unwrap());
     }
 }
