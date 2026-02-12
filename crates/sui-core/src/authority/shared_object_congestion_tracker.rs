@@ -219,14 +219,10 @@ impl SharedObjectCongestionTracker {
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
         let end_cost = start_cost.saturating_add(tx_cost);
 
-        let mut modified_objects = Vec::new();
         for obj in shared_input_objects {
             if obj.is_accessed_exclusively() {
                 let old_end_cost = self.object_execution_cost.insert(obj.id, end_cost);
                 assert!(old_end_cost.is_none() || old_end_cost.unwrap() <= end_cost);
-                if self.log_entries.is_some() {
-                    modified_objects.push(obj.id);
-                }
             }
         }
 
@@ -235,7 +231,6 @@ impl SharedObjectCongestionTracker {
                 tx_digest: *cert.digest(),
                 start_cost,
                 end_cost,
-                modified_objects,
             });
         }
     }
@@ -302,7 +297,6 @@ pub struct TransactionCostLogEntry {
     pub tx_digest: TransactionDigest,
     pub start_cost: u64,
     pub end_cost: u64,
-    pub modified_objects: Vec<ObjectID>,
 }
 
 pub struct FinishedCommitData {
@@ -1118,9 +1112,6 @@ mod object_cost_tests {
         assert_eq!(data.log_entries.len(), 1);
         assert_eq!(data.log_entries[0].tx_digest, tx_digest);
         assert_eq!(data.log_entries[0].start_cost, 0);
-        assert_eq!(data.log_entries[0].modified_objects.len(), 2);
-        assert!(data.log_entries[0].modified_objects.contains(&shared_obj_0));
-        assert!(data.log_entries[0].modified_objects.contains(&shared_obj_1));
         assert!(
             data.final_object_execution_costs
                 .contains_key(&shared_obj_0)

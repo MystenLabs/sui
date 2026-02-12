@@ -119,11 +119,6 @@ impl CongestionCommitLogger {
                     tx_digest: entry.tx_digest.into_inner().to_vec(),
                     start_cost: entry.start_cost,
                     end_cost: entry.end_cost,
-                    modified_objects: entry
-                        .modified_objects
-                        .iter()
-                        .map(|id| id.to_vec())
-                        .collect(),
                 })
                 .collect(),
         };
@@ -180,7 +175,6 @@ mod tests {
                 tx_digest: TransactionDigest::random(),
                 start_cost: 0,
                 end_cost: 100,
-                modified_objects: vec![ObjectID::random()],
             }],
             final_object_execution_costs: HashMap::from([(ObjectID::random(), 100)]),
             commit_budget: 500_000,
@@ -192,7 +186,6 @@ mod tests {
     fn test_protobuf_round_trip() {
         let obj_id = ObjectID::random();
         let tx_digest = TransactionDigest::random();
-        let modified_obj = ObjectID::random();
 
         let log = proto::CongestionCommitLog {
             epoch: 42,
@@ -208,7 +201,6 @@ mod tests {
                 tx_digest: tx_digest.into_inner().to_vec(),
                 start_cost: 50,
                 end_cost: 150,
-                modified_objects: vec![modified_obj.to_vec()],
             }],
         };
 
@@ -232,13 +224,6 @@ mod tests {
         assert_eq!(TransactionDigest::new(digest_bytes), tx_digest);
         assert_eq!(e.start_cost, 50);
         assert_eq!(e.end_cost, 150);
-        assert_eq!(
-            e.modified_objects
-                .iter()
-                .map(|b| ObjectID::try_from(b.as_slice()).unwrap())
-                .collect::<Vec<_>>(),
-            vec![modified_obj]
-        );
     }
 
     #[test]

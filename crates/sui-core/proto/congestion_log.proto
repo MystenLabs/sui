@@ -23,5 +23,4 @@ message TransactionCostEntry {
   bytes tx_digest = 1;
   uint64 start_cost = 2;
   uint64 end_cost = 3;
-  repeated bytes modified_objects = 4;
 }
