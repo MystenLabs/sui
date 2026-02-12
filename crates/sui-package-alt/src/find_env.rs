@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use anyhow::bail;
 use indexmap::IndexMap;
+use move_compiler::format_oxford_list;
 use move_package_alt::{
     RootPackage,
     schema::{Environment, EnvironmentID, EnvironmentName},
@@ -18,22 +19,26 @@ struct EnvFinder<'a> {
     explicit_env: Option<EnvironmentName>,
     wallet: &'a WalletContext,
     manifest_envs: IndexMap<EnvironmentName, EnvironmentID>,
+    for_publication: bool,
 }
 
 /// Determine the correct environment to use for the package system based on
 ///  - the path to a directory containing a Move.toml file
 ///  - the `-e <env>` argument that was passed, if any
 ///  - the CLI's active environment (`wallet`)
+///  - whether the error messages should be publication- or build-oriented.
 pub async fn find_environment(
     package_path: &Path,
     explicit_env: Option<EnvironmentName>,
     wallet: &WalletContext,
+    for_publication: bool,
 ) -> anyhow::Result<Environment> {
     let manifest_envs = RootPackage::<SuiFlavor>::environments(package_path)?;
     let finder = EnvFinder {
         explicit_env,
         wallet,
         manifest_envs,
+        for_publication,
     };
 
     // use explicit environment if provided
@@ -133,21 +138,20 @@ impl EnvFinder<'_> {
 
         if candidates.is_empty() {
             // ephemeral case, no environment found with that name, we error
-            bail!(
-                "Your active environment `{active_env}` is not present in `Move.toml`, so you cannot \
-                publish to `{active_env}`.
-
-            - If you want to create a temporary publication on `{active_env}` and record the addresses \
-               in an ephemeral file, use the `test-publish` command instead.
-
-                sui client test-publish --help
-
-            - If you want to publish to `{active_env}` and record the addresses in the shared \
-            `Publications.toml` file, you will need to add the following to `Move.toml`:
-
-                [environments]
-                {active_env} = \"{chain_id}\""
-            );
+            if self.for_publication {
+                bail!(
+                    "Your current environment is `{active_env}`, but the package does not define an `{active_env}` environment.\n\n\
+                    To publish on a different environment, you can use `sui client switch --env <env>` before publishing.\n\n\
+                    To make a temporary publication on `{active_env}`, use the `sui client test-publish` command instead.\n\n\
+                    It is also possible to add a new environment to `Move.toml` if you want to maintain a persistent publication on `{active_env}`; see https://docs.sui.io/guides/developer/packages/move-package-management#environments for more details."
+                );
+            } else {
+                let options =
+                    format_oxford_list!(ITER, "or", "`--build-env {}`", self.manifest_envs.keys());
+                bail!(
+                    "Could not determine the correct dependencies to use for `{active_env}`; pass one of {options}."
+                );
+            }
         }
 
         if candidates.len() > 1 {
