@@ -159,12 +159,12 @@ fun test_scalar_to_bytes_regression() {
 
     let minus_one = ristretto255::scalar_sub(&zero, &ristretto255::scalar_from_u64(1));
     let minus_one_bytes = *group_ops::bytes(&minus_one);
-    let expected = x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000";
+    let expected = x"ecd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010";
     assert_eq!(expected, minus_one_bytes);
 
     let minus_eight = ristretto255::scalar_sub(&zero, &ristretto255::scalar_from_u64(8));
     let minus_eight_bytes = *group_ops::bytes(&minus_eight);
-    let expected = x"73eda753299d7d483339d80809a1d80553bda402fffe5bfefffffffefffffff9";
+    let expected = x"e5d3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010";
     assert_eq!(expected, minus_eight_bytes);
 }
 
