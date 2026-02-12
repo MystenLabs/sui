@@ -188,6 +188,14 @@ impl TestEnv {
         TestTransactionBuilder::new(sender, gas, self.rgp)
     }
 
+    pub fn tx_builder_with_gas_objects(
+        &self,
+        sender: SuiAddress,
+        gas_objects: Vec<ObjectRef>,
+    ) -> TestTransactionBuilder {
+        TestTransactionBuilder::new_with_gas_objects(sender, gas_objects, self.rgp)
+    }
+
     pub async fn exec_tx_directly(
         &mut self,
         tx: TransactionData,
