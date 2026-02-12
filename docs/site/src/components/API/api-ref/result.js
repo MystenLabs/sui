@@ -2,42 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from "react";
-// import Method from "./method";
 import Markdown from "markdown-to-jsx";
 import Ref from "./ref";
 import PropType from "./proptype";
-
 import { getRef } from "..";
-
-const Property = (props) => {
-  const { property } = props;
-  const desc = property.desc
-    ? `${property.desc[0].toUpperCase()}${property.desc.substring(
-        1,
-        property.desc.length,
-      )}`
-        .replaceAll(/\</g, "&lt;")
-        .replaceAll(/\{/g, "&#123;")
-    : "";
-  return (
-    <div
-      className={`grid grid-cols-6 ml-4 even:bg-sui-ghost-white dark:even:bg-sui-ghost-dark`}
-    >
-      <div className="rounded-tl-lg rounded-bl-lg col-span-2 p-2 overflow-x-auto">
-        <p className="overflow-x-auto mb-0">
-          {property.name}
-          {property.type}
-        </p>
-      </div>
-      <div className="p-2">
-        <p className="mb-0">{property.req ? "Yes" : "No"}</p>
-      </div>
-      <div className="rounded-tr-lg rounded-br-lg col-span-3 p-2 overflow-x-auto">
-        <p className="mb-0">{property.desc && <Markdown>{desc}</Markdown>}</p>
-      </div>
-    </div>
-  );
-};
 
 const Result = (props) => {
   const { json, result } = props;
@@ -46,15 +14,12 @@ const Result = (props) => {
   let refObj = {};
   let ref = {};
 
+  // ---- ORIGINAL LOGIC (unchanged) ----
   if (hasRef) {
     const schemaPath = getRef(result.schema["$ref"]);
     ref = json.components.schemas[schemaPath];
-    if (ref.description) {
-      refObj.desc = ref.description;
-    }
-    if (ref.required) {
-      refObj.reqs = ref.required;
-    }
+    if (ref.description) refObj.desc = ref.description;
+    if (ref.required) refObj.reqs = ref.required;
     if (ref.properties && ref.properties.length > 0) {
       let x = 0;
       refObj.properties = [];
@@ -66,53 +31,31 @@ const Result = (props) => {
             desc: null,
             req: refObj.reqs.includes(k),
           });
+
+          // (kept exactly as-is from your file)
           if (typeof v.type !== "undefined" && v.type == "array") {
             if (typeof v.items["$ref"] !== "undefined") {
               refObj.properties[x].type =
                 "<[" +
-                v.items["$ref"].substring(
-                  v.items["$ref"].lastIndexOf("/") + 1,
-                  v.items["$ref"].length,
-                ) +
+                v.items["$ref"].substring(v.items["$ref"].lastIndexOf("/") + 1) +
                 "]>";
-            } else if (
-              typeof v.items.type !== "undefined" &&
-              v.items.type === "integer"
-            ) {
+            } else if (typeof v.items.type !== "undefined" && v.items.type === "integer") {
               refObj.properties[x].type = "<[" + v.items.format + "]>";
-            } else if (
-              typeof v.items.type !== "undefined" &&
-              v.items.type === "string"
-            ) {
+            } else if (typeof v.items.type !== "undefined" && v.items.type === "string") {
               refObj.properties[x].type = "<[" + v.items.type + "]>";
-            } else if (
-              typeof v.items.type !== "undefined" &&
-              v.items.type === "array"
-            ) {
+            } else if (typeof v.items.type !== "undefined" && v.items.type === "array") {
               let items = [];
               try {
                 if (typeof v.items.items["$ref"] !== "undefined") {
-                  items.push(
-                    `{${v.items.items["$ref"].substring(
-                      v.items.items["$ref"].lastIndexOf("/") + 1,
-                      v.items.items["$ref"].length,
-                    )}}`,
-                  );
+                  items.push(`{${v.items.items["$ref"].substring(v.items.items["$ref"].lastIndexOf("/") + 1)}}`);
                 } else if (v.items.items[0].type === "string") {
                   items.push("string");
                 } else {
                   v.items.items.map((item) => {
                     if (typeof item["$ref"] !== "undefined") {
-                      items.push(
-                        `{${item["$ref"].substring(
-                          item["$ref"].lastIndexOf("/") + 1,
-                          item["$ref"].length,
-                        )}}`,
-                      );
+                      items.push(`{${item["$ref"].substring(item["$ref"].lastIndexOf("/") + 1)}}`);
                     } else if (typeof item.type !== "undefined") {
-                      if (item.type === "integer") {
-                        items.push(item.format);
-                      }
+                      if (item.type === "integer") items.push(item.format);
                     }
                   });
                 }
@@ -120,7 +63,6 @@ const Result = (props) => {
                 console.log(err);
                 console.log(v);
               }
-
               refObj.properties[x].type = `<[${items.join(", ")}]>`;
             } else {
               console.log("Result not processed.");
@@ -131,12 +73,7 @@ const Result = (props) => {
           } else if (typeof v.allOf !== "undefined" && v.allOf.length == 1) {
             if (typeof v.allOf[0]["$ref"] !== "undefined") {
               refObj.properties[x].type =
-                "<[" +
-                v.allOf[0]["$ref"].substring(
-                  v.allOf[0]["$ref"].lastIndexOf("/") + 1,
-                  v.allOf[0]["$ref"].length,
-                ) +
-                "]>";
+                "<[" + v.allOf[0]["$ref"].substring(v.allOf[0]["$ref"].lastIndexOf("/") + 1) + "]>";
             } else {
               console.log("Error1");
             }
@@ -144,43 +81,25 @@ const Result = (props) => {
             refObj.properties[x].type = "<string>";
           } else if (typeof v["$ref"] !== "undefined") {
             refObj.properties[x].type =
-              "<" +
-              v["$ref"].substring(
-                v["$ref"].lastIndexOf("/") + 1,
-                v["$ref"].length,
-              ) +
-              ">";
+              "<" + v["$ref"].substring(v["$ref"].lastIndexOf("/") + 1) + ">";
           } else if (typeof v.type !== "undefined" && v.type == "boolean") {
             refObj.properties[x].type = "<Boolean>";
           } else if (typeof v.anyOf !== "undefined") {
             if (typeof v.anyOf[0]["$ref"] !== "undefined") {
               refObj.properties[x].type =
-                "<" +
-                v.anyOf[0]["$ref"].substring(
-                  v.anyOf[0]["$ref"].lastIndexOf("/") + 1,
-                  v.anyOf[0]["$ref"].length,
-                ) +
-                " | null>";
+                "<" + v.anyOf[0]["$ref"].substring(v.anyOf[0]["$ref"].lastIndexOf("/") + 1) + " | null>";
             } else {
               console.log("Error2");
             }
           } else if (typeof v.type !== "undefined" && v.type == "object") {
             if (typeof v.additionalProperties["$ref"] !== "undefined") {
               refObj.properties[x].type =
-                "<" +
-                v.additionalProperties["$ref"].substring(
-                  v.additionalProperties["$ref"].lastIndexOf("/") + 1,
-                  v.additionalProperties["$ref"].length,
-                ) +
-                ">";
+                "<" + v.additionalProperties["$ref"].substring(v.additionalProperties["$ref"].lastIndexOf("/") + 1) + ">";
             } else if (typeof v.additionalProperties.anyOf !== "undefined") {
               let type = [];
               v.additionalProperties.anyOf.map((prop) => {
-                if (typeof prop["$ref"] !== "undefined") {
-                  type.push(getRef(prop["$ref"]));
-                } else if (typeof prop.type !== "undefined") {
-                  type.push(prop.type);
-                }
+                if (typeof prop["$ref"] !== "undefined") type.push(getRef(prop["$ref"]));
+                else if (typeof prop.type !== "undefined") type.push(prop.type);
               });
               refObj.properties[x].type = `<${type.join(" | ")}>`;
             } else if (v.additionalProperties.type === "boolean") {
@@ -189,17 +108,11 @@ const Result = (props) => {
               console.log("Error3");
               console.log(v);
             }
-          } else if (
-            typeof v.items !== "undefined" &&
-            v.items.type == "array"
-          ) {
+          } else if (typeof v.items !== "undefined" && v.items.type == "array") {
             if (typeof v.items.items[0]["$ref"] !== "undefined") {
               refObj.properties[x].type =
                 "<[" +
-                v.items.items[0]["$ref"].substring(
-                  v.items.items[0]["$ref"].lastIndexOf("/") + 1,
-                  v.items.items[0]["$ref"].length,
-                ) +
+                v.items.items[0]["$ref"].substring(v.items.items[0]["$ref"].lastIndexOf("/") + 1) +
                 ", " +
                 v.items.items[1].format +
                 "]>";
@@ -207,11 +120,8 @@ const Result = (props) => {
               console.log("Error4");
             }
           } else if (typeof v.type !== "undefined" && Array.isArray(v.type)) {
-            if (v.type[0] == "string") {
-              refObj.properties[x].type = "<string, null>";
-            } else if (v.type[0] == "integer") {
-              refObj.properties[x].type = "<" + v.format + ", null>";
-            }
+            if (v.type[0] == "string") refObj.properties[x].type = "<string, null>";
+            else if (v.type[0] == "integer") refObj.properties[x].type = "<" + v.format + ", null>";
           } else if (v.description) {
             refObj.properties[x].desc = v.description;
           } else {
@@ -226,44 +136,60 @@ const Result = (props) => {
       }
     }
   }
+  // ---- END ORIGINAL LOGIC ----
 
   const hasRefProps = refObj.properties && refObj.properties.length > 0;
-  const hasDesc = refObj.desc;
 
   return (
-    <div className="ml-4 p-4 text-sui-gray-80 dark:text-sui-gray-50 border dark:border-sui-gray-75 rounded-lg bg-sui-ghost-white dark:bg-sui-ghost-dark">
-      <p className="font-bold">
-        <PropType proptype={[result.name, result.schema]}></PropType>
-      </p>
+    <div className="api-card api-card-pad">
+      <div className="api-section-title">Result</div>
 
-      {hasDesc && !hasRef && (
-        <p className="ml-4 p-2 text-sui-gray-100 dark:text-sui-gray-50 rounded-lg">
+      <div className="mb-3">
+        <PropType proptype={[result.name, result.schema]} />
+      </div>
+
+      {refObj.desc && !hasRef && (
+        <div className="api-muted">
           <Markdown>{refObj.desc}</Markdown>
-        </p>
-      )}
-      {hasRef && <Ref schema={ref}></Ref>}
-      {hasRef && hasRefProps && (
-        <div className="border-b pb-4">
-          <p className="font-bold mt-6 mb-2 ml-4 text-sui-gray-80 dark:text-sui-gray-50">
-            Properties
-          </p>
-          <div className={`grid grid-cols-6 ml-4 pb-2`}>
-            <div className="rounded-tl-lg rounded-bl-lg col-span-2 p-2 bg-sui-blue dark:bg-sui-blue-dark text-sui-gray-95 dark:text-sui-gray-50 font-bold">
-              Name&lt;Type&gt;
-            </div>
-            <div className="p-2 bg-sui-blue dark:bg-sui-blue-dark text-sui-gray-95 dark:text-sui-gray-50 font-bold">
-              Required
-            </div>
-            <div className="rounded-tr-lg rounded-br-lg col-span-3 p-2 bg-sui-blue dark:bg-sui-blue-dark text-sui-gray-95 dark:text-sui-gray-50 font-bold">
-              Description
-            </div>
-          </div>
-          {refObj.properties.map((property) => {
-            return <Property property={property} key={property.name} />;
-          })}
         </div>
       )}
-      {!result && <p>Not applicable</p>}
+
+      {hasRef && <Ref schema={ref} />}
+
+      {hasRef && hasRefProps && (
+        <div className="api-section">
+          <div className="api-section-title">Properties</div>
+
+          <div className="api-row-head">
+            <div>Name &amp; Type</div>
+            <div>Required</div>
+            <div>Description</div>
+          </div>
+
+          <div className="api-rows">
+            {refObj.properties.map((p) => (
+              <div key={p.name} className="api-row">
+                <div className="api-cell api-cell-scroll">
+                  <span className="inline-flex items-center gap-2 min-w-0">
+                    <span className="font-semibold">{p.name}</span>
+                    {p.type ? <span className="api-typechip">{p.type}</span> : null}
+                  </span>
+                </div>
+                <div className="api-cell">
+                  <span className={p.req ? "api-badge-yes" : "api-badge-no"}>
+                    {p.req ? "Required" : "Optional"}
+                  </span>
+                </div>
+                <div className="api-cell api-cell-scroll">
+                  {p.desc ? <Markdown>{p.desc}</Markdown> : <span className="api-muted">—</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!result && <div className="api-muted">Not applicable</div>}
     </div>
   );
 };

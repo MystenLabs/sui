@@ -57,6 +57,8 @@ const config = {
   plugins: [
     //require.resolve('./src/plugins/framework'),
     "docusaurus-plugin-copy-page-button",
+    require.resolve("./src/plugins/validate-openrpc"),
+
     [
       require.resolve("./src/shared/plugins/plausible"),
       {
@@ -150,6 +152,7 @@ const config = {
             "**/snippets/**",
             "**/standards/deepbook-ref/**",
             "**/app-examples/ts-sdk-ref/**",
+            "**/sui-graphql/**/generated.md",
           ],
           admonitions: {
             keywords: ["checkpoint"],
