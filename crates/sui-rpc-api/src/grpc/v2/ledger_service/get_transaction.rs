@@ -71,8 +71,9 @@ pub fn get_transaction(
         .inner()
         .get_latest_checkpoint()?
         .sequence_number;
+    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
 
-    if transaction_checkpoint > latest_checkpoint {
+    if !(lowest_available_checkpoint..=latest_checkpoint).contains(&transaction_checkpoint) {
         return Err(TransactionNotFoundError(transaction_digest).into());
     }
 
@@ -119,6 +120,7 @@ pub fn batch_get_transactions(
         .inner()
         .get_latest_checkpoint()?
         .sequence_number;
+    let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
 
     let transactions = digests
         .into_iter()
@@ -138,7 +140,8 @@ pub fn batch_get_transactions(
                 return Err(TransactionNotFoundError(digest).into());
             };
 
-            if transaction_checkpoint > latest_checkpoint {
+            if !(lowest_available_checkpoint..=latest_checkpoint).contains(&transaction_checkpoint)
+            {
                 return Err(TransactionNotFoundError(digest).into());
             }
 

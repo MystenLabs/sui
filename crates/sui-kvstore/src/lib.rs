@@ -56,7 +56,7 @@ use serde::Serialize;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
-use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
@@ -75,8 +75,15 @@ use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
 
 mod bigtable;
+pub mod config;
 mod handlers;
 pub mod tables;
+
+pub use config::CommitterLayer;
+pub use config::ConcurrentLayer;
+pub use config::IndexerConfig;
+pub use config::IngestionConfig;
+pub use config::PipelineLayer;
 
 static WRITE_LEGACY_DATA: OnceLock<bool> = OnceLock::new();
 
@@ -196,44 +203,65 @@ impl BigTableIndexer {
         indexer_args: IndexerArgs,
         client_args: ClientArgs,
         ingestion_config: IngestionConfig,
-        config: ConcurrentConfig,
+        committer: CommitterConfig,
+        pipeline: PipelineLayer,
         registry: &Registry,
     ) -> Result<Self> {
         let mut indexer = Indexer::new(
             store,
             indexer_args,
             client_args,
-            ingestion_config,
+            ingestion_config.into(),
             None,
             registry,
         )
         .await?;
 
+        let base = ConcurrentConfig {
+            committer,
+            pruner: None,
+        };
+
         indexer
-            .concurrent_pipeline(BigTableHandler::new(CheckpointsPipeline), config.clone())
+            .concurrent_pipeline(
+                BigTableHandler::new(CheckpointsPipeline),
+                pipeline.checkpoints.finish(base.clone()),
+            )
             .await?;
         indexer
             .concurrent_pipeline(
                 BigTableHandler::new(CheckpointsByDigestPipeline),
-                config.clone(),
+                pipeline.checkpoints_by_digest.finish(base.clone()),
             )
             .await?;
         indexer
-            .concurrent_pipeline(BigTableHandler::new(TransactionsPipeline), config.clone())
+            .concurrent_pipeline(
+                BigTableHandler::new(TransactionsPipeline),
+                pipeline.transactions.finish(base.clone()),
+            )
             .await?;
         indexer
-            .concurrent_pipeline(BigTableHandler::new(ObjectsPipeline), config.clone())
+            .concurrent_pipeline(
+                BigTableHandler::new(ObjectsPipeline),
+                pipeline.objects.finish(base.clone()),
+            )
             .await?;
         indexer
-            .concurrent_pipeline(BigTableHandler::new(EpochStartPipeline), config.clone())
+            .concurrent_pipeline(
+                BigTableHandler::new(EpochStartPipeline),
+                pipeline.epoch_start.finish(base.clone()),
+            )
             .await?;
         indexer
-            .concurrent_pipeline(BigTableHandler::new(EpochEndPipeline), config.clone())
+            .concurrent_pipeline(
+                BigTableHandler::new(EpochEndPipeline),
+                pipeline.epoch_end.finish(base.clone()),
+            )
             .await?;
 
         if write_legacy_data() {
             indexer
-                .concurrent_pipeline(EpochLegacyPipeline, config)
+                .concurrent_pipeline(EpochLegacyPipeline, pipeline.epoch_legacy.finish(base))
                 .await?;
         }
 

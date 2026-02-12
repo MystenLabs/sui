@@ -9,17 +9,10 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 
 use crate::pipeline::Pipeline;
-
-fn default_client_metric_host() -> String {
-    "127.0.0.1".to_string()
-}
-
-fn default_client_metric_port() -> u16 {
-    8081
-}
 
 fn default_file_format() -> FileFormat {
     FileFormat::Parquet
@@ -91,31 +84,52 @@ pub enum OutputStoreConfig {
     Custom(std::sync::Arc<dyn object_store::ObjectStore>),
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CommitterLayer {
+    pub write_concurrency: Option<usize>,
+    pub collect_interval_ms: Option<u64>,
+    pub watermark_interval_ms: Option<u64>,
+}
+
+impl CommitterLayer {
+    pub fn finish(self, base: CommitterConfig) -> CommitterConfig {
+        CommitterConfig {
+            write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
+            collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
+            watermark_interval_ms: self
+                .watermark_interval_ms
+                .unwrap_or(base.watermark_interval_ms),
+            watermark_interval_jitter_ms: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SequentialLayer {
+    pub committer: Option<CommitterLayer>,
+    pub checkpoint_lag: Option<u64>,
+}
+
+impl SequentialLayer {
+    pub fn finish(self, base: SequentialConfig) -> SequentialConfig {
+        SequentialConfig {
+            committer: if let Some(c) = self.committer {
+                c.finish(base.committer)
+            } else {
+                base.committer
+            },
+            checkpoint_lag: self.checkpoint_lag.unwrap_or(base.checkpoint_lag),
+        }
+    }
+}
+
 /// Main configuration for an analytics indexer job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexerConfig {
-    /// The url of the metrics client to connect to.
-    #[serde(default = "default_client_metric_host")]
-    pub client_metric_host: String,
-    /// The port of the metrics client to connect to.
-    #[serde(default = "default_client_metric_port")]
-    pub client_metric_port: u16,
     /// Output object store configuration
     pub output_store: OutputStoreConfig,
-    /// Remote store URL.
-    pub remote_store_url: Option<String>,
-    /// Optional streaming URL for real-time indexing
-    pub streaming_url: Option<String>,
-    /// RPC API URL for request/reply from full node.
-    pub rpc_api_url: String,
-    /// Optional RPC username
-    pub rpc_username: Option<String>,
-    /// Optional RPC password
-    pub rpc_password: Option<String>,
     /// Optional working directory for temporary files (defaults to system temp dir)
     pub work_dir: Option<PathBuf>,
-    /// Optional local ingestion path for reading checkpoints from disk instead of remote
-    pub local_ingestion_path: Option<PathBuf>,
     pub sf_account_identifier: Option<String>,
     pub sf_warehouse: Option<String>,
     pub sf_database: Option<String>,
@@ -142,10 +156,7 @@ pub struct IndexerConfig {
     pub ingestion: IngestionConfig,
 
     #[serde(default)]
-    pub sequential: SequentialConfig,
-
-    pub first_checkpoint: Option<u64>,
-    pub last_checkpoint: Option<u64>,
+    pub committer: CommitterLayer,
 
     /// Maximum serialized files waiting in upload queue per pipeline.
     /// When the queue is full, serialization blocks until uploads complete.
@@ -256,6 +267,8 @@ pub struct PipelineConfig {
     /// Default: 600 (10 minutes).
     #[serde(default = "default_force_batch_cut_after_secs")]
     pub force_batch_cut_after_secs: u64,
+    #[serde(default)]
+    pub sequential: SequentialLayer,
 }
 
 impl PipelineConfig {

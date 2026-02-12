@@ -27,7 +27,6 @@ use std::{
     borrow::Borrow,
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
-    thread::LocalKey,
 };
 use sui_types::{
     TypeTag,
@@ -55,7 +54,7 @@ type Set<K> = IndexSet<K>;
 /// allows this to be used by both the object runtime (for reading) and the test scenario (for
 /// writing) while hiding mutability.
 #[derive(Tid)]
-pub struct InMemoryTestStore(pub &'static LocalKey<RefCell<InMemoryStorage>>);
+pub struct InMemoryTestStore(pub RefCell<InMemoryStorage>);
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
 impl ChildObjectResolver for InMemoryTestStore {
@@ -65,8 +64,9 @@ impl ChildObjectResolver for InMemoryTestStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        let l: &'static LocalKey<RefCell<InMemoryStorage>> = self.0;
-        l.with_borrow(|store| store.read_child_object(parent, child, child_version_upper_bound))
+        self.0
+            .borrow()
+            .read_child_object(parent, child, child_version_upper_bound)
     }
 
     fn get_object_received_at_version(
@@ -76,14 +76,12 @@ impl ChildObjectResolver for InMemoryTestStore {
         receive_object_at_version: SequenceNumber,
         epoch_id: sui_types::committee::EpochId,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        self.0.with_borrow(|store| {
-            store.get_object_received_at_version(
-                owner,
-                receiving_object_id,
-                receive_object_at_version,
-                epoch_id,
-            )
-        })
+        self.0.borrow().get_object_received_at_version(
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
     }
 }
 
@@ -248,10 +246,7 @@ pub fn end_transaction(
     // For any unused allocated tickets, remove them from the store.
     let store: &&InMemoryTestStore = get_extension!(context)?;
     for id in unreceived {
-        if store
-            .0
-            .with_borrow_mut(|store| store.remove_object(id).is_none())
-        {
+        if store.0.borrow_mut().remove_object(id).is_none() {
             return Ok(NativeResult::err(
                 context.gas_used(),
                 E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
@@ -712,7 +707,7 @@ pub fn allocate_receiving_ticket_for_object(
 
     // NB: Must be a `&&` reference since the extension stores a static ref to the object storage.
     let store: &&InMemoryTestStore = get_extension!(context)?;
-    store.0.with_borrow_mut(|store| store.insert_object(object));
+    store.0.borrow_mut().insert_object(object);
 
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -743,10 +738,7 @@ pub fn deallocate_receiving_ticket_for_object(
 
     // Remove the object from storage. We should never hit this scenario either.
     let store: &&InMemoryTestStore = get_extension!(context)?;
-    if store
-        .0
-        .with_borrow_mut(|store| store.remove_object(id).is_none())
-    {
+    if store.0.borrow_mut().remove_object(id).is_none() {
         return Ok(NativeResult::err(
             context.gas_used(),
             E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,

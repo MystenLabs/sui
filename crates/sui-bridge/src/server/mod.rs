@@ -15,8 +15,10 @@ use crate::with_metrics;
 use alloy::primitives::Address as EthAddress;
 use axum::Json;
 use axum::Router;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::encoding::{Encoding, Hex};
@@ -35,6 +37,9 @@ pub mod handler;
 pub(crate) mod mock_handler;
 
 pub const APPLICATION_JSON: &str = "application/json";
+
+pub const MAX_REQUEST_URI_SIZE: usize = 8 * 1024;
+pub const MAX_REQUEST_BODY_SIZE: usize = 64 * 1024;
 
 // Maximum number of items allowed in comma-separated lists in governance endpoints
 // This prevents DoS attacks where oversized lists cause panics during u8 conversion
@@ -133,17 +138,89 @@ pub(crate) fn make_router(
         )
         .route(ADD_TOKENS_ON_SUI_PATH, get(handle_add_tokens_on_sui))
         .route(ADD_TOKENS_ON_EVM_PATH, get(handle_add_tokens_on_evm))
+        .layer(middleware::from_fn(reject_oversized_requests))
         .with_state((handler, metrics, metadata))
 }
 
+async fn reject_oversized_requests(req: Request, next: Next) -> Response {
+    let uri_len = req
+        .uri()
+        .path_and_query()
+        .map(|v| v.as_str().len())
+        .unwrap_or(0);
+    if uri_len > MAX_REQUEST_URI_SIZE {
+        return StatusCode::URI_TOO_LONG.into_response();
+    }
+
+    if let Some(content_length) = req.headers().get(axum::http::header::CONTENT_LENGTH) {
+        let body_len = content_length
+            .to_str()
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok());
+
+        match body_len {
+            Some(size) if size > MAX_REQUEST_BODY_SIZE => {
+                return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+            }
+            None => {
+                return StatusCode::BAD_REQUEST.into_response();
+            }
+            _ => {}
+        }
+    }
+
+    next.run(req).await
+}
+
 impl axum::response::IntoResponse for BridgeError {
-    // TODO: distinguish client error.
     fn into_response(self) -> axum::response::Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {:?}", self),
-        )
-            .into_response()
+        let status = match &self {
+            BridgeError::InvalidTxHash
+            | BridgeError::UnknownTokenId(_)
+            | BridgeError::InvalidBridgeClientRequest(_)
+            | BridgeError::InvalidChainId
+            | BridgeError::ActionIsNotGovernanceAction(_)
+            | BridgeError::ActionIsNotTokenTransferAction
+            | BridgeError::GovernanceActionIsNotApproved => StatusCode::BAD_REQUEST,
+            BridgeError::TxNotFound | BridgeError::NoBridgeEventsInTxPosition => {
+                StatusCode::NOT_FOUND
+            }
+            BridgeError::TxNotFinalized => StatusCode::CONFLICT,
+            BridgeError::TransientProviderError(_) => StatusCode::SERVICE_UNAVAILABLE,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        let sanitized_error = match self {
+            BridgeError::InvalidTxHash => "InvalidTxHash",
+            BridgeError::OriginTxFailed => "OriginTxFailed",
+            BridgeError::TxNotFound => "TxNotFound",
+            BridgeError::TxNotFinalized => "TxNotFinalized",
+            BridgeError::NoBridgeEventsInTxPosition => "NoBridgeEventsInTxPosition",
+            BridgeError::BridgeEventInUnrecognizedEthContract => {
+                "BridgeEventInUnrecognizedEthContract"
+            }
+            BridgeError::BridgeEventInUnrecognizedSuiPackage => {
+                "BridgeEventInUnrecognizedSuiPackage"
+            }
+            BridgeError::BridgeEventNotActionable => "BridgeEventNotActionable",
+            BridgeError::UnknownTokenId(_) => "UnknownTokenId",
+            BridgeError::InvalidBridgeCommittee(_) => "InvalidBridgeCommittee",
+            BridgeError::InvalidBridgeAuthoritySignature(_) => "InvalidBridgeAuthoritySignature",
+            BridgeError::InvalidBridgeAuthority(_) => "InvalidBridgeAuthority",
+            BridgeError::InvalidAuthorityUrl(_) => "InvalidAuthorityUrl",
+            BridgeError::InvalidBridgeClientRequest(_) => "InvalidBridgeClientRequest",
+            BridgeError::InvalidChainId => "InvalidChainId",
+            BridgeError::MismatchedAuthoritySigner => "MismatchedAuthoritySigner",
+            BridgeError::MismatchedAction => "MismatchedAction",
+            BridgeError::ActionIsNotGovernanceAction(_) => "ActionIsNotGovernanceAction",
+            BridgeError::GovernanceActionIsNotApproved => "GovernanceActionIsNotApproved",
+            BridgeError::AuthoirtyUrlInvalid => "AuthoirtyUrlInvalid",
+            BridgeError::ActionIsNotTokenTransferAction => "ActionIsNotTokenTransferAction",
+            BridgeError::TransientProviderError(_) => "TransientProviderError",
+            _ => "InternalError",
+        };
+
+        (status, format!("BridgeError::{sanitized_error}")).into_response()
     }
 }
 
@@ -682,6 +759,8 @@ mod tests {
     use crate::server::mock_handler::BridgeRequestMockHandler;
     use crate::test_utils::get_test_authorities_and_run_mock_bridge_server;
     use crate::types::BridgeCommittee;
+    use axum::response::IntoResponse;
+    use reqwest::header::CONTENT_LENGTH;
 
     #[tokio::test]
     async fn test_bridge_server_handle_blocklist_update_action_path() {
@@ -801,6 +880,40 @@ mod tests {
         client.request_sign_bridge_action(action).await.unwrap();
     }
 
+    #[tokio::test]
+    async fn test_bridge_server_rejects_oversized_uri() {
+        let mock = BridgeRequestMockHandler::new();
+        let (_handles, ports) = crate::test_utils::run_mock_bridge_server(vec![mock]);
+        let port = ports[0];
+
+        let oversized_query = "a".repeat(MAX_REQUEST_URI_SIZE + 1);
+        let response = reqwest::Client::new()
+            .get(format!("http://127.0.0.1:{port}/ping?{oversized_query}"))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::URI_TOO_LONG);
+    }
+
+    #[tokio::test]
+    async fn test_bridge_server_rejects_oversized_body() {
+        let mock = BridgeRequestMockHandler::new();
+        let (_handles, ports) = crate::test_utils::run_mock_bridge_server(vec![mock]);
+        let port = ports[0];
+
+        let oversized_body = "a".repeat(MAX_REQUEST_BODY_SIZE + 1);
+        let response = reqwest::Client::new()
+            .get(format!("http://127.0.0.1:{port}/ping"))
+            .header(CONTENT_LENGTH, oversized_body.len())
+            .body(oversized_body)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
     fn setup() -> BridgeClient {
         let mock = BridgeRequestMockHandler::new();
         let (_handles, authorities, mut secrets) =
@@ -809,5 +922,18 @@ mod tests {
         let committee = BridgeCommittee::new(authorities).unwrap();
         let pub_key = committee.members().keys().next().unwrap();
         BridgeClient::new(pub_key.clone(), Arc::new(committee)).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_bridge_error_response_is_sanitized() {
+        let response = BridgeError::Generic("sensitive server detail".to_string()).into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert_eq!(body, "BridgeError::InternalError");
+        assert!(!body.contains("sensitive server detail"));
     }
 }
