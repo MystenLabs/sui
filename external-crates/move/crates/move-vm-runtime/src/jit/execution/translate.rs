@@ -1100,12 +1100,22 @@ fn alloc_function(
         let member_name = context.interner.intern_ident_str(name_ident_str);
         VirtualTableKey::from_parts(package_key, module_name, member_name)
     };
-    let parameters = module
-        .signature_at(handle.parameters)
-        .0
-        .iter()
-        .map(|tok| make_arena_type(context, module, tok))
-        .collect::<PartialVMResult<Vec<_>>>()?;
+    let (parameters, mutable_ref_count, imm_ref_count): (Vec<_>, _, _) =
+        module.signature_at(handle.parameters).0.iter().try_fold(
+            (Vec::new(), 0u64, 0u64),
+            |(mut params, mut mut_ref_cnt, mut imm_ref_cnt), tok| {
+                if let SignatureToken::MutableReference(_) = tok {
+                    mut_ref_cnt = mut_ref_cnt.safe_add(1)?;
+                }
+                if let SignatureToken::Reference(_) = tok {
+                    imm_ref_cnt = imm_ref_cnt.safe_add(1)?;
+                }
+                params.push(make_arena_type(context, module, tok)?);
+                Ok::<_, PartialVMError>((params, mut_ref_cnt, imm_ref_cnt))
+            },
+        )?;
+    let should_paranoid_ref_check =
+        mutable_ref_count >= 1 && imm_ref_count.safe_add(mutable_ref_count)? >= 2;
     let parameters = context.arena_vec(parameters.into_iter())?;
     // Native functions do not have a code unit
     let (locals_len, locals) = match &def.code {
@@ -1150,6 +1160,7 @@ fn alloc_function(
         // replaced in the next step of compilation
         code: ArenaVec::empty(),
         jump_tables: ArenaVec::empty(),
+        should_paranoid_ref_check,
     };
     Ok(fun)
 }

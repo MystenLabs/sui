@@ -163,6 +163,9 @@ pub(crate) struct Function {
     pub name: VirtualTableKey,
     pub locals_len: usize,
     pub jump_tables: ArenaVec<VariantJumpTable>,
+    // If this function has more than two references, one of which is mutable, then we should run
+    // the paranoid reference checks on this function.
+    pub should_paranoid_ref_check: bool,
 }
 
 impl Drop for Function {
