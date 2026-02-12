@@ -16207,6 +16207,7 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "mysten-common",
+ "rand 0.8.5",
  "schemars 0.8.21",
  "serde",
  "serde-env",

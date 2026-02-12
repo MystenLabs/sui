@@ -22,6 +22,7 @@ fastcrypto = { workspace = true }
 move-core-types.workspace = true
 move-binary-format.workspace = true
 mysten-common.workspace = true
+rand.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
