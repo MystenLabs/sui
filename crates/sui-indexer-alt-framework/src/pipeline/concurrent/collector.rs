@@ -76,7 +76,6 @@ pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
-    watermark_tx: mpsc::Sender<Vec<WatermarkPart>>,
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
@@ -99,141 +98,85 @@ pub(super) fn collector<H: Handler + 'static>(
 
         info!(pipeline = H::NAME, "Starting collector");
 
-        // Wait for main_reader_lo to be initialized before processing.
-        let reader_lo_atomic = main_reader_lo.wait().await;
-
         loop {
             tokio::select! {
-                // Time to drain the processor channel and push batches to the committer.
+                // Time to create another batch and push it to the committer.
                 _ = poll.tick() => {
-                    // Eagerly drain all available checkpoints from the processor
-                    // channel in one go, avoiding per-checkpoint select! overhead.
-                    let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
-                    while pending_rows < H::MAX_PENDING_ROWS {
-                        let mut indexed = match rx.try_recv() {
-                            Ok(indexed) => indexed,
-                            Err(_) => break,
+                    let guard = metrics
+                        .collector_gather_latency
+                        .with_label_values(&[H::NAME])
+                        .start_timer();
+
+                    let mut batch = H::Batch::default();
+                    let mut watermark = Vec::new();
+                    let mut batch_len = 0;
+
+                    loop {
+                        let Some(mut entry) = pending.first_entry() else {
+                            break;
                         };
 
-                        if indexed.checkpoint() < reader_lo {
-                            indexed.values.clear();
-                            metrics.total_collector_skipped_checkpoints
-                                .with_label_values(&[H::NAME])
-                                .inc();
+                        if watermark.len() >= H::MAX_WATERMARK_UPDATES {
+                            break;
                         }
 
-                        metrics
-                            .total_collector_rows_received
-                            .with_label_values(&[H::NAME])
-                            .inc_by(indexed.len() as u64);
-                        metrics
-                            .total_collector_checkpoints_received
-                            .with_label_values(&[H::NAME])
-                            .inc();
-                        metrics
-                            .collector_reader_lo
-                            .with_label_values(&[H::NAME])
-                            .set(reader_lo as i64);
+                        let indexed = entry.get_mut();
+                        let before = indexed.values.len();
+                        let status = handler.batch(&mut batch, &mut indexed.values);
+                        let taken = before - indexed.values.len();
 
-                        if indexed.values.is_empty() {
-                            let watermark = WatermarkPart {
-                                watermark: indexed.watermark,
-                                batch_rows: 0,
-                                total_rows: 0,
-                            };
+                        batch_len += taken;
+                        watermark.push(indexed.watermark.take(taken));
+                        if indexed.is_empty() {
                             checkpoint_lag_reporter.report_lag(
-                                watermark.checkpoint(),
-                                watermark.timestamp_ms(),
+                                indexed.watermark.checkpoint(),
+                                indexed.watermark.timestamp_ms(),
                             );
-                            if watermark_tx.send(vec![watermark]).await.is_err() {
-                                info!(pipeline = H::NAME, "Watermark closed channel, stopping collector");
-                                return Ok(());
-                            }
-                        } else {
-                            pending_rows += indexed.len();
-                            pending.insert(indexed.checkpoint(), indexed.into());
+                            entry.remove();
+                        }
+
+                        if status == BatchStatus::Ready {
+                            // Batch is full, send it
+                            break;
                         }
                     }
+                    pending_rows -= batch_len;
+                    let elapsed = guard.stop_and_record();
+                    debug!(
+                        pipeline = H::NAME,
+                        elapsed_ms = elapsed * 1000.0,
+                        rows = batch_len,
+                        pending_rows = pending_rows,
+                        "Gathered batch",
+                    );
 
-                    // Create and send batches until pending is drained.
-                    'batch: loop {
-                        let guard = metrics
-                            .collector_gather_latency
-                            .with_label_values(&[H::NAME])
-                            .start_timer();
+                    metrics
+                        .total_collector_batches_created
+                        .with_label_values(&[H::NAME])
+                        .inc();
 
-                        let mut batch = H::Batch::default();
-                        let mut watermark = Vec::new();
-                        let mut batch_len = 0;
+                    metrics
+                        .collector_batch_size
+                        .with_label_values(&[H::NAME])
+                        .observe(batch_len as f64);
 
-                        loop {
-                            let Some(mut entry) = pending.first_entry() else {
-                                break;
-                            };
+                    let batched_rows = BatchedRows {
+                        batch,
+                        batch_len,
+                        watermark,
+                    };
 
-                            if watermark.len() >= H::MAX_WATERMARK_UPDATES {
-                                break;
-                            }
-
-                            let indexed = entry.get_mut();
-                            let before = indexed.values.len();
-                            let status = handler.batch(&mut batch, &mut indexed.values);
-                            let taken = before - indexed.values.len();
-
-                            batch_len += taken;
-                            watermark.push(indexed.watermark.take(taken));
-                            if indexed.is_empty() {
-                                checkpoint_lag_reporter.report_lag(
-                                    indexed.watermark.checkpoint(),
-                                    indexed.watermark.timestamp_ms(),
-                                );
-                                entry.remove();
-                            }
-
-                            if status == BatchStatus::Ready {
-                                break;
-                            }
-                        }
-                        pending_rows -= batch_len;
-                        let elapsed = guard.stop_and_record();
-                        debug!(
-                            pipeline = H::NAME,
-                            elapsed_ms = elapsed * 1000.0,
-                            rows = batch_len,
-                            pending_rows = pending_rows,
-                            "Gathered batch",
-                        );
-
-                        metrics
-                            .total_collector_batches_created
-                            .with_label_values(&[H::NAME])
-                            .inc();
-
-                        metrics
-                            .collector_batch_size
-                            .with_label_values(&[H::NAME])
-                            .observe(batch_len as f64);
-
-                        let batched_rows = BatchedRows {
-                            batch,
-                            batch_len,
-                            watermark,
-                        };
-
-                        if tx.send(batched_rows).await.is_err() {
-                            info!(pipeline = H::NAME, "Committer closed channel, stopping collector");
-                            return Ok(());
-                        }
-
-                        let fill = tx.max_capacity() - tx.capacity();
-                        peak_channel_fill.fetch_max(fill, Ordering::Relaxed);
-
-                        if pending_rows == 0 {
-                            break 'batch;
-                        }
+                    if tx.send(batched_rows).await.is_err() {
+                        info!(pipeline = H::NAME, "Committer closed channel, stopping collector");
+                        break;
                     }
 
-                    if rx.is_closed() && rx.is_empty() && pending_rows == 0 {
+                    let fill = tx.max_capacity() - tx.capacity();
+                    peak_channel_fill.fetch_max(fill, Ordering::Relaxed);
+
+                    if pending_rows > 0 {
+                        poll.reset_immediately();
+                    } else if rx.is_closed() && rx.is_empty() {
                         info!(
                             pipeline = H::NAME,
                             "Processor closed channel, pending rows empty, stopping collector",
@@ -243,9 +186,10 @@ pub(super) fn collector<H: Handler + 'static>(
                 }
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                // Block until data arrives when there is nothing pending.
                 Some(mut indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
-                    let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
+                    // Clear the values of outdated checkpoints, so that we don't commit data to the
+                    // store, but can still advance watermarks.
+                    let reader_lo = main_reader_lo.wait().await.load(Ordering::Relaxed);
                     if indexed.checkpoint() < reader_lo {
                         indexed.values.clear();
                         metrics.total_collector_skipped_checkpoints
@@ -266,27 +210,11 @@ pub(super) fn collector<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .set(reader_lo as i64);
 
-                    if indexed.values.is_empty() {
-                        let watermark = WatermarkPart {
-                            watermark: indexed.watermark,
-                            batch_rows: 0,
-                            total_rows: 0,
-                        };
-                        checkpoint_lag_reporter.report_lag(
-                            watermark.checkpoint(),
-                            watermark.timestamp_ms(),
-                        );
-                        if watermark_tx.send(vec![watermark]).await.is_err() {
-                            info!(pipeline = H::NAME, "Watermark closed channel, stopping collector");
-                            break;
-                        }
-                    } else {
-                        pending_rows += indexed.len();
-                        pending.insert(indexed.checkpoint(), indexed.into());
+                    pending_rows += indexed.len();
+                    pending.insert(indexed.checkpoint(), indexed.into());
 
-                        if pending_rows >= H::MIN_EAGER_ROWS {
-                            poll.reset_immediately()
-                        }
+                    if pending_rows >= H::MIN_EAGER_ROWS {
+                        poll.reset_immediately()
                     }
                 }
                 // docs::/#collector
@@ -398,13 +326,11 @@ mod tests {
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let handler = Arc::new(TestHandler);
-        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -441,13 +367,11 @@ mod tests {
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let handler = Arc::new(TestHandler);
-        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let mut collector = collector::<TestHandler>(
             handler,
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            watermark_tx,
             main_reader_lo,
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -484,13 +408,11 @@ mod tests {
         let metrics = test_metrics();
 
         let handler = Arc::new(TestHandler);
-        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            watermark_tx,
             main_reader_lo.clone(),
             metrics.clone(),
             Arc::new(AtomicUsize::new(0)),
@@ -541,13 +463,11 @@ mod tests {
             ..CommitterConfig::default()
         };
         let handler = Arc::new(TestHandler);
-        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             config,
             processor_rx,
             collector_tx,
-            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -598,13 +518,11 @@ mod tests {
             ..CommitterConfig::default()
         };
         let handler = Arc::new(TestHandler);
-        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             config,
             processor_rx,
             collector_tx,
-            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -644,13 +562,11 @@ mod tests {
             ..CommitterConfig::default()
         };
         let handler = Arc::new(TestHandler);
-        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let _collector = collector::<TestHandler>(
             handler,
             config,
             processor_rx,
             collector_tx,
-            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -682,7 +598,6 @@ mod tests {
         let main_reader_lo = Arc::new(SetOnce::new());
 
         let handler = Arc::new(TestHandler);
-        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let collector = collector(
             handler,
             CommitterConfig {
@@ -693,7 +608,6 @@ mod tests {
             },
             processor_rx,
             collector_tx,
-            watermark_tx,
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
@@ -731,7 +645,6 @@ mod tests {
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(5))));
         let metrics = test_metrics();
 
-        let (watermark_tx, mut watermark_rx) = mpsc::channel(10);
         let collector = collector(
             Arc::new(TestHandler),
             CommitterConfig {
@@ -742,7 +655,6 @@ mod tests {
             },
             processor_rx,
             collector_tx,
-            watermark_tx,
             main_reader_lo.clone(),
             metrics.clone(),
             Arc::new(AtomicUsize::new(0)),
@@ -759,19 +671,9 @@ mod tests {
         }
         let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
 
-        // Only non-skipped checkpoints (5, 6) go through the batch path.
-        assert_eq!(batch.watermark.len(), 2);
-        assert_eq!(batch.batch_len, eager_rows_plus_one * 2);
-
-        // The 4 skipped checkpoints (1, 2, 3, 4) bypass the committer and send
-        // their watermarks directly to the watermark channel.
-        let mut bypassed = 0;
-        while let Ok(parts) = watermark_rx.try_recv() {
-            bypassed += parts.len();
-        }
-        assert_eq!(bypassed, 4);
-
-        // All 6 checkpoints are reported as received.
+        // Make sure that we are advancing watermarks.
+        assert_eq!(batch.watermark.len(), 6);
+        // And reporting the checkpoints as received.
         assert_eq!(
             metrics
                 .total_collector_checkpoints_received
@@ -779,7 +681,7 @@ mod tests {
                 .get(),
             6
         );
-        // 4 checkpoints were skipped (below reader_lo).
+        // But the collector should filter out four checkpoints: (1, 2, 3, 4)
         assert_eq!(
             metrics
                 .total_collector_skipped_checkpoints
@@ -787,6 +689,8 @@ mod tests {
                 .get(),
             4
         );
+        // And that we only have values from two checkpoints (5, 6)
+        assert_eq!(batch.batch_len, eager_rows_plus_one * 2);
 
         collector.shutdown().await.unwrap();
     }
@@ -803,13 +707,11 @@ mod tests {
 
         let metrics = test_metrics();
 
-        let (watermark_tx, _watermark_rx) = mpsc::channel(10);
         let collector = collector(
             Arc::new(TestHandler),
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            watermark_tx,
             main_reader_lo.clone(),
             metrics.clone(),
             Arc::new(AtomicUsize::new(0)),
