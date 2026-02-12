@@ -1,5 +1,6 @@
 ---
 source: crates/sui/tests/shell_tests.rs
+assertion_line: 113
 ---
 ----- script -----
 #!/usr/bin/env bash
@@ -75,33 +76,40 @@ build-config = { flavor = "sui", edition = "2024" }
 === End Published.toml ===
 
 === publishing c ===
-=== c/Published.toml ===
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY a
+INCLUDING DEPENDENCY b
+BUILDING c
+code: 'Unknown error', message: "Transaction executed but checkpoint wait timed out", source: CheckpointTimeout(Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-encoding": "zstd", "x-sui-chain-id": "b18b2ce2", "x-sui-chain": "unknown", "x-sui-epoch": "0", "x-sui-checkpoint-height": "359", "x-sui-timestamp-ms": "1770916235599", "x-sui-timestamp": "2026-02-12T17:10:35.599Z", "x-sui-lowest-available-checkpoint": "0", "x-sui-lowest-available-checkpoint-objects": "0", "server": "sui-node/unknown", "vary": "origin, access-control-request-method, access-control-request-headers", "access-control-allow-origin": "*", "access-control-expose-headers": "*", "server-timing": "wait_for_finality_done;dur=912, finish_request;dur=8", "date": "Thu, 12 Feb 2026 17:10:59 GMT", "grpc-status": "0"} }, message: ExecuteTransactionResponse { transaction: Some(ExecutedTransaction { digest: None, transaction: Some(Transaction { bcs: Some(Bcs { name: Some("TransactionData"), value: Some(b"/0/0/x01/0 /x17/x17={/xcd/x80/xf2/xa1)q/x17/xc6l/xde/xa4/x06/xb1`c/xc2/x9f/xa0/x1d/x96l/x97/xf8/x0f/xfe/xee/x81/x0c/x02/x04/x01/xa3/x01/xa1/x1c/xeb/x0b/x06/0/0/0/x06/x01/0/x06/x03/x06/x0f/x05/x15/x01/x07/x16/x06/x08/x1c`/x0c|/x0b/0/x02/x01/0/x02/x01/0/x02/0/0/0/x01/0/0/0/0/x02/x01/0/0/0/0/x01a/x01b/x01c/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0b/xc1q0/x1f/n/x8d/xa4/xc4</x87?/xf8/x95&dw/x9a/xa3f/x19/x98/x95/xacf/xffp/xa9/x05/x8d/xa2/xec/xf7/xb3/xdb~`/xa6/xba/x15i/x9f/xfe/xd7/x06/x8a/xb8>bb3/xb7/xb7/x0e/x17/xb9-/xf2a/xd8/x98/xf2/xa0}/0/x01/0/0/0/x03/x11/x01/x11/x02/x02/0/x02b/xc1q0/x1f/n/x8d/xa4/xc4</x87?/xf8/x95&dw/x9a/xa3f/x19/x98/x95/xacf/xffp/xa9/x05/x8d/xa2/xec/xf7/xb3/xdb~`/xa6/xba/x15i/x9f/xfe/xd7/x06/x8a/xb8>bb3/xb7/xb7/x0e/x17/xb9-/xf2a/xd8/x98/xf2/xa0}/x01/x01/x02/0/0/x01/0/0/x17/x17={/xcd/x80/xf2/xa1)q/x17/xc6l/xde/xa4/x06/xb1`c/xc2/x9f/xa0/x1d/x96l/x97/xf8/x0f/xfe/xee/x81/x0c/x01//xb9h/xa6/xec[/xaa//xedF/xc1)/x11/xe6j/xb6t/x0b/x9f/xfaCH#/xbccG2}/x96/x86/x1b/x90/x01/0/0/0/0/0/0/0 /xb7/x10/x9aqJ=/xb0/xf3/x8bO/xf2/xa5n/xdbO/x0eEuU/xa5/xd5/x91/x0b/xe8/x08/xf7S/xde/xb2/xf1/xf4/t/x17/x17={/xcd/x80/xf2/xa1)q/x17/xc6l/xde/xa4/x06/xb1`c/xc2/x9f/xa0/x1d/x96l/x97/xf8/x0f/xfe/xee/x81/x0c/xe8/x03/0/0/0/0/0/0/xf0rt/0/0/0/0/0/0") }), digest: None, version: None, kind: None, sender: None, gas_payment: None, expiration: None }), signatures: [], effects: Some(TransactionEffects { bcs: Some(Bcs { name: Some("TransactionEffects"), value: Some(b"/x01/0/0/0/0/0/0/0/0/0@B/x0f/0/0/0/0/0p/xeeU/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0 /xbfe/xfd}XM/xf0/x11/xc5/xc8/xba7/x18/xc4/xb9/x11/x11[o/xf5/xf3OF/x8c/x85/xa5n//xba/xf7M/x12/x01/0/0/0/0/0/x03 /x8d/"/xea/xba/x0b/xd5^v/xa4#*!_/xc9/xd8/xe8/x93/x0b/xce/x12/xe8/xcf/x12/xb2f/xc3/xe9/x99/x18/x95/xb6/xb5 /xa9/xc6_/xe5/xf8/xbd'/x1d/xec/x86v:B/xf1/x9cx/xfd/x05/xc4/xa5/xb0_/xe8/x93/xc1/x19/xa1/xd5/x1eo/xc6/x01 /xc3@mQ/xf0/xdb/xa6/x01/x8a/xc0O/x82nTL/xce./xe2g/xf5z/x1b/tU/xe53t/xd3/x19M/x84/x01/x02/0/0/0/0/0/0/0/x03//xb9h/xa6/xec[/xaa//xedF/xc1)/x11/xe6j/xb6t/x0b/x9f/xfaCH#/xbccG2}/x96/x86/x1b/x90/x01/x01/0/0/0/0/0/0/0 /xb7/x10/x9aqJ=/xb0/xf3/x8bO/xf2/xa5n/xdbO/x0eEuU/xa5/xd5/x91/x0b/xe8/x08/xf7S/xde/xb2/xf1/xf4/t/0/x17/x17={/xcd/x80/xf2/xa1)q/x17/xc6l/xde/xa4/x06/xb1`c/xc2/x9f/xa0/x1d/x96l/x97/xf8/x0f/xfe/xee/x81/x0c/x01 /xd5/nC/GD~J V/x93*/x94/x97/x88/x89/xeco/x942/xde/xf1p/xbf/xdf/xfey/xff./xa7/xd4/xf4/0/x17/x17={/xcd/x80/xf2/xa1)q/x17/xc6l/xde/xa4/x06/xb1`c/xc2/x9f/xa0/x1d/x96l/x97/xf8/x0f/xfe/xee/x81/x0c/0|/xdd/x8d/xfc/x1d/xcc/x88/x85#/xed/x88/x80/x92/x97/x03/xab/xca/xf6p/t/x7fWbt/xce/n/xe2T/x15/xe0/x05/x08/0/x02/x01/0/0/0/0/0/0/0 /xee/xf3/xc1/x01/xc7/xa29/xfd/xbb/xd3/xbc#=/xe5/xd8/xfd/xcex6/0/x9e/x9c+X/x8cT/xcc/x15/xf1/x96J/xfc/x01/xff/xbd/xa0Cg/xce/x9a/xa0y/xe2/xad/x8b/xc3E/xdab/x80/xcb/xfc/xac/xecF82/x03/x1f/xd4/xcdp/t$:/0/x01 /xd5d[?Ha/x82pn/x86+/x95/xff/xe2WK/x88/x88/x13/xe4/xe8/x08/xc9`./xe5/xd8/x9f#/xddq?/0/x17/x17={/xcd/x80/xf2/xa1)q/x17/xc6l/xde/xa4/x06/xb1`c/xc2/x9f/xa0/x1d/x96l/x97/xf8/x0f/xfe/xee/x81/x0c/x01/0/0") }), digest: None, version: None, status: Some(ExecutionStatus { success: Some(true), error: None }), epoch: None, gas_used: None, transaction_digest: None, gas_object: None, events_digest: None, dependencies: [], lamport_version: None, changed_objects: [ChangedObject { object_id: Some("0x2fb968a6ec5baa2fed46c12911e66ab6740b9ffa434823bc6347327d96861b90"), input_state: Some(Exists), input_version: Some(1), input_digest: Some("DKcHyjCQ26Nd3JSGNt4yUJ9qTgVzFZo4iBYmH5YrhwWp"), input_owner: Some(Owner { kind: Some(Address), address: Some("0x17173d7bcd80f2a1297117c66cdea406b16063c29fa01d966c97f80ffeee810c"), version: None }), output_state: Some(ObjectWrite), output_version: Some(2), output_digest: Some("FLcv7g8ZzYUpBqnrs2jMhcuLx1QdFsPrVszvSvtGbfyD"), output_owner: Some(Owner { kind: Some(Address), address: Some("0x17173d7bcd80f2a1297117c66cdea406b16063c29fa01d966c97f80ffeee810c"), version: None }), accumulator_write: None, id_operation: Some(None), object_type: Some("0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>") }, ChangedObject { object_id: Some("0x7cdd8dfc1dcc888523ed8880929703abcaf670097f576274ce0ae25415e00508"), input_state: Some(DoesNotExist), input_version: None, input_digest: None, input_owner: None, output_state: Some(PackageWrite), output_version: Some(1), output_digest: Some("H5mcLd9PLyBnJrNmNsH5LXb74GMCVoeyJr7kd71HfUD9"), output_owner: None, accumulator_write: None, id_operation: Some(Created), object_type: Some("package") }, ChangedObject { object_id: Some("0xffbda04367ce9aa079e2ad8bc345da6280cbfcacec463832031fd4cd7009243a"), input_state: Some(DoesNotExist), input_version: None, input_digest: None, input_owner: None, output_state: Some(ObjectWrite), output_version: Some(2), output_digest: Some("FMzbXoMjhW3DaDvCY4iLQp9QmeZuGz5dR7LnALts5bRg"), output_owner: Some(Owner { kind: Some(Address), address: Some("0x17173d7bcd80f2a1297117c66cdea406b16063c29fa01d966c97f80ffeee810c"), version: None }), accumulator_write: None, id_operation: Some(Created), object_type: Some("0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap") }], unchanged_consensus_objects: [], auxiliary_data_digest: None, unchanged_loaded_runtime_objects: [] }), events: None, checkpoint: None, timestamp: None, balance_changes: [BalanceChange { address: Some("0x17173d7bcd80f2a1297117c66cdea406b16063c29fa01d966c97f80ffeee810c"), coin_type: Some("0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"), amount: Some("-6631600") }], objects: None }) }, extensions: Extensions })
 
-[published.localnet]
-chain-id = "CHAIN_ID"
-version = 1
-toolchain-version = "SUI_VERSION"
-build-config = { flavor = "sui", edition = "2024" }
+Caused by:
+    Transaction executed but checkpoint wait timed out
+=== c/Published.toml ===
 === End Published.toml ===
 
 === publishing d ===
-=== d/Published.toml ===
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY a
+INCLUDING DEPENDENCY b
+BUILDING d
+code: 'Client specified an invalid argument', message: "Transaction is rejected as invalid by more than 1/3 of validators by stake (non-retriable). Non-retriable errors: [Object ID 0x2fb968a6ec5baa2fed46c12911e66ab6740b9ffa434823bc6347327d96861b90 Version 0x1 Digest DKcHyjCQ26Nd3JSGNt4yUJ9qTgVzFZo4iBYmH5YrhwWp is not available for consumption, current version: 0x2 { k#99f25ef6.. } with 10000 stake].", source: RpcError(Status { code: InvalidArgument, message: "Transaction is rejected as invalid by more than 1/3 of validators by stake (non-retriable). Non-retriable errors: [Object ID 0x2fb968a6ec5baa2fed46c12911e66ab6740b9ffa434823bc6347327d96861b90 Version 0x1 Digest DKcHyjCQ26Nd3JSGNt4yUJ9qTgVzFZo4iBYmH5YrhwWp is not available for consumption, current version: 0x2 { k#99f25ef6.. } with 10000 stake].", details: b"/x08/x03/x12/xda/x02Transaction is rejected as invalid by more than 1/3 of validators by stake (non-retriable). Non-retriable errors: [Object ID 0x2fb968a6ec5baa2fed46c12911e66ab6740b9ffa434823bc6347327d96861b90 Version 0x1 Digest DKcHyjCQ26Nd3JSGNt4yUJ9qTgVzFZo4iBYmH5YrhwWp is not available for consumption, current version: 0x2 { k#99f25ef6.. } with 10000 stake].", metadata: MetadataMap { headers: {"content-type": "application/grpc", "date": "Thu, 12 Feb 2026 17:11:33 GMT", "server-timing": "finish_request;dur=721", "access-control-expose-headers": "*", "x-sui-chain-id": "b18b2ce2", "x-sui-chain": "unknown", "x-sui-epoch": "0", "x-sui-checkpoint-height": "475", "x-sui-timestamp-ms": "1770916259280", "x-sui-timestamp": "2026-02-12T17:10:59.280Z", "x-sui-lowest-available-checkpoint": "0", "x-sui-lowest-available-checkpoint-objects": "0", "server": "sui-node/unknown", "vary": "origin, access-control-request-method, access-control-request-headers", "access-control-allow-origin": "*"} }, source: None })
 
-[published.localnet]
-chain-id = "CHAIN_ID"
-version = 1
-toolchain-version = "SUI_VERSION"
-build-config = { flavor = "sui", edition = "2024" }
+Caused by:
+    0: RPC error: code: 'Client specified an invalid argument', message: "Transaction is rejected as invalid by more than 1/3 of validators by stake (non-retriable). Non-retriable errors: [Object ID 0x2fb968a6ec5baa2fed46c12911e66ab6740b9ffa434823bc6347327d96861b90 Version 0x1 Digest DKcHyjCQ26Nd3JSGNt4yUJ9qTgVzFZo4iBYmH5YrhwWp is not available for consumption, current version: 0x2 { k#99f25ef6.. } with 10000 stake]."
+    1: code: 'Client specified an invalid argument', message: "Transaction is rejected as invalid by more than 1/3 of validators by stake (non-retriable). Non-retriable errors: [Object ID 0x2fb968a6ec5baa2fed46c12911e66ab6740b9ffa434823bc6347327d96861b90 Version 0x1 Digest DKcHyjCQ26Nd3JSGNt4yUJ9qTgVzFZo4iBYmH5YrhwWp is not available for consumption, current version: 0x2 { k#99f25ef6.. } with 10000 stake]."
+=== d/Published.toml ===
 === End Published.toml ===
 
 === publishing e ===
+The package has unpublished dependencies. If you want to publish with unpublished dependencies, please publish them one by one, or (not recommended) pass the `--with-unpublished-dependencies` flag.
+ Unpublished dependencies: c, d
+        
 === e/Published.toml ===
-
-[published.localnet]
-chain-id = "CHAIN_ID"
-version = 1
-toolchain-version = "SUI_VERSION"
-build-config = { flavor = "sui", edition = "2024" }
 === End Published.toml ===
 
 ----- stderr -----
+cat: c/Published.toml: No such file or directory
+cat: d/Published.toml: No such file or directory
+cat: e/Published.toml: No such file or directory
