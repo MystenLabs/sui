@@ -102,14 +102,14 @@ impl ForkingStore {
         }
     }
 
-    pub fn get_objects(&self) -> &HashMap<ObjectID, BTreeMap<SequenceNumber, Object>> {
-        println!("TODO fetching all objects is currently not supported in ForkingStore");
-        todo!()
-    }
-    pub fn get_objects_by_keys(&self, _object_keys: &[ObjectKey]) -> &HashMap<ObjectID, Object> {
-        println!("TODO fetching objects by keys is currently not supported in ForkingStore");
-        todo!()
-    }
+    // pub fn get_objects(&self) -> &HashMap<ObjectID, BTreeMap<SequenceNumber, Object>> {
+    //     println!("TODO fetching all objects is currently not supported in ForkingStore");
+    //     todo!()
+    // }
+    // pub fn get_objects_by_keys(&self, _object_keys: &[ObjectKey]) -> &HashMap<ObjectID, Object> {
+    //     println!("TODO fetching objects by keys is currently not supported in ForkingStore");
+    //     todo!()
+    // }
 
     pub fn get_checkpoint_by_sequence_number(
         &self,

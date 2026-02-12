@@ -33,7 +33,7 @@ use sui_types::crypto::{
     AccountKeyPair, AuthoritySignature, SuiKeyPair, get_account_key_pair, get_key_pair,
 };
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
-use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
@@ -59,7 +59,6 @@ pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
-use sui_types::execution::ExecutionResult;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::sui_system_state::SuiSystemState;
@@ -195,7 +194,7 @@ where
 impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     pub fn new_with_network_config_store(config: &NetworkConfig, rng: R, store: S) -> Self {
         let keystore = KeyStore::from_network_config(config);
-        let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint());
+        let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint(), None);
 
         let genesis = &config.genesis;
         let epoch_state = EpochState::new(genesis.sui_system_object());
@@ -214,6 +213,15 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         }
     }
 
+    /// Create a new Simulacrum instance with the provided custom state.
+    ///
+    /// This function creates a Simulacrum with a custom checkpoint and system state, which can
+    /// be useful for testing specific scenarios or starting from a non-genesis state.
+    ///
+    /// Note: The provided `checkpoint` and `system_state` should be consistent with each other, i.e.
+    /// the checkpoint's epoch and sequence number should align with the system state's epoch and
+    /// the objects in the checkpoint should be reflected in the system state. Inconsistencies may
+    /// lead to unexpected behavior.
     pub fn new_from_custom_state(
         keystore: KeyStore,
         checkpoint: VerifiedCheckpoint,
@@ -221,13 +229,15 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         config: &NetworkConfig,
         store: S,
         rng: R,
+        acc_initial_shared_obj_version: Option<SequenceNumber>,
     ) -> Self {
-        let checkpoint_builder = MockCheckpointBuilder::new(checkpoint);
+        let checkpoint_builder =
+            MockCheckpointBuilder::new(checkpoint, acc_initial_shared_obj_version);
         let epoch_state = EpochState::new(system_state);
         Self {
             rng,
             keystore,
-            // this genesis is not used whatsoever, but it's required.
+            // this genesis is not used whatsoever, but it's required for Simulacrum type
             genesis: config.genesis.clone(),
             store,
             checkpoint_builder,
@@ -451,6 +461,11 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             let (settlement_txns, checkpoint_height) = self
                 .checkpoint_builder
                 .get_settlement_txns(self.epoch_state.protocol_config());
+
+            println!(
+                "Any settlement transactions to execute? {}",
+                settlement_txns.len()
+            );
 
             // Execute settlement transactions and collect their effects
             let mut settlement_effects = Vec::with_capacity(settlement_txns.len());

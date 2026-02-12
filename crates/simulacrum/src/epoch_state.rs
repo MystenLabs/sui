@@ -4,22 +4,17 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_config::{
     certificate_deny_config::CertificateDenyConfig, transaction_deny_config::TransactionDenyConfig,
     verifier_signing_config::VerifierSigningConfig,
 };
-use sui_core::authority::DEV_INSPECT_GAS_COIN_VALUE;
 use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::ObjectID,
     committee::{Committee, EpochId},
-    crypto::default_hash,
     digests::TransactionDigest,
-    effects::{TransactionEffects, TransactionEvents},
-    error::{ExecutionError, SuiErrorKind},
-    execution::ExecutionResult,
+    effects::TransactionEffects,
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
     gas::SuiGasStatus,
     inner_temporary_store::{InnerTemporaryStore, PackageStoreWithFallback},
@@ -30,10 +25,7 @@ use sui_types::{
         SuiSystemState, SuiSystemStateTrait,
         epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
     },
-    transaction::{
-        GasData, InputObjectKind, ObjectReadResult, TransactionData, TransactionDataAPI,
-        TransactionDataV1, TransactionExpiration, TransactionKind, VerifiedTransaction,
-    },
+    transaction::{TransactionDataAPI, VerifiedTransaction},
 };
 
 use crate::SimulatorStore;
@@ -491,6 +483,8 @@ impl EpochState {
             &receiving_object_refs,
         )?;
 
+        println!("Input objects: {input_objects:#?}");
+
         // Run the transaction input checks that would run when submitting the txn to a validator
         // for signing
         let (gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
@@ -502,6 +496,8 @@ impl EpochState {
             &self.bytecode_verifier_metrics,
             verifier_signing_config,
         )?;
+
+        println!("Checked input objects completed");
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas_data) = transaction_data.execution_parts();

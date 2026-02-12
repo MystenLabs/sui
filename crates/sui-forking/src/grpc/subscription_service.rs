@@ -19,8 +19,6 @@ use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServi
 use sui_rpc::proto::sui::rpc::v2::{SubscribeCheckpointsRequest, SubscribeCheckpointsResponse};
 // use sui_rpc_api::grpc::v2::ledger_service::validate_get_object_requests;
 
-const READ_MASK_DEFAULT: &str = "digest";
-
 /// A SubscriptionService implementation backed by the ForkingStore/Simulacrum.
 pub struct ForkingSubscriptionService {
     context: crate::context::Context,
@@ -50,6 +48,7 @@ impl SubscriptionService for ForkingSubscriptionService {
         let mut response = SubscribeCheckpointsResponse::default();
         response.cursor = None;
         response.checkpoint = None;
+        let _ctx = self.context.clone();
 
         Ok(tonic::Response::new(Box::pin(tokio_stream::iter(vec![
             Ok(response),

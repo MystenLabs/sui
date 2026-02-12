@@ -31,37 +31,6 @@ struct GraphQLError {
 }
 
 #[derive(Debug, Deserialize)]
-struct CheckpointResponse {
-    checkpoint: Option<CheckpointData>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CheckpointData {
-    pub sequence_number: u64,
-    pub digest: String,
-    pub timestamp: Option<String>,
-    pub epoch: Option<EpochData>,
-    pub network_total_transactions: Option<u64>,
-    pub rolling_gas_summary: Option<GasCostSummaryData>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EpochData {
-    pub epoch_id: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GasCostSummaryData {
-    pub computation_cost: Option<String>,
-    pub storage_cost: Option<String>,
-    pub storage_rebate: Option<String>,
-    pub non_refundable_storage_fee: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 struct CheckpointBcsResponse {
     checkpoint: Option<CheckpointBcsData>,
 }

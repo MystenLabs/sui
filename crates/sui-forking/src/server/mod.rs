@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result};
 use axum::{
     Json, Router,
     extract::State,
@@ -32,19 +32,14 @@ use sui_data_store::{
 };
 use sui_pg_db::{DbArgs, reset_database};
 use sui_types::{
+    accumulator_root::get_accumulator_root_obj_initial_shared_version,
     base_types::{ObjectID, SuiAddress},
-    crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo, AuthorityStrongQuorumSignInfo},
-    digests::{ChainIdentifier, get_mainnet_chain_identifier, get_testnet_chain_identifier},
+    crypto::AuthorityQuorumSignInfo,
+    digests::ChainIdentifier,
     effects::TransactionEffectsAPI,
     message_envelope::Envelope,
-    messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
-    },
-    sui_system_state::{
-        SuiSystemState, SuiSystemStateTrait,
-        sui_system_state_inner_v1::ValidatorSetV1,
-        sui_system_state_inner_v2::{self, SuiSystemStateInnerV2},
-    },
+    messages_checkpoint::{CheckpointContents, CheckpointSummary, VerifiedCheckpoint},
+    sui_system_state::SuiSystemState,
     supported_protocol_versions::{
         Chain::{self},
         ProtocolConfig,
@@ -61,10 +56,7 @@ use crate::{graphql::GraphQLClient, store::ForkingStore};
 use rand::rngs::OsRng;
 use roaring::RoaringBitmap;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer;
-use sui_rpc::proto::sui::rpc::v2::{
-    CheckpointSummary as CKS,
-    transaction_execution_service_server::TransactionExecutionServiceServer,
-};
+use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer;
 use sui_rpc::proto::sui::rpc::v2::{
     ledger_service_server::LedgerServiceServer,
     subscription_service_server::SubscriptionServiceServer,
@@ -326,7 +318,7 @@ pub async fn start_server(
     checkpoint: Option<u64>,
     host: String,
     port: u16,
-    data_ingestion_path: PathBuf,
+    _data_ingestion_path: PathBuf,
     version: &'static str,
 ) -> Result<()> {
     let chain_str = chain.as_str();
@@ -356,28 +348,20 @@ pub async fn start_server(
     let context = crate::context::Context {
         simulacrum: simulacrum.clone(),
         at_checkpoint,
-        chain,
-        protocol_version,
-    };
-
-    let chain_id = match chain {
-        Chain::Mainnet => get_mainnet_chain_identifier(),
-        Chain::Testnet => get_testnet_chain_identifier(),
-        _ => bail!("Only mainnet and testnet are supported for now"),
     };
 
     let registry = Registry::new_custom(Some("sui_forking".into()), None)
         .context("Failed to create Prometheus registry.")
         .unwrap();
 
-    start_grpc_services(context.clone(), chain_id, version, &registry);
+    let _ = start_grpc_services(context.clone(), version, &registry).await?;
 
     let state =
         Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
 
-    let update_objects_handle = tokio::spawn(async move {
-        update_system_objects(context.clone()).await.unwrap();
-    });
+    // let update_objects_handle = tokio::spawn(async move {
+    //     update_system_objects(context.clone()).await.unwrap();
+    // });
 
     println!("Ready to accept requests");
 
@@ -413,7 +397,7 @@ pub async fn start_server(
     // Abort the spawned tasks when the server shuts down
     // rpc_handle.abort();
     // indexer_handle.abort();
-    update_objects_handle.abort();
+    // update_objects_handle.abort();
 
     info!("Server shutdown complete");
 
@@ -439,7 +423,7 @@ pub async fn fetch_checkpoint_from_graphql(
     Ok((summary, contents))
 }
 
-const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6"];
+const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6", "0xacc"];
 
 /// Update system objects to the versions at the forking checkpoint
 async fn update_system_objects(context: crate::context::Context) -> anyhow::Result<()> {
@@ -479,7 +463,6 @@ async fn get_sui_system_state(
 /// Start the gRPC services for the forking server
 async fn start_grpc_services(
     context: crate::context::Context,
-    chain: ChainIdentifier,
     version: &'static str,
     registry: &Registry,
 ) -> Result<(), anyhow::Error> {
@@ -517,11 +500,6 @@ async fn initialize_simulacrum(
     chain: Chain,
     version: &'static str,
 ) -> Result<Simulacrum<OsRng, ForkingStore>, anyhow::Error> {
-    let node = match chain {
-        Chain::Mainnet => Node::Mainnet,
-        Chain::Testnet => Node::Testnet,
-        Chain::Unknown => todo!("Add support for custom chains"),
-    };
     let mut rng = rand::rngs::OsRng;
     let config = ConfigBuilder::new_with_temp_dir()
         .rng(&mut rng)
@@ -531,18 +509,13 @@ async fn initialize_simulacrum(
         .with_chain_override(chain)
         .build();
 
-    let committee = config.committee_with_network();
-
-    // change the validator set to the sui system object to be the one in the new config we just
-    // built.
     let checkpoint = fetch_checkpoint_from_graphql(client, Some(at_checkpoint)).await?;
-    let info = AuthorityQuorumSignInfo::<true> {
+    let sig = AuthorityQuorumSignInfo::<true> {
         epoch: checkpoint.0.epoch,
         signature: Default::default(),
         signers_map: RoaringBitmap::new(),
     };
-    let env_checkpoint = Envelope::new_from_data_and_sig(checkpoint.0, info);
-
+    let env_checkpoint = Envelope::new_from_data_and_sig(checkpoint.0, sig);
     let verified_checkpoint = VerifiedCheckpoint::new_unchecked(env_checkpoint);
 
     let (fs_transaction_store, object_store) = initialize_data_store(chain, at_checkpoint, version);
@@ -565,13 +538,20 @@ async fn initialize_simulacrum(
 
     let keystore = KeyStore::from_network_config(&config);
 
-    let mut simulacrum = Simulacrum::new_from_custom_state(
+    // The mock checkpoint builder relies on the accumulator root object to be present in the store
+    // with the correct initial shared version, so we need to fetch it here and pass it to the
+    // simulacrum. This is needed if protocol config has enabled accumulators
+    // TODO: do we need this if protocol config does not have enabled accumulators?
+    let acc_initial_shared_version = get_accumulator_root_obj_initial_shared_version(&store)?
+        .ok_or_else(|| anyhow::anyhow!("Failed to get accumulator root object from store"))?;
+    let simulacrum = Simulacrum::new_from_custom_state(
         keystore,
         verified_checkpoint,
         initial_sui_system_state,
         &config,
         store,
         rng,
+        Some(acc_initial_shared_version),
     );
 
     // simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
