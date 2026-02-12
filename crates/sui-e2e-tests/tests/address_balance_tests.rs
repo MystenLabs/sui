@@ -546,9 +546,12 @@ async fn test_address_balance_gas() {
         .build()
         .await;
 
-    let (sender, gas_package_id) = setup_address_balance_account(&mut test_env, 10_000_000).await;
+    let funding_amount = 100_000_000;
 
-    test_env.verify_accumulator_exists(sender, 10_000_000);
+    let (sender, gas_package_id) =
+        setup_address_balance_account(&mut test_env, funding_amount).await;
+
+    test_env.verify_accumulator_exists(sender, funding_amount);
     // Verify the accumulator object count after settlement.
     test_env.verify_accumulator_object_count(1);
 
@@ -604,9 +607,19 @@ async fn test_address_balance_gas() {
         gas_used
     );
 
-    let expected_balance = 10_000_000 - gas_used;
+    let expected_balance = funding_amount - gas_used;
 
     test_env.verify_accumulator_exists(sender, expected_balance);
+
+    // Test tx with no input objects.
+    let tx = test_env
+        .tx_builder_with_gas_objects(sender, vec![])
+        .with_address_balance_gas(test_env.chain_id, 0, 0)
+        .with_gas_budget(10_000_000)
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
 
     test_env.cluster.trigger_reconfiguration().await;
 }

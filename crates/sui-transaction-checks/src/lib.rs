@@ -419,6 +419,8 @@ mod checked {
     /// that they are all the correct version and number.
     #[instrument(level = "trace", skip_all)]
     fn check_objects(transaction: &TransactionData, objects: &InputObjects) -> UserInputResult<()> {
+        // Note: objects may be empty when address balance gas payments are used.
+
         // We require that mutable objects cannot show up more than once.
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for object in objects.iter() {
@@ -430,10 +432,6 @@ mod checked {
                     }
                 );
             }
-        }
-
-        if !transaction.is_genesis_tx() && objects.is_empty() {
-            return Err(UserInputError::ObjectInputArityViolation);
         }
 
         let gas_coins: HashSet<ObjectID> =
