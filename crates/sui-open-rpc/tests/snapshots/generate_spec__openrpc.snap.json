@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "112",
+              "maxSupportedProtocolVersion": "113",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1406,6 +1406,7 @@
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "private_generics_verifier_v2": false,
                 "random_beacon": false,
+                "randomize_checkpoint_tx_limit_in_tests": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
                 "record_additional_state_digest_in_prologue": false,

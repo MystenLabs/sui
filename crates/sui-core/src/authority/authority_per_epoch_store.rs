@@ -1111,7 +1111,9 @@ impl AuthorityPerEpochStore {
             chain_from_id, chain.1
         );
 
-        let protocol_config = ProtocolConfig::get_for_version(protocol_version, chain.1);
+        let mut protocol_config = ProtocolConfig::get_for_version(protocol_version, chain.1);
+        protocol_config
+            .apply_seeded_test_overrides(epoch_start_configuration.epoch_digest().inner());
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
