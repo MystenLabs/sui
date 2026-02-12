@@ -289,11 +289,27 @@ impl TestEnv {
         });
     }
 
-    pub fn get_sui_balance(&self, owner: SuiAddress) -> u64 {
-        self.get_balance(owner, GAS::type_tag())
+    /// Get the balance of the owner's SUI address balance.
+    pub fn get_sui_balance_ab(&self, owner: SuiAddress) -> u64 {
+        self.get_balance_ab(owner, GAS::type_tag())
     }
 
-    pub fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> u64 {
+    pub async fn get_coin_balance(&self, object_id: ObjectID) -> u64 {
+        let obj = self
+            .cluster
+            .get_object_from_fullnode_store(&object_id)
+            .await
+            .expect("coin object should exist");
+        let coin = obj
+            .data
+            .try_as_move()
+            .expect("should be a Move object")
+            .get_coin_value_unsafe();
+        coin
+    }
+
+    /// Get the balance of the owner's address balance for a given coin type.
+    pub fn get_balance_ab(&self, owner: SuiAddress, coin_type: TypeTag) -> u64 {
         let db_balance = self.cluster.fullnode_handle.sui_node.with({
             let coin_type = coin_type.clone();
             move |node| {
@@ -313,6 +329,21 @@ impl TestEnv {
         });
 
         db_balance
+    }
+
+    /// Get the total balance of SUI owned by the address (including address balance and coins).
+    pub async fn get_sui_balance(&self, owner: SuiAddress) -> u64 {
+        self.get_balance_for_coin_type(owner, GAS::type_tag()).await
+    }
+
+    /// Get the total balance of a given coin type owned by the address (including address balance and coins).
+    pub async fn get_balance_for_coin_type(&self, owner: SuiAddress, coin_type: TypeTag) -> u64 {
+        let client = self.cluster.grpc_client();
+        let rpc_balance = client
+            .get_balance(owner, &coin_type.to_canonical_string(true).parse().unwrap())
+            .await
+            .unwrap();
+        rpc_balance.balance()
     }
 
     pub fn verify_accumulator_removed(&self, owner: SuiAddress) {

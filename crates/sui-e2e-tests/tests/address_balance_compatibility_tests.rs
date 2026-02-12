@@ -229,8 +229,13 @@ async fn test_valid_coin_reservation_transfers() {
         .unwrap();
     assert!(effects.status().is_ok());
 
+    test_env
+        .cluster
+        .wait_for_tx_settlement(std::slice::from_ref(effects.transaction_digest()))
+        .await;
+
     // ensure both balances arrived at the recipient
-    let recipient_balance = test_env.get_sui_balance(recipient);
+    let recipient_balance = test_env.get_sui_balance(recipient).await;
     // 100 from coin transfer, 1 from coin reservation
     assert_eq!(recipient_balance, 100 + 1);
 }
@@ -258,7 +263,7 @@ async fn test_valid_coin_reservation_gas_payments() {
 
     let recipient = SuiAddress::random_for_testing_only();
 
-    let initial_sender_balance = test_env.get_sui_balance(sender);
+    let initial_sender_balance = test_env.get_sui_balance_ab(sender);
 
     let tx = TestTransactionBuilder::new(sender, gas_payment, test_env.rgp)
         .transfer_sui_to_address_balance(FundSource::coin(transfer_payment), vec![(1, recipient)])
@@ -269,13 +274,13 @@ async fn test_valid_coin_reservation_gas_payments() {
     let gas_charge = effects.gas_cost_summary().gas_used() as u128;
 
     // ensure both balances arrived at the recipient
-    let recipient_balance = test_env.get_sui_balance(recipient);
+    let recipient_balance = test_env.get_sui_balance_ab(recipient);
 
     // 1 MIST transferred.
     assert_eq!(recipient_balance, 1);
 
     // Sender should have lost the gas charge and the 1 MIST transferred.
-    let final_sender_balance = test_env.get_sui_balance(sender);
+    let final_sender_balance = test_env.get_sui_balance_ab(sender);
     assert_eq!(
         final_sender_balance,
         initial_sender_balance as u64 - gas_charge as u64 - 1
@@ -300,6 +305,8 @@ async fn test_gas_coin_callarg_with_coin_reservation_gas() {
 
     let gas_reservation = test_env.encode_coin_reservation(sender, 0, budget);
     let recipient = SuiAddress::random_for_testing_only();
+
+    let initial_sender_balance = test_env.get_sui_balance_ab(sender);
 
     // Use transfer_sui which internally does SplitCoins(GasCoin, [amount]) + TransferObjects.
     // GasCoin should work with coin reservation gas.
