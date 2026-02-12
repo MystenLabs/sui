@@ -44,13 +44,17 @@ const config = {
   baseUrl: "/",
 
   onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "throw",
+  onBrokenAnchors: "ignore",
+  onDuplicateRoutes: 'ignore',
 
   staticDirectories: ["static", "src/open-spec"],
 
   markdown: {
     format: "detect",
     mermaid: true,
+    hooks: {
+    onBrokenMarkdownLinks: 'throw',
+  },
   },
   
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],

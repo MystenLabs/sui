@@ -6,12 +6,11 @@
 // plugins/remark-glossary.js
 // Auto-wraps glossary terms with <Term>…</Term> in MDX content.
 //
-// Requires: `js-yaml`, `unist-util-visit`
+// Requires: `unist-util-visit`
 //   pnpm add -D js-yaml unist-util-visit
 
 import fs from "fs";
 import path from "path";
-import * as yaml from "js-yaml";
 import { visit } from "unist-util-visit";
 
 function escapeRegex(s) {
@@ -49,7 +48,7 @@ function buildMatcher(entries) {
 
 function loadGlossary(glossaryPath) {
     const raw = fs.readFileSync(glossaryPath, "utf8");
-    const data = yaml.load(raw);
+    const data = JSON.parse(raw);
 
     /** @type {{label:string,definition:string,id?:string,aliases?:string[]}[]} */
     const entries = [];
