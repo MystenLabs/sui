@@ -78,7 +78,7 @@ pub(crate) fn run(
                     ))
             })?;
             let state = MachineState::new(Arc::clone(&vtables.interner), call_stack);
-            eval::run(state, vtables, vm_config, extensions, tracer, gas_meter)
+            eval::run(state, vtables, telemetry, vm_config, extensions, tracer, gas_meter)
         }
     };
 
