@@ -1080,7 +1080,8 @@ impl Type {
     /// New applications should not use this.
     ///
     /// SAFETY: Addition over `AbstractMemorySize` is saturating and so this is safe against
-    /// overflow.
+    /// overflow. See the implementation of [`Add`] for [`AbstractMemorySize`] in the
+    /// [`move_core_types::gas_algebra`] module for more details on this and why this is safe.
     #[allow(clippy::arithmetic_side_effects)]
     pub fn size(&self) -> AbstractMemorySize {
         use Type::*;
