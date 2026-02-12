@@ -26,7 +26,6 @@ pub(crate) enum BalanceChangeContents {
     Stored(StoredBalanceChange),
 }
 
-/// Effects to the balance (sum of coin values per coin type) of addresses and objects.
 #[derive(Clone)]
 pub(crate) struct BalanceChange {
     pub(crate) scope: Scope,
@@ -34,14 +33,6 @@ pub(crate) struct BalanceChange {
 }
 
 impl BalanceChange {
-    /// Create a BalanceChange from a gRPC BalanceChange.
-    pub(crate) fn from_grpc(scope: Scope, grpc: GrpcBalanceChange) -> Self {
-        Self {
-            scope,
-            content: BalanceChangeContents::Grpc(grpc),
-        }
-    }
-
     /// Create a BalanceChange from a stored BalanceChange (database).
     pub(crate) fn from_stored(scope: Scope, stored: StoredBalanceChange) -> Self {
         Self {
@@ -50,23 +41,22 @@ impl BalanceChange {
         }
     }
 
-    /// Create a BalanceChange from a native BalanceChange.
-    pub(crate) fn from_native(scope: Scope, native: NativeBalanceChange) -> Self {
-        Self {
-            scope,
-            content: BalanceChangeContents::Native(native),
-        }
-    }
-
     /// Create a BalanceChange from KvBalanceChangeContents (from kv_loader).
     pub(crate) fn from_kv_content(scope: Scope, kv_content: KvBalanceChangeContents) -> Self {
         match kv_content {
-            KvBalanceChangeContents::Grpc(grpc) => Self::from_grpc(scope, grpc),
-            KvBalanceChangeContents::Native(native) => Self::from_native(scope, native),
+            KvBalanceChangeContents::Grpc(grpc) => Self {
+                scope,
+                content: BalanceChangeContents::Grpc(grpc),
+            },
+            KvBalanceChangeContents::Native(native) => Self {
+                scope,
+                content: BalanceChangeContents::Native(native),
+            },
         }
     }
 }
 
+/// Effects to the balance (sum of coin values per coin type) of addresses and objects.
 #[Object]
 impl BalanceChange {
     /// The address or object whose balance has changed.
