@@ -337,7 +337,7 @@ If `<pubfile>` is omitted, it defaults to `Pub.<env-name>.toml` where `<env-name
 You can also prepare bytecode for publication without actually publishing it by passing `--pubfile-path <pubfile>` to `sui move build --dump-bytecode-as-base64`:
 
 ```sh
-sui move build --dump-bytecode-as-base64 --pubfile-path Pub.localnet.toml
+sui move build --dump-bytecode-as-base64 --pubfile-path Pub.localnet.toml --build-env testnet
 ```
 
 The format of an ephemeral publication file is as follows:
