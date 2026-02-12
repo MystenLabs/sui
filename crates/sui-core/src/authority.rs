@@ -3184,17 +3184,14 @@ impl AuthorityState {
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        if self.indexes.is_none() {
+        let Some(indexes) = &self.indexes else {
             return Ok(());
-        }
+        };
 
         let tx_digest = *certificate.digest();
 
         // Allocate sequence number on the calling thread to preserve execution order.
-        let sequence = self
-            .indexes
-            .as_ref()
-            .map(|idx| idx.allocate_sequence_number());
+        let sequence = indexes.allocate_sequence_number();
 
         if self.config.sync_post_process_one_tx {
             // Synchronous mode: run post-processing inline on the calling thread
@@ -3203,7 +3200,7 @@ impl AuthorityState {
             // TODO: delete this branch once async mode has shipped
             let result = Self::post_process_one_tx_impl(
                 sequence,
-                &self.indexes,
+                indexes,
                 &self.subscription_handler,
                 &self.metrics,
                 self.name,
@@ -3218,18 +3215,16 @@ impl AuthorityState {
 
             match result {
                 Ok((raw_batch, cache_updates_with_locks)) => {
-                    if let Some(indexes) = &self.indexes {
-                        let mut db_batch = indexes.new_db_batch();
-                        db_batch
-                            .concat(vec![raw_batch])
-                            .expect("failed to absorb raw index batch");
-                        // Destructure to keep _locks alive through commit_index_batch.
-                        let IndexStoreCacheUpdatesWithLocks { _locks, inner } =
-                            cache_updates_with_locks;
-                        indexes
-                            .commit_index_batch(db_batch, vec![inner])
-                            .expect("failed to commit index batch");
-                    }
+                    let mut db_batch = indexes.new_db_batch();
+                    db_batch
+                        .concat(vec![raw_batch])
+                        .expect("failed to absorb raw index batch");
+                    // Destructure to keep _locks alive through commit_index_batch.
+                    let IndexStoreCacheUpdatesWithLocks { _locks, inner } =
+                        cache_updates_with_locks;
+                    indexes
+                        .commit_index_batch(db_batch, vec![inner])
+                        .expect("failed to commit index batch");
                 }
                 Err(e) => {
                     self.metrics.post_processing_total_failures.inc();
@@ -3244,7 +3239,7 @@ impl AuthorityState {
         let (done_tx, done_rx) = tokio::sync::oneshot::channel::<PostProcessingOutput>();
         self.pending_post_processing.insert(tx_digest, done_rx);
 
-        let indexes = self.indexes.clone();
+        let indexes = indexes.clone();
         let subscription_handler = self.subscription_handler.clone();
         let metrics = self.metrics.clone();
         let name = self.name;
@@ -3304,8 +3299,8 @@ impl AuthorityState {
     }
 
     fn post_process_one_tx_impl(
-        sequence: Option<u64>,
-        indexes: &Option<Arc<IndexStore>>,
+        sequence: u64,
+        indexes: &Arc<IndexStore>,
         subscription_handler: &Arc<SubscriptionHandler>,
         metrics: &Arc<AuthorityMetrics>,
         name: AuthorityName,
@@ -3324,7 +3319,6 @@ impl AuthorityState {
         let events = &inner_temporary_store.events;
         let written = &inner_temporary_store.written;
         let tx_coins = Self::fullnode_only_get_tx_coins_for_indexing(
-            indexes,
             name,
             object_store,
             effects,
@@ -3332,17 +3326,11 @@ impl AuthorityState {
             epoch_store,
         );
 
-        // Index tx
-        let indexes = indexes
-            .as_ref()
-            .expect("post_process_one_tx_impl called without indexes");
-        let sequence = sequence.expect("sequence number must be allocated when indexes exist");
-
         let (raw_batch, cache_updates) = Self::index_tx(
             sequence,
             backing_package_store,
             object_store,
-            indexes.as_ref(),
+            indexes,
             tx_digest,
             certificate,
             effects,
@@ -5298,14 +5286,13 @@ impl AuthorityState {
     // Returns coin objects for indexing for fullnode if indexing is enabled.
     #[instrument(level = "trace", skip_all)]
     fn fullnode_only_get_tx_coins_for_indexing(
-        indexes: &Option<Arc<IndexStore>>,
         name: AuthorityName,
         object_store: &Arc<dyn ObjectStore + Send + Sync>,
         effects: &TransactionEffects,
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<TxCoins> {
-        if indexes.is_none() || epoch_store.committee().authority_exists(&name) {
+        if epoch_store.committee().authority_exists(&name) {
             return None;
         }
         let written_coin_objects = inner_temporary_store
