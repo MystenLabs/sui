@@ -405,10 +405,28 @@ async fn test_split_from_fake_coin() {
 
 #[sim_test]
 async fn test_coin_reservation_enforced_when_not_used() {
-    // TODO:
-    // - use a coin reservation that is greater than the sender's address balance
-    // - build tx with 0 commands.
-    // - send tx, assert it fails.
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    // Use a coin reservation that is greater than the sender's address balance.
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 2000);
+
+    // Build tx with 0 commands, using the oversized coin reservation as gas.
+    let tx = test_env
+        .tx_builder_with_gas(sender, coin_reservation)
+        .build();
+
+    // Send tx, assert it fails due to insufficient balance.
+    let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+    assert!(err.to_string().contains("is less than requested"));
 }
 
 #[sim_test]
