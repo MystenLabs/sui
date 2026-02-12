@@ -355,11 +355,20 @@ async fn test_add_money_to_fake_coin() {
 
     let coin_reservation = test_env.encode_coin_reservation(sender, 0, 100);
 
-    let tx_builder = test_env.tx_builder_with_gas(sender, gas);
-    // TODO:
-    // - add "merge_coins" method to TestTransactionBuilder
-    // - use it to merge `real_coin` into `coin_reservation`
-    // - verify the sender's address balance is increased by the amount of `real_coin`
+    let initial_balance = test_env.get_sui_balance_ab(sender);
+    let real_coin_balance = test_env.get_coin_balance(real_coin.0).await;
+
+    // Merge `real_coin` into `coin_reservation` (fake coin).
+    let tx = test_env
+        .tx_builder_with_gas(sender, gas)
+        .merge_coins(coin_reservation, vec![real_coin])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
+
+    // Verify the sender's address balance is increased by the amount of `real_coin`.
+    let final_balance = test_env.get_sui_balance_ab(sender);
+    assert_eq!(final_balance, initial_balance + real_coin_balance);
 }
 
 #[sim_test]
@@ -379,11 +388,21 @@ async fn test_split_from_fake_coin() {
 
     let tx = test_env
         .tx_builder(sender)
-        .split_coin(coin_reservation, vec![100]);
+        .split_coin(coin_reservation, vec![100])
+        .build();
+    dbg!(&tx);
 
-    // TODO:
-    // - send tx, should succeed
-    // - assert that the sender received a new coin with balance 100
+    // Send tx, should succeed.
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    dbg!(&effects);
+    assert!(effects.status().is_ok());
+
+    // Assert that the sender received a new coin with balance 100.
+    let created = effects.created();
+    assert_eq!(created.len(), 1, "Expected one created object");
+    let new_coin_id = created[0].0.0;
+    let new_coin_balance = test_env.get_coin_balance(new_coin_id).await;
+    assert_eq!(new_coin_balance, 100);
 }
 
 #[sim_test]
