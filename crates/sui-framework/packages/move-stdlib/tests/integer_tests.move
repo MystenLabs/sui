@@ -7,24 +7,35 @@ module std::integer_tests;
 
 use std::unit_test::assert_eq;
 
-/// Iterate over the cases and apply the function to the case and its predecessor
-/// and successor. Predecessor is the value - 1, with min being 0, and successor
-/// is the value + 1, with max being the max value.
-public(package) macro fun cases($max: _, $cases: vector<_>, $f: |_, _, _|) {
+/// Iterate over cases and apply `$f(a, b, c)`.
+/// When `$exhaustive` is false: for each case, calls `$f(case-1, case, case+1)`.
+/// When `$exhaustive` is true: calls `$f` for all N³ permutations of cases.
+public(package) macro fun cases($max: _, $cases: vector<_>, $exhaustive: bool, $f: |_, _, _|) {
     let cases = $cases;
-    let max_pred = $max - 1;
-    cases.destroy!(|case| {
-        let case_pred = case.max(1) - 1;
-        let case_succ = case.min(max_pred) + 1;
-        $f(case_pred, case, case_succ);
-    });
+    if ($exhaustive) {
+        let len = cases.length();
+        len.do!(|i| {
+            len.do!(|j| {
+                len.do!(|k| {
+                    $f(cases[i], cases[j], cases[k]);
+                });
+            });
+        });
+    } else {
+        let max_pred = $max - 1;
+        cases.destroy!(|case| {
+            let case_pred = case.max(1) - 1;
+            let case_succ = case.min(max_pred) + 1;
+            $f(case_pred, case, case_succ);
+        });
+    };
 }
 
 public(package) macro fun test_bitwise_not($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.bitwise_not(), 0);
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(case_pred.bitwise_not().bitwise_not(), case_pred);
         assert_eq!(case_pred.bitwise_not() | case_pred, max);
         assert_eq!(case_pred.bitwise_not() ^ case_pred, max);
@@ -46,7 +57,7 @@ public(package) macro fun test_max($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.max(max), max);
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(max.max(case), max);
         assert_eq!(case.max(max), max);
         assert_eq!(case.max(case), case);
@@ -59,7 +70,7 @@ public(package) macro fun test_min($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.min(max), max);
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(max.min(case), case);
         assert_eq!(case.min(max), case);
         assert_eq!(case.min(case), case);
@@ -72,7 +83,7 @@ public(package) macro fun test_diff($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.diff(max), 0);
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(max.diff(case), max - case);
         assert_eq!(case.diff(max), max - case);
         assert_eq!(case.diff(case), 0);
@@ -95,7 +106,7 @@ public(package) macro fun test_divide_and_round_up($max: _, $cases: vector<_>) {
     let cases = $cases;
     assert_eq!(max.divide_and_round_up(max), 1);
     check_div_round!(max, max);
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         check_div_round!(max, case);
         check_div_round!(case, max);
         check_div_round!(case, case);
@@ -119,24 +130,31 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
         return
     };
 
-    // x*y/z = (x/z)*y + (x%z)*y/z
-    // Only test each naive alternative when it doesn't overflow.
-    // When the naive alternative would overflow, we skip the assertion
-    // (the overflow itself proves mul_div is needed).
-    // When it doesn't overflow, we verify the precision property:
-    // - strict less when remainder exists,
-    // - equality when divisible.
-    // (x/z)*y overflows when x/z > max/y
-    if (x / z <= max / y) {
-        if (x % z != 0) {
-            assert!((x / z) * y < x.mul_div(y, z));
-        } else {
-            assert_eq!((x / z) * y, x.mul_div(y, z));
+    // Skip if mul_div would abort (result > max).
+    // floor(x*y/z) = (x/z)*y + floor((x%z)*y/z), where the second term < y.
+    if (x / z > max / y) return;
+    let first = (x / z) * y;
+    let r = x % z;
+    if (r != 0) {
+        if (r > max / y) {
+            // r*y overflows; remainder term < y. Skip if first is too close to max.
+            if (max - first < y) return;
+        } else if (r * y / z > max - first) {
+            return
         };
     };
-    // x*(y/z) overflows when y/z > max/x
+
+    // Precision: mul_div(x,y,z) >= (x/z)*y, with equality iff floor(r*y/z) == 0.
+    // floor(r*y/z) > 0 iff r*y >= z iff r > (z-1)/y.
+    if (r > (z - 1) / y) {
+        assert!(first < x.mul_div(y, z));
+    } else {
+        assert_eq!(first, x.mul_div(y, z));
+    };
+    // Precision: mul_div(x,y,z) >= x*(y/z), with equality iff floor(x*(y%z)/z) == 0.
     if (y / z <= max / x) {
-        if (y % z != 0) {
+        let ry = y % z;
+        if (ry != 0 && x > (z - 1) / ry) {
             assert!(x * (y / z) < x.mul_div(y, z));
         } else {
             assert_eq!(x * (y / z), x.mul_div(y, z));
@@ -157,18 +175,33 @@ public(package) macro fun check_mul_div_ceil($max: _, $x: _, $y: _, $z: _) {
         return
     };
 
-    // x*y/z = (x/z)*y + (x%z)*y/z
-    // When x is divisible by z, x*y is divisible by z, so ceil == floor.
-    // When x is not divisible by z, ceil > (x/z)*y.
-    // (x/z)*y overflows when x/z > max/y
-    if (x / z <= max / y) {
-        if (x % z != 0) {
-            assert!((x / z) * y < x.mul_div_ceil(y, z));
+    // Skip if mul_div_ceil would abort (result > max).
+    // ceil(x*y/z) = floor(x*y/z) + (1 if x*y%z != 0 else 0).
+    // floor(x*y/z) = (x/z)*y + floor((x%z)*y/z), where the second term < y.
+    if (x / z > max / y) return;
+    let first = (x / z) * y;
+    let r = x % z;
+    if (r != 0) {
+        if (r > max / y) {
+            // r*y overflows; remainder term < y, ceil adds at most 1.
+            // Skip if first + y > max.
+            if (max - first < y) return;
         } else {
-            assert_eq!((x / z) * y, x.mul_div_ceil(y, z));
+            let ry = r * y;
+            let ceil_adj = if (ry % z != 0) { 1 } else { 0 };
+            if (ry / z + ceil_adj > max - first) return;
         };
     };
-    // x*(y/z) overflows when y/z > max/x
+
+    // Precision: ceil(x*y/z) >= (x/z)*y, strict iff x%z != 0.
+    // (When r > 0, either floor(r*y/z) >= 1 making floor > first, or
+    // 0 < r*y < z making ceil round up past first.)
+    if (r != 0) {
+        assert!(first < x.mul_div_ceil(y, z));
+    } else {
+        assert_eq!(first, x.mul_div_ceil(y, z));
+    };
+    // Precision: ceil(x*y/z) >= x*(y/z), strict iff y%z != 0.
     if (y / z <= max / x) {
         if (y % z != 0) {
             assert!(x * (y / z) < x.mul_div_ceil(y, z));
@@ -178,42 +211,35 @@ public(package) macro fun check_mul_div_ceil($max: _, $x: _, $y: _, $z: _) {
     };
 }
 
-/// Demonstrates that mul_div preserves more precision than (x / z) * y
-/// or x * (y / z), especially when x * y overflows.
-public(package) macro fun test_mul_div_precision<$T>($max: $T) {
+public(package) macro fun check_mul_div_precision($max: _, $x: _, $z: _) {
+    let x = $x;
+    let z = $z;
     let max = $max;
-
-    // Overflow case: (max / 2 + 1) * 3 / 2 would fail with naive x * y / z
-    let half_plus_one = max / 2 + 1;
-    let result = half_plus_one.mul_div(3, 2);
-    assert!(result > max / 2);
-    assert!(result < max);
-
-    // mul_div(x, y, z) gives exact result even when (x / z) * y loses precision
-    // because x is not divisible by z
-    let x = max / 3;
-    assert_eq!(x.mul_div(2, 2), x);
-    // Alternative (x / 2) * 2 loses the remainder when x is odd
-    assert!((x / 2) * 2 <= x.mul_div(2, 2));
-
-    // 5 * 3 / 2 = 7, but (5 / 2) * 3 = 6
-    assert_eq!((5: $T).mul_div(3, 2), 7);
-    assert_eq!((5: $T).mul_div_ceil(3, 2), 8);
+    // Identity: mul_div(x, z, z) == x even when x * z overflows.
+    if (z != 0) {
+        assert_eq!(x.mul_div(z, z), x);
+        assert_eq!(x.mul_div_ceil(z, z), x);
+    };
+    // Precision with distinct y != z: mul_div(x, y, z) >= (x/z)*y.
+    assert!((x / 3) * 2 <= x.mul_div(2, 3));
+    assert!((x / 3) * 2 <= x.mul_div_ceil(2, 3));
+    if (x <= max / 3 * 2) {
+        assert!((x / 2) * 3 <= x.mul_div(3, 2));
+        assert!((x / 2) * 3 <= x.mul_div_ceil(3, 2));
+    };
 }
 
-public(package) macro fun test_mul_div<$T>($max: $T, $cases: vector<$T>) {
+public(package) macro fun test_mul_div<$T>($max: $T, $cases: vector<$T>, $exhaustive: bool) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.mul_div(max, max.max(1)), max);
-    cases!(max, cases, |case_pred, case, case_succ| {
-        assert_eq!(case.mul_div(case, case.max(1)), case); // avoid division by 0
+    cases!(max, cases, $exhaustive, |case_pred, case, case_succ| {
         check_mul_div!(max, case_pred, case, case_succ);
         check_mul_div_ceil!(max, case_pred, case, case_succ);
+        check_mul_div_precision!(max, case_pred, case_succ);
     });
     check_mul_div!(max, max, max, max);
     check_mul_div_ceil!(max, max, max, max);
-    // Test precision advantage of mul_div over naive alternatives
-    test_mul_div_precision!<$T>(max);
 }
 
 public(package) macro fun slow_pow($base: _, $exp: u8): _ {
@@ -230,7 +256,7 @@ public(package) macro fun slow_pow($base: _, $exp: u8): _ {
 public(package) macro fun test_pow<$T>($max: $T, $cases: vector<$T>) {
     let max = $max;
     let cases = $cases;
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(case_pred.pow(0), 1);
         assert_eq!(case_pred.pow(1), case_pred);
         assert_eq!(case.pow(0), 1);
@@ -253,7 +279,7 @@ public(package) macro fun test_sqrt<$T>(
     let cases = $bound_cases;
     // logical bounds cases
     let max_sqrt = max.sqrt();
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         let sqrt_pred = case_pred.sqrt();
         assert!(sqrt_pred * sqrt_pred <= case_pred);
         let sqrt = case.sqrt();
@@ -273,7 +299,7 @@ public(package) macro fun test_sqrt<$T>(
 
     // simple reflexive cases
     let cases: vector<$T> = $reflexive_cases;
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!((case_pred * case_pred).sqrt(), case_pred);
         assert_eq!((case * case).sqrt(), case);
         assert_eq!((case_succ * case_succ).sqrt(), case_succ);
@@ -383,7 +409,7 @@ public(package) macro fun test_dos<$T>($max: $T, $cases: vector<$T>) {
     let cases = $cases;
     // test bounds/invalid ranges
     (0: $T).do!(|_| assert!(false));
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         if (case == 0) return;
         case.range_do!(0, |_| assert!(false));
         case.range_do_eq!(0, |_| assert!(false));
@@ -401,7 +427,7 @@ public(package) macro fun test_dos<$T>($max: $T, $cases: vector<$T>) {
 
     // test iteration numbers
     let cases: vector<$T> = vector[3, 5, 8, 11, 14];
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         test_dos_case!(case_pred);
         test_dos_case!(case);
         test_dos_case!(case_succ);
@@ -422,7 +448,7 @@ public(package) macro fun test_checked_add<$T>($max: $T, $cases: vector<$T>) {
     assert_eq!((1: $T).checked_add(max), option::none());
     assert_eq!(max.checked_add(max), option::none());
     // case iteration
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(case.checked_add(0), option::some(case));
         assert_eq!((0: $T).checked_add(case), option::some(case));
         if (case <= max - 1) {
@@ -458,7 +484,7 @@ public(package) macro fun test_checked_sub<$T>($max: $T, $cases: vector<$T>) {
     assert_eq!((1: $T).checked_sub(2), option::none());
     assert_eq!((1: $T).checked_sub(max), option::none());
     // case iteration
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(case.checked_sub(0), option::some(case));
         assert_eq!(case.checked_sub(case), option::some(0));
         assert_eq!(case_succ.checked_sub(case), option::some(case_succ - case));
@@ -485,7 +511,7 @@ public(package) macro fun test_checked_mul<$T>($max: $T, $cases: vector<$T>) {
     assert_eq!((2: $T).checked_mul(max), option::none());
     assert_eq!(max.checked_mul(max), option::none());
     // case iteration
-    cases!(max, cases, |_case_pred, case, _case_succ| {
+    cases!(max, cases, false, |_case_pred, case, _case_succ| {
         assert_eq!(case.checked_mul(0), option::some(0));
         assert_eq!((0: $T).checked_mul(case), option::some(0));
         assert_eq!(case.checked_mul(1), option::some(case));
@@ -516,7 +542,7 @@ public(package) macro fun test_checked_div<$T>($max: $T, $cases: vector<$T>) {
     assert_eq!((1: $T).checked_div(0), option::none());
     assert_eq!(max.checked_div(0), option::none());
     // case iteration
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         if (case != 0) {
             assert_eq!(case.checked_div(case), option::some(1));
             assert_eq!((0: $T).checked_div(case), option::some(0));
@@ -542,7 +568,7 @@ public(package) macro fun test_saturating_add<$T>($max: $T, $cases: vector<$T>) 
     assert_eq!((1: $T).saturating_add(max), max);
     assert_eq!(max.saturating_add(max), max);
     // case iteration
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(case.saturating_add(0), case);
         assert_eq!((0: $T).saturating_add(case), case);
         if (case <= max - 1) {
@@ -578,7 +604,7 @@ public(package) macro fun test_saturating_sub<$T>($max: $T, $cases: vector<$T>) 
     assert_eq!((1: $T).saturating_sub(2), 0);
     assert_eq!((1: $T).saturating_sub(max), 0);
     // case iteration
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(case.saturating_sub(0), case);
         assert_eq!(case.saturating_sub(case), 0);
         assert_eq!(case_succ.saturating_sub(case), case_succ - case);
@@ -605,7 +631,7 @@ public(package) macro fun test_saturating_mul<$T>($max: $T, $cases: vector<$T>) 
     assert_eq!((2: $T).saturating_mul(max), max);
     assert_eq!(max.saturating_mul(max), max);
     // case iteration
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         assert_eq!(case.saturating_mul(0), 0);
         assert_eq!((0: $T).saturating_mul(case), 0);
         assert_eq!(case.saturating_mul(1), case);
@@ -716,7 +742,7 @@ public(package) macro fun test_lossless_div<$T>($max: $T, $cases: vector<$T>) {
 
     assert_eq!(max.lossless_div(2), option::none());
     // case iteration
-    cases!(max, cases, |case_pred, case, case_succ| {
+    cases!(max, cases, false, |case_pred, case, case_succ| {
         if (case == 0) return;
 
         // basic cases

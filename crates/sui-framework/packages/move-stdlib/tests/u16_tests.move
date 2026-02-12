@@ -11,6 +11,9 @@ const BIT_SIZE: u8 = 16;
 const MAX: u16 = 0xFFFF;
 const MAX_PRED: u16 = MAX - 1;
 
+/// Set to true to test all N³ permutations of cases for mul_div.
+const EXHAUSTIVE_MUL_DIV: bool = false;
+
 const CASES: vector<u16> = vector[
     0,
     1,
@@ -50,7 +53,7 @@ fun test_diff() {
 
 #[test]
 fun test_mul_div() {
-    integer_tests::test_mul_div!(MAX, CASES);
+    integer_tests::test_mul_div!(MAX, CASES, EXHAUSTIVE_MUL_DIV);
 }
 
 #[test, expected_failure(arithmetic_error, location = std::u16)]
