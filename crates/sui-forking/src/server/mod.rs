@@ -55,6 +55,7 @@ use crate::{graphql::GraphQLClient, store::ForkingStore};
 
 use rand::rngs::OsRng;
 use roaring::RoaringBitmap;
+use sui_futures::service::Service;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer;
 use sui_rpc::proto::sui::rpc::v2::{
@@ -354,7 +355,8 @@ pub async fn start_server(
         .context("Failed to create Prometheus registry.")
         .unwrap();
 
-    let _ = start_grpc_services(context.clone(), version, &registry).await?;
+    let grpc = start_grpc_services(context.clone(), version, &registry).await?;
+    let grpc_handle = tokio::spawn(grpc.main());
 
     let state =
         Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
@@ -395,8 +397,7 @@ pub async fn start_server(
         .await?;
 
     // Abort the spawned tasks when the server shuts down
-    // rpc_handle.abort();
-    // indexer_handle.abort();
+    grpc_handle.abort();
     // update_objects_handle.abort();
 
     info!("Server shutdown complete");
@@ -465,7 +466,7 @@ async fn start_grpc_services(
     context: crate::context::Context,
     version: &'static str,
     registry: &Registry,
-) -> Result<(), anyhow::Error> {
+) -> Result<Service, anyhow::Error> {
     let grpc_listen_address = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("RPC listening on {}", grpc_listen_address);
 
@@ -489,8 +490,8 @@ async fn start_grpc_services(
         .add_service(LedgerServiceServer::new(ledger_service))
         .add_service(SubscriptionServiceServer::new(subscription_service))
         .add_service(TransactionExecutionServiceServer::new(tx_execution_service));
-    let _ = grpc.run().await?;
-    Ok(())
+    let handle = grpc.run().await?;
+    Ok(handle)
 }
 
 async fn initialize_simulacrum(
@@ -522,6 +523,7 @@ async fn initialize_simulacrum(
     let mut store = ForkingStore::new(at_checkpoint, fs_transaction_store, object_store);
     store.insert_checkpoint(verified_checkpoint.clone());
     store.insert_checkpoint_contents(checkpoint.1.clone());
+    store.insert_committee(config.genesis.committee());
 
     // Fetch the system store at this forked checkpoint and update the validator set to match the
     // one in our custom config, because we do not have the actual validators' keys from network.
