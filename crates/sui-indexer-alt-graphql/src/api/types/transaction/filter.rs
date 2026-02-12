@@ -6,9 +6,8 @@ use async_graphql::Enum;
 use async_graphql::InputObject;
 use async_graphql::InputValueError;
 use sui_indexer_alt_reader::kv_loader::TransactionContents;
-use sui_types::transaction::TransactionDataAPI as _;
-
 use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
+use sui_types::transaction::TransactionDataAPI as _;
 
 use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::sui_address::SuiAddress;
@@ -55,8 +54,6 @@ pub(crate) enum TransactionKindInput {
     /// A user submitted transaction block.
     ProgrammableTx = 1,
 }
-
-/// Validator for transactions pagination - allows at most one primary filter.
 pub(crate) struct TransactionFilterValidator;
 impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
     fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
@@ -152,6 +149,7 @@ impl TransactionFilter {
 }
 
 impl TransactionFilter {
+    /// Checks if a transaction's contents matches the filter conditions.
     pub(crate) fn matches(&self, transaction: &TransactionContents) -> bool {
         let Ok(data) = transaction.data() else {
             return false;
