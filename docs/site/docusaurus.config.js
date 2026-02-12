@@ -152,6 +152,7 @@ const config = {
             "**/snippets/**",
             "**/standards/deepbook-ref/**",
             "**/app-examples/ts-sdk-ref/**",
+            "**/sui-graphql/**/generated.md",
           ],
           admonitions: {
             keywords: ["checkpoint"],
