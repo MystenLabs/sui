@@ -18,6 +18,7 @@ serde_with.workspace = true
 sui-config.workspace = true
 tap.workspace = true
 thiserror.workspace = true
+futures.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 itertools.workspace = true
@@ -40,6 +41,7 @@ sui-protocol-config.workspace = true
 sui-package-resolver.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
+sui-display.workspace = true
 
 # dependencies for the protobuf definitions
 roaring.workspace = true

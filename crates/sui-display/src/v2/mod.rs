@@ -12,6 +12,7 @@ use crate::v2::parser::Chain;
 use crate::v2::parser::Literal;
 use crate::v2::parser::Parser;
 use crate::v2::parser::Strand;
+use crate::v2::writer::JsonValue;
 use crate::v2::writer::Writer;
 
 mod error;
@@ -121,15 +122,15 @@ impl<'s> Format<'s> {
     }
 
     /// Evaluate the format string returning a formatted JSON value.
-    pub async fn format<S: Store>(
+    pub async fn format<V: JsonValue>(
         &'s self,
-        interpreter: &'s Interpreter<S>,
+        interpreter: &'s Interpreter<impl Store>,
         max_depth: usize,
         max_output_size: usize,
-    ) -> Result<serde_json::Value, FormatError> {
+    ) -> Result<V, FormatError> {
         let writer = Writer::new(max_depth, max_output_size);
         let Some(value) = interpreter.eval_strands(&self.0).await? else {
-            return Ok(serde_json::Value::Null);
+            return Ok(V::null());
         };
 
         writer.write(value)
@@ -178,12 +179,12 @@ impl<'s> Display<'s> {
     /// This operation requires all field names to evaluate successfully to unique strings, and for
     /// the overall output to be bounded by `max_depth` and `max_output_size`, but otherwise
     /// supports partial failures (if one of the field values fails to parse or evaluate).
-    pub async fn display<S: Store>(
+    pub async fn display<V: JsonValue>(
         &'s self,
         max_depth: usize,
         max_output_size: usize,
-        interpreter: &'s Interpreter<S>,
-    ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
+        interpreter: &'s Interpreter<impl Store>,
+    ) -> Result<IndexMap<String, Result<V, FormatError>>, Error> {
         let writer = Arc::new(Writer::new(max_depth, max_output_size));
         let mut output = IndexMap::new();
 
@@ -200,7 +201,7 @@ impl<'s> Display<'s> {
 
                 let evaluated = match interpreter.eval_strands(strands).await {
                     Ok(Some(v)) => v,
-                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Ok(None) => return Ok(Ok(V::null())),
                     Err(e) => return Ok(Err(e)),
                 };
 
@@ -221,7 +222,7 @@ impl<'s> Display<'s> {
 
                 let evaluated = match interpreter.eval_strands(strands).await {
                     Ok(Some(v)) => v,
-                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Ok(None) => return Ok(Ok(V::null())),
                     Err(e) => return Ok(Err(e)),
                 };
 
@@ -242,13 +243,12 @@ impl<'s> Display<'s> {
 
         for ((field, name), value) in self.fields.iter().zip(names).zip(values) {
             use indexmap::map::Entry;
-            use serde_json::Value as JSON;
 
             let src = field.key.src;
 
             let n = match name {
-                Ok(JSON::String(n)) => n,
-                Ok(JSON::Null) => return Err(Error::NameEmpty(src.to_owned())),
+                Ok(v) if v.is_string() => v.as_string().unwrap().to_owned(),
+                Ok(v) if v.is_null() => return Err(Error::NameEmpty(src.to_owned())),
                 Ok(_) => return Err(Error::NameInvalid(src.to_owned())),
                 Err(e) => return Err(Error::NameEvaluation(src.to_owned(), e)),
             };
@@ -315,7 +315,7 @@ mod tests {
             return Ok(None);
         };
 
-        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+        let writer: JsonWriter = JsonWriter::new(&used, usize::MAX, usize::MAX);
         Ok(Some(value.format_json(writer)?))
     }
 
@@ -701,7 +701,7 @@ mod tests {
             bytes,
         };
 
-        let mut output = Vec::with_capacity(formats.len());
+        let mut output: Vec<serde_json::Value> = Vec::with_capacity(formats.len());
         let interpreter = Interpreter::new(root, store);
         for s in formats {
             let format = Format::parse(Limits::default(), s).unwrap();

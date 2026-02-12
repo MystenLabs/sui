@@ -12,6 +12,204 @@ use crate::v2::error::FormatError;
 use crate::v2::parser::Transform;
 use crate::v2::value as V;
 
+pub trait JsonValue {
+    type Vec: Default;
+    type Map: Default;
+
+    fn null() -> Self;
+    fn bool(value: bool) -> Self;
+    // For our purposes numbers are values that can fit in a `u32`
+    fn number(value: u32) -> Self;
+    fn string(value: String) -> Self;
+    fn array(value: Self::Vec) -> Self;
+    fn object(value: Self::Map) -> Self;
+
+    fn is_null(&self) -> bool;
+    fn is_bool(&self) -> bool;
+    fn is_number(&self) -> bool;
+    fn is_string(&self) -> bool;
+    fn is_array(&self) -> bool;
+    fn is_object(&self) -> bool;
+
+    fn as_bool(&self) -> Option<bool>;
+    fn as_string(&self) -> Option<&str>;
+    fn as_array(&self) -> Option<&Self::Vec>;
+    fn as_object(&self) -> Option<&Self::Map>;
+
+    fn vec_push_element(vec: &mut Self::Vec, value: Self);
+    fn map_push_field(map: &mut Self::Map, key: String, value: Self);
+}
+
+impl JsonValue for serde_json::Value {
+    type Vec = Vec<Self>;
+    type Map = serde_json::Map<String, Self>;
+
+    fn null() -> Self {
+        serde_json::Value::Null
+    }
+
+    fn bool(value: bool) -> Self {
+        serde_json::Value::Bool(value)
+    }
+
+    fn number(value: u32) -> Self {
+        serde_json::Value::Number(value.into())
+    }
+
+    fn string(value: String) -> Self {
+        serde_json::Value::String(value)
+    }
+
+    fn array(value: Self::Vec) -> Self {
+        serde_json::Value::Array(value)
+    }
+
+    fn object(value: Self::Map) -> Self {
+        serde_json::Value::Object(value)
+    }
+
+    fn is_null(&self) -> bool {
+        self.is_null()
+    }
+
+    fn is_bool(&self) -> bool {
+        self.is_boolean()
+    }
+
+    fn is_number(&self) -> bool {
+        self.is_number()
+    }
+
+    fn is_string(&self) -> bool {
+        self.is_string()
+    }
+
+    fn is_array(&self) -> bool {
+        self.is_array()
+    }
+
+    fn is_object(&self) -> bool {
+        self.is_object()
+    }
+
+    fn as_bool(&self) -> Option<bool> {
+        self.as_bool()
+    }
+
+    fn as_string(&self) -> Option<&str> {
+        self.as_str()
+    }
+
+    fn as_array(&self) -> Option<&Self::Vec> {
+        self.as_array()
+    }
+
+    fn as_object(&self) -> Option<&Self::Map> {
+        self.as_object()
+    }
+
+    fn vec_push_element(vec: &mut Self::Vec, value: Self) {
+        vec.push(value);
+    }
+
+    fn map_push_field(map: &mut Self::Map, key: String, value: Self) {
+        map.insert(key, value);
+    }
+}
+
+impl JsonValue for prost_types::Value {
+    type Vec = prost_types::ListValue;
+    type Map = prost_types::Struct;
+
+    fn null() -> Self {
+        prost_types::value::Kind::NullValue(0).into()
+    }
+
+    fn bool(value: bool) -> Self {
+        Self::from(value)
+    }
+
+    fn number(value: u32) -> Self {
+        Self::from(value)
+    }
+
+    fn string(value: String) -> Self {
+        Self::from(value)
+    }
+
+    fn array(value: Self::Vec) -> Self {
+        Self::from(value.values)
+    }
+
+    fn object(value: Self::Map) -> Self {
+        Self::from(value.fields)
+    }
+
+    fn is_null(&self) -> bool {
+        matches!(self.kind, Some(prost_types::value::Kind::NullValue(_)))
+    }
+
+    fn is_bool(&self) -> bool {
+        self.as_bool().is_some()
+    }
+
+    fn is_number(&self) -> bool {
+        matches!(self.kind, Some(prost_types::value::Kind::NumberValue(_)))
+    }
+
+    fn is_string(&self) -> bool {
+        self.as_string().is_some()
+    }
+
+    fn is_array(&self) -> bool {
+        self.as_array().is_some()
+    }
+
+    fn is_object(&self) -> bool {
+        self.as_object().is_some()
+    }
+
+    fn as_bool(&self) -> Option<bool> {
+        if let Some(prost_types::value::Kind::BoolValue(b)) = &self.kind {
+            Some(*b)
+        } else {
+            None
+        }
+    }
+
+    fn as_string(&self) -> Option<&str> {
+        if let Some(prost_types::value::Kind::StringValue(string)) = &self.kind {
+            Some(string.as_ref())
+        } else {
+            None
+        }
+    }
+
+    fn as_array(&self) -> Option<&Self::Vec> {
+        if let Some(prost_types::value::Kind::ListValue(array)) = &self.kind {
+            Some(array)
+        } else {
+            None
+        }
+    }
+
+    fn as_object(&self) -> Option<&Self::Map> {
+        if let Some(prost_types::value::Kind::StructValue(object)) = &self.kind {
+            Some(object)
+        } else {
+            None
+        }
+    }
+
+    fn vec_push_element(vec: &mut Self::Vec, value: Self) {
+        vec.values.push(value)
+    }
+
+    fn map_push_field(map: &mut Self::Map, key: String, value: Self) {
+        map.fields.insert(key, value);
+    }
+}
+
 /// A writer of evaluated values into JSON, tracking limits on output size and depth. A single
 /// writer can be used to write multiple values concurrently, with all writers sharing the same
 /// budgets.
@@ -42,12 +240,25 @@ pub(crate) struct StringWriter<'u> {
 ///
 /// Once a write is attempted, the budget is decremented, even if the write fails, meaning that the
 /// error is sticky and not recoverable.
-#[derive(Copy, Clone)]
-pub(crate) struct JsonWriter<'u> {
+pub(crate) struct JsonWriter<'u, V = serde_json::Value> {
     used_size: &'u AtomicUsize,
     max_size: usize,
     depth_budget: usize,
+    phantom: std::marker::PhantomData<V>,
 }
+
+impl<V> Clone for JsonWriter<'_, V> {
+    fn clone(&self) -> Self {
+        Self {
+            used_size: self.used_size,
+            max_size: self.max_size,
+            depth_budget: self.depth_budget,
+            phantom: self.phantom,
+        }
+    }
+}
+
+impl<V> Copy for JsonWriter<'_, V> {}
 
 impl Writer {
     /// Create a new writer with the given limits.
@@ -63,10 +274,10 @@ impl Writer {
     }
 
     /// Format a single strand as JSON.
-    pub(crate) fn write(
+    pub(crate) fn write<JSON: JsonValue>(
         &self,
         mut strands: Vec<V::Strand<'_>>,
-    ) -> Result<serde_json::Value, FormatError> {
+    ) -> Result<JSON, FormatError> {
         // Detect and handle JSON transforms (single strand containing an expression with an JSON
         // transform) as a special case, because they do not always evaluate to strings.
         if matches!(&strands[..], [V::Strand::Value { transform, .. }] if *transform == Transform::Json)
@@ -99,7 +310,7 @@ impl Writer {
             }
         }
 
-        Ok(serde_json::Value::String(writer.finish()))
+        Ok(JSON::string(writer.finish()))
     }
 }
 
@@ -117,12 +328,13 @@ impl<'u> StringWriter<'u> {
     }
 }
 
-impl<'u> JsonWriter<'u> {
+impl<'u, V> JsonWriter<'u, V> {
     pub(crate) fn new(used_size: &'u AtomicUsize, max_size: usize, depth_budget: usize) -> Self {
         Self {
             used_size,
             max_size,
             depth_budget,
+            phantom: std::marker::PhantomData,
         }
     }
 
@@ -135,15 +347,15 @@ impl<'u> JsonWriter<'u> {
     }
 }
 
-impl RV::Writer for JsonWriter<'_> {
-    type Value = serde_json::Value;
+impl<V: JsonValue> RV::Writer for JsonWriter<'_, V> {
+    type Value = V;
     type Error = FormatError;
 
-    type Vec = Vec<Self::Value>;
-    type Map = serde_json::Map<String, Self::Value>;
+    type Vec = V::Vec;
+    type Map = V::Map;
 
     type Nested<'a>
-        = JsonWriter<'a>
+        = JsonWriter<'a, V>
     where
         Self: 'a;
 
@@ -156,40 +368,41 @@ impl RV::Writer for JsonWriter<'_> {
             used_size: self.used_size,
             max_size: self.max_size,
             depth_budget: self.depth_budget - 1,
+            phantom: std::marker::PhantomData,
         })
     }
 
     fn write_null(&mut self) -> Result<Self::Value, Self::Error> {
         self.debit("null".len())?;
-        Ok(serde_json::Value::Null)
+        Ok(V::null())
     }
 
     fn write_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error> {
         self.debit(if value { "true".len() } else { "false".len() })?;
-        Ok(serde_json::Value::Bool(value))
+        Ok(V::bool(value))
     }
 
     fn write_number(&mut self, value: u32) -> Result<Self::Value, Self::Error> {
         self.debit(if value == 0 { 1 } else { value.ilog10() } as usize)?;
-        Ok(serde_json::Value::Number(value.into()))
+        Ok(V::number(value))
     }
 
     fn write_str(&mut self, value: String) -> Result<Self::Value, Self::Error> {
         // Account for the quotes around the string.
         self.debit(2 + value.len())?;
-        Ok(serde_json::Value::String(value))
+        Ok(V::string(value))
     }
 
     fn write_vec(&mut self, value: Self::Vec) -> Result<Self::Value, Self::Error> {
         // Account for the opening bracket.
         self.debit(1)?;
-        Ok(serde_json::Value::Array(value))
+        Ok(V::array(value))
     }
 
     fn write_map(&mut self, value: Self::Map) -> Result<Self::Value, Self::Error> {
         // Account for the opening brace.
         self.debit(1)?;
-        Ok(serde_json::Value::Object(value))
+        Ok(V::object(value))
     }
 
     fn vec_push_element(
@@ -199,7 +412,7 @@ impl RV::Writer for JsonWriter<'_> {
     ) -> Result<(), Self::Error> {
         // Account for comma (or closing bracket).
         self.debit(1)?;
-        vec.push(val);
+        V::vec_push_element(vec, val);
         Ok(())
     }
 
@@ -211,7 +424,7 @@ impl RV::Writer for JsonWriter<'_> {
     ) -> Result<(), Self::Error> {
         // Account for quotes, colon, and comma (or closing brace).
         self.debit(4 + key.len())?;
-        map.insert(key, val);
+        V::map_push_field(map, key, val);
         Ok(())
     }
 }

@@ -167,7 +167,7 @@ impl MoveValue {
                 for (field, value) in
                     sui_display::v2::Display::parse(limits.display(), display_v2.fields())
                         .map_err(display_error)?
-                        .display(
+                        .display::<serde_json::Value>(
                             limits.max_move_value_depth,
                             limits.max_display_output_size,
                             &interpreter,
@@ -298,7 +298,7 @@ impl MoveValue {
 
             let interpreter = sui_display::v2::Interpreter::new(root, store);
             let value = parsed
-                .format(
+                .format::<serde_json::Value>(
                     &interpreter,
                     limits.max_move_value_depth,
                     limits.max_display_output_size,

@@ -69,6 +69,21 @@ impl StateReader {
     }
 
     #[tracing::instrument(skip(self))]
+    pub fn get_display_object_v2_by_type(
+        &self,
+        object_type: &move_core_types::language_storage::StructTag,
+    ) -> Option<sui_types::display_registry::Display> {
+        let object_id =
+            sui_types::display_registry::display_object_id(object_type.clone().into()).ok()?;
+
+        let object = self.inner.get_object(&object_id)?;
+
+        let move_object = object.data.try_as_move()?;
+
+        bcs::from_bytes(move_object.contents()).ok()
+    }
+
+    #[tracing::instrument(skip(self))]
     pub fn get_system_state_summary(
         &self,
     ) -> Result<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary> {
@@ -417,5 +432,42 @@ impl std::error::Error for TransactionNotFoundError {}
 impl From<TransactionNotFoundError> for crate::RpcError {
     fn from(value: TransactionNotFoundError) -> Self {
         Self::new(tonic::Code::NotFound, value.to_string())
+    }
+}
+
+pub struct DisplayStore<'s> {
+    state: &'s StateReader,
+}
+
+impl<'s> DisplayStore<'s> {
+    pub fn new(state: &'s StateReader) -> Self {
+        Self { state }
+    }
+}
+
+#[async_trait::async_trait]
+impl sui_display::v2::Store for DisplayStore<'_> {
+    async fn object(
+        &self,
+        id: move_core_types::account_address::AccountAddress,
+    ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+        let Some(object) = self.state.inner().get_object(&id.into()) else {
+            return Ok(None);
+        };
+
+        let Some(move_object) = object.data.try_as_move() else {
+            return Ok(None);
+        };
+
+        let object_type = move_object.type_().clone().into();
+
+        let Some(layout) = self.state.inner().get_struct_layout(&object_type)? else {
+            return Ok(None);
+        };
+
+        Ok(Some(sui_display::v2::OwnedSlice {
+            bytes: move_object.contents().to_vec(),
+            layout,
+        }))
     }
 }
