@@ -1,6 +1,5 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-assertion_line: 113
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
