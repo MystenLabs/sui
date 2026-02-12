@@ -521,7 +521,7 @@ fn datatypes(
     // and pass a full and complete representation of it in with the package.
     fn defining_id(
         context: &PackageContext,
-        version_id: &VersionId,
+        _version_id: &VersionId,
         name: &VirtualTableKey,
     ) -> PartialVMResult<ModuleIdKey> {
         let defining_address = context
@@ -534,7 +534,7 @@ fn datatypes(
                     name.to_string(context.interner),
                 )
             })?;
-        dbg_println!("Package ID: {:?}", version_id);
+        dbg_println!("Package ID: {:?}", _version_id);
         dbg_println!("Defining Address: {:?}", defining_address);
         let module_id = name.intra_package_key().module_name;
         Ok(ModuleIdKey::from_parts(*defining_address, module_id))
@@ -603,8 +603,11 @@ fn structs(
 
             let abilities = struct_handle.abilities;
 
-            let struct_module_handle = module.module_handle_at(struct_handle.module);
-            dbg_println!("Indexing type {:?} at {:?}", name, struct_module_handle);
+            dbg_println!(
+                "Indexing type {:?} at {:?}",
+                name,
+                module.module_handle_at(struct_handle.module)
+            );
 
             let StructFieldInformation::Declared(fields) = &struct_def.field_information else {
                 return Err(partial_vm_error!(
@@ -669,8 +672,11 @@ fn enums(
             let def_vtable_key =
                 VirtualTableKey::from_parts(*original_id, *module_name, member_name);
 
-            let enum_module_handle = module.module_handle_at(enum_handle.module);
-            dbg_println!("Indexing type {:?} at {:?}", name, enum_module_handle);
+            dbg_println!(
+                "Indexing type {:?} at {:?}",
+                name,
+                module.module_handle_at(enum_handle.module)
+            );
 
             let abilities = enum_handle.abilities;
 
