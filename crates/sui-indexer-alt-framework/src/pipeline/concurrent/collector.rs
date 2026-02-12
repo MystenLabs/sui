@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use sui_futures::service::Service;
@@ -77,6 +78,7 @@ pub(super) fn collector<H: Handler + 'static>(
     tx: mpsc::Sender<BatchedRows<H>>,
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
+    peak_channel_fill: Arc<AtomicUsize>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         // The `poll` interval controls the maximum time to wait between collecting batches,
@@ -170,14 +172,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     }
 
                     let fill = tx.max_capacity() - tx.capacity();
-                    metrics
-                        .collector_channel_fill
-                        .with_label_values(&[H::NAME])
-                        .set(fill as i64);
-                    metrics
-                        .collector_channel_utilization
-                        .with_label_values(&[H::NAME])
-                        .set(fill as f64 / tx.max_capacity() as f64);
+                    peak_channel_fill.fetch_max(fill, Ordering::Relaxed);
 
                     if pending_rows > 0 {
                         poll.reset_immediately();
@@ -338,6 +333,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         let part1_length = TEST_MAX_CHUNK_ROWS / 2;
@@ -378,6 +374,7 @@ mod tests {
             collector_tx,
             main_reader_lo,
             test_metrics(),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         processor_tx
@@ -418,6 +415,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         // Send more data than MAX_PENDING_ROWS plus collector channel buffer
@@ -472,6 +470,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         let start_time = std::time::Instant::now();
@@ -526,6 +525,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         // The collector starts with an immediate poll tick, creating an empty batch
@@ -569,6 +569,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         // Consume initial empty batch
@@ -609,6 +610,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         // Send enough data to trigger batching.
@@ -655,6 +657,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         let eager_rows_plus_one = TestHandler::MIN_EAGER_ROWS + 1;
@@ -711,6 +714,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         let more_than_max_chunk_rows = TEST_MAX_CHUNK_ROWS + 10;

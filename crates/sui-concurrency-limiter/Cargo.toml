@@ -9,6 +9,7 @@ edition = "2024"
 [dependencies]
 backoff.workspace = true
 futures.workspace = true
+rand.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["rt", "time", "macros"] }
 toml = { workspace = true, optional = true }

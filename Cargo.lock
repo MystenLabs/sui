@@ -14337,6 +14337,7 @@ version = "1.66.0"
 dependencies = [
  "backoff",
  "futures",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tokio",
@@ -14855,7 +14856,6 @@ version = "1.66.0"
 dependencies = [
  "anyhow",
  "futures",
- "sui-concurrency-limiter",
  "tap",
  "thiserror 1.0.69",
  "tokio",

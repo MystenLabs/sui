@@ -4,7 +4,7 @@
 //! Dynamic concurrency limiters based on Netflix's
 //! [concurrency-limits](https://github.com/Netflix/concurrency-limits) library.
 //!
-//! Two algorithms are provided:
+//! Three algorithms are provided:
 //!
 //! - **AIMD** (`Aimd`): loss-based. Additive increase on success, multiplicative decrease on
 //!   drop. Simple and effective when the backing store signals overload via errors/throttling
@@ -13,6 +13,10 @@
 //! - **Gradient** (`Gradient`, based on Netflix's Gradient2): latency-based. Computes a gradient
 //!   from the ratio of long-term to short-term RTT and scales the limit proportionally. Effective
 //!   when the backing store degrades gradually under load (e.g. Bigtable write latency increasing).
+//!
+//! - **Vegas** (`Vegas`, identical to Netflix's VegasLimit): absolute-RTT-based. Uses the minimum
+//!   RTT ever observed as a floor to estimate queue depth. Unlike Gradient, the baseline never
+//!   drifts, so the limiter stays low when the backing store is saturated from the start.
 //!
 //! # Differences from Netflix's reference implementation
 //!
@@ -46,8 +50,12 @@
 //! Netflix's `AbstractLimiter.createListener()` which snapshots `inFlight.incrementAndGet()` at
 //! request start.
 //!
-//! All other parameters (`smoothing`, `tolerance`, `long_window`, EMA warmup) match Netflix's
-//! Gradient2 defaults.
+//! **Vegas** is identical to Netflix's `VegasLimit.java` (including probe jitter, additive
+//! decrease on drops, integer threshold comparisons, and clamp-then-smooth ordering), except
+//! that `min_limit` defaults to 1 instead of 20 (matching our other algorithms).
+//!
+//! All other Gradient parameters (`smoothing`, `tolerance`, `long_window`, EMA warmup) match
+//! Netflix's Gradient2 defaults.
 
 pub mod stream;
 
@@ -56,6 +64,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 /// Outcome of a concurrency-limited operation.
@@ -88,6 +97,7 @@ struct LimiterInner {
     algorithm: Box<dyn LimitAlgorithm>,
     inflight: AtomicUsize,
     peak_inflight: AtomicUsize,
+    peak_limit: AtomicUsize,
 }
 
 /// Cloneable handle wrapping a dynamic concurrency limit algorithm.
@@ -105,6 +115,7 @@ impl Limiter {
             }),
             inflight: AtomicUsize::new(0),
             peak_inflight: AtomicUsize::new(0),
+            peak_limit: AtomicUsize::new(limit),
         }))
     }
 
@@ -116,6 +127,7 @@ impl Limiter {
             algorithm: Box::new(Aimd::new(&config, initial)),
             inflight: AtomicUsize::new(0),
             peak_inflight: AtomicUsize::new(0),
+            peak_limit: AtomicUsize::new(initial),
         }))
     }
 
@@ -127,6 +139,19 @@ impl Limiter {
             algorithm: Box::new(Gradient::new(&config, initial)),
             inflight: AtomicUsize::new(0),
             peak_inflight: AtomicUsize::new(0),
+            peak_limit: AtomicUsize::new(initial),
+        }))
+    }
+
+    pub fn vegas(config: VegasConfig) -> Self {
+        let initial = config
+            .initial_limit
+            .clamp(config.min_limit, config.max_limit);
+        Self(Arc::new(LimiterInner {
+            algorithm: Box::new(Vegas::new(&config, initial)),
+            inflight: AtomicUsize::new(0),
+            peak_inflight: AtomicUsize::new(0),
+            peak_limit: AtomicUsize::new(initial),
         }))
     }
 
@@ -155,9 +180,18 @@ impl Limiter {
         self.0.inflight.load(Ordering::Relaxed)
     }
 
-    /// Returns the peak inflight count since the last call, resetting it to zero.
+    /// Returns the peak inflight count since the last call, resetting it to the current inflight
+    /// so the next interval's peak starts from the right baseline.
     pub fn take_peak_inflight(&self) -> usize {
-        self.0.peak_inflight.swap(0, Ordering::Relaxed)
+        let current = self.0.inflight.load(Ordering::Relaxed);
+        self.0.peak_inflight.swap(current, Ordering::Relaxed)
+    }
+
+    /// Returns the peak concurrency limit since the last call, resetting it to the current limit
+    /// so the next interval's peak starts from the right baseline.
+    pub fn take_peak_limit(&self) -> usize {
+        let current = self.0.algorithm.gauge().load(Ordering::Relaxed);
+        self.0.peak_limit.swap(current, Ordering::Relaxed)
     }
 }
 
@@ -182,6 +216,7 @@ impl Token {
         let inner = self.inner.take().expect("record_sample called twice");
         let rtt = self.start.elapsed();
         let result = inner.algorithm.update(self.inflight, outcome, rtt);
+        inner.peak_limit.fetch_max(result, Ordering::Relaxed);
         inner.inflight.fetch_sub(1, Ordering::Relaxed);
         result
     }
@@ -229,6 +264,7 @@ pub enum ConcurrencyLimit {
     Fixed { limit: usize },
     Aimd(AimdConfig),
     Gradient(GradientConfig),
+    Vegas(VegasConfig),
 }
 
 impl<'de> Deserialize<'de> for ConcurrencyLimit {
@@ -242,6 +278,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Fixed { limit: usize },
             Aimd(AimdConfig),
             Gradient(GradientConfig),
+            Vegas(VegasConfig),
         }
 
         #[derive(Deserialize)]
@@ -256,6 +293,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Helper::Tagged(Tagged::Fixed { limit }) => Ok(ConcurrencyLimit::Fixed { limit }),
             Helper::Tagged(Tagged::Aimd(c)) => Ok(ConcurrencyLimit::Aimd(c)),
             Helper::Tagged(Tagged::Gradient(c)) => Ok(ConcurrencyLimit::Gradient(c)),
+            Helper::Tagged(Tagged::Vegas(c)) => Ok(ConcurrencyLimit::Vegas(c)),
         }
     }
 }
@@ -267,6 +305,7 @@ impl ConcurrencyLimit {
             Self::Fixed { limit } => Limiter::fixed(*limit),
             Self::Aimd(config) => Limiter::aimd(config.clone()),
             Self::Gradient(config) => Limiter::gradient(config.clone()),
+            Self::Vegas(config) => Limiter::vegas(config.clone()),
         }
     }
 }
@@ -357,7 +396,7 @@ impl LimitAlgorithm for Aimd {
                 // this guard a lightly-loaded pipeline would ratchet the limit up to
                 // max_limit without ever testing the boundary.
                 if state.consecutive_successes >= self.config.successes_per_increase
-                    && inflight >= current / 2
+                    && inflight * 2 >= current
                 {
                     state.consecutive_successes = 0;
                     current = (current + 1).min(self.config.max_limit);
@@ -417,6 +456,199 @@ impl Default for GradientConfig {
             long_window: 600,
             backoff_ratio: 0.9,
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Vegas algorithm — Netflix's absolute-RTT concurrency limiter
+// ---------------------------------------------------------------------------
+
+/// Configuration for the Vegas concurrency limit algorithm.
+///
+/// Identical to Netflix's `VegasLimit.java` from the concurrency-limits library.
+///
+/// Unlike Gradient (which compares long-term vs short-term RTT), Vegas uses an absolute
+/// reference: the minimum RTT ever observed (`rtt_noload`). It estimates queue depth as
+/// `limit * (1 - rtt_noload / actual_rtt)` and backs off when the queue exceeds a threshold.
+/// Since `rtt_noload` is a floor (not a moving average), it never drifts, giving the limiter
+/// a permanent anchor for "healthy" latency.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct VegasConfig {
+    /// Starting concurrency limit.
+    pub initial_limit: usize,
+    /// Floor: the limit will never go below this value.
+    pub min_limit: usize,
+    /// Ceiling: the limit will never exceed this value.
+    pub max_limit: usize,
+    /// Exponential smoothing factor in `(0.0, 1.0]` for blending old and new limit estimates.
+    /// Netflix default is 1.0 (immediate updates).
+    pub smoothing: f64,
+    /// Alpha threshold factor: `alpha = alpha_factor * log10(limit)`.
+    /// When queue_size < alpha, the limit grows aggressively.
+    pub alpha_factor: f64,
+    /// Beta threshold factor: `beta = beta_factor * log10(limit)`.
+    /// When queue_size > beta, the limit decreases.
+    pub beta_factor: f64,
+    /// Probe interval multiplier: rtt_noload resets every `probe_jitter * probe_multiplier * limit` samples.
+    pub probe_multiplier: usize,
+}
+
+impl Default for VegasConfig {
+    fn default() -> Self {
+        Self {
+            initial_limit: 20,
+            min_limit: 1,
+            max_limit: 1000,
+            smoothing: 1.0,
+            alpha_factor: 3.0,
+            beta_factor: 6.0,
+            probe_multiplier: 30,
+        }
+    }
+}
+
+struct VegasState {
+    estimated_limit: f64,
+    rtt_noload: f64,
+    probe_count: usize,
+    probe_jitter: f64,
+}
+
+/// Vegas concurrency limit algorithm (identical to Netflix's `VegasLimit.java`).
+///
+/// On each sample:
+/// 1. **Ignore** → return unchanged
+/// 2. If `rtt <= 0` → return unchanged
+/// 3. Increment `probe_count`; if probe triggers → reset `rtt_noload` to current RTT, return
+/// 4. If `rtt_noload == 0 || rtt < rtt_noload` → update `rtt_noload`, return (calibration)
+/// 5. Call `update_estimated_limit`:
+///    a. **Dropped** → `limit -= log10(limit)` (additive decrease)
+///    b. App-limiting guard: if `inflight * 2 < limit`, return unchanged
+///    c. Queue estimate: `queue_size = ceil(limit * (1 - rtt_noload / rtt))`
+///    d. Thresholds: `alpha = alpha_factor * log10(limit)`, `beta = beta_factor * log10(limit)`
+///    e. Adjust:
+///       - `queue_size <= log10(limit)` → `+beta` (aggressive growth)
+///       - `queue_size < alpha` → `+log10(limit)` (moderate growth)
+///       - `queue_size > beta` → `-log10(limit)` (decrease)
+///       - otherwise → return `(int) estimated_limit` (hold steady, no smoothing)
+/// 6. Clamp to `[min_limit, max_limit]`, then smooth
+pub struct Vegas {
+    config: VegasConfig,
+    gauge: Arc<AtomicUsize>,
+    inner: Mutex<VegasState>,
+}
+
+/// Match Netflix's `Log10RootFunction`: `max(1, (int) log10(limit))`.
+fn log10_root(limit: usize) -> i64 {
+    1i64.max((limit as f64).log10() as i64)
+}
+
+impl Vegas {
+    fn new(config: &VegasConfig, initial: usize) -> Self {
+        let probe_jitter = rand::thread_rng().gen_range(0.5..1.0);
+        Self {
+            gauge: Arc::new(AtomicUsize::new(initial)),
+            inner: Mutex::new(VegasState {
+                estimated_limit: initial as f64,
+                rtt_noload: 0.0,
+                probe_count: 0,
+                probe_jitter,
+            }),
+            config: config.clone(),
+        }
+    }
+
+    #[cfg(test)]
+    fn current(&self) -> usize {
+        self.inner.lock().unwrap().estimated_limit as usize
+    }
+}
+
+impl LimitAlgorithm for Vegas {
+    fn update(&self, inflight: usize, outcome: Outcome, rtt: Duration) -> usize {
+        let mut state = self.inner.lock().unwrap();
+
+        if matches!(outcome, Outcome::Ignore) {
+            return state.estimated_limit as usize;
+        }
+
+        let short_rtt = rtt.as_secs_f64();
+        if short_rtt <= 0.0 {
+            return state.estimated_limit as usize;
+        }
+
+        // Probe: periodically reset rtt_noload to discover improved baselines.
+        state.probe_count += 1;
+        let probe_threshold =
+            state.probe_jitter * self.config.probe_multiplier as f64 * state.estimated_limit;
+        if state.probe_count as f64 >= probe_threshold {
+            state.probe_jitter = rand::thread_rng().gen_range(0.5..1.0);
+            state.probe_count = 0;
+            state.rtt_noload = short_rtt;
+            return state.estimated_limit as usize;
+        }
+
+        // Update rtt_noload. When a new minimum is found, treat it as a calibration
+        // point and skip adjustment (matching Netflix's VegasLimit behavior).
+        if state.rtt_noload == 0.0 || short_rtt < state.rtt_noload {
+            state.rtt_noload = short_rtt;
+            return state.estimated_limit as usize;
+        }
+
+        // From here: updateEstimatedLimit in Netflix's VegasLimit.java
+        let limit = state.estimated_limit as usize;
+
+        if matches!(outcome, Outcome::Dropped) {
+            let new_limit = (state.estimated_limit - log10_root(limit) as f64)
+                .max(self.config.min_limit as f64)
+                .min(self.config.max_limit as f64);
+            state.estimated_limit = (1.0 - self.config.smoothing) * state.estimated_limit
+                + self.config.smoothing * new_limit;
+            let current = state.estimated_limit as usize;
+            self.gauge.store(current, Ordering::Release);
+            return current;
+        }
+
+        // App-limiting guard: don't adjust when the system isn't under pressure.
+        if (inflight as f64) * 2.0 < state.estimated_limit {
+            return state.estimated_limit as usize;
+        }
+
+        let queue_size =
+            (state.estimated_limit * (1.0 - state.rtt_noload / short_rtt)).ceil() as i64;
+        let log_limit = log10_root(limit);
+        let alpha = (self.config.alpha_factor * log_limit as f64).ceil() as i64;
+        let beta = (self.config.beta_factor * log_limit as f64).ceil() as i64;
+        let threshold = log_limit;
+
+        let new_limit = if queue_size <= threshold {
+            state.estimated_limit + beta as f64
+        } else if queue_size < alpha {
+            state.estimated_limit + log_limit as f64
+        } else if queue_size > beta {
+            state.estimated_limit - log_limit as f64
+        } else {
+            // Hold steady — return directly without smoothing (matches Netflix)
+            let current = state.estimated_limit as usize;
+            self.gauge.store(current, Ordering::Release);
+            return current;
+        };
+
+        // Clamp first, then smooth (matches Netflix's ordering)
+        let clamped = new_limit
+            .max(self.config.min_limit as f64)
+            .min(self.config.max_limit as f64);
+        state.estimated_limit =
+            (1.0 - self.config.smoothing) * state.estimated_limit + self.config.smoothing * clamped;
+
+        let current = state.estimated_limit as usize;
+        self.gauge.store(current, Ordering::Release);
+        current
+    }
+
+    fn gauge(&self) -> Arc<AtomicUsize> {
+        self.gauge.clone()
     }
 }
 
@@ -729,15 +961,15 @@ mod tests {
         let alg = aimd(default_config());
         assert_eq!(alg.current(), 10);
 
-        // With 0 inflight (well under limit/2 = 5), success should not increase
+        // With 0 inflight (0*2=0 < limit=10), success should not increase
         alg.update(0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 10);
 
-        // With 4 inflight (still under limit/2 = 5), should not increase
+        // With 4 inflight (4*2=8 < limit=10), should not increase
         alg.update(4, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 10);
 
-        // With 5 inflight (= limit/2), should increase
+        // With 5 inflight (5*2=10 >= limit=10), should increase
         alg.update(5, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 11);
     }
@@ -1166,14 +1398,53 @@ mod tests {
         let t2 = limiter.acquire();
         let t3 = limiter.acquire();
         assert_eq!(limiter.take_peak_inflight(), 3);
-        assert_eq!(limiter.take_peak_inflight(), 0); // reset after take
+        // After take, peak resets to current inflight (3), not 0.
+        assert_eq!(limiter.take_peak_inflight(), 3);
 
         drop(t1);
         drop(t2);
         let _t4 = limiter.acquire();
-        // Peak should be 2 now (t3 + t4), not 3
-        assert_eq!(limiter.take_peak_inflight(), 2);
+        // Peak is 3: at the moment of the previous take, inflight was 3 (t1+t2+t3), so
+        // peak was reset to 3. Even though inflight dropped to 1 then rose to 2, the
+        // peak since last take never exceeded the baseline of 3.
+        assert_eq!(limiter.take_peak_inflight(), 3);
+
+        // Now only t3 and t4 are held (inflight=2), so peak resets to 2.
         drop(t3);
+        // t4 still held, inflight=1. Peak since last take was 2 (the baseline).
+        assert_eq!(limiter.take_peak_inflight(), 2);
+    }
+
+    #[test]
+    fn peak_limit_tracking() {
+        let limiter = Limiter::aimd(AimdConfig {
+            initial_limit: 10,
+            min_limit: 1,
+            max_limit: 20,
+            backoff_ratio: 0.5,
+            successes_per_increase: 1,
+        });
+        assert_eq!(limiter.take_peak_limit(), 10);
+
+        // Increase: hold enough tokens to pass inflight >= limit/2 guard
+        let _hold: Vec<_> = (0..10).map(|_| limiter.acquire()).collect();
+        let t = limiter.acquire();
+        t.record_sample(Outcome::Success); // 10 -> 11
+        assert_eq!(limiter.current(), 11);
+
+        // Peak should be 11 (the new high)
+        assert_eq!(limiter.take_peak_limit(), 11);
+
+        // Drop: limit goes 11 -> 5
+        let t = limiter.acquire();
+        t.record_sample(Outcome::Dropped); // floor(11 * 0.5) = 5
+        assert_eq!(limiter.current(), 5);
+
+        // Peak since last take was 11 (the baseline from the swap), not 5
+        assert_eq!(limiter.take_peak_limit(), 11);
+
+        // Now peak resets to current (5); no changes, so still 5
+        assert_eq!(limiter.take_peak_limit(), 5);
     }
 
     #[test]
@@ -1262,5 +1533,283 @@ mod tests {
         let config = ConcurrencyLimit::Fixed { limit: 5 };
         let serialized = serde_json::to_value(&config).unwrap();
         assert_eq!(serialized, serde_json::json!({"fixed": {"limit": 5}}),);
+    }
+
+    // ======================== Vegas algorithm tests ========================
+
+    fn default_vegas_config() -> VegasConfig {
+        VegasConfig {
+            initial_limit: 20,
+            min_limit: 1,
+            max_limit: 1000,
+            smoothing: 1.0,
+            alpha_factor: 3.0,
+            beta_factor: 6.0,
+            probe_multiplier: 30,
+        }
+    }
+
+    fn vegas(config: VegasConfig) -> Vegas {
+        let initial = config
+            .initial_limit
+            .clamp(config.min_limit, config.max_limit);
+        Vegas::new(&config, initial)
+    }
+
+    #[test]
+    fn vegas_steady_state_grows() {
+        let alg = vegas(default_vegas_config());
+
+        // Feed many samples at the same RTT; queue_size ≈ 0, so limit should grow.
+        let rtt = Duration::from_millis(50);
+        for _ in 0..100 {
+            alg.update(20, Outcome::Success, rtt);
+        }
+        assert!(alg.current() > 20, "Limit should grow under steady RTT");
+    }
+
+    #[test]
+    fn vegas_high_latency_decreases_limit() {
+        let config = VegasConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 200,
+            ..default_vegas_config()
+        };
+        let alg = vegas(config);
+
+        // Establish a low rtt_noload (inflight=0 so app-limiting guard keeps limit at 100)
+        let low_rtt = Duration::from_millis(10);
+        for _ in 0..20 {
+            alg.update(0, Outcome::Success, low_rtt);
+        }
+        let before = alg.current();
+
+        // Now spike RTT — queue_size grows, limit should decrease
+        let high_rtt = Duration::from_millis(200);
+        for _ in 0..50 {
+            alg.update(100, Outcome::Success, high_rtt);
+        }
+        assert!(
+            alg.current() < before,
+            "Limit should decrease when latency spikes (before={before}, after={})",
+            alg.current()
+        );
+    }
+
+    #[test]
+    fn vegas_sustained_high_latency_stays_low() {
+        // This is the key behavioral difference from Gradient: Vegas should NOT recover
+        // when latency stays high, because rtt_noload anchors the baseline permanently
+        // (until a probe fires). With a large enough probe_multiplier, the probe won't
+        // fire during this test window.
+        let config = VegasConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 200,
+            // Large probe_multiplier so the probe doesn't reset during this test.
+            // Min threshold = 0.5 * 10000 * 1 = 5000, exceeding total samples.
+            probe_multiplier: 10000,
+            ..default_vegas_config()
+        };
+        let alg = vegas(config);
+
+        // Establish a low rtt_noload (inflight=0 so the app-limiting guard
+        // prevents the limit from growing during the establish phase)
+        let low_rtt = Duration::from_millis(10);
+        for _ in 0..20 {
+            alg.update(0, Outcome::Success, low_rtt);
+        }
+        assert_eq!(alg.current(), 100);
+
+        // Spike to 200ms (20x baseline) — limit should decrease
+        let high_rtt = Duration::from_millis(200);
+        for _ in 0..100 {
+            alg.update(200, Outcome::Success, high_rtt);
+        }
+        let limit_after_spike = alg.current();
+        assert!(
+            limit_after_spike < 50,
+            "Limit should be well below initial after spike"
+        );
+
+        // Continue at 200ms for a long time — unlike Gradient, the limit should NOT recover.
+        // At very low limits, the queue estimate is small so the limit oscillates around a
+        // low equilibrium (~6) rather than staying at 1, but it never climbs back to 100.
+        for _ in 0..2000 {
+            alg.update(200, Outcome::Success, high_rtt);
+        }
+        let limit_sustained = alg.current();
+        assert!(
+            limit_sustained < 20,
+            "Vegas should NOT recover under sustained high latency \
+             (after_spike={limit_after_spike}, sustained={limit_sustained})"
+        );
+    }
+
+    #[test]
+    fn vegas_grows_from_one() {
+        let config = VegasConfig {
+            initial_limit: 1,
+            min_limit: 1,
+            max_limit: 200,
+            ..default_vegas_config()
+        };
+        let alg = vegas(config);
+        assert_eq!(alg.current(), 1);
+
+        let rtt = Duration::from_millis(50);
+        for _ in 0..20 {
+            alg.update(1, Outcome::Success, rtt);
+        }
+        assert!(
+            alg.current() > 1,
+            "Limit should grow from 1 (got {})",
+            alg.current()
+        );
+    }
+
+    #[test]
+    fn vegas_app_limiting_guard() {
+        let alg = vegas(default_vegas_config());
+        let initial = alg.current();
+
+        // Establish rtt_noload, then test with 0 inflight — guard should prevent changes
+        alg.update(0, Outcome::Success, Duration::from_millis(50));
+        for _ in 0..50 {
+            alg.update(0, Outcome::Success, Duration::from_millis(100));
+        }
+        assert_eq!(alg.current(), initial);
+    }
+
+    #[test]
+    fn vegas_drop_backoff() {
+        let alg = vegas(default_vegas_config());
+        assert_eq!(alg.current(), 20);
+
+        // Establish rtt_noload first (required so the drop path is reached after probing)
+        alg.update(20, Outcome::Success, Duration::from_millis(50));
+
+        // Drops use additive decrease: limit -= log10(limit)
+        // log10_root(20) = max(1, (int) log10(20)) = max(1, 1) = 1
+        alg.update(20, Outcome::Dropped, Duration::from_millis(50));
+        assert_eq!(alg.current(), 19); // 20 - 1 = 19
+
+        alg.update(20, Outcome::Dropped, Duration::from_millis(50));
+        assert_eq!(alg.current(), 18); // 19 - 1 = 18
+    }
+
+    #[test]
+    fn vegas_min_max_bounds() {
+        let config = VegasConfig {
+            initial_limit: 10,
+            min_limit: 5,
+            max_limit: 15,
+            ..default_vegas_config()
+        };
+        let alg = vegas(config);
+
+        // Steady RTT should grow but cap at max_limit
+        let rtt = Duration::from_millis(50);
+        for _ in 0..200 {
+            alg.update(15, Outcome::Success, rtt);
+        }
+        assert!(alg.current() <= 15, "Should not exceed max_limit");
+
+        // Additive decrease: log10_root(limit) = 1 for small limits, so each drop
+        // subtracts 1. Need enough drops to reach min_limit.
+        for _ in 0..100 {
+            alg.update(0, Outcome::Dropped, Duration::from_millis(50));
+        }
+        assert!(
+            alg.current() >= 5,
+            "Should not go below min_limit (got {})",
+            alg.current()
+        );
+    }
+
+    #[test]
+    fn vegas_probe_resets_baseline() {
+        let config = VegasConfig {
+            initial_limit: 20,
+            min_limit: 1,
+            max_limit: 200,
+            // Small probe_multiplier so probes trigger quickly even with jitter.
+            // Threshold = jitter * 1 * 20 = [10, 20) samples.
+            probe_multiplier: 1,
+            ..default_vegas_config()
+        };
+        let alg = vegas(config);
+
+        // Establish a low rtt_noload
+        let low_rtt = Duration::from_millis(10);
+        alg.update(20, Outcome::Success, low_rtt);
+
+        let rtt_noload_before = {
+            let state = alg.inner.lock().unwrap();
+            state.rtt_noload
+        };
+        assert!((rtt_noload_before - 0.010).abs() < 0.001);
+
+        // Feed enough samples at a higher RTT to trigger the probe reset.
+        // With probe_multiplier=1 and jitter in [0.5, 1.0), threshold is at most 20 samples.
+        // 100 samples guarantees at least one probe fires.
+        let higher_rtt = Duration::from_millis(50);
+        for _ in 0..100 {
+            alg.update(20, Outcome::Success, higher_rtt);
+        }
+
+        let rtt_noload_after = {
+            let state = alg.inner.lock().unwrap();
+            state.rtt_noload
+        };
+
+        // After probe reset, rtt_noload should have been reset to the current RTT
+        assert!(
+            rtt_noload_after > rtt_noload_before,
+            "Probe should reset rtt_noload (before={rtt_noload_before}, after={rtt_noload_after})"
+        );
+    }
+
+    #[test]
+    fn vegas_ignore_has_no_effect() {
+        let alg = vegas(default_vegas_config());
+        let initial = alg.current();
+
+        alg.update(20, Outcome::Ignore, Duration::from_millis(50));
+        assert_eq!(alg.current(), initial);
+    }
+
+    #[test]
+    fn vegas_toml_deserialization() {
+        let toml_str = r#"
+            [concurrency.vegas]
+            initial-limit = 10
+            min-limit = 1
+            max-limit = 1000
+            smoothing = 1.0
+            alpha-factor = 3.0
+            beta-factor = 6.0
+            probe-multiplier = 30
+        "#;
+        let parsed: Wrapper = toml::from_str(toml_str).unwrap();
+        assert!(matches!(
+            parsed.concurrency,
+            ConcurrencyLimit::Vegas(VegasConfig {
+                max_limit: 1000,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn concurrency_limit_vegas_build() {
+        let config = ConcurrencyLimit::Vegas(VegasConfig {
+            initial_limit: 20,
+            max_limit: 500,
+            ..VegasConfig::default()
+        });
+        let limiter = config.build();
+        assert_eq!(limiter.current(), 20);
     }
 }

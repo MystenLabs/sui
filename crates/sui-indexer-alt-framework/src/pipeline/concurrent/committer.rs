@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
@@ -44,6 +45,10 @@ pub(super) fn committer<H: Handler + 'static>(
     db: H::Store,
     metrics: Arc<IndexerMetrics>,
     limiter: Limiter,
+    processor_peak_fill: Arc<AtomicUsize>,
+    collector_peak_fill: Arc<AtomicUsize>,
+    processor_capacity: usize,
+    collector_capacity: usize,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = H::NAME, "Starting committer");
@@ -53,6 +58,7 @@ pub(super) fn committer<H: Handler + 'static>(
             &metrics.latest_partially_committed_checkpoint,
         );
 
+        let watermark_peak_fill = Arc::new(AtomicUsize::new(0));
         let stream_fut = ReceiverStream::new(rx).try_for_each_spawned_adaptive_with_retry(
             limiter.clone(),
             ExponentialBackoff {
@@ -180,10 +186,10 @@ pub(super) fn committer<H: Handler + 'static>(
             // g: unmeasured work (send watermark + channel metrics)
             {
                 let tx = tx.clone();
-                let metrics = metrics.clone();
+                let watermark_peak_fill = watermark_peak_fill.clone();
                 move |watermark: Vec<WatermarkPart>| {
                     let tx = tx.clone();
-                    let metrics = metrics.clone();
+                    let watermark_peak_fill = watermark_peak_fill.clone();
                     async move {
                         if tx.send(watermark).await.is_err() {
                             info!(pipeline = H::NAME, "Watermark closed channel");
@@ -191,14 +197,7 @@ pub(super) fn committer<H: Handler + 'static>(
                         }
 
                         let fill = tx.max_capacity() - tx.capacity();
-                        metrics
-                            .committer_watermark_channel_fill
-                            .with_label_values(&[H::NAME])
-                            .set(fill as i64);
-                        metrics
-                            .committer_watermark_channel_utilization
-                            .with_label_values(&[H::NAME])
-                            .set(fill as f64 / tx.max_capacity() as f64);
+                        watermark_peak_fill.fetch_max(fill, Ordering::Relaxed);
 
                         Ok(())
                     }
@@ -210,7 +209,7 @@ pub(super) fn committer<H: Handler + 'static>(
         match tokio::select! {
             result = stream_fut => result,
             _ = async {
-                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                let mut interval = tokio::time::interval(Duration::from_secs(30));
                 loop {
                     interval.tick().await;
                     metrics_for_timer
@@ -218,13 +217,49 @@ pub(super) fn committer<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .set(limiter.current() as i64);
                     metrics_for_timer
-                        .committer_write_inflight
+                        .committer_write_peak_concurrency
                         .with_label_values(&[H::NAME])
-                        .set(limiter.inflight() as i64);
+                        .set(limiter.take_peak_limit() as i64);
                     metrics_for_timer
                         .committer_write_peak_inflight
                         .with_label_values(&[H::NAME])
                         .set(limiter.take_peak_inflight() as i64);
+                    let processor_peak = processor_peak_fill.swap(0, Ordering::Relaxed);
+                    metrics_for_timer
+                        .processor_peak_channel_fill
+                        .with_label_values(&[H::NAME])
+                        .set(processor_peak as i64);
+                    if processor_capacity > 0 {
+                        metrics_for_timer
+                            .processor_peak_channel_utilization
+                            .with_label_values(&[H::NAME])
+                            .set(processor_peak as f64 / processor_capacity as f64);
+                    }
+
+                    let collector_peak = collector_peak_fill.swap(0, Ordering::Relaxed);
+                    metrics_for_timer
+                        .collector_peak_channel_fill
+                        .with_label_values(&[H::NAME])
+                        .set(collector_peak as i64);
+                    if collector_capacity > 0 {
+                        metrics_for_timer
+                            .collector_peak_channel_utilization
+                            .with_label_values(&[H::NAME])
+                            .set(collector_peak as f64 / collector_capacity as f64);
+                    }
+
+                    let watermark_peak = watermark_peak_fill.swap(0, Ordering::Relaxed);
+                    metrics_for_timer
+                        .committer_watermark_peak_channel_fill
+                        .with_label_values(&[H::NAME])
+                        .set(watermark_peak as i64);
+                    let watermark_capacity = tx.max_capacity();
+                    if watermark_capacity > 0 {
+                        metrics_for_timer
+                            .committer_watermark_peak_channel_utilization
+                            .with_label_values(&[H::NAME])
+                            .set(watermark_peak as f64 / watermark_capacity as f64);
+                    }
                 }
             } => unreachable!(),
         } {
@@ -372,6 +407,10 @@ mod tests {
             store_clone,
             metrics,
             ConcurrencyLimiter::fixed(5),
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
+            0,
+            0,
         );
 
         TestSetup {

@@ -4,6 +4,8 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::time::Duration;
 
 use scoped_futures::ScopedFutureExt;
 use sui_futures::service::Service;
@@ -48,6 +50,8 @@ pub(super) fn committer<H>(
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
+    processor_peak_fill: Arc<AtomicUsize>,
+    processor_capacity: usize,
 ) -> Service
 where
     H: Handler + Send + Sync + 'static,
@@ -95,10 +99,26 @@ where
         let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
+        let mut metrics_interval = tokio::time::interval(Duration::from_secs(30));
+
         info!(pipeline = H::NAME, "Starting committer");
 
         loop {
             tokio::select! {
+                _ = metrics_interval.tick() => {
+                    let processor_peak = processor_peak_fill.swap(0, std::sync::atomic::Ordering::Relaxed);
+                    metrics
+                        .processor_peak_channel_fill
+                        .with_label_values(&[H::NAME])
+                        .set(processor_peak as i64);
+                    if processor_capacity > 0 {
+                        metrics
+                            .processor_peak_channel_utilization
+                            .with_label_values(&[H::NAME])
+                            .set(processor_peak as f64 / processor_capacity as f64);
+                    }
+                }
+
                 _ = poll.tick() => {
                     if batch_checkpoints == 0
                         && rx.is_closed()
@@ -473,6 +493,8 @@ mod tests {
             commit_hi_tx,
             store_clone,
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            0,
         );
 
         TestSetup {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
@@ -67,6 +68,7 @@ pub(super) fn processor<P: Processor>(
     rx: mpsc::Receiver<Arc<Checkpoint>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
+    peak_channel_fill: Arc<AtomicUsize>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = P::NAME, "Starting processor");
@@ -82,6 +84,7 @@ pub(super) fn processor<P: Processor>(
                 let metrics = metrics.clone();
                 let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                 let processor = processor.clone();
+                let peak_channel_fill = peak_channel_fill.clone();
 
                 async move {
                     metrics
@@ -148,14 +151,7 @@ pub(super) fn processor<P: Processor>(
                     .map_err(|_| Break::Break)?;
 
                     let fill = tx.max_capacity() - tx.capacity();
-                    metrics
-                        .processor_channel_fill
-                        .with_label_values(&[P::NAME])
-                        .set(fill as i64);
-                    metrics
-                        .processor_channel_utilization
-                        .with_label_values(&[P::NAME])
-                        .set(fill as f64 / tx.max_capacity() as f64);
+                    peak_channel_fill.fetch_max(fill, Ordering::Relaxed);
 
                     Ok(())
                 }
@@ -245,7 +241,13 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
-        let _svc = super::processor(processor, data_rx, indexed_tx, metrics);
+        let _svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            Arc::new(AtomicUsize::new(0)),
+        );
 
         // Send both checkpoints
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -299,7 +301,13 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
-        let svc = super::processor(processor, data_rx, indexed_tx, metrics);
+        let svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            Arc::new(AtomicUsize::new(0)),
+        );
 
         // Send first checkpoint.
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -367,7 +375,13 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
-        let _svc = super::processor(processor, data_rx, indexed_tx, metrics);
+        let _svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            Arc::new(AtomicUsize::new(0)),
+        );
 
         // Send and verify first checkpoint (should succeed immediately)
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -427,7 +441,13 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn processor task
-        let _svc = super::processor(processor, data_rx, indexed_tx, metrics);
+        let _svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            Arc::new(AtomicUsize::new(0)),
+        );
 
         // Send all checkpoints and measure time
         let start = std::time::Instant::now();

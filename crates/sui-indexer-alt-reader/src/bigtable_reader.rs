@@ -77,6 +77,7 @@ impl BigtableReader {
                 client_name,
                 Some(registry),
                 bigtable_args.bigtable_app_profile_id,
+                None,
             )
             .await
             .context("Failed to create BigTable client")?,

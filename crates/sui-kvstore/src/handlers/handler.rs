@@ -29,7 +29,7 @@ pub trait BigTableProcessor: Processor<Value = Entry> {
     const TABLE: &'static str;
 
     /// How much concurrency to use when processing checkpoint data (default: 10).
-    const FANOUT: usize = 10;
+    const FANOUT: usize = 16;
 
     /// Minimum rows before eager commit (default: 50).
     const MIN_EAGER_ROWS: usize = 50;
@@ -86,6 +86,7 @@ where
     type Batch = BigTableBatch;
 
     const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
+    const MAX_PENDING_ROWS: usize = usize::MAX;
 
     fn batch(
         &self,
@@ -98,7 +99,7 @@ where
             inner.total_mutations += entry.mutations.len();
             inner.entries.insert(entry.row_key.clone(), entry);
 
-            if inner.total_mutations == max_mutations() {
+            if inner.total_mutations >= max_mutations() {
                 return BatchStatus::Ready;
             }
         }

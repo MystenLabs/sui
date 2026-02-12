@@ -69,6 +69,11 @@ pub struct MutationError {
     pub message: String,
 }
 
+/// Default number of gRPC channels in the pool. Each channel is an independent HTTP/2
+/// connection, allowing concurrent RPCs to spread across multiple TCP sockets instead
+/// of multiplexing on a single one.
+const DEFAULT_CHANNEL_POOL_SIZE: usize = 4;
+
 #[derive(Clone)]
 pub struct BigTableClient {
     table_prefix: String,
@@ -98,8 +103,9 @@ impl BigTableClient {
         instance_id: String,
         client_name: &str,
     ) -> Result<Self> {
+        let endpoint = Channel::from_shared(format!("http://{host}"))?;
         let auth_channel = AuthChannel {
-            channel: Channel::from_shared(format!("http://{host}"))?.connect_lazy(),
+            channel: endpoint.connect_lazy(),
             policy: "https://www.googleapis.com/auth/bigtable.data".to_string(),
             token_provider: None,
             token: Arc::new(RwLock::new(None)),
@@ -121,7 +127,11 @@ impl BigTableClient {
         client_name: String,
         registry: Option<&Registry>,
         app_profile_id: Option<String>,
+        channel_pool_size: Option<usize>,
     ) -> Result<Self> {
+        let pool_size = channel_pool_size
+            .unwrap_or(DEFAULT_CHANNEL_POOL_SIZE)
+            .max(1);
         let policy = if is_read_only {
             "https://www.googleapis.com/auth/bigtable.data.readonly"
         } else {
@@ -143,8 +153,21 @@ impl BigTableClient {
             None => token_provider.project_id().await?.to_string(),
         };
         let table_prefix = format!("projects/{}/instances/{}/tables/", project_id, instance_id);
+        let channel = if pool_size > 1 {
+            let (channel, tx) = Channel::balance_channel::<usize>(64);
+            for i in 0..pool_size {
+                tx.try_send(tonic::transport::channel::Change::Insert(
+                    i,
+                    endpoint.clone(),
+                ))
+                .expect("channel balancer dropped");
+            }
+            channel
+        } else {
+            endpoint.connect_lazy()
+        };
         let auth_channel = AuthChannel {
-            channel: endpoint.connect_lazy(),
+            channel,
             policy: policy.to_string(),
             token_provider: Some(token_provider),
             token: Arc::new(RwLock::new(None)),
@@ -247,7 +270,7 @@ impl BigTableClient {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
-        let mut response = self.client.mutate_rows(request).await?.into_inner();
+        let mut response = self.client.clone().mutate_rows(request).await?.into_inner();
         let mut failed_keys: Vec<MutationError> = Vec::new();
 
         while let Some(part) = response.message().await? {
@@ -330,7 +353,7 @@ impl BigTableClient {
             request.app_profile_id = app_profile_id.clone();
         }
         let mut result = vec![];
-        let mut response = self.client.read_rows(request).await?.into_inner();
+        let mut response = self.client.clone().read_rows(request).await?.into_inner();
 
         let mut row_key: Option<Bytes> = None;
         let mut row = vec![];

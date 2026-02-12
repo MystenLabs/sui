@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::marker::Unpin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::Context;
@@ -99,6 +100,8 @@ where
         // This value is updated every outer loop iteration after both streaming and broadcasting complete.
         let mut checkpoint_hi = start_cp;
 
+        let peak_channel_fill = Arc::new(AtomicUsize::new(0));
+
         'outer: while checkpoint_hi < end_cp {
             // Set up the streaming task for the current range [checkpoint_hi, end_cp). This function
             // will return a handle to the streaming task and the end cp of the ingestion task, calculated
@@ -115,6 +118,7 @@ where
                 &subscribers,
                 ingest_hi_rx.cloned(),
                 &metrics,
+                peak_channel_fill.clone(),
             )
             .await;
 
@@ -129,6 +133,7 @@ where
                 subscribers.clone(),
                 limiter.clone(),
                 metrics.clone(),
+                peak_channel_fill.clone(),
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -223,6 +228,7 @@ fn ingest_and_broadcast_range(
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     limiter: Limiter,
     metrics: Arc<IngestionMetrics>,
+    peak_channel_fill: Arc<AtomicUsize>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
         // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
@@ -253,13 +259,13 @@ fn ingest_and_broadcast_range(
             },
             {
                 let subscribers = subscribers.clone();
-                let metrics = metrics.clone();
+                let peak_channel_fill = peak_channel_fill.clone();
                 move |checkpoint: Arc<Checkpoint>| {
                     let subscribers = subscribers.clone();
-                    let metrics = metrics.clone();
+                    let peak_channel_fill = peak_channel_fill.clone();
                     async move {
                         let cp = *checkpoint.summary.sequence_number();
-                        if send_checkpoint(checkpoint, &subscribers, &metrics)
+                        if send_checkpoint(checkpoint, &subscribers, &peak_channel_fill)
                             .await
                             .is_ok()
                         {
@@ -276,12 +282,18 @@ fn ingest_and_broadcast_range(
         tokio::select! {
             result = stream_fut => result,
             _ = async {
-                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                let mut interval = tokio::time::interval(Duration::from_secs(30));
                 loop {
                     interval.tick().await;
                     metrics.ingestion_concurrency.set(limiter.current() as i64);
-                    metrics.ingestion_inflight.set(limiter.inflight() as i64);
+                    metrics.ingestion_peak_concurrency.set(limiter.take_peak_limit() as i64);
                     metrics.ingestion_peak_inflight.set(limiter.take_peak_inflight() as i64);
+                    let peak = peak_channel_fill.swap(0, Ordering::Relaxed);
+                    metrics.ingestion_peak_channel_fill.set(peak as i64);
+                    let capacity = subscribers.first().map_or(0, |s| s.max_capacity());
+                    if capacity > 0 {
+                        metrics.ingestion_peak_channel_utilization.set(peak as f64 / capacity as f64);
+                    }
                 }
             } => unreachable!(),
         }
@@ -300,6 +312,7 @@ async fn setup_streaming_task<S>(
     subscribers: &Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: &Arc<IngestionMetrics>,
+    peak_channel_fill: Arc<AtomicUsize>,
 ) -> (TaskGuard<u64>, u64)
 where
     S: CheckpointStreamingClient,
@@ -375,6 +388,7 @@ where
         subscribers.clone(),
         ingest_hi_rx,
         metrics.clone(),
+        peak_channel_fill,
     )));
 
     (stream_guard, ingestion_end)
@@ -392,6 +406,7 @@ async fn stream_and_broadcast_range(
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     mut ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: Arc<IngestionMetrics>,
+    peak_channel_fill: Arc<AtomicUsize>,
 ) -> u64 {
     while lo < hi {
         let Some(item) = stream.next().await else {
@@ -432,7 +447,7 @@ async fn stream_and_broadcast_range(
             break;
         }
 
-        if send_checkpoint(Arc::new(checkpoint), &subscribers, &metrics)
+        if send_checkpoint(Arc::new(checkpoint), &subscribers, &peak_channel_fill)
             .await
             .is_err()
         {
@@ -456,7 +471,7 @@ async fn stream_and_broadcast_range(
 async fn send_checkpoint(
     checkpoint: Arc<Checkpoint>,
     subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
-    metrics: &IngestionMetrics,
+    peak_channel_fill: &AtomicUsize,
 ) -> Result<Vec<()>, mpsc::error::SendError<Arc<Checkpoint>>> {
     let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
     let result = try_join_all(futures).await;
@@ -466,15 +481,7 @@ async fn send_checkpoint(
             .map(|s| s.max_capacity() - s.capacity())
             .max()
             .unwrap_or(0);
-        let max_cap = subscribers
-            .iter()
-            .map(|s| s.max_capacity())
-            .max()
-            .unwrap_or(1);
-        metrics.ingestion_channel_fill.set(max_fill as i64);
-        metrics
-            .ingestion_channel_utilization
-            .set(max_fill as f64 / max_cap as f64);
+        peak_channel_fill.fetch_max(max_fill, Ordering::Relaxed);
     }
     result
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -129,11 +130,15 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let handler = Arc::new(handler);
 
+    let processor_peak_fill = Arc::new(AtomicUsize::new(0));
+    let processor_capacity = processor_tx.max_capacity();
+
     let s_processor = processor(
         handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
+        processor_peak_fill.clone(),
     );
 
     let s_committer = committer::<H>(
@@ -144,6 +149,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         commit_hi_tx,
         db,
         metrics.clone(),
+        processor_peak_fill,
+        processor_capacity,
     );
 
     s_processor.merge(s_committer)
