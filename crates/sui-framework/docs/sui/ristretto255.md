@@ -102,7 +102,7 @@ Only available in devnet.
 
 
 
-<pre><code><b>const</b> <a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_ONE_BYTES">SCALAR_ONE_BYTES</a>: vector&lt;u8&gt; = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+<pre><code><b>const</b> <a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_ONE_BYTES">SCALAR_ONE_BYTES</a>: vector&lt;u8&gt; = vector[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 </code></pre>
 
 
