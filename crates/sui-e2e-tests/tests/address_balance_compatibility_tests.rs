@@ -289,6 +289,12 @@ async fn test_valid_coin_reservation_gas_payments() {
 
 #[sim_test]
 async fn test_gas_coin_callarg_with_coin_reservation_gas() {
+    // TODO: This test requires GasCoin materialization to work with coin reservations.
+    // Currently, when gas is paid via address balance (coin reservation), no actual coin object
+    // exists to load. The adapter needs to create a synthetic/virtual coin object from the
+    // address balance with balance = reservation_amount - gas_budget.
+    // See: gas_charger.rs (smash_gas, gas_coin), context.rs (gas budget subtraction in new())
+
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -316,9 +322,18 @@ async fn test_gas_coin_callarg_with_coin_reservation_gas() {
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok());
 
-    // TODO:
-    // - verify the sender's address balance is decreased by the amount of the gas reservation + gas charges.
-    // - and the recipient receives a coin with balance 100
+    let gas_charge = effects.gas_cost_summary().gas_used();
+
+    // TODO: verify the sender's address balance is decreased by the amount of the gas charges + transfer.
+    let final_sender_balance = test_env.get_sui_balance_ab(sender);
+    assert_eq!(
+        final_sender_balance,
+        initial_sender_balance - gas_charge - 100
+    );
+
+    // TODO: and the recipient receives a coin with balance 100
+    let recipient_balance = test_env.get_sui_balance_ab(recipient);
+    assert_eq!(recipient_balance, 100);
 }
 
 #[sim_test]
