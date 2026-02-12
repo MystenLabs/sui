@@ -320,12 +320,21 @@ impl TestEnv {
         });
 
         let client = self.cluster.grpc_client();
+        // Check that the rpc balance agrees with the db balance, on a best-effort basis.
         tokio::task::spawn(async move {
-            let rpc_balance = client
+            match client
                 .get_balance(owner, &coin_type.to_canonical_string(true).parse().unwrap())
                 .await
-                .unwrap();
-            assert_eq!(db_balance, rpc_balance.address_balance());
+            {
+                Ok(rpc_balance) => {
+                    assert_eq!(db_balance, rpc_balance.address_balance());
+                }
+                Err(e) => {
+                    // this usually just means the cluster shut down first before the rpc
+                    // completed.
+                    tracing::info!("Failed to verify balance via gRPC: {e}");
+                }
+            }
         });
 
         db_balance
