@@ -72,8 +72,8 @@ const concepts = [
 			'concepts/data-access/archival-store',
 			'concepts/data-access/custom-indexers',
 			'concepts/data-access/pipeline-architecture',
-            'concepts/data-access/custom-indexer/indexer-data-integration',
-            'concepts/data-access/custom-indexer/indexer-runtime-perf',
+            'concepts/data-access/indexer-data-integration',
+            'concepts/data-access/indexer-runtime-perf',
 		],
 	},
 	{
