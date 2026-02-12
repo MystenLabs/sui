@@ -117,6 +117,99 @@ impl JsonValue for serde_json::Value {
     }
 }
 
+impl JsonValue for prost_types::Value {
+    type Vec = prost_types::ListValue;
+    type Map = prost_types::Struct;
+
+    fn null() -> Self {
+        prost_types::value::Kind::NullValue(0).into()
+    }
+
+    fn bool(value: bool) -> Self {
+        Self::from(value)
+    }
+
+    fn number(value: u32) -> Self {
+        Self::from(value)
+    }
+
+    fn string(value: String) -> Self {
+        Self::from(value)
+    }
+
+    fn array(value: Self::Vec) -> Self {
+        Self::from(value.values)
+    }
+
+    fn object(value: Self::Map) -> Self {
+        Self::from(value.fields)
+    }
+
+    fn is_null(&self) -> bool {
+        matches!(self.kind, Some(prost_types::value::Kind::NullValue(_)))
+    }
+
+    fn is_bool(&self) -> bool {
+        self.as_bool().is_some()
+    }
+
+    fn is_number(&self) -> bool {
+        matches!(self.kind, Some(prost_types::value::Kind::NumberValue(_)))
+    }
+
+    fn is_string(&self) -> bool {
+        self.as_string().is_some()
+    }
+
+    fn is_array(&self) -> bool {
+        self.as_array().is_some()
+    }
+
+    fn is_object(&self) -> bool {
+        self.as_object().is_some()
+    }
+
+    fn as_bool(&self) -> Option<bool> {
+        if let Some(prost_types::value::Kind::BoolValue(b)) = &self.kind {
+            Some(*b)
+        } else {
+            None
+        }
+    }
+
+    fn as_string(&self) -> Option<&str> {
+        if let Some(prost_types::value::Kind::StringValue(string)) = &self.kind {
+            Some(string.as_ref())
+        } else {
+            None
+        }
+    }
+
+    fn as_array(&self) -> Option<&Self::Vec> {
+        if let Some(prost_types::value::Kind::ListValue(array)) = &self.kind {
+            Some(array)
+        } else {
+            None
+        }
+    }
+
+    fn as_object(&self) -> Option<&Self::Map> {
+        if let Some(prost_types::value::Kind::StructValue(object)) = &self.kind {
+            Some(object)
+        } else {
+            None
+        }
+    }
+
+    fn vec_push_element(vec: &mut Self::Vec, value: Self) {
+        vec.values.push(value)
+    }
+
+    fn map_push_field(map: &mut Self::Map, key: String, value: Self) {
+        map.fields.insert(key, value);
+    }
+}
+
 /// A writer of evaluated values into JSON, tracking limits on output size and depth. A single
 /// writer can be used to write multiple values concurrently, with all writers sharing the same
 /// budgets.

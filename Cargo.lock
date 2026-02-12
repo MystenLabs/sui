@@ -14753,6 +14753,7 @@ dependencies = [
  "indexmap 2.8.0",
  "insta",
  "move-core-types",
+ "prost-types 0.14.1",
  "serde",
  "serde_json",
  "sui-json-rpc-types",
