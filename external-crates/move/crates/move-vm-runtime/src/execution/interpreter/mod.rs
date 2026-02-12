@@ -19,10 +19,12 @@ use move_vm_config::runtime::VMConfig;
 use std::sync::Arc;
 
 mod eval;
-pub(crate) use eval::check_reference_args_unique;
 pub(crate) mod helpers;
 pub mod locals;
 pub(crate) mod state;
+
+#[cfg(test)]
+pub(crate) use eval::check_reference_args_unique;
 
 /// Entrypoint into the interpreter. All external calls need to be routed through this
 /// function.

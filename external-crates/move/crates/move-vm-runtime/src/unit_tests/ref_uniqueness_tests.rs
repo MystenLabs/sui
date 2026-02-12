@@ -3,7 +3,7 @@
 
 use crate::execution::{
     interpreter::{check_reference_args_unique, locals::MachineHeap},
-    values::{MemBox, Value, VMValueCast, Reference},
+    values::{MemBox, Reference, VMValueCast, Value},
 };
 
 #[test]
