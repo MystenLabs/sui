@@ -1871,7 +1871,7 @@ pub(crate) async fn compile_package(
 ) -> Result<CompiledPackage, anyhow::Error> {
     let dependency_ids = check_for_unpublished_deps(root_pkg, with_unpublished_deps)?;
 
-    let chain_id = client.get_chain_identifier().await?;
+    let chain_id = client.get_chain_identifier().await?.to_string();
     debug!("Current client has {chain_id} as chain identifier");
 
     debug!("Loaded package from {:?}", package_path.display());
