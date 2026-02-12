@@ -407,7 +407,7 @@ impl MemBox<Value> {
     }
 
     // Returns the underlying pointer
-    fn as_ptr(&self) -> usize {
+    pub(crate) fn as_ptr(&self) -> usize {
         self.0.as_ptr() as usize
     }
 }
@@ -544,6 +544,13 @@ impl Reference {
                 let (vec, ndx) = entry.as_ref();
                 Reference::Indexed(Box::new((vec.ptr_clone(), *ndx)))
             }
+        }
+    }
+
+    pub(crate) fn ref_ptr(&self) -> usize {
+        match self {
+            Reference::Value(mem_box) => mem_box.as_ptr(),
+            Reference::Indexed(entry) => entry.0.as_ptr(),
         }
     }
 }

@@ -1139,7 +1139,28 @@ fn push_call_frame(
     let args = checked_as!(fun_ref.arg_count(), u16)
         .and_then(|arg_count| state.pop_n_operands(arg_count))
         .map_err(|e| set_err_info!(run_context.interner(), &state.call_stack.current_frame, e))?;
+    check_reference_args_unique(&args)
+        .map_err(|e| set_err_info!(run_context.interner(), &state.call_stack.current_frame, e))?;
     state.push_call(function, ty_args, args)
+}
+
+/// Checks that all reference arguments to a function call point to distinct memory locations.
+/// The borrow checker should guarantee this statically, so a violation is an invariant error.
+pub(crate) fn check_reference_args_unique(args: &[Value]) -> PartialVMResult<()> {
+    let mut seen_ptrs = SmallVec::<[usize; 256]>::new();
+    for arg in args {
+        if let Value::Reference(reference) = arg {
+            let ptr = reference.ref_ptr();
+            if seen_ptrs.contains(&ptr) {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "duplicate reference argument in function call"
+                ));
+            }
+            seen_ptrs.push(ptr);
+        }
+    }
+    Ok(())
 }
 
 fn partial_error_to_error<T>(
