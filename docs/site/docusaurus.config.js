@@ -150,6 +150,7 @@ const config = {
             "**/snippets/**",
             "**/standards/deepbook-ref/**",
             "**/app-examples/ts-sdk-ref/**",
+            "**/app-examples/ts-sdk-ref/**",
           ],
           admonitions: {
             keywords: ["checkpoint"],

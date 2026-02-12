@@ -52,7 +52,7 @@ The indexing framework supports multiple data sources to give you flexibility in
 
 - **gRPC streaming** pushes new checkpoints from full nodes as soon as they are available, providing lower latency than polling. Because streaming only emits the latest checkpoints, you must configure a polling-based fallback source to fetch historical data and ensure reliability.
 
-For configuration examples and guidance on when to use each source, see [Checkpoint Data Sources](/guides/developer/accessing-data/custom-indexer/indexer-data-integration.mdx#checkpoint-data-sources).
+For configuration examples and guidance on when to use each source, see [Checkpoint Data Sources](/concepts/data-access/indexer-data-integration.mdx#checkpoint-data-sources).
 
 ### Ingestion layer
 
@@ -79,5 +79,5 @@ To build your own pipelines for application-specific data, see [Building Your Fi
 ## Related links
 
 <RelatedLink to="/guides/developer/accessing-data/custom-indexer/build.mdx" />
-<RelatedLink to="/guides/developer/accessing-data/custom-indexer/pipeline-architecture.mdx" />
+<RelatedLink to="/concepts/data-access/pipeline-architecture.mdx" />
 <RelatedLink to="/concepts/transactions/transaction-lifecycle.mdx" />
