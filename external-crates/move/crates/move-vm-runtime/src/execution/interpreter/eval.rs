@@ -1170,6 +1170,10 @@ pub(crate) fn check_reference_args_unique(
             }
         }
     }
+    if mut_ref_ptrs.is_empty() {
+        // No mutable references, so no possibility of aliasing violations.
+        return Ok(());
+    }
     all_ref_ptrs.sort_unstable();
     for mptr in &mut_ref_ptrs {
         let first = all_ref_ptrs.partition_point(|p| p < mptr);
