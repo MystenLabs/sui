@@ -21,7 +21,15 @@ pub enum InitRequirement {
     SeedBalancePool,
     CreateTestCoinCap,
     SeedTestCoinAddressBalance,
+    EnableAddressAlias,
 }
+
+// Flags reserved for metrics use, even though alias testing is not implemented
+// using Operations.
+pub const ALIAS_TX_FLAG: u32 = 1 << 12;
+pub const ALIAS_REMOVE_FLAG: u32 = 1 << 13;
+pub const ALIAS_ADD_FLAG: u32 = 1 << 14;
+pub const INVALID_ALIAS_TX_FLAG: u32 = 1 << 15;
 
 pub struct OperationDescriptor {
     pub name: &'static str,
