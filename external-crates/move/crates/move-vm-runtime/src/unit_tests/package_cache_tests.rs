@@ -630,6 +630,99 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     );
 }
 
+// Test that the package cache correctly reuses cached packages when different linkage
+// contexts share common dependencies. Uses Arc::ptr_eq to verify that the same cached
+// Arc<Package> is returned rather than a recompiled copy.
+//
+// package5.move defines:
+//   0x1: modules a, b (b depends on a)
+//   0x2: module c (depends on 0x1::a, 0x1::b)
+//   0x3: module c (depends on 0x1::a, 0x1::b, 0x2::c)
+#[test]
+fn cache_reuses_packages_across_linkage_contexts() {
+    let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
+    let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
+    let package3_address = AccountAddress::from_hex_literal("0x3").unwrap();
+
+    let mut adapter = InMemoryTestAdapter::new();
+    for pkg in compile_packages_in_file("package5.move", &[]) {
+        adapter.insert_package_into_storage(pkg);
+    }
+
+    // Load linkage for package 2 (pulls in packages 1 and 2)
+    let link_context_2 = adapter.get_linkage_context(package2_address).unwrap();
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context_2);
+    assert!(result.is_ok());
+    assert_eq!(adapter.runtime().cache().package_cache().len(), 2);
+
+    // Grab the cached Arc for package 1 before loading the next linkage context
+    let pkg1_before = adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package1_address)
+        .expect("package 1 should be cached");
+
+    // Load linkage for package 3 (pulls in packages 1, 2, and 3).
+    // Package 1 and 2 should come from the cache, only 3 is new.
+    let link_context_3 = adapter.get_linkage_context(package3_address).unwrap();
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context_3);
+    assert!(result.is_ok());
+    assert_eq!(adapter.runtime().cache().package_cache().len(), 3);
+
+    // Verify package 1 is the exact same Arc (pointer-equal), proving cache reuse
+    let pkg1_after = adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package1_address)
+        .expect("package 1 should still be cached");
+    assert!(
+        Arc::ptr_eq(&pkg1_before, &pkg1_after),
+        "package 1 should be the same Arc instance, not recompiled"
+    );
+
+    // Same check for package 2
+    let pkg2_before = adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package2_address)
+        .expect("package 2 should be cached");
+
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context_3);
+    assert!(result.is_ok());
+
+    let pkg2_after = adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package2_address)
+        .expect("package 2 should still be cached");
+    assert!(
+        Arc::ptr_eq(&pkg2_before, &pkg2_after),
+        "package 2 should be the same Arc instance, not recompiled"
+    );
+
+    // Evict the shared dependency (package 1) and reload
+    assert!(adapter.runtime().cache().remove_package(&package1_address));
+    assert_eq!(adapter.runtime().cache().package_cache().len(), 2);
+
+    let result = load_linkage_packages_into_runtime(&mut adapter, &link_context_3);
+    assert!(result.is_ok());
+    assert_eq!(adapter.runtime().cache().package_cache().len(), 3);
+
+    // After eviction and reload, package 1 should be a NEW Arc (different pointer)
+    let pkg1_reloaded = adapter
+        .runtime()
+        .cache()
+        .cached_package_at(package1_address)
+        .expect("package 1 should be re-cached");
+    assert!(
+        !Arc::ptr_eq(&pkg1_before, &pkg1_reloaded),
+        "after eviction, package 1 should be a fresh compilation"
+    );
+
+    // But the contents should be equivalent
+    assert_eq!(pkg1_before.loaded_types_len(), pkg1_reloaded.loaded_types_len());
+}
+
 // Test that we properly publish and relink (and reuse) packages.
 // FIXME FIXME FIXME
 #[test]
