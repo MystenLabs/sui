@@ -545,6 +545,11 @@ impl TestTransactionBuilder {
         self
     }
 
+    pub fn merge_coins(mut self, target: ObjectRef, coins: Vec<ObjectRef>) -> Self {
+        self.ptb_builder.merge_coins(target, coins).unwrap();
+        self
+    }
+
     pub fn publish(self, path: PathBuf) -> Self {
         if cfg!(msim) {
             panic!("In simtests, you must use publish_async() instead");
