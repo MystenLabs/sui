@@ -5,15 +5,27 @@
 use crate::{
     cache::move_cache::{MoveCache, Package},
     dev_utils::{
-        compilation_utils::{compile_packages, compile_packages_in_file},
+        compilation_utils::{
+            compile_packages, compile_packages_in_file, expect_modules, make_base_path,
+        },
         in_memory_test_adapter::InMemoryTestAdapter,
+        storage::StoredPackage,
         vm_test_adapter::VMTestAdapter,
     },
     runtime::{package_resolution::resolve_packages, telemetry::TransactionTelemetryContext},
-    shared::{linkage_context::LinkageContext, types::VersionId},
+    shared::{
+        linkage_context::LinkageContext,
+        types::{OriginalId, VersionId},
+    },
 };
-use move_binary_format::errors::VMResult;
-use move_core_types::{account_address::AccountAddress, resolver::ModuleResolver};
+use indexmap::IndexMap;
+use move_binary_format::{CompiledModule, errors::VMResult};
+use move_compiler::Compiler;
+use move_core_types::{
+    account_address::AccountAddress,
+    identifier::Identifier,
+    resolver::{IntraPackageName, ModuleResolver},
+};
 use move_vm_config::runtime::VMConfig;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -723,165 +735,166 @@ fn cache_reuses_packages_across_linkage_contexts() {
     assert_eq!(pkg1_before.loaded_types_len(), pkg1_reloaded.loaded_types_len());
 }
 
-// Test that we properly publish and relink (and reuse) packages.
-// FIXME FIXME FIXME
+/// Compile a relinker test module with the given original/version IDs and dependencies.
+fn relinker_pkg(
+    original_id: OriginalId,
+    version_id: VersionId,
+    module: &str,
+    deps: &[&str],
+) -> StoredPackage {
+    let base = make_base_path();
+    let source = base
+        .join(format!("rt_{module}.move"))
+        .to_string_lossy()
+        .to_string();
+    let dep_paths: Vec<String> = deps
+        .iter()
+        .map(|d| base.join(format!("rt_{d}.move")).to_string_lossy().to_string())
+        .collect();
+
+    let (_, units) = Compiler::from_files(
+        None,
+        vec![source],
+        dep_paths,
+        BTreeMap::<String, _>::new(),
+    )
+    .build_and_report()
+    .expect("compilation failed");
+
+    let modules: Vec<CompiledModule> = expect_modules(units)
+        .filter(|m| *m.self_id().address() == original_id)
+        .collect();
+    StoredPackage::from_modules_for_testing(version_id, modules).unwrap()
+}
+
+// Test that publishing and relinking packages properly updates the cache:
+// - Different linkage contexts sharing a dependency reuse its cached Arc
+// - Different versions of the same original package (C v0 vs C v1) are cached separately
+// - A failed publish (linkage mismatch) does not corrupt the cache
+//
+// Package dependency structure:
+//   C v0 (0x2): struct S, fun c() -> 42
+//   C v1 (0x5): struct S, struct R, fun c() -> 43, fun d() -> 44
+//   B v0 (0x3): fun b() = c::c() + 1  (depends on C)
+//   A v0 (0x4): fun a() = b::b() + c::d()  (depends on B and C v1)
+
+//Stores 4 packages with a relinking dependency chain: C v0 (0x2), C v1 (0x5, upgrade of C), B v0 (0x3, depends on C), A v0 (0x4, depends on B + C v1)
+//Loads B's dependency tree (B + C v0) into cache — verifies cache = 2
+//Loads A's dependency tree (A + B + C v1) into cache — verifies cache = 4 and that B v0 is reused from cache (Arc::ptr_eq) rather than recompiled
+//Verifies C v0 and C v1 are separate cache entries (different VersionIds)
+//Attempts a bad publish of A linked against C v0 (A calls d() which only exists in C v1) — verifies it fails and cache is unchanged
 #[test]
 fn relink() {
-    /*
+    let c_orig = AccountAddress::from_hex_literal("0x2").unwrap();
+    let b_orig = AccountAddress::from_hex_literal("0x3").unwrap();
+    let a_orig = AccountAddress::from_hex_literal("0x4").unwrap();
+    let c_v1_addr = AccountAddress::from_hex_literal("0x5").unwrap();
+
     let mut adapter = InMemoryTestAdapter::new();
 
-    let st_c_v1_addr = AccountAddress::from_hex_literal("0x42").unwrap();
-    let st_b_v1_addr = AccountAddress::from_hex_literal("0x43").unwrap();
+    // -- Store all packages in storage --
 
-    let c_original_addr = AccountAddress::from_hex_literal("0x2").unwrap();
-    let b_original_addr = AccountAddress::from_hex_literal("0x3").unwrap();
-    let _a_original_addr = AccountAddress::from_hex_literal("0x4").unwrap();
+    // C v0 (original=0x2, stored at 0x2)
+    let c0 = relinker_pkg(c_orig, c_orig, "c_v0", &[]);
+    adapter.insert_package_into_storage(c0);
 
-    // publish c v0
-    let packages = compile_modules_in_file("rt_c_v0.move", &[]);
-    assert!(packages.len() == 1);
-    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter
-        .publish_package_to_storage(
-            runtime_package_id,
-            runtime_package_id,
-            modules,
-            BTreeMap::new(),
-            BTreeSet::new(),
-        )
-        .unwrap();
+    // C v1 (original=0x2, stored at 0x5) with type origins:
+    // S was defined in C v0 (0x2), R is new in C v1 (0x5)
+    let mut c1 = relinker_pkg(c_orig, c_v1_addr, "c_v1", &[]);
+    c1.0.type_origin_table = IndexMap::from([
+        (
+            IntraPackageName {
+                module_name: Identifier::new("c").unwrap(),
+                type_name: Identifier::new("S").unwrap(),
+            },
+            c_orig,
+        ),
+        (
+            IntraPackageName {
+                module_name: Identifier::new("c").unwrap(),
+                type_name: Identifier::new("R").unwrap(),
+            },
+            c_v1_addr,
+        ),
+    ]);
+    adapter.insert_package_into_storage(c1);
 
-    assert_eq!(adapter.runtime()cache().package_cache().len(), 0);
+    // B v0 (original=0x3, stored at 0x3) linked against C v0
+    let mut b0 = relinker_pkg(b_orig, b_orig, "b_v0", &["c_v0"]);
+    b0.0.linkage_table = BTreeMap::from([(c_orig, c_orig), (b_orig, b_orig)]);
+    adapter.insert_package_into_storage(b0);
 
-    // publish c v1
-    let packages = compile_modules_in_file("rt_c_v1.move", &[]);
-    assert!(packages.len() == 1);
-    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter
-        .publish_package_to_storage(
-            runtime_package_id,
-            st_c_v1_addr,
-            modules,
-            [(
-                (
-                    ModuleId::new(runtime_package_id, Identifier::new("c").unwrap()),
-                    Identifier::new("S").unwrap(),
-                ),
-                ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
-            )]
-            .into_iter()
-            .collect(),
-            BTreeSet::new(),
-        )
-        .unwrap();
+    // A v0 (original=0x4, stored at 0x4) linked against C v1 and B v0
+    let mut a0 = relinker_pkg(a_orig, a_orig, "a_v0", &["b_v0", "c_v1"]);
+    a0.0.linkage_table =
+        BTreeMap::from([(c_orig, c_v1_addr), (b_orig, b_orig), (a_orig, a_orig)]);
+    adapter.insert_package_into_storage(a0);
 
-    assert_eq!(adapter.cache.package_cache().len(), 1);
+    // -- Load packages into cache with different linkage contexts --
 
-    // publish b_v0 <- c_v0
-    let packages = compile_modules_in_file("rt_b_v0.move", &["rt_c_v0.move"]);
-    assert!(packages.len() == 1);
-    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter
-        .publish_package_to_storage(
-            runtime_package_id,
-            runtime_package_id,
-            modules,
-            BTreeMap::new(),
-            [c_original_addr].into_iter().collect(),
-        )
-        .unwrap();
+    assert_eq!(adapter.runtime().cache().package_cache().len(), 0);
 
-    assert_eq!(adapter.cache.package_cache().len(), 2);
+    // Load B v0's dependency tree: B v0 + C v0
+    let link_b = LinkageContext::new(BTreeMap::from([(c_orig, c_orig), (b_orig, b_orig)]));
+    load_linkage_packages_into_runtime(&mut adapter, &link_b).unwrap();
+    assert_eq!(adapter.runtime().cache().package_cache().len(), 2);
 
-    // publish b_v0 <- c_v1
-    let packages = compile_modules_in_file("rt_b_v0.move", &["rt_c_v1.move"]);
-    assert!(packages.len() == 1);
-    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter
-        .publish_package_to_storage(
-            runtime_package_id,
-            st_b_v1_addr,
-            modules,
-            [
-                (
-                    (
-                        ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
-                        Identifier::new("S").unwrap(),
-                    ),
-                    ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
-                ),
-                (
-                    (
-                        ModuleId::new(st_c_v1_addr, Identifier::new("c").unwrap()),
-                        Identifier::new("R").unwrap(),
-                    ),
-                    ModuleId::new(st_c_v1_addr, Identifier::new("c").unwrap()),
-                ),
-            ]
-            .into_iter()
-            .collect(),
-            [st_c_v1_addr].into_iter().collect(),
-        )
-        .unwrap();
+    // Capture B v0's cached Arc to verify reuse across linkage contexts
+    let b_cached = adapter
+        .runtime()
+        .cache()
+        .cached_package_at(b_orig)
+        .expect("B v0 should be cached");
 
-    assert_eq!(adapter.cache.package_cache().len(), 4);
+    // Load A v0's dependency tree: A v0 + B v0 + C v1.
+    // B v0 (at 0x3) should be reused from cache.
+    // C v1 (at 0x5) is new — a different VersionId from C v0 (at 0x2).
+    let link_a = LinkageContext::new(BTreeMap::from([
+        (c_orig, c_v1_addr),
+        (b_orig, b_orig),
+        (a_orig, a_orig),
+    ]));
+    load_linkage_packages_into_runtime(&mut adapter, &link_a).unwrap();
+    // Cache now has: C v0 (0x2), C v1 (0x5), B v0 (0x3), A v0 (0x4)
+    assert_eq!(adapter.runtime().cache().package_cache().len(), 4);
 
-    // publish a_v0 <- c_v1 && b_v0
-    let packages = compile_modules_in_file("rt_a_v0.move", &["rt_c_v1.move", "rt_b_v0.move"]);
-    assert!(packages.len() == 1);
-    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter
-        .publish_package_to_storage(
-            runtime_package_id,
-            runtime_package_id,
-            modules,
-            [
-                (
-                    (
-                        ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
-                        Identifier::new("S").unwrap(),
-                    ),
-                    ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
-                ),
-                (
-                    (
-                        ModuleId::new(st_c_v1_addr, Identifier::new("c").unwrap()),
-                        Identifier::new("R").unwrap(),
-                    ),
-                    ModuleId::new(st_c_v1_addr, Identifier::new("c").unwrap()),
-                ),
-            ]
-            .into_iter()
-            .collect(),
-            [st_c_v1_addr, b_original_addr].into_iter().collect(),
-        )
-        .unwrap();
+    // B v0 is the same Arc (reused, not recompiled)
+    let b_reused = adapter
+        .runtime()
+        .cache()
+        .cached_package_at(b_orig)
+        .expect("B v0 should still be cached");
+    assert!(
+        Arc::ptr_eq(&b_cached, &b_reused),
+        "B v0 should be reused across linkage contexts"
+    );
 
-    assert_eq!(adapter.cache.package_cache().len(), 5);
+    // Both C versions are cached as separate entries
+    assert!(adapter.runtime().cache().cached_package_at(c_orig).is_some());
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(c_v1_addr)
+            .is_some()
+    );
 
-    // publish a_v0 <- c_v0 && b_v0 -- ERROR since a_v0 requires c_v1+
-    let packages = compile_modules_in_file("rt_a_v0.move", &["rt_c_v1.move", "rt_b_v0.move"]);
-    assert!(packages.len() == 1);
-    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
-    adapter
-        .publish_package_to_storage(
-            runtime_package_id,
-            runtime_package_id,
-            modules,
-            [(
-                (
-                    ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
-                    Identifier::new("S").unwrap(),
-                ),
-                ModuleId::new(c_original_addr, Identifier::new("c").unwrap()),
-            )]
-            .into_iter()
-            .collect(),
-            [c_original_addr, b_original_addr].into_iter().collect(),
-        )
-        .unwrap_err();
+    let cache_before_bad = adapter.runtime().cache().package_cache().len();
 
-    // cache stays the same since the publish failed
-    assert_eq!(adapter.cache.package_cache().len(), 5);
-    */
+    // Try publishing A v0 linked against C v0 instead of C v1.
+    // A calls d() which only exists in C v1, so verification should fail.
+    let mut a0_bad = relinker_pkg(a_orig, a_orig, "a_v0", &["b_v0", "c_v1"]);
+    a0_bad.0.linkage_table =
+        BTreeMap::from([(c_orig, c_orig), (b_orig, b_orig), (a_orig, a_orig)]);
+    let result = adapter.publish_package(a_orig, a0_bad.into_serialized_package());
+    assert!(
+        result.is_err(),
+        "A linked against C v0 should fail (missing d())"
+    );
+
+    // Cache must not change from a failed publish
+    assert_eq!(
+        adapter.runtime().cache().package_cache().len(),
+        cache_before_bad,
+    );
 }
