@@ -1,4 +1,4 @@
-name: Docs CI
+name: Build and Deploy docs.sui.io
 
 on:
   push:
@@ -27,3 +27,7 @@ jobs:
       - name: Build
         run: pnpm build
         working-directory: ./docs/site
+      - name: 'notify vercel'
+        uses: 'vercel/repository-dispatch/actions/status@v1'
+        with:
+          name: 'Vercel - sui-docs: Check for build success'
