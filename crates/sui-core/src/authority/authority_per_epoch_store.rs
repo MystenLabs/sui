@@ -308,6 +308,8 @@ pub struct ExecutionIndicesWithStats {
     /// height, we've fully executed the commit.
     pub height: u64,
     pub stats: ConsensusStats,
+    #[serde(default)]
+    pub last_checkpoint_flush_timestamp: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
