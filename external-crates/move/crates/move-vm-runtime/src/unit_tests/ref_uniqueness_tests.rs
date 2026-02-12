@@ -157,3 +157,56 @@ fn locals_same_local_imm_ref_passes() {
     let params = [imm_ref(&arena), imm_ref(&arena)];
     assert!(check_reference_args_unique(&args, &params).is_ok());
 }
+
+#[test]
+fn many_distinct_mut_refs_passes() {
+    let arena = Arena::new_bounded();
+    let boxes: Vec<_> = (0..200).map(|i| MemBox::new(Value::u64(i))).collect();
+    let args: Vec<_> = boxes.iter().map(|b| b.as_ref_value()).collect();
+    let params: Vec<_> = (0..200).map(|_| mut_ref(&arena)).collect();
+    assert!(check_reference_args_unique(&args, &params).is_ok());
+}
+
+#[test]
+fn many_refs_with_one_mut_alias_at_end_fails() {
+    let arena = Arena::new_bounded();
+    let boxes: Vec<_> = (0..200).map(|i| MemBox::new(Value::u64(i))).collect();
+    let mut args: Vec<_> = boxes.iter().map(|b| b.as_ref_value()).collect();
+    let mut params: Vec<_> = (0..200).map(|_| mut_ref(&arena)).collect();
+    // Alias the last mutable ref with an immutable ref to the same location
+    args.push(boxes[199].as_ref_value());
+    params.push(imm_ref(&arena));
+    assert!(check_reference_args_unique(&args, &params).is_err());
+}
+
+#[test]
+fn many_refs_with_one_mut_alias_at_start_fails() {
+    let arena = Arena::new_bounded();
+    let boxes: Vec<_> = (0..200).map(|i| MemBox::new(Value::u64(i))).collect();
+    let mut args: Vec<_> = boxes.iter().map(|b| b.as_ref_value()).collect();
+    let mut params: Vec<_> = (0..200).map(|_| imm_ref(&arena)).collect();
+    // Make the first one mutable and add a duplicate
+    params[0] = mut_ref(&arena);
+    args.push(boxes[0].as_ref_value());
+    params.push(imm_ref(&arena));
+    assert!(check_reference_args_unique(&args, &params).is_err());
+}
+
+#[test]
+fn many_imm_refs_all_aliased_passes() {
+    let arena = Arena::new_bounded();
+    let shared = MemBox::new(Value::u64(42));
+    let args: Vec<_> = (0..200).map(|_| shared.as_ref_value()).collect();
+    let params: Vec<_> = (0..200).map(|_| imm_ref(&arena)).collect();
+    assert!(check_reference_args_unique(&args, &params).is_ok());
+}
+
+#[test]
+fn many_imm_refs_one_mut_in_middle_fails() {
+    let arena = Arena::new_bounded();
+    let shared = MemBox::new(Value::u64(42));
+    let args: Vec<_> = (0..200).map(|_| shared.as_ref_value()).collect();
+    let mut params: Vec<_> = (0..200).map(|_| imm_ref(&arena)).collect();
+    params[100] = mut_ref(&arena);
+    assert!(check_reference_args_unique(&args, &params).is_err());
+}

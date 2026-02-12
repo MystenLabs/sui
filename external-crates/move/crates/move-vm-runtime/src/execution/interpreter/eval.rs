@@ -1179,7 +1179,8 @@ pub(crate) fn check_reference_args_unique(
         ));
     }
 
-    let mut mut_ref_ptrs = SmallVec::<[usize; 256]>::new();
+    // Smallvec will resize here.
+    let mut mut_ref_ptrs = SmallVec::<[usize; 8]>::new();
     let mut all_ref_ptrs = args
         .iter()
         .zip(parameters.iter())
