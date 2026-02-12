@@ -241,8 +241,7 @@ impl MoveRuntime {
             let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
             let result = try_block! {
-                let version_id = pkg.version_id;
-                dbg_println!("\n\nPublishing module at {version_id} (=> {original_id})\n\n");
+                dbg_println!("\n\nPublishing module at {} (=> {original_id})\n\n", pkg.version_id);
 
                 let link_context = LinkageContext::new(pkg.linkage_table.clone());
 
