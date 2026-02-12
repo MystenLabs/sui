@@ -39,46 +39,6 @@ impl LinkageContext {
     pub fn contains_key(&self, address: &OriginalId) -> bool {
         self.linkage_table.contains_key(address)
     }
-
-    /// Add a Runtime ID -> Storage ID entry to the linkage table. This allows for shadowing of
-    /// exsting Runtime ID definitions, but will error of the Storage ID is already being used as a
-    /// Runtime ID in the linkage.
-    pub fn add_entry(
-        &mut self,
-        original_id: OriginalId,
-        version_id: VersionId,
-    ) -> PartialVMResult<()> {
-        if self.linkage_table.contains_key(&version_id) {
-            return Err(partial_vm_error!(
-                LINKER_ERROR,
-                "Package ID {version_id} is a key in the current linkage context"
-            ));
-        };
-        self.linkage_table.insert(original_id, version_id);
-        Ok(())
-    }
-
-    /// Adds the addresses mentioned in a type tags to the linkage context as follows: if the
-    /// address is already a key, ignore it; if it is not, add it as a reflextive entry.
-    ///
-    /// This is to help harness/testing cases, where we might find type arguments to calls that would
-    /// otherwise not appear in any dependencies in the target module (e.g., we are calling it
-    /// polymorphicall).
-    pub fn add_type_arg_addresses_reflexive<'a>(
-        &mut self,
-        type_tags: impl IntoIterator<Item = &'a TypeTag>,
-    ) {
-        let type_arg_addresses = type_tags.into_iter().fold(BTreeSet::new(), |mut acc, tag| {
-            acc.extend(tag.all_addresses());
-            acc
-        });
-        for arg_address in type_arg_addresses {
-            if !self.contains_key(&arg_address) {
-                let _ = self.add_entry(arg_address, arg_address);
-            }
-        }
-    }
-
     /// Translate the runtime `module_id` to the on-chain `ModuleId` that it should be loaded from.
     pub fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
         self.linkage_table
@@ -116,5 +76,47 @@ impl LinkageContext {
 
     pub fn to_linkage_hash(&self) -> LinkageHash {
         LinkageHash(self.linkage_table.clone())
+    }
+}
+
+#[cfg(any(debug_assertions, feature = "testing"))]
+impl LinkageContext {
+    /// Add a Runtime ID -> Storage ID entry to the linkage table. This allows for shadowing of
+    /// exsting Runtime ID definitions, but will error of the Storage ID is already being used as a
+    /// Runtime ID in the linkage.
+    pub fn add_entry(
+        &mut self,
+        original_id: OriginalId,
+        version_id: VersionId,
+    ) -> PartialVMResult<()> {
+        if self.linkage_table.contains_key(&version_id) {
+            return Err(partial_vm_error!(
+                LINKER_ERROR,
+                "Package ID {version_id} is a key in the current linkage context"
+            ));
+        };
+        self.linkage_table.insert(original_id, version_id);
+        Ok(())
+    }
+
+    /// Adds the addresses mentioned in a type tags to the linkage context as follows: if the
+    /// address is already a key, ignore it; if it is not, add it as a reflextive entry.
+    ///
+    /// This is to help harness/testing cases, where we might find type arguments to calls that would
+    /// otherwise not appear in any dependencies in the target module (e.g., we are calling it
+    /// polymorphicall).
+    pub fn add_type_arg_addresses_reflexive<'a>(
+        &mut self,
+        type_tags: impl IntoIterator<Item = &'a TypeTag>,
+    ) {
+        let type_arg_addresses = type_tags.into_iter().fold(BTreeSet::new(), |mut acc, tag| {
+            acc.extend(tag.all_addresses());
+            acc
+        });
+        for arg_address in type_arg_addresses {
+            if !self.contains_key(&arg_address) {
+                let _ = self.add_entry(arg_address, arg_address);
+            }
+        }
     }
 }
