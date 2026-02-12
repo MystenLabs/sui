@@ -870,6 +870,22 @@ public fun request_add_validator_candidate_for_testing(
         )
 }
 
+#[test_only]
+public fun set_safe_mode_gas_for_testing(
+    wrapper: &mut SuiSystemState,
+    storage_rewards: Balance<SUI>,
+    computation_rewards: Balance<SUI>,
+    storage_rebates: u64,
+    non_refundable_storage_fee: u64,
+) {
+    wrapper.load_system_state_mut().set_safe_mode_gas_for_testing(
+        storage_rewards,
+        computation_rewards,
+        storage_rebates,
+        non_refundable_storage_fee,
+    )
+}
+
 // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
 #[test_only]
 public(package) fun advance_epoch_for_testing(

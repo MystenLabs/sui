@@ -1259,6 +1259,22 @@ public(package) fun request_add_validator_candidate_for_testing(
     self.validators.request_add_validator_candidate(validator, ctx);
 }
 
+#[test_only]
+public(package) fun set_safe_mode_gas_for_testing(
+    self: &mut SuiSystemStateInnerV2,
+    storage_rewards: Balance<SUI>,
+    computation_rewards: Balance<SUI>,
+    storage_rebates: u64,
+    non_refundable_storage_fee: u64,
+) {
+    self.safe_mode = true;
+    self.safe_mode_storage_rewards.join(storage_rewards);
+    self.safe_mode_computation_rewards.join(computation_rewards);
+    self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebates;
+    self.safe_mode_non_refundable_storage_fee =
+        self.safe_mode_non_refundable_storage_fee + non_refundable_storage_fee;
+}
+
 macro fun mul_div($a: u64, $b: u64, $c: u64): u64 {
     (($a as u128) * ($b as u128) / ($c as u128)) as u64
 }
