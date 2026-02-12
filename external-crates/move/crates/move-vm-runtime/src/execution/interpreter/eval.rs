@@ -20,7 +20,7 @@ use crate::{
             Vector, VectorRef, VectorSpecialization,
         },
     },
-    jit::execution::ast::{Bytecode, CallType, Function, Type},
+    jit::execution::ast::{ArenaType, Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     runtime::telemetry::TransactionTelemetryContext,
     shared::{
@@ -1008,10 +1008,9 @@ fn call_native_impl(
             return Err(partial_vm_error!(ABORTED));
         }
     };
-    let args = state
-        .pop_n_operands(arg_count)?
-        .into_iter()
-        .collect::<VecDeque<_>>();
+    let args = state.pop_n_operands(arg_count)?;
+    check_reference_args_unique(&args, &function.parameters)?;
+    let args = args.into_iter().collect::<VecDeque<_>>();
     let RunContext {
         extensions,
         vm_config,
@@ -1139,25 +1138,47 @@ fn push_call_frame(
     let args = checked_as!(fun_ref.arg_count(), u16)
         .and_then(|arg_count| state.pop_n_operands(arg_count))
         .map_err(|e| set_err_info!(run_context.interner(), &state.call_stack.current_frame, e))?;
-    check_reference_args_unique(&args)
+    check_reference_args_unique(&args, &fun_ref.parameters)
         .map_err(|e| set_err_info!(run_context.interner(), &state.call_stack.current_frame, e))?;
     state.push_call(function, ty_args, args)
 }
 
-/// Checks that all reference arguments to a function call point to distinct memory locations.
+/// Checks that mutable reference arguments to a function call point to distinct memory locations.
+/// A mutable reference's pointer must not appear in any other reference argument (mutable or
+/// immutable). Multiple immutable references to the same location are allowed.
 /// The borrow checker should guarantee this statically, so a violation is an invariant error.
-pub(crate) fn check_reference_args_unique(args: &[Value]) -> PartialVMResult<()> {
-    let mut seen_ptrs = SmallVec::<[usize; 256]>::new();
-    for arg in args {
+pub(crate) fn check_reference_args_unique(
+    args: &[Value],
+    parameters: &[ArenaType],
+) -> PartialVMResult<()> {
+    if args.len() != parameters.len() {
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "argument count ({}) does not match parameter count ({})",
+            args.len(),
+            parameters.len()
+        ));
+    }
+    let mut all_ref_ptrs = SmallVec::<[usize; 256]>::new();
+    let mut mut_ref_ptrs = SmallVec::<[usize; 256]>::new();
+    for (arg, param_ty) in args.iter().zip(parameters.iter()) {
         if let Value::Reference(reference) = arg {
             let ptr = reference.ref_ptr();
-            if seen_ptrs.contains(&ptr) {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "duplicate reference argument in function call"
-                ));
+            all_ref_ptrs.push(ptr);
+            if matches!(param_ty, ArenaType::MutableReference(_)) {
+                mut_ref_ptrs.push(ptr);
             }
-            seen_ptrs.push(ptr);
+        }
+    }
+    all_ref_ptrs.sort_unstable();
+    for mptr in &mut_ref_ptrs {
+        let first = all_ref_ptrs.partition_point(|p| p < mptr);
+        let last = all_ref_ptrs.partition_point(|p| p <= mptr);
+        if last - first > 1 {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "mutable reference argument aliases another reference in function call"
+            ));
         }
     }
     Ok(())
