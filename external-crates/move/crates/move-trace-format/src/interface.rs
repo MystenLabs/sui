@@ -29,7 +29,6 @@ impl<T: Tracer> Tracer for &mut T {
     }
 }
 
-
 /// A writer that allows you to push custom events to the trace but encapsulates the trace so that
 /// non-external events cannot be accidentally added.
 pub struct Writer<'a>(pub(crate) &'a mut MoveTrace);
