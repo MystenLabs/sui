@@ -407,7 +407,7 @@ impl MemBox<Value> {
     }
 
     // Returns the underlying pointer
-    pub(crate) fn as_ptr(&self) -> usize {
+    fn as_ptr(&self) -> usize {
         self.0.as_ptr() as usize
     }
 }
