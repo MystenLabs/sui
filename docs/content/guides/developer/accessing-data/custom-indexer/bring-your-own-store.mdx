@@ -1,4 +1,8 @@
-## Bring your own store (BYOS) {#byos}
+---
+title: Bring Your Own Store (BYOS)
+description: Implement a custom storage backend for the customer indexer framework.
+keywords: [indexer, custom store, BYOS, bring your own store, event deserialization, BCS, Move events, ClickHouse]
+---
 
 The `IndexerCluster` provides a convenient way to get started with PostgreSQL, but you might want to use a different database or storage system. This requires using the manual `Indexer` class and implementing custom `Store` and `Connection` traits from `sui-indexer-alt-framework-store-traits`.
 
@@ -46,7 +50,7 @@ pub struct MyCustomConnection<'a> {
 
 ###step Implement the `Store` trait
 
-The `Store` trait manages connection lifecycle:
+The `Store` trait manages the connection lifecycle:
 
 ```rust
 #[async_trait]
@@ -152,7 +156,7 @@ This example demonstrates:
 - **Watermark persistence** with ClickHouse-specific SQL syntax.
 - **Transaction digest indexing** similar to the built-in PostgreSQL handler.
 
-The example includes three main components:
+The example includes 3 main components:
 
 1. `store.rs` - ClickHouseStore implementing `Store` and `Connection` traits.
 
@@ -187,7 +191,7 @@ When Move smart contracts execute on Sui, they can emit events using the `sui::e
 
 ### Why deserialization is needed
 
-Move contracts emit events like this:
+Move contracts emit events like the following:
 
 ```rust
 // Move smart contract
@@ -203,11 +207,11 @@ public fun transfer_balance(...) {
 }
 ```
 
-But in checkpoint data, these events arrive as **raw BCS bytes** that need to be converted back to Rust structs for processing.
+In checkpoint data, these events arrive as **raw BCS bytes** that need to be converted back to Rust structs for processing.
 
 ### Step-by-step deserialization
 
-1. Add BCS dependency
+1. Add BCS dependency.
 
     ```rust
     [dependencies]
@@ -215,7 +219,7 @@ But in checkpoint data, these events arrive as **raw BCS bytes** that need to be
     serde = { version = "1.0", features = ["derive"] }
     ```
 
-1. Define the `Event` struct in Rust
+1. Define the `Event` struct in Rust.
 
     Define the same structure in Rust as declared in Move. You can do this manually or use [`move-binding`](https://github.com/MystenLabs/move-binding) to auto-generate it from on-chain packages.
 
@@ -238,7 +242,7 @@ But in checkpoint data, these events arrive as **raw BCS bytes** that need to be
 
     :::
 
-1. Extract event bytes in your processor
+1. Extract event bytes in your processor.
 
     ```rust
     impl Processor for YourHandler {
