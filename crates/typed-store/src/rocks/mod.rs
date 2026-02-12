@@ -660,9 +660,7 @@ impl<K, V> DBMap<K, V> {
             Storage::Rocks(_) => StorageWriteBatch::Rocks(WriteBatch::default()),
             Storage::InMemory(_) => StorageWriteBatch::InMemory(InMemoryBatch::default()),
             #[cfg(tidehunter)]
-            Storage::TideHunter(db) => {
-                StorageWriteBatch::TideHunter(db.write_batch())
-            }
+            Storage::TideHunter(db) => StorageWriteBatch::TideHunter(db.write_batch()),
         };
         DBBatch::new(
             &self.db,
