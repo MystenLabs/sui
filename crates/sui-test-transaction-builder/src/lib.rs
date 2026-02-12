@@ -98,7 +98,7 @@ impl FundSource {
 pub struct TestTransactionBuilder {
     ptb_builder: ProgrammableTransactionBuilder,
     sender: SuiAddress,
-    gas_object: Option<ObjectRef>,
+    gas_objects: Vec<ObjectRef>,
     gas_price: u64,
     gas_budget: Option<u64>,
     address_balance_gas: Option<AddressBalanceGasConfig>,
@@ -106,14 +106,22 @@ pub struct TestTransactionBuilder {
 
 impl TestTransactionBuilder {
     pub fn new(sender: SuiAddress, gas_object: ObjectRef, gas_price: u64) -> Self {
-        Self::new_impl(sender, Some(gas_object), gas_price)
+        Self::new_impl(sender, vec![gas_object], gas_price)
     }
 
-    fn new_impl(sender: SuiAddress, gas_object: Option<ObjectRef>, gas_price: u64) -> Self {
+    pub fn new_with_gas_objects(
+        sender: SuiAddress,
+        gas_objects: Vec<ObjectRef>,
+        gas_price: u64,
+    ) -> Self {
+        Self::new_impl(sender, gas_objects, gas_price)
+    }
+
+    fn new_impl(sender: SuiAddress, gas_objects: Vec<ObjectRef>, gas_price: u64) -> Self {
         Self {
             ptb_builder: ProgrammableTransactionBuilder::new(),
             sender,
-            gas_object,
+            gas_objects,
             gas_price,
             gas_budget: None,
             address_balance_gas: None,
@@ -127,7 +135,7 @@ impl TestTransactionBuilder {
         current_epoch: EpochId,
         nonce: u32,
     ) -> Self {
-        Self::new_impl(sender, None, gas_price).with_address_balance_gas(
+        Self::new_impl(sender, vec![], gas_price).with_address_balance_gas(
             chain_identifier,
             current_epoch,
             nonce,
@@ -139,7 +147,11 @@ impl TestTransactionBuilder {
     }
 
     pub fn gas_object(&self) -> Option<ObjectRef> {
-        self.gas_object
+        assert!(
+            self.gas_objects.len() <= 1,
+            "gas_object() called but multiple gas objects are set; use gas_objects() instead"
+        );
+        self.gas_objects.first().copied()
     }
 
     pub fn ptb_builder_mut(&mut self) -> &mut ProgrammableTransactionBuilder {
@@ -439,7 +451,7 @@ impl TestTransactionBuilder {
             .sum::<u64>();
         match fund_source {
             FundSource::Coin(coin) => {
-                let source = if Some(coin) == self.gas_object {
+                let source = if self.gas_objects.first() == Some(&coin) {
                     Argument::GasCoin
                 } else {
                     self.ptb_builder
@@ -632,12 +644,13 @@ impl TestTransactionBuilder {
                 ab_gas.nonce,
             )
         } else {
+            assert!(
+                !self.gas_objects.is_empty(),
+                "gas_objects required when not using address_balance_gas"
+            );
             TransactionData::new_programmable(
                 self.sender,
-                vec![
-                    self.gas_object
-                        .expect("gas_object required when not using address_balance_gas"),
-                ],
+                self.gas_objects,
                 pt,
                 gas_budget,
                 self.gas_price,

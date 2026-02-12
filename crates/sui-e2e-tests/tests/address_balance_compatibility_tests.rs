@@ -1,18 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::identifier::Identifier;
 use sui_macros::*;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
-    SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{FullObjectRef, ObjectID, SequenceNumber, SuiAddress},
     coin_reservation::ParsedObjectRefWithdrawal,
     digests::CheckpointDigest,
     effects::TransactionEffectsAPI,
-    gas_coin::GAS,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Argument, Command, ObjectArg, TransactionData},
 };
 use test_cluster::addr_balance_test_env::{TestEnvBuilder, get_sui_accumulator_object_id};
 
@@ -398,7 +393,6 @@ async fn test_deny_list_enforced_for_coin_reservation() {
 
 #[sim_test]
 async fn test_wrong_chain_id() {
-    // KEEP
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -465,7 +459,6 @@ async fn test_gas_coin_not_owned_by_gas_owner() {
 
 #[sim_test]
 async fn test_gas_payment_mix_of_owners() {
-    // KEEP (maybe?)
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -487,16 +480,9 @@ async fn test_gas_payment_mix_of_owners() {
 
     // sender1 is the sender, gas includes sender1's real coin + sender2's coin reservation.
     // The coin reservation ownership check uses self.sender() = sender1.
-    let ptb = ProgrammableTransactionBuilder::new();
-    let pt = ptb.finish();
-
-    let tx = TransactionData::new_programmable(
-        sender1,
-        vec![gas1, coin_reservation_from_sender2],
-        pt,
-        5_000_000_000,
-        test_env.rgp,
-    );
+    let tx = test_env
+        .tx_builder_with_gas_objects(sender1, vec![gas1, coin_reservation_from_sender2])
+        .build();
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
     assert!(
         err.to_string()
