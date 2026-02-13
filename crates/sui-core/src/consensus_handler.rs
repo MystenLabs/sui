@@ -63,7 +63,7 @@ use crate::{
         AuthorityMetrics, AuthorityState, ExecutionEnv,
         authority_per_epoch_store::{
             AuthorityPerEpochStore, CancelConsensusCertificateReason, ConsensusStats,
-            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStats,
+            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStatsV2,
             consensus_quarantine::ConsensusCommitOutput,
         },
         backpressure::{BackpressureManager, BackpressureSubscriber},
@@ -718,7 +718,7 @@ pub struct ConsensusHandler<C> {
     /// Holds the indices, hash and stats after the last consensus commit
     /// It is used for avoiding replaying already processed transactions,
     /// checking chain consistency, and accumulating per-epoch consensus output stats.
-    last_consensus_stats: ExecutionIndicesWithStats,
+    last_consensus_stats: ExecutionIndicesWithStatsV2,
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
     cache_reader: Arc<dyn ObjectCacheRead>,
@@ -836,7 +836,7 @@ impl<C> ConsensusHandler<C> {
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_subscriber: BackpressureSubscriber,
         traffic_controller: Option<Arc<TrafficController>>,
-        last_consensus_stats: ExecutionIndicesWithStats,
+        last_consensus_stats: ExecutionIndicesWithStatsV2,
     ) -> Self {
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
