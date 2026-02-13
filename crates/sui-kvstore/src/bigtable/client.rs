@@ -55,6 +55,8 @@ use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::tables;
 
+const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
+
 /// Error returned when a batch write has per-entry failures.
 /// Contains the keys and error details for each failed mutation.
 #[derive(Debug)]
@@ -118,6 +120,7 @@ impl BigTableClient {
         project_id: Option<String>,
         is_read_only: bool,
         timeout: Option<Duration>,
+        max_decoding_message_size: Option<usize>,
         client_name: String,
         registry: Option<&Registry>,
         app_profile_id: Option<String>,
@@ -149,9 +152,12 @@ impl BigTableClient {
             token_provider: Some(token_provider),
             token: Arc::new(RwLock::new(None)),
         };
+        let client = BigtableInternalClient::new(auth_channel).max_decoding_message_size(
+            max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
+        );
         Ok(Self {
             table_prefix,
-            client: BigtableInternalClient::new(auth_channel),
+            client,
             client_name,
             metrics: registry.map(KvMetrics::new),
             app_profile_id,

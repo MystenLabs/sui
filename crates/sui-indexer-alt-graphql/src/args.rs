@@ -33,6 +33,12 @@ pub struct KvArgs {
     #[arg(long)]
     pub bigtable_app_profile_id: Option<String>,
 
+    /// Maximum gRPC decoding message size for KV responses, in bytes.
+    ///
+    /// Applies to both Bigtable and Ledger gRPC readers.
+    #[arg(long)]
+    pub kv_max_decoding_message_size: Option<usize>,
+
     /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
     #[arg(long, group = "kv_source")]
     pub ledger_grpc_url: Option<Uri>,
@@ -49,6 +55,7 @@ impl KvArgs {
             bigtable_statement_timeout_ms: self.kv_statement_timeout_ms,
             bigtable_project: self.bigtable_project.clone(),
             bigtable_app_profile_id: self.bigtable_app_profile_id.clone(),
+            bigtable_max_decoding_message_size: self.kv_max_decoding_message_size,
         }
     }
 
@@ -56,6 +63,7 @@ impl KvArgs {
     pub fn ledger_grpc_args(&self) -> LedgerGrpcArgs {
         LedgerGrpcArgs {
             ledger_grpc_statement_timeout_ms: self.kv_statement_timeout_ms,
+            ledger_grpc_max_decoding_message_size: self.kv_max_decoding_message_size,
         }
     }
 }
