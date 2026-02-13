@@ -27,13 +27,13 @@ use tracing::{info, warn};
 
 use simulacrum::{AdvanceEpochConfig, Simulacrum, store::in_mem_store::KeyStore};
 use sui_data_store::{
-    Node, ObjectKey, ObjectStore, VersionQuery,
+    Node,
     stores::{DataStore, FileSystemStore, NODE_MAPPING_FILE, ReadThroughStore},
 };
 use sui_pg_db::{DbArgs, reset_database};
 use sui_types::{
     accumulator_root::get_accumulator_root_obj_initial_shared_version,
-    base_types::{ObjectID, SuiAddress},
+    base_types::SuiAddress,
     crypto::AuthorityQuorumSignInfo,
     digests::ChainIdentifier,
     effects::TransactionEffectsAPI,
@@ -53,7 +53,7 @@ use crate::grpc::{
     subscription_service::ForkingSubscriptionService,
     transaction_execution_service::ForkingTransactionExecutionService,
 };
-use crate::{graphql::GraphQLClient, store::ForkingStore};
+use crate::{graphql::GraphQLClient, seeds::InitialAccounts, store::ForkingStore};
 
 use rand::rngs::OsRng;
 use roaring::RoaringBitmap;
@@ -351,6 +351,7 @@ async fn faucet(
 
 /// Start the forking server
 pub async fn start_server(
+    initial_accounts: InitialAccounts,
     chain: Chain,
     checkpoint: Option<u64>,
     host: String,
@@ -378,8 +379,15 @@ pub async fn start_server(
         reset_database(database_url.clone(), DbArgs::default(), None).await?;
     }
 
-    let simulacrum =
-        initialize_simulacrum(at_checkpoint, &client, protocol_version, chain, version).await?;
+    let simulacrum = initialize_simulacrum(
+        at_checkpoint,
+        &client,
+        &initial_accounts,
+        protocol_version,
+        chain,
+        version,
+    )
+    .await?;
     let simulacrum = Arc::new(RwLock::new(simulacrum));
 
     let registry = Registry::new_custom(Some("sui_forking".into()), None)
@@ -528,6 +536,7 @@ async fn start_grpc_services(
 async fn initialize_simulacrum(
     at_checkpoint: u64,
     client: &GraphQLClient,
+    initial_accounts: &InitialAccounts,
     protocol_version: u64,
     chain: Chain,
     version: &'static str,
@@ -555,6 +564,10 @@ async fn initialize_simulacrum(
     store.insert_checkpoint(verified_checkpoint.clone());
     store.insert_checkpoint_contents(checkpoint.1.clone());
     store.insert_committee(config.genesis.committee());
+    initial_accounts
+        .prefetch_owned_objects(&store, client.endpoint(), at_checkpoint)
+        .await
+        .context("Failed to prefetch startup owned objects")?;
 
     // Fetch the system store at this forked checkpoint and update the validator set to match the
     // one in our custom config, because we do not have the actual validators' keys from network.

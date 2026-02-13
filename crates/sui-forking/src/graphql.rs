@@ -84,6 +84,10 @@ impl GraphQLClient {
         }
     }
 
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+
     /// Fetch protocol version at a specific checkpoint
     pub async fn fetch_protocol_version(&self, sequence_number: Option<u64>) -> Result<u64> {
         let query = if let Some(seq) = sequence_number {
