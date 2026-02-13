@@ -320,11 +320,10 @@ async fn test_valid_coin_reservation_gas_payments() {
 
 #[sim_test]
 async fn test_gas_coin_callarg_with_coin_reservation_gas() {
-    // TODO: This test requires GasCoin materialization to work with coin reservations.
-    // Currently, when gas is paid via address balance (coin reservation), no actual coin object
-    // exists to load. The adapter needs to create a synthetic/virtual coin object from the
-    // address balance with balance = reservation_amount - gas_budget.
-    // See: gas_charger.rs (smash_gas, gas_coin), context.rs (gas budget subtraction in new())
+    // Tests GasCoin materialization when gas is paid purely via coin reservation.
+    // The coin reservation must include both the gas budget AND any amount the
+    // transaction wants to use via GasCoin. The materialized GasCoin will have
+    // balance = reservation_amount - gas_budget.
 
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
@@ -336,35 +335,48 @@ async fn test_gas_coin_callarg_with_coin_reservation_gas() {
 
     let sender = test_env.get_sender(0);
     let budget = 5_000_000_000;
+    let transfer_amount = 100;
+
+    // Fund sender with enough for gas budget + transfer amount
     test_env
-        .fund_one_address_balance(sender, budget + 100)
+        .fund_one_address_balance(sender, budget + transfer_amount)
         .await;
 
-    let gas_reservation = test_env.encode_coin_reservation(sender, 0, budget);
+    // The gas reservation must include the transfer amount, since that's what
+    // will be available to the materialized GasCoin after subtracting the budget.
+    let gas_reservation = test_env.encode_coin_reservation(sender, 0, budget + transfer_amount);
     let recipient = SuiAddress::random_for_testing_only();
 
     let initial_sender_balance = test_env.get_sui_balance_ab(sender);
 
     // Use transfer_sui which internally does SplitCoins(GasCoin, [amount]) + TransferObjects.
-    // GasCoin should work with coin reservation gas.
+    // GasCoin should work with coin reservation gas after materialization.
     let tx = TestTransactionBuilder::new(sender, gas_reservation, test_env.rgp)
-        .transfer_sui(Some(100), recipient)
+        .transfer_sui(Some(transfer_amount), recipient)
         .build();
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
-    assert!(effects.status().is_ok());
+    assert!(
+        effects.status().is_ok(),
+        "Transaction failed: {:?}",
+        effects.status()
+    );
 
     let gas_charge = effects.gas_cost_summary().gas_used();
 
-    // Verify the sender's address balance is decreased by the amount of the gas charges + transfer.
+    // Verify the sender's address balance is decreased by the gas charges + transfer.
     let final_sender_balance = test_env.get_sui_balance_ab(sender);
     assert_eq!(
         final_sender_balance,
-        initial_sender_balance - gas_charge - 100
+        initial_sender_balance - gas_charge - transfer_amount
     );
 
-    // Verify the recipient receives the 100 MIST transfer.
-    let recipient_balance = test_env.get_sui_balance_ab(recipient);
-    assert_eq!(recipient_balance, 100);
+    // Verify the recipient received a Coin object with the transfer amount.
+    // TransferObjects creates a Coin<SUI> object, not an address balance.
+    let created = effects.created();
+    assert_eq!(created.len(), 1, "Expected exactly one created object");
+    let created_coin_id = created[0].0.0;
+    let coin_balance = test_env.get_coin_balance(created_coin_id).await;
+    assert_eq!(coin_balance, transfer_amount);
 
     test_env.cluster.trigger_reconfiguration().await;
 }
