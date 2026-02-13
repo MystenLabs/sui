@@ -174,6 +174,28 @@ async fn test_coin_reservation_validation() {
                 .contains("Maximum number of balance withdraw reservations is 10")
         );
     }
+
+    // Verify that non-SUI coin reservations cannot be used as gas.
+    {
+        // Publish a trusted coin and mint some to the sender's address balance.
+        let (_, coin_type) = test_env
+            .publish_and_mint_trusted_coin(sender1, 10_000_000_000)
+            .await;
+
+        // Make a coin reservation for the non-SUI coin.
+        let coin_reservation =
+            test_env.encode_coin_reservation_for_type(sender1, 0, 10_000_000_000, coin_type);
+
+        // Attempt to use it as gas - should be rejected since gas must be SUI.
+        let tx = test_env
+            .tx_builder_with_gas(sender1, coin_reservation)
+            .build();
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Gas object is not an owned object with owner")
+        );
+    }
 }
 
 #[sim_test]
@@ -427,17 +449,6 @@ async fn test_coin_reservation_enforced_when_not_used() {
     // Send tx, assert it fails due to insufficient balance.
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
     assert!(err.to_string().contains("is less than requested"));
-}
-
-#[sim_test]
-async fn test_non_sui_coin_reservation_in_gas() {
-    // TODO:
-    // - move `publish_and_mint_trusted_coin` to address_balance_test_env.rs
-    // - call `publish_and_mint_trusted_coin` to publish the `trusted_coin` package.
-    //   this will fund the sender's address balance with 1000000 of the trusted coin.
-    // - make a coin reservation for the trusted coin
-    // - attempt to use it as a gas coin
-    // - verify tx is rejected
 }
 
 #[sim_test]
