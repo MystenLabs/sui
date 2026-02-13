@@ -1,0 +1,8 @@
+{
+  "UseDef": {
+    "project": "tests/ext-friend-error",
+    "file_tests": {
+      "M.move": []
+    }
+  }
+}
