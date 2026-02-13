@@ -495,6 +495,29 @@ AlloyDB Omni recommends 8GB RAM per vCPU [link](https://docs.cloud.google.com/al
 - **CPU:** 6 cores
 - **Memory:** 48GB
 
+## Adding a new pipeline
+
+Adding a new pipeline to an existing indexer currently requires these steps:
+
+1. We recommend starting a new pipeline in its own indexer instance, optionally with the `--first-checkpoint <checkpoint>` flag set if you want to start from a checkpoint after genesis.
+   * Note: `--first-checkpoint` is only respected if no watermark record exists for the pipeline(s) (the pipeline has not been run before). The watermark record must be manually removed if you want to run the pipeline with a different value of `--first-checkpoint` or it will be ignored.
+2. After the new pipeline has caught up to the tip of the network, you can optionally merge it into another indexer instance.
+
+## Reducing indexer pipeline table and index bloat
+
+Bloat is the difference between the size of the data in the table or index and the amount of space it takes up on disk. Autovacuum prevents bloat if approximately the same number of rows is continually inserted and deleted like the case when pipeline pruning is enabled. However, autovacuum will not handle more rows being deleted than inserted. There are two cases where this can occur:
+
+- Enabling pruning on an unpruned pipeline.
+- Reducing the pruning retention period on a pruned table.
+
+These tools can be used to reduce bloat:
+
+| Tool          | Type      | `ACCESS EXCLUSIVE` locking            | Schedulable | Link                                                    |
+|---------------|-----------|---------------------------------------|-------------|---------------------------------------------------------|
+| `VACUUM FULL` | Built-in  | Entire operation                      | No          | https://www.postgresql.org/docs/current/sql-vacuum.html |
+| pg_repack     | Extension | Briefly during initial and final step | No          | https://reorg.github.io/pg_repack/                      |
+| pg_squeeze    | Extension | Briefly during final step             | Yes         | https://github.com/cybertec-postgresql/pg_squeeze       |
+
 ## Related links
 
 <RelatedLink to="/concepts/data-access/custom-indexers" />
