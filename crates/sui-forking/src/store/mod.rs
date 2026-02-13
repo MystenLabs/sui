@@ -9,6 +9,15 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
 use simulacrum::SimulatorStore;
+use sui_data_store::stores::{DataStore, FileSystemStore, ReadThroughStore};
+use sui_data_store::{
+    ObjectKey, ObjectStore as _, TransactionInfo, TransactionStore, TransactionStoreWriter,
+    VersionQuery,
+};
+use sui_types::SUI_CLOCK_OBJECT_ID;
+use sui_types::clock::Clock;
+use sui_types::storage::ReadStore;
+use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
 use sui_types::transaction::{SenderSignedData, Transaction};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -27,13 +36,6 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 
-use sui_data_store::stores::{DataStore, FileSystemStore, ReadThroughStore};
-use sui_data_store::{
-    ObjectKey, ObjectStore as _, TransactionInfo, TransactionStore, TransactionStoreWriter,
-    VersionQuery,
-};
-use sui_types::storage::ReadStore;
-
 pub struct ForkingStore {
     // Checkpoint data
     checkpoints: BTreeMap<CheckpointSequenceNumber, VerifiedCheckpoint>,
@@ -43,22 +45,12 @@ pub struct ForkingStore {
     // Transaction data not available through fs transaction file blobs.
     events: HashMap<TransactionDigest, TransactionEvents>,
 
-    // // Transaction data
-    // transactions: HashMap<TransactionDigest, VerifiedTransaction>,
-    // effects: HashMap<TransactionDigest, TransactionEffects>,
-    // events: HashMap<TransactionDigest, TransactionEvents>,
-
     // Committee data
     epoch_to_committee: Vec<Committee>,
 
-    // // Object data
-    // // for object versions and other data, we need the normal indexer grpc reader
+    // Object and transaction data through a cache layer provided by `sui-data-store` crate.
     fs_store: FileSystemStore,
     object_store: ReadThroughStore<FileSystemStore, DataStore>,
-
-    // // Fallback to RPC data store
-    // rpc_data_store:
-    //     Arc<ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>>,
 
     // The checkpoint at which this forked network was forked
     forked_at_checkpoint: u64,
@@ -78,10 +70,6 @@ impl ForkingStore {
         );
 
         store
-    }
-
-    pub(crate) fn object_store(&self) -> &ReadThroughStore<FileSystemStore, DataStore> {
-        &self.object_store
     }
 
     fn new_with_rpc_data_store_and_checkpoint(
@@ -210,20 +198,35 @@ impl ForkingStore {
         first.map(|(obj, _)| obj.clone())
     }
 
-    pub fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
-        sui_types::sui_system_state::get_sui_system_state(self).expect("system state should exist")
+    /// Gets the latest version of each object for the given keys, returning None for any missing
+    /// objects.
+    ///
+    /// This will use the object store to fetch the object from the primary cache (FileSystemStore)
+    /// and then fallback to the RPC data store (DataStore)
+    pub fn get_objects(
+        &self,
+        keys: &[ObjectKey],
+    ) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
+        self.object_store.get_objects(keys)
     }
 
-    pub fn get_clock(&self) -> sui_types::clock::Clock {
-        self.get_object(&sui_types::SUI_CLOCK_OBJECT_ID)
+    pub fn get_system_state(&self) -> SuiSystemState {
+        get_sui_system_state(self).expect("system state should exist")
+    }
+
+    /// Gets the clock object, which should always be present in the store since it's a system
+    /// object. Panics if not found or fails to deserialize.
+    pub fn get_clock(&self) -> Clock {
+        self.get_object(&SUI_CLOCK_OBJECT_ID)
             .expect("clock should exist")
             .to_rust()
             .expect("clock object should deserialize")
     }
 
     pub fn owned_objects(&self, owner: SuiAddress) -> Vec<Object> {
-        let objects = self.fs_store.get_objects_by_owner(owner).unwrap();
-        objects
+        self.fs_store
+            .get_objects_by_owner(owner)
+            .unwrap_or_default()
     }
 }
 
@@ -265,6 +268,11 @@ impl ForkingStore {
         }
     }
 
+    /// Inserts the transaction, its effects, events, and the written objects into the store. The
+    /// transaction and its effects are stored in the fs transaction file blobs, while the events
+    /// and written objects are stored in memory in the ForkingStore since they are not available
+    /// through the fs transaction file blobs and are needed for the execution of subsequent
+    /// transactions in the forked network.
     pub fn insert_executed_transaction(
         &mut self,
         transaction: VerifiedTransaction,
@@ -475,11 +483,11 @@ impl SimulatorStore for ForkingStore {
         self.get_object_at_version(id, version)
     }
 
-    fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
+    fn get_system_state(&self) -> SuiSystemState {
         self.get_system_state()
     }
 
-    fn get_clock(&self) -> sui_types::clock::Clock {
+    fn get_clock(&self) -> Clock {
         self.get_clock()
     }
 

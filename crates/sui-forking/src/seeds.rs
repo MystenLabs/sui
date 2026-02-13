@@ -6,9 +6,10 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
 use cynic::QueryBuilder;
-use sui_data_store::{ObjectKey, ObjectStore as _, VersionQuery};
-use sui_types::base_types::{ObjectID, SuiAddress};
 use tracing::info;
+
+use sui_data_store::{ObjectKey, VersionQuery};
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 use crate::store::ForkingStore;
 
@@ -52,7 +53,6 @@ impl InitialAccounts {
             .collect();
 
         let fetched_objects = store
-            .object_store()
             .get_objects(&object_keys)
             .context("Failed to prefetch owned objects from object store")?;
 

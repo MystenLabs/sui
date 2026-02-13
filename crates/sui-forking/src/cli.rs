@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::seeds::InitialAccounts;
 use clap::{Parser, Subcommand};
+
 use sui_types::base_types::SuiAddress;
+
+use crate::seeds::InitialAccounts;
 
 const PORT: &str = "3001";
 const IP: &str = "127.0.0.1";
