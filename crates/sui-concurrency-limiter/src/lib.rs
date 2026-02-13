@@ -4,7 +4,7 @@
 //! Dynamic concurrency limiters based on Netflix's
 //! [concurrency-limits](https://github.com/Netflix/concurrency-limits) library.
 //!
-//! Three algorithms are provided:
+//! Four algorithms are provided:
 //!
 //! - **AIMD** (`Aimd`): loss-based. Additive increase on success, multiplicative decrease on
 //!   drop. Simple and effective when the backing store signals overload via errors/throttling
@@ -19,6 +19,13 @@
 //!   drifts, so the limiter stays low when the backing store is saturated from the start.
 //!   Supports an optional sliding window for `rtt_noload` (`rtt_noload_window`) to prevent
 //!   transient low-latency startup samples from permanently anchoring the baseline.
+//!
+//! - **BBR** (`Bbr`): throughput-based. Measures bandwidth-delay product (BDP) as
+//!   `max_delivery_rate × min_rtt` and sets the limit to `ceil(BDP × gain)`. Unlike
+//!   latency-based algorithms that can't distinguish a saturated 1-node cluster from an idle
+//!   5-node cluster returning identical latency, BBR detects saturation by observing whether
+//!   more concurrency produces more throughput. Self-bootstraps from limit=1 via exponential
+//!   growth until the backend saturates.
 //!
 //! # Differences from Netflix's reference implementation
 //!
@@ -160,6 +167,18 @@ impl Limiter {
         }))
     }
 
+    pub fn bbr(config: BbrConfig) -> Self {
+        let initial = config
+            .initial_limit
+            .clamp(config.min_limit, config.max_limit);
+        Self(Arc::new(LimiterInner {
+            algorithm: Box::new(Bbr::new(&config, initial)),
+            inflight: AtomicUsize::new(0),
+            peak_inflight: AtomicUsize::new(0),
+            peak_limit: AtomicUsize::new(initial),
+        }))
+    }
+
     /// Acquire an inflight slot, returning an RAII [`Token`] that releases it on drop.
     ///
     /// The current inflight count (after incrementing) is captured in the token so that
@@ -287,6 +306,7 @@ pub enum ConcurrencyLimit {
     Aimd(AimdConfig),
     Gradient(GradientConfig),
     Vegas(VegasConfig),
+    Bbr(BbrConfig),
 }
 
 impl<'de> Deserialize<'de> for ConcurrencyLimit {
@@ -301,6 +321,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Aimd(AimdConfig),
             Gradient(GradientConfig),
             Vegas(VegasConfig),
+            Bbr(BbrConfig),
         }
 
         #[derive(Deserialize)]
@@ -316,6 +337,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Helper::Tagged(Tagged::Aimd(c)) => Ok(ConcurrencyLimit::Aimd(c)),
             Helper::Tagged(Tagged::Gradient(c)) => Ok(ConcurrencyLimit::Gradient(c)),
             Helper::Tagged(Tagged::Vegas(c)) => Ok(ConcurrencyLimit::Vegas(c)),
+            Helper::Tagged(Tagged::Bbr(c)) => Ok(ConcurrencyLimit::Bbr(c)),
         }
     }
 }
@@ -328,6 +350,7 @@ impl ConcurrencyLimit {
             Self::Aimd(config) => Limiter::aimd(config.clone()),
             Self::Gradient(config) => Limiter::gradient(config.clone()),
             Self::Vegas(config) => Limiter::vegas(config.clone()),
+            Self::Bbr(config) => Limiter::bbr(config.clone()),
         }
     }
 }
@@ -706,6 +729,151 @@ impl LimitAlgorithm for Vegas {
             .min(self.config.max_limit as f64);
         state.estimated_limit =
             (1.0 - self.config.smoothing) * state.estimated_limit + self.config.smoothing * clamped;
+
+        let current = state.estimated_limit as usize;
+        self.gauge.store(current, Ordering::Release);
+        current
+    }
+
+    fn gauge(&self) -> Arc<AtomicUsize> {
+        self.gauge.clone()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// BBR algorithm — throughput-based concurrency limiter
+// ---------------------------------------------------------------------------
+
+/// Configuration for the BBR concurrency limit algorithm.
+///
+/// Measures bandwidth-delay product (BDP) as `max_delivery_rate × min_rtt` and sets
+/// `limit = ceil(BDP × gain)`. The gain factor (> 1.0) keeps the limit slightly above
+/// BDP, enabling natural exponential growth from limit=1 until the backend saturates.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct BbrConfig {
+    /// Starting concurrency limit.
+    pub initial_limit: usize,
+    /// Floor: the limit will never go below this value.
+    pub min_limit: usize,
+    /// Ceiling: the limit will never exceed this value.
+    pub max_limit: usize,
+    /// Sliding window size for tracking minimum RTT.
+    pub rtt_window: usize,
+    /// Sliding window size for tracking maximum delivery rate.
+    pub throughput_window: usize,
+    /// Multiplier on BDP; values > 1.0 enable growth beyond current BDP.
+    pub gain: f64,
+    /// Multiplicative decrease factor on drops, in `[0.5, 1.0)`.
+    pub backoff_ratio: f64,
+}
+
+impl Default for BbrConfig {
+    fn default() -> Self {
+        Self {
+            initial_limit: 1,
+            min_limit: 1,
+            max_limit: 1000,
+            rtt_window: 5000,
+            throughput_window: 5000,
+            gain: 1.25,
+            backoff_ratio: 0.9,
+        }
+    }
+}
+
+struct BbrState {
+    estimated_limit: f64,
+    rtt_window: VecDeque<f64>,
+    delivery_rate_window: VecDeque<f64>,
+}
+
+/// BBR concurrency limit algorithm.
+///
+/// On each sample:
+/// 1. **Ignore** → return unchanged
+/// 2. If `rtt <= 0` → return unchanged
+/// 3. **Dropped** → `estimated_limit *= backoff_ratio`, clamp, return (skip window updates)
+/// 4. `delivery_rate = inflight / rtt`
+/// 5. Push rtt and delivery_rate into windows, trim to size
+/// 6. `min_rtt = min(rtt_window)`, `max_rate = max(delivery_rate_window)`
+/// 7. `estimated_limit = ceil(max_rate * min_rtt * gain)`
+/// 8. Clamp to `[min_limit, max_limit]`
+pub struct Bbr {
+    config: BbrConfig,
+    gauge: Arc<AtomicUsize>,
+    inner: Mutex<BbrState>,
+}
+
+impl Bbr {
+    fn new(config: &BbrConfig, initial: usize) -> Self {
+        Self {
+            gauge: Arc::new(AtomicUsize::new(initial)),
+            inner: Mutex::new(BbrState {
+                estimated_limit: initial as f64,
+                rtt_window: VecDeque::new(),
+                delivery_rate_window: VecDeque::new(),
+            }),
+            config: config.clone(),
+        }
+    }
+
+    #[cfg(test)]
+    fn current(&self) -> usize {
+        self.gauge.load(Ordering::Acquire)
+    }
+}
+
+impl LimitAlgorithm for Bbr {
+    fn update(&self, inflight: usize, outcome: Outcome, rtt: Duration) -> usize {
+        let mut state = self.inner.lock().unwrap();
+
+        if matches!(outcome, Outcome::Ignore) {
+            return state.estimated_limit as usize;
+        }
+
+        let rtt_secs = rtt.as_secs_f64();
+        if rtt_secs <= 0.0 {
+            return state.estimated_limit as usize;
+        }
+
+        // Drops apply multiplicative backoff and skip window updates. Fast errors
+        // produce artificially low RTT that would corrupt the min_rtt window.
+        if matches!(outcome, Outcome::Dropped) {
+            state.estimated_limit = (state.estimated_limit * self.config.backoff_ratio)
+                .clamp(self.config.min_limit as f64, self.config.max_limit as f64);
+            let current = state.estimated_limit as usize;
+            self.gauge.store(current, Ordering::Release);
+            return current;
+        }
+
+        let delivery_rate = inflight as f64 / rtt_secs;
+
+        state.rtt_window.push_back(rtt_secs);
+        while state.rtt_window.len() > self.config.rtt_window {
+            state.rtt_window.pop_front();
+        }
+
+        state.delivery_rate_window.push_back(delivery_rate);
+        while state.delivery_rate_window.len() > self.config.throughput_window {
+            state.delivery_rate_window.pop_front();
+        }
+
+        let min_rtt = state
+            .rtt_window
+            .iter()
+            .copied()
+            .fold(f64::INFINITY, f64::min);
+        let max_rate = state
+            .delivery_rate_window
+            .iter()
+            .copied()
+            .fold(0.0_f64, f64::max);
+
+        let bdp = max_rate * min_rtt;
+        state.estimated_limit = (bdp * self.config.gain)
+            .ceil()
+            .clamp(self.config.min_limit as f64, self.config.max_limit as f64);
 
         let current = state.estimated_limit as usize;
         self.gauge.store(current, Ordering::Release);
@@ -1877,6 +2045,185 @@ mod tests {
         });
         let limiter = config.build();
         assert_eq!(limiter.current(), 20);
+    }
+
+    // ======================== BBR algorithm tests ========================
+
+    fn default_bbr_config() -> BbrConfig {
+        BbrConfig {
+            initial_limit: 1,
+            min_limit: 1,
+            max_limit: 1000,
+            rtt_window: 5000,
+            throughput_window: 5000,
+            gain: 1.25,
+            backoff_ratio: 0.9,
+        }
+    }
+
+    fn bbr(config: BbrConfig) -> Bbr {
+        let initial = config
+            .initial_limit
+            .clamp(config.min_limit, config.max_limit);
+        Bbr::new(&config, initial)
+    }
+
+    #[test]
+    fn bbr_grows_from_one() {
+        let alg = bbr(default_bbr_config());
+        assert_eq!(alg.current(), 1);
+
+        // At limit=1, inflight=1, constant 5ms RTT:
+        // delivery_rate = 1/0.005 = 200, min_rtt = 0.005
+        // BDP = 200 * 0.005 = 1.0, limit = ceil(1.0 * 1.25) = 2
+        // Next: inflight=2, delivery_rate = 2/0.005 = 400
+        // BDP = 400 * 0.005 = 2.0, limit = ceil(2.0 * 1.25) = 3 ... exponential growth
+        let rtt = Duration::from_millis(5);
+        let mut prev = 1;
+        for i in 1..=10 {
+            let limit = alg.update(i, Outcome::Success, rtt);
+            assert!(
+                limit >= prev,
+                "Limit should grow (iteration {i}, prev={prev}, now={limit})"
+            );
+            prev = limit;
+        }
+        assert!(
+            alg.current() > 1,
+            "Limit should grow from 1 (got {})",
+            alg.current()
+        );
+    }
+
+    #[test]
+    fn bbr_saturated_backend_stabilizes() {
+        let config = BbrConfig {
+            initial_limit: 1,
+            min_limit: 1,
+            max_limit: 200,
+            rtt_window: 50,
+            throughput_window: 50,
+            ..default_bbr_config()
+        };
+        let alg = bbr(config);
+
+        // Phase 1: unsaturated backend — delivery_rate grows with concurrency.
+        // inflight increases linearly at constant RTT, driving limit up.
+        let rtt = Duration::from_millis(5);
+        for i in 1..=30 {
+            alg.update(i, Outcome::Success, rtt);
+        }
+        let limit_after_growth = alg.current();
+        assert!(
+            limit_after_growth > 10,
+            "Should have grown (got {limit_after_growth})"
+        );
+
+        // Phase 2: saturated backend — throughput plateaus at a lower concurrency.
+        // Only 20 operations complete concurrently (the backend's true capacity),
+        // even though the limit is higher. As old high-delivery-rate samples from
+        // phase 1 age out, max_rate drops, and BDP converges to the actual capacity.
+        let saturated_inflight = 20;
+        for _ in 0..100 {
+            alg.update(saturated_inflight, Outcome::Success, rtt);
+        }
+        let limit_stabilized = alg.current();
+        assert!(
+            limit_stabilized < limit_after_growth,
+            "Limit should decrease when throughput plateaus \
+             (growth={limit_after_growth}, stabilized={limit_stabilized})"
+        );
+    }
+
+    #[test]
+    fn bbr_drop_backoff() {
+        let config = BbrConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 1000,
+            ..default_bbr_config()
+        };
+        let alg = bbr(config);
+        assert_eq!(alg.current(), 100);
+
+        // floor(100 * 0.9) = 90
+        alg.update(100, Outcome::Dropped, Duration::from_millis(5));
+        assert_eq!(alg.current(), 90);
+
+        // floor(90 * 0.9) = 81
+        alg.update(90, Outcome::Dropped, Duration::from_millis(5));
+        assert_eq!(alg.current(), 81);
+    }
+
+    #[test]
+    fn bbr_ignore_no_effect() {
+        let config = BbrConfig {
+            initial_limit: 50,
+            ..default_bbr_config()
+        };
+        let alg = bbr(config);
+        assert_eq!(alg.current(), 50);
+
+        alg.update(50, Outcome::Ignore, Duration::from_millis(5));
+        assert_eq!(alg.current(), 50);
+    }
+
+    #[test]
+    fn bbr_min_max_bounds() {
+        let config = BbrConfig {
+            initial_limit: 10,
+            min_limit: 5,
+            max_limit: 15,
+            ..default_bbr_config()
+        };
+        let alg = bbr(config);
+
+        // Growth should cap at max_limit
+        let rtt = Duration::from_millis(5);
+        for i in 1..=50 {
+            alg.update(i.min(15), Outcome::Success, rtt);
+        }
+        assert!(alg.current() <= 15, "Should not exceed max_limit");
+
+        // Drops should not go below min_limit
+        for _ in 0..100 {
+            alg.update(0, Outcome::Dropped, Duration::from_millis(5));
+        }
+        assert!(
+            alg.current() >= 5,
+            "Should not go below min_limit (got {})",
+            alg.current()
+        );
+    }
+
+    #[test]
+    fn bbr_toml_deserialization() {
+        let toml_str = r#"
+            [concurrency.bbr]
+            initial-limit = 1
+            min-limit = 1
+            max-limit = 500
+            rtt-window = 3000
+            throughput-window = 3000
+            gain = 1.5
+            backoff-ratio = 0.85
+        "#;
+        let parsed: Wrapper = toml::from_str(toml_str).unwrap();
+        assert!(matches!(
+            parsed.concurrency,
+            ConcurrencyLimit::Bbr(BbrConfig { max_limit: 500, .. })
+        ));
+    }
+
+    #[test]
+    fn concurrency_limit_bbr_build() {
+        let config = ConcurrencyLimit::Bbr(BbrConfig {
+            initial_limit: 10,
+            max_limit: 500,
+            ..BbrConfig::default()
+        });
+        let limiter = config.build();
+        assert_eq!(limiter.current(), 10);
     }
 
     // ======================== record_sample_weighted tests ========================
