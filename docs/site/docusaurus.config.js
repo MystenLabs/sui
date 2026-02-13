@@ -115,9 +115,13 @@ const config = {
         schema: "../../crates/sui-indexer-alt-graphql/schema.graphql",
         rootPath: "../content",
         baseURL: "references/sui-api/sui-graphql/beta/reference",
+        homepage: false,
         docOptions: {
           frontMatter: {
             isGraphQlBeta: true,
+            pagination_next: null, // disable page navigation next
+            pagination_prev: null, // disable page navigation previous
+            hide_table_of_contents: true, // disable page table of content
           },
         },
         loaders: {
