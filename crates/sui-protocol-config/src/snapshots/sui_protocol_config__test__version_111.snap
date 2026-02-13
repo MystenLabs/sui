@@ -49,7 +49,6 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   enable_group_ops_native_function_msm: true
-  enable_ristretto255_group_ops: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
   enable_nitro_attestation_all_nonzero_pcrs_parsing: true
@@ -386,16 +385,6 @@ group_ops_bls12381_uncompressed_g1_to_g1_cost: 677
 group_ops_bls12381_uncompressed_g1_sum_base_cost: 77
 group_ops_bls12381_uncompressed_g1_sum_cost_per_term: 26
 group_ops_bls12381_uncompressed_g1_sum_max_terms: 1200
-group_ops_ristretto_decode_scalar_cost: 7
-group_ops_ristretto_decode_point_cost: 200
-group_ops_ristretto_scalar_add_cost: 10
-group_ops_ristretto_point_add_cost: 500
-group_ops_ristretto_scalar_sub_cost: 10
-group_ops_ristretto_point_sub_cost: 500
-group_ops_ristretto_scalar_mul_cost: 11
-group_ops_ristretto_point_mul_cost: 1200
-group_ops_ristretto_scalar_div_cost: 151
-group_ops_ristretto_point_div_cost: 2500
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
