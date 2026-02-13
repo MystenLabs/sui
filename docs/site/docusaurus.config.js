@@ -122,6 +122,7 @@ const config = {
         },
         printTypeOptions: {
           relatedTypeSection: false, 
+            hierarchy: "flat",
         },
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
