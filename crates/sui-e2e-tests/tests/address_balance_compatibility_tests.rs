@@ -491,47 +491,174 @@ async fn test_wrong_chain_id() {
 
 #[sim_test]
 async fn test_gas_smash_into_fake_coin() {
-    // TODO: This test requires fixes to gas smashing with mixed payment methods.
-    // When fake coin is first and real coin is second, there's an overflow error.
-    // When real coin is first and fake coin is second, the real coin is mutated
-    // rather than deleted/smashed into address balance.
-    //
-    // Original requirements:
-    // - build a transaction with 0 commands.
-    // - for the gas payment, make the first coin a coin reservation, i.e. fake coin.
-    // - make the second gas payment a real coin.
-    // - send tx, should succeed
-    // - verify the sender's address balance is increased by the amount of the real coin,
-    //   and the real coin is deleted.
+    // Test gas smashing where the first coin is a fake coin (coin reservation)
+    // and the second coin is a real coin. The real coin should be smashed into
+    // the address balance.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    // Fund address balance so coin reservation works
+    test_env
+        .fund_one_address_balance(sender, 10_000_000_000)
+        .await;
+
+    // Get a real coin to use as the second gas payment
+    let (_, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    let real_coin = all_gas.pop().unwrap();
+    let real_coin_balance = test_env.get_coin_balance(real_coin.0).await;
+
+    // Create a coin reservation (fake coin) to use as the first gas payment
+    let fake_coin = test_env.encode_coin_reservation(sender, 0, 5_000_000_000);
+
+    let initial_balance = test_env.get_sui_balance_ab(sender);
+
+    // Build transaction with fake coin first, real coin second
+    let tx = test_env
+        .tx_builder_with_gas_objects(sender, vec![fake_coin, real_coin])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
+
+    let gas_charge = effects.gas_cost_summary().gas_used();
+
+    // The real coin should be deleted (smashed into address balance)
+    assert_eq!(effects.deleted().len(), 1, "Real coin should be deleted");
+    assert_eq!(
+        effects.deleted()[0].0,
+        real_coin.0,
+        "Deleted object should be the real coin"
+    );
+
+    // The sender's address balance should have increased by the real coin amount,
+    // minus the gas charge (which was deducted from address balance)
+    let final_balance = test_env.get_sui_balance_ab(sender);
+    assert_eq!(
+        final_balance,
+        initial_balance + real_coin_balance - gas_charge
+    );
 }
 
 #[sim_test]
 async fn test_gas_smash_multiple_fake_coins() {
-    // TODO: This test requires fixes to gas smashing with mixed payment methods.
-    // See test_gas_smash_into_fake_coin for details.
-    //
-    // Original requirements:
-    // - build a transaction with 0 commands.
-    // - for the gas payment, make the first 2 coins coin reservations, i.e. fake coins.
-    // - make the third gas payment a real coin.
-    // - send tx, should succeed
-    // - verify the sender's address balance is increased by the amount of the real coin,
-    //   and the real coin is deleted.
-    // - verify the 2 fake coins are deleted.
+    // Test gas smashing where the first two coins are fake coins (coin reservations)
+    // and the third coin is a real coin. The real coin should be smashed into
+    // the address balance.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    // Fund address balance so coin reservations work
+    test_env
+        .fund_one_address_balance(sender, 10_000_000_000)
+        .await;
+
+    // Get a real coin to use as the third gas payment
+    let (_, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    let real_coin = all_gas.pop().unwrap();
+    let real_coin_balance = test_env.get_coin_balance(real_coin.0).await;
+
+    // Create two coin reservations (fake coins) to use as first and second gas payments.
+    // Both use epoch 0 since we're in epoch 0 - the second parameter is epoch, not sequence.
+    let fake_coin1 = test_env.encode_coin_reservation(sender, 0, 2_000_000_000);
+    let fake_coin2 = test_env.encode_coin_reservation(sender, 0, 3_000_000_000);
+
+    let initial_balance = test_env.get_sui_balance_ab(sender);
+
+    // Build transaction with two fake coins first, then real coin
+    let tx = test_env
+        .tx_builder_with_gas_objects(sender, vec![fake_coin1, fake_coin2, real_coin])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
+
+    let gas_charge = effects.gas_cost_summary().gas_used();
+
+    // The real coin should be deleted (smashed into address balance)
+    assert_eq!(effects.deleted().len(), 1, "Real coin should be deleted");
+    assert_eq!(
+        effects.deleted()[0].0,
+        real_coin.0,
+        "Deleted object should be the real coin"
+    );
+
+    // The sender's address balance should have increased by the real coin amount,
+    // minus the gas charge (which was deducted from address balance)
+    let final_balance = test_env.get_sui_balance_ab(sender);
+    assert_eq!(
+        final_balance,
+        initial_balance + real_coin_balance - gas_charge
+    );
 }
 
 #[sim_test]
 async fn test_gas_smash_from_fake_coin() {
-    // TODO: This test requires fixes to gas smashing with mixed payment methods.
-    // See test_gas_smash_into_fake_coin for details.
-    //
-    // Original requirements:
-    // - build a transaction with 0 commands.
-    // - make the first gas coin a real coin.
-    // - make the second gas coin a coin reservation, i.e. fake coin.
-    // - send tx, should succeed
-    // - verify the sender's address balance is decreased by the amount of the fake coin,
-    //   and the real coin increases by the value of the fake coin, minus the gas charge.
+    // Test gas smashing where the first coin is a real coin and the second coin
+    // is a fake coin (coin reservation). The fake coin value should be withdrawn
+    // from address balance and smashed into the real coin.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    // Fund address balance so coin reservation works
+    test_env
+        .fund_one_address_balance(sender, 10_000_000_000)
+        .await;
+
+    // Get a real coin to use as the first gas payment
+    let (_, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    let real_coin = all_gas.pop().unwrap();
+    let real_coin_balance = test_env.get_coin_balance(real_coin.0).await;
+
+    // Create a coin reservation (fake coin) to use as the second gas payment
+    let fake_coin_amount = 5_000_000_000u64;
+    let fake_coin = test_env.encode_coin_reservation(sender, 0, fake_coin_amount);
+
+    let initial_balance = test_env.get_sui_balance_ab(sender);
+
+    // Build transaction with real coin first, fake coin second
+    let tx = test_env
+        .tx_builder_with_gas_objects(sender, vec![real_coin, fake_coin])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
+
+    let gas_charge = effects.gas_cost_summary().gas_used();
+
+    // No coins should be deleted - the real coin is mutated (receives the fake coin value)
+    assert!(effects.deleted().is_empty(), "No coins should be deleted");
+
+    // The real coin should be mutated (increased by fake coin amount, minus gas)
+    let final_real_coin_balance = test_env.get_coin_balance(real_coin.0).await;
+    assert_eq!(
+        final_real_coin_balance,
+        real_coin_balance + fake_coin_amount - gas_charge
+    );
+
+    // The sender's address balance should have decreased by the fake coin amount
+    let final_balance = test_env.get_sui_balance_ab(sender);
+    assert_eq!(final_balance, initial_balance - fake_coin_amount);
 }
 
 #[sim_test]
