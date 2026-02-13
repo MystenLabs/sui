@@ -49,8 +49,6 @@ const config = {
 
   staticDirectories: ["static", "src/open-spec"],
 
-  ssrTemplate: undefined, // default
-
   markdown: {
     format: "detect",
     mermaid: true,
@@ -159,6 +157,7 @@ const config = {
             "**/standards/deepbook-ref/**",
             "**/app-examples/ts-sdk-ref/**",
             "**/sui-graphql/**/generated.md",
+            "**/sui-graphql/**/generated.mdx", 
           ],
           admonitions: {
             keywords: ["checkpoint"],
