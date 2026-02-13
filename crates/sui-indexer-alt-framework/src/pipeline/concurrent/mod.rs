@@ -103,6 +103,13 @@ pub trait Handler: Processor {
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize>;
 
+    /// Returns a weight for the batch, used to normalize RTT samples in the concurrency
+    /// limiter. Handlers that produce variable-cost batches (e.g. BigTable mutations)
+    /// should override this so the limiter sees cost-per-unit rather than raw elapsed time.
+    fn batch_weight(_batch: &Self::Batch, _batch_len: usize) -> usize {
+        1
+    }
+
     /// Clean up data between checkpoints `_from` and `_to_exclusive` (exclusive) in the database, returning
     /// the number of rows affected. This function is optional, and defaults to not pruning at all.
     async fn prune<'a>(

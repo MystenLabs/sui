@@ -81,6 +81,30 @@ pub trait AdaptiveStreamExt: Stream {
         G: Fn(T) -> GFut + Send + Sync + 'static,
         GFut: Future<Output = Result<(), Break<E>>> + Send + 'static,
         E: Send + 'static;
+
+    /// Like [`try_for_each_spawned_adaptive_with_retry`](AdaptiveStreamExt::try_for_each_spawned_adaptive_with_retry),
+    /// but normalizes the RTT sample by a per-item weight so the limiter sees
+    /// cost-per-unit-of-work instead of raw elapsed time.
+    ///
+    /// `weight` is called once per stream item (before spawning) to capture the batch
+    /// weight. The weight is passed to [`Token::record_sample_weighted`].
+    fn try_for_each_spawned_adaptive_with_retry_weighted<W, F, Op, OpFut, T, G, GFut, E>(
+        self,
+        limiter: Limiter,
+        backoff: ExponentialBackoff,
+        weight: W,
+        f: F,
+        g: G,
+    ) -> impl Future<Output = Result<(), Break<E>>>
+    where
+        W: FnMut(&Self::Item) -> usize,
+        F: FnMut(Self::Item) -> Op,
+        Op: FnMut() -> OpFut + Send + 'static,
+        OpFut: Future<Output = Result<T, Break<E>>> + Send + 'static,
+        T: Send + 'static,
+        G: Fn(T) -> GFut + Send + Sync + 'static,
+        GFut: Future<Output = Result<(), Break<E>>> + Send + 'static,
+        E: Send + 'static;
 }
 
 impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
@@ -126,7 +150,7 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                                     g(value).await
                                 }
                                 Err(Break::Err(e)) => {
-                                    token.record_sample(Outcome::Ignore);
+                                    token.record_sample(Outcome::Dropped);
                                     Err(Break::Err(e))
                                 }
                                 Err(Break::Break) => {
@@ -176,10 +200,32 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
         self,
         limiter: Limiter,
         backoff: ExponentialBackoff,
+        f: F,
+        g: G,
+    ) -> Result<(), Break<E>>
+    where
+        F: FnMut(Self::Item) -> Op,
+        Op: FnMut() -> OpFut + Send + 'static,
+        OpFut: Future<Output = Result<T, Break<E>>> + Send + 'static,
+        T: Send + 'static,
+        G: Fn(T) -> GFut + Send + Sync + 'static,
+        GFut: Future<Output = Result<(), Break<E>>> + Send + 'static,
+        E: Send + 'static,
+    {
+        self.try_for_each_spawned_adaptive_with_retry_weighted(limiter, backoff, |_| 1, f, g)
+            .await
+    }
+
+    async fn try_for_each_spawned_adaptive_with_retry_weighted<W, F, Op, OpFut, T, G, GFut, E>(
+        self,
+        limiter: Limiter,
+        backoff: ExponentialBackoff,
+        mut weight: W,
         mut f: F,
         g: G,
     ) -> Result<(), Break<E>>
     where
+        W: FnMut(&Self::Item) -> usize,
         F: FnMut(Self::Item) -> Op,
         Op: FnMut() -> OpFut + Send + 'static,
         OpFut: Future<Output = Result<T, Break<E>>> + Send + 'static,
@@ -204,6 +250,7 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                 next = self_.next(), if can_spawn => {
                     if let Some(item) = next {
                         active += 1;
+                        let w = weight(&item);
                         let mut op = f(item);
                         let limiter = limiter.clone();
                         let backoff = backoff.clone();
@@ -215,11 +262,11 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                                 let token = limiter.acquire();
                                 match op().await {
                                     Ok(value) => {
-                                        token.record_sample(Outcome::Success);
+                                        token.record_sample_weighted(Outcome::Success, w);
                                         return g(value).await;
                                     }
                                     Err(Break::Err(e)) => {
-                                        token.record_sample(Outcome::Dropped);
+                                        token.record_sample_weighted(Outcome::Dropped, w);
                                         match backoff.next_backoff() {
                                             Some(duration) => {
                                                 tokio::time::sleep(duration).await;
@@ -228,7 +275,7 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                                         }
                                     }
                                     Err(Break::Break) => {
-                                        token.record_sample(Outcome::Ignore);
+                                        token.record_sample_weighted(Outcome::Ignore, w);
                                         return Err(Break::Break);
                                     }
                                 }
@@ -610,5 +657,67 @@ mod tests {
             Err(Break::Err(e)) => assert_eq!(e, "g failed"),
             _ => panic!("expected Err from g"),
         }
+    }
+
+    // ---- weighted retry adaptive stream tests ----
+
+    #[tokio::test]
+    async fn adaptive_retry_weighted_all_succeed() {
+        let actual = Arc::new(AtomicUsize::new(0));
+        let result = stream::iter(0..100)
+            .try_for_each_spawned_adaptive_with_retry_weighted(
+                Limiter::fixed(16),
+                ExponentialBackoff {
+                    max_elapsed_time: None,
+                    ..ExponentialBackoff::default()
+                },
+                |i: &usize| *i + 1,
+                |_: usize| {
+                    let actual = actual.clone();
+                    move || {
+                        let actual = actual.clone();
+                        async move {
+                            actual.fetch_add(1, Ordering::Relaxed);
+                            Ok::<(), Break<()>>(())
+                        }
+                    }
+                },
+                |()| async { Ok(()) },
+            )
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(actual.load(Ordering::Relaxed), 100);
+    }
+
+    #[tokio::test]
+    async fn adaptive_retry_weighted_retry_then_succeed() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let result = stream::iter(0..1)
+            .try_for_each_spawned_adaptive_with_retry_weighted(
+                Limiter::fixed(4),
+                ExponentialBackoff {
+                    initial_interval: Duration::from_millis(10),
+                    max_interval: Duration::from_millis(100),
+                    max_elapsed_time: None,
+                    ..ExponentialBackoff::default()
+                },
+                |_: &usize| 1,
+                |_: usize| {
+                    let attempts = attempts.clone();
+                    move || {
+                        let attempts = attempts.clone();
+                        async move {
+                            let n = attempts.fetch_add(1, Ordering::Relaxed);
+                            if n < 3 { Err(Break::Err(())) } else { Ok(()) }
+                        }
+                    }
+                },
+                |()| async { Ok(()) },
+            )
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(attempts.load(Ordering::Relaxed), 4);
     }
 }

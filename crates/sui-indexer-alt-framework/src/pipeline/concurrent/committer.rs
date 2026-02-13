@@ -59,7 +59,7 @@ pub(super) fn committer<H: Handler + 'static>(
         );
 
         let watermark_peak_fill = Arc::new(AtomicUsize::new(0));
-        let stream_fut = ReceiverStream::new(rx).try_for_each_spawned_adaptive_with_retry(
+        let stream_fut = ReceiverStream::new(rx).try_for_each_spawned_adaptive_with_retry_weighted(
             limiter.clone(),
             ExponentialBackoff {
                 initial_interval: INITIAL_RETRY_INTERVAL,
@@ -67,6 +67,7 @@ pub(super) fn committer<H: Handler + 'static>(
                 max_elapsed_time: None,
                 ..ExponentialBackoff::default()
             },
+            |batched: &BatchedRows<H>| H::batch_weight(&batched.batch, batched.batch_len),
             // f: measured work (DB commit, retried on error)
             |BatchedRows {
                  batch,

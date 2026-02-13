@@ -67,6 +67,12 @@ struct BigTableBatchInner {
     total_mutations: usize,
 }
 
+impl BigTableBatch {
+    pub fn total_mutations(&self) -> usize {
+        self.inner.read().unwrap().total_mutations
+    }
+}
+
 impl<P> BigTableHandler<P>
 where
     P: BigTableProcessor,
@@ -103,6 +109,10 @@ where
     const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
     const MAX_PENDING_ROWS: usize = P::MAX_PENDING_ROWS;
     const MAX_WATERMARK_UPDATES: usize = P::MAX_WATERMARK_UPDATES;
+
+    fn batch_weight(batch: &Self::Batch, _batch_len: usize) -> usize {
+        batch.total_mutations()
+    }
 
     fn batch(
         &self,
@@ -205,6 +215,21 @@ mod tests {
 
     fn make_entry(key: &[u8]) -> Entry {
         tables::make_entry(key.to_vec(), [("col", Bytes::from_static(b"value"))], None)
+    }
+
+    #[test]
+    fn bigtable_batch_total_mutations() {
+        let handler = BigTableHandler::new(TestProcessor);
+        let mut batch = BigTableBatch::default();
+        assert_eq!(batch.total_mutations(), 0);
+
+        let entries: Vec<Entry> = (0..5)
+            .map(|i| make_entry(format!("row{i}").as_bytes()))
+            .collect();
+        handler.batch(&mut batch, &mut entries.into_iter());
+
+        // Each entry from make_entry has 1 mutation
+        assert_eq!(batch.total_mutations(), 5);
     }
 
     #[tokio::test]
