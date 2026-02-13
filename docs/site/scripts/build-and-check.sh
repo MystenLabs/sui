@@ -12,13 +12,6 @@ if [ -d "$FRAMEWORK_DIR" ]; then
   rm -rf "$FRAMEWORK_DIR"
 fi
 
-# Temporarily move the generated graphql pages
-GRAPHQL_BETA_DIR="$(dirname "$0")/../content/references/sui-api/sui-graphql/beta/reference"
-if [ -d "$GRAPHQL_BETA_DIR" ]; then
-  echo "Temporarily removing graphql beta reference docs"
-  mv "$GRAPHQL_BETA_DIR" "${GRAPHQL_BETA_DIR}.bak"
-fi
-
 pnpm docusaurus build 2>&1 | while IFS= read -r line; do
   echo "$line"
   echo "$line" >> "$LOG"
