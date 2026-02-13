@@ -308,8 +308,28 @@ pub struct ExecutionIndicesWithStats {
     /// height, we've fully executed the commit.
     pub height: u64,
     pub stats: ConsensusStats,
-    #[serde(default)]
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ExecutionIndicesWithStatsV2 {
+    pub index: ExecutionIndices,
+    pub height: u64,
+    pub stats: ConsensusStats,
     pub last_checkpoint_flush_timestamp: u64,
+    // Reserved for future use.
+    pub checkpoint_seq: u64,
+}
+
+impl From<ExecutionIndicesWithStats> for ExecutionIndicesWithStatsV2 {
+    fn from(v1: ExecutionIndicesWithStats) -> Self {
+        Self {
+            index: v1.index,
+            height: v1.height,
+            stats: v1.stats,
+            last_checkpoint_flush_timestamp: 0,
+            checkpoint_seq: 0,
+        }
+    }
 }
 
 type ExecutionModuleCache = SyncModuleCache<ResolverWrapper>;
@@ -508,6 +528,8 @@ pub struct AuthorityEpochTables {
     /// transactions, and accumulated stats of consensus output.
     /// This field is written by a single process (consensus handler).
     last_consensus_stats: DBMap<u64, ExecutionIndicesWithStats>,
+
+    last_consensus_stats_v2: DBMap<u64, ExecutionIndicesWithStatsV2>,
 
     /// This table contains current reconfiguration state for validator for current epoch
     reconfig_state: DBMap<u64, ReconfigState>,
@@ -734,6 +756,10 @@ impl AuthorityEpochTables {
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
+                "last_consensus_stats_v2".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
                 "reconfig_state".to_string(),
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
@@ -933,8 +959,17 @@ impl AuthorityEpochTables {
             .map(|s| s.index))
     }
 
-    pub fn get_last_consensus_stats(&self) -> SuiResult<Option<ExecutionIndicesWithStats>> {
-        Ok(self.last_consensus_stats.get(&LAST_CONSENSUS_STATS_ADDR)?)
+    pub fn get_last_consensus_stats(&self) -> SuiResult<Option<ExecutionIndicesWithStatsV2>> {
+        if let Some(v2) = self
+            .last_consensus_stats_v2
+            .get(&LAST_CONSENSUS_STATS_ADDR)?
+        {
+            return Ok(Some(v2));
+        }
+        Ok(self
+            .last_consensus_stats
+            .get(&LAST_CONSENSUS_STATS_ADDR)?
+            .map(Into::into))
     }
 
     pub fn get_locked_transaction(&self, obj_ref: &ObjectRef) -> SuiResult<Option<LockDetails>> {
@@ -2198,7 +2233,7 @@ impl AuthorityPerEpochStore {
             .collect()
     }
 
-    pub fn get_last_consensus_stats(&self) -> SuiResult<ExecutionIndicesWithStats> {
+    pub fn get_last_consensus_stats(&self) -> SuiResult<ExecutionIndicesWithStatsV2> {
         assert!(
             self.consensus_quarantine.read().is_empty(),
             "get_last_consensus_stats should only be called at startup"

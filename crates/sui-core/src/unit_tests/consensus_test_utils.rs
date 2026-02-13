@@ -21,7 +21,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
 
 use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, ExecutionIndicesWithStats,
+    AuthorityPerEpochStore, ExecutionIndicesWithStatsV2,
 };
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::shared_object_version_manager::{AssignedTxAndVersions, Schedulable};
@@ -343,7 +343,7 @@ where
     let consensus_adapter =
         make_consensus_adapter_for_test(authority.clone(), HashSet::new(), false, vec![]);
 
-    let last_consensus_stats = ExecutionIndicesWithStats {
+    let last_consensus_stats = ExecutionIndicesWithStatsV2 {
         stats: crate::authority::authority_per_epoch_store::ConsensusStats::new(
             consensus_committee.size(),
         ),
