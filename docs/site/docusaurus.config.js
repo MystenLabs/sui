@@ -120,6 +120,9 @@ const config = {
             isGraphQlBeta: true,
           },
         },
+        printTypeOptions: {
+          relatedTypeSection: false, 
+        },
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
         },
