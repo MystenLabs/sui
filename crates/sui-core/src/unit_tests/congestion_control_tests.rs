@@ -258,6 +258,7 @@ async fn test_congestion_control_execution_cancellation() {
                 observations_chunk_size: None,
             },
             false,
+            false,
         ))
     });
 

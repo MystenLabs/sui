@@ -249,6 +249,7 @@ pub mod authority_per_epoch_store_pruner;
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
+pub mod congestion_log;
 pub mod consensus_tx_status_cache;
 pub mod epoch_start_configuration;
 pub mod execution_time_estimator;

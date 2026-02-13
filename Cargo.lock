@@ -14425,6 +14425,8 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "prost 0.14.1",
+ "prost-build",
+ "protox",
  "rand 0.8.5",
  "rayon",
  "reqwest",

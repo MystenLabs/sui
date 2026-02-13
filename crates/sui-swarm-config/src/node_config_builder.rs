@@ -280,6 +280,7 @@ impl ValidatorConfigBuilder {
             validator_client_monitor_config: None,
             fork_recovery: None,
             transaction_driver_config: Some(TransactionDriverConfig::default()),
+            congestion_log: None,
         }
     }
 
@@ -629,6 +630,7 @@ impl FullnodeConfigBuilder {
             transaction_driver_config: self
                 .transaction_driver_config
                 .or(Some(TransactionDriverConfig::default())),
+            congestion_log: None,
         }
     }
 }

@@ -1406,6 +1406,7 @@ impl SuiNode {
             low_scoring_authorities,
             throughput_calculator,
             backpressure_manager,
+            config.congestion_log.clone(),
         );
 
         info!("Starting consensus manager asynchronously");

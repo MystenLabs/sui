@@ -249,6 +249,11 @@ pub struct NodeConfig {
     /// Configuration for the transaction driver.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_driver_config: Option<TransactionDriverConfig>,
+
+    /// Configuration for congestion tracker binary logging.
+    /// When set, enables per-commit binary logs of congestion tracker state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub congestion_log: Option<CongestionLogConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -280,6 +285,24 @@ impl Default for TransactionDriverConfig {
             enable_early_validation: true,
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct CongestionLogConfig {
+    pub path: PathBuf,
+    #[serde(default = "default_congestion_log_max_file_size")]
+    pub max_file_size: u64,
+    #[serde(default = "default_congestion_log_max_files")]
+    pub max_files: u32,
+}
+
+fn default_congestion_log_max_file_size() -> u64 {
+    100 * 1024 * 1024 // 100MB
+}
+
+fn default_congestion_log_max_files() -> u32 {
+    10
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
