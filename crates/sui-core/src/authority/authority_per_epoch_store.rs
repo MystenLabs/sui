@@ -308,8 +308,28 @@ pub struct ExecutionIndicesWithStats {
     /// height, we've fully executed the commit.
     pub height: u64,
     pub stats: ConsensusStats,
-    #[serde(default)]
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ExecutionIndicesWithStatsV2 {
+    pub index: ExecutionIndices,
+    pub height: u64,
+    pub stats: ConsensusStats,
     pub last_checkpoint_flush_timestamp: u64,
+    // Reserved for future use.
+    pub checkpoint_seq: u64,
+}
+
+impl From<ExecutionIndicesWithStats> for ExecutionIndicesWithStatsV2 {
+    fn from(v1: ExecutionIndicesWithStats) -> Self {
+        Self {
+            index: v1.index,
+            height: v1.height,
+            stats: v1.stats,
+            last_checkpoint_flush_timestamp: 0,
+            checkpoint_seq: 0,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
