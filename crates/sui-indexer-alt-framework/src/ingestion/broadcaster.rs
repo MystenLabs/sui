@@ -237,46 +237,31 @@ fn ingest_and_broadcast_range(
         let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
         // docs::/#bound
 
-        let stream_fut = checkpoints.try_for_each_spawned_adaptive_with_retry(
+        let stream_fut = checkpoints.try_for_each_spawned_adaptive(
             limiter.clone(),
-            ExponentialBackoff {
-                initial_interval: retry_interval,
-                max_interval: retry_interval,
-                max_elapsed_time: None,
-                ..ExponentialBackoff::default()
-            },
             |cp: u64| {
                 let client = client.clone();
-                move || {
-                    let client = client.clone();
-                    async move {
-                        client.fetch(cp).await.map_err(|e| match e {
-                            Error::NotFound(_) => Break::Err(e),
-                            _ => Break::Break,
-                        })
-                    }
-                }
-            },
-            {
                 let subscribers = subscribers.clone();
                 let peak_channel_fill = peak_channel_fill.clone();
-                move |checkpoint: Arc<Checkpoint>| {
-                    let subscribers = subscribers.clone();
-                    let peak_channel_fill = peak_channel_fill.clone();
-                    async move {
-                        let cp = *checkpoint.summary.sequence_number();
-                        if send_checkpoint(checkpoint, &subscribers, &peak_channel_fill)
-                            .await
-                            .is_ok()
-                        {
-                            debug!(checkpoint = cp, "Broadcasted checkpoint");
-                            Ok(())
-                        } else {
-                            Err(Break::Break)
-                        }
+                async move {
+                    let checkpoint = client
+                        .wait_for(cp, retry_interval)
+                        .await
+                        .map_err(|_| Break::Break)?;
+
+                    let cp = *checkpoint.summary.sequence_number();
+                    if send_checkpoint(checkpoint, &subscribers, &peak_channel_fill)
+                        .await
+                        .is_ok()
+                    {
+                        debug!(checkpoint = cp, "Broadcasted checkpoint");
+                        Ok(())
+                    } else {
+                        Err(Break::Break)
                     }
                 }
             },
+            |()| async { Ok(()) },
         );
 
         tokio::select! {
