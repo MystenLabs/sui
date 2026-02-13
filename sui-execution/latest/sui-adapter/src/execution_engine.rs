@@ -13,6 +13,7 @@ mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
     use mysten_common::debug_fatal;
+    use nonempty::NonEmpty;
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
@@ -76,7 +77,7 @@ mod checked {
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
-        WriteAccumulatorStorageCost, is_gas_paid_from_address_balance,
+        WriteAccumulatorStorageCost,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -86,6 +87,52 @@ mod checked {
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
+
+    fn get_payment_method(gas_data: &GasData, transaction_kind: &TransactionKind) -> PaymentMethod {
+        if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
+            PaymentMethod::Unmetered
+        } else {
+            let Some(payment) = NonEmpty::from_vec(gas_data.payment.clone()) else {
+                return PaymentMethod::AddressBalance(gas_data.owner);
+            };
+
+            let is_first_coin_real = !ParsedDigest::is_coin_reservation_digest(&payment.first().2);
+
+            let (real_coins, available_address_balance_gas) = {
+                let mut real_coins = Vec::new();
+                let mut available_address_balance_gas: u64 = 0;
+                for gas_coin in payment {
+                    if let Ok(parsed) = ParsedDigest::try_from(gas_coin.2) {
+                        available_address_balance_gas += parsed.reservation_amount();
+                    } else {
+                        real_coins.push(gas_coin);
+                    }
+                }
+                (real_coins, available_address_balance_gas)
+            };
+
+            let Some(real_coins) = NonEmpty::from_vec(real_coins) else {
+                // TODO: assert all fake coins are owned by gas_data.owner
+                return PaymentMethod::AddressBalance(gas_data.owner);
+            };
+
+            if is_first_coin_real {
+                // We will withdraw `available_address_balance_gas` from the address balance of the payer
+                // and smash it into the first real coin.
+                PaymentMethod::SmashIntoCoin {
+                    gas_coins: real_coins,
+                    address_balance_payer: gas_data.owner,
+                    available_address_balance_gas,
+                }
+            } else {
+                // We will smash all real coins into the address balance of the payer.
+                PaymentMethod::SmashIntoAddressBalance {
+                    gas_coins: real_coins,
+                    address_balance_payer: gas_data.owner,
+                }
+            }
+        }
+    }
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
@@ -142,35 +189,7 @@ mod checked {
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
 
-        let payment_method = if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
-            PaymentMethod::Unmetered
-        } else if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
-            PaymentMethod::AddressBalance(gas_data.owner)
-        } else {
-            let (real_gas_coins, available_address_balance_gas) = {
-                let mut real_gas_coins = Vec::new();
-                let mut available_address_balance_gas: u64 = 0;
-                for gas_coin in gas_data.payment {
-                    if let Ok(parsed) = ParsedDigest::try_from(gas_coin.2) {
-                        available_address_balance_gas += parsed.reservation_amount();
-                    } else {
-                        real_gas_coins.push(gas_coin);
-                    }
-                }
-                (real_gas_coins, available_address_balance_gas)
-            };
-
-            if real_gas_coins.is_empty() {
-                PaymentMethod::AddressBalance(gas_data.owner)
-            } else if available_address_balance_gas > 0 {
-                PaymentMethod::Mixed {
-                    address_balance_gas_payer: gas_data.owner,
-                    gas_coins: real_gas_coins,
-                }
-            } else {
-                PaymentMethod::Coins(real_gas_coins)
-            }
-        };
+        let payment_method = get_payment_method(&gas_data, &transaction_kind);
 
         let mut gas_charger = GasCharger::new(
             transaction_digest,

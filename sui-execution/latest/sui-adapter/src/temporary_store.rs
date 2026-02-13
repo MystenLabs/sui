@@ -582,6 +582,32 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results.accumulator_events.push(event);
     }
 
+    pub fn credit_address_balance_gas(&mut self, address: &SuiAddress, amount: u64) {
+        // Assert is safe because there are only 10B SUI
+        assert!(amount < i64::MAX as u64, "Amount is too large");
+        self.emit_net_address_balance_gas_payment(address, -(amount as i64));
+    }
+
+    /// Make a gas charge against the given SUI address balance.
+    pub fn charge_address_balance_gas(&mut self, address: &SuiAddress, amount: u64) {
+        // Assert is safe because there are only 10B SUI
+        assert!(amount <= i64::MAX as u64, "Amount is too large");
+        self.emit_net_address_balance_gas_payment(address, amount as i64);
+    }
+
+    pub fn emit_net_address_balance_gas_payment(&mut self, address: &SuiAddress, amount: i64) {
+        if amount == 0 {
+            return;
+        }
+        let balance_type =
+            sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
+        let accumulator_event =
+            AccumulatorEvent::from_net_balance_change(*address, balance_type, -amount)
+                .expect("Failed to create accumulator event for gas balance");
+
+        self.add_accumulator_event(accumulator_event);
+    }
+
     /// Given an object ID, if it's not modified, returns None.
     /// Otherwise returns its metadata, including version, digest, owner and storage rebate.
     /// A modified object must be either a mutable input, or a loaded child object.
