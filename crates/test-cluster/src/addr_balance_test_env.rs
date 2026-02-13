@@ -310,17 +310,14 @@ impl TestEnv {
     }
 
     pub async fn get_coin_balance(&self, object_id: ObjectID) -> u64 {
-        let obj = self
-            .cluster
+        self.cluster
             .get_object_from_fullnode_store(&object_id)
             .await
-            .expect("coin object should exist");
-        let coin = obj
+            .expect("coin object should exist")
             .data
             .try_as_move()
             .expect("should be a Move object")
-            .get_coin_value_unsafe();
-        coin
+            .get_coin_value_unsafe()
     }
 
     /// Get the balance of the owner's address balance for a given coin type.
