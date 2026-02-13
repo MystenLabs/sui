@@ -14,9 +14,11 @@
 //!   from the ratio of long-term to short-term RTT and scales the limit proportionally. Effective
 //!   when the backing store degrades gradually under load (e.g. Bigtable write latency increasing).
 //!
-//! - **Vegas** (`Vegas`, identical to Netflix's VegasLimit): absolute-RTT-based. Uses the minimum
-//!   RTT ever observed as a floor to estimate queue depth. Unlike Gradient, the baseline never
+//! - **Vegas** (`Vegas`, based on Netflix's VegasLimit): absolute-RTT-based. Uses the minimum
+//!   RTT observed as a floor to estimate queue depth. Unlike Gradient, the baseline never
 //!   drifts, so the limiter stays low when the backing store is saturated from the start.
+//!   Supports an optional sliding window for `rtt_noload` (`rtt_noload_window`) to prevent
+//!   transient low-latency startup samples from permanently anchoring the baseline.
 //!
 //! # Differences from Netflix's reference implementation
 //!
@@ -61,6 +63,7 @@
 
 pub mod stream;
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -484,13 +487,14 @@ impl Default for GradientConfig {
 
 /// Configuration for the Vegas concurrency limit algorithm.
 ///
-/// Identical to Netflix's `VegasLimit.java` from the concurrency-limits library.
+/// Based on Netflix's `VegasLimit.java` from the concurrency-limits library.
 ///
 /// Unlike Gradient (which compares long-term vs short-term RTT), Vegas uses an absolute
-/// reference: the minimum RTT ever observed (`rtt_noload`). It estimates queue depth as
+/// reference: the minimum RTT observed (`rtt_noload`). It estimates queue depth as
 /// `limit * (1 - rtt_noload / actual_rtt)` and backs off when the queue exceeds a threshold.
-/// Since `rtt_noload` is a floor (not a moving average), it never drifts, giving the limiter
-/// a permanent anchor for "healthy" latency.
+/// When `rtt_noload_window` is 0, this is the all-time minimum (matching Netflix). When
+/// non-zero, it's the minimum over a sliding window, which prevents startup transients from
+/// permanently anchoring the baseline too low.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct VegasConfig {
@@ -511,6 +515,11 @@ pub struct VegasConfig {
     pub beta_factor: f64,
     /// Probe interval multiplier: rtt_noload resets every `probe_jitter * probe_multiplier * limit` samples.
     pub probe_multiplier: usize,
+    /// When non-zero, rtt_noload is the minimum RTT over a sliding window of this many samples
+    /// instead of the all-time minimum. This prevents transient low-latency samples (e.g. during
+    /// startup) from permanently anchoring the baseline too low, which causes the limiter to
+    /// underestimate capacity on low-latency backends.
+    pub rtt_noload_window: usize,
 }
 
 impl Default for VegasConfig {
@@ -523,6 +532,7 @@ impl Default for VegasConfig {
             alpha_factor: 3.0,
             beta_factor: 6.0,
             probe_multiplier: 30,
+            rtt_noload_window: 0,
         }
     }
 }
@@ -532,18 +542,28 @@ struct VegasState {
     rtt_noload: f64,
     probe_count: usize,
     probe_jitter: f64,
+    /// Sliding window of recent RTT samples for computing windowed rtt_noload.
+    /// Empty when `rtt_noload_window == 0` (all-time minimum mode).
+    rtt_window: VecDeque<f64>,
 }
 
-/// Vegas concurrency limit algorithm (identical to Netflix's `VegasLimit.java`).
+/// Vegas concurrency limit algorithm (based on Netflix's `VegasLimit.java`).
+///
+/// Two modes for tracking `rtt_noload`:
+/// - **All-time minimum** (`rtt_noload_window = 0`): matches Netflix. Probes periodically reset
+///   `rtt_noload` to the current RTT; otherwise tracks the global minimum.
+/// - **Windowed minimum** (`rtt_noload_window > 0`): `rtt_noload` is the minimum RTT over the
+///   last N successful samples. Probing is disabled. This prevents startup transients from
+///   permanently anchoring the baseline too low on low-latency backends.
 ///
 /// On each sample:
 /// 1. **Ignore** → return unchanged
 /// 2. If `rtt <= 0` → return unchanged
 /// 3. **Dropped** → `limit -= log10(limit)` (additive decrease), return early.
-///    Skips probe counting and `rtt_noload` updates to prevent fast-error RTTs
-///    from poisoning the baseline.
-/// 4. Increment `probe_count`; if probe triggers → reset `rtt_noload` to current RTT, return
-/// 5. If `rtt_noload == 0 || rtt < rtt_noload` → update `rtt_noload`, return (calibration)
+///    Skips `rtt_noload` updates to prevent fast-error RTTs from poisoning the baseline.
+/// 4. (All-time mode) Increment `probe_count`; if probe triggers → reset `rtt_noload`, return
+///    (Windowed mode) Push RTT into window, recompute `rtt_noload` as window minimum
+/// 5. (All-time mode) If `rtt < rtt_noload` → update `rtt_noload`, return (calibration)
 /// 6. Call `update_estimated_limit`:
 ///    a. App-limiting guard: if `inflight * 2 < limit`, return unchanged
 ///    b. Queue estimate: `queue_size = ceil(limit * (1 - rtt_noload / rtt))`
@@ -575,6 +595,7 @@ impl Vegas {
                 rtt_noload: 0.0,
                 probe_count: 0,
                 probe_jitter,
+                rtt_window: VecDeque::new(),
             }),
             config: config.clone(),
         }
@@ -616,22 +637,39 @@ impl LimitAlgorithm for Vegas {
             return current;
         }
 
-        // Probe: periodically reset rtt_noload to discover improved baselines.
-        state.probe_count += 1;
-        let probe_threshold =
-            state.probe_jitter * self.config.probe_multiplier as f64 * state.estimated_limit;
-        if state.probe_count as f64 >= probe_threshold {
-            state.probe_jitter = rand::thread_rng().gen_range(0.5..1.0);
-            state.probe_count = 0;
-            state.rtt_noload = short_rtt;
-            return state.estimated_limit as usize;
-        }
+        let windowed = self.config.rtt_noload_window > 0;
 
-        // Update rtt_noload. When a new minimum is found, treat it as a calibration
-        // point and skip adjustment (matching Netflix's VegasLimit behavior).
-        if state.rtt_noload == 0.0 || short_rtt < state.rtt_noload {
-            state.rtt_noload = short_rtt;
-            return state.estimated_limit as usize;
+        if windowed {
+            // Windowed mode: rtt_noload is the min of a sliding window of recent samples.
+            state.rtt_window.push_back(short_rtt);
+            while state.rtt_window.len() > self.config.rtt_noload_window {
+                state.rtt_window.pop_front();
+            }
+            state.rtt_noload = state
+                .rtt_window
+                .iter()
+                .copied()
+                .fold(f64::INFINITY, f64::min);
+        } else {
+            // All-time minimum mode (original Netflix behavior).
+
+            // Probe: periodically reset rtt_noload to discover improved baselines.
+            state.probe_count += 1;
+            let probe_threshold =
+                state.probe_jitter * self.config.probe_multiplier as f64 * state.estimated_limit;
+            if state.probe_count as f64 >= probe_threshold {
+                state.probe_jitter = rand::thread_rng().gen_range(0.5..1.0);
+                state.probe_count = 0;
+                state.rtt_noload = short_rtt;
+                return state.estimated_limit as usize;
+            }
+
+            // When a new minimum is found, treat it as a calibration point and skip
+            // adjustment (matching Netflix's VegasLimit behavior).
+            if state.rtt_noload == 0.0 || short_rtt < state.rtt_noload {
+                state.rtt_noload = short_rtt;
+                return state.estimated_limit as usize;
+            }
         }
 
         // From here: updateEstimatedLimit in Netflix's VegasLimit.java
@@ -1573,6 +1611,7 @@ mod tests {
             alpha_factor: 3.0,
             beta_factor: 6.0,
             probe_multiplier: 30,
+            rtt_noload_window: 0,
         }
     }
 
