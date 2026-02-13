@@ -15,9 +15,9 @@ use std::{
     time::Duration,
 };
 
-use crate::endpoint_manager::{AddressSource, EndpointId};
+use crate::endpoint_manager::{AddressSource, EndpointId, EndpointManager};
 use sui_config::p2p::{AccessType, DiscoveryConfig, P2pConfig};
-use sui_types::crypto::{NetworkKeyPair, Signer, ToFromBytes, VerifyingKey};
+use sui_types::crypto::{NetworkKeyPair, NetworkPublicKey, Signer, ToFromBytes, VerifyingKey};
 use sui_types::digests::Digest;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::multiaddr::Multiaddr;
@@ -70,11 +70,23 @@ pub enum DiscoveryMessage {
 #[derive(Clone, Debug)]
 pub struct Handle {
     pub(super) _shutdown_handle: Arc<oneshot::Sender<()>>,
-    sender: mpsc::Sender<DiscoveryMessage>,
+    pub(super) sender: Sender,
 }
 
 impl Handle {
-    /// Updates the address for a single peer from a specific source.
+    pub fn sender(&self) -> Sender {
+        self.sender.clone()
+    }
+}
+
+/// A lightweight handle for sending messages to the discovery event loop
+/// without holding a shutdown reference.
+#[derive(Clone, Debug)]
+pub struct Sender {
+    pub(super) sender: mpsc::Sender<DiscoveryMessage>,
+}
+
+impl Sender {
     pub fn peer_address_change(
         &self,
         peer_id: PeerId,
@@ -253,6 +265,8 @@ struct DiscoveryEventLoop {
     state: Arc<RwLock<State>>,
     mailbox: mpsc::Receiver<DiscoveryMessage>,
     metrics: Metrics,
+    consensus_external_address: Option<Multiaddr>,
+    endpoint_manager: EndpointManager,
 }
 
 impl DiscoveryEventLoop {
@@ -320,6 +334,7 @@ impl DiscoveryEventLoop {
                     self.metrics.clone(),
                     vec![*peer_info],
                     self.configured_peers.clone(),
+                    &self.endpoint_manager,
                 );
             }
         }
@@ -350,9 +365,19 @@ impl DiscoveryEventLoop {
         }
         .sign(&self.keypair);
 
-        // TODO: Add support for including other address types to our V2 info.
         let mut addresses_map = BTreeMap::new();
         addresses_map.insert(EndpointId::P2p(peer_id), addresses);
+        if let Some(consensus_addr) = &self.consensus_external_address {
+            // Populates `Consensus` EndpointId from our P2P (anemo) `PeerId`.
+            // This is safe because both the P2P and consensus networks use the same
+            // ed25519 network keypair. Both originate from `NodeConfig::network_key_pair()`.
+            let network_pubkey =
+                NetworkPublicKey::from_bytes(&peer_id.0).expect("PeerId is a valid public key");
+            addresses_map.insert(
+                EndpointId::Consensus(network_pubkey),
+                vec![consensus_addr.clone()],
+            );
+        }
         let our_info_v2 = VersionedNodeInfo::V2(NodeInfoV2 {
             addresses: addresses_map,
             timestamp_ms,
@@ -471,6 +496,7 @@ impl DiscoveryEventLoop {
                         self.state.clone(),
                         self.metrics.clone(),
                         self.configured_peers.clone(),
+                        self.endpoint_manager.clone(),
                     ));
                 }
             }
@@ -498,6 +524,7 @@ impl DiscoveryEventLoop {
                 self.state.clone(),
                 self.metrics.clone(),
                 self.configured_peers.clone(),
+                self.endpoint_manager.clone(),
             ));
 
         // Cull old peers older than a day
@@ -707,6 +734,7 @@ async fn query_peer_for_their_known_peers(
     state: Arc<RwLock<State>>,
     metrics: Metrics,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    endpoint_manager: EndpointManager,
 ) {
     // Query V3 concurrently with V2 when enabled
     if discovery_config.use_get_known_peers_v3() {
@@ -747,7 +775,13 @@ async fn query_peer_for_their_known_peers(
                 );
             }
             if let Some(found_peers) = found_peers_v3 {
-                update_known_peers_versioned(state, metrics, found_peers, configured_peers);
+                update_known_peers_versioned(
+                    state,
+                    metrics,
+                    found_peers,
+                    configured_peers,
+                    &endpoint_manager,
+                );
             }
             return;
         }
@@ -765,6 +799,7 @@ async fn query_connected_peers_for_their_known_peers(
     state: Arc<RwLock<State>>,
     metrics: Metrics,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    endpoint_manager: EndpointManager,
 ) {
     use rand::seq::IteratorRandom;
 
@@ -860,7 +895,13 @@ async fn query_connected_peers_for_their_known_peers(
                 found_peers_v2,
                 configured_peers.clone(),
             );
-            update_known_peers_versioned(state, metrics, found_peers_v3, configured_peers);
+            update_known_peers_versioned(
+                state,
+                metrics,
+                found_peers_v3,
+                configured_peers,
+                &endpoint_manager,
+            );
             return;
         }
     }
@@ -964,6 +1005,7 @@ fn update_known_peers_versioned(
     metrics: Metrics,
     found_peers: Vec<SignedVersionedNodeInfo>,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    endpoint_manager: &EndpointManager,
 ) {
     use std::collections::hash_map::Entry;
 
@@ -976,7 +1018,6 @@ fn update_known_peers_versioned(
         .and_then(|info| info.peer_id());
     let known_peers_v2 = &mut state.write().unwrap().known_peers_v2;
 
-    // TODO: Integrate versioned peer address updates with EndpointManager.
     for peer_info in found_peers.into_iter().take(MAX_PEERS_TO_SEND + 1) {
         let timestamp_ms = peer_info.timestamp_ms();
 
@@ -1029,6 +1070,21 @@ fn update_known_peers_versioned(
                 peer_id
             );
             continue;
+        }
+
+        // Forward non-P2P addresses from configured peers to EndpointManager.
+        if configured_peers.contains_key(&peer_id)
+            && let VersionedNodeInfo::V2(info_v2) = peer_info.data()
+        {
+            for (endpoint_id, addrs) in &info_v2.addresses {
+                if !matches!(endpoint_id, EndpointId::P2p(_)) && !addrs.is_empty() {
+                    let _ = endpoint_manager.update_endpoint(
+                        endpoint_id.clone(),
+                        AddressSource::Discovery,
+                        addrs.clone(),
+                    );
+                }
+            }
         }
 
         let peer = VerifiedSignedVersionedNodeInfo::new_from_verified(peer_info);

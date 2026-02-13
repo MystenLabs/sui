@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    endpoint_manager::{AddressSource, EndpointId, EndpointManager},
+    endpoint_manager::{AddressSource, EndpointId},
     utils::{build_network_and_key, build_network_with_anemo_config},
 };
 use anemo::Result;
@@ -16,7 +16,8 @@ use tokio::time::timeout;
 #[tokio::test]
 async fn get_known_peers() -> Result<()> {
     let config = P2pConfig::default();
-    let (UnstartedDiscovery { state, .. }, server) = Builder::new().config(config).build_internal();
+    let (UnstartedDiscovery { state, .. }, server, _) =
+        Builder::new().config(config).build_internal();
 
     // Err when own_info not set
     server
@@ -78,7 +79,8 @@ async fn get_known_peers() -> Result<()> {
 #[tokio::test]
 async fn get_known_peers_v3() -> Result<()> {
     let config = P2pConfig::default();
-    let (UnstartedDiscovery { state, .. }, server) = Builder::new().config(config).build_internal();
+    let (UnstartedDiscovery { state, .. }, server, _) =
+        Builder::new().config(config).build_internal();
 
     let our_peer_id = PeerId([9; 32]);
     let mut our_addresses = BTreeMap::new();
@@ -189,7 +191,7 @@ async fn trusted_peers_shared_only_with_configured_peers() {
         address: "/dns/localhost/udp/8080".parse().unwrap(),
     });
 
-    let (builder, server) = Builder::new().config(config).build_internal();
+    let (builder, server, _) = Builder::new().config(config).build_internal();
     let (network, keypair) = crate::utils::build_network_and_key(|router| router);
     let _ = builder.build(network, keypair);
 
@@ -300,7 +302,7 @@ async fn trusted_peers_shared_only_with_configured_peers_v3() {
         address: "/dns/localhost/udp/8080".parse().unwrap(),
     });
 
-    let (builder, server) = Builder::new().config(config).build_internal();
+    let (builder, server, _) = Builder::new().config(config).build_internal();
     let (network, keypair) = crate::utils::build_network_and_key(|router| router);
     let _ = builder.build(network, keypair);
 
@@ -439,7 +441,7 @@ async fn trusted_peers_shared_only_with_configured_peers_v3() {
 #[tokio::test]
 async fn make_connection_to_seed_peer() -> Result<()> {
     let mut config = P2pConfig::default();
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, _em) = Builder::new().config(config.clone()).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (_event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
@@ -447,7 +449,7 @@ async fn make_connection_to_seed_peer() -> Result<()> {
         peer_id: None,
         address: format!("/dns/localhost/udp/{}", network_1.local_addr().port()).parse()?,
     });
-    let (builder, server) = Builder::new().config(config).build();
+    let (builder, server, _em) = Builder::new().config(config).build();
     let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
     let (mut event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
 
@@ -471,7 +473,7 @@ async fn make_connection_to_seed_peer() -> Result<()> {
 #[tokio::test]
 async fn make_connection_to_seed_peer_with_peer_id() -> Result<()> {
     let mut config = P2pConfig::default();
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, _em) = Builder::new().config(config.clone()).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (_event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
@@ -479,7 +481,7 @@ async fn make_connection_to_seed_peer_with_peer_id() -> Result<()> {
         peer_id: Some(network_1.peer_id()),
         address: format!("/dns/localhost/udp/{}", network_1.local_addr().port()).parse()?,
     });
-    let (builder, server) = Builder::new().config(config).build();
+    let (builder, server, _em) = Builder::new().config(config).build();
     let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
     let (mut event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
 
@@ -504,7 +506,7 @@ async fn make_connection_to_seed_peer_with_peer_id() -> Result<()> {
 async fn three_nodes_can_connect_via_discovery() -> Result<()> {
     // Setup the peer that will be the seed for the other two
     let mut config = P2pConfig::default();
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, _em) = Builder::new().config(config.clone()).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
@@ -512,14 +514,14 @@ async fn three_nodes_can_connect_via_discovery() -> Result<()> {
         peer_id: Some(network_1.peer_id()),
         address: format!("/dns/localhost/udp/{}", network_1.local_addr().port()).parse()?,
     });
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, _em) = Builder::new().config(config.clone()).build();
     let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
     let (mut event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
     // Set an external_address address for node 2 so that it can share its address
     event_loop_2.config.external_address =
         Some(format!("/dns/localhost/udp/{}", network_2.local_addr().port()).parse()?);
 
-    let (builder, server) = Builder::new().config(config).build();
+    let (builder, server, _em) = Builder::new().config(config).build();
     let (network_3, key_3) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_3, _handle_3) = builder.build(network_3.clone(), key_3);
 
@@ -564,12 +566,11 @@ async fn three_nodes_can_connect_via_discovery() -> Result<()> {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn peers_are_added_from_endpoint_manager() -> Result<()> {
     let config = P2pConfig::default();
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, endpoint_manager_1) = Builder::new().config(config.clone()).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
-    let (event_loop_1, handle_1) = builder.build(network_1.clone(), key_1);
-    let endpoint_manager_1 = EndpointManager::new(handle_1);
+    let (event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, _em) = Builder::new().config(config.clone()).build();
     let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
 
@@ -1095,7 +1096,7 @@ fn local_allowlisted_peer(peer_id: PeerId, port: Option<u16>) -> AllowlistedPeer
 
 fn set_up_network(p2p_config: P2pConfig) -> (UnstartedDiscovery, Network, NetworkKeyPair) {
     let anemo_config = p2p_config.anemo_config.clone().unwrap_or_default();
-    let (builder, server) = Builder::new().config(p2p_config).build();
+    let (builder, server, _em) = Builder::new().config(p2p_config).build();
     let (network, keypair) =
         build_network_with_anemo_config(|router| router.add_rpc_service(server), anemo_config);
     (builder, network, keypair)
@@ -1119,12 +1120,11 @@ fn start_network(
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_address_source_priority() -> Result<()> {
     let config = P2pConfig::default();
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, endpoint_manager_1) = Builder::new().config(config.clone()).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
-    let (event_loop_1, handle_1) = builder.build(network_1.clone(), key_1);
-    let endpoint_manager_1 = EndpointManager::new(handle_1);
+    let (event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, _em) = Builder::new().config(config.clone()).build();
     let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
 
@@ -1190,12 +1190,11 @@ async fn test_address_source_priority() -> Result<()> {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_address_source_clear() -> Result<()> {
     let config = P2pConfig::default();
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, endpoint_manager_1) = Builder::new().config(config.clone()).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
-    let (event_loop_1, handle_1) = builder.build(network_1.clone(), key_1);
-    let endpoint_manager_1 = EndpointManager::new(handle_1);
+    let (event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, _em) = Builder::new().config(config.clone()).build();
     let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
 
@@ -1266,12 +1265,11 @@ async fn test_address_source_clear() -> Result<()> {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_address_source_clear_all() -> Result<()> {
     let config = P2pConfig::default();
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, endpoint_manager_1) = Builder::new().config(config.clone()).build();
     let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
-    let (event_loop_1, handle_1) = builder.build(network_1.clone(), key_1);
-    let endpoint_manager_1 = EndpointManager::new(handle_1);
+    let (event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
 
-    let (builder, server) = Builder::new().config(config.clone()).build();
+    let (builder, server, _em) = Builder::new().config(config.clone()).build();
     let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
 

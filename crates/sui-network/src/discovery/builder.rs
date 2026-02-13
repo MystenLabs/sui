@@ -5,6 +5,7 @@ use super::{
     Discovery, DiscoveryEventLoop, DiscoveryMessage, DiscoveryServer, Handle, State,
     metrics::Metrics, server::Server,
 };
+use crate::endpoint_manager::EndpointManager;
 use anemo::codegen::InboundRequestLayer;
 use anemo::types::PeerAffinity;
 use anemo::{PeerId, types::PeerInfo};
@@ -16,6 +17,7 @@ use std::{
 };
 use sui_config::p2p::P2pConfig;
 use sui_types::crypto::NetworkKeyPair;
+use sui_types::multiaddr::Multiaddr;
 use tap::{Pipe, TapFallible};
 use tokio::{
     sync::{mpsc, oneshot},
@@ -27,6 +29,7 @@ use tracing::warn;
 pub struct Builder {
     config: Option<P2pConfig>,
     metrics: Option<Metrics>,
+    consensus_external_address: Option<Multiaddr>,
 }
 
 impl Builder {
@@ -35,6 +38,7 @@ impl Builder {
         Self {
             config: None,
             metrics: None,
+            consensus_external_address: None,
         }
     }
 
@@ -48,13 +52,24 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> (UnstartedDiscovery, DiscoveryServer<impl Discovery>) {
+    pub fn consensus_external_address(mut self, addr: Multiaddr) -> Self {
+        self.consensus_external_address = Some(addr);
+        self
+    }
+
+    pub fn build(
+        self,
+    ) -> (
+        UnstartedDiscovery,
+        DiscoveryServer<impl Discovery>,
+        EndpointManager,
+    ) {
         let discovery_config = self
             .config
             .clone()
             .and_then(|config| config.discovery)
             .unwrap_or_default();
-        let (builder, server) = self.build_internal();
+        let (builder, server, endpoint_manager) = self.build_internal();
         let mut discovery_server = DiscoveryServer::new(server);
 
         // Apply rate limits from configuration as needed.
@@ -72,11 +87,15 @@ impl Builder {
                 )),
             );
         }
-        (builder, discovery_server)
+        (builder, discovery_server, endpoint_manager)
     }
 
-    pub(super) fn build_internal(self) -> (UnstartedDiscovery, Server) {
-        let Builder { config, metrics } = self;
+    pub(super) fn build_internal(self) -> (UnstartedDiscovery, Server, EndpointManager) {
+        let Builder {
+            config,
+            metrics,
+            consensus_external_address,
+        } = self;
         let config = config.unwrap();
         let discovery_config = config.discovery.clone().unwrap_or_default();
         let metrics = metrics.unwrap_or_else(Metrics::disabled);
@@ -85,8 +104,12 @@ impl Builder {
 
         let handle = Handle {
             _shutdown_handle: Arc::new(shutdown_tx),
-            sender: mailbox_tx.clone(),
+            sender: super::Sender {
+                sender: mailbox_tx.clone(),
+            },
         };
+
+        let endpoint_manager = EndpointManager::new(handle.sender());
 
         let state = State {
             our_info: None,
@@ -116,8 +139,11 @@ impl Builder {
                 mailbox: mailbox_rx,
                 metrics,
                 configured_peers,
+                consensus_external_address,
+                endpoint_manager: endpoint_manager.clone(),
             },
             server,
+            endpoint_manager,
         )
     }
 }
@@ -131,6 +157,8 @@ pub struct UnstartedDiscovery {
     pub(super) mailbox: mpsc::Receiver<DiscoveryMessage>,
     pub(super) metrics: Metrics,
     pub(super) configured_peers: Arc<OnceLock<HashMap<PeerId, PeerInfo>>>,
+    pub(super) consensus_external_address: Option<Multiaddr>,
+    pub(super) endpoint_manager: EndpointManager,
 }
 
 impl UnstartedDiscovery {
@@ -147,6 +175,8 @@ impl UnstartedDiscovery {
             mailbox,
             metrics,
             configured_peers,
+            consensus_external_address,
+            endpoint_manager,
         } = self;
 
         let discovery_config = config.discovery.clone().unwrap_or_default();
@@ -173,6 +203,8 @@ impl UnstartedDiscovery {
                 state,
                 mailbox,
                 metrics,
+                consensus_external_address,
+                endpoint_manager,
             },
             handle,
         )

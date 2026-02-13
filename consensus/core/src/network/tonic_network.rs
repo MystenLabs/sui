@@ -771,15 +771,20 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
 
         info!("Starting tonic service");
 
-        let authority = self.context.committee.authority(self.context.own_index);
-        // By default, bind to the unspecified address to allow the actual address to be assigned.
-        // But bind to localhost if it is requested.
-        let own_address = if authority.address.is_localhost_ip() {
-            authority.address.clone()
-        } else {
-            authority.address.with_zero_ip()
-        };
-        let own_address = to_socket_addr(&own_address).unwrap();
+        let own_address =
+            if let Some(listen_addr) = &self.context.parameters.listen_address_override {
+                listen_addr
+            } else {
+                let authority = self.context.committee.authority(self.context.own_index);
+                // By default, bind to the unspecified address to allow the actual address to be assigned.
+                // But bind to localhost if it is requested.
+                if authority.address.is_localhost_ip() {
+                    &authority.address
+                } else {
+                    &authority.address.with_zero_ip()
+                }
+            };
+        let own_address = to_socket_addr(own_address).unwrap();
         let service = TonicServiceProxy::new(self.context.clone(), service);
         let config = &self.context.parameters.tonic;
 
