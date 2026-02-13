@@ -7,13 +7,14 @@ use prost_types::FieldMask;
 use sui_rpc::field::{FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::{
-    BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
-    BatchGetTransactionsResponse, ExecutedTransaction, GetCheckpointRequest, GetCheckpointResponse,
-    GetEpochRequest, GetEpochResponse, GetObjectRequest, GetObjectResponse, GetObjectResult,
-    GetServiceInfoRequest, GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
-    GetTransactionResult, Object, Transaction, TransactionEffects, TransactionEvents,
-    UserSignature, ledger_service_server::LedgerService,
+    ledger_service_server::LedgerService, BatchGetObjectsRequest, BatchGetObjectsResponse,
+    BatchGetTransactionsRequest, BatchGetTransactionsResponse, ExecutedTransaction,
+    GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest, GetEpochResponse,
+    GetObjectRequest, GetObjectResponse, GetObjectResult, GetServiceInfoRequest,
+    GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse, GetTransactionResult,
+    Object, Transaction, TransactionEffects, TransactionEvents, UserSignature,
 };
+use sui_rpc_api::grpc::v2::ledger_service::protocol_config_to_proto;
 use sui_rpc_api::grpc::v2::ledger_service::validate_get_object_requests;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_api::{
@@ -392,17 +393,17 @@ impl LedgerService for ForkingLedgerService {
         if read_mask.contains(Epoch::REFERENCE_GAS_PRICE_FIELD.name) {
             message.reference_gas_price = Some(simulacrum.reference_gas_price());
         }
-        // if let (Some(submask), Some(version)) = (
-        //     read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name),
-        //     simulacrum.protocol_version,
-        //     // epoch_info.protocol_version,
-        // ) {
-        //     let protocol_config =
-        //         ProtocolConfig::get_for_version_if_supported(version.into(), chain);
-        //     message.protocol_config = protocol_config.map(|config| {
-        //         RpcProtocolConfig::merge_from(protocol_config_to_proto(config), &submask)
-        //     });
-        // }
+        if let Some(submask) = read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name) {
+            // Clients request protocol config to determine the active network protocol version.
+            // If omitted, they may treat the response as version 0 (proto default), which then
+            // fails local protocol-config construction.
+            let protocol_config = simulacrum.protocol_config();
+            message.protocol_config =
+                Some(sui_rpc::proto::sui::rpc::v2::ProtocolConfig::merge_from(
+                    protocol_config_to_proto(protocol_config),
+                    &submask,
+                ));
+        }
         if read_mask.contains(Epoch::COMMITTEE_FIELD.name) {
             let committee = epoch_start_state.get_sui_committee();
             let members: Vec<_> = committee
