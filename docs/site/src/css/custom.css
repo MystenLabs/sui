@@ -148,7 +148,7 @@
 } 
 
 .navbar-sidebar .menu__link--active, .navbar-sidebar .menu__link--active:hover, [data-theme='dark'] .navbar-sidebar .menu__link--active, [data-theme='dark'] .navbar-sidebar .menu__link--active:hover {
-  @apply !bg-sui-blue-primary text-sui-gray-100
+  @apply !bg-sui-blue-primary text-sui-blue-bright
 }
 
 html[data-theme=dark] {
@@ -2187,8 +2187,4 @@ html[data-theme='dark'] .protoBadge {
 .protoBadgeRepeated {
   border-color: rgba(255, 184, 77, 0.35);
   background: rgba(255, 184, 77, 0.14);
-}
-
-.linkLabel_sEOA {
-  color: #8FCBFF;
 }
