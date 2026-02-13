@@ -15598,6 +15598,7 @@ dependencies = [
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
  "sui-keys",
+ "sui-protocol-config",
  "sui-rpc",
  "sui-types",
  "telemetry-subscribers",
