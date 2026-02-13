@@ -40,6 +40,9 @@ pub struct ForkingStore {
     checkpoint_digest_to_sequence_number: HashMap<CheckpointDigest, CheckpointSequenceNumber>,
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
 
+    // Transaction data not available through fs transaction file blobs.
+    events: HashMap<TransactionDigest, TransactionEvents>,
+
     // // Transaction data
     // transactions: HashMap<TransactionDigest, VerifiedTransaction>,
     // effects: HashMap<TransactionDigest, TransactionEffects>,
@@ -95,6 +98,7 @@ impl ForkingStore {
             checkpoints: BTreeMap::new(),
             checkpoint_digest_to_sequence_number: HashMap::new(),
             checkpoint_contents: HashMap::new(),
+            events: HashMap::new(),
             epoch_to_committee: vec![],
             fs_store,
             object_store,
@@ -175,17 +179,8 @@ impl ForkingStore {
         tx.map(|tx_info| tx_info.effects)
     }
 
-    pub fn get_transaction_events(
-        &self,
-        _digest: &TransactionDigest,
-    ) -> Option<&TransactionEvents> {
-        println!(
-            "TODO fetching transaction events is currently not supported in ForkingStore, and it \
-            retursn None"
-        );
-        None
-        // println!("Fetching events for transaction digest: {:?}", digest);
-        // todo!()
+    pub fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<&TransactionEvents> {
+        self.events.get(digest)
     }
 
     /// Tries to fetch the object at the latest version, and if not found, it will fetch it from
@@ -289,10 +284,11 @@ impl ForkingStore {
         &mut self,
         transaction: VerifiedTransaction,
         effects: TransactionEffects,
-        _events: TransactionEvents,
+        events: TransactionEvents,
         written_objects: BTreeMap<ObjectID, Object>,
     ) {
-        let tx_digest = effects.transaction_digest().to_string();
+        let transaction_digest = *effects.transaction_digest();
+        let tx_digest = transaction_digest.to_string();
         let tx_info = TransactionInfo {
             data: transaction.data().inner().intent_message().value.clone(),
             effects,
@@ -301,6 +297,7 @@ impl ForkingStore {
         self.fs_store
             .write_transaction(&tx_digest, tx_info)
             .unwrap();
+        self.events.insert(transaction_digest, events);
 
         let objects = written_objects
             .into_iter()
@@ -325,8 +322,8 @@ impl ForkingStore {
         todo!()
     }
 
-    pub fn insert_events(&mut self, _tx_digest: &TransactionDigest, _events: TransactionEvents) {
-        todo!()
+    pub fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
+        self.events.insert(*tx_digest, events);
     }
 
     pub fn update_objects(

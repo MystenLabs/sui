@@ -11,7 +11,7 @@ use sui_types::{
     inner_temporary_store::InnerTemporaryStore,
     transaction::{InputObjectKind, TransactionData, TransactionDataAPI},
 };
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::context::Context;
 use crate::store::ForkingStore;
@@ -47,22 +47,35 @@ pub async fn execute_transaction(
 
     // Execute the transaction
     let simulacrum = &context.simulacrum;
-    let mut sim = simulacrum.write().await;
-    let (effects, execution_error) =
-        sim.execute_transaction_impersonating(tx_data)
-            .map_err(|e| {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    format!("Transaction execution failed: {e}"),
-                )
-            })?;
+    let (effects, execution_error, checkpoint_sequence_number) = {
+        let mut sim = simulacrum.write().await;
+        let (effects, execution_error) =
+            sim.execute_transaction_impersonating(tx_data)
+                .map_err(|e| {
+                    RpcError::new(
+                        tonic::Code::Internal,
+                        format!("Transaction execution failed: {e}"),
+                    )
+                })?;
 
-    if let Some(ref err) = execution_error {
-        info!("Transaction execution error: {:?}", err);
+        if let Some(ref err) = execution_error {
+            info!("Transaction execution error: {:?}", err);
+        }
+
+        // Create checkpoint
+        let checkpoint = sim.create_checkpoint();
+        (effects, execution_error, checkpoint.sequence_number)
+    };
+
+    if let Err(err) = context
+        .publish_checkpoint_by_sequence_number(checkpoint_sequence_number)
+        .await
+    {
+        warn!(
+            checkpoint_sequence_number,
+            "Failed to publish checkpoint to subscribers after transaction execution: {err}"
+        );
     }
-
-    // Create checkpoint
-    sim.create_checkpoint();
 
     info!(
         "Executed transaction with digest: {:?}",

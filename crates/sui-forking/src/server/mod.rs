@@ -23,7 +23,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use tracing::info;
+use tracing::{info, warn};
 
 use simulacrum::{AdvanceEpochConfig, Simulacrum, store::in_mem_store::KeyStore};
 use sui_data_store::{
@@ -66,6 +66,7 @@ use sui_rpc::proto::sui::rpc::v2::{
     state_service_server::StateServiceServer,
     transaction_execution_service_server::TransactionExecutionServiceServer,
 };
+use sui_rpc_api::subscription::SubscriptionService as RpcSubscriptionService;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -163,18 +164,32 @@ async fn get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 }
 
 async fn advance_checkpoint(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut sim = state.context.simulacrum.write().await;
+    let checkpoint_sequence_number = {
+        let mut sim = state.context.simulacrum.write().await;
 
-    // create_checkpoint returns a VerifiedCheckpoint, not a Result
-    let checkpoint = sim.create_checkpoint();
-    state.transaction_count.fetch_add(1, Ordering::SeqCst);
-    info!("Advanced to checkpoint {}", checkpoint.sequence_number);
+        // create_checkpoint returns a VerifiedCheckpoint, not a Result
+        let checkpoint = sim.create_checkpoint();
+        state.transaction_count.fetch_add(1, Ordering::SeqCst);
+        info!("Advanced to checkpoint {}", checkpoint.sequence_number);
+        checkpoint.sequence_number
+    };
+
+    if let Err(err) = state
+        .context
+        .publish_checkpoint_by_sequence_number(checkpoint_sequence_number)
+        .await
+    {
+        warn!(
+            checkpoint_sequence_number,
+            "Failed to publish checkpoint to subscribers: {err}"
+        );
+    }
 
     Json(ApiResponse::<String> {
         success: true,
         data: Some(format!(
             "Advanced to checkpoint {}",
-            checkpoint.sequence_number
+            checkpoint_sequence_number
         )),
         error: None,
     })
@@ -199,13 +214,30 @@ async fn advance_clock(
 }
 
 async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut sim = state.context.simulacrum.write().await;
+    let latest_checkpoint_sequence_number = {
+        let mut sim = state.context.simulacrum.write().await;
 
-    // Use default configuration for advancing epoch
-    let config = AdvanceEpochConfig::default();
-    sim.advance_epoch(config);
-    state.transaction_count.fetch_add(1, Ordering::SeqCst);
-    info!("Advanced to next epoch");
+        // Use default configuration for advancing epoch
+        let config = AdvanceEpochConfig::default();
+        sim.advance_epoch(config);
+        state.transaction_count.fetch_add(1, Ordering::SeqCst);
+        info!("Advanced to next epoch");
+        sim.store()
+            .get_highest_checkpint()
+            .map(|cp| cp.sequence_number)
+    };
+
+    if let Some(checkpoint_sequence_number) = latest_checkpoint_sequence_number
+        && let Err(err) = state
+            .context
+            .publish_checkpoint_by_sequence_number(checkpoint_sequence_number)
+            .await
+    {
+        warn!(
+            checkpoint_sequence_number,
+            "Failed to publish checkpoint to subscribers after epoch advance: {err}"
+        );
+    }
 
     Json(ApiResponse::<String> {
         success: true,
@@ -350,14 +382,17 @@ pub async fn start_server(
         initialize_simulacrum(at_checkpoint, &client, protocol_version, chain, version).await?;
     let simulacrum = Arc::new(RwLock::new(simulacrum));
 
-    let context = crate::context::Context {
-        simulacrum: simulacrum.clone(),
-        at_checkpoint,
-    };
-
     let registry = Registry::new_custom(Some("sui_forking".into()), None)
         .context("Failed to create Prometheus registry.")
         .unwrap();
+    let (checkpoint_sender, subscription_service_handle) = RpcSubscriptionService::build(&registry);
+
+    let context = crate::context::Context {
+        simulacrum: simulacrum.clone(),
+        subscription_service_handle,
+        checkpoint_sender,
+        at_checkpoint,
+    };
 
     let grpc = start_grpc_services(context.clone(), version, &registry).await?;
     let grpc_handle = tokio::spawn(grpc.main());
