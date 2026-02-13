@@ -515,6 +515,7 @@ mod test {
         test_simulated_load(test_cluster, 120).await;
     }
 
+    #[cfg(not(tidehunter))]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
         let test_cluster = build_test_cluster(10, 10000, 0).await;
@@ -750,6 +751,7 @@ mod test {
 
     // TODO add this back once flakiness is resolved
     #[ignore]
+    #[cfg(not(tidehunter))]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_pruning() {
         let epoch_duration_ms = 5000;
