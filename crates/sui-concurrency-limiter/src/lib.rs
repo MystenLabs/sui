@@ -245,21 +245,10 @@ impl Token {
         result
     }
 
-    /// Like [`record_sample`](Token::record_sample), but normalizes the RTT by `weight`
-    /// so the limiter sees cost-per-unit-of-work instead of raw elapsed time. A batch
-    /// with 1000 mutations that takes 1s reports the same normalized RTT as a batch with
-    /// 1 mutation that takes 1ms. `weight` is clamped to at least 1.
-    pub fn record_sample_weighted(mut self, outcome: Outcome, weight: usize) -> usize {
-        let inner = self.inner.take().expect("record_sample called twice");
-        let rtt = self.start.elapsed();
-        let w = weight.max(1);
-        let normalized_rtt = Duration::from_secs_f64(rtt.as_secs_f64() / w as f64);
-        let result = inner
-            .algorithm
-            .update(self.inflight, outcome, normalized_rtt);
-        inner.peak_limit.fetch_max(result, Ordering::Relaxed);
-        inner.inflight.fetch_sub(1, Ordering::Relaxed);
-        result
+    /// Like [`record_sample`](Token::record_sample), but accepts a `weight` parameter
+    /// for API compatibility. The weight is currently ignored — raw RTT is used directly.
+    pub fn record_sample_weighted(self, outcome: Outcome, _weight: usize) -> usize {
+        self.record_sample(outcome)
     }
 }
 
