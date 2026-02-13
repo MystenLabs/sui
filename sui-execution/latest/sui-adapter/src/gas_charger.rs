@@ -214,13 +214,16 @@ pub mod checked {
                     let primary_gas_coin = gas_coins.first();
                     let additional_gas_coins = gas_coins.tail();
 
-                    // Should be unmetered.
+                    // Should not be unmetered.
                     assert!(primary_gas_coin.0 != ObjectID::ZERO);
 
                     // set the first coin to be the transaction only gas coin.
                     // All others will be smashed into this one.
                     self.smashed_gas_coin = Some(primary_gas_coin.0);
-                    if additional_gas_coins.is_empty() {
+
+                    // Early return only if there's nothing to smash (no additional coins
+                    // and no address balance gas from fake coins)
+                    if additional_gas_coins.is_empty() && *available_address_balance_gas == 0 {
                         return;
                     }
 
