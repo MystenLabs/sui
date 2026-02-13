@@ -67,6 +67,7 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{GasData, TransactionData, TransactionKind},
 };
+use tracing::info;
 
 /// Configuration for advancing epochs in the Simulacrum.
 ///
@@ -293,7 +294,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &mut self,
         transaction_data: TransactionData,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        println!(
+        info!(
             "Executing transaction impersonating sender: {:?}",
             transaction_data.sender()
         );
@@ -345,8 +346,6 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let InnerTemporaryStore {
             written, events, ..
         } = inner_temporary_store;
-
-        println!("Written objects {:?}", written);
 
         self.store.insert_executed_transaction(
             transaction.clone(),
@@ -461,11 +460,6 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             let (settlement_txns, checkpoint_height) = self
                 .checkpoint_builder
                 .get_settlement_txns(self.epoch_state.protocol_config());
-
-            println!(
-                "Any settlement transactions to execute? {}",
-                settlement_txns.len()
-            );
 
             // Execute settlement transactions and collect their effects
             let mut settlement_effects = Vec::with_capacity(settlement_txns.len());
@@ -853,7 +847,6 @@ impl<'a> CommitteeWithKeys<'a> {
 
 impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
     fn get_validator_key(&self, name: &AuthorityName) -> &dyn Signer<AuthoritySignature> {
-        println!("Getting key for validator {name}");
         self.keystore.validator(name).unwrap()
     }
 

@@ -225,7 +225,6 @@ impl GraphQLClient {
 
         let checkpoint = data.checkpoint.context("Checkpoint not found")?;
 
-        println!("Checkpoint summaryBcs (base64): {}", checkpoint.summary_bcs);
         let summary_bytes = base64::engine::general_purpose::STANDARD
             .decode(&checkpoint.summary_bcs)
             .context("Failed to decode summaryBcs from base64")?;

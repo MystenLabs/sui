@@ -7,12 +7,12 @@ use prost_types::FieldMask;
 use sui_rpc::field::{FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::{
-    ledger_service_server::LedgerService, BatchGetObjectsRequest, BatchGetObjectsResponse,
-    BatchGetTransactionsRequest, BatchGetTransactionsResponse, ExecutedTransaction,
-    GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest, GetEpochResponse,
-    GetObjectRequest, GetObjectResponse, GetObjectResult, GetServiceInfoRequest,
-    GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse, GetTransactionResult,
-    Object, Transaction, TransactionEffects, TransactionEvents, UserSignature,
+    BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
+    BatchGetTransactionsResponse, ExecutedTransaction, GetCheckpointRequest, GetCheckpointResponse,
+    GetEpochRequest, GetEpochResponse, GetObjectRequest, GetObjectResponse, GetObjectResult,
+    GetServiceInfoRequest, GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
+    GetTransactionResult, Object, Transaction, TransactionEffects, TransactionEvents,
+    UserSignature, ledger_service_server::LedgerService,
 };
 use sui_rpc_api::grpc::v2::ledger_service::protocol_config_to_proto;
 use sui_rpc_api::grpc::v2::ledger_service::validate_get_object_requests;
@@ -92,11 +92,6 @@ impl LedgerService for ForkingLedgerService {
             read_mask,
             ..
         } = request.into_inner();
-
-        println!(
-            "Received get_object request for object_id: {:?}, version: {:?}",
-            object_id, version
-        );
 
         let (requests, read_mask) =
             validate_get_object_requests(vec![(object_id, version)], read_mask)
@@ -431,13 +426,11 @@ impl ForkingLedgerService {
         object_id: ObjectID,
         version: Option<u64>,
     ) -> Result<sui_types::object::Object, RpcError> {
-        println!("get_object_impl: object_id={object_id}, version={version:?}");
         let sim = self.simulacrum.read().await;
         let store = sim.store_static();
         let object = if let Some(version) = version {
             store.get_object_at_version(&object_id, version.into())
         } else {
-            println!("Trying to get latest version of object {object_id}");
             store.get_object(&object_id)
         };
 

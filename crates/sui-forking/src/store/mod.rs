@@ -77,11 +77,6 @@ impl ForkingStore {
             forked_at_checkpoint,
         );
 
-        // println!(
-        //     "Genesis transaction digest: {:?}",
-        //     genesis.transaction().digest()
-        // );
-        // store.init_with_genesis(genesis);
         store
     }
 
@@ -105,15 +100,6 @@ impl ForkingStore {
             forked_at_checkpoint,
         }
     }
-
-    // pub fn get_objects(&self) -> &HashMap<ObjectID, BTreeMap<SequenceNumber, Object>> {
-    //     println!("TODO fetching all objects is currently not supported in ForkingStore");
-    //     todo!()
-    // }
-    // pub fn get_objects_by_keys(&self, _object_keys: &[ObjectKey]) -> &HashMap<ObjectID, Object> {
-    //     println!("TODO fetching objects by keys is currently not supported in ForkingStore");
-    //     todo!()
-    // }
 
     pub fn get_checkpoint_by_sequence_number(
         &self,
@@ -236,7 +222,6 @@ impl ForkingStore {
     }
 
     pub fn owned_objects(&self, owner: SuiAddress) -> Vec<Object> {
-        println!("Fetching owned objects for address: {:?}", owner);
         let objects = self.fs_store.get_objects_by_owner(owner).unwrap();
         objects
     }

@@ -483,8 +483,6 @@ impl EpochState {
             &receiving_object_refs,
         )?;
 
-        println!("Input objects: {input_objects:#?}");
-
         // Run the transaction input checks that would run when submitting the txn to a validator
         // for signing
         let (gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
@@ -496,8 +494,6 @@ impl EpochState {
             &self.bytecode_verifier_metrics,
             verifier_signing_config,
         )?;
-
-        println!("Checked input objects completed");
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas_data) = transaction_data.execution_parts();

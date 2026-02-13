@@ -369,8 +369,8 @@ pub async fn start_server(
             .await?
     };
     println!(
-        "Starting at checkpoint {} with protocol version {}",
-        at_checkpoint, protocol_version
+        "Starting from {} at checkpoint {} with protocol version {}",
+        chain_str, at_checkpoint, protocol_version
     );
     let protocol_config = ProtocolConfig::get_for_version(protocol_version.into(), chain);
     let database_url = Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
@@ -408,8 +408,6 @@ pub async fn start_server(
     let state =
         Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
 
-    println!("Ready to accept requests");
-
     let app = Router::new()
         .route("/health", get(health))
         .route("/status", get(get_status))
@@ -423,6 +421,7 @@ pub async fn start_server(
 
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
     println!("Forking server listening on {}", addr);
+    println!("Ready to accept requests");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
