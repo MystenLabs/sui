@@ -493,6 +493,237 @@ impl Data {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ObjectPermission {
+    Read = 0b0001,
+    Write = 0b0010,
+    Delete = 0b0100,
+    Transfer = 0b1000,
+}
+
+impl ObjectPermission {
+    pub const fn from_u64(bits: u64) -> Option<Self> {
+        match bits {
+            0b0001 => Some(Self::Read),
+            0b0010 => Some(Self::Write),
+            0b0100 => Some(Self::Delete),
+            0b1000 => Some(Self::Transfer),
+            _ => None,
+        }
+    }
+}
+
+impl Display for ObjectPermission {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Read => write!(f, "Read"),
+            Self::Write => write!(f, "Write"),
+            Self::Delete => write!(f, "Delete"),
+            Self::Transfer => write!(f, "Transfer"),
+        }
+    }
+}
+
+#[derive(
+    Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
+)]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
+pub struct ObjectPermissions(u64);
+
+impl ObjectPermissions {
+    pub const NONE: Self = Self(0);
+    pub const READ: Self = Self(ObjectPermission::Read as u64);
+    pub const WRITE: Self = Self(ObjectPermission::Write as u64);
+    pub const DELETE: Self = Self(ObjectPermission::Delete as u64);
+    pub const TRANSFER: Self = Self(ObjectPermission::Transfer as u64);
+    pub const ALL: Self = Self(Self::READ.0 | Self::WRITE.0 | Self::DELETE.0 | Self::TRANSFER.0);
+
+    pub const fn single(permission: ObjectPermission) -> Self {
+        Self(permission as u64)
+    }
+
+    pub fn can(&self, permission: ObjectPermission) -> bool {
+        let p = permission as u64;
+        (self.0 & p) == p
+    }
+
+    pub fn can_read(&self) -> bool {
+        self.can(ObjectPermission::Read)
+    }
+
+    pub fn can_write(&self) -> bool {
+        self.can(ObjectPermission::Write)
+    }
+
+    pub fn can_delete(&self) -> bool {
+        self.can(ObjectPermission::Delete)
+    }
+
+    pub fn can_transfer(&self) -> bool {
+        self.can(ObjectPermission::Transfer)
+    }
+
+    pub fn can_access_immutably_at_signing(&self) -> bool {
+        self.can_read()
+    }
+
+    pub fn can_access_mutably_at_signing(&self) -> bool {
+        self.can_write() || self.can_delete() || self.can_transfer()
+    }
+
+    pub const fn intersect(self, other: Self) -> Self {
+        Self(self.0 & other.0)
+    }
+
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    pub const fn difference(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
+    }
+
+    #[inline(always)]
+    const fn is_subset_bits(sub: u64, sup: u64) -> bool {
+        (sub & sup) == sub
+    }
+
+    pub const fn is_subset(&self, other: Self) -> bool {
+        Self::is_subset_bits(self.0, other.0)
+    }
+
+    pub const fn from_u64(bits: u64) -> Option<Self> {
+        if Self::is_subset_bits(bits, Self::ALL.0) {
+            Some(Self(bits))
+        } else {
+            None
+        }
+    }
+}
+
+impl std::ops::BitOr<ObjectPermission> for ObjectPermissions {
+    type Output = Self;
+    fn bitor(self, rhs: ObjectPermission) -> Self {
+        ObjectPermissions(self.0 | (rhs as u64))
+    }
+}
+
+impl std::ops::BitOr<ObjectPermissions> for ObjectPermissions {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        ObjectPermissions(self.0 | rhs.0)
+    }
+}
+
+pub struct ObjectPermissionsIterator {
+    set: ObjectPermissions,
+    idx: u64,
+}
+
+impl Iterator for ObjectPermissionsIterator {
+    type Item = ObjectPermission;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.idx <= 0b1000 {
+            let next = ObjectPermission::from_u64(self.set.0 & self.idx);
+            self.idx <<= 1;
+            if next.is_some() {
+                return next;
+            }
+        }
+        None
+    }
+}
+
+impl IntoIterator for ObjectPermissions {
+    type Item = ObjectPermission;
+    type IntoIter = ObjectPermissionsIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        ObjectPermissionsIterator {
+            idx: 0b0001,
+            set: self,
+        }
+    }
+}
+
+impl Display for ObjectPermissions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{")?;
+        let mut first = true;
+        for permission in *self {
+            if !first {
+                write!(f, ",")?;
+            }
+            write!(f, "{}", permission)?;
+            first = false;
+        }
+        write!(f, "}}")
+    }
+}
+
+#[derive(
+    Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
+)]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
+pub struct PartyPermissions {
+    /// The default permissions, used for any party member not explicitly listed in `members`.
+    default_permissions: ObjectPermissions,
+    /// The permissions for each party member.
+    /// NOTE this should be sorted by SuiAddress
+    members: Vec<(SuiAddress, ObjectPermissions)>,
+}
+
+impl PartyPermissions {
+    /// Returns `None` if `members` is not unique per address.
+    pub fn new(
+        default_permissions: ObjectPermissions,
+        mut members: Vec<(SuiAddress, ObjectPermissions)>,
+    ) -> Option<Self> {
+        if !members.is_sorted_by_key(|(a, _)| *a) {
+            members.sort_by_key(|(a, _)| *a);
+        }
+        for window in members.windows(2) {
+            let [(addr1, _), (addr2, _)] = window.try_into().unwrap();
+            if addr1 == addr2 {
+                // Not unique
+                return None;
+            }
+        }
+        Some(Self {
+            default_permissions,
+            members,
+        })
+    }
+
+    pub fn permissions_for(&self, address: &SuiAddress) -> ObjectPermissions {
+        self.members
+            .iter()
+            .find(|(a, _)| a == address)
+            .map(|(_, p)| *p)
+            .unwrap_or(self.default_permissions)
+    }
+}
+
+impl Display for PartyPermissions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "PartyPermissions {{ default_permissions: {}, members: [",
+            self.default_permissions.0
+        )?;
+        let mut first = true;
+        for (address, permissions) in &self.members {
+            if !first {
+                write!(f, ", ")?;
+            }
+            write!(f, "{} => {}", address, permissions.0)?;
+            first = false;
+        }
+        write!(f, "] }}")
+    }
+}
+
 #[derive(
     Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
@@ -519,6 +750,10 @@ pub enum Owner {
         // The owner of the object.
         owner: SuiAddress,
     },
+    PartyPermissioned {
+        start_version: SequenceNumber,
+        permissions: PartyPermissions,
+    },
 }
 
 impl Owner {
@@ -530,7 +765,8 @@ impl Owner {
             Self::Shared { .. }
             | Self::Immutable
             | Self::ObjectOwner(_)
-            | Self::ConsensusAddressOwner { .. } => Err(SuiErrorKind::UnexpectedOwnerType.into()),
+            | Self::ConsensusAddressOwner { .. }
+            | Self::PartyPermissioned { .. } => Err(SuiErrorKind::UnexpectedOwnerType.into()),
         }
     }
 
@@ -542,7 +778,9 @@ impl Owner {
             Self::AddressOwner(address)
             | Self::ObjectOwner(address)
             | Self::ConsensusAddressOwner { owner: address, .. } => Ok(*address),
-            Self::Shared { .. } | Self::Immutable => Err(SuiErrorKind::UnexpectedOwnerType.into()),
+            Self::Shared { .. } | Self::Immutable | Self::PartyPermissioned { .. } => {
+                Err(SuiErrorKind::UnexpectedOwnerType.into())
+            }
         }
     }
 
@@ -553,7 +791,8 @@ impl Owner {
             Self::Shared {
                 initial_shared_version,
             } => Some(*initial_shared_version),
-            Self::ConsensusAddressOwner { start_version, .. } => Some(*start_version),
+            Self::ConsensusAddressOwner { start_version, .. }
+            | Self::PartyPermissioned { start_version, .. } => Some(*start_version),
             Self::Immutable | Self::AddressOwner(_) | Self::ObjectOwner(_) => None,
         }
     }
@@ -590,7 +829,8 @@ impl PartialEq<ObjectID> for Owner {
             Self::AddressOwner(_)
             | Self::Shared { .. }
             | Self::Immutable
-            | Self::ConsensusAddressOwner { .. } => false,
+            | Self::ConsensusAddressOwner { .. }
+            | Self::PartyPermissioned { .. } => false,
         }
     }
 }
@@ -621,6 +861,17 @@ impl Display for Owner {
                     "ConsensusAddressOwner( {}, {} )",
                     start_version.value(),
                     owner
+                )
+            }
+            Self::PartyPermissioned {
+                start_version,
+                permissions,
+            } => {
+                write!(
+                    f,
+                    "PartyPermissioned( {}, {} )",
+                    start_version.value(),
+                    permissions
                 )
             }
         }

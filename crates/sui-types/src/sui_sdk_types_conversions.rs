@@ -188,6 +188,7 @@ impl From<crate::object::Owner> for Owner {
                 start_version: start_version.value(),
                 owner: owner.into(),
             },
+            crate::object::Owner::PartyPermissioned { .. } => todo!("PartyPermissioned WIP"),
         }
     }
 }

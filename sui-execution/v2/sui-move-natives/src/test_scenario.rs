@@ -154,6 +154,9 @@ pub fn end_transaction(
             Owner::ConsensusAddressOwner { .. } => {
                 unimplemented!("ConsensusAddressOwner does not exist for this execution version")
             }
+            Owner::PartyPermissioned { .. } => {
+                unimplemented!("PartyPermissioned does not exist for this execution version")
+            }
         }
     }
     // deletions already handled above, but we drop the delete kind for the effects
@@ -603,6 +606,9 @@ fn transaction_effects(
             Owner::Immutable => frozen.push(id),
             Owner::ConsensusAddressOwner { .. } => {
                 unimplemented!("ConsensusAddressOwner does not exist for this execution version")
+            }
+            Owner::PartyPermissioned { .. } => {
+                unimplemented!("PartyPermissioned does not exist for this execution version")
             }
         }
     }

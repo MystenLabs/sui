@@ -411,6 +411,8 @@ impl TransactionBuilder {
                     SharedObjectMutability::Immutable
                 },
             },
+            // We need to know the sender/signer to know if this should be Mutable or Immutable
+            Owner::PartyPermissioned { .. } => todo!("PartyPermissioned WIP"),
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 ObjectArg::ImmOrOwnedObject(obj_ref)
             }
@@ -544,11 +546,16 @@ impl TransactionBuilder {
                 | Owner::ConsensusAddressOwner {
                     start_version: initial_shared_version,
                     ..
+                }
+                | Owner::PartyPermissioned {
+                    start_version: initial_shared_version,
+                    ..
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.compute_object_reference().0,
                     initial_shared_version,
                     mutability: SharedObjectMutability::Mutable,
                 },
+
                 Owner::Immutable => {
                     bail!("Upgrade capability is stored immutably and cannot be used for upgrades")
                 }

@@ -543,6 +543,9 @@ impl TemporaryStore<'_> {
                         "ConsensusAddressOwner does not exist for this execution version"
                     )
                 }
+                Owner::PartyPermissioned { .. } => {
+                    unimplemented!("PartyPermissioned does not exist for this execution version")
+                }
             }
         }
 
@@ -578,6 +581,11 @@ impl TemporaryStore<'_> {
                                 "ConsensusAddressOwner does not exist for this execution version"
                             )
                         }
+                        Owner::PartyPermissioned { .. } => {
+                            unimplemented!(
+                                "PartyPermissioned does not exist for this execution version"
+                            )
+                        }
                     }
                 }
                 WriteKind::Create | WriteKind::Unwrap => {
@@ -606,6 +614,11 @@ impl TemporaryStore<'_> {
                         Owner::ConsensusAddressOwner { .. } => {
                             unimplemented!(
                                 "ConsensusAddressOwner does not exist for this execution version"
+                            )
+                        }
+                        Owner::PartyPermissioned { .. } => {
+                            unimplemented!(
+                                "PartyPermissioned does not exist for this execution version"
                             )
                         }
                     }

@@ -130,6 +130,7 @@ fn delta(obj: &Object) -> anyhow::Result<Option<Delta>> {
     let &owner = match obj.owner() {
         Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => owner,
         Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => return Ok(None),
+        Owner::PartyPermissioned { .. } => todo!("PartyPermissioned WIP"),
     };
 
     // Only track coins.

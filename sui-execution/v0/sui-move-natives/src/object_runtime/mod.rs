@@ -520,6 +520,9 @@ impl ObjectRuntimeState {
                         "ConsensusAddressOwner does not exist for this execution version"
                     )
                 }
+                Owner::PartyPermissioned { .. } => {
+                    unimplemented!("PartyPermissioned does not exist for this execution version")
+                }
             })
             .collect();
         // update the input owners with the new owners from transfers
@@ -618,6 +621,9 @@ fn update_owner_map(
             }
             Owner::ConsensusAddressOwner { .. } => {
                 unimplemented!("ConsensusAddressOwner does not exist for this execution version")
+            }
+            Owner::PartyPermissioned { .. } => {
+                unimplemented!("PartyPermissioned does not exist for this execution version")
             }
         }
     }

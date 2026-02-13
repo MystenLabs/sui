@@ -72,6 +72,7 @@ impl BalanceChange {
                     Owner::AddressOwner(addr)
                     | Owner::ObjectOwner(addr)
                     | Owner::ConsensusAddressOwner { owner: addr, .. } => *addr,
+                    Owner::PartyPermissioned { .. } => todo!("PartyPermissioned WIP"),
                     Owner::Shared { .. } | Owner::Immutable => return Ok(None),
                 }
             }
@@ -138,6 +139,7 @@ impl From<BalanceChangeContents> for GrpcBalanceChange {
                     Owner::AddressOwner(addr)
                     | Owner::ObjectOwner(addr)
                     | Owner::ConsensusAddressOwner { owner: addr, .. } => Some(addr),
+                    Owner::PartyPermissioned { .. } => todo!("PartyPermissioned WIP"),
                     Owner::Shared { .. } | Owner::Immutable => None,
                 };
 
@@ -148,7 +150,6 @@ impl From<BalanceChangeContents> for GrpcBalanceChange {
                 grpc.set_coin_type(coin_type);
                 grpc.set_amount(amount.to_string());
                 grpc
-            }
         }
     }
 }

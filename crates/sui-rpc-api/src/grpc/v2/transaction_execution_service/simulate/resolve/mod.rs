@@ -663,6 +663,7 @@ fn resolve_object(
         | sui_types::object::Owner::ConsensusAddressOwner { .. } => {
             resolve_shared_input_with_object(called_packages, arg_uses, arg_idx, object)
         }
+        sui_types::object::Owner::PartyPermissioned { .. } => todo!("PartyPermissioned WIP"),
         sui_types::object::Owner::ObjectOwner(_) => Err(RpcError::new(
             tonic::Code::InvalidArgument,
             format!("object {object_id} is object owned and cannot be used as an input"),
