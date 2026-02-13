@@ -13,6 +13,7 @@ use tokio::sync::mpsc;
 
 use crate::store::ForkingStore;
 use simulacrum::Simulacrum;
+use sui_types::digests::ChainIdentifier;
 
 #[derive(Clone)]
 pub(crate) struct Context {
@@ -20,9 +21,12 @@ pub(crate) struct Context {
     pub subscription_service_handle: SubscriptionServiceHandle,
     pub checkpoint_sender: mpsc::Sender<Checkpoint>,
     pub at_checkpoint: u64,
+    pub chain_id: ChainIdentifier,
 }
 
 impl Context {
+    /// Publish a checkpoint to the subscription service by its sequence number. This is used for
+    /// the subscription service for checkpoints.
     pub async fn publish_checkpoint_by_sequence_number(
         &self,
         checkpoint_sequence_number: u64,

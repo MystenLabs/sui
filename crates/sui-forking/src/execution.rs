@@ -162,7 +162,6 @@ async fn fetch_and_cache_object_from_rpc(
     object_id: &ObjectID,
 ) -> Result<(), anyhow::Error> {
     let obj = data_store.get_object(object_id);
-
     obj.ok_or_else(|| anyhow::anyhow!("Object {} not found in store during execution", object_id))?;
 
     Ok(())

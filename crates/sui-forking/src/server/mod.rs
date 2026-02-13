@@ -35,7 +35,7 @@ use sui_types::{
     accumulator_root::get_accumulator_root_obj_initial_shared_version,
     base_types::SuiAddress,
     crypto::AuthorityQuorumSignInfo,
-    digests::ChainIdentifier,
+    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
     effects::TransactionEffectsAPI,
     message_envelope::Envelope,
     messages_checkpoint::{CheckpointContents, CheckpointSummary, VerifiedCheckpoint},
@@ -395,11 +395,17 @@ pub async fn start_server(
         .unwrap();
     let (checkpoint_sender, subscription_service_handle) = RpcSubscriptionService::build(&registry);
 
+    let chain_id = match chain_str {
+        "mainnet" => get_mainnet_chain_identifier(),
+        "testnet" => get_testnet_chain_identifier(),
+        _ => panic!("Unsupported chain, expected mainnet or testnet"),
+    };
     let context = crate::context::Context {
         simulacrum: simulacrum.clone(),
         subscription_service_handle,
         checkpoint_sender,
         at_checkpoint,
+        chain_id,
     };
 
     let grpc = start_grpc_services(context.clone(), version, &registry).await?;
@@ -516,9 +522,8 @@ async fn start_grpc_services(
         tls: GrpcTlsArgs::default(),
     };
 
-    let simulacrum = context.simulacrum.clone();
     let subscription_service = ForkingSubscriptionService::new(context.clone());
-    let ledger_service = ForkingLedgerService::new(simulacrum.clone(), ChainIdentifier::random());
+    let ledger_service = ForkingLedgerService::new(context.clone());
     let state_service = ForkingStateService::new(context.clone());
     let tx_execution_service = ForkingTransactionExecutionService::new(context.clone());
     let grpc = GrpcRpcService::new(grpc_args, version, &registry)

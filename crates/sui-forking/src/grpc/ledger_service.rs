@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
+use fastcrypto::encoding::{Base58, Encoding};
 use prost_types::FieldMask;
+use tracing::info;
+
 use sui_rpc::field::{FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::{
     BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
     BatchGetTransactionsResponse, ExecutedTransaction, GetCheckpointRequest, GetCheckpointResponse,
@@ -14,43 +16,32 @@ use sui_rpc::proto::sui::rpc::v2::{
     GetTransactionResult, Object, Transaction, TransactionEffects, TransactionEvents,
     UserSignature, ledger_service_server::LedgerService,
 };
+use sui_rpc::proto::sui::rpc::v2::{Checkpoint, Epoch, ValidatorCommittee};
 use sui_rpc_api::grpc::v2::ledger_service::protocol_config_to_proto;
 use sui_rpc_api::grpc::v2::ledger_service::validate_get_object_requests;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc_api::proto::sui::rpc::v2::ValidatorCommitteeMember;
 use sui_rpc_api::{
     CheckpointNotFoundError, ErrorReason, ObjectNotFoundError, RpcError, TransactionNotFoundError,
 };
 use sui_sdk_types::Digest;
 use sui_types::base_types::ObjectID;
-use sui_types::digests::{ChainIdentifier, CheckpointDigest};
-use tokio::sync::RwLock;
-
-use crate::store::ForkingStore;
-use fastcrypto::encoding::{Base58, Encoding};
-use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
-use sui_rpc::proto::sui::rpc::v2::{Checkpoint, Epoch, ValidatorCommittee};
-use sui_rpc_api::proto::sui::rpc::v2::ValidatorCommitteeMember;
+use sui_types::digests::CheckpointDigest;
 use sui_types::message_envelope::Message;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use tracing::info;
+
+use crate::context::Context;
 
 const READ_MASK_DEFAULT: &str = "digest";
 
 /// A LedgerService implementation backed by the ForkingStore/Simulacrum.
 pub struct ForkingLedgerService {
-    simulacrum: Arc<RwLock<simulacrum::Simulacrum<rand::rngs::OsRng, ForkingStore>>>,
-    chain_id: ChainIdentifier,
+    context: Context,
 }
 
 impl ForkingLedgerService {
-    pub fn new(
-        simulacrum: Arc<RwLock<simulacrum::Simulacrum<rand::rngs::OsRng, ForkingStore>>>,
-        chain_id: ChainIdentifier,
-    ) -> Self {
-        Self {
-            simulacrum,
-            chain_id,
-        }
+    pub fn new(context: Context) -> Self {
+        Self { context }
     }
 }
 
@@ -60,14 +51,14 @@ impl LedgerService for ForkingLedgerService {
         &self,
         _request: tonic::Request<GetServiceInfoRequest>,
     ) -> Result<tonic::Response<GetServiceInfoResponse>, tonic::Status> {
-        let sim = self.simulacrum.read().await;
+        let sim = self.context.simulacrum.read().await;
         let store = sim.store();
 
         let checkpoint = store.get_highest_checkpint();
         let mut message = GetServiceInfoResponse::default();
 
-        message.chain_id = Some(Base58::encode(self.chain_id.as_bytes()));
-        message.chain = Some(self.chain_id.chain().as_str().into());
+        message.chain_id = Some(Base58::encode(self.context.chain_id.as_bytes()));
+        message.chain = Some(self.context.chain_id.chain().as_str().into());
 
         if let Some(cp) = checkpoint {
             message.epoch = Some(cp.epoch());
@@ -251,7 +242,7 @@ impl LedgerService for ForkingLedgerService {
         &self,
         request: tonic::Request<GetCheckpointRequest>,
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
-        let simulacrum = self.simulacrum.read().await;
+        let simulacrum = self.context.simulacrum.read().await;
         let store = simulacrum.store_static();
 
         let GetCheckpointRequest {
@@ -330,7 +321,7 @@ impl LedgerService for ForkingLedgerService {
         //     let (checkpoint_data, _) =
         //         CheckpointReader::fetch_from_object_store(&client, sequence_number).await?;
         //     let checkpoint = sui_types::full_checkpoint_content::Checkpoint::from(
-        //         std::sync::Arc::into_inner(checkpoint_data).unwrap(),
+        //         std::sync::Ar<F13c::into_inner(checkpoint_data).unwrap(),
         //     );
         //
         //     message.merge(&checkpoint, &read_mask);
@@ -360,7 +351,7 @@ impl LedgerService for ForkingLedgerService {
             FieldMaskTree::from(read_mask)
         };
 
-        let simulacrum = self.simulacrum.read().await;
+        let simulacrum = self.context.simulacrum.read().await;
         let epoch_start_state = simulacrum.epoch_start_state();
 
         let mut message = Epoch::default();
@@ -426,7 +417,7 @@ impl ForkingLedgerService {
         object_id: ObjectID,
         version: Option<u64>,
     ) -> Result<sui_types::object::Object, RpcError> {
-        let sim = self.simulacrum.read().await;
+        let sim = self.context.simulacrum.read().await;
         let store = sim.store_static();
         let object = if let Some(version) = version {
             store.get_object_at_version(&object_id, version.into())
@@ -447,7 +438,7 @@ impl ForkingLedgerService {
     ) -> Result<ExecutedTransaction, RpcError> {
         use sui_types::storage::ReadStore;
 
-        let sim = self.simulacrum.read().await;
+        let sim = self.context.simulacrum.read().await;
         let store = sim.store_static();
 
         let transaction = store
