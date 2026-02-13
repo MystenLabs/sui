@@ -3,7 +3,7 @@
 
 use crate::{
     jit::optimization::ast,
-    shared::{SafeArithmetic as _, SafeIndex as _},
+    shared::safe_ops::{SafeArithmetic as _, SafeIndex as _},
     validation::verification::ast as Input,
 };
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};

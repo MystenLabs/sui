@@ -13,8 +13,8 @@ use crate::{
     },
     jit::execution::ast::{Function, InternedDisplay, Type},
     shared::{
-        SafeArithmetic as _, SafeIndex as _,
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
+        safe_ops::{SafeArithmetic as _, SafeIndex as _},
         vm_pointer::VMPointer,
     },
 };

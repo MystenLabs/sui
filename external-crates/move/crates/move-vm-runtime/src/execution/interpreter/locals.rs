@@ -5,7 +5,7 @@
 
 use crate::{
     execution::values::{MemBox, values_impl::Value},
-    shared::SafeArithmetic as _,
+    shared::safe_ops::SafeArithmetic as _,
 };
 
 use move_binary_format::{errors::PartialVMResult, partial_vm_error, safe_assert};

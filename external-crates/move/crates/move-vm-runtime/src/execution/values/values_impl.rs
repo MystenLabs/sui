@@ -6,7 +6,7 @@ use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
     shared::{
-        SafeArithmetic as _, SafeIndex,
+        safe_ops::{SafeArithmetic as _, SafeIndex as _},
         views::{ValueView, ValueVisitor},
     },
 };

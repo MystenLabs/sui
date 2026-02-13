@@ -24,8 +24,8 @@ use crate::{
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     runtime::telemetry::TransactionTelemetryContext,
     shared::{
-        SafeArithmetic as _, SafeIndex as _,
         gas::{GasMeter, SimpleInstruction},
+        safe_ops::{SafeArithmetic as _, SafeIndex as _},
         vm_pointer::VMPointer,
     },
 };
