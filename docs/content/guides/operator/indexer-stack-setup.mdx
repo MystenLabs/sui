@@ -489,6 +489,21 @@ AlloyDB Omni recommends 8GB RAM per vCPU [link](https://docs.cloud.google.com/al
 - **CPU:** 6 cores
 - **Memory:** 48GB
 
+## Add new pipeline to pre-existing indexer
+
+Adding a new pipeline to an existing indexer currently requires these manual steps:
+
+1. Determine the most recently indexed checkpoint (`recent-checkpoint`) by doing one of the following (an approximate value is ok to use because the new pipeline will catch up):
+    * Query with GraphQL: `curl -d '{"query":"{ checkpoint { sequenceNumber } }"}' '<graphql-url>'`
+    * Use the `indexer_alt_indexer_latest_processed_checkpoint` metric
+2. Start the indexer with the new pipeline specifying
+    * `--first-checkpoint <recent-checkpoint>`
+
+   Note: `--first-checkpoint` only needs to be specified the first time the indexer runs with the new pipeline in order to bootstrap the watermark record; it will resume from the watermark record on subsequent runs.
+3. If you also want to index checkpoints before `recent-checkpoint`, start a backfill on a separate indexer instance for the new pipeline specifying
+    * `--first-checkpoint <min-checkpoint>`
+    * `--last-checkpoint <recent-checkpoint - 1>`
+
 ## Related links
 
 <RelatedLink to="/concepts/data-access/graphql-indexer" />
