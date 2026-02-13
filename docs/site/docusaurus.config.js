@@ -43,10 +43,6 @@ const config = {
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: "/",
 
-  ssg: {
-    trailingSlash: false,
-  },
-  
   onBrokenLinks: "throw",
   onBrokenAnchors: "ignore",
   onDuplicateRoutes: 'ignore',
