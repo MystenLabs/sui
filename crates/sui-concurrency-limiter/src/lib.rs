@@ -50,9 +50,11 @@
 //! Netflix's `AbstractLimiter.createListener()` which snapshots `inFlight.incrementAndGet()` at
 //! request start.
 //!
-//! **Vegas** is identical to Netflix's `VegasLimit.java` (including probe jitter, additive
-//! decrease on drops, integer threshold comparisons, and clamp-then-smooth ordering), except
-//! that `min_limit` defaults to 1 instead of 20 (matching our other algorithms).
+//! **Vegas** matches Netflix's `VegasLimit.java` (probe jitter, additive decrease on drops,
+//! integer threshold comparisons, clamp-then-smooth ordering) with two differences:
+//! `min_limit` defaults to 1 instead of 20 (matching our other algorithms), and drops skip
+//! probe counting and `rtt_noload` updates to prevent fast-error RTTs from poisoning the
+//! baseline (Netflix doesn't need this because their drops are timeouts, not fast errors).
 //!
 //! All other Gradient parameters (`smoothing`, `tolerance`, `long_window`, EMA warmup) match
 //! Netflix's Gradient2 defaults.
@@ -216,6 +218,23 @@ impl Token {
         let inner = self.inner.take().expect("record_sample called twice");
         let rtt = self.start.elapsed();
         let result = inner.algorithm.update(self.inflight, outcome, rtt);
+        inner.peak_limit.fetch_max(result, Ordering::Relaxed);
+        inner.inflight.fetch_sub(1, Ordering::Relaxed);
+        result
+    }
+
+    /// Like [`record_sample`](Token::record_sample), but normalizes the RTT by `weight`
+    /// so the limiter sees cost-per-unit-of-work instead of raw elapsed time. A batch
+    /// with 1000 mutations that takes 1s reports the same normalized RTT as a batch with
+    /// 1 mutation that takes 1ms. `weight` is clamped to at least 1.
+    pub fn record_sample_weighted(mut self, outcome: Outcome, weight: usize) -> usize {
+        let inner = self.inner.take().expect("record_sample called twice");
+        let rtt = self.start.elapsed();
+        let w = weight.max(1);
+        let normalized_rtt = Duration::from_secs_f64(rtt.as_secs_f64() / w as f64);
+        let result = inner
+            .algorithm
+            .update(self.inflight, outcome, normalized_rtt);
         inner.peak_limit.fetch_max(result, Ordering::Relaxed);
         inner.inflight.fetch_sub(1, Ordering::Relaxed);
         result
@@ -520,19 +539,21 @@ struct VegasState {
 /// On each sample:
 /// 1. **Ignore** → return unchanged
 /// 2. If `rtt <= 0` → return unchanged
-/// 3. Increment `probe_count`; if probe triggers → reset `rtt_noload` to current RTT, return
-/// 4. If `rtt_noload == 0 || rtt < rtt_noload` → update `rtt_noload`, return (calibration)
-/// 5. Call `update_estimated_limit`:
-///    a. **Dropped** → `limit -= log10(limit)` (additive decrease)
-///    b. App-limiting guard: if `inflight * 2 < limit`, return unchanged
-///    c. Queue estimate: `queue_size = ceil(limit * (1 - rtt_noload / rtt))`
-///    d. Thresholds: `alpha = alpha_factor * log10(limit)`, `beta = beta_factor * log10(limit)`
-///    e. Adjust:
+/// 3. **Dropped** → `limit -= log10(limit)` (additive decrease), return early.
+///    Skips probe counting and `rtt_noload` updates to prevent fast-error RTTs
+///    from poisoning the baseline.
+/// 4. Increment `probe_count`; if probe triggers → reset `rtt_noload` to current RTT, return
+/// 5. If `rtt_noload == 0 || rtt < rtt_noload` → update `rtt_noload`, return (calibration)
+/// 6. Call `update_estimated_limit`:
+///    a. App-limiting guard: if `inflight * 2 < limit`, return unchanged
+///    b. Queue estimate: `queue_size = ceil(limit * (1 - rtt_noload / rtt))`
+///    c. Thresholds: `alpha = alpha_factor * log10(limit)`, `beta = beta_factor * log10(limit)`
+///    d. Adjust:
 ///       - `queue_size <= log10(limit)` → `+beta` (aggressive growth)
 ///       - `queue_size < alpha` → `+log10(limit)` (moderate growth)
 ///       - `queue_size > beta` → `-log10(limit)` (decrease)
 ///       - otherwise → return `(int) estimated_limit` (hold steady, no smoothing)
-/// 6. Clamp to `[min_limit, max_limit]`, then smooth
+/// 7. Clamp to `[min_limit, max_limit]`, then smooth
 pub struct Vegas {
     config: VegasConfig,
     gauge: Arc<AtomicUsize>,
@@ -578,6 +599,23 @@ impl LimitAlgorithm for Vegas {
             return state.estimated_limit as usize;
         }
 
+        // Handle drops before probing or updating rtt_noload. Fast errors
+        // (connection refused, quota exceeded) produce artificially low RTTs
+        // that would poison rtt_noload if allowed through. Netflix's VegasLimit
+        // doesn't hit this in practice because their "drops" are timeouts (slow),
+        // but ours can be fast, so we guard explicitly.
+        if matches!(outcome, Outcome::Dropped) {
+            let limit = state.estimated_limit as usize;
+            let new_limit = (state.estimated_limit - log10_root(limit) as f64)
+                .max(self.config.min_limit as f64)
+                .min(self.config.max_limit as f64);
+            state.estimated_limit = (1.0 - self.config.smoothing) * state.estimated_limit
+                + self.config.smoothing * new_limit;
+            let current = state.estimated_limit as usize;
+            self.gauge.store(current, Ordering::Release);
+            return current;
+        }
+
         // Probe: periodically reset rtt_noload to discover improved baselines.
         state.probe_count += 1;
         let probe_threshold =
@@ -598,17 +636,6 @@ impl LimitAlgorithm for Vegas {
 
         // From here: updateEstimatedLimit in Netflix's VegasLimit.java
         let limit = state.estimated_limit as usize;
-
-        if matches!(outcome, Outcome::Dropped) {
-            let new_limit = (state.estimated_limit - log10_root(limit) as f64)
-                .max(self.config.min_limit as f64)
-                .min(self.config.max_limit as f64);
-            state.estimated_limit = (1.0 - self.config.smoothing) * state.estimated_limit
-                + self.config.smoothing * new_limit;
-            let current = state.estimated_limit as usize;
-            self.gauge.store(current, Ordering::Release);
-            return current;
-        }
 
         // App-limiting guard: don't adjust when the system isn't under pressure.
         if (inflight as f64) * 2.0 < state.estimated_limit {
@@ -1811,5 +1838,41 @@ mod tests {
         });
         let limiter = config.build();
         assert_eq!(limiter.current(), 20);
+    }
+
+    // ======================== record_sample_weighted tests ========================
+
+    #[test]
+    fn record_sample_weighted_weight_one_equals_unweighted() {
+        let limiter = Limiter::fixed(10);
+        let t1 = limiter.acquire();
+        let t2 = limiter.acquire();
+        assert_eq!(limiter.inflight(), 2);
+
+        t1.record_sample(Outcome::Success);
+        assert_eq!(limiter.inflight(), 1);
+
+        t2.record_sample_weighted(Outcome::Success, 1);
+        assert_eq!(limiter.inflight(), 0);
+    }
+
+    #[test]
+    fn record_sample_weighted_zero_treated_as_one() {
+        let limiter = Limiter::fixed(10);
+        let token = limiter.acquire();
+        assert_eq!(limiter.inflight(), 1);
+
+        token.record_sample_weighted(Outcome::Success, 0);
+        assert_eq!(limiter.inflight(), 0);
+    }
+
+    #[test]
+    fn record_sample_weighted_decrements_inflight() {
+        let limiter = Limiter::fixed(10);
+        let token = limiter.acquire();
+        assert_eq!(limiter.inflight(), 1);
+
+        token.record_sample_weighted(Outcome::Dropped, 100);
+        assert_eq!(limiter.inflight(), 0);
     }
 }
