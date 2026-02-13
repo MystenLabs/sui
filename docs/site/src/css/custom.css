@@ -2188,3 +2188,7 @@ html[data-theme='dark'] .protoBadge {
   border-color: rgba(255, 184, 77, 0.35);
   background: rgba(255, 184, 77, 0.14);
 }
+
+.linkLabel_sEOA {
+  color: #8FCBFF;
+}
