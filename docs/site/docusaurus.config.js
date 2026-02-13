@@ -50,12 +50,7 @@ const config = {
   staticDirectories: ["static", "src/open-spec"],
 
   ssrTemplate: undefined, // default
-  future: {
-    experimental_faster: {
-      ssgWorkers: true,
-    },
-  },
-  
+
   markdown: {
     format: "detect",
     mermaid: true,
