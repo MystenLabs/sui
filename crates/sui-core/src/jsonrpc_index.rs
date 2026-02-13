@@ -41,12 +41,10 @@ use sui_types::storage::error::Error as StorageError;
 use tracing::{debug, info, instrument, trace};
 use typed_store::DBMapUtils;
 use typed_store::rocks::{
-    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
+    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, StagedBatch, default_db_options,
     read_size_from_env,
 };
 use typed_store::traits::Map;
-
-type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
@@ -193,9 +191,27 @@ pub struct IndexStoreCaches {
     pub locks: MutexTable<SuiAddress>,
 }
 
+type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
+
+/// Cache updates with optional locks held. Returned from `index_tx`.
+/// In sync mode, locks are acquired and held until the batch is committed.
+/// In async mode, locks are None and this is converted to `IndexStoreCacheUpdates`
+/// via `into_inner()` before sending across threads.
+pub struct IndexStoreCacheUpdatesWithLocks {
+    pub(crate) _locks: Option<Vec<OwnedMutexGuard<()>>>,
+    pub(crate) inner: IndexStoreCacheUpdates,
+}
+
+impl IndexStoreCacheUpdatesWithLocks {
+    pub fn into_inner(self) -> IndexStoreCacheUpdates {
+        self.inner
+    }
+}
+
+/// Send-safe cache updates without locks, used in the async post-processing channel
+/// and by `commit_index_batch`.
 #[derive(Default)]
 pub struct IndexStoreCacheUpdates {
-    _locks: Vec<OwnedMutexGuard<()>>,
     per_coin_type_balance_changes: Vec<((SuiAddress, TypeTag), SuiResult<TotalBalance>)>,
     all_balance_changes: Vec<(SuiAddress, SuiResult<Arc<AllBalance>>)>,
 }
@@ -267,6 +283,307 @@ impl IndexStoreTables {
 
     pub fn coin_index(&self) -> &DBMap<CoinIndexKey2, CoinInfo> {
         &self.coin_index_2
+    }
+
+    pub fn check_databases_equal(&self, other: &IndexStoreTables) {
+        fn assert_tables_equal<K, V>(name: &str, table_a: &DBMap<K, V>, table_b: &DBMap<K, V>)
+        where
+            K: Serialize + DeserializeOwned + PartialEq + std::fmt::Debug,
+            V: Serialize + DeserializeOwned + PartialEq + std::fmt::Debug,
+        {
+            let mut iter_a = table_a.safe_iter();
+            let mut iter_b = table_b.safe_iter();
+            let mut count = 0u64;
+            loop {
+                match (iter_a.next(), iter_b.next()) {
+                    (Some(a), Some(b)) => {
+                        let (ka, va): (K, V) = a.expect("failed to read from table_a");
+                        let (kb, vb): (K, V) = b.expect("failed to read from table_b");
+                        assert!(
+                            ka == kb && va == vb,
+                            "{name}: mismatch at entry {count}:\n  a=({ka:?}, {va:?})\n  b=({kb:?}, {vb:?})"
+                        );
+                        count += 1;
+                    }
+                    (None, None) => break,
+                    (Some(_), None) => {
+                        panic!(
+                            "{name}: table_a has more entries than table_b (diverged after {count} entries)"
+                        );
+                    }
+                    (None, Some(_)) => {
+                        panic!(
+                            "{name}: table_b has more entries than table_a (diverged after {count} entries)"
+                        );
+                    }
+                }
+            }
+            info!("{name}: verified {count} entries are identical");
+        }
+
+        // Tables keyed by TxSequenceNumber may have different sequence numbers between
+        // async and sync post-processing. Compare the (prefix, value) pairs as sorted
+        // vectors instead of lockstep iteration.
+        // Crash recovery can re-index transactions with new sequence numbers while
+        // old entries remain, producing duplicates. Deduplicate before comparing.
+        fn assert_seq_table_equal<P, V>(
+            name: &str,
+            table_a: &DBMap<(P, TxSequenceNumber), V>,
+            table_b: &DBMap<(P, TxSequenceNumber), V>,
+        ) where
+            P: Serialize + DeserializeOwned + Ord + std::fmt::Debug,
+            V: Serialize + DeserializeOwned + Ord + std::fmt::Debug,
+        {
+            let mut entries_a: Vec<(P, V)> = table_a
+                .safe_iter()
+                .map(|r| {
+                    let ((p, _seq), v) = r.expect("failed to read from table_a");
+                    (p, v)
+                })
+                .collect();
+            let mut entries_b: Vec<(P, V)> = table_b
+                .safe_iter()
+                .map(|r| {
+                    let ((p, _seq), v) = r.expect("failed to read from table_b");
+                    (p, v)
+                })
+                .collect();
+            entries_a.sort();
+            entries_a.dedup();
+            entries_b.sort();
+            entries_b.dedup();
+            assert!(
+                entries_a.len() == entries_b.len(),
+                "{name}: different number of unique entries: {} vs {}",
+                entries_a.len(),
+                entries_b.len()
+            );
+            for (i, (a, b)) in entries_a.iter().zip(entries_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "{name}: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "{name}: verified {} unique entries match (ignoring sequence numbers)",
+                entries_a.len()
+            );
+        }
+
+        // EventIndex contains a wall-clock timestamp that differs between nodes.
+        // Compare only (TransactionEventsDigest, TransactionDigest).
+        type EventKey = (TransactionEventsDigest, TransactionDigest);
+        fn strip_timestamp(ei: EventIndex) -> EventKey {
+            (ei.0, ei.1)
+        }
+
+        // Tables where the key contains an EventId = (TxSequenceNumber, usize). Compare
+        // the (prefix, event_key) pairs as sorted vectors, ignoring both event ids and
+        // timestamps.
+        fn assert_event_table_equal<P>(
+            name: &str,
+            table_a: &DBMap<(P, EventId), EventIndex>,
+            table_b: &DBMap<(P, EventId), EventIndex>,
+        ) where
+            P: Serialize + DeserializeOwned + Ord + std::fmt::Debug,
+        {
+            let mut entries_a: Vec<(P, EventKey)> = table_a
+                .safe_iter()
+                .map(|r| {
+                    let ((p, _eid), v) = r.expect("failed to read from table_a");
+                    (p, strip_timestamp(v))
+                })
+                .collect();
+            let mut entries_b: Vec<(P, EventKey)> = table_b
+                .safe_iter()
+                .map(|r| {
+                    let ((p, _eid), v) = r.expect("failed to read from table_b");
+                    (p, strip_timestamp(v))
+                })
+                .collect();
+            entries_a.sort();
+            entries_a.dedup();
+            entries_b.sort();
+            entries_b.dedup();
+            assert!(
+                entries_a.len() == entries_b.len(),
+                "{name}: different number of unique entries: {} vs {}",
+                entries_a.len(),
+                entries_b.len()
+            );
+            for (i, (a, b)) in entries_a.iter().zip(entries_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "{name}: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "{name}: verified {} unique entries match (ignoring event ids and timestamps)",
+                entries_a.len()
+            );
+        }
+
+        // Exact comparison — tables with no sequence numbers in keys.
+        assert_tables_equal("owner_index", &self.owner_index, &other.owner_index);
+        assert_tables_equal("coin_index_2", &self.coin_index_2, &other.coin_index_2);
+        assert_tables_equal(
+            "address_balances",
+            &self.address_balances,
+            &other.address_balances,
+        );
+        assert_tables_equal(
+            "dynamic_field_index",
+            &self.dynamic_field_index,
+            &other.dynamic_field_index,
+        );
+
+        // Transaction tables — compare (address, digest) pairs ignoring sequence numbers.
+        assert_seq_table_equal(
+            "transactions_from_addr",
+            &self.transactions_from_addr,
+            &other.transactions_from_addr,
+        );
+        assert_seq_table_equal(
+            "transactions_to_addr",
+            &self.transactions_to_addr,
+            &other.transactions_to_addr,
+        );
+        // transactions_by_move_function has a 4-tuple key: (ObjectID, String, String, TxSequenceNumber)
+        {
+            let mut entries_a: Vec<((ObjectID, String, String), TransactionDigest)> = self
+                .transactions_by_move_function
+                .safe_iter()
+                .map(|r| {
+                    let ((pkg, module, func, _seq), digest) =
+                        r.expect("failed to read from table_a");
+                    ((pkg, module, func), digest)
+                })
+                .collect();
+            let mut entries_b: Vec<((ObjectID, String, String), TransactionDigest)> = other
+                .transactions_by_move_function
+                .safe_iter()
+                .map(|r| {
+                    let ((pkg, module, func, _seq), digest) =
+                        r.expect("failed to read from table_b");
+                    ((pkg, module, func), digest)
+                })
+                .collect();
+            entries_a.sort();
+            entries_a.dedup();
+            entries_b.sort();
+            entries_b.dedup();
+            assert!(
+                entries_a.len() == entries_b.len(),
+                "transactions_by_move_function: different number of unique entries: {} vs {}",
+                entries_a.len(),
+                entries_b.len()
+            );
+            for (i, (a, b)) in entries_a.iter().zip(entries_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "transactions_by_move_function: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "transactions_by_move_function: verified {} entries match (ignoring sequence numbers)",
+                entries_a.len()
+            );
+        }
+
+        // Event tables — compare event keys ignoring event ids and timestamps.
+        {
+            // event_order: DBMap<EventId, EventIndex> — no prefix, just compare values.
+            let mut vals_a: Vec<EventKey> = self
+                .event_order
+                .safe_iter()
+                .map(|r| strip_timestamp(r.expect("failed to read from table_a").1))
+                .collect();
+            let mut vals_b: Vec<EventKey> = other
+                .event_order
+                .safe_iter()
+                .map(|r| strip_timestamp(r.expect("failed to read from table_b").1))
+                .collect();
+            vals_a.sort();
+            vals_a.dedup();
+            vals_b.sort();
+            vals_b.dedup();
+            assert!(
+                vals_a.len() == vals_b.len(),
+                "event_order: different number of entries: {} vs {}",
+                vals_a.len(),
+                vals_b.len()
+            );
+            for (i, (a, b)) in vals_a.iter().zip(vals_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "event_order: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "event_order: verified {} entries match (ignoring event ids and timestamps)",
+                vals_a.len()
+            );
+        }
+        assert_event_table_equal(
+            "event_by_move_module",
+            &self.event_by_move_module,
+            &other.event_by_move_module,
+        );
+        assert_event_table_equal(
+            "event_by_move_event",
+            &self.event_by_move_event,
+            &other.event_by_move_event,
+        );
+        assert_event_table_equal(
+            "event_by_event_module",
+            &self.event_by_event_module,
+            &other.event_by_event_module,
+        );
+        assert_event_table_equal(
+            "event_by_sender",
+            &self.event_by_sender,
+            &other.event_by_sender,
+        );
+        // event_by_time: key is (timestamp_ms, EventId) — timestamps differ between
+        // nodes, so just compare the set of EventKey values.
+        {
+            let mut vals_a: Vec<EventKey> = self
+                .event_by_time
+                .safe_iter()
+                .map(|r| strip_timestamp(r.expect("failed to read from table_a").1))
+                .collect();
+            let mut vals_b: Vec<EventKey> = other
+                .event_by_time
+                .safe_iter()
+                .map(|r| strip_timestamp(r.expect("failed to read from table_b").1))
+                .collect();
+            vals_a.sort();
+            vals_a.dedup();
+            vals_b.sort();
+            vals_b.dedup();
+            assert!(
+                vals_a.len() == vals_b.len(),
+                "event_by_time: different number of entries: {} vs {}",
+                vals_a.len(),
+                vals_b.len()
+            );
+            for (i, (a, b)) in vals_a.iter().zip(vals_b.iter()).enumerate() {
+                assert!(
+                    a == b,
+                    "event_by_time: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
+                );
+            }
+            info!(
+                "event_by_time: verified {} entries match (ignoring timestamps and event ids)",
+                vals_a.len()
+            );
+        }
+
+        // Skipped tables:
+        // - transaction_order / transactions_seq: sequence numbers differ by design
+        // - transactions_by_input_object_id / transactions_by_mutated_object_id: deprecated
+        // - meta: metadata singleton, not meaningful to compare
+        // - pruner_watermark: operational state
     }
 
     #[allow(deprecated)]
@@ -583,35 +900,43 @@ impl IndexStore {
     pub fn index_coin(
         &self,
         digest: &TransactionDigest,
-        batch: &mut DBBatch,
+        batch: &mut StagedBatch,
         object_index_changes: &ObjectIndexChanges,
         tx_coins: Option<TxCoins>,
-    ) -> SuiResult<IndexStoreCacheUpdates> {
+        acquire_locks: bool,
+    ) -> SuiResult<IndexStoreCacheUpdatesWithLocks> {
         // In production if this code path is hit, we should expect `tx_coins` to not be None.
         // However, in many tests today we do not distinguish validator and/or fullnode, so
         // we gracefully exist here.
         if tx_coins.is_none() {
-            return Ok(IndexStoreCacheUpdates::default());
+            return Ok(IndexStoreCacheUpdatesWithLocks {
+                _locks: None,
+                inner: IndexStoreCacheUpdates::default(),
+            });
         }
-        // Acquire locks on changed coin owners
-        let mut addresses: HashSet<SuiAddress> = HashSet::new();
-        addresses.extend(
-            object_index_changes
-                .deleted_owners
-                .iter()
-                .map(|(owner, _)| *owner),
-        );
-        addresses.extend(
-            object_index_changes
-                .new_owners
-                .iter()
-                .map(|((owner, _), _)| *owner),
-        );
-        let _locks = self.caches.locks.acquire_locks(addresses.into_iter());
+
+        let _locks = if acquire_locks {
+            let mut addresses: HashSet<SuiAddress> = HashSet::new();
+            addresses.extend(
+                object_index_changes
+                    .deleted_owners
+                    .iter()
+                    .map(|(owner, _)| *owner),
+            );
+            addresses.extend(
+                object_index_changes
+                    .new_owners
+                    .iter()
+                    .map(|((owner, _), _)| *owner),
+            );
+            Some(self.caches.locks.acquire_locks(addresses.into_iter()))
+        } else {
+            None
+        };
+
+        let (input_coins, written_coins) = tx_coins.unwrap();
         let mut balance_changes: HashMap<SuiAddress, HashMap<TypeTag, TotalBalance>> =
             HashMap::new();
-        // Index coin info
-        let (input_coins, written_coins) = tx_coins.unwrap();
 
         // 1. Remove old coins from the DB by looking at the set of input coin objects
         let coin_delete_keys = input_coins
@@ -719,17 +1044,24 @@ impl IndexStore {
                 )
             })
             .collect();
-        let cache_updates = IndexStoreCacheUpdates {
+        let cache_updates = IndexStoreCacheUpdatesWithLocks {
             _locks,
-            per_coin_type_balance_changes,
-            all_balance_changes,
+            inner: IndexStoreCacheUpdates {
+                per_coin_type_balance_changes,
+                all_balance_changes,
+            },
         };
         Ok(cache_updates)
+    }
+
+    pub fn allocate_sequence_number(&self) -> u64 {
+        self.next_sequence_number.fetch_add(1, Ordering::SeqCst)
     }
 
     #[instrument(skip_all)]
     pub fn index_tx(
         &self,
+        sequence: u64,
         sender: SuiAddress,
         active_inputs: impl Iterator<Item = ObjectID>,
         mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
@@ -740,9 +1072,9 @@ impl IndexStore {
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
         accumulator_events: Vec<AccumulatorEvent>,
-    ) -> SuiResult<u64> {
-        let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
-        let mut batch = self.tables.transactions_from_addr.batch();
+        acquire_locks: bool,
+    ) -> SuiResult<(StagedBatch, IndexStoreCacheUpdatesWithLocks)> {
+        let mut batch = StagedBatch::new();
 
         batch.insert_batch(
             &self.tables.transaction_order,
@@ -791,12 +1123,17 @@ impl IndexStore {
         )?;
 
         // Coin Index
-        let cache_updates = self.index_coin(digest, &mut batch, &object_index_changes, tx_coins)?;
+        let cache_updates = self.index_coin(
+            digest,
+            &mut batch,
+            &object_index_changes,
+            tx_coins,
+            acquire_locks,
+        )?;
 
         // update address balances index
         let address_balance_updates = accumulator_events.into_iter().filter_map(|event| {
             let ty = &event.write.address.ty;
-            // Only process events with Balance<T> types
             let coin_type = sui_types::balance::Balance::maybe_get_balance_type_param(ty)?;
             Some(((event.write.address.address, coin_type), ()))
         });
@@ -888,32 +1225,40 @@ impl IndexStore {
             }),
         )?;
 
+        Ok((batch, cache_updates))
+    }
+
+    /// Write a combined index batch and apply cache updates.
+    pub fn commit_index_batch(
+        &self,
+        batch: DBBatch,
+        cache_updates: Vec<IndexStoreCacheUpdates>,
+    ) -> SuiResult {
         let invalidate_caches =
             read_size_from_env(ENV_VAR_INVALIDATE_INSTEAD_OF_UPDATE).unwrap_or(0) > 0;
 
         if invalidate_caches {
-            // Invalidate cache before writing to db so we always serve latest values
-            self.invalidate_per_coin_type_cache(
-                cache_updates
-                    .per_coin_type_balance_changes
-                    .iter()
-                    .map(|x| x.0.clone()),
-            )?;
-            self.invalidate_all_balance_cache(
-                cache_updates.all_balance_changes.iter().map(|x| x.0),
-            )?;
+            for cu in &cache_updates {
+                self.invalidate_per_coin_type_cache(
+                    cu.per_coin_type_balance_changes.iter().map(|x| x.0.clone()),
+                )?;
+                self.invalidate_all_balance_cache(cu.all_balance_changes.iter().map(|x| x.0))?;
+            }
         }
 
         batch.write()?;
 
         if !invalidate_caches {
-            // We cannot update the cache before updating the db or else on failing to write to db
-            // we will update the cache twice). However, this only means cache is eventually consistent with
-            // the db (within a very short delay)
-            self.update_per_coin_type_cache(cache_updates.per_coin_type_balance_changes)?;
-            self.update_all_balance_cache(cache_updates.all_balance_changes)?;
+            for cu in cache_updates {
+                self.update_per_coin_type_cache(cu.per_coin_type_balance_changes)?;
+                self.update_all_balance_cache(cu.all_balance_changes)?;
+            }
         }
-        Ok(sequence)
+        Ok(())
+    }
+
+    pub fn new_db_batch(&self) -> DBBatch {
+        self.tables.transactions_from_addr.batch()
     }
 
     pub fn next_sequence_number(&self) -> TxSequenceNumber {
@@ -1982,7 +2327,9 @@ mod tests {
         };
 
         let tx_coins = (input_objects.clone(), written_objects.clone());
-        index_store.index_tx(
+        let seq = index_store.allocate_sequence_number();
+        let (raw_batch, cache_updates) = index_store.index_tx(
+            seq,
             address,
             vec![].into_iter(),
             vec![].into_iter(),
@@ -1993,7 +2340,14 @@ mod tests {
             1234,
             Some(tx_coins),
             vec![],
+            false,
         )?;
+        // Commit the batch so subsequent reads see the data
+        let mut db_batch = index_store.new_db_batch();
+        db_batch.concat(vec![raw_batch]).unwrap();
+        index_store
+            .commit_index_batch(db_batch, vec![cache_updates.into_inner()])
+            .unwrap();
 
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
@@ -2025,7 +2379,9 @@ mod tests {
             new_dynamic_fields: vec![],
         };
         let tx_coins = (input_objects, written_objects);
-        index_store.index_tx(
+        let seq = index_store.allocate_sequence_number();
+        let (raw_batch, cache_updates) = index_store.index_tx(
+            seq,
             address,
             vec![].into_iter(),
             vec![].into_iter(),
@@ -2036,7 +2392,13 @@ mod tests {
             1234,
             Some(tx_coins),
             vec![],
+            false,
         )?;
+        let mut db_batch = index_store.new_db_batch();
+        db_batch.concat(vec![raw_batch]).unwrap();
+        index_store
+            .commit_index_batch(db_batch, vec![cache_updates.into_inner()])
+            .unwrap();
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),
             index_store.tables.coin_index_2.clone(),

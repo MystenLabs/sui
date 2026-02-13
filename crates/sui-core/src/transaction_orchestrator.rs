@@ -203,25 +203,24 @@ where
             details: e.to_string(),
         })??;
 
-        if !executed_locally {
-            executed_locally = if matches!(
-                request_type,
-                ExecuteTransactionRequestType::WaitForLocalExecution
-            ) {
-                let executed_locally =
-                    Inner::<A>::wait_for_finalized_tx_executed_locally_with_timeout(
-                        &self.inner.validator_state,
-                        tx_digest,
-                        tx_type,
-                        &self.inner.metrics,
-                    )
-                    .await
-                    .is_ok();
-                add_server_timing("local_execution done");
-                executed_locally
-            } else {
-                false
-            };
+        if matches!(
+            request_type,
+            ExecuteTransactionRequestType::WaitForLocalExecution
+        ) {
+            // Always wait for the checkpoint containing this tx to be finalized,
+            // even when effects are already available locally. With batched index
+            // writes, index data is only committed at checkpoint boundaries, so
+            // callers relying on up-to-date index data after WaitForLocalExecution
+            // need the checkpoint to be processed.
+            executed_locally = Inner::<A>::wait_for_finalized_tx_executed_locally_with_timeout(
+                &self.inner.validator_state,
+                tx_digest,
+                tx_type,
+                &self.inner.metrics,
+            )
+            .await
+            .is_ok();
+            add_server_timing("local_execution done");
         }
 
         let QuorumTransactionResponse {
@@ -835,15 +834,23 @@ where
             .with_label_values(&[tx_type.as_str()])
             .start_timer();
         debug!("Waiting for finalized tx to be executed locally.");
-        match timeout(
-            LOCAL_EXECUTION_TIMEOUT,
+        match timeout(LOCAL_EXECUTION_TIMEOUT, async move {
             validator_state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_digests(
                     "TransactionOrchestrator::notify_read_wait_for_local_execution",
                     &[tx_digest],
-                ),
-        )
+                )
+                .await;
+            // Wait for the checkpoint containing this tx to be finalized.
+            // Index data is committed before the checkpoint notification fires,
+            // so it is guaranteed to be available when this resolves.
+            let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+            epoch_store
+                .transactions_executed_in_checkpoint_notify(vec![tx_digest])
+                .await
+                .expect("db error waiting for transaction checkpointing");
+        })
         .instrument(error_span!(
             "transaction_orchestrator::local_execution",
             ?tx_digest
