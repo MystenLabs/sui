@@ -12,7 +12,7 @@ if [ -d "$FRAMEWORK_DIR" ]; then
   rm -rf "$FRAMEWORK_DIR"
 fi
 
-node --stack-size=8192 ./node_modules/@docusaurus/core/bin/docusaurus.mjs build 2>&1 | while IFS= read -r line; do
+node --stack-size=65536 ./node_modules/@docusaurus/core/bin/docusaurus.mjs build 2>&1 | while IFS= read -r line; do
   echo "$line"
   echo "$line" >> "$LOG"
 done
