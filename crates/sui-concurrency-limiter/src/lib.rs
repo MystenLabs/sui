@@ -4,7 +4,7 @@
 //! Dynamic concurrency limiters based on Netflix's
 //! [concurrency-limits](https://github.com/Netflix/concurrency-limits) library.
 //!
-//! Four algorithms are provided:
+//! Five algorithms are provided:
 //!
 //! - **AIMD** (`Aimd`): loss-based. Additive increase on success, multiplicative decrease on
 //!   drop. Simple and effective when the backing store signals overload via errors/throttling
@@ -26,6 +26,12 @@
 //!   5-node cluster returning identical latency, BBR detects saturation by observing whether
 //!   more concurrency produces more throughput. Self-bootstraps from limit=1 via exponential
 //!   growth until the backend saturates.
+//!
+//! - **Adaptive** (`Adaptive`): interval-based throughput probing with tail-latency braking.
+//!   Collects statistics over ~1s probe intervals and uses a three-phase state machine
+//!   (Startup → ProbeBW → emergency brake) to discover optimal concurrency. Measures
+//!   completions-per-second as an independent throughput signal and asks whether it grows
+//!   when concurrency increases. If yes, grow. If no, you've found the knee.
 //!
 //! # Differences from Netflix's reference implementation
 //!
@@ -68,7 +74,10 @@
 //! All other Gradient parameters (`smoothing`, `tolerance`, `long_window`, EMA warmup) match
 //! Netflix's Gradient2 defaults.
 
+mod adaptive;
 pub mod stream;
+
+pub use adaptive::AdaptiveConfig;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -184,6 +193,19 @@ impl Limiter {
             .clamp(config.min_limit, config.max_limit);
         Self(Arc::new(LimiterInner {
             algorithm: Box::new(Bbr::new(&config, initial)),
+            inflight: AtomicUsize::new(0),
+            total_completed: AtomicUsize::new(0),
+            peak_inflight: AtomicUsize::new(0),
+            peak_limit: AtomicUsize::new(initial),
+        }))
+    }
+
+    pub fn adaptive(config: AdaptiveConfig) -> Self {
+        let initial = config
+            .initial_limit
+            .clamp(config.min_limit, config.max_limit);
+        Self(Arc::new(LimiterInner {
+            algorithm: Box::new(adaptive::Adaptive::new(&config, initial)),
             inflight: AtomicUsize::new(0),
             total_completed: AtomicUsize::new(0),
             peak_inflight: AtomicUsize::new(0),
@@ -322,6 +344,7 @@ pub enum ConcurrencyLimit {
     Gradient(GradientConfig),
     Vegas(VegasConfig),
     Bbr(BbrConfig),
+    Adaptive(AdaptiveConfig),
 }
 
 impl<'de> Deserialize<'de> for ConcurrencyLimit {
@@ -337,6 +360,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Gradient(GradientConfig),
             Vegas(VegasConfig),
             Bbr(BbrConfig),
+            Adaptive(AdaptiveConfig),
         }
 
         #[derive(Deserialize)]
@@ -353,6 +377,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Helper::Tagged(Tagged::Gradient(c)) => Ok(ConcurrencyLimit::Gradient(c)),
             Helper::Tagged(Tagged::Vegas(c)) => Ok(ConcurrencyLimit::Vegas(c)),
             Helper::Tagged(Tagged::Bbr(c)) => Ok(ConcurrencyLimit::Bbr(c)),
+            Helper::Tagged(Tagged::Adaptive(c)) => Ok(ConcurrencyLimit::Adaptive(c)),
         }
     }
 }
@@ -366,6 +391,7 @@ impl ConcurrencyLimit {
             Self::Gradient(config) => Limiter::gradient(config.clone()),
             Self::Vegas(config) => Limiter::vegas(config.clone()),
             Self::Bbr(config) => Limiter::bbr(config.clone()),
+            Self::Adaptive(config) => Limiter::adaptive(config.clone()),
         }
     }
 }
