@@ -48,7 +48,7 @@ use sui_types::{
     DEEPBOOK_PACKAGE_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
-    digests::{ObjectDigest, TransactionDigest},
+    digests::{ChainIdentifier, ObjectDigest, TransactionDigest},
     error::{ExecutionError, SuiError, SuiResult},
     executable_transaction::VerifiedExecutableTransaction,
     gas::SuiGasStatus,
@@ -970,6 +970,7 @@ impl LocalExec {
             input_objects,
             &protocol_config,
             reference_gas_price,
+            ChainIdentifier::from_chain(pre_run_sandbox.transaction_info.chain),
         )
         .unwrap();
         let (kind, signer, gas_data) = executable.transaction_data().execution_parts();

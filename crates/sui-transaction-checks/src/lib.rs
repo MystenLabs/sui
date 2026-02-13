@@ -7,14 +7,19 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use once_cell::unsync::Lazy;
     use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
     use sui_config::verifier_signing_config::VerifierSigningConfig;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::accumulator_root::AccumulatorValue;
+    use sui_types::balance::Balance;
     use sui_types::base_types::{ObjectID, ObjectRef};
-    use sui_types::coin_reservation::ParsedDigest;
+    use sui_types::coin_reservation::{ParsedDigest, mask_or_unmask_id};
+    use sui_types::digests::ChainIdentifier;
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
+    use sui_types::gas_coin::GAS;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
@@ -57,6 +62,7 @@ mod checked {
         reference_gas_price: u64,
         transaction: &TransactionData,
         gas_ownership_checks: bool,
+        chain_identifier: ChainIdentifier,
     ) -> SuiResult<SuiGasStatus> {
         if transaction.kind().is_system_tx() {
             Ok(SuiGasStatus::new_unmetered())
@@ -68,6 +74,7 @@ mod checked {
                 gas,
                 transaction,
                 gas_ownership_checks,
+                chain_identifier,
             )
         }
     }
@@ -81,6 +88,7 @@ mod checked {
         receiving_objects: &ReceivingObjects,
         metrics: &Arc<BytecodeVerifierMetrics>,
         verifier_signing_config: &VerifierSigningConfig,
+        chain_identifier: ChainIdentifier,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         let gas_status = check_transaction_input_inner(
             protocol_config,
@@ -88,6 +96,7 @@ mod checked {
             transaction,
             &input_objects,
             &[],
+            chain_identifier,
         )?;
         check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
@@ -110,6 +119,7 @@ mod checked {
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
         verifier_signing_config: &VerifierSigningConfig,
+        chain_identifier: ChainIdentifier,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         let gas_object_ref = gas_object.compute_object_reference();
         input_objects.push(ObjectReadResult::new_from_gas_object(&gas_object));
@@ -120,6 +130,7 @@ mod checked {
             transaction,
             &input_objects,
             &[gas_object_ref],
+            chain_identifier,
         )?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
         // Runs verifier, which could be expensive.
@@ -143,6 +154,7 @@ mod checked {
         input_objects: InputObjects,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
+        chain_identifier: ChainIdentifier,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         let transaction = cert.data().transaction_data();
         let gas_status = check_transaction_input_inner(
@@ -151,6 +163,7 @@ mod checked {
             transaction,
             &input_objects,
             &[],
+            chain_identifier,
         )?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
         // NB: move verifier is only checked at signing time, not at execution.
@@ -167,6 +180,7 @@ mod checked {
         // TODO: check ReceivingObjects for dev inspect?
         _receiving_objects: ReceivingObjects,
         reference_gas_price: u64,
+        chain_identifier: ChainIdentifier,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         let kind = transaction.kind();
         kind.validity_check(config)?;
@@ -202,6 +216,7 @@ mod checked {
             reference_gas_price,
             transaction,
             false, // gas_ownership_checks - false means mostly transaction level checks
+            chain_identifier,
         )?;
 
         Ok((gas_status, input_objects.into_checked()))
@@ -215,6 +230,7 @@ mod checked {
         input_objects: &InputObjects,
         // Overrides the gas objects in the transaction.
         gas_override: &[ObjectRef],
+        chain_identifier: ChainIdentifier,
     ) -> SuiResult<SuiGasStatus> {
         let gas = if gas_override.is_empty() {
             transaction.gas()
@@ -229,6 +245,7 @@ mod checked {
             reference_gas_price,
             transaction,
             true, // gas_ownership_checks
+            chain_identifier,
         )?;
         check_objects(transaction, input_objects)?;
 
@@ -364,6 +381,7 @@ mod checked {
         gas: &[ObjectRef],
         transaction: &TransactionData,
         gas_ownership_checks: bool,
+        chain_identifier: ChainIdentifier,
     ) -> SuiResult<SuiGasStatus> {
         let gas_budget = transaction.gas_budget();
         let gas_price = transaction.gas_price();
@@ -377,8 +395,29 @@ mod checked {
         let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
         let mut gas_objects = vec![];
         let mut coin_reservation_total: u64 = 0;
+
+        // Lazily computed expected SUI accumulator object ID for the sender.
+        // Used to verify that coin reservations are for SUI, not other coin types.
+        let expected_sui_accumulator_id = Lazy::new(|| {
+            AccumulatorValue::get_field_id(
+                transaction.sender(),
+                &Balance::type_tag(GAS::type_tag()),
+            )
+            .map(|id| *id.inner())
+            .unwrap_or(ObjectID::ZERO)
+        });
+
         for obj_ref in gas {
             if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
+                // Verify that the coin reservation is for SUI.
+                // Gas payments must be in SUI, not other coin types.
+                let unmasked_id = mask_or_unmask_id(obj_ref.0, chain_identifier);
+                if unmasked_id != *expected_sui_accumulator_id {
+                    return Err(UserInputError::GasObjectNotOwnedObject {
+                        owner: Owner::AddressOwner(transaction.sender()),
+                    }
+                    .into());
+                }
                 coin_reservation_total += parsed.reservation_amount();
             } else {
                 let obj = objects.get(&obj_ref.0);
