@@ -342,9 +342,9 @@ impl ModuleResolver for LinkageView<'_> {
         unreachable!("v0 get_packages_static should not be called on LinkageView")
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        _ids: &[AccountAddress],
+        _ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         unreachable!("v0 get_packages should not be called on LinkageView")
     }

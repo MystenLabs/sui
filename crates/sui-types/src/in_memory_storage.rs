@@ -113,12 +113,11 @@ impl ModuleResolver for InMemoryStorage {
         Ok(packages)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        ids.iter()
-            .map(|id| get_package(self, &(*id).into()))
+        ids.map(|id| get_package(self, &(*id).into()))
             .collect::<Result<_, _>>()
     }
 }
@@ -137,9 +136,9 @@ impl ModuleResolver for &mut InMemoryStorage {
         (**self).get_packages_static(ids)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         (**self).get_packages(ids)
     }

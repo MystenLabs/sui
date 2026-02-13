@@ -233,19 +233,19 @@ impl ModuleResolver for InMemoryStorage {
     fn get_packages_static<const N: usize>(
         &self,
         ids: [AccountAddress; N],
-    ) -> std::prelude::v1::Result<[Option<SerializedPackage>; N], Self::Error> {
-        self.get_packages(&ids).map(|packages| {
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        self.get_packages(ids.iter()).map(|packages| {
             packages
                 .try_into()
                 .expect("Impossible to get a length mismatch")
         })
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        ids.iter()
+        ids.into_iter()
             .map(|version_id| {
                 if let Some(stored_package) = self.accounts.get(version_id) {
                     Ok(Some(stored_package.clone().into_serialized_package()))

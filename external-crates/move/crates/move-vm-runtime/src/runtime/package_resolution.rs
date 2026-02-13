@@ -132,18 +132,17 @@ pub(crate) fn load_and_verify_packages(
     vm_config: &VMConfig,
     natives: &NativeFunctions,
     allow_loading_failure: bool,
-    packages_to_read: &BTreeSet<VersionId>,
+    packages: &BTreeSet<VersionId>,
 ) -> VMResult<Vec<verification::ast::Package>> {
-    let packages = packages_to_read.iter().cloned().collect::<Vec<_>>();
     let load_timer = telemetry.make_timer_with_count(
         crate::runtime::telemetry::TimerKind::Load,
         packages.len() as u64,
     );
-    let packages = match load_packages(store, &packages) {
+    let packages = match load_packages(store, packages) {
         Ok(packages) => Ok(packages),
         Err(err) if allow_loading_failure => Err(err),
         Err(err) => {
-            tracing::error!("[VM] Error fetching packages {packages_to_read:?}");
+            tracing::error!("[VM] Error fetching packages {packages:?}");
             Err(expect_no_verification_errors(err))
         }
     };
@@ -169,9 +168,10 @@ pub(crate) fn load_and_verify_packages(
 // The order of the returned packages matches the order of the provided version ids.
 fn load_packages(
     store: impl ModuleResolver,
-    ids: &[VersionId],
+    ids: &BTreeSet<VersionId>,
 ) -> VMResult<Vec<SerializedPackage>> {
-    let pkgs = match store.get_packages(ids) {
+    let ids = ids.iter().copied().collect::<Vec<_>>();
+    let pkgs = match store.get_packages(ids.iter()) {
         Ok(pkgs) => pkgs
             .into_iter()
             .enumerate()
@@ -265,11 +265,12 @@ pub(crate) fn jit_and_cache_package(
         telemetry.record_redundant_compilation();
     }
 
-    cache.cached_package_at(version_id).ok_or_else(|| {
-        partial_vm_error!(
-            UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            "Package not found in cache after loading"
-        )
-        .finish(Location::Package(version_id))
-    })
+    // SAFETY: We call an `expect` as opposed to raising an invariant violation here since if we
+    // fail to find the package right after inserting it, the cache is in a broken state and there
+    // is no recovery from this point forward, so we must panic and crash the process rather than
+    // trying to continue in a broken state.
+    #[allow(clippy::expect_used)]
+    Ok(cache.cached_package_at(version_id).expect(
+        "Package must be in cache after inserting it otherwise cache is irreparably broken",
+    ))
 }

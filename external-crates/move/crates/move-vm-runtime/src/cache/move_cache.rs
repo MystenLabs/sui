@@ -140,6 +140,11 @@ impl MoveCache {
         inserted
     }
 
+    /// Clear all cached linkage tables.
+    pub(crate) fn drop_all_cached_linkage_tables(&self) {
+        self.linkage_vtables.clear();
+    }
+
     /// Get cached linkage tables for a given linkage context, if present, and updates the LRU
     /// stats. If not present, returns `None`.
     pub(crate) fn cached_linkage_tables_at(

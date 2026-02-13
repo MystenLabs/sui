@@ -243,16 +243,6 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     }
 }
 
-macro_rules! debug_writeln {
-    ($($toks: tt)*) => {
-        writeln!($($toks)*).map_err(|_|
-            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "failed to write to buffer"
-            )
-        )
-    };
-}
-
 impl<'b> NativeContext<'_, 'b, '_> {
     pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
         self.vtables.type_to_type_tag(ty)
@@ -328,13 +318,16 @@ impl<'b> NativeContext<'_, 'b, '_> {
     }
 
     #[cfg(any(debug_assertions, feature = "testing"))]
+    #[allow(clippy::expect_used)]
     pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
         // If this native was a base invocation, it won't have a stack to speak of.
         if let Some(state) = self.state {
             state.debug_print_stack_trace(self.vtables, buf)
         } else {
-            debug_writeln!(buf, "No Call Stack Available")?;
-            debug_writeln!(buf, "Base Native Invocations Do Not Create Call Stacks")
+            writeln!(buf, "No Call Stack Available").expect("failed to write to buffer");
+            writeln!(buf, "Base Native Invocations Do Not Create Call Stacks")
+                .expect("failed to write to buffer");
+            Ok(())
         }
     }
 }

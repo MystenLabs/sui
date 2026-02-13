@@ -2090,13 +2090,11 @@ impl ModuleResolver for LocalExec {
         Ok(res)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        ids.iter()
-            .map(|id| get_package(self, &(*id).into()))
-            .collect()
+        ids.map(|id| get_package(self, &(*id).into())).collect()
     }
 }
 
@@ -2108,9 +2106,9 @@ impl ModuleResolver for &mut LocalExec {
         (**self).get_module(module_id)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         (**self).get_packages(ids)
     }

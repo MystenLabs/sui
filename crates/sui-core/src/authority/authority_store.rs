@@ -1625,12 +1625,11 @@ impl ModuleResolver for ResolverWrapper {
         Ok(packages)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        ids.iter()
-            .map(|id| get_package(&*self.resolver, &ObjectID::from(*id)))
+        ids.map(|id| get_package(&*self.resolver, &ObjectID::from(*id)))
             .collect()
     }
 }

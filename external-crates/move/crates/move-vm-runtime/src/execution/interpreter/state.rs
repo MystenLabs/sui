@@ -22,19 +22,17 @@ use move_binary_format::{errors::*, partial_vm_error};
 
 use std::{fmt::Write, sync::Arc};
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 macro_rules! debug_write {
     ($($toks: tt)*) => {
-        write!($($toks)*).map_err(|_|
-            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "failed to write to buffer")
-        )
+        write!($($toks)*).expect("failed to write to buffer")
     };
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 macro_rules! debug_writeln {
     ($($toks: tt)*) => {
-        writeln!($($toks)*).map_err(|_|
-            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "failed to write to buffer")
-        )
+        writeln!($($toks)*).expect("failed to write to buffer")
     };
 }
 
@@ -172,6 +170,7 @@ impl MachineState {
     //
 
     #[cfg(any(debug_assertions, feature = "testing"))]
+    #[allow(clippy::expect_used)]
     pub(super) fn debug_print_frame<B: Write>(
         &self,
         buf: &mut B,
@@ -184,33 +183,33 @@ impl MachineState {
         // Print function header (module::function<ty_args...>)
         let func = frame.function();
 
-        debug_write!(buf, "    [{}] ", idx)?;
+        debug_write!(buf, "    [{}] ", idx);
         let module = func.module_id(&vtables.interner);
-        debug_write!(buf, "{}::{}::", module.address(), module.name())?;
+        debug_write!(buf, "{}::{}::", module.address(), module.name());
 
-        debug_write!(buf, "{}", func.name(&vtables.interner))?;
+        debug_write!(buf, "{}", func.name(&vtables.interner));
         let ty_args = frame.ty_args();
         let mut ty_tags = vec![];
         for ty in ty_args {
             ty_tags.push(vtables.type_to_type_tag(ty)?);
         }
         if !ty_tags.is_empty() {
-            debug_write!(buf, "<")?;
+            debug_write!(buf, "<");
             let mut it = ty_tags.iter();
             if let Some(tag) = it.next() {
-                debug_write!(buf, "{}", tag)?;
+                debug_write!(buf, "{}", tag);
                 for tag in it {
-                    debug_write!(buf, ", ")?;
-                    debug_write!(buf, "{}", tag)?;
+                    debug_write!(buf, ", ");
+                    debug_write!(buf, "{}", tag);
                 }
             }
-            debug_write!(buf, ">")?;
+            debug_write!(buf, ">");
         }
-        debug_writeln!(buf)?;
+        debug_writeln!(buf);
 
         // Print out the current instruction and a small window around it.
-        debug_writeln!(buf)?;
-        debug_writeln!(buf, "        Code:")?;
+        debug_writeln!(buf);
+        debug_writeln!(buf, "        Code:");
 
         let pc = frame.pc as usize;
         let code = func.code();
@@ -220,47 +219,53 @@ impl MachineState {
             let after = min(code.len(), pc.saturating_add(4));
 
             for (ndx, instr) in code.iter().enumerate().take(pc).skip(before) {
-                debug_write!(buf, "            [{}] ", ndx)?;
-                let _ = &instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
-                debug_writeln!(buf)?;
+                debug_write!(buf, "            [{}] ", ndx);
+                let _ = &instr
+                    .fmt(&mut *buf, &vtables.interner)
+                    .expect("failed to format instruction");
+                debug_writeln!(buf);
             }
-            debug_write!(buf, "          > [{}] ", pc,)?;
+            debug_write!(buf, "          > [{}] ", pc);
             code.safe_get(pc)?
                 .fmt(&mut *buf, &vtables.interner)
-                .map_err(fmt_err)?;
-            debug_writeln!(buf)?;
+                .expect("failed to format instruction");
+            debug_writeln!(buf);
             for (ndx, instr) in code
                 .iter()
                 .enumerate()
                 .take(after)
                 .skip(pc.saturating_add(1))
             {
-                debug_write!(buf, "            [{}] ", ndx)?;
-                instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
-                debug_writeln!(buf)?;
+                debug_write!(buf, "            [{}] ", ndx);
+                instr
+                    .fmt(&mut *buf, &vtables.interner)
+                    .expect("failed to format instruction");
+                debug_writeln!(buf);
             }
         } else {
             // PC is past end (e.g., right after Ret); just show last few instructions.
             let start = code.len().saturating_sub(4);
             for (ndx, instr) in code.iter().enumerate().skip(start) {
-                debug_write!(buf, "            [{}] ", ndx)?;
-                instr.fmt(&mut *buf, &vtables.interner).map_err(fmt_err)?;
-                debug_writeln!(buf)?;
+                debug_write!(buf, "            [{}] ", ndx);
+                instr
+                    .fmt(&mut *buf, &vtables.interner)
+                    .expect("failed to format instruction");
+                debug_writeln!(buf);
             }
-            debug_writeln!(buf, "          > [{}] <pc out of bounds>", pc)?;
+            debug_writeln!(buf, "          > [{}] <pc out of bounds>", pc);
         }
 
         // Locals
-        debug_writeln!(buf)?;
-        debug_writeln!(buf, "        Locals:")?;
+        debug_writeln!(buf);
+        debug_writeln!(buf, "        Locals:");
         if func.local_count() > 0 {
             values::debug::print_stack_frame(buf, &frame.stack_frame)?;
-            debug_writeln!(buf)?;
+            debug_writeln!(buf);
         } else {
-            debug_writeln!(buf, "            (none)")?;
+            debug_writeln!(buf, "            (none)");
         }
 
-        debug_writeln!(buf)?;
+        debug_writeln!(buf);
         Ok(())
     }
 
@@ -270,18 +275,18 @@ impl MachineState {
         vtables: &VMDispatchTables,
         buf: &mut B,
     ) -> PartialVMResult<()> {
-        debug_writeln!(buf, "Call Stack:")?;
+        debug_writeln!(buf, "Call Stack:");
         self.debug_print_frame(buf, vtables, 0, &self.call_stack.current_frame)?;
         for (i, frame) in self.call_stack.frames.iter().enumerate() {
             self.debug_print_frame(buf, vtables, i.saturating_add(1), frame)?;
         }
-        debug_writeln!(buf, "Operand Stack:")?;
+        debug_writeln!(buf, "Operand Stack:");
         for (idx, val) in self.operand_stack.value.iter().enumerate() {
             // TODO: Currently we do not know the types of the values on the operand stack.
             // Revisit.
-            debug_write!(buf, "    [{}] ", idx)?;
+            debug_write!(buf, "    [{}] ", idx);
             values::debug::print_value(buf, val)?;
-            debug_writeln!(buf)?;
+            debug_writeln!(buf);
         }
         Ok(())
     }
@@ -463,15 +468,4 @@ impl CallFrame {
     pub(super) fn location(&self, interner: &IdentifierInterner) -> Location {
         Location::Module(self.function().module_id(interner).clone())
     }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Helpers
-// -------------------------------------------------------------------------------------------------
-
-fn fmt_err(_input: std::fmt::Error) -> PartialVMError {
-    partial_vm_error!(
-        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-        "failed to write to buffer"
-    )
 }

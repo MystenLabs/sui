@@ -314,16 +314,15 @@ impl ModuleResolver for InMemoryStore {
         Ok(packages)
     }
 
-    fn get_packages(
+    fn get_packages<'a>(
         &self,
-        ids: &[AccountAddress],
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
-        ids.iter()
-            .map(|id| {
-                load_package_object_from_object_store(self, &ObjectID::from(*id))
-                    .map(|pkg| pkg.map(|pkg| pkg.move_package().into_serialized_move_package()))
-            })
-            .collect()
+        ids.map(|id| {
+            load_package_object_from_object_store(self, &ObjectID::from(*id))
+                .map(|pkg| pkg.map(|pkg| pkg.move_package().into_serialized_move_package()))
+        })
+        .collect()
     }
 }
 

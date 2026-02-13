@@ -719,12 +719,12 @@ impl RpcExampleProvider {
                 Ok([const { None }; N])
             }
 
-            fn get_packages(
+            fn get_packages<'a>(
                 &self,
-                ids: &[move_core_types::account_address::AccountAddress],
+                ids: impl ExactSizeIterator<Item = &'a move_core_types::account_address::AccountAddress>,
             ) -> Result<Vec<Option<move_core_types::resolver::SerializedPackage>>, Self::Error>
             {
-                Ok(ids.iter().map(|_| None).collect())
+                Ok(ids.map(|_| None).collect())
             }
         }
         let result = SuiTransactionBlockResponse {
