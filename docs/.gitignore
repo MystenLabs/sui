@@ -1,4 +1,5 @@
 **/subtree/**/*.mdx
+**/images/*.mdx
 content/references/release-notes.mdx
 MARKDOWN_EXPORT.mdx
 README.mdx

@@ -8,6 +8,49 @@ keywords: [indexer, consistent store, graphql, setup, dex]
 
 See [GraphQL and General-Purpose Indexer](/concepts/data-access/graphql-indexer.mdx) for more information on the stack.
 
+## Components
+
+<table>
+	<tbody>
+		<tr>
+			<td>
+				![Indexer stack components](./images/indexer_stack.svg "A diagram showing the indexer stack components")
+			</td>
+			<td>
+				<table>
+					<tbody>
+					<tr>
+						<td>Indexer connection params</td>
+						<td>
+							1a. `--remote-store-url`<br/>
+							1b. `--database-url`
+						</td>
+					</tr>
+					<tr>
+						<td>Consistent store connection params</td>
+						<td>
+							2a. `--remote-store-url`<br/>
+							2b. One of `--azure`, `--gcs`, `--http`, `--s3`<br/>
+							2c. `--database-path`
+						</td>
+					</tr>
+					<tr>
+						<td>GraphQL connection params</td>
+						<td>
+							3a. `--fullnode-rpc-url`<br/>
+							3b. `--database-url`<br/>
+							3c. `--consistent-store-url`<br/>
+							3d. `--ledger-grpc-url`
+						</td>
+					</tr>
+					</tbody>
+				</table>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+
 ## Indexer setup
 
 The indexer consists of multiple pipelines that each read, transform, and write checkpoint data to a table. Multiple instances of the indexer can run in parallel, each configured by its own TOML file.
