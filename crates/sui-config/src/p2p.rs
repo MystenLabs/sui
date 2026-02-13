@@ -484,6 +484,12 @@ pub struct DiscoveryConfig {
     /// If unspecified, this will default to `1,024`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mailbox_capacity: Option<usize>,
+
+    /// Use get_known_peers_v3 RPC to fetch peer info.
+    ///
+    /// If unspecified, this will default to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_get_known_peers_v3: Option<bool>,
 }
 
 impl DiscoveryConfig {
@@ -515,6 +521,10 @@ impl DiscoveryConfig {
         const MAILBOX_CAPACITY: usize = 1_024;
 
         self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
+    }
+
+    pub fn use_get_known_peers_v3(&self) -> bool {
+        self.use_get_known_peers_v3.unwrap_or(false)
     }
 }
 
