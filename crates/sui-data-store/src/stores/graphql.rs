@@ -6,8 +6,8 @@
 //! The RPC calls are implemented in `gql_queries.rs`.
 
 use crate::{
-    EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore, StoreSummary, TransactionInfo,
-    TransactionStore, VersionQuery, gql_queries, node::Node,
+    CheckpointStore, EpochData, EpochStore, FullCheckpointData, ObjectKey, ObjectStore, SetupStore,
+    StoreSummary, TransactionInfo, TransactionStore, VersionQuery, gql_queries, node::Node,
 };
 use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
@@ -23,6 +23,7 @@ use std::{
 use sui_types::{
     committee::ProtocolVersion,
     effects::TransactionEffects,
+    messages_checkpoint::CheckpointSequenceNumber,
     object::Object,
     supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::TransactionData,
@@ -58,6 +59,10 @@ struct DataStoreMetrics {
     proto_hit: AtomicU64,
     proto_miss: AtomicU64,
     proto_error: AtomicU64,
+    // checkpoints
+    checkpoint_hit: AtomicU64,
+    checkpoint_miss: AtomicU64,
+    checkpoint_error: AtomicU64,
     // objects by query kind
     obj_version_hit: AtomicU64,
     obj_version_miss: AtomicU64,
@@ -235,6 +240,49 @@ impl ObjectStore for DataStore {
     }
 }
 
+impl CheckpointStore for DataStore {
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointData>, Error> {
+        match block_on!(self.full_checkpoint(sequence)) {
+            Ok(Some(checkpoint)) => {
+                self.metrics.checkpoint_hit.fetch_add(1, Ordering::Relaxed);
+                Ok(Some(checkpoint))
+            }
+            Ok(None) => {
+                self.metrics.checkpoint_miss.fetch_add(1, Ordering::Relaxed);
+                Ok(None)
+            }
+            Err(e) => {
+                self.metrics
+                    .checkpoint_error
+                    .fetch_add(1, Ordering::Relaxed);
+                Err(e)
+            }
+        }
+    }
+
+    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+        match block_on!(self.latest_full_checkpoint()) {
+            Ok(Some(checkpoint)) => {
+                self.metrics.checkpoint_hit.fetch_add(1, Ordering::Relaxed);
+                Ok(Some(checkpoint))
+            }
+            Ok(None) => {
+                self.metrics.checkpoint_miss.fetch_add(1, Ordering::Relaxed);
+                Ok(None)
+            }
+            Err(e) => {
+                self.metrics
+                    .checkpoint_error
+                    .fetch_add(1, Ordering::Relaxed);
+                Err(e)
+            }
+        }
+    }
+}
+
 impl SetupStore for DataStore {
     fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, Error> {
         // Return the chain identifier
@@ -352,6 +400,41 @@ impl DataStore {
         );
         Ok(data)
     }
+
+    async fn full_checkpoint(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointData>, Error> {
+        let mut client = sui_rpc_api::Client::new(self.node.node_url())
+            .context("failed to create gRPC client for full checkpoint fetch")?;
+
+        match client.get_full_checkpoint(sequence).await {
+            Ok(checkpoint) => Ok(Some(checkpoint)),
+            Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
+            Err(status) => Err(Error::msg(format!(
+                "failed to fetch full checkpoint {}: {}",
+                sequence, status
+            ))),
+        }
+    }
+
+    async fn latest_full_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+        let mut client = sui_rpc_api::Client::new(self.node.node_url())
+            .context("failed to create gRPC client for latest checkpoint fetch")?;
+
+        let summary = match client.get_latest_checkpoint().await {
+            Ok(summary) => summary,
+            Err(status) if status.code() == tonic::Code::NotFound => return Ok(None),
+            Err(status) => {
+                return Err(Error::msg(format!(
+                    "failed to fetch latest checkpoint summary: {}",
+                    status
+                )));
+            }
+        };
+
+        self.full_checkpoint(summary.sequence_number).await
+    }
 }
 
 impl StoreSummary for DataStore {
@@ -366,6 +449,9 @@ impl StoreSummary for DataStore {
         let proto_hit = m.proto_hit.load(Ordering::Relaxed);
         let proto_miss = m.proto_miss.load(Ordering::Relaxed);
         let proto_err = m.proto_error.load(Ordering::Relaxed);
+        let checkpoint_hit = m.checkpoint_hit.load(Ordering::Relaxed);
+        let checkpoint_miss = m.checkpoint_miss.load(Ordering::Relaxed);
+        let checkpoint_err = m.checkpoint_error.load(Ordering::Relaxed);
         let obj_v_hit = m.obj_version_hit.load(Ordering::Relaxed);
         let obj_v_miss = m.obj_version_miss.load(Ordering::Relaxed);
         let obj_v_err = m.obj_version_error.load(Ordering::Relaxed);
@@ -378,9 +464,9 @@ impl StoreSummary for DataStore {
         let obj_total_hit = obj_v_hit + obj_r_hit + obj_c_hit;
         let obj_total_miss = obj_v_miss + obj_r_miss + obj_c_miss;
         let obj_total_err = obj_v_err + obj_r_err + obj_c_err;
-        let total_hit = txn_hit + epoch_hit + proto_hit + obj_total_hit;
-        let total_miss = txn_miss + epoch_miss + proto_miss + obj_total_miss;
-        let total_err = txn_err + epoch_err + proto_err + obj_total_err;
+        let total_hit = txn_hit + epoch_hit + proto_hit + checkpoint_hit + obj_total_hit;
+        let total_miss = txn_miss + epoch_miss + proto_miss + checkpoint_miss + obj_total_miss;
+        let total_err = txn_err + epoch_err + proto_err + checkpoint_err + obj_total_err;
 
         writeln!(w, "DataStore (remote GQL) summary")?;
         writeln!(w, "  Node: {:?}", self.node())?;
@@ -410,6 +496,11 @@ impl StoreSummary for DataStore {
             w,
             "    Protocol:    hit={} miss={} error={}",
             proto_hit, proto_miss, proto_err
+        )?;
+        writeln!(
+            w,
+            "    Checkpoint:  hit={} miss={} error={}",
+            checkpoint_hit, checkpoint_miss, checkpoint_err
         )?;
         writeln!(
             w,

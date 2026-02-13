@@ -4,6 +4,8 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
+use tracing::warn;
+
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
@@ -11,11 +13,13 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::SimulatorStore;
 use sui_data_store::stores::{DataStore, FileSystemStore, ReadThroughStore};
 use sui_data_store::{
-    ObjectKey, ObjectStore as _, TransactionInfo, TransactionStore, TransactionStoreWriter,
-    VersionQuery,
+    CheckpointIndexStore as _, CheckpointStore as _, CheckpointStoreWriter as _,
+    FullCheckpointData, ObjectKey, ObjectStore as _, TransactionInfo, TransactionStore,
+    TransactionStoreWriter, VersionQuery,
 };
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::clock::Clock;
+use sui_types::message_envelope::Envelope;
 use sui_types::storage::ReadStore;
 use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
 use sui_types::transaction::{SenderSignedData, Transaction};
@@ -37,91 +41,154 @@ use sui_types::{
 };
 
 pub struct ForkingStore {
-    // Checkpoint data
-    checkpoints: BTreeMap<CheckpointSequenceNumber, VerifiedCheckpoint>,
-    checkpoint_digest_to_sequence_number: HashMap<CheckpointDigest, CheckpointSequenceNumber>,
-    checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
-
     // Transaction data not available through fs transaction file blobs.
     events: HashMap<TransactionDigest, TransactionEvents>,
 
     // Committee data
     epoch_to_committee: Vec<Committee>,
 
-    // Object and transaction data through a cache layer provided by `sui-data-store` crate.
+    /// FileSystemStore operates as a local cache for
+    /// - checkpoints
+    /// - transactions
+    /// - objects
+    ///
+    /// It does not have a fallback mechanism, so it will only contain data that is explicitly
+    /// available on the local filesystem.
     fs_store: FileSystemStore,
-    object_store: ReadThroughStore<FileSystemStore, DataStore>,
+
+    /// Store set up as a primary/secondary read-through store, where the primary store is the
+    /// FileSystemStore and the secondary store is a DataStore that fetches data from RPC at the
+    /// forked checkpoint. The secondary store is used to read data that is
+    /// not available in the FileSystemStore, and it will it write back to the FileSystemStore.
+    fs_gql_store: ReadThroughStore<FileSystemStore, DataStore>,
 
     // The checkpoint at which this forked network was forked
     forked_at_checkpoint: u64,
+
+    // Simulacrum inserts checkpoint summary and contents in two separate calls.
+    // Keep the summary only until contents arrives so we can persist one full checkpoint payload.
+    pending_checkpoint: Option<VerifiedCheckpoint>,
 }
 
 impl ForkingStore {
+    /// Creates a forking store with local filesystem and read-through RPC-backed stores.
     pub fn new(
-        // genesis: &Genesis,
         forked_at_checkpoint: u64,
         fs_store: FileSystemStore,
-        object_store: ReadThroughStore<FileSystemStore, DataStore>,
-    ) -> Self {
-        let store = Self::new_with_rpc_data_store_and_checkpoint(
-            fs_store,
-            object_store,
-            forked_at_checkpoint,
-        );
-
-        store
-    }
-
-    fn new_with_rpc_data_store_and_checkpoint(
-        fs_store: FileSystemStore,
-        object_store: ReadThroughStore<FileSystemStore, DataStore>,
-        forked_at_checkpoint: u64,
+        fs_gql_store: ReadThroughStore<FileSystemStore, DataStore>,
     ) -> Self {
         Self {
-            checkpoints: BTreeMap::new(),
-            checkpoint_digest_to_sequence_number: HashMap::new(),
-            checkpoint_contents: HashMap::new(),
             events: HashMap::new(),
             epoch_to_committee: vec![],
             fs_store,
-            object_store,
+            fs_gql_store,
             forked_at_checkpoint,
+            pending_checkpoint: None,
         }
     }
 
+    /// Returns `true` when a sequence is at or after the fork boundary.
+    pub fn is_post_fork(&self, sequence: CheckpointSequenceNumber) -> bool {
+        sequence >= self.forked_at_checkpoint
+    }
+
+    /// Converts full checkpoint payload data into a verified checkpoint summary envelope.
+    fn verified_checkpoint_from_full_checkpoint_data(
+        checkpoint: &FullCheckpointData,
+    ) -> VerifiedCheckpoint {
+        let certified_summary = checkpoint.summary.clone();
+        let envelope = Envelope::new_from_data_and_sig(
+            certified_summary.data().clone(),
+            certified_summary.auth_sig().clone(),
+        );
+        VerifiedCheckpoint::new_unchecked(envelope)
+    }
+
+    /// Loads full checkpoint payload by sequence.
+    /// When `should_fallback` is `true`, pre-fork misses are eligible for read-through fetches.
+    /// Post-fork reads are always local-only.
+    pub fn get_full_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+        should_fallback: bool,
+    ) -> Option<FullCheckpointData> {
+        if !should_fallback || self.is_post_fork(sequence_number) {
+            self.fs_store
+                .get_checkpoint_by_sequence_number(sequence_number)
+                .ok()
+                .flatten()
+        } else {
+            self.fs_gql_store
+                .get_checkpoint_by_sequence_number(sequence_number)
+                .ok()
+                .flatten()
+        }
+    }
+
+    /// Returns checkpoint summary by sequence.
+    /// When `should_fallback` is `true`, pre-fork misses can go through read-through.
     pub fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<&VerifiedCheckpoint> {
-        self.checkpoints.get(&sequence_number)
+        should_fallback: bool,
+    ) -> Option<VerifiedCheckpoint> {
+        self.get_full_checkpoint_by_sequence_number(sequence_number, should_fallback)
+            .map(|checkpoint| Self::verified_checkpoint_from_full_checkpoint_data(&checkpoint))
     }
 
+    /// Returns checkpoint summary by digest via local digest index and sequence read.
     pub fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
-    ) -> Option<&VerifiedCheckpoint> {
-        self.checkpoint_digest_to_sequence_number
-            .get(digest)
-            .and_then(|sequence_number| self.get_checkpoint_by_sequence_number(*sequence_number))
+        should_fallback: bool,
+    ) -> Option<VerifiedCheckpoint> {
+        let sequence_number = self
+            .fs_store
+            .get_sequence_by_checkpoint_digest(digest)
+            .ok()
+            .flatten()?;
+        self.get_checkpoint_by_sequence_number(sequence_number, should_fallback)
     }
 
-    pub fn get_highest_checkpint(&self) -> Option<&VerifiedCheckpoint> {
-        self.checkpoints
-            .last_key_value()
-            .map(|(_, checkpoint)| checkpoint)
+    /// Returns checkpoint contents by sequence.
+    /// When `should_fallback` is `true`, pre-fork misses can go through read-through.
+    pub fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+        should_fallback: bool,
+    ) -> Option<CheckpointContents> {
+        self.get_full_checkpoint_by_sequence_number(sequence_number, should_fallback)
+            .map(|checkpoint| checkpoint.contents)
     }
 
-    pub fn get_checkpoint_contents(
+    /// Returns checkpoint contents by digest via local digest index and sequence read.
+    pub fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<&CheckpointContents> {
-        self.checkpoint_contents.get(digest)
+        should_fallback: bool,
+    ) -> Option<CheckpointContents> {
+        let sequence_number = self
+            .fs_store
+            .get_sequence_by_contents_digest(digest)
+            .ok()
+            .flatten()?;
+        self.get_checkpoint_contents_by_sequence_number(sequence_number, should_fallback)
     }
 
+    /// Returns the latest locally available checkpoint summary from filesystem cache.
+    pub fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
+        let full_checkpoint = self.fs_store.get_latest_checkpoint().ok().flatten()?;
+        Some(Self::verified_checkpoint_from_full_checkpoint_data(
+            &full_checkpoint,
+        ))
+    }
+
+    /// Returns committee metadata for an epoch, if known in-memory.
     pub fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee> {
         self.epoch_to_committee.get(epoch as usize)
     }
 
+    /// Returns the transaction by digest from local filesystem transaction cache.
     pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
         let tx = self
             .fs_store
@@ -141,6 +208,7 @@ impl ForkingStore {
         Some(tx)
     }
 
+    /// Returns transaction effects by digest from local filesystem transaction cache.
     pub fn get_transaction_effects(
         &self,
         digest: &TransactionDigest,
@@ -153,6 +221,7 @@ impl ForkingStore {
         tx.map(|tx_info| tx_info.effects)
     }
 
+    /// Returns in-memory transaction events by transaction digest.
     pub fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<&TransactionEvents> {
         self.events.get(digest)
     }
@@ -172,7 +241,7 @@ impl ForkingStore {
         // (DataStore) if not found, and it will be written back to the primary cache for future
         // reads.
         let objects = self
-            .object_store
+            .fs_gql_store
             .get_objects(&[ObjectKey {
                 object_id: *id,
                 version_query: sui_data_store::VersionQuery::AtCheckpoint(
@@ -185,9 +254,10 @@ impl ForkingStore {
         first.map(|(obj, _)| obj.clone())
     }
 
+    /// Returns an object at an exact version using read-through object fetch.
     pub fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
         let objects = self
-            .object_store
+            .fs_gql_store
             .get_objects(&[ObjectKey {
                 object_id: *id,
                 version_query: sui_data_store::VersionQuery::Version(version.into()),
@@ -207,9 +277,10 @@ impl ForkingStore {
         &self,
         keys: &[ObjectKey],
     ) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
-        self.object_store.get_objects(keys)
+        self.fs_gql_store.get_objects(keys)
     }
 
+    /// Returns the current system state view derived from this store.
     pub fn get_system_state(&self) -> SuiSystemState {
         get_sui_system_state(self).expect("system state should exist")
     }
@@ -223,6 +294,7 @@ impl ForkingStore {
             .expect("clock object should deserialize")
     }
 
+    /// Returns all locally cached objects currently owned by an address.
     pub fn owned_objects(&self, owner: SuiAddress) -> Vec<Object> {
         self.fs_store
             .get_objects_by_owner(owner)
@@ -231,6 +303,8 @@ impl ForkingStore {
 }
 
 impl ForkingStore {
+    /// Records checkpoint summary state and updates committee map on epoch transitions.
+    /// The matching contents are expected in a later `insert_checkpoint_contents` call.
     pub fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
         if let Some(end_of_epoch_data) = &checkpoint.data().end_of_epoch_data {
             let next_committee = end_of_epoch_data
@@ -243,17 +317,58 @@ impl ForkingStore {
             self.insert_committee(committee);
         }
 
-        self.checkpoint_digest_to_sequence_number
-            .insert(*checkpoint.digest(), *checkpoint.sequence_number());
-        self.checkpoints
-            .insert(*checkpoint.sequence_number(), checkpoint);
+        if let Some(previous_pending) = &self.pending_checkpoint {
+            warn!(
+                previous_sequence = *previous_pending.sequence_number(),
+                next_sequence = *checkpoint.sequence_number(),
+                "overwriting pending checkpoint before matching contents were inserted"
+            );
+        }
+        self.pending_checkpoint = Some(checkpoint);
     }
 
+    /// Completes a pending checkpoint and persists full checkpoint payload for post-fork sequences.
     pub fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
-        self.checkpoint_contents
-            .insert(*contents.digest(), contents);
+        let Some(checkpoint) = self.pending_checkpoint.take() else {
+            warn!("checkpoint contents inserted without a pending checkpoint summary");
+            return;
+        };
+
+        if checkpoint.content_digest != *contents.digest() {
+            warn!(
+                sequence_number = *checkpoint.sequence_number(),
+                "checkpoint content digest mismatch between summary and inserted contents"
+            );
+            return;
+        }
+
+        let sequence_number = *checkpoint.sequence_number();
+
+        // The startup checkpoint is fetched directly through the checkpoint store read path.
+        // Only persist checkpoints produced after the fork point.
+        if sequence_number <= self.forked_at_checkpoint {
+            return;
+        }
+
+        match self.get_checkpoint_data(checkpoint, contents) {
+            Ok(full_checkpoint) => {
+                if let Err(err) = self.fs_store.write_checkpoint(&full_checkpoint) {
+                    warn!(
+                        sequence_number,
+                        "failed to persist checkpoint to checkpoint store: {err}"
+                    );
+                }
+            }
+            Err(err) => {
+                warn!(
+                    sequence_number,
+                    "failed to build full checkpoint data for persistence: {err}"
+                );
+            }
+        }
     }
 
+    /// Inserts committee info for an epoch if not already present.
     pub fn insert_committee(&mut self, committee: Committee) {
         let epoch = committee.epoch as usize;
 
@@ -304,21 +419,25 @@ impl ForkingStore {
             })
             .collect();
 
-        self.object_store.write_objects(objects).unwrap();
+        self.fs_gql_store.write_objects(objects).unwrap();
     }
 
+    /// Placeholder for direct transaction insertion; currently unused.
     pub fn insert_transaction(&mut self, _transaction: VerifiedTransaction) {
         todo!()
     }
 
+    /// Placeholder for direct effects insertion; currently unused.
     pub fn insert_transaction_effects(&mut self, _effects: TransactionEffects) {
         todo!()
     }
 
+    /// Stores transaction events in-memory.
     pub fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
         self.events.insert(*tx_digest, events);
     }
 
+    /// Placeholder for object update path; currently unused.
     pub fn update_objects(
         &mut self,
         _written_objects: BTreeMap<ObjectID, Object>,
@@ -353,7 +472,7 @@ impl ChildObjectResolver for ForkingStore {
             object_id: *child,
             version_query: VersionQuery::RootVersion(child_version_upper_bound.value()),
         };
-        let object = self.object_store.get_objects(&[object_key]).unwrap();
+        let object = self.fs_gql_store.get_objects(&[object_key]).unwrap();
         debug_assert!(object.len() == 1, "Expected one object for {}", child,);
         let object = object
             .into_iter()
@@ -440,23 +559,22 @@ impl SimulatorStore for ForkingStore {
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        self.get_checkpoint_by_sequence_number(sequence_number)
-            .cloned()
+        ForkingStore::get_checkpoint_by_sequence_number(self, sequence_number, true)
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        self.get_checkpoint_by_digest(digest).cloned()
+        ForkingStore::get_checkpoint_by_digest(self, digest, true)
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        self.get_highest_checkpint().cloned()
+        ForkingStore::get_highest_checkpint(self)
     }
 
     fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        self.get_checkpoint_contents(digest).cloned()
+        ForkingStore::get_checkpoint_contents_by_digest(self, digest, true)
     }
 
     fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<Committee> {
@@ -579,7 +697,6 @@ impl ReadStore for ForkingStore {
 
     fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
         self.get_highest_checkpint()
-            .cloned()
             .ok_or_else(|| sui_types::storage::error::Error::custom("No checkpoint available"))
     }
 
@@ -602,30 +719,28 @@ impl ReadStore for ForkingStore {
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        ForkingStore::get_checkpoint_by_digest(self, digest).cloned()
+        ForkingStore::get_checkpoint_by_digest(self, digest, true)
     }
 
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        ForkingStore::get_checkpoint_by_sequence_number(self, sequence_number).cloned()
+        ForkingStore::get_checkpoint_by_sequence_number(self, sequence_number, true)
     }
 
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        self.get_checkpoint_contents(digest).cloned()
+        ForkingStore::get_checkpoint_contents_by_digest(self, digest, true)
     }
 
     fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<CheckpointContents> {
-        let checkpoint = self.get_checkpoint_by_sequence_number(sequence_number)?;
-        self.get_checkpoint_contents(&checkpoint.content_digest)
-            .cloned()
+        ForkingStore::get_checkpoint_contents_by_sequence_number(self, sequence_number, true)
     }
 
     fn get_transaction(&self, tx_digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {

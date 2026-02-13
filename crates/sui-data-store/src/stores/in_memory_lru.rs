@@ -8,9 +8,10 @@
 //! This is useful to avoid unbounded memory growth under heavy load.
 
 use crate::{
-    EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore,
-    StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter, VersionQuery,
-    node::Node,
+    CheckpointIndexStore, CheckpointIndexStoreWriter, CheckpointStore, CheckpointStoreWriter,
+    EpochData, EpochStore, EpochStoreWriter, FullCheckpointData, ObjectKey, ObjectStore,
+    ObjectStoreWriter, SetupStore, StoreSummary, TransactionInfo, TransactionStore,
+    TransactionStoreWriter, VersionQuery, node::Node,
 };
 use anyhow::{Error, Result};
 use lru::LruCache;
@@ -24,6 +25,8 @@ use std::{
 use sui_types::{
     base_types::ObjectID,
     committee::ProtocolVersion,
+    digests::{CheckpointContentsDigest, CheckpointDigest},
+    messages_checkpoint::CheckpointSequenceNumber,
     object::Object,
     supported_protocol_versions::{Chain, ProtocolConfig},
 };
@@ -31,6 +34,9 @@ use sui_types::{
 /// Default cache capacities
 const DEFAULT_TXN_CAP: usize = 10_000;
 const DEFAULT_EPOCH_CAP: usize = 10_000;
+const DEFAULT_FULL_CHECKPOINT_CAP: usize = 1_000;
+const DEFAULT_CHECKPOINT_DIGEST_INDEX_CAP: usize = 5_000;
+const DEFAULT_CONTENTS_DIGEST_INDEX_CAP: usize = 5_000;
 const DEFAULT_OBJECT_CAP: usize = 50_000;
 const DEFAULT_ROOT_MAP_CAP: usize = 50_000;
 const DEFAULT_CHECKPOINT_MAP_CAP: usize = 50_000;
@@ -40,6 +46,9 @@ struct LruMemoryStoreInner {
     node: Node,
     transaction_cache: LruCache<String, TransactionInfo>,
     epoch_data_cache: LruCache<u64, EpochData>,
+    checkpoint_data_cache: LruCache<CheckpointSequenceNumber, FullCheckpointData>,
+    checkpoint_digest_index: LruCache<CheckpointDigest, CheckpointSequenceNumber>,
+    checkpoint_contents_digest_index: LruCache<CheckpointContentsDigest, CheckpointSequenceNumber>,
     /// Objects are cached by (ObjectID, actual_version)
     object_cache: LruCache<(ObjectID, u64), Object>,
     // The next 2 maps can be organized as flat maps or nested maps
@@ -71,6 +80,10 @@ struct LruStoreMetrics {
     proto_hit: AtomicU64,
     proto_miss: AtomicU64,
     proto_error: AtomicU64,
+    // checkpoints
+    checkpoint_hit: AtomicU64,
+    checkpoint_miss: AtomicU64,
+    checkpoint_error: AtomicU64,
     // objects by query kind
     obj_version_hit: AtomicU64,
     obj_version_miss: AtomicU64,
@@ -90,6 +103,9 @@ impl LruMemoryStore {
             node,
             DEFAULT_TXN_CAP,
             DEFAULT_EPOCH_CAP,
+            DEFAULT_FULL_CHECKPOINT_CAP,
+            DEFAULT_CHECKPOINT_DIGEST_INDEX_CAP,
+            DEFAULT_CONTENTS_DIGEST_INDEX_CAP,
             DEFAULT_OBJECT_CAP,
             DEFAULT_ROOT_MAP_CAP,
             DEFAULT_CHECKPOINT_MAP_CAP,
@@ -101,6 +117,9 @@ impl LruMemoryStore {
         node: Node,
         txn_cap: usize,
         epoch_cap: usize,
+        full_checkpoint_cap: usize,
+        checkpoint_digest_index_cap: usize,
+        contents_digest_index_cap: usize,
         object_cap: usize,
         root_map_cap: usize,
         checkpoint_map_cap: usize,
@@ -110,6 +129,9 @@ impl LruMemoryStore {
             node,
             transaction_cache: LruCache::new(nz(txn_cap)),
             epoch_data_cache: LruCache::new(nz(epoch_cap)),
+            checkpoint_data_cache: LruCache::new(nz(full_checkpoint_cap)),
+            checkpoint_digest_index: LruCache::new(nz(checkpoint_digest_index_cap)),
+            checkpoint_contents_digest_index: LruCache::new(nz(contents_digest_index_cap)),
             object_cache: LruCache::new(nz(object_cap)),
             root_version_cache: LruCache::new(nz(root_map_cap)),
             checkpoint_cache: LruCache::new(nz(checkpoint_map_cap)),
@@ -245,6 +267,99 @@ impl ObjectStore for LruMemoryStore {
     }
 }
 
+impl CheckpointStore for LruMemoryStore {
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointData>, Error> {
+        let mut inner = self.0.write().unwrap();
+        let checkpoint = inner.checkpoint_data_cache.get(&sequence).cloned();
+        if checkpoint.is_some() {
+            inner.metrics.checkpoint_hit.fetch_add(1, Ordering::Relaxed);
+        } else {
+            inner
+                .metrics
+                .checkpoint_miss
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        Ok(checkpoint)
+    }
+
+    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+        let inner = self.0.write().unwrap();
+        let latest = inner
+            .checkpoint_data_cache
+            .iter()
+            .max_by_key(|(sequence, _)| *sequence)
+            .map(|(_, checkpoint)| checkpoint.clone());
+        if latest.is_some() {
+            inner.metrics.checkpoint_hit.fetch_add(1, Ordering::Relaxed);
+        } else {
+            inner
+                .metrics
+                .checkpoint_miss
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        Ok(latest)
+    }
+}
+
+impl CheckpointStoreWriter for LruMemoryStore {
+    fn write_checkpoint(&self, checkpoint: &FullCheckpointData) -> Result<(), Error> {
+        let mut inner = self.0.write().unwrap();
+        let sequence = checkpoint.summary.sequence_number;
+        let checkpoint_digest = *checkpoint.summary.digest();
+        let contents_digest = *checkpoint.contents.digest();
+
+        inner
+            .checkpoint_data_cache
+            .put(sequence, checkpoint.clone());
+        inner
+            .checkpoint_digest_index
+            .put(checkpoint_digest, sequence);
+        inner
+            .checkpoint_contents_digest_index
+            .put(contents_digest, sequence);
+        Ok(())
+    }
+}
+
+impl CheckpointIndexStore for LruMemoryStore {
+    fn get_sequence_by_checkpoint_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        let mut inner = self.0.write().unwrap();
+        Ok(inner.checkpoint_digest_index.get(digest).copied())
+    }
+
+    fn get_sequence_by_contents_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        let mut inner = self.0.write().unwrap();
+        Ok(inner.checkpoint_contents_digest_index.get(digest).copied())
+    }
+}
+
+impl CheckpointIndexStoreWriter for LruMemoryStore {
+    fn write_checkpoint_indexes(
+        &self,
+        sequence: CheckpointSequenceNumber,
+        checkpoint_digest: CheckpointDigest,
+        contents_digest: CheckpointContentsDigest,
+    ) -> Result<(), Error> {
+        let mut inner = self.0.write().unwrap();
+        inner
+            .checkpoint_digest_index
+            .put(checkpoint_digest, sequence);
+        inner
+            .checkpoint_contents_digest_index
+            .put(contents_digest, sequence);
+        Ok(())
+    }
+}
+
 impl TransactionStoreWriter for LruMemoryStore {
     fn write_transaction(
         &self,
@@ -323,6 +438,9 @@ impl StoreSummary for LruMemoryStore {
         let proto_hit = m.proto_hit.load(Ordering::Relaxed);
         let proto_miss = m.proto_miss.load(Ordering::Relaxed);
         let proto_err = m.proto_error.load(Ordering::Relaxed);
+        let checkpoint_hit = m.checkpoint_hit.load(Ordering::Relaxed);
+        let checkpoint_miss = m.checkpoint_miss.load(Ordering::Relaxed);
+        let checkpoint_err = m.checkpoint_error.load(Ordering::Relaxed);
         let obj_v_hit = m.obj_version_hit.load(Ordering::Relaxed);
         let obj_v_miss = m.obj_version_miss.load(Ordering::Relaxed);
         let obj_v_err = m.obj_version_error.load(Ordering::Relaxed);
@@ -335,9 +453,9 @@ impl StoreSummary for LruMemoryStore {
         let obj_total_hit = obj_v_hit + obj_r_hit + obj_c_hit;
         let obj_total_miss = obj_v_miss + obj_r_miss + obj_c_miss;
         let obj_total_err = obj_v_err + obj_r_err + obj_c_err;
-        let total_hit = txn_hit + epoch_hit + proto_hit + obj_total_hit;
-        let total_miss = txn_miss + epoch_miss + proto_miss + obj_total_miss;
-        let total_err = txn_err + epoch_err + proto_err + obj_total_err;
+        let total_hit = txn_hit + epoch_hit + proto_hit + checkpoint_hit + obj_total_hit;
+        let total_miss = txn_miss + epoch_miss + proto_miss + checkpoint_miss + obj_total_miss;
+        let total_err = txn_err + epoch_err + proto_err + checkpoint_err + obj_total_err;
 
         writeln!(w, "LruMemoryStore summary")?;
         writeln!(w, "  Node: {:?}", self.node())?;
@@ -360,6 +478,11 @@ impl StoreSummary for LruMemoryStore {
             w,
             "    Protocol:    hit={} miss={} error={}",
             proto_hit, proto_miss, proto_err
+        )?;
+        writeln!(
+            w,
+            "    Checkpoint:  hit={} miss={} error={}",
+            checkpoint_hit, checkpoint_miss, checkpoint_err
         )?;
         writeln!(
             w,

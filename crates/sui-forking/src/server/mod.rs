@@ -1,15 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    net::SocketAddr,
-    num::NonZeroUsize,
-    path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-};
+use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 use anyhow::{Context as _, Result};
 use axum::{
@@ -19,7 +11,6 @@ use axum::{
     routing::{get, post},
 };
 use prometheus::Registry;
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
@@ -27,23 +18,18 @@ use tracing::{info, warn};
 
 use simulacrum::{AdvanceEpochConfig, Simulacrum, store::in_mem_store::KeyStore};
 use sui_data_store::{
-    Node,
+    CheckpointStore as _, Node,
     stores::{DataStore, FileSystemStore, NODE_MAPPING_FILE, ReadThroughStore},
 };
-use sui_pg_db::{DbArgs, reset_database};
 use sui_types::{
     accumulator_root::get_accumulator_root_obj_initial_shared_version,
     base_types::SuiAddress,
-    crypto::AuthorityQuorumSignInfo,
     digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
     effects::TransactionEffectsAPI,
     message_envelope::Envelope,
-    messages_checkpoint::{CheckpointContents, CheckpointSummary, VerifiedCheckpoint},
+    messages_checkpoint::VerifiedCheckpoint,
     sui_system_state::SuiSystemState,
-    supported_protocol_versions::{
-        Chain::{self},
-        ProtocolConfig,
-    },
+    supported_protocol_versions::Chain::{self},
     transaction::Transaction,
 };
 
@@ -56,7 +42,6 @@ use crate::grpc::{
 use crate::{graphql::GraphQLClient, seeds::InitialAccounts, store::ForkingStore};
 
 use rand::rngs::OsRng;
-use roaring::RoaringBitmap;
 use sui_futures::service::Service;
 use sui_rpc::proto::sui::rpc::v2::{
     ledger_service_server::LedgerServiceServer,
@@ -98,35 +83,18 @@ pub struct ApiResponse<T> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ForkingStatus {
-    pub forked_at_checkpoint: u64,
     pub checkpoint: u64,
     pub epoch: u64,
-    pub transaction_count: usize,
 }
 
 /// The shared state for the forking server
 pub struct AppState {
     pub context: crate::context::Context,
-    pub transaction_count: Arc<AtomicUsize>,
-    pub forked_at_checkpoint: u64,
-    pub _chain: Chain,
-    pub _protocol_config: ProtocolConfig,
 }
 
 impl AppState {
-    pub async fn new(
-        context: crate::context::Context,
-        chain: Chain,
-        forked_at_checkpoint: u64,
-        protocol_config: ProtocolConfig,
-    ) -> Self {
-        Self {
-            context,
-            transaction_count: Arc::new(AtomicUsize::new(0)),
-            forked_at_checkpoint,
-            _chain: chain,
-            _protocol_config: protocol_config,
-        }
+    pub async fn new(context: crate::context::Context) -> Self {
+        Self { context }
     }
 }
 
@@ -149,12 +117,7 @@ async fn get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         .map(|c| c.epoch())
         .unwrap_or(0);
 
-    let status = ForkingStatus {
-        forked_at_checkpoint: state.forked_at_checkpoint,
-        checkpoint,
-        epoch,
-        transaction_count: state.transaction_count.load(Ordering::SeqCst),
-    };
+    let status = ForkingStatus { checkpoint, epoch };
 
     Json(ApiResponse {
         success: true,
@@ -169,7 +132,6 @@ async fn advance_checkpoint(State(state): State<Arc<AppState>>) -> impl IntoResp
 
         // create_checkpoint returns a VerifiedCheckpoint, not a Result
         let checkpoint = sim.create_checkpoint();
-        state.transaction_count.fetch_add(1, Ordering::SeqCst);
         info!("Advanced to checkpoint {}", checkpoint.sequence_number);
         checkpoint.sequence_number
     };
@@ -203,7 +165,6 @@ async fn advance_clock(
 
     let duration = std::time::Duration::from_secs(request.seconds);
     sim.advance_clock(duration);
-    state.transaction_count.fetch_add(1, Ordering::SeqCst);
     info!("Advanced clock by {} seconds", request.seconds);
 
     Json(ApiResponse::<String> {
@@ -220,7 +181,6 @@ async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl IntoResponse 
         // Use default configuration for advancing epoch
         let config = AdvanceEpochConfig::default();
         sim.advance_epoch(config);
-        state.transaction_count.fetch_add(1, Ordering::SeqCst);
         info!("Advanced to next epoch");
         sim.store()
             .get_highest_checkpint()
@@ -287,7 +247,6 @@ async fn execute_tx(
 
             let error_str = execution_error.map(|e| format!("{:?}", e));
 
-            state.transaction_count.fetch_add(1, Ordering::SeqCst);
             info!("Executed transaction successfully");
 
             Json(ApiResponse {
@@ -329,7 +288,6 @@ async fn faucet(
             let effects_base64 =
                 base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &effects_bytes);
 
-            state.transaction_count.fetch_add(1, Ordering::SeqCst);
             info!("Executed transaction successfully");
 
             Json(ApiResponse {
@@ -372,12 +330,6 @@ pub async fn start_server(
         "Starting from {} at checkpoint {} with protocol version {}",
         chain_str, at_checkpoint, protocol_version
     );
-    let protocol_config = ProtocolConfig::get_for_version(protocol_version.into(), chain);
-    let database_url = Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
-
-    {
-        reset_database(database_url.clone(), DbArgs::default(), None).await?;
-    }
 
     let simulacrum = initialize_simulacrum(
         at_checkpoint,
@@ -404,15 +356,13 @@ pub async fn start_server(
         simulacrum: simulacrum.clone(),
         subscription_service_handle,
         checkpoint_sender,
-        at_checkpoint,
         chain_id,
     };
 
     let grpc = start_grpc_services(context.clone(), version, &registry).await?;
     let grpc_handle = tokio::spawn(grpc.main());
 
-    let state =
-        Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
+    let state = Arc::new(AppState::new(context.clone()).await);
 
     let app = Router::new()
         .route("/health", get(health))
@@ -450,25 +400,6 @@ pub async fn start_server(
     info!("Server shutdown complete");
 
     Ok(())
-}
-
-/// Fetch a checkpoint from the GraphQL RPC and deserialize it into a
-/// `VerifiedCheckpoint` and `CheckpointContents`.
-///
-/// We trust the RPC response, so the checkpoint is wrapped with
-/// `new_unchecked` rather than verifying signatures against a committee.
-pub async fn fetch_checkpoint_from_graphql(
-    client: &GraphQLClient,
-    sequence_number: Option<u64>,
-) -> Result<(CheckpointSummary, CheckpointContents)> {
-    let (summary_bytes, content_bytes) = client.fetch_checkpoint_bcs(sequence_number).await?;
-
-    let summary: CheckpointSummary = bcs::from_bytes(&summary_bytes)
-        .context("Failed to deserialize checkpoint summary from GraphQL")?;
-    let contents: CheckpointContents = bcs::from_bytes(&content_bytes)
-        .context("Failed to deserialize checkpoint contents from GraphQL")?;
-
-    Ok((summary, contents))
 }
 
 // // const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6", "0xacc"];
@@ -554,19 +485,29 @@ async fn initialize_simulacrum(
         .with_chain_override(chain)
         .build();
 
-    let checkpoint = fetch_checkpoint_from_graphql(client, Some(at_checkpoint)).await?;
-    let sig = AuthorityQuorumSignInfo::<true> {
-        epoch: checkpoint.0.epoch,
-        signature: Default::default(),
-        signers_map: RoaringBitmap::new(),
+    let (fs_store, fs_gql_store) = initialize_data_store(chain, at_checkpoint, version);
+
+    let startup_checkpoint = match fs_store
+        .get_checkpoint_by_sequence_number(at_checkpoint)
+        .context("failed to read startup checkpoint from local checkpoint store")?
+    {
+        Some(checkpoint) => checkpoint,
+        None => fs_gql_store
+            .get_checkpoint_by_sequence_number(at_checkpoint)
+            .context("failed to hydrate startup checkpoint from checkpoint read-through store")?
+            .with_context(|| format!("checkpoint {at_checkpoint} not found"))?,
     };
-    let env_checkpoint = Envelope::new_from_data_and_sig(checkpoint.0, sig);
+
+    let certified_summary = startup_checkpoint.summary.clone();
+    let env_checkpoint = Envelope::new_from_data_and_sig(
+        certified_summary.data().clone(),
+        certified_summary.auth_sig().clone(),
+    );
     let verified_checkpoint = VerifiedCheckpoint::new_unchecked(env_checkpoint);
 
-    let (fs_transaction_store, object_store) = initialize_data_store(chain, at_checkpoint, version);
-    let mut store = ForkingStore::new(at_checkpoint, fs_transaction_store, object_store);
+    let mut store = ForkingStore::new(at_checkpoint, fs_store, fs_gql_store);
     store.insert_checkpoint(verified_checkpoint.clone());
-    store.insert_checkpoint_contents(checkpoint.1.clone());
+    store.insert_checkpoint_contents(startup_checkpoint.contents.clone());
     store.insert_committee(config.genesis.committee());
     initial_accounts
         .prefetch_owned_objects(&store, client.endpoint(), at_checkpoint)
@@ -635,9 +576,8 @@ fn initialize_data_store(
     let fs_base_path = FileSystemStore::base_path().unwrap().join(forking_path);
     let fs = FileSystemStore::new_with_path(node.clone(), fs_base_path.clone()).unwrap();
     let gql_rpc_store = DataStore::new(node.clone(), version).unwrap();
-    let fs_transaction_store =
-        FileSystemStore::new_with_path(node.clone(), fs_base_path.clone()).unwrap();
-    let object_store = ReadThroughStore::new(fs, gql_rpc_store);
+    let fs_store = FileSystemStore::new_with_path(node.clone(), fs_base_path.clone()).unwrap();
+    let fs_gql_store = ReadThroughStore::new(fs, gql_rpc_store);
 
     info!("Fs base path {:?}", fs_base_path.display());
     let node_mapping_file = fs_base_path.join(NODE_MAPPING_FILE);
@@ -653,7 +593,7 @@ fn initialize_data_store(
         .unwrap();
     }
 
-    (fs_transaction_store, object_store)
+    (fs_store, fs_gql_store)
 }
 
 // Where are we at

@@ -124,7 +124,6 @@ async fn main() -> Result<()> {
                 if let Some(status) = result.data {
                     println!("Checkpoint: {}", status.checkpoint);
                     println!("Epoch: {}", status.epoch);
-                    println!("Transactions: {}", status.transaction_count);
                 } else {
                     println!("Error: {:?}", result.error);
                 }

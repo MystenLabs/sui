@@ -13,7 +13,7 @@ use sui_rpc::proto::sui::rpc::v2::{
     BatchGetTransactionsResponse, ExecutedTransaction, GetCheckpointRequest, GetCheckpointResponse,
     GetEpochRequest, GetEpochResponse, GetObjectRequest, GetObjectResponse, GetObjectResult,
     GetServiceInfoRequest, GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
-    GetTransactionResult, Object, Transaction, TransactionEffects, TransactionEvents,
+    GetTransactionResult, Object, ObjectSet, Transaction, TransactionEffects, TransactionEvents,
     UserSignature, ledger_service_server::LedgerService,
 };
 use sui_rpc::proto::sui::rpc::v2::{Checkpoint, Epoch, ValidatorCommittee};
@@ -25,14 +25,14 @@ use sui_rpc_api::{
     CheckpointNotFoundError, ErrorReason, ObjectNotFoundError, RpcError, TransactionNotFoundError,
 };
 use sui_sdk_types::Digest;
+use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::base_types::ObjectID;
 use sui_types::digests::CheckpointDigest;
-use sui_types::message_envelope::Message;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 
 use crate::context::Context;
 
-const READ_MASK_DEFAULT: &str = "digest";
+const READ_MASK_DEFAULT: &str = "sequence_number,digest";
 
 /// A LedgerService implementation backed by the ForkingStore/Simulacrum.
 pub struct ForkingLedgerService {
@@ -271,61 +271,93 @@ impl LedgerService for ForkingLedgerService {
                     tonic::Status::from(RpcError::from(fv))
                 })?;
 
-                store.get_checkpoint_by_digest(&digest).ok_or_else(|| {
-                    let error = CheckpointNotFoundError::digest(digest.into());
-                    tonic::Status::from(RpcError::from(error))
-                })?
-            }
-            Some(CheckpointId::SequenceNumber(sequence_number)) => {
-                // Default to latest checkpoint
                 store
-                    .get_checkpoint_by_sequence_number(sequence_number)
+                    .get_checkpoint_by_digest(&digest, true)
                     .ok_or_else(|| {
-                        let error = CheckpointNotFoundError::sequence_number(sequence_number);
+                        let error = CheckpointNotFoundError::digest(digest.into());
                         tonic::Status::from(RpcError::from(error))
                     })?
             }
-            _ => {
-                println!("TODO");
-                todo!()
-            }
+            Some(CheckpointId::SequenceNumber(sequence_number)) => store
+                .get_checkpoint_by_sequence_number(sequence_number, true)
+                .ok_or_else(|| {
+                    let error = CheckpointNotFoundError::sequence_number(sequence_number);
+                    tonic::Status::from(RpcError::from(error))
+                })?,
+            Some(_) | None => store.get_highest_checkpint().ok_or_else(|| {
+                tonic::Status::from(RpcError::from(CheckpointNotFoundError::sequence_number(0)))
+            })?,
         };
 
         let mut message = Checkpoint::default();
-        let _content_digest = checkpoint.content_digest;
 
         let summary = checkpoint.data();
         let signature = checkpoint.auth_sig();
-
-        println!("Auth sig: {:?}", signature);
+        let sequence_number = summary.sequence_number;
+        let timestamp_ms = summary.timestamp_ms;
 
         message.merge(summary, &read_mask);
         message.merge(signature.clone(), &read_mask);
-        //
-        if read_mask.contains(Checkpoint::CONTENTS_FIELD.name) {
-            let checkpoint_contents = store
-                .get_checkpoint_contents(&summary.content_digest)
+
+        if read_mask.contains(Checkpoint::CONTENTS_FIELD.name)
+            || read_mask.contains(Checkpoint::TRANSACTIONS_FIELD.name)
+            || read_mask.contains(Checkpoint::OBJECTS_FIELD.name)
+        {
+            let full_checkpoint = store
+                .get_full_checkpoint_by_sequence_number(sequence_number, true)
                 .ok_or_else(|| {
-                    let error = CheckpointNotFoundError::digest((summary.digest()).into());
+                    let error = CheckpointNotFoundError::sequence_number(sequence_number);
                     tonic::Status::from(RpcError::from(error))
                 })?;
-            message.merge(checkpoint_contents, &read_mask);
+            let object_set = full_checkpoint.object_set.clone();
+
+            if read_mask.contains(Checkpoint::CONTENTS_FIELD.name) {
+                message.merge(&full_checkpoint.contents, &read_mask);
+            }
+
+            if read_mask.contains(Checkpoint::TRANSACTIONS_FIELD.name)
+                || read_mask.contains(Checkpoint::OBJECTS_FIELD.name)
+            {
+                if let Some(submask) = read_mask
+                    .subtree(Checkpoint::OBJECTS_FIELD)
+                    .and_then(|submask| submask.subtree(ObjectSet::OBJECTS_FIELD))
+                {
+                    let set = object_set
+                        .iter()
+                        .map(|o| sui_rpc::proto::sui::rpc::v2::Object::merge_from(o, &submask))
+                        .collect();
+                    message.objects = Some(ObjectSet::default().with_objects(set));
+                }
+
+                if let Some(submask) = read_mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
+                    message.transactions = full_checkpoint
+                        .transactions
+                        .into_iter()
+                        .map(|t| {
+                            let balance_changes =
+                                if submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
+                                    derive_balance_changes_2(&t.effects, &object_set)
+                                        .into_iter()
+                                        .map(Into::into)
+                                        .collect()
+                                } else {
+                                    Vec::new()
+                                };
+                            let mut transaction = ExecutedTransaction::merge_from(&t, &submask);
+                            transaction.checkpoint = submask
+                                .contains(ExecutedTransaction::CHECKPOINT_FIELD)
+                                .then_some(sequence_number);
+                            transaction.timestamp = submask
+                                .contains(ExecutedTransaction::TIMESTAMP_FIELD)
+                                .then(|| sui_rpc_api::proto::timestamp_ms_to_proto(timestamp_ms));
+                            transaction.balance_changes = balance_changes;
+
+                            transaction
+                        })
+                        .collect();
+                }
+            }
         }
-        //
-        // if (read_mask.contains(Checkpoint::TRANSACTIONS_FIELD)
-        //     || read_mask.contains(Checkpoint::OBJECTS_FIELD))
-        //     && let Some(url) = checkpoint_bucket
-        // {
-        //     let sequence_number = checkpoint.sequence_number;
-        //     let client = create_remote_store_client(url, vec![], 60)?;
-        //     let (checkpoint_data, _) =
-        //         CheckpointReader::fetch_from_object_store(&client, sequence_number).await?;
-        //     let checkpoint = sui_types::full_checkpoint_content::Checkpoint::from(
-        //         std::sync::Ar<F13c::into_inner(checkpoint_data).unwrap(),
-        //     );
-        //
-        //     message.merge(&checkpoint, &read_mask);
-        // }
 
         Ok(tonic::Response::new(GetCheckpointResponse::new(message)))
     }

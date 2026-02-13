@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result};
-use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -28,18 +27,6 @@ struct GraphQLResponse<T> {
 #[derive(Debug, Deserialize)]
 struct GraphQLError {
     message: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct CheckpointBcsResponse {
-    checkpoint: Option<CheckpointBcsData>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CheckpointBcsData {
-    pub summary_bcs: String,
-    pub content_bcs: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -159,81 +146,6 @@ impl GraphQLClient {
             .context("No data in GraphQL response")?;
 
         Ok(data.checkpoint.query.protocol_configs.protocol_version)
-    }
-
-    /// Fetch checkpoint summary and contents as BCS bytes from the GraphQL RPC.
-    /// If `sequence_number` is `None`, fetches the latest checkpoint.
-    /// Returns `(summary_bcs, content_bcs)` as raw bytes after base64 decoding.
-    pub async fn fetch_checkpoint_bcs(
-        &self,
-        sequence_number: Option<u64>,
-    ) -> Result<(Vec<u8>, Vec<u8>)> {
-        let seq_arg = match sequence_number {
-            Some(seq) => format!("sequenceNumber: {}", seq),
-            None => String::new(),
-        };
-
-        let query = format!(
-            r#"query {{
-  checkpoint({}) {{
-    summaryBcs
-    contentBcs
-  }}
-}}"#,
-            seq_arg
-        );
-
-        let request = GraphQLRequest {
-            query,
-            variables: None,
-        };
-
-        let response = self
-            .client
-            .post(&self.endpoint)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to send GraphQL request")?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unable to read error response".to_string());
-            anyhow::bail!(
-                "GraphQL request failed with status {}: {}",
-                status,
-                error_text
-            );
-        }
-
-        let graphql_response: GraphQLResponse<CheckpointBcsResponse> = response
-            .json()
-            .await
-            .context("Failed to parse GraphQL response")?;
-
-        if let Some(errors) = graphql_response.errors {
-            let error_messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
-            anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
-        }
-
-        let data = graphql_response
-            .data
-            .context("No data in GraphQL response")?;
-
-        let checkpoint = data.checkpoint.context("Checkpoint not found")?;
-
-        let summary_bytes = base64::engine::general_purpose::STANDARD
-            .decode(&checkpoint.summary_bcs)
-            .context("Failed to decode summaryBcs from base64")?;
-
-        let content_bytes = base64::engine::general_purpose::STANDARD
-            .decode(&checkpoint.content_bcs)
-            .context("Failed to decode contentBcs from base64")?;
-
-        Ok((summary_bytes, content_bytes))
     }
 
     pub async fn fetch_latest_checkpoint_and_protocol_version(&self) -> Result<(u64, u64)> {

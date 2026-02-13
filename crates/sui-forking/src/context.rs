@@ -20,7 +20,6 @@ pub(crate) struct Context {
     pub simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>,
     pub subscription_service_handle: SubscriptionServiceHandle,
     pub checkpoint_sender: mpsc::Sender<Checkpoint>,
-    pub at_checkpoint: u64,
     pub chain_id: ChainIdentifier,
 }
 
@@ -36,12 +35,12 @@ impl Context {
             let store = sim.store_static();
 
             let verified_checkpoint = store
-                .get_checkpoint_by_sequence_number(checkpoint_sequence_number)
+                .get_checkpoint_by_sequence_number(checkpoint_sequence_number, true)
                 .with_context(|| {
                     format!("missing checkpoint summary at sequence {checkpoint_sequence_number}")
                 })?;
             let checkpoint_contents = store
-                .get_checkpoint_contents_by_digest(&verified_checkpoint.content_digest)
+                .get_checkpoint_contents_by_digest(&verified_checkpoint.content_digest, true)
                 .with_context(|| {
                     format!("missing checkpoint contents for sequence {checkpoint_sequence_number}")
                 })?;

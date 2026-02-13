@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    EpochData, EpochStore, ObjectKey, ObjectStore, ReadDataStore, ReadWriteDataStore, SetupStore,
-    StoreSummary, TransactionInfo, TransactionStore,
+    CheckpointIndexStore, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, ObjectKey,
+    ObjectStore, ReadDataStore, ReadWriteDataStore, SetupStore, StoreSummary, TransactionInfo,
+    TransactionStore,
 };
 use anyhow::{Error, Result};
 use sui_types::{
-    object::Object, supported_protocol_versions::ProtocolConfig,
+    digests::{CheckpointContentsDigest, CheckpointDigest},
+    messages_checkpoint::CheckpointSequenceNumber,
 };
+use sui_types::{object::Object, supported_protocol_versions::ProtocolConfig};
 
 /// A read-through store that composes a primary (cache) and a secondary (source) store.
 /// It tries the primary first; on miss it reads from the secondary and writes back to the primary.
@@ -122,6 +125,65 @@ where
             }
         }
         Ok(objects)
+    }
+}
+
+impl<P, S> CheckpointStore for ReadThroughStore<P, S>
+where
+    P: ReadWriteDataStore,
+    S: ReadDataStore,
+    P: CheckpointStoreWriter,
+    S: CheckpointStore,
+{
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<Option<crate::FullCheckpointData>, Error> {
+        match self.primary.get_checkpoint_by_sequence_number(sequence)? {
+            Some(checkpoint) => Ok(Some(checkpoint)),
+            None => self
+                .secondary
+                .get_checkpoint_by_sequence_number(sequence)?
+                .map_or(Ok(None), |checkpoint| {
+                    self.primary.write_checkpoint(&checkpoint)?;
+                    Ok(Some(checkpoint))
+                }),
+        }
+    }
+
+    fn get_latest_checkpoint(&self) -> Result<Option<crate::FullCheckpointData>, Error> {
+        match self.primary.get_latest_checkpoint()? {
+            Some(checkpoint) => Ok(Some(checkpoint)),
+            None => self
+                .secondary
+                .get_latest_checkpoint()?
+                .map_or(Ok(None), |checkpoint| {
+                    self.primary.write_checkpoint(&checkpoint)?;
+                    Ok(Some(checkpoint))
+                }),
+        }
+    }
+}
+
+impl<P, S> CheckpointIndexStore for ReadThroughStore<P, S>
+where
+    P: ReadWriteDataStore,
+    S: ReadDataStore,
+    P: CheckpointIndexStore,
+    S: CheckpointStore,
+{
+    fn get_sequence_by_checkpoint_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        self.primary.get_sequence_by_checkpoint_digest(digest)
+    }
+
+    fn get_sequence_by_contents_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        self.primary.get_sequence_by_contents_digest(digest)
     }
 }
 

@@ -14588,12 +14588,17 @@ dependencies = [
  "cynic-codegen",
  "fastcrypto",
  "lru 0.10.0",
+ "prost 0.14.1",
  "reqwest",
  "serde",
  "sui-config",
+ "sui-rpc",
+ "sui-rpc-api",
  "sui-types",
  "tokio",
+ "tonic 0.14.3",
  "tracing",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]

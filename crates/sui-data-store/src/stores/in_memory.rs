@@ -24,9 +24,10 @@
 //! ```
 
 use crate::{
-    EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore,
-    StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter, VersionQuery,
-    node::Node,
+    CheckpointIndexStore, CheckpointIndexStoreWriter, CheckpointStore, CheckpointStoreWriter,
+    EpochData, EpochStore, EpochStoreWriter, FullCheckpointData, ObjectKey, ObjectStore,
+    ObjectStoreWriter, SetupStore, StoreSummary, TransactionInfo, TransactionStore,
+    TransactionStoreWriter, VersionQuery, node::Node,
 };
 use anyhow::{Error, Result};
 use std::{
@@ -39,6 +40,8 @@ use std::{
 use sui_types::{
     base_types::ObjectID,
     committee::ProtocolVersion,
+    digests::{CheckpointContentsDigest, CheckpointDigest},
+    messages_checkpoint::CheckpointSequenceNumber,
     object::Object,
     supported_protocol_versions::{Chain, ProtocolConfig},
 };
@@ -48,6 +51,9 @@ struct InMemoryStoreInner {
     node: Node,
     transaction_cache: BTreeMap<String, TransactionInfo>,
     epoch_data_cache: BTreeMap<u64, EpochData>,
+    checkpoint_data_cache: BTreeMap<CheckpointSequenceNumber, FullCheckpointData>,
+    checkpoint_digest_index: BTreeMap<CheckpointDigest, CheckpointSequenceNumber>,
+    checkpoint_contents_digest_index: BTreeMap<CheckpointContentsDigest, CheckpointSequenceNumber>,
     object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>,
     // The next 2 maps can be organized as flat maps or nested maps
     // and the best solution depends on usage patterns.
@@ -81,6 +87,10 @@ struct MemStoreMetrics {
     proto_hit: AtomicU64,
     proto_miss: AtomicU64,
     proto_error: AtomicU64,
+    // checkpoints
+    checkpoint_hit: AtomicU64,
+    checkpoint_miss: AtomicU64,
+    checkpoint_error: AtomicU64,
     // objects by query kind
     obj_version_hit: AtomicU64,
     obj_version_miss: AtomicU64,
@@ -100,6 +110,9 @@ impl InMemoryStore {
             node,
             transaction_cache: BTreeMap::new(),
             epoch_data_cache: BTreeMap::new(),
+            checkpoint_data_cache: BTreeMap::new(),
+            checkpoint_digest_index: BTreeMap::new(),
+            checkpoint_contents_digest_index: BTreeMap::new(),
             object_cache: BTreeMap::new(),
             root_version_cache: BTreeMap::new(),
             checkpoint_cache: BTreeMap::new(),
@@ -122,6 +135,9 @@ impl InMemoryStore {
         let mut inner = self.0.write().unwrap();
         inner.transaction_cache.clear();
         inner.epoch_data_cache.clear();
+        inner.checkpoint_data_cache.clear();
+        inner.checkpoint_digest_index.clear();
+        inner.checkpoint_contents_digest_index.clear();
         inner.object_cache.clear();
         inner.root_version_cache.clear();
         inner.checkpoint_cache.clear();
@@ -143,9 +159,12 @@ impl InMemoryStore {
         CacheStats {
             transaction_cache_size: inner.transaction_cache.len(),
             epoch_data_cache_size: inner.epoch_data_cache.len(),
+            checkpoint_cache_size: inner.checkpoint_data_cache.len(),
+            checkpoint_digest_index_size: inner.checkpoint_digest_index.len(),
+            checkpoint_contents_digest_index_size: inner.checkpoint_contents_digest_index.len(),
             object_cache_size,
             root_version_cache_size,
-            checkpoint_cache_size,
+            object_checkpoint_cache_size: checkpoint_cache_size,
         }
     }
 
@@ -184,9 +203,12 @@ impl InMemoryStore {
 pub struct CacheStats {
     pub transaction_cache_size: usize,
     pub epoch_data_cache_size: usize,
+    pub checkpoint_cache_size: usize,
+    pub checkpoint_digest_index_size: usize,
+    pub checkpoint_contents_digest_index_size: usize,
     pub object_cache_size: usize,
     pub root_version_cache_size: usize,
-    pub checkpoint_cache_size: usize,
+    pub object_checkpoint_cache_size: usize,
 }
 
 impl TransactionStore for InMemoryStore {
@@ -313,6 +335,93 @@ impl ObjectStore for InMemoryStore {
     }
 }
 
+impl CheckpointStore for InMemoryStore {
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointData>, Error> {
+        let inner = self.0.read().unwrap();
+        if let Some(checkpoint) = inner.checkpoint_data_cache.get(&sequence) {
+            inner.metrics.checkpoint_hit.fetch_add(1, Ordering::Relaxed);
+            return Ok(Some(checkpoint.clone()));
+        }
+        inner
+            .metrics
+            .checkpoint_miss
+            .fetch_add(1, Ordering::Relaxed);
+        Ok(None)
+    }
+
+    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+        let inner = self.0.read().unwrap();
+        if let Some((_, checkpoint)) = inner.checkpoint_data_cache.last_key_value() {
+            inner.metrics.checkpoint_hit.fetch_add(1, Ordering::Relaxed);
+            return Ok(Some(checkpoint.clone()));
+        }
+        inner
+            .metrics
+            .checkpoint_miss
+            .fetch_add(1, Ordering::Relaxed);
+        Ok(None)
+    }
+}
+
+impl CheckpointStoreWriter for InMemoryStore {
+    fn write_checkpoint(&self, checkpoint: &FullCheckpointData) -> Result<(), Error> {
+        let mut inner = self.0.write().unwrap();
+        let sequence = checkpoint.summary.sequence_number;
+        let checkpoint_digest = *checkpoint.summary.digest();
+        let contents_digest = *checkpoint.contents.digest();
+
+        inner
+            .checkpoint_data_cache
+            .insert(sequence, checkpoint.clone());
+        inner
+            .checkpoint_digest_index
+            .insert(checkpoint_digest, sequence);
+        inner
+            .checkpoint_contents_digest_index
+            .insert(contents_digest, sequence);
+        Ok(())
+    }
+}
+
+impl CheckpointIndexStore for InMemoryStore {
+    fn get_sequence_by_checkpoint_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        let inner = self.0.read().unwrap();
+        Ok(inner.checkpoint_digest_index.get(digest).copied())
+    }
+
+    fn get_sequence_by_contents_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        let inner = self.0.read().unwrap();
+        Ok(inner.checkpoint_contents_digest_index.get(digest).copied())
+    }
+}
+
+impl CheckpointIndexStoreWriter for InMemoryStore {
+    fn write_checkpoint_indexes(
+        &self,
+        sequence: CheckpointSequenceNumber,
+        checkpoint_digest: CheckpointDigest,
+        contents_digest: CheckpointContentsDigest,
+    ) -> Result<(), Error> {
+        let mut inner = self.0.write().unwrap();
+        inner
+            .checkpoint_digest_index
+            .insert(checkpoint_digest, sequence);
+        inner
+            .checkpoint_contents_digest_index
+            .insert(contents_digest, sequence);
+        Ok(())
+    }
+}
+
 impl TransactionStoreWriter for InMemoryStore {
     fn write_transaction(
         &self,
@@ -396,6 +505,9 @@ impl StoreSummary for InMemoryStore {
         let proto_hit = m.proto_hit.load(Ordering::Relaxed);
         let proto_miss = m.proto_miss.load(Ordering::Relaxed);
         let proto_err = m.proto_error.load(Ordering::Relaxed);
+        let checkpoint_hit = m.checkpoint_hit.load(Ordering::Relaxed);
+        let checkpoint_miss = m.checkpoint_miss.load(Ordering::Relaxed);
+        let checkpoint_err = m.checkpoint_error.load(Ordering::Relaxed);
         let obj_v_hit = m.obj_version_hit.load(Ordering::Relaxed);
         let obj_v_miss = m.obj_version_miss.load(Ordering::Relaxed);
         let obj_v_err = m.obj_version_error.load(Ordering::Relaxed);
@@ -408,9 +520,9 @@ impl StoreSummary for InMemoryStore {
         let obj_total_hit = obj_v_hit + obj_r_hit + obj_c_hit;
         let obj_total_miss = obj_v_miss + obj_r_miss + obj_c_miss;
         let obj_total_err = obj_v_err + obj_r_err + obj_c_err;
-        let total_hit = txn_hit + epoch_hit + proto_hit + obj_total_hit;
-        let total_miss = txn_miss + epoch_miss + proto_miss + obj_total_miss;
-        let total_err = txn_err + epoch_err + proto_err + obj_total_err;
+        let total_hit = txn_hit + epoch_hit + proto_hit + checkpoint_hit + obj_total_hit;
+        let total_miss = txn_miss + epoch_miss + proto_miss + checkpoint_miss + obj_total_miss;
+        let total_err = txn_err + epoch_err + proto_err + checkpoint_err + obj_total_err;
 
         writeln!(w, "InMemoryStore summary")?;
         writeln!(w, "  Node: {:?}", self.node())?;
@@ -421,12 +533,27 @@ impl StoreSummary for InMemoryStore {
             stats.transaction_cache_size
         )?;
         writeln!(w, "    Epochs: {} entries", stats.epoch_data_cache_size)?;
+        writeln!(
+            w,
+            "    Checkpoints: {} entries",
+            stats.checkpoint_cache_size
+        )?;
+        writeln!(
+            w,
+            "    Checkpoint digest index: {} entries",
+            stats.checkpoint_digest_index_size
+        )?;
+        writeln!(
+            w,
+            "    Contents digest index: {} entries",
+            stats.checkpoint_contents_digest_index_size
+        )?;
         writeln!(w, "    Objects: {} versions", stats.object_cache_size)?;
         writeln!(w, "    Root map: {} entries", stats.root_version_cache_size)?;
         writeln!(
             w,
             "    Checkpoint map: {} entries",
-            stats.checkpoint_cache_size
+            stats.object_checkpoint_cache_size
         )?;
         writeln!(
             w,
@@ -448,6 +575,11 @@ impl StoreSummary for InMemoryStore {
             w,
             "    Protocol:    hit={} miss={} error={}",
             proto_hit, proto_miss, proto_err
+        )?;
+        writeln!(
+            w,
+            "    Checkpoint:  hit={} miss={} error={}",
+            checkpoint_hit, checkpoint_miss, checkpoint_err
         )?;
         writeln!(
             w,
