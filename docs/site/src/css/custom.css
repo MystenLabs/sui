@@ -2080,6 +2080,30 @@ button.tocCollapsibleButton_zfLF {
   border-radius: 8px !important;
 }
 
+/* Mobile TOC container surface + border in dark mode */
+html[data-theme='dark'] .theme-doc-toc-mobile,
+html[data-theme='dark'] .tocCollapsible_dj4I {
+  background: var(--sui-dark-blue-bkg) !important; /* #00060F */
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px;
+}
+
+/* "On this page" button in dark mode */
+html[data-theme='dark'] button.tocCollapsibleButton_zfLF {
+  border: 2px solid rgba(255, 255, 255, 0.18) !important;
+  color: var(--sui-white) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* TOC links in dark mode */
+html[data-theme='dark'] .theme-doc-toc-mobile .table-of-contents__link {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+html[data-theme='dark'] .theme-doc-toc-mobile .table-of-contents__link:hover {
+  color: var(--sui-blue-bright) !important; /* #5CA9FF */
+}
+
 /* Protocol reference styling */
 .protoCard {
   margin-top: 1.25rem;
@@ -2187,4 +2211,12 @@ html[data-theme='dark'] .protoBadge {
 .protoBadgeRepeated {
   border-color: rgba(255, 184, 77, 0.35);
   background: rgba(255, 184, 77, 0.14);
+}
+
+html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
+  color: #1759C4 !important;
+}
+
+[data-theme='light'] .menu__link.menu__link--active {
+  color: #1759C4 !important;
 }
