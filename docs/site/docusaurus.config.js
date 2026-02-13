@@ -43,6 +43,10 @@ const config = {
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: "/",
 
+  ssg: {
+    trailingSlash: false,
+  },
+  
   onBrokenLinks: "throw",
   onBrokenAnchors: "ignore",
   onDuplicateRoutes: 'ignore',
@@ -119,10 +123,6 @@ const config = {
           frontMatter: {
             isGraphQlBeta: true,
           },
-        },
-        printTypeOptions: {
-          relatedTypeSection: false, 
-            hierarchy: "flat",
         },
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
