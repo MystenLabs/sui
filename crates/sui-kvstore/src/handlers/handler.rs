@@ -32,10 +32,16 @@ pub trait BigTableProcessor: Processor<Value = Entry> {
     const TABLE: &'static str;
 
     /// How much concurrency to use when processing checkpoint data (default: 10).
-    const FANOUT: usize = 128;
+    const FANOUT: usize = 32;
 
     /// Minimum rows before eager commit (default: 50).
     const MIN_EAGER_ROWS: usize = 50;
+
+    /// Max pending rows before backpressure (default: 5000).
+    const MAX_PENDING_ROWS: usize = 5000;
+
+    /// Max watermark updates per batch (default: 10_000).
+    const MAX_WATERMARK_UPDATES: usize = 10_000;
 
     /// Synchronous checkpoint processing. Called on a blocking thread pool to avoid
     /// starving the tokio async worker threads.
@@ -95,7 +101,8 @@ where
     type Batch = BigTableBatch;
 
     const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
-    const MAX_PENDING_ROWS: usize = 50_000;
+    const MAX_PENDING_ROWS: usize = P::MAX_PENDING_ROWS;
+    const MAX_WATERMARK_UPDATES: usize = P::MAX_WATERMARK_UPDATES;
 
     fn batch(
         &self,
