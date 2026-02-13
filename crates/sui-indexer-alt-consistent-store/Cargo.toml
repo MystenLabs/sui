@@ -55,4 +55,5 @@ sui-indexer-alt-metrics.workspace = true
 sui-storage.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
 tempfile.workspace = true
