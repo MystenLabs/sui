@@ -13,9 +13,9 @@ use crate::ProtocolConfigData;
 pub const NAME: &str = "protocol_configs";
 
 pub mod col {
-    /// BCS-serialized BTreeMap<String, Option<String>> of config attributes.
+    /// BCS-serialized config attributes map.
     pub const CONFIGS: &str = "cf";
-    /// BCS-serialized BTreeMap<String, bool> of feature flags.
+    /// BCS-serialized feature flags map.
     pub const FLAGS: &str = "ff";
 }
 
