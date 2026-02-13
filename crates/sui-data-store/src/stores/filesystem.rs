@@ -74,7 +74,7 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress},
     committee::ProtocolVersion,
     effects::TransactionEffects,
-    object::Object,
+    object::{Object, Owner},
     supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::TransactionData,
 };
@@ -450,8 +450,14 @@ impl FileSystemStore {
                 let object_id_str = entry.file_name().to_string_lossy().to_string();
                 if let Ok(object_id) = ObjectID::from_hex_literal(&object_id_str) {
                     if let Some((object, _version)) = self.get_object_latest(&object_id)? {
-                        if object.is_address_owned()
-                            && object.owner() == &sui_types::object::Owner::AddressOwner(owner)
+                        if matches!(object.owner(), Owner::AddressOwner(address) if *address == owner)
+                            || matches!(
+                                object.owner(),
+                                Owner::ConsensusAddressOwner {
+                                    owner: address,
+                                    ..
+                                } if *address == owner
+                            )
                         {
                             results.push(object);
                         }

@@ -1,22 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
+use crate::context::Context;
 
-use crate::{context::Context, store::ForkingStore};
-
-use base64::Engine;
-use prost_types::FieldMask;
-use sui_rpc::{
-    field::{FieldMaskTree, FieldMaskUtil},
-    proto::{
-        google::rpc::bad_request::FieldViolation,
-        sui::rpc::v2::{ListOwnedObjectsResponse, Object, state_service_server::StateService},
-    },
-};
-use sui_rpc_api::{ErrorReason, proto::sui::rpc::v2 as grpc};
-use sui_sdk_types::Address;
-use sui_types::{base_types::SuiAddress, storage::OwnedObjectInfo};
+use sui_rpc::proto::sui::rpc::v2::state_service_server::StateService;
+use sui_rpc_api::proto::sui::rpc::v2 as grpc;
 
 mod list_owned_objects;
 
@@ -81,6 +69,7 @@ impl StateService for ForkingStateService {
         request: tonic::Request<grpc::ListOwnedObjectsRequest>,
     ) -> Result<tonic::Response<grpc::ListOwnedObjectsResponse>, tonic::Status> {
         list_owned_objects::list_owned_objects(self, request.into_inner())
+            .await
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
