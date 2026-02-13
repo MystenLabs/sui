@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-const { main: validateOpenRpcSpecs } = require("../scripts/validate-openrpc.js");
+const { main: validateOpenRpcSpecs } = require("../../scripts/validate-openrpc.js");
 
 module.exports = function openrpcValidatePlugin() {
   return {

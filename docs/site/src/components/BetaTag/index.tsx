@@ -15,7 +15,7 @@ export default function BetaTag(props) {
   // If `props.slim` is included, do not add spacing because the box is inline with
   // content as opposed to at top of topic based on `beta` frontmatter.
   return (
-    <Admonition
+    <Admonition type="info"
       title="Early-Stage Feature"
       icon="⚙️"
       className={`${props.slim ? "" : "!my-12"} bg-sui-blue-light border-sui-blue-dark dark:bg-sui-blue-dark dark:border-sui-blue-light`}

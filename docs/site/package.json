@@ -8,8 +8,8 @@
     "update-subtrees": "cd ../../; sh docs/site/src/shared/js/update-subtrees.sh",
     "prebuild": "node src/js/generate-import-context.js; node src/js/convert-awesome-sui.mjs; node src/shared/js/convert-release-notes.js",
     "prestart": "node src/js/convert-awesome-sui.mjs; node src/shared/js/convert-release-notes.js",
-    "start": "rm -r ../content/references/framework; node src/utils/grpc-download.js; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus start",
-    "build": "node src/js/generate-import-context.js; node src/utils/grpc-download.js; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; NODE_OPTIONS='--max-old-space-size=4096' docusaurus build; node scripts/copy-markdown-files.js",
+    "start": "rm -r ../content/references/framework; node src/utils/grpc-download.js; docusaurus graphql-to-doc:beta && node scripts/remove-no-desc.mjs ../content/references/sui-api/sui-graphql/beta/reference; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus start",
+    "build": "node src/js/generate-import-context.js; node src/utils/grpc-download.js; docusaurus graphql-to-doc:beta && node scripts/remove-no-desc.mjs ../content/references/sui-api/sui-graphql/beta/reference; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; NODE_OPTIONS='--max-old-space-size=4096'; node scripts/copy-markdown-files.js; bash scripts/build-and-check.sh",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
@@ -109,8 +109,8 @@
     ]
   },
   "engines": {
-    "node": ">=20",
-    "pnpm": ">=9"
+    "node": "20",
+    "pnpm": "9"
   },
   "pnpm": {
     "overrides": {

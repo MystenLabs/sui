@@ -148,7 +148,7 @@
 } 
 
 .navbar-sidebar .menu__link--active, .navbar-sidebar .menu__link--active:hover, [data-theme='dark'] .navbar-sidebar .menu__link--active, [data-theme='dark'] .navbar-sidebar .menu__link--active:hover {
-  @apply !bg-sui-blue-primary text-sui-gray-100
+  @apply !bg-sui-blue-primary text-sui-blue-bright
 }
 
 html[data-theme=dark] {
@@ -1894,4 +1894,329 @@ html[data-theme="dark"] .api-code-title { background: rgba(255,255,255,0.04); }
 .api-nav-link.active-scroll-spy {
   background: rgba(41,141,255,0.14);
   border-color: rgba(41,141,255,0.35);
+}
+
+.mobileToc {
+  margin: 0.5rem 0;
+  border: 1px solid var(--ifm-toc-border-color);
+  border-radius: var(--ifm-global-radius);
+  padding: 0.5rem;
+}
+
+.mobileTocSummary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+@media (max-width: 996px) {
+  .theme-toggle-wrapper {
+    display: flex !important;
+    align-items: center !important;
+    margin-left: 6px !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* make the toggle button not take extra space */
+  .theme-toggle-wrapper button {
+    padding: 6px !important;
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  /* Make the right section a real horizontal row */
+  .navbar__items--right {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    margin-left: auto !important;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+  }
+
+  /* Wrapper div around right-side items */
+  .navbar__items--right > div {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+    min-width: 0 !important;
+  }
+
+  /* 🚨 Prevent "stacking": force wrappers + buttons out of absolute/fixed positioning */
+  .navbar__items--right > div,
+  .navbar div[class*="navbarSearchContainer"],
+  .navbar [class*="DocSearch"],
+  .navbar [class*="kapa"] {
+    position: static !important;
+    inset: auto !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    transform: none !important;
+    float: none !important;
+  }
+
+  /* Search container wrapper */
+  .navbar div[class*="navbarSearchContainer"],
+  .navbar .navbar__search {
+    display: flex !important;
+    align-items: center !important;
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Kapa button */
+  .navbar [class*="kapa-trigger"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+
+    border-radius: 50% !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    background: rgba(255, 255, 255, 0.10) !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    cursor: pointer !important;
+    flex: 0 0 auto !important;
+  }
+
+  .navbar [class*="kapa-trigger"] img {
+    width: 20px !important;
+    height: 20px !important;
+    display: block !important;
+  }
+
+  /* DocSearch button */
+  .navbar [class*="DocSearch-Button"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+
+    border-radius: 50% !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    background: rgba(255, 255, 255, 0.10) !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    cursor: pointer !important;
+    flex: 0 0 auto !important;
+    color: white !important;
+  }
+
+  .navbar [class*="DocSearch-Button"] .DocSearch-Button-Placeholder,
+  .navbar [class*="DocSearch-Button"] .DocSearch-Button-Keys {
+    display: none !important;
+  }
+
+  .navbar [class*="DocSearch-Button"] .DocSearch-Search-Icon {
+    width: 18px !important;
+    height: 18px !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+}
+
+@media (max-width: 996px) {
+  /* --- Kapa: keep only the icon on mobile --- */
+
+  /* Ensure Kapa trigger lays out like an icon button */
+  .navbar [class*="kapa-trigger"] {
+    gap: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide any text nodes / labels inside the Kapa trigger */
+  .navbar [class*="kapa-trigger"] span,
+  .navbar [class*="kapa-trigger"] p,
+  .navbar [class*="kapa-trigger"] div:not(:has(svg)):not(:has(img)),
+  .navbar [class*="kapa-trigger"] :is([class*="label"], [class*="text"], [class*="title"]) {
+    display: none !important;
+  }
+
+  /* If Kapa uses an SVG icon (common), size it predictably */
+  .navbar [class*="kapa-trigger"] svg {
+    width: 20px !important;
+    height: 20px !important;
+    display: block !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* If Kapa uses an img icon, same deal */
+  .navbar [class*="kapa-trigger"] img {
+    width: 20px !important;
+    height: 20px !important;
+    display: block !important;
+    flex: 0 0 auto !important;
+    object-fit: contain !important;
+  }
+
+  /* Safety: prevent hidden text from affecting layout */
+  .navbar [class*="kapa-trigger"] {
+    font-size: 0 !important;
+    line-height: 0 !important;
+  }
+}
+
+button.tocCollapsibleButton_zfLF {
+  border: 2px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 8px !important;
+}
+
+/* Mobile TOC container surface + border in dark mode */
+html[data-theme='dark'] .theme-doc-toc-mobile,
+html[data-theme='dark'] .tocCollapsible_dj4I {
+  background: var(--sui-dark-blue-bkg) !important; /* #00060F */
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px;
+}
+
+/* "On this page" button in dark mode */
+html[data-theme='dark'] button.tocCollapsibleButton_zfLF {
+  border: 2px solid rgba(255, 255, 255, 0.18) !important;
+  color: var(--sui-white) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* TOC links in dark mode */
+html[data-theme='dark'] .theme-doc-toc-mobile .table-of-contents__link {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+html[data-theme='dark'] .theme-doc-toc-mobile .table-of-contents__link:hover {
+  color: var(--sui-blue-bright) !important; /* #5CA9FF */
+}
+
+/* Protocol reference styling */
+.protoCard {
+  margin-top: 1.25rem;
+  border-radius: 16px;
+  border: 1px solid rgba(120, 120, 120, 0.25);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 10px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+html[data-theme='dark'] .protoCard {
+  border-color: rgba(120, 120, 120, 0.18);
+  background: rgba(20, 22, 24, 0.65);
+  box-shadow: 0 1px 14px rgba(0, 0, 0, 0.28);
+}
+
+.protoCardHeader {
+  padding: 20px 24px 8px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.protoCardDesc {
+  padding: 0 24px 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  opacity: 0.85;
+}
+
+.protoGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-top: 1px solid rgba(120, 120, 120, 0.18);
+}
+
+html[data-theme='dark'] .protoGrid {
+  border-top-color: rgba(120, 120, 120, 0.14);
+}
+
+.protoGridTitle {
+  grid-column: 1 / -1;
+  padding: 12px 24px;
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+  background: rgba(120, 120, 120, 0.08);
+  border-bottom: 1px solid rgba(120, 120, 120, 0.18);
+}
+
+html[data-theme='dark'] .protoGridTitle {
+  background: rgba(120, 120, 120, 0.12);
+  border-bottom-color: rgba(120, 120, 120, 0.14);
+}
+
+.protoKey {
+  grid-column: span 2;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  border-right: 1px solid rgba(120, 120, 120, 0.14);
+  border-bottom: 1px solid rgba(120, 120, 120, 0.14);
+  overflow-wrap: anywhere;
+}
+
+.protoVal {
+  grid-column: span 4;
+  padding: 12px 24px;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(120, 120, 120, 0.14);
+}
+
+.protoValMuted {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.85;
+  line-height: 1.5;
+}
+
+/* Badges */
+.protoBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 120, 120, 0.22);
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
+  margin-top: 8px;
+  background: rgba(120, 120, 120, 0.08);
+}
+
+html[data-theme='dark'] .protoBadge {
+  border-color: rgba(120, 120, 120, 0.18);
+  background: rgba(120, 120, 120, 0.14);
+}
+
+.protoBadgeOptional {
+  border-color: rgba(41, 141, 255, 0.35);
+  background: rgba(41, 141, 255, 0.12);
+}
+
+.protoBadgeRepeated {
+  border-color: rgba(255, 184, 77, 0.35);
+  background: rgba(255, 184, 77, 0.14);
+}
+
+html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
+  color: #1759C4 !important;
+}
+
+[data-theme='light'] .menu__link.menu__link--active {
+  color: #1759C4 !important;
 }

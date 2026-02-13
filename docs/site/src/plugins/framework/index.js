@@ -681,23 +681,26 @@ const frameworkPlugin = (_context, _options) => {
     name: "sui-framework-plugin",
 
     async loadContent() {
-      // framework folder is added to gitignore, so should only exist locally.
-      // Clearing the folder programmatically messes up the watch dev build,
-      // so only do it when the directory is missing. Should never exist on vercel.
+      // Always start fresh — remove existing framework docs
       if (fs.existsSync(DOCS_PATH)) {
-        console.log(
-          "\n******\nSkipping framework doc build. If you want to rebuild, delete the framework folder before restarting the server.\n******",
-        );
-        return;
-      } else {
         try {
-          fs.mkdirSync(DOCS_PATH, { recursive: true });
+          fs.rmSync(DOCS_PATH, { recursive: true, force: true });
+          console.log("[sui-framework-plugin] Removed existing framework docs directory.");
         } catch (err) {
           console.error(
-            `[sui-framework-plugin] ERROR: Cannot create output directory ${DOCS_PATH}: ${err.message}`,
+            `[sui-framework-plugin] ERROR: Cannot remove existing directory ${DOCS_PATH}: ${err.message}`,
           );
           return;
         }
+      }
+
+      try {
+        fs.mkdirSync(DOCS_PATH, { recursive: true });
+      } catch (err) {
+        console.error(
+          `[sui-framework-plugin] ERROR: Cannot create output directory ${DOCS_PATH}: ${err.message}`,
+        );
+        return;
       }
 
       const recurseFiles = (dirPath, files = []) => {
