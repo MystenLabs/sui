@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 111;
+const MAX_PROTOCOL_VERSION: u64 = 112;
 
 // Record history of protocol version allocations here:
 //
@@ -296,7 +296,7 @@ const MAX_PROTOCOL_VERSION: u64 = 111;
 //              split_checkpoints_in_consensus_handler in devnet
 //              Enable additional validation on zkLogin public identifier.
 // Version 111: Validator metadata
-//              Enable Ristretto255 in devnet.
+// Version 112: Enable Ristretto255 in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4571,7 +4571,8 @@ impl ProtocolConfig {
                 }
                 111 => {
                     cfg.feature_flags.validator_metadata_verify_v2 = true;
-
+                }
+                112 => {
                     cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
                     cfg.group_ops_ristretto_decode_point_cost = Some(200);
                     cfg.group_ops_ristretto_scalar_add_cost = Some(10);
