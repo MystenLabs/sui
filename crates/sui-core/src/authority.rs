@@ -1030,6 +1030,7 @@ impl AuthorityState {
             &receiving_objects,
             &self.metrics.bytecode_verifier_metrics,
             &self.config.verifier_signing_config,
+            epoch_store.get_chain_identifier(),
         )?;
 
         self.handle_coin_deny_list_checks(
@@ -2006,6 +2007,7 @@ impl AuthorityState {
             input_objects,
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
+            epoch_store.get_chain_identifier(),
         ) {
             Ok(result) => result,
             Err(e) => return ExecutionOutput::Fatal(e),
@@ -2326,6 +2328,7 @@ impl AuthorityState {
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
+                    epoch_store.get_chain_identifier(),
                 )?,
                 Some(gas_object_id),
             )
@@ -2339,6 +2342,7 @@ impl AuthorityState {
                     &receiving_objects,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
+                    epoch_store.get_chain_identifier(),
                 )?,
                 None,
             )
@@ -2541,6 +2545,7 @@ impl AuthorityState {
                 &receiving_objects,
                 &self.metrics.bytecode_verifier_metrics,
                 &self.config.verifier_signing_config,
+                epoch_store.get_chain_identifier(),
             )?
         } else {
             sui_transaction_checks::check_dev_inspect_input(
@@ -2549,6 +2554,7 @@ impl AuthorityState {
                 input_objects,
                 receiving_objects,
                 epoch_store.reference_gas_price(),
+                epoch_store.get_chain_identifier(),
             )?
         };
 
@@ -2755,6 +2761,7 @@ impl AuthorityState {
                 input_objects,
                 receiving_objects,
                 reference_gas_price,
+                epoch_store.get_chain_identifier(),
             )?
         } else {
             // If we are not skipping checks, then we call the check_transaction_input function and its dummy gas
@@ -2776,6 +2783,7 @@ impl AuthorityState {
                     dummy_gas_object,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
+                    epoch_store.get_chain_identifier(),
                 )?
             } else {
                 sui_transaction_checks::check_transaction_input(
@@ -2786,6 +2794,7 @@ impl AuthorityState {
                     &receiving_objects,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
+                    epoch_store.get_chain_identifier(),
                 )?
             }
         };
