@@ -532,6 +532,7 @@ mod tests {
     fn test_config() -> IngestionConfig {
         IngestionConfig {
             checkpoint_buffer_size: 5,
+            subscriber_channel_size: 5,
             ingest_concurrency: sui_concurrency_limiter::ConcurrencyLimit::Fixed { limit: 2 },
             retry_interval_ms: 100,
             streaming_backoff_initial_batch_size: 2,

@@ -89,6 +89,7 @@ impl From<CommitterConfig> for CommitterLayer {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
+    pub subscriber_channel_size: Option<usize>,
     pub ingest_concurrency: Option<ConcurrencyLimit>,
     pub retry_interval_ms: Option<u64>,
     pub streaming_backoff_initial_batch_size: Option<usize>,
@@ -106,6 +107,9 @@ impl IngestionLayer {
             checkpoint_buffer_size: self
                 .checkpoint_buffer_size
                 .unwrap_or(base.checkpoint_buffer_size),
+            subscriber_channel_size: self
+                .subscriber_channel_size
+                .unwrap_or(base.subscriber_channel_size),
             ingest_concurrency: self.ingest_concurrency.unwrap_or(base.ingest_concurrency),
             retry_interval_ms: self.retry_interval_ms.unwrap_or(base.retry_interval_ms),
             streaming_backoff_initial_batch_size: self
@@ -128,6 +132,9 @@ impl Merge for IngestionLayer {
     fn merge(self, other: IngestionLayer) -> anyhow::Result<IngestionLayer> {
         Ok(IngestionLayer {
             checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
+            subscriber_channel_size: other
+                .subscriber_channel_size
+                .or(self.subscriber_channel_size),
             ingest_concurrency: other.ingest_concurrency.or(self.ingest_concurrency),
             retry_interval_ms: other.retry_interval_ms.or(self.retry_interval_ms),
             streaming_backoff_initial_batch_size: other
@@ -150,6 +157,7 @@ impl From<IngestionConfig> for IngestionLayer {
     fn from(config: IngestionConfig) -> Self {
         Self {
             checkpoint_buffer_size: Some(config.checkpoint_buffer_size),
+            subscriber_channel_size: Some(config.subscriber_channel_size),
             ingest_concurrency: Some(config.ingest_concurrency),
             retry_interval_ms: Some(config.retry_interval_ms),
             streaming_backoff_initial_batch_size: Some(config.streaming_backoff_initial_batch_size),

@@ -53,6 +53,7 @@ pub struct PipelineLayer {
 #[serde(deny_unknown_fields)]
 pub struct IngestionConfig {
     pub checkpoint_buffer_size: usize,
+    pub subscriber_channel_size: usize,
     pub ingest_concurrency: ConcurrencyLimit,
     pub retry_interval_ms: u64,
     pub streaming_backoff_initial_batch_size: usize,
@@ -71,6 +72,7 @@ impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
     fn from(config: framework::ingestion::IngestionConfig) -> Self {
         Self {
             checkpoint_buffer_size: config.checkpoint_buffer_size,
+            subscriber_channel_size: config.subscriber_channel_size,
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,
             streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,
@@ -85,6 +87,7 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
     fn from(config: IngestionConfig) -> Self {
         framework::ingestion::IngestionConfig {
             checkpoint_buffer_size: config.checkpoint_buffer_size,
+            subscriber_channel_size: config.subscriber_channel_size,
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,
             streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,

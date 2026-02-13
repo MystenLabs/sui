@@ -59,7 +59,12 @@ impl ClientArgs {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IngestionConfig {
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
+    /// Controls how far ahead ingestion can run past the slowest pipeline's committed watermark.
     pub checkpoint_buffer_size: usize,
+
+    /// Per-pipeline channel capacity for buffering checkpoints between the broadcaster and each
+    /// pipeline's processor. Defaults to `checkpoint_buffer_size` if not set.
+    pub subscriber_channel_size: usize,
 
     /// Concurrency limit for checkpoint ingestion.
     pub ingest_concurrency: ConcurrencyLimit,
@@ -174,7 +179,7 @@ impl IngestionService {
         mpsc::Receiver<Arc<Checkpoint>>,
         mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
-        let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
+        let (sender, receiver) = mpsc::channel(self.config.subscriber_channel_size);
         self.subscribers.push(sender);
         (receiver, self.commit_hi_tx.clone())
     }
@@ -235,6 +240,7 @@ impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
             checkpoint_buffer_size: 5000,
+            subscriber_channel_size: 5000,
             ingest_concurrency: ConcurrencyLimit::Fixed { limit: 200 },
             retry_interval_ms: 200,
             streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
