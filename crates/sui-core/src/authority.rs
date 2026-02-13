@@ -1935,6 +1935,7 @@ impl AuthorityState {
             self.chain_identifier,
             &*self.coin_reservation_resolver,
             sender,
+            &gas_data,
             &mut kind,
         );
 
