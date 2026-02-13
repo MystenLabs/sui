@@ -262,11 +262,21 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                                 let token = limiter.acquire();
                                 match op().await {
                                     Ok(value) => {
-                                        token.record_sample_weighted(Outcome::Success, w);
+                                        let outcome = if w > 0 {
+                                            Outcome::Success
+                                        } else {
+                                            Outcome::Ignore
+                                        };
+                                        token.record_sample_weighted(outcome, w);
                                         return g(value).await;
                                     }
                                     Err(Break::Err(e)) => {
-                                        token.record_sample_weighted(Outcome::Dropped, w);
+                                        let outcome = if w > 0 {
+                                            Outcome::Dropped
+                                        } else {
+                                            Outcome::Ignore
+                                        };
+                                        token.record_sample_weighted(outcome, w);
                                         match backoff.next_backoff() {
                                             Some(duration) => {
                                                 tokio::time::sleep(duration).await;
