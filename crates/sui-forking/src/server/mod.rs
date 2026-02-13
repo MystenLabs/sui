@@ -47,20 +47,24 @@ use sui_types::{
     transaction::Transaction,
 };
 
-use crate::grpc::transaction_execution_service::ForkingTransactionExecutionService;
-use crate::grpc::{RpcArgs as GrpcArgs, ledger_service::ForkingLedgerService};
-use crate::grpc::{RpcService as GrpcRpcService, consistent_store::ForkingConsistentStore};
-use crate::grpc::{TlsArgs as GrpcTlsArgs, subscription_service::ForkingSubscriptionService};
+use crate::grpc::{
+    RpcArgs as GrpcArgs, RpcService as GrpcRpcService, TlsArgs as GrpcTlsArgs,
+    ledger_service::ForkingLedgerService, state_service::ForkingStateService,
+    subscription_service::ForkingSubscriptionService,
+    transaction_execution_service::ForkingTransactionExecutionService,
+};
 use crate::{graphql::GraphQLClient, store::ForkingStore};
 
 use rand::rngs::OsRng;
 use roaring::RoaringBitmap;
 use sui_futures::service::Service;
-use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer;
-use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer;
 use sui_rpc::proto::sui::rpc::v2::{
     ledger_service_server::LedgerServiceServer,
     subscription_service_server::SubscriptionServiceServer,
+};
+use sui_rpc::proto::sui::rpc::v2::{
+    state_service_server::StateServiceServer,
+    transaction_execution_service_server::TransactionExecutionServiceServer,
 };
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 
@@ -361,10 +365,6 @@ pub async fn start_server(
     let state =
         Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
 
-    // let update_objects_handle = tokio::spawn(async move {
-    //     update_system_objects(context.clone()).await.unwrap();
-    // });
-
     println!("Ready to accept requests");
 
     let app = Router::new()
@@ -398,7 +398,6 @@ pub async fn start_server(
 
     // Abort the spawned tasks when the server shuts down
     grpc_handle.abort();
-    // update_objects_handle.abort();
 
     info!("Server shutdown complete");
 
@@ -424,35 +423,35 @@ pub async fn fetch_checkpoint_from_graphql(
     Ok((summary, contents))
 }
 
-const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6", "0xacc"];
-
-/// Update system objects to the versions at the forking checkpoint
-async fn update_system_objects(context: crate::context::Context) -> anyhow::Result<()> {
-    let crate::context::Context { at_checkpoint, .. } = context;
-
-    info!(
-        "Fetching system objects from RPC at checkpoint {}",
-        at_checkpoint
-    );
-    let object_ids: Vec<ObjectID> = SYSTEM_OBJECT_IDS
-        .iter()
-        .map(|id| ObjectID::from_hex_literal(id).unwrap())
-        .collect();
-
-    let keys: Vec<ObjectKey> = object_ids
-        .iter()
-        .map(|&object_id| ObjectKey {
-            object_id,
-            version_query: VersionQuery::AtCheckpoint(at_checkpoint),
-        })
-        .collect();
-
-    let simulacrum = context.simulacrum.write().await;
-    let data_store = simulacrum.store_static();
-    data_store.object_store().get_objects(&keys).unwrap();
-
-    Ok(())
-}
+// // const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6", "0xacc"];
+//
+// /// Update system objects to the versions at the forking checkpoint
+// async fn update_system_objects(context: crate::context::Context) -> anyhow::Result<()> {
+//     let crate::context::Context { at_checkpoint, .. } = context;
+//
+//     info!(
+//         "Fetching system objects from RPC at checkpoint {}",
+//         at_checkpoint
+//     );
+//     let object_ids: Vec<ObjectID> = SYSTEM_OBJECT_IDS
+//         .iter()
+//         .map(|id| ObjectID::from_hex_literal(id).unwrap())
+//         .collect();
+//
+//     let keys: Vec<ObjectKey> = object_ids
+//         .iter()
+//         .map(|&object_id| ObjectKey {
+//             object_id,
+//             version_query: VersionQuery::AtCheckpoint(at_checkpoint),
+//         })
+//         .collect();
+//
+//     let simulacrum = context.simulacrum.write().await;
+//     let data_store = simulacrum.store_static();
+//     data_store.object_store().get_objects(&keys).unwrap();
+//
+//     Ok(())
+// }
 
 async fn get_sui_system_state(
     forking_store: &ForkingStore,
@@ -477,18 +476,15 @@ async fn start_grpc_services(
 
     let simulacrum = context.simulacrum.clone();
     let subscription_service = ForkingSubscriptionService::new(context.clone());
-    let consistent_store = ForkingConsistentStore::new(context.clone());
     let ledger_service = ForkingLedgerService::new(simulacrum.clone(), ChainIdentifier::random());
+    let state_service = ForkingStateService::new(context.clone());
     let tx_execution_service = ForkingTransactionExecutionService::new(context.clone());
     let grpc = GrpcRpcService::new(grpc_args, version, &registry)
         .await?
         .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
-        .register_encoded_file_descriptor_set(
-            sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::FILE_DESCRIPTOR_SET,
-        )
-        .add_service(ConsistentServiceServer::new(consistent_store))
         .add_service(LedgerServiceServer::new(ledger_service))
         .add_service(SubscriptionServiceServer::new(subscription_service))
+        .add_service(StateServiceServer::new(state_service))
         .add_service(TransactionExecutionServiceServer::new(tx_execution_service));
     let handle = grpc.run().await?;
     Ok(handle)

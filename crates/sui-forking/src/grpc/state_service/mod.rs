@@ -1,0 +1,87 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::str::FromStr;
+
+use crate::{context::Context, store::ForkingStore};
+
+use base64::Engine;
+use prost_types::FieldMask;
+use sui_rpc::{
+    field::{FieldMaskTree, FieldMaskUtil},
+    proto::{
+        google::rpc::bad_request::FieldViolation,
+        sui::rpc::v2::{ListOwnedObjectsResponse, Object, state_service_server::StateService},
+    },
+};
+use sui_rpc_api::{ErrorReason, proto::sui::rpc::v2 as grpc};
+use sui_sdk_types::Address;
+use sui_types::{base_types::SuiAddress, storage::OwnedObjectInfo};
+
+mod list_owned_objects;
+
+pub(crate) struct ForkingStateService {
+    context: Context,
+}
+
+impl ForkingStateService {
+    pub fn new(context: Context) -> Self {
+        Self { context }
+    }
+}
+
+#[tonic::async_trait]
+impl StateService for ForkingStateService {
+    async fn get_coin_info(
+        &self,
+        request: tonic::Request<grpc::GetCoinInfoRequest>,
+    ) -> Result<tonic::Response<grpc::GetCoinInfoResponse>, tonic::Status> {
+        println!("get_coin: request={:?}", request);
+        todo!()
+        // let checkpoint = self.checkpoint(&request)?;
+        // let response = get_coin(self, checkpoint, request.into_inner())?;
+        // Ok(checkpointed_response(checkpoint, response)?)
+    }
+
+    async fn list_dynamic_fields(
+        &self,
+        request: tonic::Request<grpc::ListDynamicFieldsRequest>,
+    ) -> Result<tonic::Response<grpc::ListDynamicFieldsResponse>, tonic::Status> {
+        println!("list_dynamic_fields: request={:?}", request);
+        todo!()
+        // let checkpoint = self.checkpoint(&request)?;
+        // let response = list_dynamic_fields(self, checkpoint, request.into_inner())?;
+        // Ok(checkpointed_response(checkpoint, response)?)
+    }
+
+    async fn get_balance(
+        &self,
+        request: tonic::Request<grpc::GetBalanceRequest>,
+    ) -> Result<tonic::Response<grpc::GetBalanceResponse>, tonic::Status> {
+        println!("get balance: request={:?}", request);
+        todo!()
+        // let checkpoint = self.checkpoint(&request)?;
+        // let response = get_balance(self, checkpoint, request.into_inner())?;
+        // Ok(checkpointed_response(checkpoint, response)?)
+    }
+
+    async fn list_balances(
+        &self,
+        request: tonic::Request<grpc::ListBalancesRequest>,
+    ) -> Result<tonic::Response<grpc::ListBalancesResponse>, tonic::Status> {
+        println!("list balances: request={:?}", request);
+        todo!()
+        // let checkpoint = self.checkpoint(&request)?;
+        // let response = list_balances(self, checkpoint, request.into_inner())?;
+        // Ok(checkpointed_response(checkpoint, response)?)
+    }
+
+    async fn list_owned_objects(
+        &self,
+        request: tonic::Request<grpc::ListOwnedObjectsRequest>,
+    ) -> Result<tonic::Response<grpc::ListOwnedObjectsResponse>, tonic::Status> {
+        list_owned_objects::list_owned_objects(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+}

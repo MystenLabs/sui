@@ -24,11 +24,11 @@ use tonic::server::NamedService;
 use tonic_health::ServingStatus;
 use tracing::info;
 
-pub mod consistent_store;
 mod error;
 pub mod ledger_service;
 mod metrics;
 mod middleware;
+pub mod state_service;
 pub mod subscription_service;
 pub mod transaction_execution_service;
 
