@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::anyhow;
-use backoff::ExponentialBackoff;
 use futures::Stream;
 use futures::future::try_join_all;
 use sui_concurrency_limiter::Limiter;
