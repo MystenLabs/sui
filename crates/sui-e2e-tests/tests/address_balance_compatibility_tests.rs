@@ -196,6 +196,8 @@ async fn test_coin_reservation_validation() {
                 .contains("Gas object is not an owned object with owner")
         );
     }
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -217,6 +219,8 @@ async fn test_coin_reservation_gating() {
                 .contains("coin reservation backward compatibility layer is not enabled")
         );
     }
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -260,6 +264,8 @@ async fn test_valid_coin_reservation_transfers() {
     let recipient_balance = test_env.get_sui_balance(recipient).await;
     // 100 from coin transfer, 1 from coin reservation
     assert_eq!(recipient_balance, 100 + 1);
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -307,6 +313,8 @@ async fn test_valid_coin_reservation_gas_payments() {
         final_sender_balance,
         initial_sender_balance as u64 - gas_charge as u64 - 1
     );
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -356,6 +364,8 @@ async fn test_gas_coin_callarg_with_coin_reservation_gas() {
     // Verify the recipient receives the 100 MIST transfer.
     let recipient_balance = test_env.get_sui_balance_ab(recipient);
     assert_eq!(recipient_balance, 100);
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -391,6 +401,8 @@ async fn test_add_money_to_fake_coin() {
     // Verify the sender's address balance is increased by the amount of `real_coin`.
     let final_balance = test_env.get_sui_balance_ab(sender);
     assert_eq!(final_balance, initial_balance + real_coin_balance);
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -423,6 +435,8 @@ async fn test_split_from_fake_coin() {
     let new_coin_id = created[0].0.0;
     let new_coin_balance = test_env.get_coin_balance(new_coin_id).await;
     assert_eq!(new_coin_balance, 100);
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -449,6 +463,8 @@ async fn test_coin_reservation_enforced_when_not_used() {
     // Send tx, assert it fails due to insufficient balance.
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
     assert!(err.to_string().contains("is less than requested"));
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -487,6 +503,8 @@ async fn test_wrong_chain_id() {
         .await
         .unwrap_err();
     assert!(err.to_string().contains("not found"));
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -544,6 +562,8 @@ async fn test_gas_smash_into_fake_coin() {
         final_balance,
         initial_balance + real_coin_balance - gas_charge
     );
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -603,6 +623,8 @@ async fn test_gas_smash_multiple_fake_coins() {
         final_balance,
         initial_balance + real_coin_balance - gas_charge
     );
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -659,6 +681,8 @@ async fn test_gas_smash_from_fake_coin() {
     // The sender's address balance should have decreased by the fake coin amount
     let final_balance = test_env.get_sui_balance_ab(sender);
     assert_eq!(final_balance, initial_balance - fake_coin_amount);
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -694,6 +718,8 @@ async fn test_gas_coin_not_owned_by_gas_owner() {
         err.to_string()
             .contains(format!("is owned by {}, not sender {}", sender2, sender1).as_str())
     );
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -727,4 +753,6 @@ async fn test_gas_payment_mix_of_owners() {
         err.to_string()
             .contains(format!("is owned by {}, not sender {}", sender2, sender1).as_str())
     );
+
+    test_env.cluster.trigger_reconfiguration().await;
 }
