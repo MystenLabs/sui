@@ -21,7 +21,6 @@ use sui_bridge::abi::EthBridgeCommittee;
 use sui_bridge::abi::{EthSuiBridge, eth_sui_bridge};
 use sui_bridge::crypto::BridgeAuthorityPublicKeyBytes;
 use sui_bridge::encoding::TOKEN_TRANSFER_MESSAGE_VERSION_V2;
-use sui_bridge::error::BridgeResult;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::types::BridgeAction;
 use sui_bridge::types::{
@@ -628,17 +627,13 @@ impl BridgeClientCommands {
                 .await
             }
             BridgeClientCommands::ClaimOnEth { seq_num, dry_run } => {
-                claim_on_eth(seq_num, config, sui_bridge_client, dry_run)
-                    .await
-                    .map_err(|e| anyhow!("{:?}", e))
+                claim_on_eth(seq_num, config, sui_bridge_client, dry_run).await
             }
             BridgeClientCommands::ClaimOnSui {
                 seq_num,
                 source_chain,
                 dry_run,
-            } => claim_on_sui(seq_num, source_chain, config, sui_bridge_client, dry_run)
-                .await
-                .map_err(|e| anyhow!("{:?}", e)),
+            } => claim_on_sui(seq_num, source_chain, config, sui_bridge_client, dry_run).await,
         }
     }
 }
@@ -785,9 +780,11 @@ async fn deposit_on_sui(
             );
             Ok(())
         }
-        sui_json_rpc_types::SuiExecutionStatus::Failure { error } => {
-            Err(anyhow!("Transaction {:?} failed: {:?}", tx_digest, error))
-        }
+        sui_json_rpc_types::SuiExecutionStatus::Failure { error } => Err(anyhow!(
+            "Deposit ({version:?}) transaction {:?} failed: {:?}",
+            tx_digest,
+            error
+        )),
     }
 }
 
@@ -796,11 +793,16 @@ async fn claim_on_eth(
     config: &LoadedBridgeCliConfig,
     sui_bridge_client: SuiBridgeClient,
     dry_run: bool,
-) -> BridgeResult<()> {
-    let sui_chain_id = sui_bridge_client.get_bridge_summary().await?.chain_id;
+) -> anyhow::Result<()> {
+    let sui_chain_id = sui_bridge_client
+        .get_bridge_summary()
+        .await
+        .map_err(|e| anyhow!("{:?}", e))?
+        .chain_id;
     let parsed_message = sui_bridge_client
         .get_parsed_token_transfer_message(sui_chain_id, seq_num)
-        .await?;
+        .await
+        .map_err(|e| anyhow!("{:?}", e))?;
     if parsed_message.is_none() {
         println!("No record found for seq_num: {seq_num}, chain id: {sui_chain_id}");
         return Ok(());
@@ -868,11 +870,12 @@ async fn claim_on_sui(
     config: &LoadedBridgeCliConfig,
     sui_bridge_client: SuiBridgeClient,
     dry_run: bool,
-) -> BridgeResult<()> {
+) -> anyhow::Result<()> {
     // Look up the on-chain bridge record to determine the token type
     let parsed_message = sui_bridge_client
         .get_parsed_token_transfer_message(source_chain, seq_num)
-        .await?;
+        .await
+        .map_err(|e| anyhow!("{:?}", e))?;
     let Some(parsed_message) = parsed_message else {
         println!("No record found for seq_num: {seq_num}, source chain: {source_chain}");
         return Ok(());
@@ -888,20 +891,20 @@ async fn claim_on_sui(
     let token_type = parsed_message.parsed_payload.token_type;
 
     // Get the token type tag mapping
-    let id_token_map = sui_bridge_client.get_token_id_map().await?;
+    let id_token_map = sui_bridge_client
+        .get_token_id_map()
+        .await
+        .map_err(|e| anyhow!("{:?}", e))?;
     let type_tag = id_token_map.get(&token_type).ok_or_else(|| {
-        sui_bridge::error::BridgeError::Generic(format!(
+        anyhow!(
             "Unknown token type {token_type} for seq_num {seq_num}, source chain {source_chain}"
-        ))
+        )
     })?;
 
     let bridge_object_arg = sui_bridge_client
         .get_mutable_bridge_object_arg_must_succeed()
         .await;
-    let (sui_key, sender, gas_obj_ref) = config
-        .get_sui_account_info()
-        .await
-        .map_err(|e| sui_bridge::error::BridgeError::Generic(e.to_string()))?;
+    let (sui_key, sender, gas_obj_ref) = config.get_sui_account_info().await?;
     let rgp = sui_bridge_client
         .get_reference_gas_price_until_success()
         .await;
@@ -930,12 +933,7 @@ async fn claim_on_sui(
         let resp = sui_client
             .simulate_transaction(&tx_data, true)
             .await
-            .map_err(|e| {
-                sui_bridge::error::BridgeError::Generic(format!(
-                    "Dry run (simulate) failed: {:?}",
-                    e
-                ))
-            })?;
+            .map_err(|e| anyhow!("Dry run (simulate) failed: {:?}", e))?;
         println!(
             "Claim on Sui ({version_label}) dry run result for seq_num {seq_num}, source chain {source_chain}: {:?}",
             resp
@@ -954,12 +952,7 @@ async fn claim_on_sui(
         let resp = sui_bridge_client
             .execute_transaction_block_with_effects(signed_tx)
             .await
-            .map_err(|e| {
-                sui_bridge::error::BridgeError::Generic(format!(
-                    "Failed to execute claim transaction: {:?}",
-                    e
-                ))
-            })?;
+            .map_err(|e| anyhow!("Failed to execute claim transaction: {:?}", e))?;
         match &resp.status {
             sui_json_rpc_types::SuiExecutionStatus::Success => {
                 info!(
@@ -971,10 +964,11 @@ async fn claim_on_sui(
                 );
             }
             sui_json_rpc_types::SuiExecutionStatus::Failure { error } => {
-                return Err(sui_bridge::error::BridgeError::Generic(format!(
+                return Err(anyhow!(
                     "Claim ({version_label}) transaction {:?} failed: {:?}",
-                    tx_digest, error
-                )));
+                    tx_digest,
+                    error
+                ));
             }
         }
     }
