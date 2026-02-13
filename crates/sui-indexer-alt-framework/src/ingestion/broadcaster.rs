@@ -11,8 +11,8 @@ use anyhow::Context;
 use anyhow::anyhow;
 use futures::Stream;
 use futures::future::try_join_all;
-use sui_concurrency_limiter::Limiter;
 use sui_concurrency_limiter::stream::{AdaptiveStreamExt, Break};
+use sui_concurrency_limiter::{Limiter, Outcome, Token};
 use sui_futures::service::Service;
 use sui_futures::task::TaskGuard;
 use tokio::sync::mpsc;
@@ -236,9 +236,11 @@ fn ingest_and_broadcast_range(
         let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
         // docs::/#bound
 
-        let stream_fut = checkpoints.try_for_each_spawned_adaptive(
-            limiter.clone(),
-            |cp: u64| {
+        let stream_fut = checkpoints.try_for_each_spawned_adaptive_with_token(limiter.clone(), {
+            let client = client.clone();
+            let subscribers = subscribers.clone();
+            let peak_channel_fill = peak_channel_fill.clone();
+            move |cp: u64, token: Token| {
                 let client = client.clone();
                 let subscribers = subscribers.clone();
                 let peak_channel_fill = peak_channel_fill.clone();
@@ -247,6 +249,16 @@ fn ingest_and_broadcast_range(
                         .wait_for(cp, retry_interval)
                         .await
                         .map_err(|_| Break::Break)?;
+
+                    // Check channel pressure before sending: if any subscriber has no
+                    // remaining capacity, report as a drop so the limiter backs off.
+                    let any_full = subscribers.iter().any(|s| s.capacity() == 0);
+                    let outcome = if any_full {
+                        Outcome::Dropped
+                    } else {
+                        Outcome::Success
+                    };
+                    token.record_sample(outcome);
 
                     let cp = *checkpoint.summary.sequence_number();
                     if send_checkpoint(checkpoint, &subscribers, &peak_channel_fill)
@@ -259,9 +271,8 @@ fn ingest_and_broadcast_range(
                         Err(Break::Break)
                     }
                 }
-            },
-            |()| async { Ok(()) },
-        );
+            }
+        });
 
         tokio::select! {
             result = stream_fut => result,

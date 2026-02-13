@@ -8,7 +8,7 @@ use backoff::backoff::Backoff;
 use futures::stream::{Stream, StreamExt};
 use tokio::task::JoinSet;
 
-use crate::{Limiter, Outcome};
+use crate::{Limiter, Outcome, Token};
 
 /// Wrapper type for errors to allow the body of a `try_for_each_spawned` call to signal that it
 /// either wants to return early (`Break`) out of the loop, or propagate an error (`Err(E)`).
@@ -80,6 +80,26 @@ pub trait AdaptiveStreamExt: Stream {
         T: Send + 'static,
         G: Fn(T) -> GFut + Send + Sync + 'static,
         GFut: Future<Output = Result<(), Break<E>>> + Send + 'static,
+        E: Send + 'static;
+
+    /// Like [`try_for_each_spawned_adaptive`](AdaptiveStreamExt::try_for_each_spawned_adaptive),
+    /// but passes the [`Token`] directly to the closure, giving it full control over when and
+    /// how the sample is recorded.
+    ///
+    /// The closure **must** call [`Token::record_sample`] (or [`Token::record_sample_weighted`])
+    /// exactly once before returning. If the token is dropped without recording, the inflight
+    /// count is decremented but no sample is fed to the algorithm.
+    ///
+    /// There is no separate `g` closure — all work (measured and unmeasured) lives in `f`.
+    fn try_for_each_spawned_adaptive_with_token<F, Fut, E>(
+        self,
+        limiter: Limiter,
+        f: F,
+    ) -> impl Future<Output = Result<(), Break<E>>>
+    where
+        Self::Item: Send + 'static,
+        F: Fn(Self::Item, Token) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<(), Break<E>>> + Send + 'static,
         E: Send + 'static;
 
     /// Like [`try_for_each_spawned_adaptive_with_retry`](AdaptiveStreamExt::try_for_each_spawned_adaptive_with_retry),
@@ -158,6 +178,77 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                                     Err(Break::Break)
                                 }
                             }
+                        });
+                    } else {
+                        draining = true;
+                    }
+                }
+
+                Some(res) = join_set.join_next() => {
+                    active -= 1;
+                    match res {
+                        Ok(Err(e)) if error.is_none() => {
+                            error = Some(e);
+                            draining = true;
+                        }
+
+                        Ok(_) => {}
+
+                        Err(e) if e.is_panic() => {
+                            panic::resume_unwind(e.into_panic())
+                        }
+
+                        Err(e) => {
+                            assert!(e.is_cancelled());
+                            draining = true;
+                        }
+                    }
+                }
+
+                else => {
+                    if active == 0 && draining {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(e) = error { Err(e) } else { Ok(()) }
+    }
+
+    async fn try_for_each_spawned_adaptive_with_token<F, Fut, E>(
+        self,
+        limiter: Limiter,
+        f: F,
+    ) -> Result<(), Break<E>>
+    where
+        Self::Item: Send + 'static,
+        F: Fn(Self::Item, Token) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<(), Break<E>>> + Send + 'static,
+        E: Send + 'static,
+    {
+        let f = Arc::new(f);
+        let mut active: usize = 0;
+        let mut join_set = JoinSet::new();
+        let mut draining = false;
+        let mut error = None;
+
+        let mut self_ = pin!(self);
+
+        loop {
+            let current_limit = limiter.current();
+            let can_spawn = !draining && active < current_limit;
+
+            tokio::select! {
+                next = self_.next(), if can_spawn => {
+                    if let Some(item) = next {
+                        active += 1;
+                        let limiter = limiter.clone();
+                        let f = f.clone();
+
+                        join_set.spawn(async move {
+                            let token = limiter.acquire();
+                            f(item, token).await
                         });
                     } else {
                         draining = true;
