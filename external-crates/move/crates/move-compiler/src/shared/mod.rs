@@ -418,6 +418,11 @@ impl CompilationEnv {
         final_diags
     }
 
+    /// FIX for bug #18284: Extract diagnostics at any point during compilation
+    pub fn take_intermediate_diags(&mut self) -> Diagnostics {
+        std::mem::take(&mut self.diags)
+    }
+
     pub fn known_filter_names(&self) -> impl IntoIterator<Item = FilterPrefix> + '_ {
         self.known_filters.keys().copied()
     }

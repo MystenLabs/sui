@@ -1220,3 +1220,18 @@ fn run(
     }
     rec(compilation_env, pre_compiled_lib, cur, until)
 }
+
+//**************************************************************************************************
+// FIX for bug #18284: Diagnostic extraction after intermediate passes
+//**************************************************************************************************
+
+impl<const P: Pass> SteppedCompiler<P> {
+    /// Extract diagnostics after any compilation pass
+    /// 
+    /// This fixes GitHub issue #18284 where PASS_TYPING (and other intermediate
+    /// passes) would not expose diagnostic information.
+    pub fn take_diagnostics(mut self) -> (Self, Diagnostics) {
+        let diags = self.compilation_env.take_intermediate_diags();
+        (self, diags)
+    }
+}
