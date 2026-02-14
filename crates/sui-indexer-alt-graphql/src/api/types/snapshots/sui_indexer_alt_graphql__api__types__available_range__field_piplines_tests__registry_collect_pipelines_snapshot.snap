@@ -605,9 +605,6 @@ ExecutionError.message
 ExecutionResult.effects
   => {}
 
-ExecutionResult.errors
-  => {}
-
 FeatureFlag.key
   => {}
 
@@ -1536,9 +1533,6 @@ SimulationResult.effects
   => {}
 
 SimulationResult.outputs
-  => {}
-
-SimulationResult.error
   => {}
 
 SplitCoinsCommand.coin

@@ -5,13 +5,9 @@ use async_graphql::SimpleObject;
 
 use crate::api::types::transaction_effects::TransactionEffects;
 
-/// The execution result of a transaction, including the transaction effects and any potential errors due to signing or quorum-driving.
+/// The execution result of a transaction, including the transaction effects.
 #[derive(Clone, SimpleObject)]
 pub struct ExecutionResult {
-    /// The effects of the transaction execution, if successful.
+    /// The effects of the transaction execution.
     pub effects: Option<TransactionEffects>,
-
-    /// Errors that occurred during execution (e.g., network errors, validation failures).
-    /// These are distinct from execution failures within the transaction itself.
-    pub errors: Option<Vec<String>>,
 }

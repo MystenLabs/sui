@@ -1,0 +1,24 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_execute_transaction_tests.rs
+expression: "&result"
+---
+{
+  "data": null,
+  "errors": [
+    {
+      "message": "Invalid argument: Invalid user signature: Signature is not valid: Fail to verify user sig Invalid signature was given to the function",
+      "locations": [
+        {
+          "line": 3,
+          "column": 17
+        }
+      ],
+      "path": [
+        "executeTransaction"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
