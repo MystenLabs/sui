@@ -341,7 +341,7 @@ impl AdaptiveState {
                 stall_count,
             } => {
                 if underutilized {
-                    // Not enough inflight to test the backend — skip this round
+                    self.limit = ((self.limit as f64) * 0.95).ceil() as usize;
                 } else {
                     let growth = if *best_throughput > 0.0 {
                         (throughput_ema - *best_throughput) / *best_throughput
@@ -1030,11 +1030,7 @@ mod tests {
         alg.force_interval_with_throughput(1000.0);
 
         // ceil(100 * 0.95) = 95
-        assert_eq!(
-            alg.current(),
-            95,
-            "Limit should decay when underutilized"
-        );
+        assert_eq!(alg.current(), 95, "Limit should decay when underutilized");
     }
 
     #[test]
@@ -1114,14 +1110,31 @@ mod tests {
         };
         let alg = adaptive(config);
 
-        // Feed with zero inflight — startup should not double
+        // Feed with zero inflight — startup should decay, not double
+        feed_successes_idle(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1000.0);
+
+        // ceil(10 * 0.95) = 10 (rounds up from 9.5)
+        assert_eq!(
+            alg.current(),
+            10,
+            "Startup should decay when underutilized (ceil(10*0.95)=10)"
+        );
+
+        // A second round: ceil(10 * 0.95) = 10 still (small limits decay slowly)
+        // Test with higher limit to see actual decay
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 100;
+            alg.gauge.store(100, Ordering::Release);
+        }
         feed_successes_idle(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(1000.0);
 
         assert_eq!(
             alg.current(),
-            10,
-            "Startup should not grow when underutilized"
+            95,
+            "Startup should decay when underutilized (ceil(100*0.95)=95)"
         );
     }
 
