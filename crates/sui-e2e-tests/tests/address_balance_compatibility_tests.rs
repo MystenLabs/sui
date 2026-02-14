@@ -382,6 +382,68 @@ async fn test_gas_coin_callarg_with_coin_reservation_gas() {
 }
 
 #[sim_test]
+async fn test_gas_coin_by_ref_with_coin_reservation_gas() {
+    // Tests GasCoin materialization when GasCoin is used by reference (not consumed).
+    // Uses transfer_sui_to_address_balance which splits from GasCoin and sends to
+    // address balance, leaving the GasCoin still alive (not transferred by value).
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let budget = 5_000_000_000;
+    let transfer_amount = 100u64;
+
+    // Fund sender with enough for gas budget + transfer amount
+    test_env
+        .fund_one_address_balance(sender, budget + transfer_amount)
+        .await;
+
+    // The gas reservation must include the transfer amount
+    let gas_reservation = test_env.encode_coin_reservation(sender, 0, budget + transfer_amount);
+    let recipient = SuiAddress::random_for_testing_only();
+
+    let initial_sender_balance = test_env.get_sui_balance_ab(sender);
+
+    // Use transfer_sui_to_address_balance which does:
+    // - SplitCoins(GasCoin, [amount]) -> Balance
+    // - send_funds(Balance, recipient)
+    // The GasCoin is borrowed mutably but not consumed by value.
+    let tx = TestTransactionBuilder::new(sender, gas_reservation, test_env.rgp)
+        .transfer_sui_to_address_balance(
+            FundSource::Coin(gas_reservation),
+            vec![(transfer_amount, recipient)],
+        )
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "Transaction failed: {:?}",
+        effects.status()
+    );
+
+    let gas_charge = effects.gas_cost_summary().gas_used();
+
+    // Verify the sender's address balance is decreased by gas charges + transfer
+    let final_sender_balance = test_env.get_sui_balance_ab(sender);
+    assert_eq!(
+        final_sender_balance,
+        initial_sender_balance - gas_charge - transfer_amount
+    );
+
+    // Verify the recipient's address balance received the transfer
+    let recipient_balance = test_env.get_sui_balance_ab(recipient);
+    assert_eq!(recipient_balance, transfer_amount);
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
 async fn test_gas_coin_callarg_with_mixed_gas() {
     // Test that GasCoin arg works when gas is [real, fake].
     // The real coin becomes the smashed gas coin, so GasCoin should work.
