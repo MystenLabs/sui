@@ -309,8 +309,10 @@ impl AdaptiveState {
 
         // Throughput guard: only grow when throughput is actively responding.
         // If adding concurrency doesn't increase throughput, we're past the knee.
+        // Uses 10% threshold to avoid noise in per-second completion counts
+        // leaking through and causing spurious growth.
         let throughput_not_growing = match prev_ema {
-            Some(prev) => throughput_ema < prev * 1.05,
+            Some(prev) => throughput_ema < prev * 1.10,
             None => false,
         };
 
@@ -332,7 +334,6 @@ impl AdaptiveState {
                         *intervals_since_probe += 1;
 
                         if !underutilized
-                            && !throughput_not_growing
                             && *intervals_since_probe >= config.probe_bw_intervals
                         {
                             let pre_probe_limit = self.limit;
@@ -952,18 +953,18 @@ mod tests {
             state.throughput_ema = Some(1000.0);
         }
 
-        // Flat throughput: 0.3*1000 + 0.7*1000 = 1000, need > 1050 to grow
+        // Flat throughput: 0.3*1000 + 0.7*1000 = 1000, need > 1100 to grow
         feed_successes(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(1000.0);
 
-        // 1000 < 1000*1.05=1050, so not growing — should NOT increase
+        // 1000 < 1000*1.10=1100, so not growing — should NOT increase
         assert_eq!(alg.current(), 100);
 
         // Now with strong throughput growth
         feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(2000.0); // 0.3*2000 + 0.7*1000 = 1300, vs prev 1000 → 1300 >= 1050
+        alg.force_interval_with_throughput(2000.0); // 0.3*2000 + 0.7*1000 = 1300, vs prev 1000 → 1300 >= 1100
 
-        // 1300 >= 1000*1.05=1050, so growing — should increase
+        // 1300 >= 1000*1.10=1100, so growing — should increase
         // 100 + sqrt(100) = 110
         assert_eq!(alg.current(), 110);
     }
