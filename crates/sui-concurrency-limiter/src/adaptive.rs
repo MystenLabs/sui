@@ -157,11 +157,13 @@ impl IntervalStats {
         if self.rtt_samples.len() < 10 {
             return None;
         }
-        self.rtt_samples
-            .sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let idx = ((self.rtt_samples.len() as f64 * p).ceil() as usize)
             .min(self.rtt_samples.len())
             .saturating_sub(1);
+        // O(n) partial sort — only positions the idx-th element correctly.
+        self.rtt_samples.select_nth_unstable_by(idx, |a, b| {
+            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+        });
         Some(self.rtt_samples[idx])
     }
 }
@@ -178,6 +180,9 @@ struct RollingErrors {
     error_count: usize,
 }
 
+const MIN_ERROR_WINDOW: usize = 100;
+const MAX_ERROR_WINDOW: usize = 10_000;
+
 impl RollingErrors {
     fn new(size: usize) -> Self {
         Self {
@@ -188,9 +193,23 @@ impl RollingErrors {
         }
     }
 
+    /// Scale window to ~2x the current limit, clamped to [100, 10_000].
+    /// At low concurrency this gives reasonable history; at high concurrency
+    /// it prevents a tiny burst from tripping the brake.
+    fn resize_for_limit(&mut self, limit: usize) {
+        let target = (limit * 2).clamp(MIN_ERROR_WINDOW, MAX_ERROR_WINDOW);
+        if target != self.window.len() {
+            // Reset rather than try to remap the ring buffer — the window
+            // refills quickly at high throughput.
+            self.window = vec![false; target];
+            self.head = 0;
+            self.count = 0;
+            self.error_count = 0;
+        }
+    }
+
     fn push(&mut self, is_error: bool) {
         if self.count == self.window.len() {
-            // Evict oldest
             if self.window[self.head] {
                 self.error_count -= 1;
             }
@@ -229,12 +248,16 @@ struct AdaptiveState {
     rolling_errors: RollingErrors,
     throughput_ema: Option<f64>,
     baseline_p95: Option<f64>,
+    baseline_recorded_at: Option<Instant>,
+    /// Skip the latency brake for one interval after ProbeDown recalibrates baseline.
+    suppress_latency_brake: bool,
     limit: usize,
 }
 
 impl AdaptiveState {
     fn record_sample(&mut self, inflight: usize, outcome: &Outcome, rtt: Duration) {
         self.stats.peak_inflight = self.stats.peak_inflight.max(inflight);
+        self.rolling_errors.resize_for_limit(self.limit);
         match outcome {
             Outcome::Success => {
                 self.stats.successes += 1;
@@ -287,8 +310,10 @@ impl AdaptiveState {
     /// Interval processing with an explicit throughput value.
     /// Separated from `process_interval` so tests can inject deterministic throughput.
     fn apply_interval(&mut self, config: &AdaptiveConfig, gauge: &AtomicUsize, throughput: f64) {
+        let prev_ema = self.throughput_ema;
+
         // Update throughput EMA: first interval seeds directly
-        self.throughput_ema = Some(match self.throughput_ema {
+        self.throughput_ema = Some(match prev_ema {
             None => throughput,
             Some(prev) => 0.3 * throughput + 0.7 * prev,
         });
@@ -300,6 +325,14 @@ impl AdaptiveState {
         // Inflight guard: skip growth when the system isn't utilizing the current limit.
         // Without this, the limit rockets to max when ingestion is slow.
         let underutilized = self.stats.peak_inflight * 2 < self.limit;
+
+        // Throughput guard: skip growth when throughput isn't responding to higher limits.
+        // Without this, Cruise blindly grows the limit while the backend saturates
+        // (latency climbs but no errors), overshooting the knee.
+        let throughput_declining = match prev_ema {
+            Some(prev) => throughput_ema < prev * 0.95,
+            None => false,
+        };
 
         // Phase-specific logic
         match &mut self.phase {
@@ -319,8 +352,8 @@ impl AdaptiveState {
                     if growth >= config.full_pipe_threshold {
                         *best_throughput = throughput_ema;
                         *stall_count = 0;
-                        self.limit = ((self.limit as f64) * config.startup_growth_factor).ceil()
-                            as usize;
+                        self.limit =
+                            ((self.limit as f64) * config.startup_growth_factor).ceil() as usize;
                     } else {
                         *stall_count += 1;
                         if *stall_count >= config.full_pipe_rounds {
@@ -340,14 +373,16 @@ impl AdaptiveState {
                     ProbeBWState::Cruise {
                         intervals_since_probe,
                     } => {
-                        if !underutilized {
-                            // Additive increase: sqrt(limit) per interval, minimum 1
+                        if !underutilized && !throughput_declining {
                             let inc = ((self.limit as f64).sqrt().floor() as usize).max(1);
                             self.limit += inc;
                         }
                         *intervals_since_probe += 1;
 
-                        if !underutilized && *intervals_since_probe >= config.probe_bw_intervals {
+                        if !underutilized
+                            && !throughput_declining
+                            && *intervals_since_probe >= config.probe_bw_intervals
+                        {
                             let pre_probe_limit = self.limit;
                             let start_ema = throughput_ema;
                             self.limit =
@@ -371,10 +406,10 @@ impl AdaptiveState {
                         } else {
                             // Revert and probe down to measure baseline latency
                             let reverted = *pre_probe_limit;
-                            if self.baseline_p95.is_none()
-                                || self.stats.start.elapsed() > Duration::from_secs(30)
-                            {
-                                // Baseline is stale or missing — probe down
+                            let baseline_stale = self
+                                .baseline_recorded_at
+                                .is_none_or(|t| t.elapsed() > Duration::from_secs(30));
+                            if baseline_stale {
                                 let pre_down = reverted;
                                 self.limit = ((reverted as f64) * 0.75).ceil() as usize;
                                 self.phase = Phase::ProbeBW(ProbeBWState::ProbeDown {
@@ -389,9 +424,10 @@ impl AdaptiveState {
                         }
                     }
                     ProbeBWState::ProbeDown { pre_down_limit } => {
-                        // Record p95 as baseline, restore limit
                         if let Some(p95) = current_p95 {
                             self.baseline_p95 = Some(p95);
+                            self.baseline_recorded_at = Some(Instant::now());
+                            self.suppress_latency_brake = true;
                         }
                         self.limit = *pre_down_limit;
                         self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
@@ -402,8 +438,12 @@ impl AdaptiveState {
             }
         }
 
-        // Latency brake (always active when baseline exists and we have enough samples)
-        if let (Some(baseline), Some(current)) = (self.baseline_p95, current_p95)
+        // Latency brake (always active when baseline exists and we have enough samples).
+        // Suppressed for one interval after ProbeDown recalibrates to avoid immediately
+        // undoing the fresh baseline measurement.
+        if self.suppress_latency_brake {
+            self.suppress_latency_brake = false;
+        } else if let (Some(baseline), Some(current)) = (self.baseline_p95, current_p95)
             && baseline > 0.0
             && current > baseline
         {
@@ -451,6 +491,8 @@ impl Adaptive {
                 rolling_errors: RollingErrors::new(100),
                 throughput_ema: None,
                 baseline_p95: None,
+                baseline_recorded_at: None,
+                suppress_latency_brake: false,
                 limit: initial,
             }),
             config: config.clone(),
@@ -481,13 +523,7 @@ impl Adaptive {
 }
 
 impl LimitAlgorithm for Adaptive {
-    fn update(
-        &self,
-        inflight: usize,
-        _delivered: usize,
-        outcome: Outcome,
-        rtt: Duration,
-    ) -> usize {
+    fn update(&self, inflight: usize, _delivered: usize, outcome: Outcome, rtt: Duration) -> usize {
         let mut state = self.inner.lock().unwrap();
 
         // 1. Record sample
@@ -804,20 +840,20 @@ mod tests {
         let alg = adaptive(config);
         assert_eq!(alg.current(), 100);
 
-        // Fill rolling window with 94 successes, then 5 errors = 5/99 ≈ 5.05% > 5%
-        // The 5th error crosses the threshold and triggers the brake.
-        for _ in 0..94 {
+        // Window is 200 (limit=100 * 2, clamped to min 100).
+        // 190 successes + 11 errors → 11/200 = 5.5% > 5%.
+        for _ in 0..190 {
             alg.update(0, 0, Outcome::Success, Duration::from_millis(10));
         }
         assert_eq!(alg.current(), 100);
 
-        for _ in 0..4 {
+        for _ in 0..10 {
             alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
         }
-        assert_eq!(alg.current(), 100); // 4/98 = 4.08%, still below 5%
+        assert_eq!(alg.current(), 100); // 10/200 = 5.0%, not > 5%
 
         alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
-        // 5/99 = 5.05% > 5%, brake fires: ceil(100 * 0.5) = 50
+        // 11/200 = 5.5% > 5%, brake fires: ceil(100 * 0.5) = 50
         assert_eq!(alg.current(), 50);
     }
 
@@ -834,11 +870,11 @@ mod tests {
         };
         let alg = adaptive(config);
 
-        // Trigger error brake
-        for _ in 0..94 {
+        // Trigger error brake (window=200, need >5% error rate)
+        for _ in 0..190 {
             alg.update(0, 0, Outcome::Success, Duration::from_millis(10));
         }
-        for _ in 0..6 {
+        for _ in 0..11 {
             alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
         }
 
@@ -988,7 +1024,11 @@ mod tests {
         feed_successes_idle(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(1000.0);
 
-        assert_eq!(alg.current(), 100, "Limit should not grow when underutilized");
+        assert_eq!(
+            alg.current(),
+            100,
+            "Limit should not grow when underutilized"
+        );
     }
 
     #[test]
@@ -1014,7 +1054,47 @@ mod tests {
         feed_successes(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(1000.0);
 
-        assert_eq!(alg.current(), 110, "Limit should grow when utilized (100 + sqrt(100))");
+        assert_eq!(
+            alg.current(),
+            110,
+            "Limit should grow when utilized (100 + sqrt(100))"
+        );
+    }
+
+    #[test]
+    fn cruise_stops_growing_when_throughput_declines() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            probe_bw_intervals: 100,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                intervals_since_probe: 0,
+            });
+            state.throughput_ema = Some(1000.0);
+        }
+
+        // Feed with high inflight but declining throughput (below 95% of prev EMA)
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(900.0); // 0.3*900 + 0.7*1000 = 970, vs prev 1000 → 970 < 950? No, 970 >= 950
+
+        // 970 >= 1000*0.95=950, so NOT declining — should still grow
+        assert_eq!(alg.current(), 110);
+
+        // Now a real decline
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(500.0); // 0.3*500 + 0.7*970 = 150+679 = 829, vs prev 970 → 829 < 921.5
+
+        // 829 < 970*0.95=921.5, so declining — should NOT grow
+        // limit stays at 110 (no sqrt(110) added)
+        assert_eq!(alg.current(), 110);
     }
 
     #[test]
@@ -1032,7 +1112,11 @@ mod tests {
         feed_successes_idle(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(1000.0);
 
-        assert_eq!(alg.current(), 10, "Startup should not grow when underutilized");
+        assert_eq!(
+            alg.current(),
+            10,
+            "Startup should not grow when underutilized"
+        );
     }
 
     // ======================== Serialization tests ========================
