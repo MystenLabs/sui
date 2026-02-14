@@ -150,6 +150,10 @@ impl<'a> Resolver<'a> for ToObject {
                     Tx::SharedObjectMutability::Immutable
                 },
             },
+            Owner::PartyPermissioned { .. } => {
+                // We need to know the sender to determine mutability
+                todo!("PartyPermissioned WIP")
+            }
             Owner::ObjectOwner(_) => {
                 error!(loc => help: {
                     "{obj_id} is an object-owned object, you can only use immutable, shared, or owned objects here."

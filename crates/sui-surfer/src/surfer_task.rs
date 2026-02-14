@@ -67,11 +67,15 @@ impl SurferTask {
                                     .or_default()
                                     .push(obj_ref);
                             }
+                            // TODO: Implement full support for Party objects in sui-surfer.
                             Owner::Shared {
                                 initial_shared_version,
                             }
-                            // TODO: Implement full support for ConsensusAddressOwner objects in sui-surfer.
                             | Owner::ConsensusAddressOwner {
+                                start_version: initial_shared_version,
+                                ..
+                            }
+                            | Owner::PartyPermissioned {
                                 start_version: initial_shared_version,
                                 ..
                             } => {

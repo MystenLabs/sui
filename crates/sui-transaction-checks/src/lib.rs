@@ -15,6 +15,7 @@ mod checked {
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
+    use sui_types::object::{ObjectPermission, ObjectPermissions};
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
@@ -367,7 +368,9 @@ mod checked {
                             .into()
                         )
                     }
-                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
+                    Owner::Shared { .. }
+                    | Owner::ConsensusAddressOwner { .. }
+                    | Owner::PartyPermissioned { .. } => {
                         fp_bail!(UserInputError::NotSharedObjectError.into())
                     }
                     Owner::Immutable => fp_bail!(
@@ -593,7 +596,9 @@ mod checked {
                             parent_id: owner.into(),
                         });
                     }
-                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
+                    Owner::Shared { .. }
+                    | Owner::ConsensusAddressOwner { .. }
+                    | Owner::PartyPermissioned { .. } => {
                         // This object is a mutable consensus object. However the transaction
                         // specifies it as an owned object. This is inconsistent.
                         return Err(UserInputError::NotOwnedObjectError);
@@ -670,6 +675,48 @@ mod checked {
                                 ),
                             }
                         )
+                    }
+
+                    Owner::PartyPermissioned {
+                        start_version: actual_initial_shared_version,
+                        permissions,
+                    } => {
+                        fp_ensure!(
+                            input_initial_shared_version == *actual_initial_shared_version,
+                            UserInputError::SharedObjectStartingVersionMismatch
+                        );
+                        // TODO PartyPermissioned WIP should we allow sponsor here?
+                        // Check the owner has permissions for this kind of mutability
+                        let sender_permissions = permissions.permissions_for(owner);
+                        match mutability {
+                            SharedObjectMutability::Immutable => {
+                                todo!("Better error kind here ");
+                                fp_ensure!(
+                                    sender_permissions.can_access_immutably_at_signing(),
+                                    UserInputError::IncorrectUserSignature {
+                                        error: format!(
+                                            "Sender address {owner:?} does not have immutable access permissions for object {object_id:?} with party ownership. The required permission is {}, but the permissions for the sender for this object are {sender_permissions}",
+                                            ObjectPermission::Read,
+                                        ),
+                                    }
+                                )
+                            }
+                            SharedObjectMutability::Mutable => {
+                                todo!("Better error kind here ");
+                                fp_ensure!(
+                                    sender_permissions.can_access_mutably_at_signing(),
+                                    UserInputError::IncorrectUserSignature {
+                                        error: format!(
+                                            "Sender address {owner:?} does not have mutable access permissions for object {object_id:?} with party ownership. The required permissions are one of: {}, but the permissions for the sender for this object are {sender_permissions}",
+                                            ObjectPermissions::AT_LEAST_ONE_REQUIRED_FOR_MUTABLE_AT_SIGNING,
+                                        ),
+                                    }
+                                )
+                            }
+                            SharedObjectMutability::NonExclusiveWrite => {
+                                todo!("PartyPermissioned WIP")
+                            }
+                        }
                     }
                 }
             }

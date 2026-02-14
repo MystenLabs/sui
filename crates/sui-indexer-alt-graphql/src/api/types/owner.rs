@@ -86,6 +86,7 @@ impl Owner {
                 start_version: Some(start_version.into()),
                 address: Some(Address::with_address(scope.without_root_bound(), owner)),
             }),
+            NO::PartyPermissioned { .. } => todo!("PartyPermissioned WIP"),
         }
     }
 }

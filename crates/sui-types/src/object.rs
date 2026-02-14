@@ -539,6 +539,10 @@ impl ObjectPermissions {
     pub const TRANSFER: Self = Self(ObjectPermission::Transfer as u64);
     pub const ALL: Self = Self(Self::READ.0 | Self::WRITE.0 | Self::DELETE.0 | Self::TRANSFER.0);
 
+    /// Requires _at least_ one of WRITE, DELETE, or TRANSFER
+    pub const AT_LEAST_ONE_REQUIRED_FOR_MUTABLE_AT_SIGNING: Self =
+        Self(Self::WRITE.0 | Self::DELETE.0 | Self::TRANSFER.0);
+
     pub const fn single(permission: ObjectPermission) -> Self {
         Self(permission as u64)
     }
@@ -676,10 +680,15 @@ pub struct PartyPermissions {
 
 impl PartyPermissions {
     /// Returns `None` if `members` is not unique per address.
+    /// Returns `None` if it could be represented as a single `ConsensusAddressOwner`
     pub fn new(
         default_permissions: ObjectPermissions,
         mut members: Vec<(SuiAddress, ObjectPermissions)>,
     ) -> Option<Self> {
+        if Self::is_consensus_address_owner(default_permissions, &members) {
+            return None;
+        }
+
         if !members.is_sorted_by_key(|(a, _)| *a) {
             members.sort_by_key(|(a, _)| *a);
         }
@@ -694,6 +703,15 @@ impl PartyPermissions {
             default_permissions,
             members,
         })
+    }
+
+    pub fn is_consensus_address_owner(
+        default_permissions: ObjectPermissions,
+        members: &[(SuiAddress, ObjectPermissions)],
+    ) -> bool {
+        default_permissions == ObjectPermissions::NONE
+            && members.len() == 1
+            && members[0].1 == ObjectPermissions::ALL
     }
 
     pub fn permissions_for(&self, address: &SuiAddress) -> ObjectPermissions {
