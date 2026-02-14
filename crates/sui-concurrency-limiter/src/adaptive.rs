@@ -373,7 +373,11 @@ impl AdaptiveState {
                     ProbeBWState::Cruise {
                         intervals_since_probe,
                     } => {
-                        if !underutilized && !throughput_declining {
+                        if underutilized {
+                            // Limit is above what the system actually uses — decay toward
+                            // real usage so the limit stays meaningful as a ceiling.
+                            self.limit = ((self.limit as f64) * 0.95).ceil() as usize;
+                        } else if !throughput_declining {
                             let inc = ((self.limit as f64).sqrt().floor() as usize).max(1);
                             self.limit += inc;
                         }
@@ -771,7 +775,8 @@ mod tests {
             let mut state = alg.inner.lock().unwrap();
             state.limit = 125;
             state.throughput_ema = Some(100.0);
-            state.baseline_p95 = Some(0.01); // Existing baseline so we don't probe down
+            state.baseline_p95 = Some(0.01); // Existing fresh baseline so we don't probe down
+            state.baseline_recorded_at = Some(Instant::now());
             state.phase = Phase::ProbeBW(ProbeBWState::ProbeUp {
                 pre_probe_limit: 100,
                 start_throughput_ema: 100.0,
@@ -1020,14 +1025,15 @@ mod tests {
             });
         }
 
-        // Feed with zero inflight — should NOT grow
+        // Feed with zero inflight — should decay, not grow
         feed_successes_idle(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(1000.0);
 
+        // ceil(100 * 0.95) = 95
         assert_eq!(
             alg.current(),
-            100,
-            "Limit should not grow when underutilized"
+            95,
+            "Limit should decay when underutilized"
         );
     }
 
