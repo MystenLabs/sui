@@ -307,11 +307,10 @@ impl AdaptiveState {
         // Without this, the limit rockets to max when ingestion is slow.
         let underutilized = self.stats.peak_inflight * 2 < self.limit;
 
-        // Throughput guard: skip growth when throughput isn't responding to higher limits.
-        // Without this, Cruise blindly grows the limit while the backend saturates
-        // (latency climbs but no errors), overshooting the knee.
-        let throughput_declining = match prev_ema {
-            Some(prev) => throughput_ema < prev * 0.95,
+        // Throughput guard: only grow when throughput is actively responding.
+        // If adding concurrency doesn't increase throughput, we're past the knee.
+        let throughput_not_growing = match prev_ema {
+            Some(prev) => throughput_ema < prev * 1.05,
             None => false,
         };
 
@@ -326,14 +325,14 @@ impl AdaptiveState {
                             // Limit is above what the system actually uses — decay toward
                             // real usage so the limit stays meaningful as a ceiling.
                             self.limit = ((self.limit as f64) * 0.95).ceil() as usize;
-                        } else if !throughput_declining {
+                        } else if !throughput_not_growing {
                             let inc = ((self.limit as f64).sqrt().floor() as usize).max(1);
                             self.limit += inc;
                         }
                         *intervals_since_probe += 1;
 
                         if !underutilized
-                            && !throughput_declining
+                            && !throughput_not_growing
                             && *intervals_since_probe >= config.probe_bw_intervals
                         {
                             let pre_probe_limit = self.limit;
@@ -934,7 +933,7 @@ mod tests {
     }
 
     #[test]
-    fn cruise_stops_growing_when_throughput_declines() {
+    fn cruise_stops_growing_when_throughput_flat() {
         let config = AdaptiveConfig {
             initial_limit: 100,
             min_limit: 1,
@@ -953,22 +952,21 @@ mod tests {
             state.throughput_ema = Some(1000.0);
         }
 
-        // Feed with high inflight but declining throughput (below 95% of prev EMA)
+        // Flat throughput: 0.3*1000 + 0.7*1000 = 1000, need > 1050 to grow
         feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(900.0); // 0.3*900 + 0.7*1000 = 970, vs prev 1000 → 970 < 950? No, 970 >= 950
+        alg.force_interval_with_throughput(1000.0);
 
-        // 970 >= 1000*0.95=950, so NOT declining — should still grow
-        assert_eq!(alg.current(), 110);
+        // 1000 < 1000*1.05=1050, so not growing — should NOT increase
+        assert_eq!(alg.current(), 100);
 
-        // Now a real decline
+        // Now with strong throughput growth
         feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(500.0); // 0.3*500 + 0.7*970 = 150+679 = 829, vs prev 970 → 829 < 921.5
+        alg.force_interval_with_throughput(2000.0); // 0.3*2000 + 0.7*1000 = 1300, vs prev 1000 → 1300 >= 1050
 
-        // 829 < 970*0.95=921.5, so declining — should NOT grow
-        // limit stays at 110 (no sqrt(110) added)
+        // 1300 >= 1000*1.05=1050, so growing — should increase
+        // 100 + sqrt(100) = 110
         assert_eq!(alg.current(), 110);
     }
-
 
     // ======================== Serialization tests ========================
 
