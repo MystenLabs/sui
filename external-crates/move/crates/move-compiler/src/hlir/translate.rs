@@ -1371,8 +1371,20 @@ fn value(
                 if let Some(ref field_map) = decl_fields {
                     fields
                         .into_iter()
-                        .map(|(f, (exp_idx, (bt, tf)))| {
-                            (*field_map.get(&f).unwrap(), f, exp_idx, bt, tf)
+                        .filter_map(|(f, (exp_idx, (bt, tf)))| {
+                            match field_map.get(&f) {
+                                Some(decl_idx) => Some((*decl_idx, f, exp_idx, bt, tf)),
+                                None => {
+                                    context.add_diag(diag!(
+                                        TypeSafety::InvalidField,
+                                        (f.loc(), format!(
+                                            "Invalid field '{}' in enum variant constructor",
+                                            f.value()
+                                        ))
+                                    ));
+                                    None
+                                }
+                            }
                         })
                         .collect()
                 } else {
@@ -1451,8 +1463,20 @@ fn value(
                 if let Some(ref field_map) = decl_fields {
                     fields
                         .into_iter()
-                        .map(|(f, (exp_idx, (bt, tf)))| {
-                            (*field_map.get(&f).unwrap(), f, exp_idx, bt, tf)
+                        .filter_map(|(f, (exp_idx, (bt, tf)))| {
+                            match field_map.get(&f) {
+                                Some(decl_idx) => Some((*decl_idx, f, exp_idx, bt, tf)),
+                                None => {
+                                    context.add_diag(diag!(
+                                        TypeSafety::InvalidField,
+                                        (f.loc(), format!(
+                                            "Invalid field '{}' in enum variant constructor",
+                                            f.value()
+                                        ))
+                                    ));
+                                    None
+                                }
+                            }
                         })
                         .collect()
                 } else {
@@ -3092,3 +3116,4 @@ fn gen_unused_warnings(
         context.pop_warning_filter_scope();
     }
 }
+
