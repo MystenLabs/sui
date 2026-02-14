@@ -121,6 +121,7 @@ struct IntervalStats {
     successes: usize,
     errors: usize,
     rtt_samples: Vec<f64>,
+    peak_inflight: usize,
     start: Instant,
     next_interval: Duration,
 }
@@ -131,6 +132,7 @@ impl IntervalStats {
             successes: 0,
             errors: 0,
             rtt_samples: Vec::new(),
+            peak_inflight: 0,
             start: Instant::now(),
             next_interval: interval,
         }
@@ -140,6 +142,7 @@ impl IntervalStats {
         self.successes = 0;
         self.errors = 0;
         self.rtt_samples.clear();
+        self.peak_inflight = 0;
         self.start = Instant::now();
         // Jitter: +/- 10%
         let jitter = rand::thread_rng().gen_range(0.9..1.1);
@@ -230,7 +233,8 @@ struct AdaptiveState {
 }
 
 impl AdaptiveState {
-    fn record_sample(&mut self, outcome: &Outcome, rtt: Duration) {
+    fn record_sample(&mut self, inflight: usize, outcome: &Outcome, rtt: Duration) {
+        self.stats.peak_inflight = self.stats.peak_inflight.max(inflight);
         match outcome {
             Outcome::Success => {
                 self.stats.successes += 1;
@@ -293,35 +297,41 @@ impl AdaptiveState {
         // Compute tail latency
         let current_p95 = self.stats.percentile(config.brake_percentile);
 
+        // Inflight guard: skip growth when the system isn't utilizing the current limit.
+        // Without this, the limit rockets to max when ingestion is slow.
+        let underutilized = self.stats.peak_inflight * 2 < self.limit;
+
         // Phase-specific logic
         match &mut self.phase {
             Phase::Startup {
                 best_throughput,
                 stall_count,
             } => {
-                let growth = if *best_throughput > 0.0 {
-                    (throughput_ema - *best_throughput) / *best_throughput
+                if underutilized {
+                    // Not enough inflight to test the backend — skip this round
                 } else {
-                    1.0 // first interval always counts as growth
-                };
+                    let growth = if *best_throughput > 0.0 {
+                        (throughput_ema - *best_throughput) / *best_throughput
+                    } else {
+                        1.0 // first interval always counts as growth
+                    };
 
-                if growth >= config.full_pipe_threshold {
-                    // Throughput grew enough — double the limit
-                    *best_throughput = throughput_ema;
-                    *stall_count = 0;
-                    self.limit =
-                        ((self.limit as f64) * config.startup_growth_factor).ceil() as usize;
-                } else {
-                    *stall_count += 1;
-                    if *stall_count >= config.full_pipe_rounds {
-                        // Full pipe detected — drain to headroom level
-                        let drain_limit = ((self.limit as f64) * config.headroom_factor
-                            / config.startup_growth_factor)
-                            .ceil() as usize;
-                        self.limit = drain_limit;
-                        self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
-                            intervals_since_probe: 0,
-                        });
+                    if growth >= config.full_pipe_threshold {
+                        *best_throughput = throughput_ema;
+                        *stall_count = 0;
+                        self.limit = ((self.limit as f64) * config.startup_growth_factor).ceil()
+                            as usize;
+                    } else {
+                        *stall_count += 1;
+                        if *stall_count >= config.full_pipe_rounds {
+                            let drain_limit = ((self.limit as f64) * config.headroom_factor
+                                / config.startup_growth_factor)
+                                .ceil() as usize;
+                            self.limit = drain_limit;
+                            self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                                intervals_since_probe: 0,
+                            });
+                        }
                     }
                 }
             }
@@ -330,12 +340,14 @@ impl AdaptiveState {
                     ProbeBWState::Cruise {
                         intervals_since_probe,
                     } => {
-                        // Additive increase: sqrt(limit) per interval, minimum 1
-                        let inc = ((self.limit as f64).sqrt().floor() as usize).max(1);
-                        self.limit += inc;
+                        if !underutilized {
+                            // Additive increase: sqrt(limit) per interval, minimum 1
+                            let inc = ((self.limit as f64).sqrt().floor() as usize).max(1);
+                            self.limit += inc;
+                        }
                         *intervals_since_probe += 1;
 
-                        if *intervals_since_probe >= config.probe_bw_intervals {
+                        if !underutilized && *intervals_since_probe >= config.probe_bw_intervals {
                             let pre_probe_limit = self.limit;
                             let start_ema = throughput_ema;
                             self.limit =
@@ -471,7 +483,7 @@ impl Adaptive {
 impl LimitAlgorithm for Adaptive {
     fn update(
         &self,
-        _inflight: usize,
+        inflight: usize,
         _delivered: usize,
         outcome: Outcome,
         rtt: Duration,
@@ -479,7 +491,7 @@ impl LimitAlgorithm for Adaptive {
         let mut state = self.inner.lock().unwrap();
 
         // 1. Record sample
-        state.record_sample(&outcome, rtt);
+        state.record_sample(inflight, &outcome, rtt);
 
         // 2. Per-sample emergency brake (error rate)
         state.check_error_brake(&self.config, &self.gauge);
@@ -520,7 +532,16 @@ mod tests {
         Adaptive::new(&config, initial)
     }
 
+    /// Feed successes with high inflight (passes the inflight guard).
     fn feed_successes(alg: &Adaptive, count: usize, rtt: Duration) {
+        let limit = alg.current();
+        for _ in 0..count {
+            alg.update(limit, 0, Outcome::Success, rtt);
+        }
+    }
+
+    /// Feed successes with zero inflight (triggers the inflight guard).
+    fn feed_successes_idle(alg: &Adaptive, count: usize, rtt: Duration) {
         for _ in 0..count {
             alg.update(0, 0, Outcome::Success, rtt);
         }
@@ -940,6 +961,78 @@ mod tests {
             alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
         }
         assert_eq!(alg.current(), 3);
+    }
+
+    // ======================== Inflight guard tests ========================
+
+    #[test]
+    fn no_growth_when_underutilized() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            probe_bw_intervals: 100,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                intervals_since_probe: 0,
+            });
+        }
+
+        // Feed with zero inflight — should NOT grow
+        feed_successes_idle(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1000.0);
+
+        assert_eq!(alg.current(), 100, "Limit should not grow when underutilized");
+    }
+
+    #[test]
+    fn growth_resumes_when_utilized() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            probe_bw_intervals: 100,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                intervals_since_probe: 0,
+            });
+        }
+
+        // Feed with high inflight — should grow
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1000.0);
+
+        assert_eq!(alg.current(), 110, "Limit should grow when utilized (100 + sqrt(100))");
+    }
+
+    #[test]
+    fn startup_skips_when_underutilized() {
+        let config = AdaptiveConfig {
+            initial_limit: 10,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // Feed with zero inflight — startup should not double
+        feed_successes_idle(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1000.0);
+
+        assert_eq!(alg.current(), 10, "Startup should not grow when underutilized");
     }
 
     // ======================== Serialization tests ========================
