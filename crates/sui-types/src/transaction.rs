@@ -964,6 +964,10 @@ impl ProgrammableTransaction {
             .iter()
             .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
     }
+
+    pub fn uses_gas_coin(&self) -> bool {
+        self.commands.iter().any(|cmd| cmd.is_gas_coin_used())
+    }
 }
 
 /// A single command in a programmable transaction.
@@ -2956,6 +2960,17 @@ impl TransactionDataAPI for TransactionDataV1 {
                     .into());
                 }
                 TransactionExpiration::ValidDuring { .. } => {}
+            }
+
+            // Reject transactions that use Argument::GasCoin when gas payment is empty.
+            // There is no gas coin to reference in this case.
+            if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
+                if pt.uses_gas_coin() {
+                    return Err(UserInputError::Unsupported(
+                        "Argument::GasCoin cannot be used when gas payment is empty".to_string(),
+                    )
+                    .into());
+                }
             }
         } else {
             fp_ensure!(

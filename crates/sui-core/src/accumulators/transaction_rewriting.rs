@@ -217,11 +217,7 @@ fn rewrite_gas_coin_references(commands: &mut [Command], replacement: Argument) 
                     }
                 }
             }
-            Command::Upgrade(_, _, _, ticket) => {
-                if *ticket == Argument::GasCoin {
-                    *ticket = replacement;
-                }
-            }
+            Command::Upgrade(_, _, _, _) => {}
         }
     }
 }
