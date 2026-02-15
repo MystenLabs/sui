@@ -4039,15 +4039,18 @@ fn lvalue(
                     context.add_diag(diag!(Declarations::DuplicateItem, primary, secondary));
                 }
                 if v.is_syntax_identifier() {
-                    debug_assert!(
-                        matches!(case, C::Assign),
-                        "ICE this should fail during parsing"
-                    );
-                    let msg = format!(
-                        "Cannot assign to argument for parameter '{}'. \
-                        Arguments must be used in value positions",
-                        v.0
-                    );
+                    let msg = match case {
+                        C::Bind => format!(
+                            "Cannot bind argument for parameter '{}'. \
+                            Arguments must be used in value positions",
+                            v.0
+                        ),
+                        C::Assign => format!(
+                            "Cannot assign to argument for parameter '{}'. \
+                            Arguments must be used in value positions",
+                            v.0
+                        ),
+                    };
                     let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
                     diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
                     context.add_diag(diag);
