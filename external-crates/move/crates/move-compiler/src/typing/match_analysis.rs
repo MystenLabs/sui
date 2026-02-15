@@ -373,8 +373,7 @@ fn find_counterexample_impl(
                 let ctor_arity = arg_types.len() as u32;
                 let decl_fields = context
                     .info()
-                    .struct_fields(&mident, &datatype_name)
-                    .unwrap();
+                    .struct_fields(&mident, &datatype_name)?;
                 let fringe_binders =
                     context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                 let is_positional = context.info().struct_is_positional(&mident, &datatype_name);
