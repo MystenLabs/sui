@@ -1,17 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Adaptive concurrency limiter combining BBR-style throughput probing with tail-latency braking.
+//! Adaptive concurrency limiter using throughput probing.
 //!
 //! Unlike the per-sample algorithms (AIMD, Gradient, Vegas, BBR), Adaptive collects statistics
 //! over **probe intervals** (~1s) and makes limit decisions at interval boundaries:
 //!
 //! 1. **ProbeBW**: Steady-state with periodic probing (Cruise → ProbeUp → ProbeDown cycle).
 //!    Cruise uses additive increase (sqrt(limit) per interval) with decay when underutilized.
-//! 2. **Emergency brake**: Per-sample error check + interval-based tail-latency check (always active).
+//! 2. **Emergency brake**: Per-sample error check (always active).
 //!
 //! The key insight: measure completions-per-second as an independent throughput signal, then ask
 //! whether it grows when concurrency increases. If yes, grow. If no, you've found the knee.
+//! ProbeDown verifies: if throughput is maintained at reduced concurrency, the extra concurrency
+//! wasn't helping — keep the lower limit.
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -36,23 +38,28 @@ pub struct AdaptiveConfig {
     /// Duration of each probe interval in milliseconds.
     pub probe_interval_ms: u64,
 
+    // Throughput tracking
+    /// EMA smoothing weight for current interval (0.0–1.0). Lower = smoother, less noise.
+    pub throughput_ema_alpha: f64,
+    /// Minimum EMA growth ratio to allow Cruise to increase the limit.
+    pub throughput_growth_threshold: f64,
+
     // ProbeBW
     /// Multiplicative gain when probing upward.
     pub probe_up_gain: f64,
     /// Number of cruise intervals between probe cycles.
     pub probe_bw_intervals: usize,
+    /// Minimum throughput fraction to accept when probing down (0.0–1.0).
+    /// ProbeDown keeps the lower concurrency limit if throughput stays above this
+    /// fraction of pre-probe throughput. Lower values (e.g. 0.80) trade throughput
+    /// for lower latency; higher values (e.g. 0.95) keep concurrency closer to peak.
+    pub probe_down_min_throughput: f64,
 
     // Braking
     /// Multiplicative backoff on error brake.
     pub error_backoff_ratio: f64,
-    /// Multiplicative backoff on latency brake.
-    pub latency_backoff_ratio: f64,
     /// Error rate threshold (fraction) that triggers the error brake.
     pub error_rate_threshold: f64,
-    /// Queue signal threshold for the latency brake.
-    pub queue_signal_beta: f64,
-    /// Percentile used for tail-latency braking (0.0–1.0).
-    pub brake_percentile: f64,
 }
 
 impl Default for AdaptiveConfig {
@@ -62,13 +69,13 @@ impl Default for AdaptiveConfig {
             min_limit: 1,
             max_limit: 100_000,
             probe_interval_ms: 1000,
+            throughput_ema_alpha: 0.3,
+            throughput_growth_threshold: 1.10,
             probe_up_gain: 1.25,
             probe_bw_intervals: 10,
+            probe_down_min_throughput: 0.90,
             error_backoff_ratio: 0.5,
-            latency_backoff_ratio: 0.9,
             error_rate_threshold: 0.05,
-            queue_signal_beta: 6.0,
-            brake_percentile: 0.95,
         }
     }
 }
@@ -91,6 +98,7 @@ enum ProbeBWState {
     },
     ProbeDown {
         pre_down_limit: usize,
+        pre_probe_throughput_ema: f64,
     },
 }
 
@@ -101,7 +109,6 @@ enum ProbeBWState {
 struct IntervalStats {
     successes: usize,
     errors: usize,
-    rtt_samples: Vec<f64>,
     peak_inflight: usize,
     start: Instant,
     next_interval: Duration,
@@ -112,7 +119,6 @@ impl IntervalStats {
         Self {
             successes: 0,
             errors: 0,
-            rtt_samples: Vec::new(),
             peak_inflight: 0,
             start: Instant::now(),
             next_interval: interval,
@@ -122,7 +128,6 @@ impl IntervalStats {
     fn reset(&mut self, interval: Duration) {
         self.successes = 0;
         self.errors = 0;
-        self.rtt_samples.clear();
         self.peak_inflight = 0;
         self.start = Instant::now();
         // Jitter: +/- 10%
@@ -132,20 +137,6 @@ impl IntervalStats {
 
     fn elapsed(&self) -> bool {
         self.start.elapsed() >= self.next_interval
-    }
-
-    fn percentile(&mut self, p: f64) -> Option<f64> {
-        if self.rtt_samples.len() < 10 {
-            return None;
-        }
-        let idx = ((self.rtt_samples.len() as f64 * p).ceil() as usize)
-            .min(self.rtt_samples.len())
-            .saturating_sub(1);
-        // O(n) partial sort — only positions the idx-th element correctly.
-        self.rtt_samples.select_nth_unstable_by(idx, |a, b| {
-            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-        });
-        Some(self.rtt_samples[idx])
     }
 }
 
@@ -228,24 +219,16 @@ struct AdaptiveState {
     stats: IntervalStats,
     rolling_errors: RollingErrors,
     throughput_ema: Option<f64>,
-    baseline_p95: Option<f64>,
-    baseline_recorded_at: Option<Instant>,
-    /// Skip the latency brake for one interval after ProbeDown recalibrates baseline.
-    suppress_latency_brake: bool,
     limit: usize,
 }
 
 impl AdaptiveState {
-    fn record_sample(&mut self, inflight: usize, outcome: &Outcome, rtt: Duration) {
+    fn record_sample(&mut self, inflight: usize, outcome: &Outcome) {
         self.stats.peak_inflight = self.stats.peak_inflight.max(inflight);
         self.rolling_errors.resize_for_limit(self.limit);
         match outcome {
             Outcome::Success => {
                 self.stats.successes += 1;
-                let rtt_secs = rtt.as_secs_f64();
-                if rtt_secs > 0.0 {
-                    self.stats.rtt_samples.push(rtt_secs);
-                }
                 self.rolling_errors.push(false);
             }
             Outcome::Dropped => {
@@ -296,12 +279,12 @@ impl AdaptiveState {
         // Update throughput EMA: first interval seeds directly
         self.throughput_ema = Some(match prev_ema {
             None => throughput,
-            Some(prev) => 0.3 * throughput + 0.7 * prev,
+            Some(prev) => {
+                config.throughput_ema_alpha * throughput
+                    + (1.0 - config.throughput_ema_alpha) * prev
+            }
         });
         let throughput_ema = self.throughput_ema.unwrap();
-
-        // Compute tail latency
-        let current_p95 = self.stats.percentile(config.brake_percentile);
 
         // Inflight guard: skip growth when the system isn't utilizing the current limit.
         // Without this, the limit rockets to max when ingestion is slow.
@@ -309,10 +292,8 @@ impl AdaptiveState {
 
         // Throughput guard: only grow when throughput is actively responding.
         // If adding concurrency doesn't increase throughput, we're past the knee.
-        // Uses 10% threshold to avoid noise in per-second completion counts
-        // leaking through and causing spurious growth.
         let throughput_not_growing = match prev_ema {
-            Some(prev) => throughput_ema < prev * 1.10,
+            Some(prev) => throughput_ema < prev * config.throughput_growth_threshold,
             None => false,
         };
 
@@ -333,9 +314,7 @@ impl AdaptiveState {
                         }
                         *intervals_since_probe += 1;
 
-                        if !underutilized
-                            && *intervals_since_probe >= config.probe_bw_intervals
-                        {
+                        if !underutilized && *intervals_since_probe >= config.probe_bw_intervals {
                             let pre_probe_limit = self.limit;
                             let start_ema = throughput_ema;
                             self.limit =
@@ -350,59 +329,43 @@ impl AdaptiveState {
                         pre_probe_limit,
                         start_throughput_ema,
                     } => {
-                        // After 1 interval: did throughput respond?
                         if throughput_ema >= *start_throughput_ema * 1.10 {
-                            // Keep the higher limit
+                            // Throughput responded — keep the higher limit
                             self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
                                 intervals_since_probe: 0,
                             });
                         } else {
-                            // Revert and probe down to measure baseline latency
-                            let reverted = *pre_probe_limit;
-                            let baseline_stale = self
-                                .baseline_recorded_at
-                                .is_none_or(|t| t.elapsed() > Duration::from_secs(30));
-                            if baseline_stale {
-                                let pre_down = reverted;
-                                self.limit = ((reverted as f64) * 0.75).ceil() as usize;
-                                self.phase = Phase::ProbeBW(ProbeBWState::ProbeDown {
-                                    pre_down_limit: pre_down,
-                                });
-                            } else {
-                                self.limit = reverted;
-                                self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
-                                    intervals_since_probe: 0,
-                                });
-                            }
+                            // Throughput didn't respond — revert and probe down to
+                            // check if we can use less concurrency.
+                            let pre_down = *pre_probe_limit;
+                            let pre_probe_ema = *start_throughput_ema;
+                            self.limit = ((pre_down as f64) * 0.75).ceil() as usize;
+                            self.phase = Phase::ProbeBW(ProbeBWState::ProbeDown {
+                                pre_down_limit: pre_down,
+                                pre_probe_throughput_ema: pre_probe_ema,
+                            });
                         }
                     }
-                    ProbeBWState::ProbeDown { pre_down_limit } => {
-                        if let Some(p95) = current_p95 {
-                            self.baseline_p95 = Some(p95);
-                            self.baseline_recorded_at = Some(Instant::now());
-                            self.suppress_latency_brake = true;
+                    ProbeBWState::ProbeDown {
+                        pre_down_limit,
+                        pre_probe_throughput_ema,
+                    } => {
+                        // If throughput at reduced concurrency is within 90% of what we
+                        // had before probing, the extra concurrency wasn't helping —
+                        // keep the lower limit.
+                        if throughput_ema
+                            >= *pre_probe_throughput_ema * config.probe_down_min_throughput
+                        {
+                            // Throughput maintained — keep reduced limit
+                        } else {
+                            // Throughput dropped — restore original limit
+                            self.limit = *pre_down_limit;
                         }
-                        self.limit = *pre_down_limit;
                         self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
                             intervals_since_probe: 0,
                         });
                     }
                 }
-            }
-        }
-
-        // Latency brake (always active when baseline exists and we have enough samples).
-        // Suppressed for one interval after ProbeDown recalibrates to avoid immediately
-        // undoing the fresh baseline measurement.
-        if self.suppress_latency_brake {
-            self.suppress_latency_brake = false;
-        } else if let (Some(baseline), Some(current)) = (self.baseline_p95, current_p95)
-            && baseline > 0.0
-            && current > baseline
-        {
-            let queue_signal = self.limit as f64 * (1.0 - baseline / current);
-            if queue_signal > config.queue_signal_beta {
-                self.limit = ((self.limit as f64) * config.latency_backoff_ratio).ceil() as usize;
             }
         }
 
@@ -442,9 +405,6 @@ impl Adaptive {
                 stats: IntervalStats::new(interval),
                 rolling_errors: RollingErrors::new(100),
                 throughput_ema: None,
-                baseline_p95: None,
-                baseline_recorded_at: None,
-                suppress_latency_brake: false,
                 limit: initial,
             }),
             config: config.clone(),
@@ -475,11 +435,17 @@ impl Adaptive {
 }
 
 impl LimitAlgorithm for Adaptive {
-    fn update(&self, inflight: usize, _delivered: usize, outcome: Outcome, rtt: Duration) -> usize {
+    fn update(
+        &self,
+        inflight: usize,
+        _delivered: usize,
+        outcome: Outcome,
+        _rtt: Duration,
+    ) -> usize {
         let mut state = self.inner.lock().unwrap();
 
         // 1. Record sample
-        state.record_sample(inflight, &outcome, rtt);
+        state.record_sample(inflight, &outcome);
 
         // 2. Per-sample emergency brake (error rate)
         state.check_error_brake(&self.config, &self.gauge);
@@ -630,7 +596,7 @@ mod tests {
     }
 
     #[test]
-    fn probe_up_reverts_when_throughput_flat() {
+    fn probe_up_enters_probe_down_when_throughput_flat() {
         let config = AdaptiveConfig {
             initial_limit: 100,
             min_limit: 1,
@@ -645,8 +611,6 @@ mod tests {
             let mut state = alg.inner.lock().unwrap();
             state.limit = 125;
             state.throughput_ema = Some(100.0);
-            state.baseline_p95 = Some(0.01); // Existing fresh baseline so we don't probe down
-            state.baseline_recorded_at = Some(Instant::now());
             state.phase = Phase::ProbeBW(ProbeBWState::ProbeUp {
                 pre_probe_limit: 100,
                 start_throughput_ema: 100.0,
@@ -658,15 +622,20 @@ mod tests {
         feed_successes(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(100.0);
 
-        // Should revert to pre_probe_limit (100) and go to Cruise
+        // Should enter ProbeDown at ceil(100 * 0.75) = 75
         let limit = alg.current();
-        assert_eq!(limit, 100);
+        assert_eq!(limit, 75);
+        let state = alg.inner.lock().unwrap();
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::ProbeDown { .. })
+        ));
     }
 
     // ======================== ProbeDown tests ========================
 
     #[test]
-    fn probe_down_records_baseline_and_restores() {
+    fn probe_down_keeps_lower_limit_when_throughput_maintained() {
         let config = AdaptiveConfig {
             initial_limit: 100,
             min_limit: 1,
@@ -682,16 +651,53 @@ mod tests {
             state.throughput_ema = Some(100.0);
             state.phase = Phase::ProbeBW(ProbeBWState::ProbeDown {
                 pre_down_limit: 100,
+                pre_probe_throughput_ema: 100.0,
             });
             alg.gauge.store(75, Ordering::Release);
         }
 
+        // Throughput at 75% concurrency is ~same as before (95 → EMA = 0.3*95 + 0.7*100 = 98.5, >= 90)
         feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(1000.0);
+        alg.force_interval_with_throughput(95.0);
 
+        // Should keep the lower limit (75) since throughput was maintained
+        assert_eq!(alg.current(), 75);
+        let state = alg.inner.lock().unwrap();
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::Cruise { .. })
+        ));
+    }
+
+    #[test]
+    fn probe_down_restores_limit_when_throughput_drops() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 75;
+            state.throughput_ema = Some(100.0);
+            state.phase = Phase::ProbeBW(ProbeBWState::ProbeDown {
+                pre_down_limit: 100,
+                pre_probe_throughput_ema: 100.0,
+            });
+            alg.gauge.store(75, Ordering::Release);
+        }
+
+        // Throughput dropped significantly (50 → EMA = 0.3*50 + 0.7*100 = 85, < 90)
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(50.0);
+
+        // Should restore original limit (100) since throughput dropped
         assert_eq!(alg.current(), 100);
         let state = alg.inner.lock().unwrap();
-        assert!(state.baseline_p95.is_some());
         assert!(matches!(
             state.phase,
             Phase::ProbeBW(ProbeBWState::Cruise { .. })
@@ -758,45 +764,6 @@ mod tests {
             state.phase,
             Phase::ProbeBW(ProbeBWState::Cruise { .. })
         ));
-    }
-
-    // ======================== Latency brake tests ========================
-
-    #[test]
-    fn latency_brake_fires_at_interval() {
-        let config = AdaptiveConfig {
-            initial_limit: 100,
-            min_limit: 1,
-            max_limit: 10000,
-            probe_interval_ms: 1000,
-            queue_signal_beta: 6.0,
-            latency_backoff_ratio: 0.9,
-            probe_bw_intervals: 100, // high so we stay in cruise
-            ..default_config()
-        };
-        let alg = adaptive(config);
-
-        {
-            let mut state = alg.inner.lock().unwrap();
-            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
-                intervals_since_probe: 0,
-            });
-            state.baseline_p95 = Some(0.010); // 10ms baseline
-            state.throughput_ema = Some(100.0);
-        }
-
-        // Feed samples with much higher latency (100ms) to trigger latency brake
-        // queue_signal = limit * (1 - baseline/current) = 110 * (1 - 0.01/0.1) = 110 * 0.9 = 99 > 6
-        feed_successes(&alg, 50, Duration::from_millis(100));
-        alg.force_interval_with_throughput(1000.0);
-
-        // After cruise additive increase: 100 + sqrt(100) = 110
-        // After latency brake: ceil(110 * 0.9) = 99
-        let limit = alg.current();
-        assert!(
-            limit < 110,
-            "Latency brake should have reduced limit, got {limit}"
-        );
     }
 
     // ======================== Edge case tests ========================
