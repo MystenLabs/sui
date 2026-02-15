@@ -34,6 +34,7 @@ pub fn translate_package(
 mod tests {
     use super::translate_package;
     use crate::{
+        cache::identifier_interner::IdentifierInterner,
         jit::execution::ast::Package as RuntimePackage, validation::verification::ast as verif_ast,
     };
     use indexmap::IndexMap;
@@ -88,7 +89,8 @@ mod tests {
         };
         let natives = crate::natives::functions::NativeFunctions::empty_for_testing().unwrap();
 
-        let result = translate_package(&vm_config, &natives, verified);
+        let interner = IdentifierInterner::new();
+        let result = translate_package(&vm_config, &interner, &natives, verified);
         let runtime_pkg = result.expect("translate_package should succeed for minimal package");
         assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
     }
@@ -105,7 +107,8 @@ mod tests {
         };
         let natives = crate::natives::functions::NativeFunctions::empty_for_testing().unwrap();
 
-        let result = translate_package(&vm_config, &natives, verified);
+        let interner = IdentifierInterner::new();
+        let result = translate_package(&vm_config, &interner, &natives, verified);
         let runtime_pkg = result.expect("translate_package should succeed for minimal package");
         assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
     }
@@ -169,9 +172,10 @@ mod tests {
             ..VMConfig::default()
         };
         let natives = crate::natives::functions::NativeFunctions::empty_for_testing().unwrap();
+        let interner = IdentifierInterner::new();
 
         let result_no_opt =
-            translate_package(&vm_config_no_opt, &natives, verified.clone());
+            translate_package(&vm_config_no_opt, &interner, &natives, verified.clone());
         let runtime_pkg_no_opt =
             result_no_opt.expect("translate_package should succeed without optimization");
 
@@ -180,7 +184,7 @@ mod tests {
             optimize_bytecode: true,
             ..VMConfig::default()
         };
-        let result_opt = translate_package(&vm_config_opt, &natives, verified);
+        let result_opt = translate_package(&vm_config_opt, &interner, &natives, verified);
         let runtime_pkg_opt =
             result_opt.expect("translate_package should succeed with optimization");
 
