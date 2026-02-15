@@ -329,7 +329,7 @@ impl AdaptiveState {
                         pre_probe_limit,
                         start_throughput_ema,
                     } => {
-                        if throughput_ema >= *start_throughput_ema * 1.10 {
+                        if throughput >= *start_throughput_ema * 1.10 {
                             // Throughput responded — keep the higher limit
                             self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
                                 intervals_since_probe: 0,
@@ -353,7 +353,7 @@ impl AdaptiveState {
                         // If throughput at reduced concurrency is within 90% of what we
                         // had before probing, the extra concurrency wasn't helping —
                         // keep the lower limit.
-                        if throughput_ema
+                        if throughput
                             >= *pre_probe_throughput_ema * config.probe_down_min_throughput
                         {
                             // Throughput maintained — keep reduced limit
