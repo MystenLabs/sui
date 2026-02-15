@@ -276,7 +276,7 @@ impl PatternArm {
         arg_types: &Vec<&Type>,
     ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pats.pop_front().unwrap();
+        let first_pattern = output.pats.pop_front()?;
         let loc = first_pattern.pat.loc;
         match first_pattern.pat.value {
             TP::Variant(mident, enum_, name, _, fields)
