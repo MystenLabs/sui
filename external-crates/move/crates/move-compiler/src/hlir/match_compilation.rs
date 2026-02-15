@@ -170,7 +170,11 @@ fn build_match_tree(
     if subject.ty.value.unfold_to_builtin_type_name().is_some() {
         compile_match_literal(context, subject, fringe, matrix)
     } else {
-        let tyargs = subject.ty.value.type_arguments().unwrap().clone();
+        let Some(tyargs) = subject.ty.value.type_arguments().cloned() else {
+            // Type has no type arguments (e.g., abort expression). This represents
+            // unreachable code, so treat as match failure.
+            return MatchTree::Failure;
+        };
 
         let (mident, datatype_name) = subject
             .ty
