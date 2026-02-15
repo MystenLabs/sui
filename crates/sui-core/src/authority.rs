@@ -126,6 +126,7 @@ use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValue
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::authenticator_state::get_authenticator_state;
+use sui_types::balance::Balance;
 use sui_types::coin_reservation;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{AuthoritySignInfo, Signer, default_hash};
@@ -4768,10 +4769,15 @@ impl AuthorityState {
             return Ok(None);
         };
 
+        // Extract the currency type from balance_type (e.g., SUI from Balance<SUI>).
+        // get_balance expects the currency type, not the balance type.
+        let currency_type =
+            Balance::maybe_get_balance_type_param(&balance_type).unwrap_or(balance_type);
+
         let balance = crate::accumulators::balances::get_balance(
             owner,
             self.get_child_object_resolver().as_ref(),
-            balance_type,
+            currency_type,
         )?;
 
         if balance == 0 {
