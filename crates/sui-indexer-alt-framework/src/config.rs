@@ -125,9 +125,7 @@ impl IngestionLayer {
             streaming_statement_timeout_ms: self
                 .streaming_statement_timeout_ms
                 .unwrap_or(base.streaming_statement_timeout_ms),
-            max_pending_rows: self
-                .max_pending_rows
-                .unwrap_or(base.max_pending_rows),
+            max_pending_rows: self.max_pending_rows.unwrap_or(base.max_pending_rows),
         }
     }
 }
