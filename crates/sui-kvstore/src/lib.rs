@@ -15,7 +15,6 @@ pub use crate::handlers::EpochStartPipeline;
 pub use crate::handlers::ObjectsPipeline;
 pub use crate::handlers::PrevEpochUpdate;
 pub use crate::handlers::TransactionsPipeline;
-pub use crate::handlers::set_max_mutations;
 
 pub const CHECKPOINTS_PIPELINE: &str =
     <BigTableHandler<CheckpointsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;

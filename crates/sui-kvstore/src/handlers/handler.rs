@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use std::sync::RwLock;
 
 use bytes::Bytes;
@@ -19,9 +17,6 @@ use crate::bigtable::store::BigTableStore;
 
 /// BigTable's hard limit for mutations per batch.
 pub const BIGTABLE_MAX_MUTATIONS: usize = 100_000;
-
-const DEFAULT_MAX_MUTATIONS: usize = 10_000;
-static MAX_MUTATIONS: OnceLock<usize> = OnceLock::new();
 
 /// Extension of `Processor` that specifies a BigTable table name.
 ///
@@ -63,7 +58,7 @@ pub struct BigTableBatch {
 
 #[derive(Default)]
 struct BigTableBatchInner {
-    entries: BTreeMap<Bytes, Entry>,
+    entries: Vec<Entry>,
     total_mutations: usize,
 }
 
@@ -123,9 +118,9 @@ where
 
         for entry in values {
             inner.total_mutations += entry.mutations.len();
-            inner.entries.insert(entry.row_key.clone(), entry);
+            inner.entries.push(entry);
 
-            if inner.total_mutations >= max_mutations() {
+            if inner.total_mutations >= BIGTABLE_MAX_MUTATIONS {
                 return BatchStatus::Ready;
             }
         }
@@ -143,10 +138,20 @@ where
             if inner.entries.is_empty() {
                 return Ok(0);
             }
-            inner.entries.values().cloned().collect()
+            let mut entries: Vec<Entry> = inner.entries.clone();
+            // Sort by row_key for BigTable locality, then dedup (keep last
+            // occurrence for each key since later checkpoints overwrite earlier).
+            entries.sort_by(|a, b| a.row_key.cmp(&b.row_key));
+            entries.dedup_by(|later, earlier| {
+                if later.row_key == earlier.row_key {
+                    std::mem::swap(later, earlier);
+                    true
+                } else {
+                    false
+                }
+            });
+            entries
         };
-        // Used only for metrics. On partial failure we return Err so the count
-        // is not reported, but it would overcount if that ever changed.
         let count = entries_to_write.len();
 
         match conn
@@ -160,26 +165,12 @@ where
                     let mut inner = batch.inner.write().unwrap();
                     let failed: std::collections::BTreeSet<&Bytes> =
                         partial.failed_keys.iter().map(|f| &f.key).collect();
-                    inner.entries.retain(|key, _| failed.contains(key));
+                    inner.entries.retain(|entry| failed.contains(&entry.row_key));
                 }
                 Err(e)
             }
         }
     }
-}
-
-/// Set the maximum mutations per batch. Must be called before creating any BigTableHandler.
-/// Panics if called more than once or if value >= BIGTABLE_MAX_MUTATIONS.
-pub fn set_max_mutations(value: usize) {
-    assert!(
-        value < BIGTABLE_MAX_MUTATIONS,
-        "max_mutations must be less than {BIGTABLE_MAX_MUTATIONS}"
-    );
-    MAX_MUTATIONS.set(value).expect("max_mutations already set");
-}
-
-fn max_mutations() -> usize {
-    *MAX_MUTATIONS.get_or_init(|| DEFAULT_MAX_MUTATIONS)
 }
 
 #[cfg(test)]
@@ -281,7 +272,7 @@ mod tests {
             let inner = batch.inner.read().unwrap();
             assert_eq!(inner.entries.len(), 5);
             for key in [b"row1", b"row3", b"row5", b"row7", b"row9"] {
-                assert!(inner.entries.contains_key(key.as_slice()));
+                assert!(inner.entries.iter().any(|e| e.row_key.as_ref() == key.as_slice()));
             }
         }
 
@@ -292,7 +283,7 @@ mod tests {
             let inner = batch.inner.read().unwrap();
             assert_eq!(inner.entries.len(), 3);
             for key in [b"row1", b"row5", b"row9"] {
-                assert!(inner.entries.contains_key(key.as_slice()));
+                assert!(inner.entries.iter().any(|e| e.row_key.as_ref() == key.as_slice()));
             }
         }
 

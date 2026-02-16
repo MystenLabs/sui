@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::Future, panic, pin::pin, sync::Arc};
+use std::future::Future;
+use std::panic;
+use std::pin::pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use backoff::ExponentialBackoff;
 use backoff::backoff::Backoff;
@@ -9,6 +13,17 @@ use futures::stream::{Stream, StreamExt};
 use tokio::task::JoinSet;
 
 use crate::{Limiter, Outcome, Token};
+
+/// RAII guard that decrements an `Arc<AtomicUsize>` by `weight` on drop.
+/// Ensures the active mutation count is released even when a spawned task
+/// is cancelled.
+struct WeightGuard(Arc<AtomicUsize>, usize);
+
+impl Drop for WeightGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(self.1, Ordering::Relaxed);
+    }
+}
 
 /// Wrapper type for errors to allow the body of a `try_for_each_spawned` call to signal that it
 /// either wants to return early (`Break`) out of the loop, or propagate an error (`Err(E)`).
@@ -326,7 +341,7 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
         E: Send + 'static,
     {
         let g = Arc::new(g);
-        let mut active: usize = 0;
+        let active = Arc::new(AtomicUsize::new(0));
         let mut join_set = JoinSet::new();
         let mut draining = false;
         let mut error = None;
@@ -335,22 +350,24 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
 
         loop {
             let current_limit = limiter.current();
-            let can_spawn = !draining && active < current_limit;
+            let can_spawn = !draining && active.load(Ordering::Relaxed) < current_limit;
 
             tokio::select! {
                 next = self_.next(), if can_spawn => {
                     if let Some(item) = next {
-                        active += 1;
                         let w = weight(&item);
+                        active.fetch_add(w, Ordering::Relaxed);
+                        let guard = WeightGuard(active.clone(), w);
                         let mut op = f(item);
                         let limiter = limiter.clone();
                         let backoff = backoff.clone();
                         let g = g.clone();
 
                         join_set.spawn(async move {
+                            let _guard = guard;
                             let mut backoff = backoff;
                             loop {
-                                let token = limiter.acquire();
+                                let token = limiter.acquire_weighted(w);
                                 match op().await {
                                     Ok(value) => {
                                         let outcome = if w > 0 {
@@ -358,7 +375,7 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                                         } else {
                                             Outcome::Ignore
                                         };
-                                        token.record_sample_weighted(outcome, w);
+                                        token.record_sample(outcome);
                                         return g(value).await;
                                     }
                                     Err(Break::Err(e)) => {
@@ -367,7 +384,7 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                                         } else {
                                             Outcome::Ignore
                                         };
-                                        token.record_sample_weighted(outcome, w);
+                                        token.record_sample(outcome);
                                         match backoff.next_backoff() {
                                             Some(duration) => {
                                                 tokio::time::sleep(duration).await;
@@ -376,7 +393,7 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                                         }
                                     }
                                     Err(Break::Break) => {
-                                        token.record_sample_weighted(Outcome::Ignore, w);
+                                        token.record_sample(Outcome::Ignore);
                                         return Err(Break::Break);
                                     }
                                 }
@@ -388,7 +405,6 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                 }
 
                 Some(res) = join_set.join_next() => {
-                    active -= 1;
                     match res {
                         Ok(Err(e)) if error.is_none() => {
                             error = Some(e);
@@ -409,7 +425,7 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                 }
 
                 else => {
-                    if active == 0 && draining {
+                    if active.load(Ordering::Relaxed) == 0 && draining {
                         break;
                     }
                 }
