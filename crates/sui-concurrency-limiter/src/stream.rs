@@ -101,6 +101,9 @@ pub trait AdaptiveStreamExt: Stream {
     /// but passes the [`Token`] directly to the closure, giving it full control over when and
     /// how the sample is recorded.
     ///
+    /// The token is acquired **before** spawning the task, so the limiter's inflight count
+    /// reflects committed work immediately rather than after the task begins executing.
+    ///
     /// The closure **must** call [`Token::record_sample`] (or [`Token::record_sample_weighted`])
     /// exactly once before returning. If the token is dropped without recording, the inflight
     /// count is decremented but no sample is fed to the algorithm.
@@ -258,11 +261,10 @@ impl<S: Stream + Sized + 'static> AdaptiveStreamExt for S {
                 next = self_.next(), if can_spawn => {
                     if let Some(item) = next {
                         active += 1;
-                        let limiter = limiter.clone();
+                        let token = limiter.acquire();
                         let f = f.clone();
 
                         join_set.spawn(async move {
-                            let token = limiter.acquire();
                             f(item, token).await
                         });
                     } else {

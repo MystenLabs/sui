@@ -840,10 +840,10 @@ pub struct BbrConfig {
     pub min_limit: usize,
     /// Ceiling: the limit will never exceed this value.
     pub max_limit: usize,
-    /// Sliding window size for tracking minimum RTT.
-    pub rtt_window: usize,
-    /// Sliding window size for tracking maximum delivery rate.
-    pub throughput_window: usize,
+    /// Time-based sliding window (in milliseconds) for tracking minimum RTT.
+    pub rtt_window_ms: u64,
+    /// Time-based sliding window (in milliseconds) for tracking maximum delivery rate.
+    pub throughput_window_ms: u64,
     /// Multiplier on BDP; values > 1.0 enable growth beyond current BDP.
     pub gain: f64,
     /// Multiplicative decrease factor on drops, in `[0.5, 1.0)`.
@@ -856,8 +856,8 @@ impl Default for BbrConfig {
             initial_limit: 1,
             min_limit: 1,
             max_limit: 1000,
-            rtt_window: 5000,
-            throughput_window: 5000,
+            rtt_window_ms: 5000,
+            throughput_window_ms: 5000,
             gain: 1.25,
             backoff_ratio: 0.9,
         }
@@ -866,8 +866,8 @@ impl Default for BbrConfig {
 
 struct BbrState {
     estimated_limit: f64,
-    rtt_window: VecDeque<f64>,
-    delivery_rate_window: VecDeque<f64>,
+    rtt_window: VecDeque<(Instant, f64)>,
+    delivery_rate_window: VecDeque<(Instant, f64)>,
 }
 
 /// BBR concurrency limit algorithm.
@@ -938,25 +938,36 @@ impl LimitAlgorithm for Bbr {
 
         let delivery_rate = delivered as f64 / rtt_secs;
 
-        state.rtt_window.push_back(rtt_secs);
-        while state.rtt_window.len() > self.config.rtt_window {
-            state.rtt_window.pop_front();
+        let now = Instant::now();
+        let rtt_cutoff = Duration::from_millis(self.config.rtt_window_ms);
+        state.rtt_window.push_back((now, rtt_secs));
+        while let Some(&(t, _)) = state.rtt_window.front() {
+            if now.duration_since(t) > rtt_cutoff {
+                state.rtt_window.pop_front();
+            } else {
+                break;
+            }
         }
 
-        state.delivery_rate_window.push_back(delivery_rate);
-        while state.delivery_rate_window.len() > self.config.throughput_window {
-            state.delivery_rate_window.pop_front();
+        let throughput_cutoff = Duration::from_millis(self.config.throughput_window_ms);
+        state.delivery_rate_window.push_back((now, delivery_rate));
+        while let Some(&(t, _)) = state.delivery_rate_window.front() {
+            if now.duration_since(t) > throughput_cutoff {
+                state.delivery_rate_window.pop_front();
+            } else {
+                break;
+            }
         }
 
         let min_rtt = state
             .rtt_window
             .iter()
-            .copied()
+            .map(|&(_, v)| v)
             .fold(f64::INFINITY, f64::min);
         let max_rate = state
             .delivery_rate_window
             .iter()
-            .copied()
+            .map(|&(_, v)| v)
             .fold(0.0_f64, f64::max);
 
         let bdp = max_rate * min_rtt;
@@ -2150,8 +2161,8 @@ mod tests {
             initial_limit: 1,
             min_limit: 1,
             max_limit: 1000,
-            rtt_window: 5000,
-            throughput_window: 5000,
+            rtt_window_ms: 5000,
+            throughput_window_ms: 5000,
             gain: 1.25,
             backoff_ratio: 0.9,
         }
@@ -2197,8 +2208,9 @@ mod tests {
             initial_limit: 1,
             min_limit: 1,
             max_limit: 200,
-            rtt_window: 50,
-            throughput_window: 50,
+            // Short windows so phase-1 samples expire quickly during phase 2.
+            rtt_window_ms: 50,
+            throughput_window_ms: 50,
             ..default_bbr_config()
         };
         let alg = bbr(config);
@@ -2216,11 +2228,10 @@ mod tests {
         );
 
         // Phase 2: saturated backend — throughput plateaus at a lower concurrency.
-        // Only 20 operations complete concurrently (the backend's true capacity),
-        // even though the limit is higher. As old high-delivery-rate samples from
-        // phase 1 age out, max_rate drops, and BDP converges to the actual capacity.
+        // Sleep so that old high-delivery-rate samples from phase 1 expire.
+        std::thread::sleep(Duration::from_millis(60));
         let saturated_inflight = 20;
-        for _ in 0..100 {
+        for _ in 0..20 {
             alg.update(saturated_inflight, 10, 1, Outcome::Success, rtt);
         }
         let limit_stabilized = alg.current();
@@ -2299,8 +2310,8 @@ mod tests {
             initial-limit = 1
             min-limit = 1
             max-limit = 500
-            rtt-window = 3000
-            throughput-window = 3000
+            rtt-window-ms = 3000
+            throughput-window-ms = 3000
             gain = 1.5
             backoff-ratio = 0.85
         "#;

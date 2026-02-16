@@ -255,20 +255,13 @@ fn ingest_and_broadcast_range(
                 let peak_channel_fill = peak_channel_fill.clone();
                 let pending_rows = pending_rows.clone();
                 async move {
-                    let checkpoint = client
-                        .wait_for(cp, retry_interval)
-                        .await
-                        .map_err(|_| Break::Break)?;
-
-                    // Check channel pressure before sending: if any subscriber has no
-                    // remaining capacity, report as a drop so the limiter backs off.
-                    let any_full = subscribers.iter().any(|s| s.capacity() == 0);
-                    let outcome = if any_full {
-                        Outcome::Dropped
-                    } else {
-                        Outcome::Success
+                    let checkpoint = match client.wait_for(cp, retry_interval).await {
+                        Ok(checkpoint) => checkpoint,
+                        Err(_) => {
+                            token.record_sample(Outcome::Dropped);
+                            return Err(Break::Break);
+                        }
                     };
-                    token.record_sample(outcome);
 
                     let cp = *checkpoint.summary.sequence_number();
                     if send_checkpoint(
@@ -281,6 +274,7 @@ fn ingest_and_broadcast_range(
                     .await
                     .is_ok()
                     {
+                        token.record_sample(Outcome::Success);
                         debug!(checkpoint = cp, "Broadcasted checkpoint");
                         Ok(())
                     } else {
