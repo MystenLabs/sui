@@ -6,9 +6,11 @@
 //! Unlike the per-sample algorithms (AIMD, Gradient, Vegas, BBR), Adaptive collects statistics
 //! over **probe intervals** (~1s) and makes limit decisions at interval boundaries:
 //!
-//! 1. **ProbeBW**: Steady-state with periodic probing (Cruise → ProbeUp → ProbeDown cycle).
-//!    Cruise uses additive increase (sqrt(limit) per interval) with decay when underutilized.
-//! 2. **Emergency brake**: Per-sample error check + interval-based tail-latency check (always active).
+//! 1. **Startup**: Exponential search (double each round) until throughput stalls for 3 rounds,
+//!    then drain to ~85% of the knee and enter ProbeBW.
+//! 2. **ProbeBW**: Steady-state with periodic probing (Cruise → ProbeUp → ProbeDown cycle).
+//!    Cruise holds the limit steady (decaying when underutilized); ProbeUp tests for headroom.
+//! 3. **Emergency brake**: Per-sample error check + interval-based tail-latency check (always active).
 //!
 //! The key insight: measure completions-per-second as an independent throughput signal, then ask
 //! whether it grows when concurrency increases. If yes, grow. If no, you've found the knee.
@@ -44,6 +46,18 @@ pub struct AdaptiveConfig {
     /// Minimum EMA growth ratio to allow Cruise to increase the limit.
     pub throughput_growth_threshold: f64,
 
+    // Startup phase
+    /// Multiplicative growth factor in Startup (doubles the limit each round by default).
+    pub startup_growth_factor: f64,
+    /// Minimum throughput EMA growth ratio to count as "pipe filling" during Startup.
+    /// E.g., 1.25 means 25% growth is needed; below that is a stall.
+    pub full_pipe_threshold: f64,
+    /// Consecutive stall rounds in Startup before declaring the pipe full and draining.
+    pub full_pipe_rounds: usize,
+    /// Headroom factor applied when draining from Startup into ProbeBW.
+    /// Drain formula: limit * headroom_factor / startup_growth_factor.
+    pub headroom_factor: f64,
+
     // ProbeBW
     /// Multiplicative gain when probing upward.
     pub probe_up_gain: f64,
@@ -77,6 +91,10 @@ impl Default for AdaptiveConfig {
             probe_interval_ms: 1000,
             throughput_ema_alpha: 0.3,
             throughput_growth_threshold: 1.10,
+            startup_growth_factor: 2.0,
+            full_pipe_threshold: 1.25,
+            full_pipe_rounds: 3,
+            headroom_factor: 0.85,
             probe_up_gain: 1.25,
             probe_bw_intervals: 10,
             probe_down_min_throughput: 0.90,
@@ -94,6 +112,12 @@ impl Default for AdaptiveConfig {
 // ---------------------------------------------------------------------------
 
 enum Phase {
+    Startup {
+        /// Throughput EMA at the start of the current probe round.
+        round_start_throughput: Option<f64>,
+        /// Consecutive rounds where throughput grew less than full_pipe_threshold.
+        stall_count: usize,
+    },
     ProbeBW(ProbeBWState),
 }
 
@@ -325,28 +349,61 @@ impl AdaptiveState {
         // Without this, the limit rockets to max when ingestion is slow.
         let underutilized = self.stats.peak_inflight * 2 < self.limit;
 
-        // Throughput guard: only grow when throughput is actively responding.
-        // If adding concurrency doesn't increase throughput, we're past the knee.
-        let throughput_not_growing = match prev_ema {
-            Some(prev) => throughput_ema < prev * config.throughput_growth_threshold,
-            None => false,
-        };
-
         // Phase-specific logic
         match &mut self.phase {
+            Phase::Startup {
+                round_start_throughput,
+                stall_count,
+            } => {
+                if !underutilized {
+                    // Use EMA (not raw) for growth detection: 2x jumps give huge margin
+                    // over the 25% threshold, so EMA lag costs at most one extra doubling.
+                    // Raw throughput noise is the bigger risk — it can cause false growth
+                    // that skips stall counts.
+                    let grew = match *round_start_throughput {
+                        Some(prev) if prev > 0.0 => {
+                            throughput_ema >= prev * config.full_pipe_threshold
+                        }
+                        _ => true,
+                    };
+
+                    *round_start_throughput = Some(throughput_ema);
+
+                    if grew {
+                        *stall_count = 0;
+                        self.limit =
+                            ((self.limit as f64) * config.startup_growth_factor).ceil() as usize;
+                    } else {
+                        *stall_count += 1;
+                    }
+                }
+                // When underutilized, skip — don't grow or count stalls until
+                // the pipeline catches up to the current limit.
+
+                if *stall_count >= config.full_pipe_rounds {
+                    // Full pipe detected. The last successful growth step overshot,
+                    // so drain back: limit * headroom / growth_factor.
+                    self.limit = ((self.limit as f64) * config.headroom_factor
+                        / config.startup_growth_factor)
+                        .ceil() as usize;
+                    self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                        intervals_since_probe: 0,
+                    });
+                }
+            }
             Phase::ProbeBW(sub) => {
                 match sub {
                     ProbeBWState::Cruise {
                         intervals_since_probe,
                     } => {
-                        if underutilized {
+                        if underutilized && *intervals_since_probe > 3 {
                             // Limit is above what the system actually uses — decay toward
                             // real usage so the limit stays meaningful as a ceiling.
+                            // Grace period (3 intervals) prevents decay right after
+                            // entering Cruise (e.g., post-Startup drain).
                             self.limit = ((self.limit as f64) * 0.95).ceil() as usize;
-                        } else if !throughput_not_growing {
-                            let inc = ((self.limit as f64).sqrt().floor() as usize).max(1);
-                            self.limit += inc;
                         }
+                        // No additive increase — ProbeUp handles growth discovery.
                         *intervals_since_probe += 1;
 
                         if !underutilized && *intervals_since_probe >= config.probe_bw_intervals {
@@ -364,8 +421,15 @@ impl AdaptiveState {
                         pre_probe_limit,
                         start_throughput_ema,
                     } => {
-                        if throughput >= *start_throughput_ema * 1.10 {
-                            // Throughput responded — keep the higher limit
+                        if throughput >= *start_throughput_ema * config.full_pipe_threshold {
+                            // Major headroom discovered — re-enter Startup for fast
+                            // exploration (e.g., backend autoscaled).
+                            self.phase = Phase::Startup {
+                                round_start_throughput: Some(throughput_ema),
+                                stall_count: 0,
+                            };
+                        } else if throughput >= *start_throughput_ema * 1.10 {
+                            // Modest throughput gain — keep the higher limit
                             self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
                                 intervals_since_probe: 0,
                             });
@@ -455,9 +519,10 @@ impl Adaptive {
         Self {
             gauge: Arc::new(AtomicUsize::new(initial)),
             inner: Mutex::new(AdaptiveState {
-                phase: Phase::ProbeBW(ProbeBWState::Cruise {
-                    intervals_since_probe: 0,
-                }),
+                phase: Phase::Startup {
+                    round_start_throughput: None,
+                    stall_count: 0,
+                },
                 stats: IntervalStats::new(interval),
                 rolling_errors: RollingErrors::new(100),
                 throughput_ema: None,
@@ -494,13 +559,7 @@ impl Adaptive {
 }
 
 impl LimitAlgorithm for Adaptive {
-    fn update(
-        &self,
-        inflight: usize,
-        _delivered: usize,
-        outcome: Outcome,
-        rtt: Duration,
-    ) -> usize {
+    fn update(&self, inflight: usize, _delivered: usize, outcome: Outcome, rtt: Duration) -> usize {
         let mut state = self.inner.lock().unwrap();
 
         // 1. Record sample
@@ -563,35 +622,9 @@ mod tests {
     // ======================== Cruise tests ========================
 
     #[test]
-    fn cruise_additive_increase() {
+    fn cruise_holds_steady() {
         let config = AdaptiveConfig {
             initial_limit: 100,
-            min_limit: 1,
-            max_limit: 10000,
-            probe_interval_ms: 1000,
-            probe_bw_intervals: 100, // high so we stay in cruise
-            ..default_config()
-        };
-        let alg = adaptive(config);
-
-        {
-            let mut state = alg.inner.lock().unwrap();
-            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
-                intervals_since_probe: 0,
-            });
-        }
-
-        feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(1000.0);
-
-        // sqrt(100) = 10, so limit should be 110
-        assert_eq!(alg.current(), 110);
-    }
-
-    #[test]
-    fn cruise_minimum_additive_increase_is_one() {
-        let config = AdaptiveConfig {
-            initial_limit: 1,
             min_limit: 1,
             max_limit: 10000,
             probe_interval_ms: 1000,
@@ -607,11 +640,231 @@ mod tests {
             });
         }
 
+        // Cruise should not grow additively — ProbeUp handles growth discovery
         feed_successes(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(1000.0);
+        assert_eq!(alg.current(), 100);
+    }
 
-        // sqrt(1) = 1, so limit should be 2
-        assert_eq!(alg.current(), 2);
+    // ======================== Startup tests ========================
+
+    #[test]
+    fn startup_doubles_on_growth() {
+        let config = AdaptiveConfig {
+            initial_limit: 4,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            startup_growth_factor: 2.0,
+            full_pipe_threshold: 1.25,
+            full_pipe_rounds: 3,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // First round: no baseline, assumed growth → double to 8
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(400.0);
+        assert_eq!(alg.current(), 8);
+
+        // Second round: throughput doubled (800 >= 400*1.25) → double to 16
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+    }
+
+    #[test]
+    fn startup_no_double_on_stall() {
+        let config = AdaptiveConfig {
+            initial_limit: 8,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            startup_growth_factor: 2.0,
+            full_pipe_threshold: 1.25,
+            full_pipe_rounds: 3,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // Seed → double to 16
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+
+        // Throughput flat (800 < 800*1.25=1000) → stall, hold at 16
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+    }
+
+    #[test]
+    fn startup_detects_full_pipe_and_drains() {
+        let config = AdaptiveConfig {
+            initial_limit: 4,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            startup_growth_factor: 2.0,
+            full_pipe_threshold: 1.25,
+            full_pipe_rounds: 3,
+            headroom_factor: 0.85,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // Round 1: seed → double to 8
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(400.0);
+        assert_eq!(alg.current(), 8);
+
+        // Round 2: throughput doubles → double to 16
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+
+        // Round 3: throughput flat → stall 1
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+
+        // Round 4: still flat → stall 2
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+
+        // Round 5: still flat → stall 3 → drain!
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        // drain: ceil(16 * 0.85 / 2.0) = ceil(6.8) = 7
+        assert_eq!(alg.current(), 7);
+
+        let state = alg.inner.lock().unwrap();
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::Cruise { .. })
+        ));
+    }
+
+    #[test]
+    fn startup_resets_stall_count_on_growth() {
+        let config = AdaptiveConfig {
+            initial_limit: 4,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            startup_growth_factor: 2.0,
+            full_pipe_threshold: 1.25,
+            full_pipe_rounds: 3,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // Seed → double to 8
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(400.0);
+        // Grows → double to 16
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+
+        // Stall 1 (flat at 800)
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        // Stall 2
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+
+        // Throughput jumps to 1300. EMA from ~663 → 0.3*1300 + 0.7*663 = 854,
+        // which exceeds 663*1.25=829. Grew → reset stall count, double to 32.
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1300.0);
+        assert_eq!(alg.current(), 32); // doubled from 16
+
+        // Two more stalls — not enough to trigger drain (need 3 consecutive)
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1300.0);
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1300.0);
+
+        let state = alg.inner.lock().unwrap();
+        assert!(matches!(state.phase, Phase::Startup { .. }));
+    }
+
+    #[test]
+    fn startup_ema_dampens_noisy_throughput() {
+        // EMA prevents a single noisy spike from counting as growth.
+        // With raw throughput, a 25%+ spike would falsely reset stall_count.
+        let config = AdaptiveConfig {
+            initial_limit: 8,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            startup_growth_factor: 2.0,
+            full_pipe_threshold: 1.25,
+            full_pipe_rounds: 3,
+            throughput_ema_alpha: 0.3,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // Seed → double to 16
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+
+        // Flat throughput → stall 1. EMA ≈ 800. round_start = 800.
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+
+        // Noisy spike at 1100 (raw is 37% above baseline, but
+        // EMA = 0.3*1100 + 0.7*800 = 890, which is 890/800 = 1.11 < 1.25).
+        // Stall count should continue incrementing, not reset.
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1100.0);
+        assert_eq!(
+            alg.current(),
+            16,
+            "EMA should dampen the spike — still a stall"
+        );
+
+        // One more stall → stall_count=3 → drain
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        let limit = alg.current();
+        assert!(
+            limit < 16,
+            "Should have drained after 3 stalls, got {limit}"
+        );
+    }
+
+    #[test]
+    fn startup_skips_when_underutilized() {
+        let config = AdaptiveConfig {
+            initial_limit: 8,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            startup_growth_factor: 2.0,
+            full_pipe_threshold: 1.25,
+            full_pipe_rounds: 3,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // Seed with high inflight → double to 16
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+
+        // Now feed with zero inflight (underutilized). Should neither grow nor count as stall.
+        feed_successes_idle(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(900.0);
+        assert_eq!(alg.current(), 16, "Should not double when underutilized");
+
+        // Still in Startup, stall_count should still be 0
+        let state = alg.inner.lock().unwrap();
+        assert!(matches!(state.phase, Phase::Startup { stall_count: 0, .. }));
     }
 
     // ======================== ProbeUp tests ========================
@@ -640,9 +893,9 @@ mod tests {
             alg.gauge.store(125, Ordering::Release);
         }
 
-        // Feed samples, then force with high throughput (200 → EMA = 0.3*200 + 0.7*100 = 130 >= 110)
+        // Feed samples with modest throughput gain (115 >= 100*1.10 but 115 < 100*1.25)
         feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(200.0);
+        alg.force_interval_with_throughput(115.0);
 
         // Should transition to Cruise, keeping the higher limit
         let limit = alg.current();
@@ -652,6 +905,41 @@ mod tests {
             state.phase,
             Phase::ProbeBW(ProbeBWState::Cruise { .. })
         ));
+    }
+
+    #[test]
+    fn probe_up_reenters_startup_on_major_gain() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            probe_up_gain: 1.25,
+            full_pipe_threshold: 1.25,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 125;
+            state.throughput_ema = Some(100.0);
+            state.phase = Phase::ProbeBW(ProbeBWState::ProbeUp {
+                pre_probe_limit: 100,
+                start_throughput_ema: 100.0,
+            });
+            alg.gauge.store(125, Ordering::Release);
+        }
+
+        // Major throughput gain: 130 >= 100*1.25=125 → re-enter Startup
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(130.0);
+
+        let state = alg.inner.lock().unwrap();
+        assert!(
+            matches!(state.phase, Phase::Startup { .. }),
+            "Should re-enter Startup on major throughput gain"
+        );
     }
 
     #[test]
@@ -888,27 +1176,19 @@ mod tests {
     #[test]
     fn min_max_bounds_respected() {
         let config = AdaptiveConfig {
-            initial_limit: 5,
+            initial_limit: 10,
             min_limit: 5,
             max_limit: 15,
             probe_interval_ms: 1000,
+            startup_growth_factor: 2.0,
             ..default_config()
         };
         let alg = adaptive(config);
 
-        {
-            let mut state = alg.inner.lock().unwrap();
-            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
-                intervals_since_probe: 0,
-            });
-            state.limit = 14;
-            alg.gauge.store(14, Ordering::Release);
-        }
-
+        // Startup doubling: 10 * 2 = 20, but max is 15
         feed_successes(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(1000.0);
 
-        // sqrt(14) ≈ 3, so 14 + 3 = 17, but max is 15
         assert!(
             alg.current() <= 15,
             "Should not exceed max_limit, got {}",
@@ -956,7 +1236,7 @@ mod tests {
         {
             let mut state = alg.inner.lock().unwrap();
             state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
-                intervals_since_probe: 0,
+                intervals_since_probe: 4, // past grace period
             });
         }
 
@@ -969,7 +1249,7 @@ mod tests {
     }
 
     #[test]
-    fn growth_resumes_when_utilized() {
+    fn cruise_underutilized_grace_period() {
         let config = AdaptiveConfig {
             initial_limit: 100,
             min_limit: 1,
@@ -983,55 +1263,18 @@ mod tests {
         {
             let mut state = alg.inner.lock().unwrap();
             state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
-                intervals_since_probe: 0,
+                intervals_since_probe: 0, // fresh entry (e.g., post-Startup drain)
             });
         }
 
-        // Feed with high inflight — should grow
-        feed_successes(&alg, 50, Duration::from_millis(10));
+        // Feed with zero inflight during grace period — should NOT decay
+        feed_successes_idle(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(1000.0);
-
         assert_eq!(
             alg.current(),
-            110,
-            "Limit should grow when utilized (100 + sqrt(100))"
+            100,
+            "Should not decay during grace period (intervals_since_probe <= 3)"
         );
-    }
-
-    #[test]
-    fn cruise_stops_growing_when_throughput_flat() {
-        let config = AdaptiveConfig {
-            initial_limit: 100,
-            min_limit: 1,
-            max_limit: 10000,
-            probe_interval_ms: 1000,
-            probe_bw_intervals: 100,
-            ..default_config()
-        };
-        let alg = adaptive(config);
-
-        {
-            let mut state = alg.inner.lock().unwrap();
-            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
-                intervals_since_probe: 0,
-            });
-            state.throughput_ema = Some(1000.0);
-        }
-
-        // Flat throughput: 0.3*1000 + 0.7*1000 = 1000, need > 1100 to grow
-        feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(1000.0);
-
-        // 1000 < 1000*1.10=1100, so not growing — should NOT increase
-        assert_eq!(alg.current(), 100);
-
-        // Now with strong throughput growth
-        feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(2000.0); // 0.3*2000 + 0.7*1000 = 1300, vs prev 1000 → 1300 >= 1100
-
-        // 1300 >= 1000*1.10=1100, so growing — should increase
-        // 100 + sqrt(100) = 110
-        assert_eq!(alg.current(), 110);
     }
 
     // ======================== Serialization tests ========================
@@ -1078,7 +1321,14 @@ mod tests {
         };
         let alg = adaptive(config);
 
-        // Cruise: additive increase for 3 intervals, then probe up
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                intervals_since_probe: 0,
+            });
+        }
+
+        // Cruise for 3 intervals, then transitions to ProbeUp
         let limit_before = alg.current();
         for _ in 0..3 {
             feed_successes(&alg, 50, Duration::from_millis(10));
