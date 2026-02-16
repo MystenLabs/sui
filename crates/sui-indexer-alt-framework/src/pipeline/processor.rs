@@ -69,6 +69,7 @@ pub(super) fn processor<P: Processor>(
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
+    pending_rows: Arc<AtomicUsize>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = P::NAME, "Starting processor");
@@ -85,6 +86,7 @@ pub(super) fn processor<P: Processor>(
                 let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                 let processor = processor.clone();
                 let peak_channel_fill = peak_channel_fill.clone();
+                let pending_rows = pending_rows.clone();
 
                 async move {
                     metrics
@@ -113,6 +115,8 @@ pub(super) fn processor<P: Processor>(
                             .map_err(backoff::Error::transient)
                     })
                     .await?;
+
+                    pending_rows.fetch_add(values.len(), Ordering::Relaxed);
 
                     let elapsed = guard.stop_and_record();
 
@@ -247,6 +251,7 @@ mod tests {
             indexed_tx,
             metrics,
             Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         // Send both checkpoints
@@ -306,6 +311,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
+            Arc::new(AtomicUsize::new(0)),
             Arc::new(AtomicUsize::new(0)),
         );
 
@@ -381,6 +387,7 @@ mod tests {
             indexed_tx,
             metrics,
             Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         // Send and verify first checkpoint (should succeed immediately)
@@ -446,6 +453,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
+            Arc::new(AtomicUsize::new(0)),
             Arc::new(AtomicUsize::new(0)),
         );
 

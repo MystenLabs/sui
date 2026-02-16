@@ -120,6 +120,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
+    pending_rows: Arc<AtomicUsize>,
 ) -> Service {
     info!(
         pipeline = H::NAME,
@@ -139,6 +140,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_tx,
         metrics.clone(),
         processor_peak_fill.clone(),
+        pending_rows.clone(),
     );
 
     let s_committer = committer::<H>(
@@ -151,6 +153,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         metrics.clone(),
         processor_peak_fill,
         processor_capacity,
+        pending_rows,
     );
 
     s_processor.merge(s_committer)

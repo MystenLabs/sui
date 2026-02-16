@@ -272,6 +272,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
+    pending_rows: Arc<AtomicUsize>,
 ) -> anyhow::Result<Service> {
     info!(
         pipeline = H::NAME,
@@ -305,6 +306,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_tx,
         metrics.clone(),
         processor_peak_fill.clone(),
+        pending_rows.clone(),
     );
 
     let s_collector = collector::<H>(
@@ -315,6 +317,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         main_reader_lo.clone(),
         metrics.clone(),
         collector_peak_fill.clone(),
+        pending_rows.clone(),
     );
 
     let s_committer = committer::<H>(
@@ -328,6 +331,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         collector_peak_fill,
         processor_capacity,
         collector_capacity,
+        pending_rows,
     );
 
     let s_commit_watermark = commit_watermark::<H>(
@@ -484,6 +488,7 @@ mod tests {
                 checkpoint_rx,
                 commit_hi_tx,
                 metrics,
+                Arc::new(AtomicUsize::new(0)),
             )
             .unwrap();
 

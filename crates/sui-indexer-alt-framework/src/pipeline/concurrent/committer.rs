@@ -53,6 +53,7 @@ pub(super) fn committer<H: Handler + 'static>(
     collector_peak_fill: Arc<AtomicUsize>,
     processor_capacity: usize,
     collector_capacity: usize,
+    global_pending_rows: Arc<AtomicUsize>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = H::NAME, "Starting committer");
@@ -69,6 +70,7 @@ pub(super) fn committer<H: Handler + 'static>(
                 collector_peak_fill,
                 processor_capacity,
                 collector_capacity,
+                global_pending_rows,
             )
             .await;
         }
@@ -80,6 +82,7 @@ pub(super) fn committer<H: Handler + 'static>(
         );
 
         let watermark_peak_fill = Arc::new(AtomicUsize::new(0));
+        let global_pending_rows_for_stream = global_pending_rows;
         let stream_fut = ReceiverStream::new(rx).try_for_each_spawned_adaptive_with_retry_weighted(
             limiter.clone(),
             ExponentialBackoff {
@@ -100,6 +103,7 @@ pub(super) fn committer<H: Handler + 'static>(
                 let db = db.clone();
                 let metrics = metrics.clone();
                 let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
+                let global_pending_rows = global_pending_rows_for_stream.clone();
 
                 let highest_checkpoint = watermark.iter().map(|w| w.checkpoint()).max();
                 let highest_checkpoint_timestamp = watermark.iter().map(|w| w.timestamp_ms()).max();
@@ -111,6 +115,7 @@ pub(super) fn committer<H: Handler + 'static>(
                     let metrics = metrics.clone();
                     let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                     let watermark = watermark.clone();
+                    let global_pending_rows = global_pending_rows.clone();
 
                     async move {
                         if batch_len == 0 {
@@ -182,6 +187,8 @@ pub(super) fn committer<H: Handler + 'static>(
                                     .committer_tx_rows
                                     .with_label_values(&[H::NAME])
                                     .observe(affected as f64);
+
+                                global_pending_rows.fetch_sub(batch_len, Ordering::Relaxed);
 
                                 Ok(watermark)
                             }
@@ -328,6 +335,7 @@ async fn rebatching_committer<H: Handler + 'static>(
     collector_peak_fill: Arc<AtomicUsize>,
     processor_capacity: usize,
     collector_capacity: usize,
+    global_pending_rows: Arc<AtomicUsize>,
 ) -> anyhow::Result<()> {
     let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
         &metrics.partially_committed_checkpoint_timestamp_lag,
@@ -395,6 +403,7 @@ async fn rebatching_committer<H: Handler + 'static>(
             let metrics = metrics.clone();
             let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
             let watermark_peak_fill = watermark_peak_fill.clone();
+            let global_pending_rows = global_pending_rows.clone();
 
             let highest_checkpoint = dest_watermarks.iter().map(|w| w.checkpoint()).max();
             let highest_checkpoint_timestamp =
@@ -484,6 +493,8 @@ async fn rebatching_committer<H: Handler + 'static>(
                                 .committer_tx_rows
                                 .with_label_values(&[H::NAME])
                                 .observe(affected as f64);
+
+                            global_pending_rows.fetch_sub(batch_len, Ordering::Relaxed);
 
                             if tx.send(dest_watermarks).await.is_err() {
                                 info!(pipeline = H::NAME, "Watermark closed channel");
@@ -772,6 +783,7 @@ mod tests {
             Arc::new(AtomicUsize::new(0)),
             0,
             0,
+            Arc::new(AtomicUsize::new(0)),
         );
 
         TestSetup {

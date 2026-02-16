@@ -52,6 +52,7 @@ pub(super) fn committer<H>(
     metrics: Arc<IndexerMetrics>,
     processor_peak_fill: Arc<AtomicUsize>,
     processor_capacity: usize,
+    global_pending_rows: Arc<AtomicUsize>,
 ) -> Service
 where
     H: Handler + Send + Sync + 'static,
@@ -183,6 +184,7 @@ where
                                     .inc();
 
                                 let indexed = entry.remove();
+                                global_pending_rows.fetch_sub(indexed.len(), std::sync::atomic::Ordering::Relaxed);
                                 pending_rows -= indexed.len();
                             }
                         }
@@ -344,6 +346,7 @@ where
                     // docs::/#send
 
                     let _ = std::mem::take(&mut batch);
+                    global_pending_rows.fetch_sub(batch_rows, std::sync::atomic::Ordering::Relaxed);
                     pending_rows -= batch_rows;
                     batch_checkpoints = 0;
                     batch_rows = 0;
@@ -495,6 +498,7 @@ mod tests {
             metrics,
             Arc::new(AtomicUsize::new(0)),
             0,
+            Arc::new(AtomicUsize::new(0)),
         );
 
         TestSetup {

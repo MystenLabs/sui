@@ -54,6 +54,8 @@ pub(super) fn broadcaster<R, S>(
     mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
     metrics: Arc<IngestionMetrics>,
+    pending_rows: Arc<AtomicUsize>,
+    max_pending_rows: Option<usize>,
 ) -> Service
 where
     R: std::ops::RangeBounds<u64> + Send + 'static,
@@ -118,6 +120,8 @@ where
                 ingest_hi_rx.cloned(),
                 &metrics,
                 peak_channel_fill.clone(),
+                pending_rows.clone(),
+                max_pending_rows,
             )
             .await;
 
@@ -133,6 +137,8 @@ where
                 limiter.clone(),
                 metrics.clone(),
                 peak_channel_fill.clone(),
+                pending_rows.clone(),
+                max_pending_rows,
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -228,6 +234,8 @@ fn ingest_and_broadcast_range(
     limiter: Limiter,
     metrics: Arc<IngestionMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
+    pending_rows: Arc<AtomicUsize>,
+    max_pending_rows: Option<usize>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
         // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
@@ -240,10 +248,12 @@ fn ingest_and_broadcast_range(
             let client = client.clone();
             let subscribers = subscribers.clone();
             let peak_channel_fill = peak_channel_fill.clone();
+            let pending_rows = pending_rows.clone();
             move |cp: u64, token: Token| {
                 let client = client.clone();
                 let subscribers = subscribers.clone();
                 let peak_channel_fill = peak_channel_fill.clone();
+                let pending_rows = pending_rows.clone();
                 async move {
                     let checkpoint = client
                         .wait_for(cp, retry_interval)
@@ -261,9 +271,15 @@ fn ingest_and_broadcast_range(
                     token.record_sample(outcome);
 
                     let cp = *checkpoint.summary.sequence_number();
-                    if send_checkpoint(checkpoint, &subscribers, &peak_channel_fill)
-                        .await
-                        .is_ok()
+                    if send_checkpoint(
+                        checkpoint,
+                        &subscribers,
+                        &peak_channel_fill,
+                        &pending_rows,
+                        max_pending_rows,
+                    )
+                    .await
+                    .is_ok()
                     {
                         debug!(checkpoint = cp, "Broadcasted checkpoint");
                         Ok(())
@@ -308,6 +324,8 @@ async fn setup_streaming_task<S>(
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: &Arc<IngestionMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
+    pending_rows: Arc<AtomicUsize>,
+    max_pending_rows: Option<usize>,
 ) -> (TaskGuard<u64>, u64)
 where
     S: CheckpointStreamingClient,
@@ -384,6 +402,8 @@ where
         ingest_hi_rx,
         metrics.clone(),
         peak_channel_fill,
+        pending_rows,
+        max_pending_rows,
     )));
 
     (stream_guard, ingestion_end)
@@ -402,6 +422,8 @@ async fn stream_and_broadcast_range(
     mut ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: Arc<IngestionMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
+    pending_rows: Arc<AtomicUsize>,
+    max_pending_rows: Option<usize>,
 ) -> u64 {
     while lo < hi {
         let Some(item) = stream.next().await else {
@@ -442,9 +464,15 @@ async fn stream_and_broadcast_range(
             break;
         }
 
-        if send_checkpoint(Arc::new(checkpoint), &subscribers, &peak_channel_fill)
-            .await
-            .is_err()
+        if send_checkpoint(
+            Arc::new(checkpoint),
+            &subscribers,
+            &peak_channel_fill,
+            &pending_rows,
+            max_pending_rows,
+        )
+        .await
+        .is_err()
         {
             break;
         }
@@ -467,7 +495,14 @@ async fn send_checkpoint(
     checkpoint: Arc<Checkpoint>,
     subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
     peak_channel_fill: &AtomicUsize,
+    pending_rows: &AtomicUsize,
+    max_pending_rows: Option<usize>,
 ) -> Result<Vec<()>, mpsc::error::SendError<Arc<Checkpoint>>> {
+    if let Some(max) = max_pending_rows {
+        while pending_rows.load(Ordering::Relaxed) >= max {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
     let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
     let result = try_join_all(futures).await;
     if result.is_ok() {
@@ -534,6 +569,7 @@ mod tests {
             streaming_backoff_max_batch_size: 16,
             streaming_connection_timeout_ms: 100,
             streaming_statement_timeout_ms: 100,
+            max_pending_rows: None,
         }
     }
 
@@ -594,6 +630,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         assert_eq!(
@@ -620,6 +658,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         assert_eq!(
@@ -647,6 +687,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         assert_eq!(
@@ -678,6 +720,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         assert_eq!(
@@ -710,6 +754,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         assert_eq!(
@@ -742,6 +788,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         assert_eq!(
@@ -785,6 +833,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         assert_eq!(
@@ -834,6 +884,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx1, subscriber_tx2],
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Both subscribers should receive checkpoints
@@ -875,6 +927,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics,
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should receive checkpoints starting from 1000
@@ -920,6 +974,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should receive all checkpoints from the stream in order
@@ -953,6 +1009,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         assert_eq!(
@@ -990,6 +1048,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should use only ingestion since streaming is beyond end_cp
@@ -1025,6 +1085,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         assert_eq!(
@@ -1065,6 +1127,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should receive all checkpoints exactly once (no duplicates) from streaming.
@@ -1102,6 +1166,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should receive first three checkpoints from streaming in order
@@ -1148,6 +1214,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should receive first 10 checkpoints (0..10) from streaming
@@ -1197,6 +1265,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should receive first 5 checkpoints from streaming in order
@@ -1241,6 +1311,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should eventually receive all checkpoints despite errors from streaming.
@@ -1279,6 +1351,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should fallback to ingestion for initial batch size checkpoints
@@ -1323,6 +1397,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should fallback to ingestion for first 10 checkpoints
@@ -1364,6 +1440,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should fallback to ingestion for all checkpoints
@@ -1405,6 +1483,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should fallback to ingestion for first 2 + 4 + 8 + 16 = 30 checkpoints
@@ -1467,6 +1547,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should fallback to ingestion for initial batch size checkpoints
@@ -1514,6 +1596,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should fallback to ingestion for first batch
@@ -1556,6 +1640,8 @@ mod tests {
             hi_rx,
             vec![subscriber_tx],
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         // Should receive first 5 checkpoints from streaming in order

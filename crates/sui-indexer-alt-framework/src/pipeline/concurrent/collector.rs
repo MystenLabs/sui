@@ -79,6 +79,7 @@ pub(super) fn collector<H: Handler + 'static>(
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
+    global_pending_rows: Arc<AtomicUsize>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         // The `poll` interval controls the maximum time to wait between collecting batches,
@@ -191,6 +192,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     // store, but can still advance watermarks.
                     let reader_lo = main_reader_lo.wait().await.load(Ordering::Relaxed);
                     if indexed.checkpoint() < reader_lo {
+                        global_pending_rows.fetch_sub(indexed.values.len(), Ordering::Relaxed);
                         indexed.values.clear();
                         metrics.total_collector_skipped_checkpoints
                             .with_label_values(&[H::NAME])
@@ -334,6 +336,7 @@ mod tests {
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         let part1_length = TEST_MAX_CHUNK_ROWS / 2;
@@ -375,6 +378,7 @@ mod tests {
             main_reader_lo,
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         processor_tx
@@ -415,6 +419,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
             Arc::new(AtomicUsize::new(0)),
         );
 
@@ -471,6 +476,7 @@ mod tests {
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         let start_time = std::time::Instant::now();
@@ -526,6 +532,7 @@ mod tests {
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         // The collector starts with an immediate poll tick, creating an empty batch
@@ -570,6 +577,7 @@ mod tests {
             main_reader_lo.clone(),
             test_metrics(),
             Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
         );
 
         // Consume initial empty batch
@@ -610,6 +618,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            Arc::new(AtomicUsize::new(0)),
             Arc::new(AtomicUsize::new(0)),
         );
 
@@ -657,6 +666,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
             Arc::new(AtomicUsize::new(0)),
         );
 
@@ -714,6 +724,7 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            Arc::new(AtomicUsize::new(0)),
             Arc::new(AtomicUsize::new(0)),
         );
 

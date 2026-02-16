@@ -96,6 +96,7 @@ pub struct IngestionLayer {
     pub streaming_backoff_max_batch_size: Option<usize>,
     pub streaming_connection_timeout_ms: Option<u64>,
     pub streaming_statement_timeout_ms: Option<u64>,
+    pub max_pending_rows: Option<Option<usize>>,
 }
 
 impl IngestionLayer {
@@ -124,6 +125,9 @@ impl IngestionLayer {
             streaming_statement_timeout_ms: self
                 .streaming_statement_timeout_ms
                 .unwrap_or(base.streaming_statement_timeout_ms),
+            max_pending_rows: self
+                .max_pending_rows
+                .unwrap_or(base.max_pending_rows),
         }
     }
 }
@@ -149,6 +153,7 @@ impl Merge for IngestionLayer {
             streaming_statement_timeout_ms: other
                 .streaming_statement_timeout_ms
                 .or(self.streaming_statement_timeout_ms),
+            max_pending_rows: other.max_pending_rows.or(self.max_pending_rows),
         })
     }
 }
@@ -164,6 +169,7 @@ impl From<IngestionConfig> for IngestionLayer {
             streaming_backoff_max_batch_size: Some(config.streaming_backoff_max_batch_size),
             streaming_connection_timeout_ms: Some(config.streaming_connection_timeout_ms),
             streaming_statement_timeout_ms: Some(config.streaming_statement_timeout_ms),
+            max_pending_rows: Some(config.max_pending_rows),
         }
     }
 }

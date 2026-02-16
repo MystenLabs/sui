@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -157,6 +158,10 @@ pub struct Indexer<S: Store> {
     /// unless overridden by [Self::default_next_checkpoint].
     first_ingestion_checkpoint: u64,
 
+    /// Global counter of rows produced by processors but not yet committed. Shared across
+    /// all pipelines and the broadcaster for global backpressure.
+    pending_rows: Arc<AtomicUsize>,
+
     /// The service handles for every pipeline, used to manage lifetimes and graceful shutdown.
     pipelines: Vec<Service>,
 }
@@ -234,6 +239,7 @@ impl<S: Store> Indexer<S> {
             },
             added_pipelines: BTreeSet::new(),
             first_ingestion_checkpoint: u64::MAX,
+            pending_rows: Arc::new(AtomicUsize::new(0)),
             pipelines: vec![],
         })
     }
@@ -295,6 +301,7 @@ impl<S: Store> Indexer<S> {
             checkpoint_rx,
             commit_hi_tx,
             self.metrics.clone(),
+            self.pending_rows.clone(),
         )?);
 
         Ok(())
@@ -321,7 +328,11 @@ impl<S: Store> Indexer<S> {
         let regulated = true;
         let mut service = self
             .ingestion_service
-            .run(self.first_ingestion_checkpoint..=last_checkpoint, regulated)
+            .run(
+                self.first_ingestion_checkpoint..=last_checkpoint,
+                regulated,
+                self.pending_rows.clone(),
+            )
             .await
             .context("Failed to start ingestion service")?;
 
@@ -418,6 +429,7 @@ impl<T: TransactionalStore> Indexer<T> {
             checkpoint_rx,
             commit_hi_tx,
             self.metrics.clone(),
+            self.pending_rows.clone(),
         ));
 
         Ok(())
