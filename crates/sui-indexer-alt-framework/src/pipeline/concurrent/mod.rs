@@ -14,7 +14,6 @@ use tokio::sync::mpsc;
 use tracing::info;
 
 use crate::Task;
-use crate::ingestion::CheckpointData;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::Processor;
@@ -30,6 +29,7 @@ use crate::pipeline::processor::processor;
 use crate::pipeline::processor_channel_size;
 use crate::pipeline::watermark_channel_size;
 use crate::store::Store;
+use crate::types::full_checkpoint_content::Checkpoint;
 
 mod collector;
 mod commit_watermark;
@@ -269,7 +269,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     config: ConcurrentConfig,
     store: H::Store,
     task: Option<Task>,
-    checkpoint_rx: mpsc::Receiver<CheckpointData>,
+    checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
 ) -> anyhow::Result<Service> {
@@ -370,7 +370,6 @@ mod tests {
     use tokio::time::timeout;
 
     use crate::FieldCount;
-    use crate::ingestion::checkpoint_data;
     use crate::metrics::IndexerMetrics;
     use crate::mocks::store::MockConnection;
     use crate::mocks::store::MockStore;
@@ -464,7 +463,7 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        checkpoint_tx: mpsc::Sender<CheckpointData>,
+        checkpoint_tx: mpsc::Sender<Arc<Checkpoint>>,
         #[allow(unused)]
         pipeline: Service,
     }
@@ -503,7 +502,7 @@ mod tests {
                     .with_timestamp_ms(1000000000 + checkpoint * 1000)
                     .build_checkpoint(),
             );
-            self.checkpoint_tx.send(checkpoint_data(checkpoint)).await?;
+            self.checkpoint_tx.send(checkpoint).await?;
             Ok(())
         }
 

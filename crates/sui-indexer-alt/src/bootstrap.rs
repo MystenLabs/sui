@@ -71,7 +71,7 @@ pub async fn bootstrap(
         // - Get the Genesis system transaction from the genesis checkpoint.
         // - Get the system state object that was written out by the system transaction.
         None => {
-            let (genesis_checkpoint, _wire_size) = indexer
+            let genesis_checkpoint = indexer
                 .ingestion_client()
                 .wait_for(0, retry_interval)
                 .await

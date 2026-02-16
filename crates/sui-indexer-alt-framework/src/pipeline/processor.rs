@@ -9,6 +9,7 @@ use backoff::ExponentialBackoff;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
+use sui_types::full_checkpoint_content::Checkpoint;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
@@ -17,11 +18,9 @@ use tracing::info;
 
 use async_trait::async_trait;
 
-use crate::ingestion::CheckpointData;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::IndexedCheckpoint;
-use crate::types::full_checkpoint_content::Checkpoint;
 
 /// If the processor needs to retry processing a checkpoint, it will wait this long initially.
 const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
@@ -66,7 +65,7 @@ pub trait Processor: Send + Sync + 'static {
 /// channel.
 pub(super) fn processor<P: Processor>(
     processor: Arc<P>,
-    rx: mpsc::Receiver<CheckpointData>,
+    rx: mpsc::Receiver<Arc<Checkpoint>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
@@ -80,7 +79,7 @@ pub(super) fn processor<P: Processor>(
         );
 
         match ReceiverStream::new(rx)
-            .try_for_each_spawned(P::FANOUT, |(checkpoint, _guard)| {
+            .try_for_each_spawned(P::FANOUT, |checkpoint| {
                 let tx = tx.clone();
                 let metrics = metrics.clone();
                 let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
@@ -189,7 +188,6 @@ mod tests {
     use tokio::sync::mpsc;
     use tokio::time::timeout;
 
-    use crate::ingestion::checkpoint_data;
     use crate::metrics::IndexerMetrics;
 
     use super::*;
@@ -252,14 +250,8 @@ mod tests {
         );
 
         // Send both checkpoints
-        data_tx
-            .send(checkpoint_data(checkpoint1.clone()))
-            .await
-            .unwrap();
-        data_tx
-            .send(checkpoint_data(checkpoint2.clone()))
-            .await
-            .unwrap();
+        data_tx.send(checkpoint1.clone()).await.unwrap();
+        data_tx.send(checkpoint2.clone()).await.unwrap();
 
         // Receive and verify first checkpoint
         let indexed1 = indexed_rx
@@ -318,10 +310,7 @@ mod tests {
         );
 
         // Send first checkpoint.
-        data_tx
-            .send(checkpoint_data(checkpoint1.clone()))
-            .await
-            .unwrap();
+        data_tx.send(checkpoint1.clone()).await.unwrap();
 
         // Receive and verify first checkpoint
         let indexed1 = indexed_rx
@@ -335,10 +324,7 @@ mod tests {
 
         // Sending second checkpoint after shutdown should fail, because the data_rx channel is
         // closed.
-        data_tx
-            .send(checkpoint_data(checkpoint2.clone()))
-            .await
-            .unwrap_err();
+        data_tx.send(checkpoint2.clone()).await.unwrap_err();
 
         // Indexed channel is closed, and indexed_rx receives the last None result.
         let next_result = indexed_rx.recv().await;
@@ -398,10 +384,7 @@ mod tests {
         );
 
         // Send and verify first checkpoint (should succeed immediately)
-        data_tx
-            .send(checkpoint_data(checkpoint1.clone()))
-            .await
-            .unwrap();
+        data_tx.send(checkpoint1.clone()).await.unwrap();
         let indexed1 = indexed_rx
             .recv()
             .await
@@ -409,10 +392,7 @@ mod tests {
         assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
 
         // Send second checkpoint (should fail twice, then succeed on 3rd attempt)
-        data_tx
-            .send(checkpoint_data(checkpoint2.clone()))
-            .await
-            .unwrap();
+        data_tx.send(checkpoint2.clone()).await.unwrap();
 
         let indexed2 = indexed_rx
             .recv()
@@ -472,7 +452,7 @@ mod tests {
         // Send all checkpoints and measure time
         let start = std::time::Instant::now();
         for checkpoint in checkpoints {
-            data_tx.send(checkpoint_data(checkpoint)).await.unwrap();
+            data_tx.send(checkpoint).await.unwrap();
         }
         drop(data_tx);
 

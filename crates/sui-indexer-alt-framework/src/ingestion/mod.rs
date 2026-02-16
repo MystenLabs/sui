@@ -16,10 +16,7 @@ use sui_concurrency_limiter::{ConcurrencyLimit, Limiter};
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
 
-pub use crate::ingestion::broadcaster::CheckpointData;
 use crate::ingestion::broadcaster::broadcaster;
-#[cfg(test)]
-pub(crate) use crate::ingestion::broadcaster::checkpoint_data;
 use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
 use crate::ingestion::ingestion_client::IngestionClient;
@@ -28,6 +25,7 @@ use crate::ingestion::ingestion_client::IngestionMode;
 use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
+use crate::types::full_checkpoint_content::Checkpoint;
 
 mod broadcaster;
 pub(crate) mod decode;
@@ -64,13 +62,6 @@ pub struct IngestionConfig {
     /// Controls how far ahead ingestion can run past the slowest pipeline's committed watermark.
     pub checkpoint_buffer_size: usize,
 
-    /// Optional byte-based budget for the checkpoint buffer. When set, the broadcaster will halt
-    /// ingestion when the total wire bytes of in-flight checkpoints reaches this limit, resuming
-    /// only after subscribers drain enough data. Coexists with `checkpoint_buffer_size` as an
-    /// independent constraint.
-    #[serde(default)]
-    pub checkpoint_buffer_bytes: Option<usize>,
-
     /// Per-pipeline channel capacity for buffering checkpoints between the broadcaster and each
     /// pipeline's processor. Defaults to `checkpoint_buffer_size` if not set.
     pub subscriber_channel_size: usize,
@@ -100,7 +91,7 @@ pub struct IngestionService {
     streaming_client: Option<GrpcStreamingClient>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-    subscribers: Vec<mpsc::Sender<CheckpointData>>,
+    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
     metrics: Arc<IngestionMetrics>,
 }
 
@@ -185,7 +176,7 @@ impl IngestionService {
     pub fn subscribe(
         &mut self,
     ) -> (
-        mpsc::Receiver<CheckpointData>,
+        mpsc::Receiver<Arc<Checkpoint>>,
         mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
         let (sender, receiver) = mpsc::channel(self.config.subscriber_channel_size);
@@ -249,7 +240,6 @@ impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
             checkpoint_buffer_size: 5000,
-            checkpoint_buffer_bytes: None,
             subscriber_channel_size: 5000,
             ingest_concurrency: ConcurrencyLimit::Fixed { limit: 200 },
             retry_interval_ms: 200,
@@ -306,12 +296,12 @@ mod tests {
 
     async fn test_subscriber(
         stop_after: usize,
-        mut rx: mpsc::Receiver<CheckpointData>,
+        mut rx: mpsc::Receiver<Arc<Checkpoint>>,
     ) -> TaskGuard<Vec<u64>> {
         TaskGuard::new(tokio::spawn(async move {
             let mut seqs = vec![];
             for _ in 0..stop_after {
-                let Some((checkpoint, _guard)) = rx.recv().await else {
+                let Some(checkpoint) = rx.recv().await else {
                     break;
                 };
 
@@ -450,8 +440,8 @@ mod tests {
 
         // This subscriber will take its sweet time processing checkpoints.
         let (mut laggard, _) = ingestion_service.subscribe();
-        async fn unblock(laggard: &mut mpsc::Receiver<CheckpointData>) -> u64 {
-            let (checkpoint, _guard) = laggard.recv().await.unwrap();
+        async fn unblock(laggard: &mut mpsc::Receiver<Arc<Checkpoint>>) -> u64 {
+            let checkpoint = laggard.recv().await.unwrap();
             checkpoint.summary.sequence_number
         }
 

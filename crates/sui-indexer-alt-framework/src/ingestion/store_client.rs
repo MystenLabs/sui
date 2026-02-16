@@ -177,7 +177,7 @@ pub(crate) mod tests {
         .await;
 
         let client = remote_test_client(server.uri());
-        let (checkpoint, _wire_size) = client.fetch(42).await.unwrap();
+        let checkpoint = client.fetch(42).await.unwrap();
 
         assert_eq!(42, checkpoint.summary.sequence_number)
     }
@@ -202,7 +202,7 @@ pub(crate) mod tests {
         .await;
 
         let client = remote_test_client(server.uri());
-        let (checkpoint, _wire_size) = client.fetch(42).await.unwrap();
+        let checkpoint = client.fetch(42).await.unwrap();
 
         assert_eq!(42, checkpoint.summary.sequence_number)
     }
@@ -225,7 +225,7 @@ pub(crate) mod tests {
         .await;
 
         let client = remote_test_client(server.uri());
-        let (checkpoint, _wire_size) = client.fetch(42).await.unwrap();
+        let checkpoint = client.fetch(42).await.unwrap();
 
         assert_eq!(42, checkpoint.summary.sequence_number)
     }
@@ -267,7 +267,7 @@ pub(crate) mod tests {
             IngestionClient::with_store(store, test_ingestion_metrics()).unwrap();
 
         // This should timeout once, then succeed on retry
-        let (checkpoint, _wire_size) = ingestion_client.fetch(42).await.unwrap();
+        let checkpoint = ingestion_client.fetch(42).await.unwrap();
         assert_eq!(42, checkpoint.summary.sequence_number);
 
         // Verify that the server received exactly 2 requests (1 timeout + 1 successful retry)

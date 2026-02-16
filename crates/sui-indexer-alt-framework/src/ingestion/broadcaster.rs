@@ -29,43 +29,6 @@ use crate::ingestion::streaming_client::CheckpointStreamingClient;
 use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
-/// RAII guard that decrements a shared byte counter when dropped. Used to track the total
-/// wire bytes of in-flight checkpoints across all subscriber channels.
-pub struct SizeGuard {
-    wire_size: usize,
-    counter: Arc<AtomicUsize>,
-}
-
-impl Drop for SizeGuard {
-    fn drop(&mut self) {
-        self.counter.fetch_sub(self.wire_size, Ordering::Relaxed);
-    }
-}
-
-impl std::fmt::Debug for SizeGuard {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SizeGuard")
-            .field("wire_size", &self.wire_size)
-            .finish()
-    }
-}
-
-/// A checkpoint paired with its byte-tracking guard. The guard keeps the checkpoint's wire
-/// bytes counted in the shared budget until all subscribers finish processing it.
-pub type CheckpointData = (Arc<Checkpoint>, Arc<SizeGuard>);
-
-/// Create a CheckpointData with no byte tracking, for use in tests.
-#[cfg(test)]
-pub(crate) fn checkpoint_data(checkpoint: Arc<Checkpoint>) -> CheckpointData {
-    (
-        checkpoint,
-        Arc::new(SizeGuard {
-            wire_size: 0,
-            counter: Arc::new(AtomicUsize::new(0)),
-        }),
-    )
-}
-
 /// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges
 /// via either streaming or ingesting, or both.
 ///
@@ -89,7 +52,7 @@ pub(super) fn broadcaster<R, S>(
     client: IngestionClient,
     limiter: Limiter,
     mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-    subscribers: Vec<mpsc::Sender<CheckpointData>>,
+    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
     metrics: Arc<IngestionMetrics>,
 ) -> Service
 where
@@ -118,10 +81,8 @@ where
         };
 
         let buffer_size = config.checkpoint_buffer_size as u64;
-        let byte_budget = config.checkpoint_buffer_bytes;
 
         let subscribers = Arc::new(subscribers);
-        let buffered_bytes = Arc::new(AtomicUsize::new(0));
 
         // Track subscriber watermarks
         let mut subscribers_hi = HashMap::<&'static str, u64>::new();
@@ -157,8 +118,6 @@ where
                 ingest_hi_rx.cloned(),
                 &metrics,
                 peak_channel_fill.clone(),
-                buffered_bytes.clone(),
-                byte_budget,
             )
             .await;
 
@@ -174,8 +133,6 @@ where
                 limiter.clone(),
                 metrics.clone(),
                 peak_channel_fill.clone(),
-                buffered_bytes.clone(),
-                byte_budget,
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -188,14 +145,7 @@ where
                         subscribers_hi.insert(name, hi);
 
                         if let Some(min_hi) = subscribers_hi.values().copied().min() {
-                            let new_ingest_hi = if byte_budget
-                                .is_some_and(|b| buffered_bytes.load(Ordering::Relaxed) >= b)
-                            {
-                                // Over byte budget — don't advance, let subscribers drain.
-                                min_hi
-                            } else {
-                                min_hi.saturating_add(buffer_size)
-                            };
+                            let new_ingest_hi = min_hi.saturating_add(buffer_size);
                             // Update the watch channel, which will notify all waiting tasks
                             let _ = ingest_hi_tx.send(new_ingest_hi);
                         }
@@ -274,12 +224,10 @@ fn ingest_and_broadcast_range(
     retry_interval: Duration,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     client: IngestionClient,
-    subscribers: Arc<Vec<mpsc::Sender<CheckpointData>>>,
+    subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     limiter: Limiter,
     metrics: Arc<IngestionMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
-    buffered_bytes: Arc<AtomicUsize>,
-    byte_budget: Option<usize>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
         // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
@@ -292,14 +240,12 @@ fn ingest_and_broadcast_range(
             let client = client.clone();
             let subscribers = subscribers.clone();
             let peak_channel_fill = peak_channel_fill.clone();
-            let buffered_bytes = buffered_bytes.clone();
             move |cp: u64, token: Token| {
                 let client = client.clone();
                 let subscribers = subscribers.clone();
                 let peak_channel_fill = peak_channel_fill.clone();
-                let buffered_bytes = buffered_bytes.clone();
                 async move {
-                    let (checkpoint, wire_size) = client
+                    let checkpoint = client
                         .wait_for(cp, retry_interval)
                         .await
                         .map_err(|_| Break::Break)?;
@@ -315,16 +261,9 @@ fn ingest_and_broadcast_range(
                     token.record_sample(outcome);
 
                     let cp = *checkpoint.summary.sequence_number();
-                    if send_checkpoint(
-                        checkpoint,
-                        wire_size,
-                        &subscribers,
-                        &peak_channel_fill,
-                        &buffered_bytes,
-                        byte_budget,
-                    )
-                    .await
-                    .is_ok()
+                    if send_checkpoint(checkpoint, &subscribers, &peak_channel_fill)
+                        .await
+                        .is_ok()
                     {
                         debug!(checkpoint = cp, "Broadcasted checkpoint");
                         Ok(())
@@ -350,7 +289,6 @@ fn ingest_and_broadcast_range(
                     if capacity > 0 {
                         metrics.ingestion_peak_channel_utilization.set(peak as f64 / capacity as f64);
                     }
-                    metrics.ingestion_buffered_bytes.set(buffered_bytes.load(Ordering::Relaxed) as i64);
                 }
             } => unreachable!(),
         }
@@ -366,12 +304,10 @@ async fn setup_streaming_task<S>(
     end_cp: u64,
     streaming_backoff_batch_size: &mut u64,
     config: &IngestionConfig,
-    subscribers: &Arc<Vec<mpsc::Sender<CheckpointData>>>,
+    subscribers: &Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: &Arc<IngestionMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
-    buffered_bytes: Arc<AtomicUsize>,
-    byte_budget: Option<usize>,
 ) -> (TaskGuard<u64>, u64)
 where
     S: CheckpointStreamingClient,
@@ -412,8 +348,8 @@ where
     })
     .peekable();
 
-    let (checkpoint, _wire_size) = match stream.peek().await {
-        Some(Ok(pair)) => pair,
+    let checkpoint = match stream.peek().await {
+        Some(Ok(checkpoint)) => checkpoint,
         Some(Err(e)) => {
             return fallback(&format!("Failed to peek latest checkpoint: {e}"));
         }
@@ -448,8 +384,6 @@ where
         ingest_hi_rx,
         metrics.clone(),
         peak_channel_fill,
-        buffered_bytes,
-        byte_budget,
     )));
 
     (stream_guard, ingestion_end)
@@ -463,13 +397,11 @@ where
 async fn stream_and_broadcast_range(
     mut lo: u64,
     hi: u64,
-    mut stream: impl Stream<Item = Result<(Checkpoint, usize), Error>> + Unpin,
-    subscribers: Arc<Vec<mpsc::Sender<CheckpointData>>>,
+    mut stream: impl Stream<Item = Result<Checkpoint, Error>> + Unpin,
+    subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     mut ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: Arc<IngestionMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
-    buffered_bytes: Arc<AtomicUsize>,
-    byte_budget: Option<usize>,
 ) -> u64 {
     while lo < hi {
         let Some(item) = stream.next().await else {
@@ -477,8 +409,8 @@ async fn stream_and_broadcast_range(
             break;
         };
 
-        let (checkpoint, wire_size) = match item {
-            Ok(pair) => pair,
+        let checkpoint = match item {
+            Ok(checkpoint) => checkpoint,
             Err(e) => {
                 warn!(lo, "Streaming error: {e}");
                 break;
@@ -510,16 +442,9 @@ async fn stream_and_broadcast_range(
             break;
         }
 
-        if send_checkpoint(
-            Arc::new(checkpoint),
-            wire_size,
-            &subscribers,
-            &peak_channel_fill,
-            &buffered_bytes,
-            byte_budget,
-        )
-        .await
-        .is_err()
+        if send_checkpoint(Arc::new(checkpoint), &subscribers, &peak_channel_fill)
+            .await
+            .is_err()
         {
             break;
         }
@@ -540,26 +465,10 @@ async fn stream_and_broadcast_range(
 /// Returns an error if any subscriber's channel is closed.
 async fn send_checkpoint(
     checkpoint: Arc<Checkpoint>,
-    wire_size: usize,
-    subscribers: &[mpsc::Sender<CheckpointData>],
+    subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
     peak_channel_fill: &AtomicUsize,
-    buffered_bytes: &Arc<AtomicUsize>,
-    byte_budget: Option<usize>,
-) -> Result<Vec<()>, mpsc::error::SendError<CheckpointData>> {
-    // Wait until we're under the byte budget before admitting more data.
-    if let Some(budget) = byte_budget {
-        while buffered_bytes.load(Ordering::Relaxed) >= budget {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    }
-    buffered_bytes.fetch_add(wire_size, Ordering::Relaxed);
-    let guard = Arc::new(SizeGuard {
-        wire_size,
-        counter: buffered_bytes.clone(),
-    });
-    let futures = subscribers
-        .iter()
-        .map(|s| s.send((checkpoint.clone(), guard.clone())));
+) -> Result<Vec<()>, mpsc::error::SendError<Arc<Checkpoint>>> {
+    let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
     let result = try_join_all(futures).await;
     if result.is_ok() {
         let max_fill = subscribers
@@ -618,7 +527,6 @@ mod tests {
     fn test_config() -> IngestionConfig {
         IngestionConfig {
             checkpoint_buffer_size: 5,
-            checkpoint_buffer_bytes: None,
             subscriber_channel_size: 5,
             ingest_concurrency: sui_concurrency_limiter::ConcurrencyLimit::Fixed { limit: 2 },
             retry_interval_ms: 100,
@@ -644,10 +552,10 @@ mod tests {
 
     /// Receive `count` checkpoints from the channel and return their sequence numbers as a Vec.
     /// Maintains order, useful for verifying sequential delivery (e.g., from streaming).
-    async fn recv_vec(rx: &mut mpsc::Receiver<CheckpointData>, count: usize) -> Vec<u64> {
+    async fn recv_vec(rx: &mut mpsc::Receiver<Arc<Checkpoint>>, count: usize) -> Vec<u64> {
         let mut result = Vec::with_capacity(count);
         for _ in 0..count {
-            let (checkpoint, _guard) = expect_recv(rx).await.unwrap();
+            let checkpoint = expect_recv(rx).await.unwrap();
             result.push(*checkpoint.summary.sequence_number());
         }
         result
@@ -655,10 +563,10 @@ mod tests {
 
     /// Receive `count` checkpoints from the channel and return their sequence numbers as a BTreeSet.
     /// Useful for verifying unordered delivery (e.g., from concurrent ingestion).
-    async fn recv_set(rx: &mut mpsc::Receiver<CheckpointData>, count: usize) -> BTreeSet<u64> {
+    async fn recv_set(rx: &mut mpsc::Receiver<Arc<Checkpoint>>, count: usize) -> BTreeSet<u64> {
         let mut result = BTreeSet::new();
         for _ in 0..count {
-            let (checkpoint, _guard) = expect_recv(rx).await.unwrap();
+            let checkpoint = expect_recv(rx).await.unwrap();
             let inserted = result.insert(*checkpoint.summary.sequence_number());
             assert!(
                 inserted,
@@ -893,7 +801,7 @@ mod tests {
 
         // But updating a's watermark does.
         hi_tx.send(("a", 3)).unwrap();
-        let (checkpoint, _guard) = expect_recv(&mut subscriber_rx).await.unwrap();
+        let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
         assert_eq!(*checkpoint.summary.sequence_number(), 2);
 
         // ...by one checkpoint.
@@ -901,7 +809,7 @@ mod tests {
 
         // And we can make more progress by updating it again.
         hi_tx.send(("a", 4)).unwrap();
-        let (checkpoint, _guard) = expect_recv(&mut subscriber_rx).await.unwrap();
+        let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
         assert_eq!(*checkpoint.summary.sequence_number(), 3);
 
         // But another update to "a" will now not make a difference, because "b" is still behind.
