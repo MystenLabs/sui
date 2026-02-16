@@ -327,10 +327,8 @@ impl AdaptiveState {
 
         // Throughput guard: only grow when throughput is actively responding.
         // If adding concurrency doesn't increase throughput, we're past the knee.
-        // Uses raw throughput vs prev EMA (not EMA vs EMA) to avoid overshoot:
-        // EMA lag causes 2-3 extra growth intervals after throughput actually plateaus.
         let throughput_not_growing = match prev_ema {
-            Some(prev) => throughput < prev * config.throughput_growth_threshold,
+            Some(prev) => throughput_ema < prev * config.throughput_growth_threshold,
             None => false,
         };
 
