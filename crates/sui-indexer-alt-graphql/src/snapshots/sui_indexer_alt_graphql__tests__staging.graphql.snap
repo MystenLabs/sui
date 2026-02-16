@@ -2659,6 +2659,12 @@ type MoveValue {
 	"""
 	asAddress: Address
 	"""
+	Attempts to treat this value as a `vector<T>` and paginate over its elements.
+	
+	Values of other types cannot be interpreted as vectors, and `null` is returned.
+	"""
+	asVector(first: Int, after: String, last: Int, before: String): MoveValueConnection
+	"""
 	The BCS representation of this value, Base64-encoded.
 	"""
 	bcs: Base64
@@ -2698,6 +2704,35 @@ type MoveValue {
 	The value's type.
 	"""
 	type: MoveType
+}
+
+type MoveValueConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveValueEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveValue!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveValueEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveValue!
 }
 
 """
