@@ -320,44 +320,6 @@ impl Token {
     }
 }
 
-impl Token {
-    /// Feed the algorithm (outcome + RTT) but keep the inflight count alive until the
-    /// returned [`InflightGuard`] is dropped. This lets callers decouple algorithm
-    /// feedback timing from the logical end of the operation (e.g. a send that may block).
-    pub fn record_sample_keeping_inflight(mut self, outcome: Outcome) -> InflightGuard {
-        let inner = self.inner.take().expect("record_sample called twice");
-        let rtt = self.start.elapsed();
-        let completed_now = inner
-            .total_completed
-            .fetch_add(self.weight, Ordering::Relaxed)
-            + self.weight;
-        let delivered = completed_now - self.completed_at_acquire;
-        let result = inner
-            .algorithm
-            .update(self.inflight, delivered, self.weight, outcome, rtt);
-        inner.peak_limit.fetch_max(result, Ordering::Relaxed);
-        InflightGuard {
-            inner,
-            weight: self.weight,
-        }
-    }
-}
-
-/// RAII guard that holds the inflight count alive after the algorithm has been fed.
-/// Decrements inflight on drop.
-pub struct InflightGuard {
-    inner: Arc<LimiterInner>,
-    weight: usize,
-}
-
-impl Drop for InflightGuard {
-    fn drop(&mut self) {
-        self.inner
-            .inflight
-            .fetch_sub(self.weight, Ordering::Relaxed);
-    }
-}
-
 impl Drop for Token {
     fn drop(&mut self) {
         if let Some(inner) = &self.inner {
@@ -2393,61 +2355,6 @@ mod tests {
         assert_eq!(limiter.inflight(), 1);
 
         token.record_sample_weighted(Outcome::Dropped, 100);
-        assert_eq!(limiter.inflight(), 0);
-    }
-
-    // ======================== record_sample_keeping_inflight tests ========================
-
-    #[test]
-    fn keeping_inflight_holds_count() {
-        let limiter = Limiter::fixed(10);
-        let token = limiter.acquire();
-        assert_eq!(limiter.inflight(), 1);
-
-        let guard = token.record_sample_keeping_inflight(Outcome::Success);
-        assert_eq!(limiter.inflight(), 1);
-
-        drop(guard);
-        assert_eq!(limiter.inflight(), 0);
-    }
-
-    #[test]
-    fn keeping_inflight_feeds_algorithm() {
-        let limiter = Limiter::aimd(default_config());
-        assert_eq!(limiter.current(), 10);
-
-        let _hold: Vec<_> = (0..9).map(|_| limiter.acquire()).collect();
-        let token = limiter.acquire();
-
-        let _guard = token.record_sample_keeping_inflight(Outcome::Success);
-        assert_eq!(limiter.current(), 11);
-    }
-
-    #[test]
-    fn keeping_inflight_no_double_decrement() {
-        let limiter = Limiter::fixed(10);
-        let token = limiter.acquire();
-        assert_eq!(limiter.inflight(), 1);
-
-        let guard = token.record_sample_keeping_inflight(Outcome::Success);
-        // Token is consumed — its Drop is a no-op because inner was taken.
-        // Only the guard holds the inflight count.
-        assert_eq!(limiter.inflight(), 1);
-
-        drop(guard);
-        assert_eq!(limiter.inflight(), 0);
-    }
-
-    #[test]
-    fn keeping_inflight_weighted() {
-        let limiter = Limiter::fixed(10);
-        let token = limiter.acquire_weighted(5);
-        assert_eq!(limiter.inflight(), 5);
-
-        let guard = token.record_sample_keeping_inflight(Outcome::Success);
-        assert_eq!(limiter.inflight(), 5);
-
-        drop(guard);
         assert_eq!(limiter.inflight(), 0);
     }
 }

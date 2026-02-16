@@ -4,7 +4,6 @@
 use std::collections::HashMap;
 use std::marker::Unpin;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
@@ -245,24 +244,16 @@ fn ingest_and_broadcast_range(
         let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
         // docs::/#bound
 
-        let shed_cps: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(Vec::new()));
-
         let stream_fut = checkpoints.try_for_each_spawned_adaptive_with_token(limiter.clone(), {
             let client = client.clone();
             let subscribers = subscribers.clone();
             let peak_channel_fill = peak_channel_fill.clone();
             let pending_rows = pending_rows.clone();
-            let limiter = limiter.clone();
-            let metrics = metrics.clone();
-            let shed_cps = shed_cps.clone();
             move |cp: u64, token: Token| {
                 let client = client.clone();
                 let subscribers = subscribers.clone();
                 let peak_channel_fill = peak_channel_fill.clone();
                 let pending_rows = pending_rows.clone();
-                let limiter = limiter.clone();
-                let metrics = metrics.clone();
-                let shed_cps = shed_cps.clone();
                 async move {
                     let checkpoint = client
                         .wait_for(cp, retry_interval)
@@ -277,17 +268,7 @@ fn ingest_and_broadcast_range(
                     } else {
                         Outcome::Success
                     };
-
-                    // Feed algorithm immediately but keep inflight alive until send completes.
-                    let _inflight_guard = token.record_sample_keeping_inflight(outcome);
-
-                    // Shed if inflight exceeds the limiter's current target.
-                    // Newer tasks see higher inflight and shed first (approximate LIFO).
-                    if limiter.inflight() > limiter.current() {
-                        shed_cps.lock().unwrap().push(cp);
-                        metrics.total_ingestion_shed_checkpoints.inc();
-                        return Ok(());
-                    }
+                    token.record_sample(outcome);
 
                     let cp = *checkpoint.summary.sequence_number();
                     if send_checkpoint(
@@ -309,7 +290,7 @@ fn ingest_and_broadcast_range(
             }
         });
 
-        let result = tokio::select! {
+        tokio::select! {
             result = stream_fut => result,
             _ = async {
                 let mut interval = tokio::time::interval(Duration::from_secs(30));
@@ -326,35 +307,7 @@ fn ingest_and_broadcast_range(
                     }
                 }
             } => unreachable!(),
-        };
-
-        result?;
-
-        // Retry checkpoints shed during memory pressure. By now the pipeline
-        // backlog has drained, so retries should succeed quickly.
-        let mut shed = shed_cps.lock().unwrap().drain(..).collect::<Vec<_>>();
-        shed.sort_unstable();
-        for cp in shed {
-            let checkpoint = client
-                .wait_for(cp, retry_interval)
-                .await
-                .map_err(|_| Break::Break)?;
-
-            if send_checkpoint(
-                checkpoint,
-                &subscribers,
-                &peak_channel_fill,
-                &pending_rows,
-                max_pending_rows,
-            )
-            .await
-            .is_err()
-            {
-                return Err(Break::Break);
-            }
         }
-
-        Ok(())
     }))
 }
 

@@ -86,8 +86,6 @@ pub struct IngestionMetrics {
 
     pub ingestion_peak_channel_fill: IntGauge,
     pub ingestion_peak_channel_utilization: Gauge,
-
-    pub total_ingestion_shed_checkpoints: IntCounter,
 }
 
 #[derive(Clone)]
@@ -327,12 +325,6 @@ impl IngestionMetrics {
             ingestion_peak_channel_utilization: register_gauge_with_registry!(
                 name("ingestion_peak_channel_utilization"),
                 "Peak utilization of ingestion subscriber channels since last sample",
-                registry,
-            )
-            .unwrap(),
-            total_ingestion_shed_checkpoints: register_int_counter_with_registry!(
-                name("total_ingestion_shed_checkpoints"),
-                "Total number of checkpoints shed during memory pressure and retried later",
                 registry,
             )
             .unwrap(),
