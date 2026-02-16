@@ -327,8 +327,10 @@ impl AdaptiveState {
 
         // Throughput guard: only grow when throughput is actively responding.
         // If adding concurrency doesn't increase throughput, we're past the knee.
+        // Uses raw throughput vs prev EMA (not EMA vs EMA) to avoid overshoot:
+        // EMA lag causes 2-3 extra growth intervals after throughput actually plateaus.
         let throughput_not_growing = match prev_ema {
-            Some(prev) => throughput_ema < prev * config.throughput_growth_threshold,
+            Some(prev) => throughput < prev * config.throughput_growth_threshold,
             None => false,
         };
 
@@ -823,6 +825,45 @@ mod tests {
             state.phase,
             Phase::ProbeBW(ProbeBWState::Cruise { .. })
         ));
+    }
+
+    // ======================== Latency brake tests ========================
+
+    #[test]
+    fn latency_brake_fires_at_interval() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            queue_signal_beta: 6.0,
+            latency_backoff_ratio: 0.9,
+            probe_bw_intervals: 100, // high so we stay in cruise
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                intervals_since_probe: 0,
+            });
+            state.baseline_p95 = Some(0.010); // 10ms baseline
+            state.throughput_ema = Some(100.0);
+        }
+
+        // Feed samples with much higher latency (100ms) to trigger latency brake
+        // queue_signal = limit * (1 - baseline/current) = 110 * (1 - 0.01/0.1) = 110 * 0.9 = 99 > 6
+        feed_successes(&alg, 50, Duration::from_millis(100));
+        alg.force_interval_with_throughput(1000.0);
+
+        // After cruise additive increase: 100 + sqrt(100) = 110
+        // After latency brake: ceil(110 * 0.9) = 99
+        let limit = alg.current();
+        assert!(
+            limit < 110,
+            "Latency brake should have reduced limit, got {limit}"
+        );
     }
 
     // ======================== Edge case tests ========================
