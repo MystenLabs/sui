@@ -6,6 +6,7 @@ use fastcrypto::traits::ToFromBytes;
 use futures::stream::Stream;
 use futures::stream::TryStreamExt;
 use prost_types::FieldMask;
+use prost_types::value::Kind as ProtoValueKind;
 use std::time::Duration;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::TryFromProtoError;
@@ -615,6 +616,7 @@ pub struct ExecutedTransaction {
     pub effects: TransactionEffects,
     pub clever_error: Option<proto::CleverError>,
     pub events: Option<TransactionEvents>,
+    pub event_json: Vec<Option<serde_json::Value>>,
     pub changed_objects: Vec<proto::ChangedObject>,
     #[allow(unused)]
     unchanged_loaded_runtime_objects: Vec<proto::ObjectReference>,
@@ -654,6 +656,7 @@ impl ExecutedTransaction {
                 .changed_objects()
                 .finish(),
             ExecutedTransaction::path_builder().events().bcs().finish(),
+            ExecutedTransaction::path_builder().events().events().json(),
             ExecutedTransaction::path_builder()
                 .balance_changes()
                 .finish(),
@@ -801,6 +804,16 @@ fn executed_transaction_try_from_proto(
         .map(|bcs| bcs.deserialize())
         .transpose()
         .map_err(|e| TryFromProtoError::invalid("events.bcs", e))?;
+    let event_json = executed_transaction
+        .events_opt()
+        .map(|events| {
+            events
+                .events()
+                .iter()
+                .map(|event| event.json_opt().map(proto_value_to_json_value))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
     let balance_changes = executed_transaction
         .balance_changes
@@ -814,6 +827,7 @@ fn executed_transaction_try_from_proto(
         effects,
         clever_error,
         events,
+        event_json,
         balance_changes,
         checkpoint: executed_transaction.checkpoint,
         changed_objects: executed_transaction.effects().changed_objects().to_owned(),
@@ -824,6 +838,28 @@ fn executed_transaction_try_from_proto(
         timestamp: executed_transaction.timestamp,
     }
     .pipe(Ok)
+}
+
+fn proto_value_to_json_value(proto: &prost_types::Value) -> serde_json::Value {
+    match proto.kind.as_ref() {
+        Some(ProtoValueKind::NullValue(_)) | None => serde_json::Value::Null,
+        Some(ProtoValueKind::NumberValue(n)) => serde_json::Value::from(*n),
+        Some(ProtoValueKind::StringValue(s)) => serde_json::Value::from(s.clone()),
+        Some(ProtoValueKind::BoolValue(b)) => serde_json::Value::from(*b),
+        Some(ProtoValueKind::StructValue(map)) => serde_json::Value::Object(
+            map.fields
+                .iter()
+                .map(|(k, v)| (k.clone(), proto_value_to_json_value(v)))
+                .collect(),
+        ),
+        Some(ProtoValueKind::ListValue(list_value)) => serde_json::Value::Array(
+            list_value
+                .values
+                .iter()
+                .map(proto_value_to_json_value)
+                .collect(),
+        ),
+    }
 }
 
 fn status_from_error_with_metadata<T: Into<BoxError>>(err: T, metadata: MetadataMap) -> Status {

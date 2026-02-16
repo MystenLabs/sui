@@ -2491,7 +2491,12 @@ fn to_legacy_events(response: &ExecutedTransaction) -> Option<SuiTransactionBloc
                 transaction_module: event.transaction_module.clone(),
                 sender: event.sender,
                 type_: event.type_.clone(),
-                parsed_json: json!({}),
+                parsed_json: response
+                    .event_json
+                    .get(event_seq)
+                    .cloned()
+                    .flatten()
+                    .unwrap_or_else(|| json!({})),
                 bcs: BcsEvent::new(event.contents.clone()),
                 timestamp_ms,
             })
