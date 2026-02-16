@@ -48,8 +48,9 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BalanceChange as RpcBalanceChange, BcsEvent, Coin, ObjectChange as RpcObjectChange, SuiEvent,
-    SuiTransactionBlock, SuiTransactionBlockEffects, SuiTransactionBlockEvents,
+    BalanceChange as RpcBalanceChange, BcsEvent, Coin, DryRunTransactionBlockResponse,
+    ObjectChange as RpcObjectChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockEffects,
+    SuiTransactionBlockEvents,
     SuiTransactionBlockResponse,
 };
 use sui_keys::key_identity::KeyIdentity;
@@ -2321,7 +2322,11 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::NoOutput => {}
             SuiClientCommandResult::DryRun(response) => {
-                writeln!(f, "{}", Pretty(response))?;
+                if let Some(legacy) = to_legacy_dry_run_transaction_block_response(response) {
+                    writeln!(f, "{}", Pretty(&legacy))?;
+                } else {
+                    writeln!(f, "{}", Pretty(response))?;
+                }
             }
             SuiClientCommandResult::DevInspect(response) => {
                 writeln!(f, "{}", Pretty(response))?;
@@ -2527,6 +2532,27 @@ fn to_legacy_transaction_block_response(
     legacy_response
 }
 
+fn to_legacy_dry_run_transaction_block_response(
+    response: &SimulateTransactionResponse,
+) -> Option<DryRunTransactionBlockResponse> {
+    let effects = SuiTransactionBlockEffects::try_from(response.transaction.effects.clone()).ok()?;
+    let input = to_legacy_transaction(&response.transaction)?.data;
+    let execution_error_source = match response.transaction.effects.status() {
+        ExecutionStatus::Failure { error, .. } => Some(format!("{error:?}")),
+        ExecutionStatus::Success => None,
+    };
+
+    Some(DryRunTransactionBlockResponse {
+        effects,
+        events: to_legacy_events(&response.transaction).unwrap_or_default(),
+        object_changes: to_legacy_object_changes(&response.transaction),
+        balance_changes: to_legacy_balance_changes(&response.transaction),
+        input,
+        execution_error_source,
+        suggested_gas_price: response.suggested_gas_price,
+    })
+}
+
 fn convert_number_to_string(value: Value) -> Value {
     match value {
         Value::Number(n) => Value::String(n.to_string()),
@@ -2555,6 +2581,13 @@ impl Debug for SuiClientCommandResult {
             SuiClientCommandResult::TransactionBlock(response) => Ok(serde_json::to_string_pretty(
                 &to_legacy_transaction_block_response(response),
             )?),
+            SuiClientCommandResult::DryRun(response) => {
+                if let Some(legacy) = to_legacy_dry_run_transaction_block_response(response) {
+                    Ok(serde_json::to_string_pretty(&legacy)?)
+                } else {
+                    Ok(serde_json::to_string_pretty(response)?)
+                }
+            }
             _ => Ok(serde_json::to_string_pretty(self)?),
         });
         write!(f, "{}", s)

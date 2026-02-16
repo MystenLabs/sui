@@ -279,6 +279,7 @@ impl Client {
         Ok(SimulateTransactionResponse {
             transaction,
             command_outputs: response.command_outputs,
+            suggested_gas_price: response.suggested_gas_price,
         })
     }
 
@@ -713,6 +714,7 @@ impl ExecutedTransaction {
 pub struct SimulateTransactionResponse {
     pub transaction: ExecutedTransaction,
     pub command_outputs: Vec<proto::CommandResult>,
+    pub suggested_gas_price: Option<u64>,
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
