@@ -293,6 +293,7 @@ fn ingest_and_broadcast_range(
                     metrics.ingestion_concurrency.set(limiter.current() as i64);
                     metrics.ingestion_peak_concurrency.set(limiter.take_peak_limit() as i64);
                     metrics.ingestion_peak_inflight.set(limiter.take_peak_inflight() as i64);
+                    metrics.global_pending_rows.set(pending_rows.load(Ordering::Relaxed) as i64);
                     let peak = peak_channel_fill.swap(0, Ordering::Relaxed);
                     metrics.ingestion_peak_channel_fill.set(peak as i64);
                     let capacity = subscribers.first().map_or(0, |s| s.max_capacity());

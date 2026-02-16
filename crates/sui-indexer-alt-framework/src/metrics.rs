@@ -86,6 +86,7 @@ pub struct IngestionMetrics {
 
     pub ingestion_peak_channel_fill: IntGauge,
     pub ingestion_peak_channel_utilization: Gauge,
+    pub global_pending_rows: IntGauge,
 }
 
 #[derive(Clone)]
@@ -326,6 +327,12 @@ impl IngestionMetrics {
             ingestion_peak_channel_utilization: register_gauge_with_registry!(
                 name("ingestion_peak_channel_utilization"),
                 "Peak utilization of ingestion subscriber channels since last sample",
+                registry,
+            )
+            .unwrap(),
+            global_pending_rows: register_int_gauge_with_registry!(
+                name("global_pending_rows"),
+                "Rows produced by processors but not yet committed across all pipelines",
                 registry,
             )
             .unwrap(),
