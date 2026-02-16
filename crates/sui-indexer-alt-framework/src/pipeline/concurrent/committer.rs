@@ -98,6 +98,7 @@ pub(super) fn committer<H: Handler + 'static>(
                  batch_len,
                  watermark,
              }| {
+                let batch_mutations = H::batch_weight(&batch, batch_len);
                 let batch: Arc<H::Batch> = Arc::new(batch);
                 let handler = handler.clone();
                 let db = db.clone();
@@ -182,6 +183,11 @@ pub(super) fn committer<H: Handler + 'static>(
                                     .total_committer_rows_affected
                                     .with_label_values(&[H::NAME])
                                     .inc_by(affected as u64);
+
+                                metrics
+                                    .total_committer_mutations_committed
+                                    .with_label_values(&[H::NAME])
+                                    .inc_by(batch_mutations as u64);
 
                                 metrics
                                     .committer_tx_rows
@@ -489,6 +495,10 @@ async fn rebatching_committer<H: Handler + 'static>(
                                 .total_committer_rows_affected
                                 .with_label_values(&[H::NAME])
                                 .inc_by(affected as u64);
+                            metrics
+                                .total_committer_mutations_committed
+                                .with_label_values(&[H::NAME])
+                                .inc_by(dest_weight as u64);
                             metrics
                                 .committer_tx_rows
                                 .with_label_values(&[H::NAME])

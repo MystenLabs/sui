@@ -110,6 +110,7 @@ pub struct IndexerMetrics {
     pub total_committer_batches_failed: IntCounterVec,
     pub total_committer_rows_committed: IntCounterVec,
     pub total_committer_rows_affected: IntCounterVec,
+    pub total_committer_mutations_committed: IntCounterVec,
     pub total_watermarks_out_of_order: IntCounterVec,
     pub total_pruner_chunks_attempted: IntCounterVec,
     pub total_pruner_chunks_deleted: IntCounterVec,
@@ -459,6 +460,13 @@ impl IndexerMetrics {
             total_committer_rows_affected: register_int_counter_vec_with_registry!(
                 name("total_committer_rows_affected"),
                 "Total number of rows actually written to the database by this committer",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_committer_mutations_committed: register_int_counter_vec_with_registry!(
+                name("total_committer_mutations_committed"),
+                "Total number of mutations sent to the database by this committer",
                 &["pipeline"],
                 registry,
             )
