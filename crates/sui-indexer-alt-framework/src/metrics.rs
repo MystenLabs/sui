@@ -86,6 +86,9 @@ pub struct IngestionMetrics {
 
     pub ingestion_peak_channel_fill: IntGauge,
     pub ingestion_peak_channel_utilization: Gauge,
+
+    /// Current bytes buffered across all subscriber channels, tracked by SizeGuard RAII.
+    pub ingestion_buffered_bytes: IntGauge,
 }
 
 #[derive(Clone)]
@@ -325,6 +328,12 @@ impl IngestionMetrics {
             ingestion_peak_channel_utilization: register_gauge_with_registry!(
                 name("ingestion_peak_channel_utilization"),
                 "Peak utilization of ingestion subscriber channels since last sample",
+                registry,
+            )
+            .unwrap(),
+            ingestion_buffered_bytes: register_int_gauge_with_registry!(
+                name("ingestion_buffered_bytes"),
+                "Current bytes buffered across all subscriber channels, tracked by RAII guards",
                 registry,
             )
             .unwrap(),

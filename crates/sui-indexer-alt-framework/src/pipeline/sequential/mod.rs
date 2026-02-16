@@ -11,6 +11,7 @@ use sui_futures::service::Service;
 use tokio::sync::mpsc;
 use tracing::info;
 
+use crate::ingestion::CheckpointData;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::Processor;
@@ -19,7 +20,6 @@ use crate::pipeline::processor_channel_size;
 use crate::pipeline::sequential::committer::committer;
 use crate::store::Store;
 use crate::store::TransactionalStore;
-use crate::types::full_checkpoint_content::Checkpoint;
 
 mod committer;
 
@@ -117,7 +117,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     next_checkpoint: u64,
     config: SequentialConfig,
     db: H::Store,
-    checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
+    checkpoint_rx: mpsc::Receiver<CheckpointData>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {

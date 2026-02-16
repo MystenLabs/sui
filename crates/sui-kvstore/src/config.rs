@@ -87,6 +87,7 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
     fn from(config: IngestionConfig) -> Self {
         framework::ingestion::IngestionConfig {
             checkpoint_buffer_size: config.checkpoint_buffer_size,
+            checkpoint_buffer_bytes: None,
             subscriber_channel_size: config.subscriber_channel_size,
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,

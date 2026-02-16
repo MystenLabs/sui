@@ -295,7 +295,7 @@ impl IngestionClient {
         &self,
         checkpoint: u64,
         retry_interval: Duration,
-    ) -> IngestionResult<Arc<Checkpoint>> {
+    ) -> IngestionResult<(Arc<Checkpoint>, usize)> {
         let backoff = Constant::new(retry_interval);
         let fetch = || async move {
             use backoff::Error as BE;
@@ -320,7 +320,7 @@ impl IngestionClient {
     /// function if we fail to deserialize the result as [Checkpoint].
     ///
     /// The function will immediately return if the checkpoint is not found.
-    pub async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<Checkpoint>> {
+    pub async fn fetch(&self, checkpoint: u64) -> IngestionResult<(Arc<Checkpoint>, usize)> {
         let client = self.client.clone();
         let request = move || {
             let client = client.clone();
@@ -355,23 +355,21 @@ impl IngestionClient {
                     }
                 })?;
 
-                Ok::<Checkpoint, backoff::Error<IngestionError>>(match fetch_data {
+                Ok::<(Checkpoint, usize), backoff::Error<IngestionError>>(match fetch_data {
                     FetchData::Raw(bytes) => {
-                        self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
+                        let wire_size = bytes.len();
+                        self.metrics.total_ingested_bytes.inc_by(wire_size as u64);
 
-                        decode::checkpoint(&bytes).map_err(|e| {
+                        let data = decode::checkpoint(&bytes).map_err(|e| {
                             self.metrics.inc_retry(
                                 checkpoint,
                                 e.reason(),
                                 IngestionError::DeserializationError(checkpoint, e.into()),
                             )
-                        })?
+                        })?;
+                        (data, wire_size)
                     }
-                    FetchData::Checkpoint(data) => {
-                        // We are not recording size metric for Checkpoint data (from RPC client).
-                        // TODO: Record the metric when we have a good way to get the size information
-                        data
-                    }
+                    FetchData::Checkpoint(data) => (data, 0),
                 })
             }
         };
@@ -384,7 +382,7 @@ impl IngestionClient {
         };
 
         let guard = self.metrics.ingested_checkpoint_latency.start_timer();
-        let data = backoff::future::retry(backoff, request).await?;
+        let (data, wire_size) = backoff::future::retry(backoff, request).await?;
         let elapsed = guard.stop_and_record();
 
         debug!(
@@ -413,7 +411,7 @@ impl IngestionClient {
             .total_ingested_objects
             .inc_by(data.object_set.len() as u64);
 
-        Ok(Arc::new(data))
+        Ok((Arc::new(data), wire_size))
     }
 }
 
@@ -497,7 +495,7 @@ mod tests {
         mock.checkpoints.insert(1, FetchData::Raw(bytes.clone()));
 
         // Fetch and verify
-        let result = client.fetch(1).await.unwrap();
+        let (result, _wire_size) = client.fetch(1).await.unwrap();
         assert_eq!(result.summary.sequence_number(), &1);
     }
 
@@ -510,7 +508,7 @@ mod tests {
         mock.checkpoints.insert(1, FetchData::Raw(bytes));
 
         // Fetch and verify
-        let result = client.fetch(1).await.unwrap();
+        let (result, _wire_size) = client.fetch(1).await.unwrap();
         assert_eq!(result.summary.sequence_number(), &1);
     }
 
@@ -535,7 +533,7 @@ mod tests {
         mock.transient_failures.insert(1, 2);
 
         // Fetch and verify it succeeds after retries
-        let result = client.fetch(1).await.unwrap();
+        let (result, _wire_size) = client.fetch(1).await.unwrap();
         assert_eq!(*result.summary.sequence_number(), 1);
 
         // Verify that exactly 2 retries were recorded
@@ -559,7 +557,7 @@ mod tests {
         mock.not_found_failures.insert(1, 1);
 
         // Wait for checkpoint with short retry interval
-        let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
+        let (result, _wire_size) = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
         assert_eq!(result.summary.sequence_number(), &1);
 
         // Verify that exactly 1 retry was recorded
@@ -578,7 +576,7 @@ mod tests {
         mock.checkpoints.insert(1, FetchData::Raw(bytes));
 
         // Wait for checkpoint with short retry interval
-        let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
+        let (result, _wire_size) = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
         assert_eq!(result.summary.sequence_number(), &1);
     }
 

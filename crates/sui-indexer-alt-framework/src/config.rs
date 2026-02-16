@@ -89,6 +89,7 @@ impl From<CommitterConfig> for CommitterLayer {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
+    pub checkpoint_buffer_bytes: Option<usize>,
     pub subscriber_channel_size: Option<usize>,
     pub ingest_concurrency: Option<ConcurrencyLimit>,
     pub retry_interval_ms: Option<u64>,
@@ -107,6 +108,9 @@ impl IngestionLayer {
             checkpoint_buffer_size: self
                 .checkpoint_buffer_size
                 .unwrap_or(base.checkpoint_buffer_size),
+            checkpoint_buffer_bytes: self
+                .checkpoint_buffer_bytes
+                .or(base.checkpoint_buffer_bytes),
             subscriber_channel_size: self
                 .subscriber_channel_size
                 .unwrap_or(base.subscriber_channel_size),
@@ -132,6 +136,9 @@ impl Merge for IngestionLayer {
     fn merge(self, other: IngestionLayer) -> anyhow::Result<IngestionLayer> {
         Ok(IngestionLayer {
             checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
+            checkpoint_buffer_bytes: other
+                .checkpoint_buffer_bytes
+                .or(self.checkpoint_buffer_bytes),
             subscriber_channel_size: other
                 .subscriber_channel_size
                 .or(self.subscriber_channel_size),
@@ -157,6 +164,7 @@ impl From<IngestionConfig> for IngestionLayer {
     fn from(config: IngestionConfig) -> Self {
         Self {
             checkpoint_buffer_size: Some(config.checkpoint_buffer_size),
+            checkpoint_buffer_bytes: config.checkpoint_buffer_bytes,
             subscriber_channel_size: Some(config.subscriber_channel_size),
             ingest_concurrency: Some(config.ingest_concurrency),
             retry_interval_ms: Some(config.retry_interval_ms),

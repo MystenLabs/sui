@@ -19,8 +19,8 @@ use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
 use crate::types::full_checkpoint_content::Checkpoint;
 
-/// Type alias for a stream of checkpoint data.
-pub type CheckpointStream = Pin<Box<dyn Stream<Item = Result<Checkpoint>> + Send>>;
+/// Type alias for a stream of checkpoint data with wire size for byte budget tracking.
+pub type CheckpointStream = Pin<Box<dyn Stream<Item = Result<(Checkpoint, usize)>> + Send>>;
 
 /// Trait representing a client for streaming checkpoint data.
 #[async_trait]
@@ -73,8 +73,11 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
             Ok(response) => response
                 .checkpoint
                 .context("Checkpoint data missing in response")
-                .and_then(|checkpoint| {
-                    Checkpoint::try_from(&checkpoint).context("Failed to parse checkpoint")
+                .and_then(|proto_checkpoint| {
+                    let wire_size = prost::Message::encoded_len(&proto_checkpoint);
+                    let checkpoint = Checkpoint::try_from(&proto_checkpoint)
+                        .context("Failed to parse checkpoint")?;
+                    Ok((checkpoint, wire_size))
                 })
                 .map_err(Error::StreamingError),
             Err(e) => Err(Error::RpcClientError(e)),
@@ -109,7 +112,7 @@ pub mod test_utils {
     }
 
     impl Stream for MockStreamState {
-        type Item = Result<Checkpoint>;
+        type Item = Result<(Checkpoint, usize)>;
 
         fn poll_next(
             self: Pin<&mut Self>,
@@ -125,7 +128,7 @@ pub mod test_utils {
                     let seq = *seq;
                     actions.remove(0);
                     let mut builder = TestCheckpointBuilder::new(seq);
-                    std::task::Poll::Ready(Some(Ok(builder.build_checkpoint())))
+                    std::task::Poll::Ready(Some(Ok((builder.build_checkpoint(), 0))))
                 }
                 StreamAction::Error => {
                     actions.remove(0);
