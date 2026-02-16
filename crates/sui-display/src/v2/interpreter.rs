@@ -294,6 +294,7 @@ impl<S: V::Store> Interpreter<S> {
         use V::Value as VV;
 
         Ok(match lit {
+            L::Self_ => Some(VV::Slice(self.root.as_slice())),
             L::Address(a) => Some(VV::Address(*a)),
             L::Bool(b) => Some(VV::Bool(*b)),
             L::U8(n) => Some(VV::U8(*n)),
