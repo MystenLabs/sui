@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
+use fastcrypto::traits::ToFromBytes;
 use futures::stream::Stream;
 use futures::stream::TryStreamExt;
 use prost_types::FieldMask;
@@ -16,6 +17,7 @@ use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
+use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use tap::Pipe;
@@ -609,6 +611,7 @@ impl Client {
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct ExecutedTransaction {
     pub transaction: TransactionData,
+    pub signatures: Vec<GenericSignature>,
     pub effects: TransactionEffects,
     pub clever_error: Option<proto::CleverError>,
     pub events: Option<TransactionEvents>,
@@ -628,6 +631,10 @@ impl ExecutedTransaction {
         FieldMask::from_paths([
             ExecutedTransaction::path_builder()
                 .transaction()
+                .bcs()
+                .finish(),
+            ExecutedTransaction::path_builder()
+                .signatures()
                 .bcs()
                 .finish(),
             ExecutedTransaction::path_builder().effects().bcs().finish(),
@@ -691,6 +698,11 @@ impl ExecutedTransaction {
                 let digest = o.output_digest().parse().ok()?;
                 Some((id, version, digest))
             })
+    }
+
+    pub fn timestamp_ms(&self) -> Option<u64> {
+        self.timestamp
+            .and_then(|timestamp| sui_rpc::proto::proto_to_timestamp_ms(timestamp).ok())
     }
 }
 
@@ -767,6 +779,14 @@ fn executed_transaction_try_from_proto(
         .bcs()
         .deserialize()
         .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?;
+    let signatures = executed_transaction
+        .signatures()
+        .iter()
+        .map(|sig| {
+            GenericSignature::from_bytes(sig.bcs().value())
+                .map_err(|e| TryFromProtoError::invalid("signatures.bcs", e))
+        })
+        .collect::<Result<_, _>>()?;
     let clever_error = executed_transaction
         .effects()
         .status()
@@ -790,6 +810,7 @@ fn executed_transaction_try_from_proto(
 
     ExecutedTransaction {
         transaction,
+        signatures,
         effects,
         clever_error,
         events,
