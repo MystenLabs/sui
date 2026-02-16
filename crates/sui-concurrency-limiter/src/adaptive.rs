@@ -393,7 +393,9 @@ impl AdaptiveState {
                                 round_start_throughput: Some(throughput_ema),
                                 stall_count: 0,
                             };
-                        } else if throughput >= *start_throughput_ema * 1.10 {
+                        } else if throughput
+                            >= *start_throughput_ema * config.throughput_growth_threshold
+                        {
                             // Modest throughput gain — keep the higher limit
                             self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
                                 intervals_since_probe: 0,
