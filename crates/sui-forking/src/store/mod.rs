@@ -19,6 +19,7 @@ use sui_data_store::{
 };
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::clock::Clock;
+use sui_types::error::SuiErrorKind;
 use sui_types::message_envelope::Envelope;
 use sui_types::storage::ReadStore;
 use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
@@ -45,8 +46,8 @@ pub struct ForkingStore {
     events: HashMap<TransactionDigest, TransactionEvents>,
 
     // Committee data
-    epoch_to_committee: Vec<Committee>,
-
+    epoch_to_committee: BTreeMap<EpochId, Committee>,
+    // epoch_to_committee: Vec<Committee>,
     /// FileSystemStore operates as a local cache for
     /// - checkpoints
     /// - transactions
@@ -79,7 +80,7 @@ impl ForkingStore {
     ) -> Self {
         Self {
             events: HashMap::new(),
-            epoch_to_committee: vec![],
+            epoch_to_committee: BTreeMap::new(),
             fs_store,
             fs_gql_store,
             forked_at_checkpoint,
@@ -185,7 +186,7 @@ impl ForkingStore {
 
     /// Returns committee metadata for an epoch, if known in-memory.
     pub fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee> {
-        self.epoch_to_committee.get(epoch as usize)
+        self.epoch_to_committee.get(&epoch)
     }
 
     /// Returns the transaction by digest from local filesystem transaction cache.
@@ -370,17 +371,20 @@ impl ForkingStore {
 
     /// Inserts committee info for an epoch if not already present.
     pub fn insert_committee(&mut self, committee: Committee) {
-        let epoch = committee.epoch as usize;
-
-        if self.epoch_to_committee.get(epoch).is_some() {
-            return;
-        }
-
-        if self.epoch_to_committee.len() == epoch {
-            self.epoch_to_committee.push(committee);
-        } else {
-            panic!("committee was inserted into EpochCommitteeMap out of order");
-        }
+        self.epoch_to_committee
+            .entry(committee.epoch)
+            .or_insert(committee);
+        // let epoch = committee.epoch as usize;
+        //
+        // if self.epoch_to_committee.get(epoch).is_some() {
+        //     return;
+        // }
+        //
+        // if self.epoch_to_committee.len() == epoch {
+        //     self.epoch_to_committee.push(committee);
+        // } else {
+        //     panic!("committee was inserted into EpochCommitteeMap out of order");
+        // }
     }
 
     /// Inserts the transaction, its effects, events, and the written objects into the store. The
@@ -463,29 +467,35 @@ impl ChildObjectResolver for ForkingStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        println!(
-            "Reading child object: {:?} of parent: {:?} with version upper bound: {:?}",
-            child, parent, child_version_upper_bound
-        );
+        // Child-object resolution during execution must stay local to avoid pulling stale
+        // pre-fork data through read-through fallbacks.
+        let child_object =
+            match self.fs_store.get_object_latest(child).map_err(|e| {
+                sui_types::error::SuiError::from(SuiErrorKind::Storage(e.to_string()))
+            })? {
+                None => return Ok(None),
+                Some((obj, _)) => obj,
+            };
 
-        let object_key = ObjectKey {
-            object_id: *child,
-            version_query: VersionQuery::RootVersion(child_version_upper_bound.value()),
-        };
-        let object = self.fs_gql_store.get_objects(&[object_key]).unwrap();
-        debug_assert!(object.len() == 1, "Expected one object for {}", child,);
-        let object = object
-            .into_iter()
-            .next()
-            .unwrap()
-            .map(|(obj, _version)| obj);
+        let parent = *parent;
+        if child_object.owner != Owner::ObjectOwner(parent.into()) {
+            return Err(SuiErrorKind::InvalidChildObjectAccess {
+                object: *child,
+                given_parent: parent,
+                actual_owner: child_object.owner.clone(),
+            }
+            .into());
+        }
 
-        println!(
-            "Found object {:?} for child: {:?} of parent: {:?}",
-            object, child, parent
-        );
+        if child_object.version() > child_version_upper_bound {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "TODO ForkingStore::read_child_object does not yet support bounded reads"
+                    .to_owned(),
+            }
+            .into());
+        }
 
-        Ok(object)
+        Ok(Some(child_object))
     }
 
     fn get_object_received_at_version(
