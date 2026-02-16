@@ -158,6 +158,7 @@ where
                 &metrics,
                 peak_channel_fill.clone(),
                 buffered_bytes.clone(),
+                byte_budget,
             )
             .await;
 
@@ -174,6 +175,7 @@ where
                 metrics.clone(),
                 peak_channel_fill.clone(),
                 buffered_bytes.clone(),
+                byte_budget,
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -277,6 +279,7 @@ fn ingest_and_broadcast_range(
     metrics: Arc<IngestionMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
     buffered_bytes: Arc<AtomicUsize>,
+    byte_budget: Option<usize>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
         // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
@@ -318,6 +321,7 @@ fn ingest_and_broadcast_range(
                         &subscribers,
                         &peak_channel_fill,
                         &buffered_bytes,
+                        byte_budget,
                     )
                     .await
                     .is_ok()
@@ -367,6 +371,7 @@ async fn setup_streaming_task<S>(
     metrics: &Arc<IngestionMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
     buffered_bytes: Arc<AtomicUsize>,
+    byte_budget: Option<usize>,
 ) -> (TaskGuard<u64>, u64)
 where
     S: CheckpointStreamingClient,
@@ -444,6 +449,7 @@ where
         metrics.clone(),
         peak_channel_fill,
         buffered_bytes,
+        byte_budget,
     )));
 
     (stream_guard, ingestion_end)
@@ -463,6 +469,7 @@ async fn stream_and_broadcast_range(
     metrics: Arc<IngestionMetrics>,
     peak_channel_fill: Arc<AtomicUsize>,
     buffered_bytes: Arc<AtomicUsize>,
+    byte_budget: Option<usize>,
 ) -> u64 {
     while lo < hi {
         let Some(item) = stream.next().await else {
@@ -509,6 +516,7 @@ async fn stream_and_broadcast_range(
             &subscribers,
             &peak_channel_fill,
             &buffered_bytes,
+            byte_budget,
         )
         .await
         .is_err()
@@ -536,7 +544,14 @@ async fn send_checkpoint(
     subscribers: &[mpsc::Sender<CheckpointData>],
     peak_channel_fill: &AtomicUsize,
     buffered_bytes: &Arc<AtomicUsize>,
+    byte_budget: Option<usize>,
 ) -> Result<Vec<()>, mpsc::error::SendError<CheckpointData>> {
+    // Wait until we're under the byte budget before admitting more data.
+    if let Some(budget) = byte_budget {
+        while buffered_bytes.load(Ordering::Relaxed) >= budget {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
     buffered_bytes.fetch_add(wire_size, Ordering::Relaxed);
     let guard = Arc::new(SizeGuard {
         wire_size,
