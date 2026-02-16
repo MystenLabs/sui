@@ -104,9 +104,34 @@ where
     const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
     const MAX_PENDING_ROWS: usize = P::MAX_PENDING_ROWS;
     const MAX_WATERMARK_UPDATES: usize = P::MAX_WATERMARK_UPDATES;
+    const CAPACITY_BATCHING: bool = true;
+    const MAX_BATCH_WEIGHT: usize = BIGTABLE_MAX_MUTATIONS;
 
     fn batch_weight(batch: &Self::Batch, _batch_len: usize) -> usize {
         batch.total_mutations()
+    }
+
+    fn drain_batch(
+        source: &mut Self::Batch,
+        dest: &mut Self::Batch,
+        max_weight: usize,
+    ) -> (usize, usize) {
+        let mut src = source.inner.write().unwrap();
+        let mut dst = dest.inner.write().unwrap();
+        let mut weight = 0;
+        let mut count = 0;
+        while count < src.entries.len() {
+            let w = src.entries[count].mutations.len();
+            if weight + w > max_weight && weight > 0 {
+                break;
+            }
+            weight += w;
+            count += 1;
+        }
+        dst.entries.extend(src.entries.drain(..count));
+        dst.total_mutations += weight;
+        src.total_mutations -= weight;
+        (weight, count)
     }
 
     fn batch(
@@ -165,7 +190,9 @@ where
                     let mut inner = batch.inner.write().unwrap();
                     let failed: std::collections::BTreeSet<&Bytes> =
                         partial.failed_keys.iter().map(|f| &f.key).collect();
-                    inner.entries.retain(|entry| failed.contains(&entry.row_key));
+                    inner
+                        .entries
+                        .retain(|entry| failed.contains(&entry.row_key));
                 }
                 Err(e)
             }
@@ -272,7 +299,12 @@ mod tests {
             let inner = batch.inner.read().unwrap();
             assert_eq!(inner.entries.len(), 5);
             for key in [b"row1", b"row3", b"row5", b"row7", b"row9"] {
-                assert!(inner.entries.iter().any(|e| e.row_key.as_ref() == key.as_slice()));
+                assert!(
+                    inner
+                        .entries
+                        .iter()
+                        .any(|e| e.row_key.as_ref() == key.as_slice())
+                );
             }
         }
 
@@ -283,7 +315,12 @@ mod tests {
             let inner = batch.inner.read().unwrap();
             assert_eq!(inner.entries.len(), 3);
             for key in [b"row1", b"row5", b"row9"] {
-                assert!(inner.entries.iter().any(|e| e.row_key.as_ref() == key.as_slice()));
+                assert!(
+                    inner
+                        .entries
+                        .iter()
+                        .any(|e| e.row_key.as_ref() == key.as_slice())
+                );
             }
         }
 

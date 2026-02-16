@@ -559,7 +559,14 @@ impl Adaptive {
 }
 
 impl LimitAlgorithm for Adaptive {
-    fn update(&self, inflight: usize, _delivered: usize, weight: usize, outcome: Outcome, rtt: Duration) -> usize {
+    fn update(
+        &self,
+        inflight: usize,
+        _delivered: usize,
+        weight: usize,
+        outcome: Outcome,
+        rtt: Duration,
+    ) -> usize {
         let mut state = self.inner.lock().unwrap();
 
         // 1. Record sample
