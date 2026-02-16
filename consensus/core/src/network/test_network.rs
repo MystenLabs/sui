@@ -15,9 +15,9 @@ use crate::{
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{
-        BlockRequestStream, BlockStream, NodeId, ObserverBlockStream, ObserverBlockStreamItem,
-        ObserverNetworkService, ValidatorNetworkService,
-        observer::{BlockStreamRequest, block_stream_request::Command},
+        BlockStream, NodeId, ObserverBlockStream, ObserverBlockStreamItem, ObserverNetworkService,
+        ValidatorNetworkService,
+        observer::{StartBlockStream, block_stream_request::Command},
     },
 };
 
@@ -129,29 +129,20 @@ impl ObserverNetworkService for Mutex<TestService> {
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,
-        mut request_stream: BlockRequestStream,
+        highest_round_per_authority: Vec<u64>,
     ) -> ConsensusResult<ObserverBlockStream> {
-        use futures::stream::{self, StreamExt};
+        use futures::stream;
 
         {
             let mut state = self.lock();
             state.handle_stream_blocks.push(peer);
+            state
+                .stream_commands_received
+                .lock()
+                .push(Command::Start(StartBlockStream {
+                    highest_round_per_authority: highest_round_per_authority.clone(),
+                }));
         }
-
-        let start_request = request_stream.next().await;
-
-        let highest_round_per_authority = match &start_request {
-            Some(BlockStreamRequest {
-                command: Some(Command::Start(start)),
-            }) => {
-                self.lock()
-                    .stream_commands_received
-                    .lock()
-                    .push(Command::Start(start.clone()));
-                start.highest_round_per_authority.clone()
-            }
-            _ => return Ok(Box::pin(stream::empty())),
-        };
 
         let (blocks_to_send, highest_commit_index) = {
             let state = self.lock();

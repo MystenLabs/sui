@@ -3,7 +3,10 @@
 
 use std::{path::PathBuf, time::Duration};
 
+use mysten_network::Multiaddr;
 use serde::{Deserialize, Serialize};
+
+use crate::NetworkPublicKey;
 
 /// Operational configurations of a consensus authority.
 ///
@@ -219,6 +222,40 @@ impl Default for Parameters {
     }
 }
 
+/// Represents a peer observer node with its network key and address.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct PeerRecord {
+    /// Network public key of the peer observer node (hex-encoded).
+    #[serde(
+        serialize_with = "serialize_public_key_as_hex",
+        deserialize_with = "deserialize_public_key_from_hex"
+    )]
+    pub public_key: NetworkPublicKey,
+    /// Multi-address of the peer observer node.
+    pub address: Multiaddr,
+}
+
+fn serialize_public_key_as_hex<S>(key: &NetworkPublicKey, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use fastcrypto::encoding::Encoding;
+    let hex_str = fastcrypto::encoding::Hex::encode(key.to_bytes());
+    serializer.serialize_str(&hex_str)
+}
+
+fn deserialize_public_key_from_hex<'de, D>(deserializer: D) -> Result<NetworkPublicKey, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use fastcrypto::{encoding::Encoding, traits::ToFromBytes};
+    let hex_str = String::deserialize(deserializer)?;
+    let bytes = fastcrypto::encoding::Hex::decode(&hex_str).map_err(serde::de::Error::custom)?;
+    let inner_key = fastcrypto::ed25519::Ed25519PublicKey::from_bytes(bytes.as_ref())
+        .map_err(serde::de::Error::custom)?;
+    Ok(NetworkPublicKey::new(inner_key))
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TonicParameters {
     /// Keepalive interval and timeouts for both client and server.
@@ -259,6 +296,13 @@ pub struct TonicParameters {
     /// If unspecified, this will default to an empty Vec (no allowlist, all observers allowed).
     #[serde(default = "TonicParameters::default_observer_allowlist")]
     pub observer_allowlist: Vec<String>,
+
+    /// List of observer peers to connect to when acting as an observer client.
+    /// Each record contains the network public key and multi-address of a peer observer server.
+    ///
+    /// If unspecified, this will default to an empty Vec.
+    #[serde(default = "TonicParameters::default_observer_peers")]
+    pub observer_peers: Vec<PeerRecord>,
 }
 
 impl TonicParameters {
@@ -289,6 +333,10 @@ impl TonicParameters {
     fn default_observer_allowlist() -> Vec<String> {
         Vec::new()
     }
+
+    fn default_observer_peers() -> Vec<PeerRecord> {
+        Vec::new()
+    }
 }
 
 impl Default for TonicParameters {
@@ -300,6 +348,7 @@ impl Default for TonicParameters {
             message_size_limit: TonicParameters::default_message_size_limit(),
             observer_server_port: TonicParameters::default_observer_server_port(),
             observer_allowlist: TonicParameters::default_observer_allowlist(),
+            observer_peers: TonicParameters::default_observer_peers(),
         }
     }
 }

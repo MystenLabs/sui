@@ -33,8 +33,8 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
-        BlockRequestStream, BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream,
-        ObserverNetworkService, ValidatorNetworkService,
+        BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream, ObserverNetworkService,
+        ValidatorNetworkService,
     },
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
@@ -647,7 +647,7 @@ impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
     async fn handle_stream_blocks(
         &self,
         _peer: NodeId,
-        _request_stream: BlockRequestStream,
+        _highest_round_per_authority: Vec<u64>,
     ) -> ConsensusResult<ObserverBlockStream> {
         // TODO: Implement observer block streaming
         todo!("Observer block streaming not yet implemented")
@@ -999,7 +999,7 @@ mod tests {
         async fn stream_blocks(
             &self,
             _peer: crate::network::PeerId,
-            _request_stream: crate::network::BlockRequestStream,
+            _highest_round_per_authority: Vec<u64>,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
             unimplemented!("Unimplemented")

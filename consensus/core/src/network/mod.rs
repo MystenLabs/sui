@@ -16,14 +16,20 @@
 //! directly to the server. This keeps the logic agnostics to the underlying network outside of
 //! this module, so they can be reused easily across network implementations.
 
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{
+    fmt::{Display, Formatter},
+    net::SocketAddrV6,
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use futures::Stream;
-use mysten_network::Multiaddr;
+use mysten_network::{Multiaddr, multiaddr::Protocol};
 
 use crate::{
     block::{ExtendedBlock, VerifiedBlock},
@@ -37,13 +43,22 @@ use crate::{
 pub(crate) type NodeId = NetworkPublicKey;
 
 /// Identifies a peer in the network, which can be either a validator or an observer.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum PeerId {
     /// A validator node identified by its authority index.
     Validator(AuthorityIndex),
     /// An observer node identified by its network public key.
     #[allow(dead_code)]
     Observer(NodeId),
+}
+
+impl Display for PeerId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PeerId::Validator(authority) => write!(f, "[{}]", authority),
+            PeerId::Observer(node_id) => write!(f, "[{:?}]", node_id),
+        }
+    }
 }
 
 // Tonic generated RPC stubs.
@@ -215,11 +230,13 @@ pub(crate) type BlockRequestStream =
 #[async_trait]
 #[allow(dead_code)]
 pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
-    /// Handles the bidirectional block streaming request from an observer peer.
+    /// Handles the block streaming request from an observer peer.
+    /// Returns a stream of blocks with the highest commit index for each block.
+    /// Blocks with rounds higher than the highest_round_per_authority will be streamed.
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,
-        request_stream: BlockRequestStream,
+        highest_round_per_authority: Vec<u64>,
     ) -> ConsensusResult<ObserverBlockStream>;
 
     /// Handles the request to fetch blocks by references from an observer peer.
@@ -246,11 +263,13 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
 #[async_trait]
 #[allow(dead_code)]
 pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
-    /// Initiates bidirectional block streaming with a peer.
+    /// Initiates block streaming with a peer (validator or observer).
+    /// Returns a stream of blocks with the highest commit index.
+    /// Blocks with rounds higher than the highest_round_per_authority will be streamed.
     async fn stream_blocks(
         &self,
         peer: PeerId,
-        request_stream: BlockRequestStream,
+        highest_round_per_authority: Vec<u64>,
         timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream>;
 
@@ -334,5 +353,25 @@ impl From<ExtendedBlock> for ExtendedSerializedBlock {
                 })
                 .collect(),
         }
+    }
+}
+
+/// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into
+/// a host:port string.
+pub(crate) fn to_host_port_str(addr: &Multiaddr) -> Result<String, String> {
+    let mut iter = addr.iter();
+
+    match (iter.next(), iter.next()) {
+        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => {
+            Ok(format!("{}:{}", ipaddr, port))
+        }
+        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => {
+            Ok(format!("{}", SocketAddrV6::new(ipaddr, port, 0, 0)))
+        }
+        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port))) => {
+            Ok(format!("{}:{}", hostname, port))
+        }
+
+        _ => Err(format!("unsupported multiaddr: {addr}")),
     }
 }
