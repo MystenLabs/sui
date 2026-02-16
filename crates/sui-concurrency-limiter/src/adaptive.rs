@@ -10,7 +10,7 @@
 //!    then drain to ~85% of the knee and enter ProbeBW.
 //! 2. **ProbeBW**: Steady-state with periodic probing (Cruise → ProbeUp → ProbeDown cycle).
 //!    Cruise holds the limit steady (decaying when underutilized); ProbeUp tests for headroom.
-//! 3. **Emergency brake**: Per-sample error check + interval-based tail-latency check (always active).
+//! 3. **Emergency brake**: Per-sample error rate check (always active).
 //!
 //! The key insight: measure completions-per-second as an independent throughput signal, then ask
 //! whether it grows when concurrency increases. If yes, grow. If no, you've found the knee.
@@ -72,14 +72,8 @@ pub struct AdaptiveConfig {
     // Braking
     /// Multiplicative backoff on error brake.
     pub error_backoff_ratio: f64,
-    /// Multiplicative backoff on latency brake.
-    pub latency_backoff_ratio: f64,
     /// Error rate threshold (fraction) that triggers the error brake.
     pub error_rate_threshold: f64,
-    /// Queue signal threshold for the latency brake.
-    pub queue_signal_beta: f64,
-    /// Percentile used for tail-latency braking (0.0–1.0).
-    pub brake_percentile: f64,
 }
 
 impl Default for AdaptiveConfig {
@@ -99,10 +93,7 @@ impl Default for AdaptiveConfig {
             probe_bw_intervals: 10,
             probe_down_min_throughput: 0.90,
             error_backoff_ratio: 0.5,
-            latency_backoff_ratio: 0.9,
             error_rate_threshold: 0.05,
-            queue_signal_beta: 6.0,
-            brake_percentile: 0.95,
         }
     }
 }
@@ -142,7 +133,6 @@ enum ProbeBWState {
 struct IntervalStats {
     successes: usize,
     errors: usize,
-    rtt_samples: Vec<f64>,
     peak_inflight: usize,
     start: Instant,
     next_interval: Duration,
@@ -153,7 +143,6 @@ impl IntervalStats {
         Self {
             successes: 0,
             errors: 0,
-            rtt_samples: Vec::new(),
             peak_inflight: 0,
             start: Instant::now(),
             next_interval: interval,
@@ -163,7 +152,6 @@ impl IntervalStats {
     fn reset(&mut self, interval: Duration) {
         self.successes = 0;
         self.errors = 0;
-        self.rtt_samples.clear();
         self.peak_inflight = 0;
         self.start = Instant::now();
         // Jitter: +/- 10%
@@ -173,19 +161,6 @@ impl IntervalStats {
 
     fn elapsed(&self) -> bool {
         self.start.elapsed() >= self.next_interval
-    }
-
-    fn percentile(&mut self, p: f64) -> Option<f64> {
-        if self.rtt_samples.len() < 10 {
-            return None;
-        }
-        let idx = ((self.rtt_samples.len() as f64 * p).ceil() as usize)
-            .min(self.rtt_samples.len())
-            .saturating_sub(1);
-        self.rtt_samples.select_nth_unstable_by(idx, |a, b| {
-            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-        });
-        Some(self.rtt_samples[idx])
     }
 }
 
@@ -268,23 +243,16 @@ struct AdaptiveState {
     stats: IntervalStats,
     rolling_errors: RollingErrors,
     throughput_ema: Option<f64>,
-    baseline_p95: Option<f64>,
-    baseline_recorded_at: Option<Instant>,
-    suppress_latency_brake: bool,
     limit: usize,
 }
 
 impl AdaptiveState {
-    fn record_sample(&mut self, inflight: usize, weight: usize, outcome: &Outcome, rtt: Duration) {
+    fn record_sample(&mut self, inflight: usize, weight: usize, outcome: &Outcome) {
         self.stats.peak_inflight = self.stats.peak_inflight.max(inflight);
         self.rolling_errors.resize_for_limit(self.limit);
         match outcome {
             Outcome::Success => {
                 self.stats.successes += weight;
-                let rtt_secs = rtt.as_secs_f64();
-                if rtt_secs > 0.0 {
-                    self.stats.rtt_samples.push(rtt_secs);
-                }
                 self.rolling_errors.push(false);
             }
             Outcome::Dropped => {
@@ -341,9 +309,6 @@ impl AdaptiveState {
             }
         });
         let throughput_ema = self.throughput_ema.unwrap();
-
-        // Compute tail latency
-        let current_p95 = self.stats.percentile(config.brake_percentile);
 
         // Inflight guard: skip growth when the system isn't utilizing the current limit.
         // Without this, the limit rockets to max when ingestion is slow.
@@ -449,12 +414,6 @@ impl AdaptiveState {
                         pre_down_limit,
                         pre_probe_throughput_ema,
                     } => {
-                        // Record latency baseline at reduced concurrency
-                        if let Some(p95) = current_p95 {
-                            self.baseline_p95 = Some(p95);
-                            self.baseline_recorded_at = Some(Instant::now());
-                            self.suppress_latency_brake = true;
-                        }
                         // If throughput at reduced concurrency is within threshold of what we
                         // had before probing, the extra concurrency wasn't helping —
                         // keep the lower limit.
@@ -474,21 +433,6 @@ impl AdaptiveState {
             }
         }
 
-        // Latency brake (always active when baseline exists and we have enough samples).
-        // Suppressed for one interval after ProbeDown recalibrates to avoid immediately
-        // undoing the fresh baseline measurement.
-        if self.suppress_latency_brake {
-            self.suppress_latency_brake = false;
-        } else if let (Some(baseline), Some(current)) = (self.baseline_p95, current_p95)
-            && baseline > 0.0
-            && current > baseline
-        {
-            let queue_signal = self.limit as f64 * (1.0 - baseline / current);
-            if queue_signal > config.queue_signal_beta {
-                self.limit = ((self.limit as f64) * config.latency_backoff_ratio).ceil() as usize;
-            }
-        }
-
         // Clamp
         self.limit = self.limit.clamp(config.min_limit, config.max_limit);
         gauge.store(self.limit, Ordering::Release);
@@ -505,8 +449,8 @@ impl AdaptiveState {
 
 /// Adaptive concurrency limit algorithm.
 ///
-/// Combines BBR-style throughput probing with tail-latency braking using a three-phase
-/// state machine. See module docs for details.
+/// Combines BBR-style throughput probing with error braking using a two-phase
+/// state machine (Startup → ProbeBW). See module docs for details.
 pub struct Adaptive {
     config: AdaptiveConfig,
     gauge: Arc<AtomicUsize>,
@@ -526,9 +470,6 @@ impl Adaptive {
                 stats: IntervalStats::new(interval),
                 rolling_errors: RollingErrors::new(100),
                 throughput_ema: None,
-                baseline_p95: None,
-                baseline_recorded_at: None,
-                suppress_latency_brake: false,
                 limit: initial,
             }),
             config: config.clone(),
@@ -565,12 +506,12 @@ impl LimitAlgorithm for Adaptive {
         _delivered: usize,
         weight: usize,
         outcome: Outcome,
-        rtt: Duration,
+        _rtt: Duration,
     ) -> usize {
         let mut state = self.inner.lock().unwrap();
 
         // 1. Record sample
-        state.record_sample(inflight, weight, &outcome, rtt);
+        state.record_sample(inflight, weight, &outcome);
 
         // 2. Per-sample emergency brake (error rate)
         state.check_error_brake(&self.config, &self.gauge);
@@ -1118,45 +1059,6 @@ mod tests {
             state.phase,
             Phase::ProbeBW(ProbeBWState::Cruise { .. })
         ));
-    }
-
-    // ======================== Latency brake tests ========================
-
-    #[test]
-    fn latency_brake_fires_at_interval() {
-        let config = AdaptiveConfig {
-            initial_limit: 100,
-            min_limit: 1,
-            max_limit: 10000,
-            probe_interval_ms: 1000,
-            queue_signal_beta: 6.0,
-            latency_backoff_ratio: 0.9,
-            probe_bw_intervals: 100, // high so we stay in cruise
-            ..default_config()
-        };
-        let alg = adaptive(config);
-
-        {
-            let mut state = alg.inner.lock().unwrap();
-            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
-                intervals_since_probe: 0,
-            });
-            state.baseline_p95 = Some(0.010); // 10ms baseline
-            state.throughput_ema = Some(100.0);
-        }
-
-        // Feed samples with much higher latency (100ms) to trigger latency brake
-        // queue_signal = limit * (1 - baseline/current) = 110 * (1 - 0.01/0.1) = 110 * 0.9 = 99 > 6
-        feed_successes(&alg, 50, Duration::from_millis(100));
-        alg.force_interval_with_throughput(1000.0);
-
-        // After cruise additive increase: 100 + sqrt(100) = 110
-        // After latency brake: ceil(110 * 0.9) = 99
-        let limit = alg.current();
-        assert!(
-            limit < 110,
-            "Latency brake should have reduced limit, got {limit}"
-        );
     }
 
     // ======================== Edge case tests ========================

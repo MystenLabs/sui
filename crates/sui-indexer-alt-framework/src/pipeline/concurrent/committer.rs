@@ -549,11 +549,11 @@ async fn rebatching_committer<H: Handler + 'static>(
                         if w == 0 {
                             // Empty batch: forward watermarks immediately without
                             // going through the limiter or buffer.
-                            if !batched.watermark.is_empty() {
-                                if tx.send(batched.watermark).await.is_err() {
-                                    info!(pipeline = H::NAME, "Watermark closed channel");
-                                    draining = true;
-                                }
+                            if !batched.watermark.is_empty()
+                                && tx.send(batched.watermark).await.is_err()
+                            {
+                                info!(pipeline = H::NAME, "Watermark closed channel");
+                                draining = true;
                             }
                         } else {
                             buffer_weight += w;
