@@ -50,8 +50,7 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     BalanceChange as RpcBalanceChange, BcsEvent, Coin, DryRunTransactionBlockResponse,
     ObjectChange as RpcObjectChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockEffects,
-    SuiTransactionBlockEvents,
-    SuiTransactionBlockResponse,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse,
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
@@ -2535,7 +2534,8 @@ fn to_legacy_transaction_block_response(
 fn to_legacy_dry_run_transaction_block_response(
     response: &SimulateTransactionResponse,
 ) -> Option<DryRunTransactionBlockResponse> {
-    let effects = SuiTransactionBlockEffects::try_from(response.transaction.effects.clone()).ok()?;
+    let effects =
+        SuiTransactionBlockEffects::try_from(response.transaction.effects.clone()).ok()?;
     let input = to_legacy_transaction(&response.transaction)?.data;
     let execution_error_source = match response.transaction.effects.status() {
         ExecutionStatus::Failure { error, .. } => Some(format!("{error:?}")),
