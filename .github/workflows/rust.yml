@@ -112,9 +112,11 @@ jobs:
         run: cargo build -p sui
       - name: Start test cluster
         run: |
-          ./target/debug/sui start --force-regenesis --committee-size 1 \
-              --epoch-duration-ms 3600000 --with-faucet \
-              --network.config /tmp/test-cluster &
+          mkdir -p /tmp/test-cluster
+          ./target/debug/sui genesis --working-dir /tmp/test-cluster \
+              --epoch-duration-ms 3600000 --committee-size 1
+          ./target/debug/sui start --network.config /tmp/test-cluster \
+              --with-faucet &
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:9000 > /dev/null 2>&1 && break
             sleep 1
@@ -272,9 +274,11 @@ jobs:
       - name: Start test cluster
         shell: bash
         run: |
-          ./target/debug/sui start --force-regenesis --committee-size 1 \
-              --epoch-duration-ms 3600000 --with-faucet \
-              --network.config "${{ runner.temp }}/test-cluster" &
+          mkdir -p "${{ runner.temp }}/test-cluster"
+          ./target/debug/sui genesis --working-dir "${{ runner.temp }}/test-cluster" \
+              --epoch-duration-ms 3600000 --committee-size 1
+          ./target/debug/sui start --network.config "${{ runner.temp }}/test-cluster" \
+              --with-faucet &
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:9000 > /dev/null 2>&1 && break
             sleep 1
