@@ -2002,6 +2002,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     &deferral_key,
                     protocol_config.max_deferral_rounds_for_congestion_control(),
                 ) {
+                    assert_reachable!("unpaid amplification deferral");
                     debug!(
                         "Deferring transaction {:?} due to unpaid amplification (count={}, allowed={})",
                         transaction.tx().digest(),
