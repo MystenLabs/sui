@@ -88,6 +88,5 @@ expression: "result.pointer(\"/data/executeTransaction\")"
         "amount": "1000000"
       }
     ]
-  },
-  "errors": null
+  }
 }

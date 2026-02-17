@@ -49,6 +49,10 @@ struct Args {
     #[arg(long)]
     app_profile_id: Option<String>,
 
+    /// Maximum gRPC decoding message size for Bigtable responses, in bytes.
+    #[arg(long)]
+    bigtable_max_decoding_message_size: Option<usize>,
+
     /// Maximum mutations per BigTable batch (must be < 100k)
     #[arg(long, value_parser = parse_max_mutations)]
     max_mutations: Option<usize>,
@@ -98,6 +102,7 @@ async fn main() -> Result<()> {
         args.bigtable_project,
         false,
         None,
+        args.bigtable_max_decoding_message_size,
         "sui-kvstore-alt".to_string(),
         None,
         args.app_profile_id,

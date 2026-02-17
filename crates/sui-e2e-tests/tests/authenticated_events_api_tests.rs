@@ -4,6 +4,7 @@
 use itertools::Itertools;
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
+use std::time::Duration;
 use sui_keys::keystore::AccountKeystore;
 use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_light_client::proof::base::{Proof, ProofContents, ProofTarget, ProofVerifier};
@@ -169,6 +170,40 @@ async fn emit_large_test_event(
     test_cluster.sign_and_execute_transaction(&tx_data).await
 }
 
+/// Connect to the EventServiceClient with timeout and retry logic.
+///
+/// gRPC connection establishment can hang indefinitely if the remote peer is unable to complete
+/// connection establishment. This helper ensures we always have bounded connection times and
+/// can retry on transient failures.
+async fn connect_event_service_client(
+    rpc_url: &str,
+) -> EventServiceClient<tonic::transport::Channel> {
+    const MAX_RETRIES: u32 = 10;
+    const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+
+    for attempt in 0..MAX_RETRIES {
+        match tokio::time::timeout(
+            CONNECT_TIMEOUT,
+            EventServiceClient::connect(rpc_url.to_owned()),
+        )
+        .await
+        {
+            Ok(Ok(client)) => return client,
+            Ok(Err(e)) if attempt + 1 < MAX_RETRIES => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                continue;
+            }
+            Ok(Err(e)) => panic!("failed to connect after {MAX_RETRIES} attempts: {e}"),
+            Err(_) if attempt + 1 < MAX_RETRIES => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                continue;
+            }
+            Err(_) => panic!("connection timed out after {MAX_RETRIES} attempts"),
+        }
+    }
+    unreachable!()
+}
+
 async fn query_authenticated_events(
     rpc_url: &str,
     stream_id: &str,
@@ -178,9 +213,7 @@ async fn query_authenticated_events(
     sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsResponse,
     tonic::Status,
 > {
-    let mut client = EventServiceClient::connect(rpc_url.to_owned())
-        .await
-        .unwrap();
+    let mut client = connect_event_service_client(rpc_url).await;
 
     let mut req = ListAuthenticatedEventsRequest::default();
     req.stream_id = Some(stream_id.to_string());
@@ -200,9 +233,7 @@ async fn list_authenticated_events(
     start_checkpoint: u64,
     page_size: Option<u32>,
 ) -> Vec<AuthenticatedEvent> {
-    let mut event_client = EventServiceClient::connect(rpc_url.to_owned())
-        .await
-        .unwrap();
+    let mut event_client = connect_event_service_client(rpc_url).await;
 
     let mut all_events = Vec::new();
     let mut page_token: Option<Vec<u8>> = None;
