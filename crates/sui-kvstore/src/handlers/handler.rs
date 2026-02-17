@@ -98,7 +98,7 @@ where
             inner.total_mutations += entry.mutations.len();
             inner.entries.insert(entry.row_key.clone(), entry);
 
-            if inner.total_mutations == max_mutations() {
+            if inner.total_mutations >= max_mutations() {
                 return BatchStatus::Ready;
             }
         }
