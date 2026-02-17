@@ -721,7 +721,7 @@ where
         let resp = timeout(
             request_timeout,
             network_client.fetch_blocks(
-                crate::network::PeerId::Authority(peer),
+                crate::network::PeerId::Validator(peer),
                 blocks_guard
                     .block_refs
                     .clone()

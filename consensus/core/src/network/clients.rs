@@ -57,7 +57,7 @@ where
         // A validator node will always talk via the validator interface to another authority.
         // Otherwise, the only way to communicate with the other peer is via the observer interface.
         if self.context.is_validator()
-            && let PeerId::Authority(authority) = peer
+            && let PeerId::Validator(authority) = peer
         {
             let client = self.validator_client.as_ref().ok_or_else(|| {
                 ConsensusError::NetworkConfig("Validator client not available".to_string())
@@ -132,7 +132,7 @@ where
         // A validator node will always talk via the validator interface to another authority.
         // Otherwise, the only way to communicate with the other peer is via the observer interface.
         if self.context.is_validator()
-            && let PeerId::Authority(authority) = peer
+            && let PeerId::Validator(authority) = peer
         {
             let client = self.validator_client.as_ref().ok_or_else(|| {
                 ConsensusError::NetworkConfig("Validator client not available".to_string())
@@ -157,7 +157,7 @@ where
         // A validator node will always talk via the validator interface to another authority.
         // Otherwise, the only way to communicate with the other peer is via the observer interface.
         if self.context.is_validator()
-            && let PeerId::Authority(authority) = peer
+            && let PeerId::Validator(authority) = peer
         {
             let client = self.validator_client.as_ref().ok_or_else(|| {
                 ConsensusError::NetworkConfig("Validator client not available".to_string())

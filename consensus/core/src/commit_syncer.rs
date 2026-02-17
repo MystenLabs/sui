@@ -553,7 +553,7 @@ where
         let (serialized_commits, serialized_blocks) = inner
             .network_client
             .fetch_commits(
-                crate::network::PeerId::Authority(target_authority),
+                crate::network::PeerId::Validator(target_authority),
                 commit_range.clone(),
                 timeout,
             )
@@ -596,7 +596,7 @@ where
                     let serialized_blocks = inner
                         .network_client
                         .fetch_blocks(
-                            crate::network::PeerId::Authority(target_authority),
+                            crate::network::PeerId::Validator(target_authority),
                             request_block_refs.to_vec(),
                             vec![],
                             false,

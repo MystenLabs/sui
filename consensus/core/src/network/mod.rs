@@ -40,7 +40,7 @@ pub(crate) type NodeId = NetworkPublicKey;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PeerId {
     /// A validator node identified by its authority index.
-    Authority(AuthorityIndex),
+    Validator(AuthorityIndex),
     /// An observer node identified by its network public key.
     #[allow(dead_code)]
     Observer(NodeId),
