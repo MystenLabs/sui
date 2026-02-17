@@ -54,6 +54,7 @@ pub(super) fn committer<H: Handler + 'static>(
     processor_capacity: usize,
     collector_capacity: usize,
     global_pending_rows: Arc<AtomicUsize>,
+    target_batch_weight: Option<usize>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = H::NAME, "Starting committer");
@@ -71,6 +72,7 @@ pub(super) fn committer<H: Handler + 'static>(
                 processor_capacity,
                 collector_capacity,
                 global_pending_rows,
+                target_batch_weight,
             )
             .await;
         }
@@ -342,6 +344,7 @@ async fn rebatching_committer<H: Handler + 'static>(
     processor_capacity: usize,
     collector_capacity: usize,
     global_pending_rows: Arc<AtomicUsize>,
+    target_batch_weight: Option<usize>,
 ) -> anyhow::Result<()> {
     let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
         &metrics.partially_committed_checkpoint_timestamp_lag,
@@ -368,7 +371,10 @@ async fn rebatching_committer<H: Handler + 'static>(
                 break;
             }
             let available = current_limit - inflight;
-            let cap = available.min(H::MAX_BATCH_WEIGHT);
+            let cap = target_batch_weight
+                .unwrap_or(available)
+                .min(available)
+                .min(H::MAX_BATCH_WEIGHT);
 
             let mut dest_batch = H::Batch::default();
             let mut dest_watermarks: Vec<WatermarkPart> = Vec::new();
@@ -794,6 +800,7 @@ mod tests {
             0,
             0,
             Arc::new(AtomicUsize::new(0)),
+            None,
         );
 
         TestSetup {

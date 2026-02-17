@@ -18,6 +18,18 @@ use crate::bigtable::store::BigTableStore;
 /// BigTable's hard limit for mutations per batch.
 pub const BIGTABLE_MAX_MUTATIONS: usize = 100_000;
 
+/// Effective max mutations per batch, overridable via `BIGTABLE_MAX_MUTATIONS` env var.
+/// Defaults to [`BIGTABLE_MAX_MUTATIONS`].
+pub fn bigtable_max_mutations() -> usize {
+    static CACHED: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *CACHED.get_or_init(|| {
+        std::env::var("BIGTABLE_MAX_MUTATIONS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(BIGTABLE_MAX_MUTATIONS)
+    })
+}
+
 /// Extension of `Processor` that specifies a BigTable table name.
 ///
 /// Implementors define [`Self::process_sync`] with their CPU-bound serialization logic.
@@ -144,10 +156,6 @@ where
         for entry in values {
             inner.total_mutations += entry.mutations.len();
             inner.entries.push(entry);
-
-            if inner.total_mutations >= BIGTABLE_MAX_MUTATIONS {
-                return BatchStatus::Ready;
-            }
         }
 
         BatchStatus::Pending

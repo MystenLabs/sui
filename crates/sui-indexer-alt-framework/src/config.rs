@@ -33,6 +33,7 @@ pub struct CommitterLayer {
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
     pub watermark_interval_jitter_ms: Option<u64>,
+    pub target_batch_weight: Option<usize>,
 }
 
 impl CommitterLayer {
@@ -55,6 +56,7 @@ impl CommitterLayer {
             watermark_interval_jitter_ms: self
                 .watermark_interval_jitter_ms
                 .unwrap_or(base.watermark_interval_jitter_ms),
+            target_batch_weight: self.target_batch_weight.or(base.target_batch_weight),
         }
     }
 }
@@ -68,6 +70,7 @@ impl Merge for CommitterLayer {
             watermark_interval_jitter_ms: other
                 .watermark_interval_jitter_ms
                 .or(self.watermark_interval_jitter_ms),
+            target_batch_weight: other.target_batch_weight.or(self.target_batch_weight),
         })
     }
 }
@@ -79,6 +82,7 @@ impl From<CommitterConfig> for CommitterLayer {
             collect_interval_ms: Some(config.collect_interval_ms),
             watermark_interval_ms: Some(config.watermark_interval_ms),
             watermark_interval_jitter_ms: Some(config.watermark_interval_jitter_ms),
+            target_batch_weight: config.target_batch_weight,
         }
     }
 }

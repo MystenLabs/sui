@@ -332,6 +332,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_capacity,
         collector_capacity,
         pending_rows,
+        committer_config.target_batch_weight,
     );
 
     let s_commit_watermark = commit_watermark::<H>(
