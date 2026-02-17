@@ -22,6 +22,8 @@ use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::BatchStatus;
 use crate::pipeline::concurrent::BatchedRows;
 use crate::pipeline::concurrent::Handler;
+use crate::pipeline::concurrent::pending_rows::InflightRows;
+use crate::pipeline::concurrent::pending_rows::PendingRowsGuard;
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
@@ -30,6 +32,9 @@ struct PendingCheckpoint<H: Handler> {
     values: std::vec::IntoIter<H::Value>,
     /// The watermark associated with this checkpoint and the part of it that is left to commit
     watermark: WatermarkPart,
+    /// RAII guard tracking these rows in the pipeline's pending count.
+    /// `None` when the checkpoint was skipped (values cleared, rows released).
+    guard: Option<PendingRowsGuard>,
 }
 
 impl<H: Handler> PendingCheckpoint<H> {
@@ -41,8 +46,8 @@ impl<H: Handler> PendingCheckpoint<H> {
     }
 }
 
-impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
-    fn from(indexed: IndexedCheckpoint<H>) -> Self {
+impl<H: Handler> PendingCheckpoint<H> {
+    fn new(indexed: IndexedCheckpoint<H>, guard: Option<PendingRowsGuard>) -> Self {
         let total_rows = indexed.values.len();
         Self {
             watermark: WatermarkPart {
@@ -51,6 +56,7 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
                 total_rows,
             },
             values: indexed.values.into_iter(),
+            guard,
         }
     }
 }
@@ -76,6 +82,7 @@ pub(super) fn collector<H: Handler + 'static>(
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
+    inflight: InflightRows,
     metrics: Arc<IndexerMetrics>,
     min_eager_rows: usize,
     max_pending_rows: usize,
@@ -108,7 +115,7 @@ pub(super) fn collector<H: Handler + 'static>(
                 biased;
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                Some(mut indexed) = rx.recv(), if pending_rows < max_pending_rows => {
+                Some(mut indexed) = inflight.backpressured(max_pending_rows, rx.recv()) => {
                     let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
 
                     metrics
@@ -128,11 +135,13 @@ pub(super) fn collector<H: Handler + 'static>(
                         }
 
                         recv_cps += 1;
-                        recv_rows += indexed.len();
-                        pending_rows += indexed.len();
-                        pending.insert(indexed.checkpoint(), indexed.into());
+                        let len = indexed.len();
+                        recv_rows += len;
+                        pending_rows += len;
+                        let guard = if len > 0 { Some(inflight.guard(len)) } else { None };
+                        pending.insert(indexed.checkpoint(), PendingCheckpoint::new(indexed, guard));
 
-                        if pending_rows >= max_pending_rows {
+                        if inflight.count() >= max_pending_rows {
                             break;
                         }
 
@@ -174,6 +183,7 @@ pub(super) fn collector<H: Handler + 'static>(
                 let mut batch = H::Batch::default();
                 let mut watermark = Vec::new();
                 let mut batch_len = 0;
+                let mut batch_guard: Option<PendingRowsGuard> = None;
 
                 loop {
                     let Some(mut entry) = pending.first_entry() else {
@@ -191,6 +201,17 @@ pub(super) fn collector<H: Handler + 'static>(
 
                     batch_len += taken;
                     watermark.push(indexed.watermark.take(taken));
+
+                    if taken > 0
+                        && let Some(ref mut guard) = indexed.guard
+                    {
+                        let split = guard.split(taken);
+                        match &mut batch_guard {
+                            Some(g) => g.merge(split),
+                            None => batch_guard = Some(split),
+                        }
+                    }
+
                     if indexed.is_empty() {
                         checkpoint_lag_reporter.report_lag(
                             indexed.watermark.checkpoint(),
@@ -228,6 +249,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     batch,
                     batch_len,
                     watermark,
+                    guard: batch_guard,
                 };
                 if tx.send(batched_rows).await.is_err() {
                     info!(
@@ -267,6 +289,7 @@ mod tests {
     use crate::metrics::tests::test_metrics;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::BatchStatus;
+    use crate::pipeline::concurrent::pending_rows::InflightRows;
     use crate::types::full_checkpoint_content::Checkpoint;
 
     use super::*;
@@ -362,6 +385,7 @@ mod tests {
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
+            InflightRows::new(),
             test_metrics(),
             TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
@@ -402,6 +426,7 @@ mod tests {
             processor_rx,
             collector_tx,
             main_reader_lo,
+            InflightRows::new(),
             test_metrics(),
             TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
@@ -445,6 +470,7 @@ mod tests {
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
+            InflightRows::new(),
             metrics.clone(),
             TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
@@ -502,6 +528,7 @@ mod tests {
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
+            InflightRows::new(),
             test_metrics(),
             TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
@@ -559,6 +586,7 @@ mod tests {
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
+            InflightRows::new(),
             test_metrics(),
             TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
@@ -605,6 +633,7 @@ mod tests {
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
+            InflightRows::new(),
             test_metrics(),
             TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
@@ -648,6 +677,7 @@ mod tests {
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
+            InflightRows::new(),
             test_metrics(),
             TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
@@ -697,6 +727,7 @@ mod tests {
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
+            InflightRows::new(),
             metrics.clone(),
             TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
@@ -738,6 +769,63 @@ mod tests {
         collector.shutdown().await.unwrap();
     }
 
+    /// The collector creates guards for non-skipped checkpoints. Skipped checkpoints (below
+    /// reader_lo) get no guard, so their rows never increment the counter.
+    #[tokio::test]
+    async fn test_collector_skipped_checkpoints_release_pending_rows() {
+        let (processor_tx, processor_rx) = mpsc::channel(10);
+        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(5))));
+
+        // Share the InflightRows with the collector so we can observe the counter.
+        let inflight = InflightRows::new();
+
+        let collector = collector(
+            Arc::new(TestHandler),
+            CommitterConfig {
+                collect_interval_ms: 200_000,
+                ..CommitterConfig::default()
+            },
+            processor_rx,
+            collector_tx,
+            main_reader_lo.clone(),
+            inflight.clone(),
+            test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
+        );
+
+        let rows_per_cp = TestHandler::MIN_EAGER_ROWS + 1;
+
+        // Checkpoints 1-4 are below reader_lo=5, so they will be skipped (no guard created).
+        // Checkpoints 5-6 will be kept (guard created).
+        let test_data: Vec<_> = [1, 5, 2, 6, 4, 3]
+            .into_iter()
+            .map(|cp| IndexedCheckpoint::new(0, cp, 10, 1000, vec![Entry; rows_per_cp]))
+            .collect();
+
+        // Counter is 0 before the collector receives anything.
+        assert_eq!(inflight.count(), 0);
+
+        for data in test_data {
+            processor_tx.send(data).await.unwrap();
+        }
+
+        // The batch should contain only rows from checkpoints 5 and 6.
+        let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
+        assert_eq!(batch.batch_len, rows_per_cp * 2);
+
+        // Only 2 non-skipped checkpoints had guards created, so the counter reflects those rows.
+        assert_eq!(inflight.count(), rows_per_cp * 2);
+
+        // Dropping the batch releases the remaining rows.
+        drop(batch);
+        assert_eq!(inflight.count(), 0);
+
+        collector.shutdown().await.unwrap();
+    }
+
     /// Because a checkpoint may be partially batched before the main reader lo advances past it,
     /// the collector must ensure that it fully writes out the checkpoint. Otherwise, this will
     /// essentially stall the commit_watermark task indefinitely as the latter waits for the
@@ -756,6 +844,7 @@ mod tests {
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
+            InflightRows::new(),
             metrics.clone(),
             TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,

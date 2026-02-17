@@ -201,11 +201,12 @@ A separate reader watermark update task (running periodically, configurable) adv
 
 Because `pruner_hi` (1000) < `reader_lo` (1001), the pruner detects that some checkpoints are outside of the retention window. It cleans up all elements up to `reader_lo` (deleting checkpoint 1000) and updates `pruner_hi` to `reader_lo` (1001).
 
-
 :::info
 Checkpoints older than `reader_lo` might still be temporarily available because of:
+
 - Intentional delay protecting in-flight queries
 - Pruner not completing cleanup yet
+
 :::
 
 ## Sequential pipeline architecture {#sequential-pipeline-architecture}
@@ -276,7 +277,7 @@ Without regulation, missing checkpoints can cause deadlocks in situations like:
 To avoid this pitfall, you can use watermark progress reporting. After successful commits, instruct the pipelines to send `(pipeline_name, highest_committed_checkpoint)` to the broadcaster through the `commit_hi_tx` channel.
 
 <ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/committer.rs" tag="send" />
-    
+
 The `Broadcaster` receives updates by listening on `commit_hi_rx`. It then calculates the ingestion boundary across all pipelines (`min_subscriber_watermark + buffer_size`).
 
 <ImportContent source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" tag="regulator" />
@@ -343,11 +344,9 @@ The primary responsibility of the `Collector` is to buffer processed data and cr
 The `Collector` receives out-of-order processed data from multiple `Processor` workers. It then buffers data until reaching optimal batch size (`MIN_EAGER_ROWS`) or until a timeout is met (to preserve forward progress for quiet pipelines).
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="MIN_EAGER_ROWS" />
-    
-The `Collector` combines data from multiple checkpoints into single database write batches and applies backpressure when too much data is pending (`MAX_PENDING_ROWS`).
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="MAX_PENDING_ROWS" />
-    
+The `Collector` combines data from multiple checkpoints into single database write batches.
+
 Database writes are expensive; batching dramatically improves throughput by reducing the number of database round trips.
 
 #### `Committer` {#con-committer}
@@ -372,7 +371,7 @@ The primary responsibility of the `CommitterWatermark` is to track which checkpo
 The `CommitterWatermark` receives `WatermarkParts` from successful `Committer` writes.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/mod.rs" struct="WatermarkPart"/>
-    
+
 The `CommitterWatermark` maintains an in-memory map of checkpoint completion status, advancing `checkpoint_hi_inclusive` only when there are no gaps in the sequence. Periodically, it writes the new `checkpoint_hi_inclusive` to the `Watermark` database.
 
 This component enforces the critical rule that `checkpoint_hi_inclusive` can advance only when all data up to that point is committed with no gaps. See the [watermark system](#watermark-system) for details on how this enables safe out-of-order processing.
@@ -396,11 +395,11 @@ The primary responsibility of the `Pruner` is to remove old data based on retent
 The `Pruner` waits for the safety delay (`delay_ms`) after `reader_lo` updates.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" struct="PrunerConfig" highlight="delay_ms" />
-    
+
 The `Pruner` then calculates which checkpoints can be safely deleted and spawns up to `prune_concurrency` parallel cleanup tasks.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" struct="PrunerConfig" highlight="prune_concurrency" />
-    
+
 Each task calls your `Handler::prune()` method for specific checkpoint ranges and updates `pruner_hi` as cleanup completes.
 
 :::important
@@ -446,7 +445,7 @@ The framework automatically creates and manages a `Watermark` table in your data
 
 <ImportContent mode="code" source="crates/sui-pg-db/src/schema.rs" />
 
-###  Concurrent pipeline backpressure mechanisms {#concurrent-backpressure}
+### Concurrent pipeline backpressure mechanisms {#concurrent-backpressure}
 
 With the component architecture detailed, let's examine how the pipeline prevents memory overflow through cascading backpressure using inter-component channels.
 
@@ -458,32 +457,35 @@ Each channel has a fixed buffer size that automatically blocks when full:
 
 **`Broadcaster` to `Processor`**: `checkpoint_buffer_size` slots → `Broadcaster` blocks, upstream pressure.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="checkpoint_buffer_size" />   
-    
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="checkpoint_buffer_size" />
+
 **`Processor` to `Collector`**: `FANOUT + PIPELINE_BUFFER` slots → All workers block on `send()`.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="processor_tx" />
-    
+
 **`Collector` to `Committer`**: `write_concurrency + PIPELINE_BUFFER` slots → `Collector` stops accepting.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" tag="buff" /> 
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" tag="buff" />
 
 When any channel fills, pressure automatically propagates backward through the entire pipeline.
 
 #### Component-level blocking
 
-At the component level, the `Collector` respects memory limits and stops accepting when `pending_rows ≥ MAX_PENDING_ROWS`.
-
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/collector.rs" tag="collector" /> 
-    
 Database connection limits are also in place. The `Committer` blocks when all connections are busy.
+
+#### Per-pipeline row-count backpressure
+
+Each concurrent pipeline enforces a per-pipeline row limit via the `MAX_PENDING_ROWS` constant on its `Handler` trait. Before pulling the next checkpoint from the processor channel, the pipeline's collector waits until its own uncommitted row count drops below this threshold. Sequential pipelines do not use row-count backpressure because their in-order commit requirement can create deadlocks: the committer may need future checkpoints to make progress, but row-count backpressure prevents the collector from delivering them.
+
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="MAX_PENDING_ROWS" />
+
+This is useful when pipelines produce highly variable numbers of rows per checkpoint. Channel-based backpressure counts checkpoints, not rows, so a single checkpoint with tens of thousands of rows can spike memory even though only one checkpoint is buffered. Because the limit is per-pipeline, pipelines that produce large rows (such as `kv_objects`) can be tuned independently from pipelines that produce small rows (such as `tx_digests`). When a pipeline's collector pauses, the processor-to-collector channel fills up, which blocks processor workers, which in turn fills the ingestion channel, creating backpressure on the broadcaster without the broadcaster needing to know about row counts.
 
 #### Application-level coordination
 
 `Watermark` feedback provides application-level coordination by reporting progress to the `Broadcaster` through `Watermark` updates. Further coordination is provided through bounded ingestion, where the `Broadcaster` only signals fetches within a bounded range ahead of the current watermark.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" fun="spawn_aborting" /> 
-    
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" fun="spawn_aborting" />
 Finally, memory protection ensures the entire system operates within predictable memory bounds.
 
 #### Backpressure in practice
@@ -565,7 +567,7 @@ Tuning guidelines:
 
 - **`FANOUT`:** Increase for CPU-intensive processing, decrease for memory-constrained environments.
 - **`MIN_EAGER_ROWS`:** Lower values reduce data commit latency (individual data appears in database sooner), higher values improve overall throughput (more efficient larger batches).
-- **`MAX_PENDING_ROWS`:** Controls how much data can accumulate when the committer falls behind. Higher values provide more buffer space but use more memory during bottlenecks.
+- **`MAX_PENDING_ROWS`:** Controls how much data can accumulate before the collector pauses. Higher values provide more buffer space but use more memory during bottlenecks.
 - **`MAX_WATERMARK_UPDATES`:** Lower for sparse pipelines (rare events), keep default for dense pipelines.
 
 #### `CommitterConfig` optimization

@@ -22,6 +22,8 @@ use crate::pipeline::concurrent::collector::collector;
 use crate::pipeline::concurrent::commit_watermark::commit_watermark;
 use crate::pipeline::concurrent::committer::committer;
 use crate::pipeline::concurrent::main_reader_lo::track_main_reader_lo;
+use crate::pipeline::concurrent::pending_rows::InflightRows;
+use crate::pipeline::concurrent::pending_rows::PendingRowsGuard;
 use crate::pipeline::concurrent::pruner::pruner;
 use crate::pipeline::concurrent::reader_watermark::reader_watermark;
 use crate::pipeline::processor::processor;
@@ -32,6 +34,7 @@ mod collector;
 mod commit_watermark;
 mod committer;
 mod main_reader_lo;
+mod pending_rows;
 mod pruner;
 mod reader_watermark;
 
@@ -165,6 +168,8 @@ struct BatchedRows<H: Handler> {
     batch_len: usize,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
+    /// RAII guard tracking these rows in the pending count. Dropped after commit to decrement.
+    guard: Option<PendingRowsGuard>,
 }
 
 impl<H, V> BatchedRows<H>
@@ -178,6 +183,7 @@ where
             batch,
             batch_len,
             watermark,
+            guard: None,
         }
     }
 }
@@ -263,6 +269,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let handler = Arc::new(handler);
 
+    let inflight = InflightRows::new();
+
     let s_processor = processor(
         handler.clone(),
         checkpoint_rx,
@@ -277,6 +285,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         collector_rx,
         collector_tx,
         main_reader_lo.clone(),
+        inflight,
         metrics.clone(),
         min_eager_rows,
         max_pending_rows,
@@ -738,10 +747,11 @@ mod tests {
         // │   Input    │    │ (FANOUT=2) │    │            │    │🐌 10s Delay│
         // └────────────┘    └────────────┘    └────────────┘    └[BOTTLENECK]┘
         //                │                 │                 │
-        //              [●●●]           [●●●●●●●]         [●●●●●●]
-        //            buffer: 3         buffer: 7         buffer: 6
+        //              [●●●]           [●●●●●●●]           [●●]
+        //            buffer: 3         buffer: 7         pending: 2
         //
-        // BOTTLENECK: Committer with 10s delay blocks entire pipeline
+        // BOTTLENECK: Committer holds inflight guards during its 10s commit, keeping
+        // inflight at MAX_PENDING_ROWS and preventing the collector from pulling more.
 
         let config = ConcurrentConfig {
             committer: CommitterConfig {
@@ -758,56 +768,43 @@ mod tests {
         let setup = TestSetup::new(config, store, 0).await;
 
         // Pipeline capacity analysis with slow commits:
-        // Configuration: FANOUT=2, write_concurrency=1, PIPELINE_BUFFER=5
+        // Configuration: MAX_PENDING_ROWS=4, FANOUT=2, write_concurrency=1, PIPELINE_BUFFER=5
         //
         // Channel and task breakdown:
         // - Checkpoint->Processor channel: 3 slots (TEST_CHECKPOINT_BUFFER_SIZE)
         // - Processor tasks: 2 tasks (FANOUT=2)
         // - Processor->Collector channel: 7 slots (FANOUT=2 + PIPELINE_BUFFER=5)
-        // - Collector->Committer channel: 6 slots (write_concurrency=1 + PIPELINE_BUFFER=5)
-        // - Committer task: 1 task (blocked by slow commit)
+        // - Collector pending: 2 checkpoints × 2 values = 4 values (hits MAX_PENDING_ROWS=4)
         //
-        // Total theoretical capacity: 3 + 2 + 7 + 6 + 1 = 19 checkpoints
+        // Once the committer pulls a batch, guards transfer to it. The 10s commit keeps
+        // inflight at MAX_PENDING_ROWS, so the collector stays gated.
+        //
+        // Total capacity: 3 + 2 + 7 + 2 = 14 checkpoints
 
-        // Fill pipeline to theoretical capacity - these should all succeed
-        for i in 0..19 {
+        // Fill pipeline to capacity - these should all succeed
+        for i in 0..14 {
             setup
                 .send_checkpoint_with_timeout(i, Duration::from_millis(100))
                 .await
                 .unwrap();
         }
 
-        // Find the actual back pressure point
-        // Due to non-determinism in collector's tokio::select!, the collector may consume
-        // up to 2 checkpoints (filling MAX_PENDING_ROWS=4) before applying back pressure.
-        // This means back pressure occurs somewhere in range 19-21.
-        let mut back_pressure_checkpoint = None;
-        for checkpoint in 19..22 {
-            if setup
-                .send_checkpoint_with_timeout(checkpoint, Duration::from_millis(100))
-                .await
-                .is_err()
-            {
-                back_pressure_checkpoint = Some(checkpoint);
-                break;
-            }
-        }
-        assert!(
-            back_pressure_checkpoint.is_some(),
-            "Back pressure should occur between checkpoints 19-21"
-        );
+        // Checkpoint 14 should block: guards held by slow committer keep inflight = MAX_PENDING_ROWS
+        setup
+            .send_checkpoint_expect_timeout(14, Duration::from_millis(200))
+            .await;
 
-        // Verify that some data has been processed (pipeline is working)
+        // Pipeline can drain once the slow commit finishes and guards are dropped
+        setup
+            .send_checkpoint_with_timeout(14, TEST_TIMEOUT)
+            .await
+            .unwrap();
+
+        // Verify data was processed
         setup
             .store
             .wait_for_any_data(DataPipeline::NAME, TEST_TIMEOUT)
             .await;
-
-        // Allow pipeline to drain by sending the blocked checkpoint with longer timeout
-        setup
-            .send_checkpoint_with_timeout(back_pressure_checkpoint.unwrap(), TEST_TIMEOUT)
-            .await
-            .unwrap();
     }
 
     // ==================== FAILURE TESTING ====================
