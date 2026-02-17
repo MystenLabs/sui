@@ -13768,6 +13768,7 @@ dependencies = [
  "move-analyzer",
  "move-binary-format",
  "move-bytecode-source-map",
+ "move-bytecode-utils",
  "move-bytecode-verifier-meter",
  "move-cli",
  "move-command-line-common",
