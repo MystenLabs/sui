@@ -79,14 +79,14 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
 
     // Set up config directory for the test. For shared cluster tests, we copy the config and
     // request a fresh gas coin via faucet so tests can run in parallel without gas conflicts.
-    let temp_config_dir = if let Some(ref shared_dir) = shared_config_dir.filter(|_| is_network_test)
-    {
-        let dir = copy_shared_cluster_config(Path::new(shared_dir));
-        request_faucet(&dir.path().join(SUI_CLIENT_CONFIG));
-        dir
-    } else {
-        make_temp_config_dir()
-    };
+    let temp_config_dir =
+        if let Some(ref shared_dir) = shared_config_dir.filter(|_| is_network_test) {
+            let dir = copy_shared_cluster_config(Path::new(shared_dir));
+            request_faucet(&dir.path().join(SUI_CLIENT_CONFIG));
+            dir
+        } else {
+            make_temp_config_dir()
+        };
     let config_dir = if let Some(ref cluster) = cluster {
         cluster.swarm.dir()
     } else {

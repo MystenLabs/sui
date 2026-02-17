@@ -274,7 +274,7 @@ jobs:
         run: |
           ./target/debug/sui start --force-regenesis --committee-size 1 \
               --epoch-duration-ms 3600000 --with-faucet \
-              --network.config /tmp/test-cluster &
+              --network.config "${{ runner.temp }}/test-cluster" &
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:9000 > /dev/null 2>&1 && break
             sleep 1
@@ -283,7 +283,7 @@ jobs:
       - name: cargo test Sui CLI
         shell: bash
         env:
-          SUI_TEST_CLUSTER_CONFIG_DIR: /tmp/test-cluster
+          SUI_TEST_CLUSTER_CONFIG_DIR: ${{ runner.temp }}/test-cluster
         run: |
           cargo nextest run -p sui --no-fail-fast --profile ci
 
