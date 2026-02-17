@@ -42,6 +42,8 @@ impl CommitterLayer {
 #[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
+    /// Maximum rows per BigTable batch for this pipeline.
+    pub max_rows: Option<usize>,
 }
 
 impl ConcurrentLayer {

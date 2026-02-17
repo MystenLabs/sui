@@ -38,7 +38,6 @@ use sui_types::transaction::Transaction;
 pub use crate::bigtable::client::BigTableClient;
 pub use crate::bigtable::store::BigTableConnection;
 pub use crate::bigtable::store::BigTableStore;
-pub use crate::handlers::BIGTABLE_MAX_MUTATIONS;
 pub use crate::handlers::BigTableHandler;
 pub use crate::handlers::CheckpointsByDigestPipeline;
 pub use crate::handlers::CheckpointsPipeline;
@@ -54,7 +53,6 @@ pub use crate::handlers::PrevEpochUpdate;
 pub use crate::handlers::ProtocolConfigsPipeline;
 pub use crate::handlers::SystemPackagesPipeline;
 pub use crate::handlers::TransactionsPipeline;
-pub use crate::handlers::set_max_mutations;
 pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
 pub use config::IndexerConfig;
@@ -330,43 +328,43 @@ impl BigTableIndexer {
 
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(CheckpointsPipeline),
+                BigTableHandler::new(CheckpointsPipeline, &pipeline.checkpoints),
                 pipeline.checkpoints.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(CheckpointsByDigestPipeline),
+                BigTableHandler::new(CheckpointsByDigestPipeline, &pipeline.checkpoints_by_digest),
                 pipeline.checkpoints_by_digest.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(TransactionsPipeline),
+                BigTableHandler::new(TransactionsPipeline, &pipeline.transactions),
                 pipeline.transactions.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(ObjectsPipeline),
+                BigTableHandler::new(ObjectsPipeline, &pipeline.objects),
                 pipeline.objects.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(EpochStartPipeline),
+                BigTableHandler::new(EpochStartPipeline, &pipeline.epoch_start),
                 pipeline.epoch_start.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(EpochEndPipeline),
+                BigTableHandler::new(EpochEndPipeline, &pipeline.epoch_end),
                 pipeline.epoch_end.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(ProtocolConfigsPipeline(chain)),
+                BigTableHandler::new(ProtocolConfigsPipeline(chain), &pipeline.protocol_configs),
                 pipeline.protocol_configs.finish(base.clone()),
             )
             .await?;
