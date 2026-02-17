@@ -54,6 +54,10 @@ struct Args {
     #[arg(long)]
     bigtable_max_decoding_message_size: Option<usize>,
 
+    /// Number of gRPC channels in the connection pool (default: 10)
+    #[arg(long)]
+    channel_pool_size: Option<usize>,
+
     /// Maximum mutations per BigTable batch (must be < 100k)
     #[arg(long, value_parser = parse_max_mutations)]
     max_mutations: Option<usize>,
@@ -111,6 +115,7 @@ async fn main() -> Result<()> {
         "sui-kvstore-alt".to_string(),
         None,
         args.app_profile_id,
+        args.channel_pool_size,
     )
     .await?;
 
