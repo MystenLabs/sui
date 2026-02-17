@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -59,7 +60,10 @@ pub trait BigTableProcessor: Processor<Value = Entry> {
 ///
 /// This adapter wraps a `BigTableProcessor` and provides the common batching and commit logic
 /// for writing entries to BigTable. Individual pipelines implement `BigTableProcessor`.
-pub struct BigTableHandler<P>(Arc<P>);
+pub struct BigTableHandler<P> {
+    processor: Arc<P>,
+    max_mutations: usize,
+}
 
 /// Batch of BigTable entries.
 /// Uses RwLock for interior mutability so we can remove succeeded entries on partial write failures.
@@ -70,7 +74,7 @@ pub struct BigTableBatch {
 
 #[derive(Default)]
 struct BigTableBatchInner {
-    entries: Vec<Entry>,
+    entries: BTreeMap<Bytes, Entry>,
     total_mutations: usize,
 }
 
@@ -84,8 +88,11 @@ impl<P> BigTableHandler<P>
 where
     P: BigTableProcessor,
 {
-    pub fn new(processor: P) -> Self {
-        Self(Arc::new(processor))
+    pub fn new(processor: P, max_mutations: usize) -> Self {
+        Self {
+            processor: Arc::new(processor),
+            max_mutations,
+        }
     }
 }
 
@@ -99,7 +106,7 @@ where
     type Value = Entry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
-        let processor = Arc::clone(&self.0);
+        let processor = Arc::clone(&self.processor);
         let checkpoint = Arc::clone(checkpoint);
         tokio::task::spawn_blocking(move || processor.process_sync(&checkpoint)).await?
     }
@@ -116,27 +123,6 @@ where
     const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
     const MAX_PENDING_ROWS: usize = P::MAX_PENDING_ROWS;
     const MAX_WATERMARK_UPDATES: usize = P::MAX_WATERMARK_UPDATES;
-    const CAPACITY_BATCHING: bool = true;
-    const MAX_BATCH_WEIGHT: usize = usize::MAX;
-
-    fn batch_weight(_batch: &Self::Batch, _batch_len: usize) -> usize {
-        1
-    }
-
-    fn drain_batch(
-        source: &mut Self::Batch,
-        dest: &mut Self::Batch,
-        max_weight: usize,
-    ) -> (usize, usize) {
-        let mut src = source.inner.write().unwrap();
-        let mut dst = dest.inner.write().unwrap();
-        let count = max_weight.min(src.entries.len());
-        let mutations: usize = src.entries[..count].iter().map(|e| e.mutations.len()).sum();
-        dst.entries.extend(src.entries.drain(..count));
-        dst.total_mutations += mutations;
-        src.total_mutations -= mutations;
-        (count, count)
-    }
 
     fn batch(
         &self,
@@ -147,7 +133,10 @@ where
 
         for entry in values {
             inner.total_mutations += entry.mutations.len();
-            inner.entries.push(entry);
+            inner.entries.insert(entry.row_key.clone(), entry);
+            if inner.total_mutations >= self.max_mutations {
+                return BatchStatus::Ready;
+            }
         }
 
         BatchStatus::Pending
@@ -163,19 +152,7 @@ where
             if inner.entries.is_empty() {
                 return Ok(0);
             }
-            let mut entries: Vec<Entry> = inner.entries.clone();
-            // Sort by row_key for BigTable locality, then dedup (keep last
-            // occurrence for each key since later checkpoints overwrite earlier).
-            entries.sort_by(|a, b| a.row_key.cmp(&b.row_key));
-            entries.dedup_by(|later, earlier| {
-                if later.row_key == earlier.row_key {
-                    std::mem::swap(later, earlier);
-                    true
-                } else {
-                    false
-                }
-            });
-            entries
+            inner.entries.values().cloned().collect()
         };
         let count = entries_to_write.len();
 
@@ -190,9 +167,7 @@ where
                     let mut inner = batch.inner.write().unwrap();
                     let failed: std::collections::BTreeSet<&Bytes> =
                         partial.failed_keys.iter().map(|f| &f.key).collect();
-                    inner
-                        .entries
-                        .retain(|entry| failed.contains(&entry.row_key));
+                    inner.entries.retain(|key, _| failed.contains(key));
                 }
                 Err(e)
             }
@@ -237,7 +212,7 @@ mod tests {
 
     #[test]
     fn bigtable_batch_total_mutations() {
-        let handler = BigTableHandler::new(TestProcessor);
+        let handler = BigTableHandler::new(TestProcessor, bigtable_max_mutations());
         let mut batch = BigTableBatch::default();
         assert_eq!(batch.total_mutations(), 0);
 
@@ -285,7 +260,7 @@ mod tests {
         let store = BigTableStore::new(client);
         let mut conn = store.connect().await.unwrap();
 
-        let handler = BigTableHandler::new(TestProcessor);
+        let handler = BigTableHandler::new(TestProcessor, bigtable_max_mutations());
         let mut batch = BigTableBatch::default();
         let entries: Vec<Entry> = (0..10)
             .map(|i| make_entry(format!("row{i}").as_bytes()))
@@ -299,12 +274,7 @@ mod tests {
             let inner = batch.inner.read().unwrap();
             assert_eq!(inner.entries.len(), 5);
             for key in [b"row1", b"row3", b"row5", b"row7", b"row9"] {
-                assert!(
-                    inner
-                        .entries
-                        .iter()
-                        .any(|e| e.row_key.as_ref() == key.as_slice())
-                );
+                assert!(inner.entries.contains_key(key.as_slice()));
             }
         }
 
@@ -315,12 +285,7 @@ mod tests {
             let inner = batch.inner.read().unwrap();
             assert_eq!(inner.entries.len(), 3);
             for key in [b"row1", b"row5", b"row9"] {
-                assert!(
-                    inner
-                        .entries
-                        .iter()
-                        .any(|e| e.row_key.as_ref() == key.as_slice())
-                );
+                assert!(inner.entries.contains_key(key.as_slice()));
             }
         }
 

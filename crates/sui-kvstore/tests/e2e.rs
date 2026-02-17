@@ -326,6 +326,7 @@ impl TestHarness {
             ingestion_config.into(),
             CommitterConfig::default(),
             PipelineLayer::default(),
+            sui_kvstore::bigtable_max_mutations(),
             &registry,
         )
         .await

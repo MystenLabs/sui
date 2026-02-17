@@ -247,12 +247,12 @@ struct AdaptiveState {
 }
 
 impl AdaptiveState {
-    fn record_sample(&mut self, inflight: usize, weight: usize, outcome: &Outcome) {
+    fn record_sample(&mut self, inflight: usize, outcome: &Outcome) {
         self.stats.peak_inflight = self.stats.peak_inflight.max(inflight);
         self.rolling_errors.resize_for_limit(self.limit);
         match outcome {
             Outcome::Success => {
-                self.stats.successes += weight;
+                self.stats.successes += 1;
                 self.rolling_errors.push(false);
             }
             Outcome::Dropped => {
@@ -506,14 +506,13 @@ impl LimitAlgorithm for Adaptive {
         &self,
         inflight: usize,
         _delivered: usize,
-        weight: usize,
         outcome: Outcome,
         _rtt: Duration,
     ) -> usize {
         let mut state = self.inner.lock().unwrap();
 
         // 1. Record sample
-        state.record_sample(inflight, weight, &outcome);
+        state.record_sample(inflight, &outcome);
 
         // 2. Per-sample emergency brake (error rate)
         state.check_error_brake(&self.config, &self.gauge);
@@ -558,14 +557,14 @@ mod tests {
     fn feed_successes(alg: &Adaptive, count: usize, rtt: Duration) {
         let limit = alg.current();
         for _ in 0..count {
-            alg.update(limit, 0, 1, Outcome::Success, rtt);
+            alg.update(limit, 0, Outcome::Success, rtt);
         }
     }
 
     /// Feed successes with zero inflight (triggers the inflight guard).
     fn feed_successes_idle(alg: &Adaptive, count: usize, rtt: Duration) {
         for _ in 0..count {
-            alg.update(0, 0, 1, Outcome::Success, rtt);
+            alg.update(0, 0, Outcome::Success, rtt);
         }
     }
 
@@ -1021,16 +1020,16 @@ mod tests {
         // Window is 200 (limit=100 * 2, clamped to min 100).
         // 190 successes + 11 errors → 11/200 = 5.5% > 5%.
         for _ in 0..190 {
-            alg.update(0, 0, 1, Outcome::Success, Duration::from_millis(10));
+            alg.update(0, 0, Outcome::Success, Duration::from_millis(10));
         }
         assert_eq!(alg.current(), 100);
 
         for _ in 0..10 {
-            alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(10));
+            alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
         }
         assert_eq!(alg.current(), 100); // 10/200 = 5.0%, not > 5%
 
-        alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(10));
+        alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
         // 11/200 = 5.5% > 5%, brake fires: ceil(100 * 0.5) = 50
         assert_eq!(alg.current(), 50);
     }
@@ -1050,10 +1049,10 @@ mod tests {
 
         // Trigger error brake (window=200, need >5% error rate)
         for _ in 0..190 {
-            alg.update(0, 0, 1, Outcome::Success, Duration::from_millis(10));
+            alg.update(0, 0, Outcome::Success, Duration::from_millis(10));
         }
         for _ in 0..11 {
-            alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(10));
+            alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
         }
 
         let state = alg.inner.lock().unwrap();
@@ -1122,10 +1121,10 @@ mod tests {
 
         // Trigger error brake: ceil(5 * 0.5) = 3 (= min_limit)
         for _ in 0..94 {
-            alg.update(0, 0, 1, Outcome::Success, Duration::from_millis(10));
+            alg.update(0, 0, Outcome::Success, Duration::from_millis(10));
         }
         for _ in 0..6 {
-            alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(10));
+            alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
         }
         assert_eq!(alg.current(), 3);
     }
@@ -1266,7 +1265,7 @@ mod tests {
 
         // Feed only Ignore outcomes
         for _ in 0..100 {
-            alg.update(0, 0, 1, Outcome::Ignore, Duration::from_millis(10));
+            alg.update(0, 0, Outcome::Ignore, Duration::from_millis(10));
         }
 
         // No successes or errors recorded, limit should be unchanged

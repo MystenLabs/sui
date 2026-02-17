@@ -103,34 +103,6 @@ pub trait Handler: Processor {
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize>;
 
-    /// Returns a weight for the batch, used to normalize RTT samples in the concurrency
-    /// limiter. Handlers that produce variable-cost batches (e.g. BigTable mutations)
-    /// should override this so the limiter sees cost-per-unit rather than raw elapsed time.
-    fn batch_weight(_batch: &Self::Batch, _batch_len: usize) -> usize {
-        1
-    }
-
-    /// Whether this handler uses capacity-based batching. When true, the committer buffers
-    /// incoming batches and drains entries based on available limiter capacity, merging them
-    /// into optimally-sized commit batches instead of committing collector batches as-is.
-    const CAPACITY_BATCHING: bool = false;
-
-    /// Maximum weight for a single commit batch. Only relevant when `CAPACITY_BATCHING` is true.
-    /// Handlers should set this to their backend's per-RPC limit.
-    const MAX_BATCH_WEIGHT: usize = usize::MAX;
-
-    /// Drain entries from `source` into `dest`, up to `max_weight` units of weight.
-    /// Returns `(weight_drained, count_drained)` where count is the number of rows moved.
-    /// Must drain at least one entry if source is non-empty to guarantee progress.
-    /// Only called when `CAPACITY_BATCHING` is true.
-    fn drain_batch(
-        _source: &mut Self::Batch,
-        _dest: &mut Self::Batch,
-        _max_weight: usize,
-    ) -> (usize, usize) {
-        unimplemented!("drain_batch required when CAPACITY_BATCHING = true")
-    }
-
     /// Clean up data between checkpoints `_from` and `_to_exclusive` (exclusive) in the database, returning
     /// the number of rows affected. This function is optional, and defaults to not pruning at all.
     async fn prune<'a>(
@@ -186,26 +158,7 @@ struct BatchedRows<H: Handler> {
     watermark: Vec<WatermarkPart>,
 }
 
-impl<H: Handler> BatchedRows<H> {
-    fn is_empty(&self) -> bool {
-        self.batch_len == 0
-    }
-
-    /// Split off watermark parts covering `count` rows that were drained from the front
-    /// of this batch. Returns the watermark parts for the drained rows.
-    fn take_watermarks(&mut self, mut count: usize) -> Vec<WatermarkPart> {
-        let mut result = Vec::new();
-        while count > 0 && !self.watermark.is_empty() {
-            let take = count.min(self.watermark[0].batch_rows);
-            result.push(self.watermark[0].take(take));
-            count -= take;
-            if self.watermark[0].batch_rows == 0 {
-                self.watermark.remove(0);
-            }
-        }
-        result
-    }
-}
+impl<H: Handler> BatchedRows<H> {}
 
 impl<H, V> BatchedRows<H>
 where
@@ -332,7 +285,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_capacity,
         collector_capacity,
         pending_rows,
-        committer_config.target_batch_weight,
     );
 
     let s_commit_watermark = commit_watermark::<H>(

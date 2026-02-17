@@ -12,7 +12,7 @@ use anyhow::anyhow;
 use futures::Stream;
 use futures::future::try_join_all;
 use sui_concurrency_limiter::stream::{AdaptiveStreamExt, Break};
-use sui_concurrency_limiter::{Limiter, Outcome, Token};
+use sui_concurrency_limiter::Limiter;
 use sui_futures::service::Service;
 use sui_futures::task::TaskGuard;
 use tokio::sync::mpsc;
@@ -244,45 +244,46 @@ fn ingest_and_broadcast_range(
         let checkpoints = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
         // docs::/#bound
 
-        let stream_fut = checkpoints.try_for_each_spawned_adaptive_with_token(limiter.clone(), {
-            let client = client.clone();
-            let subscribers = subscribers.clone();
-            let peak_channel_fill = peak_channel_fill.clone();
-            let pending_rows = pending_rows.clone();
-            move |cp: u64, token: Token| {
+        let stream_fut = checkpoints.try_for_each_spawned_adaptive(
+            limiter.clone(),
+            |cp: u64| {
                 let client = client.clone();
+                async move {
+                    match client.wait_for(cp, retry_interval).await {
+                        Ok(checkpoint) => Ok(checkpoint),
+                        Err(_) => Err(Break::Break),
+                    }
+                }
+            },
+            {
                 let subscribers = subscribers.clone();
                 let peak_channel_fill = peak_channel_fill.clone();
                 let pending_rows = pending_rows.clone();
-                async move {
-                    let checkpoint = match client.wait_for(cp, retry_interval).await {
-                        Ok(checkpoint) => checkpoint,
-                        Err(_) => {
-                            token.record_sample(Outcome::Dropped);
-                            return Err(Break::Break);
+                move |checkpoint: Arc<Checkpoint>| {
+                    let subscribers = subscribers.clone();
+                    let peak_channel_fill = peak_channel_fill.clone();
+                    let pending_rows = pending_rows.clone();
+                    async move {
+                        let cp = *checkpoint.summary.sequence_number();
+                        if send_checkpoint(
+                            checkpoint,
+                            &subscribers,
+                            &peak_channel_fill,
+                            &pending_rows,
+                            max_pending_rows,
+                        )
+                        .await
+                        .is_ok()
+                        {
+                            debug!(checkpoint = cp, "Broadcasted checkpoint");
+                            Ok(())
+                        } else {
+                            Err(Break::Break)
                         }
-                    };
-
-                    let cp = *checkpoint.summary.sequence_number();
-                    if send_checkpoint(
-                        checkpoint,
-                        &subscribers,
-                        &peak_channel_fill,
-                        &pending_rows,
-                        max_pending_rows,
-                    )
-                    .await
-                    .is_ok()
-                    {
-                        token.record_sample(Outcome::Success);
-                        debug!(checkpoint = cp, "Broadcasted checkpoint");
-                        Ok(())
-                    } else {
-                        Err(Break::Break)
                     }
                 }
-            }
-        });
+            },
+        );
 
         tokio::select! {
             result = stream_fut => result,

@@ -204,6 +204,7 @@ impl BigTableIndexer {
         ingestion_config: IngestionConfig,
         committer: CommitterConfig,
         pipeline: PipelineLayer,
+        max_mutations: usize,
         registry: &Registry,
     ) -> Result<Self> {
         let mut indexer = Indexer::new(
@@ -223,37 +224,37 @@ impl BigTableIndexer {
 
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(CheckpointsPipeline),
+                BigTableHandler::new(CheckpointsPipeline, max_mutations),
                 pipeline.checkpoints.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(CheckpointsByDigestPipeline),
+                BigTableHandler::new(CheckpointsByDigestPipeline, max_mutations),
                 pipeline.checkpoints_by_digest.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(TransactionsPipeline),
+                BigTableHandler::new(TransactionsPipeline, max_mutations),
                 pipeline.transactions.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(ObjectsPipeline),
+                BigTableHandler::new(ObjectsPipeline, max_mutations),
                 pipeline.objects.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(EpochStartPipeline),
+                BigTableHandler::new(EpochStartPipeline, max_mutations),
                 pipeline.epoch_start.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(EpochEndPipeline),
+                BigTableHandler::new(EpochEndPipeline, max_mutations),
                 pipeline.epoch_end.finish(base.clone()),
             )
             .await?;

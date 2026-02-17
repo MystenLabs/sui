@@ -111,15 +111,10 @@ trait LimitAlgorithm: Send + Sync + 'static {
     /// `delivered` is the number of requests that completed between when this token was
     /// acquired and when it completed (including itself). This is the TCP BBR-style
     /// delivery count, measuring actual backend throughput rather than sender concurrency.
-    ///
-    /// `weight` is the number of units of work this sample represents (e.g. mutations in
-    /// a batch). Algorithms that track throughput use this to count completions in work
-    /// units rather than requests.
     fn update(
         &self,
         inflight: usize,
         delivered: usize,
-        weight: usize,
         outcome: Outcome,
         rtt: Duration,
     ) -> usize;
@@ -230,15 +225,7 @@ impl Limiter {
     /// [`Token::record_sample`] passes the load at request start, not at completion —
     /// matching Netflix's AbstractLimiter behavior.
     pub fn acquire(&self) -> Token {
-        self.acquire_weighted(1)
-    }
-
-    /// Acquire `weight` inflight slots, returning an RAII [`Token`] that releases them on drop.
-    ///
-    /// Used for mutation-space concurrency limiting where each batch consumes permits
-    /// proportional to its size (e.g. number of mutations).
-    pub fn acquire_weighted(&self, weight: usize) -> Token {
-        let inflight = self.0.inflight.fetch_add(weight, Ordering::Relaxed) + weight;
+        let inflight = self.0.inflight.fetch_add(1, Ordering::Relaxed) + 1;
         let completed_at_acquire = self.0.total_completed.load(Ordering::Relaxed);
         self.0.peak_inflight.fetch_max(inflight, Ordering::Relaxed);
         Token {
@@ -246,7 +233,6 @@ impl Limiter {
             inflight,
             completed_at_acquire,
             start: Instant::now(),
-            weight,
         }
     }
 
@@ -288,8 +274,6 @@ pub struct Token {
     completed_at_acquire: usize,
     /// Timestamp captured at acquire time for automatic RTT measurement.
     start: Instant,
-    /// Number of work units this token represents (e.g. mutations in a batch).
-    weight: usize,
 }
 
 impl Token {
@@ -301,29 +285,22 @@ impl Token {
         let rtt = self.start.elapsed();
         let completed_now = inner
             .total_completed
-            .fetch_add(self.weight, Ordering::Relaxed)
-            + self.weight;
+            .fetch_add(1, Ordering::Relaxed)
+            + 1;
         let delivered = completed_now - self.completed_at_acquire;
         let result = inner
             .algorithm
-            .update(self.inflight, delivered, self.weight, outcome, rtt);
+            .update(self.inflight, delivered, outcome, rtt);
         inner.peak_limit.fetch_max(result, Ordering::Relaxed);
-        inner.inflight.fetch_sub(self.weight, Ordering::Relaxed);
+        inner.inflight.fetch_sub(1, Ordering::Relaxed);
         result
-    }
-
-    /// Deprecated alias for [`record_sample`](Token::record_sample). The weight is
-    /// already stored in the token from [`Limiter::acquire_weighted`], so the explicit
-    /// `_weight` parameter is ignored.
-    pub fn record_sample_weighted(self, outcome: Outcome, _weight: usize) -> usize {
-        self.record_sample(outcome)
     }
 }
 
 impl Drop for Token {
     fn drop(&mut self) {
         if let Some(inner) = &self.inner {
-            inner.inflight.fetch_sub(self.weight, Ordering::Relaxed);
+            inner.inflight.fetch_sub(1, Ordering::Relaxed);
         }
     }
 }
@@ -342,7 +319,6 @@ impl LimitAlgorithm for Fixed {
         &self,
         _inflight: usize,
         _delivered: usize,
-        _weight: usize,
         _outcome: Outcome,
         _rtt: Duration,
     ) -> usize {
@@ -497,7 +473,6 @@ impl LimitAlgorithm for Aimd {
         &self,
         inflight: usize,
         _delivered: usize,
-        _weight: usize,
         outcome: Outcome,
         _rtt: Duration,
     ) -> usize {
@@ -710,7 +685,6 @@ impl LimitAlgorithm for Vegas {
         &self,
         inflight: usize,
         _delivered: usize,
-        _weight: usize,
         outcome: Outcome,
         rtt: Duration,
     ) -> usize {
@@ -911,7 +885,6 @@ impl LimitAlgorithm for Bbr {
         &self,
         _inflight: usize,
         delivered: usize,
-        _weight: usize,
         outcome: Outcome,
         rtt: Duration,
     ) -> usize {
@@ -1081,7 +1054,6 @@ impl LimitAlgorithm for Gradient {
         &self,
         inflight: usize,
         _delivered: usize,
-        _weight: usize,
         outcome: Outcome,
         rtt: Duration,
     ) -> usize {
@@ -1183,7 +1155,7 @@ mod tests {
     fn success_increases_limit_by_one() {
         let alg = aimd(default_config());
         assert_eq!(alg.current(), 10);
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 11);
     }
 
@@ -1191,7 +1163,7 @@ mod tests {
     fn drop_decreases_limit_by_backoff_ratio() {
         let alg = aimd(default_config());
         assert_eq!(alg.current(), 10);
-        alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(10));
+        alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
         // floor(10 * 0.9) = 9
         assert_eq!(alg.current(), 9);
     }
@@ -1200,7 +1172,7 @@ mod tests {
     fn ignore_has_no_effect() {
         let alg = aimd(default_config());
         assert_eq!(alg.current(), 10);
-        alg.update(0, 0, 1, Outcome::Ignore, Duration::from_millis(10));
+        alg.update(0, 0, Outcome::Ignore, Duration::from_millis(10));
         assert_eq!(alg.current(), 10);
     }
 
@@ -1216,13 +1188,13 @@ mod tests {
         let alg = aimd(config);
 
         // Decrease should not go below min_limit
-        alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(10));
+        alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
         assert_eq!(alg.current(), 2); // max(2, floor(2*0.5)=1) = 2
 
         // Increase should not go above max_limit
-        alg.update(2, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(2, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 3);
-        alg.update(3, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(3, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 3); // clamped at max
     }
 
@@ -1231,13 +1203,13 @@ mod tests {
         let alg = aimd(default_config());
         assert_eq!(alg.current(), 10);
 
-        alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(10)); // floor(10 * 0.9) = 9
+        alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10)); // floor(10 * 0.9) = 9
         assert_eq!(alg.current(), 9);
 
-        alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(10)); // floor(9 * 0.9) = 8
+        alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10)); // floor(9 * 0.9) = 8
         assert_eq!(alg.current(), 8);
 
-        alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(10)); // floor(8 * 0.9) = 7
+        alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10)); // floor(8 * 0.9) = 7
         assert_eq!(alg.current(), 7);
     }
 
@@ -1245,13 +1217,13 @@ mod tests {
     fn recovery_after_drop() {
         let alg = aimd(default_config());
 
-        alg.update(10, 0, 1, Outcome::Dropped, Duration::from_millis(10)); // 10 -> 9
+        alg.update(10, 0, Outcome::Dropped, Duration::from_millis(10)); // 10 -> 9
         assert_eq!(alg.current(), 9);
 
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10)); // 9 -> 10
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10)); // 9 -> 10
         assert_eq!(alg.current(), 10);
 
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10)); // 10 -> 11
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10)); // 10 -> 11
         assert_eq!(alg.current(), 11);
     }
 
@@ -1265,20 +1237,20 @@ mod tests {
         assert_eq!(alg.current(), 10);
 
         // Two successes, not enough to increase
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10));
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10));
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 10);
 
         // Drop resets the counter
-        alg.update(10, 0, 1, Outcome::Dropped, Duration::from_millis(10)); // 10 -> 9
+        alg.update(10, 0, Outcome::Dropped, Duration::from_millis(10)); // 10 -> 9
         assert_eq!(alg.current(), 9);
 
         // Need 3 consecutive successes again
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10));
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10));
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 9); // still 9, only 2 successes
 
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 10); // now 3 consecutive -> increase
     }
 
@@ -1290,9 +1262,9 @@ mod tests {
         };
         let alg = aimd(config);
 
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10));
-        alg.update(10, 0, 1, Outcome::Ignore, Duration::from_millis(10)); // should not reset counter
-        alg.update(10, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10));
+        alg.update(10, 0, Outcome::Ignore, Duration::from_millis(10)); // should not reset counter
+        alg.update(10, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 11); // 2 successes reached
     }
 
@@ -1302,15 +1274,15 @@ mod tests {
         assert_eq!(alg.current(), 10);
 
         // With 0 inflight (0*2=0 < limit=10), success should not increase
-        alg.update(0, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(0, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 10);
 
         // With 4 inflight (4*2=8 < limit=10), should not increase
-        alg.update(4, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(4, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 10);
 
         // With 5 inflight (5*2=10 >= limit=10), should increase
-        alg.update(5, 0, 1, Outcome::Success, Duration::from_millis(10));
+        alg.update(5, 0, Outcome::Success, Duration::from_millis(10));
         assert_eq!(alg.current(), 11);
     }
 
@@ -1354,7 +1326,7 @@ mod tests {
         // Feed many samples at the same RTT; gradient should be ~1.0, limit should grow.
         let rtt = Duration::from_millis(50);
         for _ in 0..100 {
-            alg.update(20, 0, 1, Outcome::Success, rtt);
+            alg.update(20, 0, Outcome::Success, rtt);
         }
         assert!(alg.current() > 20, "Limit should grow under steady RTT");
     }
@@ -1372,14 +1344,14 @@ mod tests {
         // Establish a baseline long RTT
         let baseline_rtt = Duration::from_millis(50);
         for _ in 0..20 {
-            alg.update(100, 0, 1, Outcome::Success, baseline_rtt);
+            alg.update(100, 0, Outcome::Success, baseline_rtt);
         }
         let before = alg.current();
 
         // Now spike the RTT — gradient < 1.0 should reduce the limit
         let high_rtt = Duration::from_millis(500);
         for _ in 0..50 {
-            alg.update(100, 0, 1, Outcome::Success, high_rtt);
+            alg.update(100, 0, Outcome::Success, high_rtt);
         }
         assert!(
             alg.current() < before,
@@ -1394,7 +1366,7 @@ mod tests {
         // Pass 0 inflight — guard should prevent changes
         let initial = alg.current();
         for _ in 0..50 {
-            alg.update(0, 0, 1, Outcome::Success, Duration::from_millis(50));
+            alg.update(0, 0, Outcome::Success, Duration::from_millis(50));
         }
         assert_eq!(alg.current(), initial);
     }
@@ -1413,7 +1385,7 @@ mod tests {
 
         let rtt = Duration::from_millis(50);
         for _ in 0..100 {
-            alg.update(15, 0, 1, Outcome::Success, rtt);
+            alg.update(15, 0, Outcome::Success, rtt);
         }
         assert!(alg.current() <= 15, "Should not exceed max_limit");
     }
@@ -1423,7 +1395,7 @@ mod tests {
         let alg = gradient(default_gradient_config());
         let initial = alg.current();
 
-        alg.update(20, 0, 1, Outcome::Ignore, Duration::from_millis(50));
+        alg.update(20, 0, Outcome::Ignore, Duration::from_millis(50));
         assert_eq!(alg.current(), initial);
     }
 
@@ -1433,11 +1405,11 @@ mod tests {
         assert_eq!(alg.current(), 20);
 
         // A drop should reduce limit by backoff_ratio (0.9)
-        alg.update(20, 0, 1, Outcome::Dropped, Duration::from_millis(1));
+        alg.update(20, 0, Outcome::Dropped, Duration::from_millis(1));
         // floor(20 * 0.9) = 18
         assert_eq!(alg.current(), 18);
 
-        alg.update(20, 0, 1, Outcome::Dropped, Duration::from_millis(1));
+        alg.update(20, 0, Outcome::Dropped, Duration::from_millis(1));
         // floor(18 * 0.9) = 16
         assert_eq!(alg.current(), 16);
     }
@@ -1452,11 +1424,11 @@ mod tests {
         let alg = gradient(config);
 
         // floor(6 * 0.9) = 5, at min
-        alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(1));
+        alg.update(0, 0, Outcome::Dropped, Duration::from_millis(1));
         assert_eq!(alg.current(), 5);
 
         // Should not go below min
-        alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(1));
+        alg.update(0, 0, Outcome::Dropped, Duration::from_millis(1));
         assert_eq!(alg.current(), 5);
     }
 
@@ -1472,7 +1444,7 @@ mod tests {
         // A very fast drop RTT with tolerance=1.5 gives gradient clamped to 1.0,
         // so the limit should not decrease.
         let initial = alg.current();
-        alg.update(20, 0, 1, Outcome::Dropped, Duration::from_millis(1));
+        alg.update(20, 0, Outcome::Dropped, Duration::from_millis(1));
         assert!(
             alg.current() >= initial,
             "With backoff disabled, fast drop should not decrease limit"
@@ -1489,7 +1461,7 @@ mod tests {
 
         // Establish a high long RTT
         for _ in 0..20 {
-            alg.update(20, 0, 1, Outcome::Success, Duration::from_millis(200));
+            alg.update(20, 0, Outcome::Success, Duration::from_millis(200));
         }
         let long_rtt_before = {
             let state = alg.inner.lock().unwrap();
@@ -1497,7 +1469,7 @@ mod tests {
         };
 
         // Now send a much lower RTT — should trigger drift decay
-        alg.update(20, 0, 1, Outcome::Success, Duration::from_millis(50));
+        alg.update(20, 0, Outcome::Success, Duration::from_millis(50));
         let long_rtt_after = {
             let state = alg.inner.lock().unwrap();
             state.long_rtt.get()
@@ -1522,7 +1494,7 @@ mod tests {
         // Establish baseline at 30ms. The limit grows during this phase
         // (gradient=1.0, queue_size pushes it up).
         for _ in 0..50 {
-            alg.update(200, 0, 1, Outcome::Success, Duration::from_millis(30));
+            alg.update(200, 0, Outcome::Success, Duration::from_millis(30));
         }
         let limit_before_spike = alg.current();
 
@@ -1531,7 +1503,7 @@ mod tests {
         // not enough for the EMA (half-life ~208 samples) to absorb the new
         // latency.
         for _ in 0..100 {
-            alg.update(200, 0, 1, Outcome::Success, Duration::from_millis(90));
+            alg.update(200, 0, Outcome::Success, Duration::from_millis(90));
         }
         let limit_after_spike = alg.current();
         assert!(
@@ -1543,7 +1515,7 @@ mod tests {
         // Continue at 90ms for much longer — the EMA absorbs the new baseline,
         // gradient recovers toward 1.0, and the limit stabilizes above min_limit.
         for _ in 0..2000 {
-            alg.update(200, 0, 1, Outcome::Success, Duration::from_millis(90));
+            alg.update(200, 0, Outcome::Success, Duration::from_millis(90));
         }
         let limit_recovered = alg.current();
         assert!(
@@ -1566,7 +1538,7 @@ mod tests {
         // Sustained drops bypass the gradient and apply multiplicative backoff
         // (limit *= 0.9) each time, grinding down to min_limit.
         for _ in 0..200 {
-            alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(1));
+            alg.update(0, 0, Outcome::Dropped, Duration::from_millis(1));
         }
 
         assert_eq!(alg.current(), 1);
@@ -1904,7 +1876,7 @@ mod tests {
         // Feed many samples at the same RTT; queue_size ≈ 0, so limit should grow.
         let rtt = Duration::from_millis(50);
         for _ in 0..100 {
-            alg.update(20, 0, 1, Outcome::Success, rtt);
+            alg.update(20, 0, Outcome::Success, rtt);
         }
         assert!(alg.current() > 20, "Limit should grow under steady RTT");
     }
@@ -1922,14 +1894,14 @@ mod tests {
         // Establish a low rtt_noload (inflight=0 so app-limiting guard keeps limit at 100)
         let low_rtt = Duration::from_millis(10);
         for _ in 0..20 {
-            alg.update(0, 0, 1, Outcome::Success, low_rtt);
+            alg.update(0, 0, Outcome::Success, low_rtt);
         }
         let before = alg.current();
 
         // Now spike RTT — queue_size grows, limit should decrease
         let high_rtt = Duration::from_millis(200);
         for _ in 0..50 {
-            alg.update(100, 0, 1, Outcome::Success, high_rtt);
+            alg.update(100, 0, Outcome::Success, high_rtt);
         }
         assert!(
             alg.current() < before,
@@ -1959,14 +1931,14 @@ mod tests {
         // prevents the limit from growing during the establish phase)
         let low_rtt = Duration::from_millis(10);
         for _ in 0..20 {
-            alg.update(0, 0, 1, Outcome::Success, low_rtt);
+            alg.update(0, 0, Outcome::Success, low_rtt);
         }
         assert_eq!(alg.current(), 100);
 
         // Spike to 200ms (20x baseline) — limit should decrease
         let high_rtt = Duration::from_millis(200);
         for _ in 0..100 {
-            alg.update(200, 0, 1, Outcome::Success, high_rtt);
+            alg.update(200, 0, Outcome::Success, high_rtt);
         }
         let limit_after_spike = alg.current();
         assert!(
@@ -1978,7 +1950,7 @@ mod tests {
         // At very low limits, the queue estimate is small so the limit oscillates around a
         // low equilibrium (~6) rather than staying at 1, but it never climbs back to 100.
         for _ in 0..2000 {
-            alg.update(200, 0, 1, Outcome::Success, high_rtt);
+            alg.update(200, 0, Outcome::Success, high_rtt);
         }
         let limit_sustained = alg.current();
         assert!(
@@ -2001,7 +1973,7 @@ mod tests {
 
         let rtt = Duration::from_millis(50);
         for _ in 0..20 {
-            alg.update(1, 0, 1, Outcome::Success, rtt);
+            alg.update(1, 0, Outcome::Success, rtt);
         }
         assert!(
             alg.current() > 1,
@@ -2016,9 +1988,9 @@ mod tests {
         let initial = alg.current();
 
         // Establish rtt_noload, then test with 0 inflight — guard should prevent changes
-        alg.update(0, 0, 1, Outcome::Success, Duration::from_millis(50));
+        alg.update(0, 0, Outcome::Success, Duration::from_millis(50));
         for _ in 0..50 {
-            alg.update(0, 0, 1, Outcome::Success, Duration::from_millis(100));
+            alg.update(0, 0, Outcome::Success, Duration::from_millis(100));
         }
         assert_eq!(alg.current(), initial);
     }
@@ -2029,14 +2001,14 @@ mod tests {
         assert_eq!(alg.current(), 20);
 
         // Establish rtt_noload first (required so the drop path is reached after probing)
-        alg.update(20, 0, 1, Outcome::Success, Duration::from_millis(50));
+        alg.update(20, 0, Outcome::Success, Duration::from_millis(50));
 
         // Drops use additive decrease: limit -= log10(limit)
         // log10_root(20) = max(1, (int) log10(20)) = max(1, 1) = 1
-        alg.update(20, 0, 1, Outcome::Dropped, Duration::from_millis(50));
+        alg.update(20, 0, Outcome::Dropped, Duration::from_millis(50));
         assert_eq!(alg.current(), 19); // 20 - 1 = 19
 
-        alg.update(20, 0, 1, Outcome::Dropped, Duration::from_millis(50));
+        alg.update(20, 0, Outcome::Dropped, Duration::from_millis(50));
         assert_eq!(alg.current(), 18); // 19 - 1 = 18
     }
 
@@ -2053,14 +2025,14 @@ mod tests {
         // Steady RTT should grow but cap at max_limit
         let rtt = Duration::from_millis(50);
         for _ in 0..200 {
-            alg.update(15, 0, 1, Outcome::Success, rtt);
+            alg.update(15, 0, Outcome::Success, rtt);
         }
         assert!(alg.current() <= 15, "Should not exceed max_limit");
 
         // Additive decrease: log10_root(limit) = 1 for small limits, so each drop
         // subtracts 1. Need enough drops to reach min_limit.
         for _ in 0..100 {
-            alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(50));
+            alg.update(0, 0, Outcome::Dropped, Duration::from_millis(50));
         }
         assert!(
             alg.current() >= 5,
@@ -2084,7 +2056,7 @@ mod tests {
 
         // Establish a low rtt_noload
         let low_rtt = Duration::from_millis(10);
-        alg.update(20, 0, 1, Outcome::Success, low_rtt);
+        alg.update(20, 0, Outcome::Success, low_rtt);
 
         let rtt_noload_before = {
             let state = alg.inner.lock().unwrap();
@@ -2097,7 +2069,7 @@ mod tests {
         // 100 samples guarantees at least one probe fires.
         let higher_rtt = Duration::from_millis(50);
         for _ in 0..100 {
-            alg.update(20, 0, 1, Outcome::Success, higher_rtt);
+            alg.update(20, 0, Outcome::Success, higher_rtt);
         }
 
         let rtt_noload_after = {
@@ -2117,7 +2089,7 @@ mod tests {
         let alg = vegas(default_vegas_config());
         let initial = alg.current();
 
-        alg.update(20, 0, 1, Outcome::Ignore, Duration::from_millis(50));
+        alg.update(20, 0, Outcome::Ignore, Duration::from_millis(50));
         assert_eq!(alg.current(), initial);
     }
 
@@ -2188,7 +2160,7 @@ mod tests {
         let rtt = Duration::from_millis(5);
         let mut prev = 1;
         for i in 1..=10 {
-            let limit = alg.update(i, i, 1, Outcome::Success, rtt);
+            let limit = alg.update(i, i, Outcome::Success, rtt);
             assert!(
                 limit >= prev,
                 "Limit should grow (iteration {i}, prev={prev}, now={limit})"
@@ -2219,7 +2191,7 @@ mod tests {
         // inflight increases linearly at constant RTT, driving limit up.
         let rtt = Duration::from_millis(5);
         for i in 1..=30 {
-            alg.update(i, i, 1, Outcome::Success, rtt);
+            alg.update(i, i, Outcome::Success, rtt);
         }
         let limit_after_growth = alg.current();
         assert!(
@@ -2232,7 +2204,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(60));
         let saturated_inflight = 20;
         for _ in 0..20 {
-            alg.update(saturated_inflight, 10, 1, Outcome::Success, rtt);
+            alg.update(saturated_inflight, 10, Outcome::Success, rtt);
         }
         let limit_stabilized = alg.current();
         assert!(
@@ -2254,11 +2226,11 @@ mod tests {
         assert_eq!(alg.current(), 100);
 
         // floor(100 * 0.9) = 90
-        alg.update(100, 100, 1, Outcome::Dropped, Duration::from_millis(5));
+        alg.update(100, 100, Outcome::Dropped, Duration::from_millis(5));
         assert_eq!(alg.current(), 90);
 
         // floor(90 * 0.9) = 81
-        alg.update(90, 90, 1, Outcome::Dropped, Duration::from_millis(5));
+        alg.update(90, 90, Outcome::Dropped, Duration::from_millis(5));
         assert_eq!(alg.current(), 81);
     }
 
@@ -2271,7 +2243,7 @@ mod tests {
         let alg = bbr(config);
         assert_eq!(alg.current(), 50);
 
-        alg.update(50, 50, 1, Outcome::Ignore, Duration::from_millis(5));
+        alg.update(50, 50, Outcome::Ignore, Duration::from_millis(5));
         assert_eq!(alg.current(), 50);
     }
 
@@ -2288,13 +2260,13 @@ mod tests {
         // Growth should cap at max_limit
         let rtt = Duration::from_millis(5);
         for i in 1..=50 {
-            alg.update(i.min(15), i.min(15), 1, Outcome::Success, rtt);
+            alg.update(i.min(15), i.min(15), Outcome::Success, rtt);
         }
         assert!(alg.current() <= 15, "Should not exceed max_limit");
 
         // Drops should not go below min_limit
         for _ in 0..100 {
-            alg.update(0, 0, 1, Outcome::Dropped, Duration::from_millis(5));
+            alg.update(0, 0, Outcome::Dropped, Duration::from_millis(5));
         }
         assert!(
             alg.current() >= 5,
@@ -2333,39 +2305,4 @@ mod tests {
         assert_eq!(limiter.current(), 10);
     }
 
-    // ======================== record_sample_weighted tests ========================
-
-    #[test]
-    fn record_sample_weighted_weight_one_equals_unweighted() {
-        let limiter = Limiter::fixed(10);
-        let t1 = limiter.acquire();
-        let t2 = limiter.acquire();
-        assert_eq!(limiter.inflight(), 2);
-
-        t1.record_sample(Outcome::Success);
-        assert_eq!(limiter.inflight(), 1);
-
-        t2.record_sample_weighted(Outcome::Success, 1);
-        assert_eq!(limiter.inflight(), 0);
-    }
-
-    #[test]
-    fn record_sample_weighted_zero_treated_as_one() {
-        let limiter = Limiter::fixed(10);
-        let token = limiter.acquire();
-        assert_eq!(limiter.inflight(), 1);
-
-        token.record_sample_weighted(Outcome::Success, 0);
-        assert_eq!(limiter.inflight(), 0);
-    }
-
-    #[test]
-    fn record_sample_weighted_decrements_inflight() {
-        let limiter = Limiter::fixed(10);
-        let token = limiter.acquire();
-        assert_eq!(limiter.inflight(), 1);
-
-        token.record_sample_weighted(Outcome::Dropped, 100);
-        assert_eq!(limiter.inflight(), 0);
-    }
 }

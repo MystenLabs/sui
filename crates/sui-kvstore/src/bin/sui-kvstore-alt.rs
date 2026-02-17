@@ -44,6 +44,11 @@ struct Args {
     #[arg(long)]
     write_legacy_data: bool,
 
+    /// Maximum mutations per BigTable commit batch. Defaults to BIGTABLE_MAX_MUTATIONS env var
+    /// or 100,000.
+    #[arg(long)]
+    max_mutations: Option<usize>,
+
     #[command(flatten)]
     metrics_args: MetricsArgs,
 
@@ -97,6 +102,10 @@ async fn main() -> Result<()> {
 
     let committer = config.committer.finish(&args.client_args);
 
+    let max_mutations = args
+        .max_mutations
+        .unwrap_or_else(sui_kvstore::bigtable_max_mutations);
+
     let bigtable_indexer = BigTableIndexer::new(
         store,
         args.indexer_args,
@@ -104,6 +113,7 @@ async fn main() -> Result<()> {
         config.ingestion,
         committer,
         config.pipeline,
+        max_mutations,
         &registry,
     )
     .await?;
