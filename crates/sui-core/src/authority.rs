@@ -1838,6 +1838,18 @@ impl AuthorityState {
         self.get_cache_writer()
             .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
 
+        // Fire an in-memory-only notification so the scheduler can detect that this
+        // barrier transaction has been executed (e.g. by the checkpoint executor) and
+        // stop waiting for the checkpoint builder.  We intentionally do NOT persist
+        // this to the DB to avoid stale entries surviving a crash while effects may not.
+        if let Some(settlement_key) = certificate
+            .transaction_data()
+            .kind()
+            .accumulator_barrier_settlement_key()
+        {
+            epoch_store.notify_barrier_executed(settlement_key, *tx_digest);
+        }
+
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
             // reload them in the cache.

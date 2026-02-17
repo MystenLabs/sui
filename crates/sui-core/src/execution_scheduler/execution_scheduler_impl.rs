@@ -432,16 +432,32 @@ impl ExecutionScheduler {
                     .map(|(key, env)| {
                         let epoch_store = epoch_store.clone();
                         async move {
-                            (
-                                key,
-                                epoch_store.wait_for_settlement_transactions(key).await,
-                                env,
-                            )
+                            // Race settlement notification from checkpoint builder against
+                            // the barrier tx being executed (e.g. by checkpoint executor).
+                            // commit_certificate fires an in-memory notify for barrier txs
+                            // which resolves notify_read_tx_key_to_digest.
+                            let keys = [key];
+                            tokio::select! {
+                                txns = epoch_store.wait_for_settlement_transactions(key) => {
+                                    assert_reachable!("settlement transactions received");
+                                    (key, Some(txns), env)
+                                }
+                                result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
+                                    let _ = result;
+                                    debug!(?key, "Settlement already executed, skipping scheduler wait");
+                                    assert_reachable!("settlement already executed");
+                                    (key, None, env)
+                                }
+                            }
                         }
                     })
                     .collect();
 
                 while let Some((settlement_key, txns, env)) = futures.next().await {
+                    let Some(txns) = txns else {
+                        continue;
+                    };
+
                     let mut barrier_deps = BarrierDependencyBuilder::new();
                     let txns = txns
                         .into_iter()
@@ -459,13 +475,21 @@ impl ExecutionScheduler {
                     let epoch_store = epoch_store.clone();
                     let env = env.clone();
                     spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-                        let barrier_tx = epoch_store
-                            .wait_for_barrier_transaction(settlement_key)
-                            .await;
-                        let deps = barrier_deps
-                            .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
-                        let env = env.with_barrier_dependencies(deps);
-                        scheduler.enqueue_transactions(vec![(barrier_tx, env)], &epoch_store);
+                        let keys = [settlement_key];
+                        tokio::select! {
+                            barrier_tx = epoch_store.wait_for_barrier_transaction(settlement_key) => {
+                                assert_reachable!("barrier transaction received");
+                                let deps = barrier_deps
+                                    .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
+                                let env = env.with_barrier_dependencies(deps);
+                                scheduler.enqueue_transactions(vec![(barrier_tx, env)], &epoch_store);
+                            }
+                            result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
+                                let _ = result;
+                                debug!(?settlement_key, "Barrier already executed, skipping scheduler wait");
+                                assert_reachable!("barrier already executed");
+                            }
+                        }
                     }));
                 }
             }));
