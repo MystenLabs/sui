@@ -439,11 +439,13 @@ impl ExecutionScheduler {
                             let keys = [key];
                             tokio::select! {
                                 txns = epoch_store.wait_for_settlement_transactions(key) => {
+                                    assert_reachable!("settlement transactions received");
                                     (key, Some(txns), env)
                                 }
                                 result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
                                     let _ = result;
                                     debug!(?key, "Settlement already executed, skipping scheduler wait");
+                                    assert_reachable!("settlement already executed");
                                     (key, None, env)
                                 }
                             }
@@ -476,6 +478,7 @@ impl ExecutionScheduler {
                         let keys = [settlement_key];
                         tokio::select! {
                             barrier_tx = epoch_store.wait_for_barrier_transaction(settlement_key) => {
+                                assert_reachable!("barrier transaction received");
                                 let deps = barrier_deps
                                     .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
                                 let env = env.with_barrier_dependencies(deps);
@@ -484,6 +487,7 @@ impl ExecutionScheduler {
                             result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
                                 let _ = result;
                                 debug!(?settlement_key, "Barrier already executed, skipping scheduler wait");
+                                assert_reachable!("barrier already executed");
                             }
                         }
                     }));
