@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
+use fastcrypto::traits::ToFromBytes;
 use futures::stream::Stream;
 use futures::stream::TryStreamExt;
 use prost_types::FieldMask;
+use prost_types::value::Kind as ProtoValueKind;
 use std::time::Duration;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::TryFromProtoError;
@@ -16,6 +18,7 @@ use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
+use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use tap::Pipe;
@@ -276,6 +279,7 @@ impl Client {
         Ok(SimulateTransactionResponse {
             transaction,
             command_outputs: response.command_outputs,
+            suggested_gas_price: response.suggested_gas_price,
         })
     }
 
@@ -609,9 +613,11 @@ impl Client {
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct ExecutedTransaction {
     pub transaction: TransactionData,
+    pub signatures: Vec<GenericSignature>,
     pub effects: TransactionEffects,
     pub clever_error: Option<proto::CleverError>,
     pub events: Option<TransactionEvents>,
+    pub event_json: Vec<Option<serde_json::Value>>,
     pub changed_objects: Vec<proto::ChangedObject>,
     #[allow(unused)]
     unchanged_loaded_runtime_objects: Vec<proto::ObjectReference>,
@@ -628,6 +634,10 @@ impl ExecutedTransaction {
         FieldMask::from_paths([
             ExecutedTransaction::path_builder()
                 .transaction()
+                .bcs()
+                .finish(),
+            ExecutedTransaction::path_builder()
+                .signatures()
                 .bcs()
                 .finish(),
             ExecutedTransaction::path_builder().effects().bcs().finish(),
@@ -647,6 +657,7 @@ impl ExecutedTransaction {
                 .changed_objects()
                 .finish(),
             ExecutedTransaction::path_builder().events().bcs().finish(),
+            ExecutedTransaction::path_builder().events().events().json(),
             ExecutedTransaction::path_builder()
                 .balance_changes()
                 .finish(),
@@ -692,12 +703,18 @@ impl ExecutedTransaction {
                 Some((id, version, digest))
             })
     }
+
+    pub fn timestamp_ms(&self) -> Option<u64> {
+        self.timestamp
+            .and_then(|timestamp| sui_rpc::proto::proto_to_timestamp_ms(timestamp).ok())
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct SimulateTransactionResponse {
     pub transaction: ExecutedTransaction,
     pub command_outputs: Vec<proto::CommandResult>,
+    pub suggested_gas_price: Option<u64>,
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
@@ -767,6 +784,14 @@ fn executed_transaction_try_from_proto(
         .bcs()
         .deserialize()
         .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?;
+    let signatures = executed_transaction
+        .signatures()
+        .iter()
+        .map(|sig| {
+            GenericSignature::from_bytes(sig.bcs().value())
+                .map_err(|e| TryFromProtoError::invalid("signatures.bcs", e))
+        })
+        .collect::<Result<_, _>>()?;
     let clever_error = executed_transaction
         .effects()
         .status()
@@ -781,6 +806,16 @@ fn executed_transaction_try_from_proto(
         .map(|bcs| bcs.deserialize())
         .transpose()
         .map_err(|e| TryFromProtoError::invalid("events.bcs", e))?;
+    let event_json = executed_transaction
+        .events_opt()
+        .map(|events| {
+            events
+                .events()
+                .iter()
+                .map(|event| event.json_opt().map(proto_value_to_json_value))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
     let balance_changes = executed_transaction
         .balance_changes
@@ -790,9 +825,11 @@ fn executed_transaction_try_from_proto(
 
     ExecutedTransaction {
         transaction,
+        signatures,
         effects,
         clever_error,
         events,
+        event_json,
         balance_changes,
         checkpoint: executed_transaction.checkpoint,
         changed_objects: executed_transaction.effects().changed_objects().to_owned(),
@@ -803,6 +840,28 @@ fn executed_transaction_try_from_proto(
         timestamp: executed_transaction.timestamp,
     }
     .pipe(Ok)
+}
+
+fn proto_value_to_json_value(proto: &prost_types::Value) -> serde_json::Value {
+    match proto.kind.as_ref() {
+        Some(ProtoValueKind::NullValue(_)) | None => serde_json::Value::Null,
+        Some(ProtoValueKind::NumberValue(n)) => serde_json::Value::from(*n),
+        Some(ProtoValueKind::StringValue(s)) => serde_json::Value::from(s.clone()),
+        Some(ProtoValueKind::BoolValue(b)) => serde_json::Value::from(*b),
+        Some(ProtoValueKind::StructValue(map)) => serde_json::Value::Object(
+            map.fields
+                .iter()
+                .map(|(k, v)| (k.clone(), proto_value_to_json_value(v)))
+                .collect(),
+        ),
+        Some(ProtoValueKind::ListValue(list_value)) => serde_json::Value::Array(
+            list_value
+                .values
+                .iter()
+                .map(proto_value_to_json_value)
+                .collect(),
+        ),
+    }
 }
 
 fn status_from_error_with_metadata<T: Into<BoxError>>(err: T, metadata: MetadataMap) -> Status {
