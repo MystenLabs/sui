@@ -117,10 +117,10 @@ where
     const MAX_PENDING_ROWS: usize = P::MAX_PENDING_ROWS;
     const MAX_WATERMARK_UPDATES: usize = P::MAX_WATERMARK_UPDATES;
     const CAPACITY_BATCHING: bool = true;
-    const MAX_BATCH_WEIGHT: usize = BIGTABLE_MAX_MUTATIONS;
+    const MAX_BATCH_WEIGHT: usize = usize::MAX;
 
-    fn batch_weight(batch: &Self::Batch, _batch_len: usize) -> usize {
-        batch.total_mutations()
+    fn batch_weight(_batch: &Self::Batch, batch_len: usize) -> usize {
+        batch_len
     }
 
     fn drain_batch(
@@ -130,20 +130,12 @@ where
     ) -> (usize, usize) {
         let mut src = source.inner.write().unwrap();
         let mut dst = dest.inner.write().unwrap();
-        let mut weight = 0;
-        let mut count = 0;
-        while count < src.entries.len() {
-            let w = src.entries[count].mutations.len();
-            if weight + w > max_weight && weight > 0 {
-                break;
-            }
-            weight += w;
-            count += 1;
-        }
+        let count = max_weight.min(src.entries.len());
+        let mutations: usize = src.entries[..count].iter().map(|e| e.mutations.len()).sum();
         dst.entries.extend(src.entries.drain(..count));
-        dst.total_mutations += weight;
-        src.total_mutations -= weight;
-        (weight, count)
+        dst.total_mutations += mutations;
+        src.total_mutations -= mutations;
+        (count, count)
     }
 
     fn batch(
