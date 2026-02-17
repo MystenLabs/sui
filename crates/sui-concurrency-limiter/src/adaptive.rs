@@ -79,6 +79,15 @@ pub struct AdaptiveConfig {
     pub error_backoff_ratio: f64,
     /// Error rate threshold (fraction) that triggers the error brake.
     pub error_rate_threshold: f64,
+
+    // Target utilization
+    /// Fraction of discovered capacity to target (0.0–1.0). Default 1.0 (full capacity).
+    /// E.g., 0.6 means operate at 60% of the throughput knee, with periodic re-probing
+    /// to detect capacity changes.
+    pub target_utilization: f64,
+    /// How often (ms) to re-probe for capacity changes when target_utilization < 1.0.
+    /// 0 = disable re-probing. Default 300_000 (5 minutes).
+    pub re_probe_interval_ms: u64,
 }
 
 impl Default for AdaptiveConfig {
@@ -99,6 +108,8 @@ impl Default for AdaptiveConfig {
             probe_down_min_throughput: 0.90,
             error_backoff_ratio: 0.5,
             error_rate_threshold: 0.05,
+            target_utilization: 1.0,
+            re_probe_interval_ms: 300_000,
         }
     }
 }
@@ -121,9 +132,11 @@ enum ProbeBWState {
     Cruise {
         intervals_since_probe: usize,
     },
+    ReProbeBaseline,
     ProbeUp {
         pre_probe_limit: usize,
         start_throughput_ema: f64,
+        is_re_probe: bool,
     },
     ProbeDown {
         pre_down_limit: usize,
@@ -249,6 +262,9 @@ struct AdaptiveState {
     rolling_errors: RollingErrors,
     throughput_ema: Option<f64>,
     limit: usize,
+    knee_limit: Option<usize>,
+    knee_throughput: Option<f64>,
+    last_re_probe: Instant,
 }
 
 impl AdaptiveState {
@@ -282,6 +298,7 @@ impl AdaptiveState {
                 intervals_since_probe: 0,
             });
             self.rolling_errors.reset();
+            self.last_re_probe = Instant::now();
         }
     }
 
@@ -307,9 +324,18 @@ impl AdaptiveState {
                         *stall_count += 1;
                     }
                     if *stall_count >= config.full_pipe_rounds {
-                        self.limit = ((self.limit as f64) * config.headroom_factor
+                        let knee = ((self.limit as f64) * config.headroom_factor
                             / config.startup_growth_factor)
                             .ceil() as usize;
+                        self.knee_limit = Some(knee);
+                        self.knee_throughput = None;
+                        self.last_re_probe = Instant::now();
+                        if config.target_utilization < 1.0 {
+                            self.limit =
+                                ((knee as f64) * config.target_utilization).ceil() as usize;
+                        } else {
+                            self.limit = knee;
+                        }
                         self.limit = self.limit.clamp(config.min_limit, config.max_limit);
                         gauge.store(self.limit, Ordering::Release);
                         self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
@@ -386,9 +412,18 @@ impl AdaptiveState {
                 if *stall_count >= config.full_pipe_rounds {
                     // Full pipe detected. The last successful growth step overshot,
                     // so drain back: limit * headroom / growth_factor.
-                    self.limit = ((self.limit as f64) * config.headroom_factor
+                    let knee = ((self.limit as f64) * config.headroom_factor
                         / config.startup_growth_factor)
                         .ceil() as usize;
+                    self.knee_limit = Some(knee);
+                    self.knee_throughput = None;
+                    self.last_re_probe = Instant::now();
+                    if config.target_utilization < 1.0 {
+                        self.limit =
+                            ((knee as f64) * config.target_utilization).ceil() as usize;
+                    } else {
+                        self.limit = knee;
+                    }
                     self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
                         intervals_since_probe: 0,
                     });
@@ -409,7 +444,23 @@ impl AdaptiveState {
                         // No additive increase — ProbeUp handles growth discovery.
                         *intervals_since_probe += 1;
 
-                        if !underutilized && *intervals_since_probe >= config.probe_bw_intervals {
+                        if config.target_utilization < 1.0 {
+                            // Re-probe timer: periodically return to the knee to
+                            // re-validate capacity instead of counter-based ProbeUp.
+                            if config.re_probe_interval_ms > 0
+                                && !underutilized
+                                && self.last_re_probe.elapsed()
+                                    >= Duration::from_millis(config.re_probe_interval_ms)
+                            {
+                                if let Some(knee) = self.knee_limit {
+                                    self.limit = knee;
+                                    self.phase =
+                                        Phase::ProbeBW(ProbeBWState::ReProbeBaseline);
+                                }
+                            }
+                        } else if !underutilized
+                            && *intervals_since_probe >= config.probe_bw_intervals
+                        {
                             let pre_probe_limit = self.limit;
                             let start_ema = throughput_ema;
                             self.limit =
@@ -417,12 +468,43 @@ impl AdaptiveState {
                             self.phase = Phase::ProbeBW(ProbeBWState::ProbeUp {
                                 pre_probe_limit,
                                 start_throughput_ema: start_ema,
+                                is_re_probe: false,
+                            });
+                        }
+                    }
+                    ProbeBWState::ReProbeBaseline => {
+                        let knee = self.knee_limit.unwrap();
+                        let capacity_decreased = self
+                            .knee_throughput
+                            .map_or(false, |prev| throughput < prev * 0.85);
+
+                        if capacity_decreased {
+                            let prev_knee_tp = self.knee_throughput.unwrap();
+                            let ratio = throughput / prev_knee_tp;
+                            let new_knee = ((knee as f64) * ratio).ceil() as usize;
+                            self.knee_limit = Some(new_knee);
+                            self.knee_throughput = Some(throughput);
+                            self.limit = ((new_knee as f64) * config.target_utilization)
+                                .ceil() as usize;
+                            self.last_re_probe = Instant::now();
+                            self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                                intervals_since_probe: 0,
+                            });
+                        } else {
+                            self.knee_throughput = Some(throughput);
+                            self.limit =
+                                ((knee as f64) * config.probe_up_gain).ceil() as usize;
+                            self.phase = Phase::ProbeBW(ProbeBWState::ProbeUp {
+                                pre_probe_limit: knee,
+                                start_throughput_ema: throughput_ema,
+                                is_re_probe: true,
                             });
                         }
                     }
                     ProbeBWState::ProbeUp {
                         pre_probe_limit,
                         start_throughput_ema,
+                        is_re_probe,
                     } => {
                         // Proportional threshold: scale required throughput gain by the
                         // actual concurrency increase so the bar is consistent at all
@@ -447,7 +529,23 @@ impl AdaptiveState {
                                 stall_count: 0,
                             };
                         } else if throughput_ema >= *start_throughput_ema * proportional_threshold {
+                            if *is_re_probe {
+                                // Capacity increased — update knee to new level
+                                self.knee_limit = Some(self.limit);
+                                self.limit = ((self.limit as f64) * config.target_utilization)
+                                    .ceil() as usize;
+                                self.last_re_probe = Instant::now();
+                            }
                             // Throughput grew proportionally — keep the higher limit
+                            self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                                intervals_since_probe: 0,
+                            });
+                        } else if *is_re_probe {
+                            // Knee confirmed unchanged — restore target utilization
+                            let knee = self.knee_limit.unwrap_or(*pre_probe_limit);
+                            self.limit =
+                                ((knee as f64) * config.target_utilization).ceil() as usize;
+                            self.last_re_probe = Instant::now();
                             self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
                                 intervals_since_probe: 0,
                             });
@@ -526,6 +624,9 @@ impl Adaptive {
                 rolling_errors: RollingErrors::new(100),
                 throughput_ema: None,
                 limit: initial,
+                knee_limit: None,
+                knee_throughput: None,
+                last_re_probe: Instant::now(),
             }),
             config: config.clone(),
         }
@@ -551,6 +652,13 @@ impl Adaptive {
             return;
         }
         state.apply_interval(&self.config, &self.gauge, throughput);
+    }
+
+    /// Set last_re_probe to the distant past so the re-probe timer fires on the next interval.
+    #[cfg(test)]
+    fn expire_re_probe_timer(&self) {
+        let mut state = self.inner.lock().unwrap();
+        state.last_re_probe = Instant::now() - Duration::from_secs(3600);
     }
 }
 
@@ -906,6 +1014,7 @@ mod tests {
             state.phase = Phase::ProbeBW(ProbeBWState::ProbeUp {
                 pre_probe_limit: 100,
                 start_throughput_ema: 100.0,
+                is_re_probe: false,
             });
             alg.gauge.store(125, Ordering::Release);
         }
@@ -945,6 +1054,7 @@ mod tests {
             state.phase = Phase::ProbeBW(ProbeBWState::ProbeUp {
                 pre_probe_limit: 100,
                 start_throughput_ema: 100.0,
+                is_re_probe: false,
             });
             alg.gauge.store(125, Ordering::Release);
         }
@@ -980,6 +1090,7 @@ mod tests {
             state.phase = Phase::ProbeBW(ProbeBWState::ProbeUp {
                 pre_probe_limit: 100,
                 start_throughput_ema: 100.0,
+                is_re_probe: false,
             });
             alg.gauge.store(125, Ordering::Release);
         }
@@ -1340,5 +1451,450 @@ mod tests {
 
         // No successes or errors recorded, limit should be unchanged
         assert_eq!(alg.current(), 100);
+    }
+
+    // ======================== Target utilization tests ========================
+
+    #[test]
+    fn startup_drain_applies_target_utilization() {
+        let config = AdaptiveConfig {
+            initial_limit: 4,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            startup_growth_factor: 2.0,
+            full_pipe_threshold: 1.25,
+            full_pipe_rounds: 3,
+            headroom_factor: 0.85,
+            target_utilization: 0.6,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // Round 1: seed → double to 8
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(400.0);
+        assert_eq!(alg.current(), 8);
+
+        // Round 2: throughput doubles → double to 16
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(800.0);
+        assert_eq!(alg.current(), 16);
+
+        // Rounds 3–5: flat → 3 stalls → drain
+        for _ in 0..3 {
+            feed_successes(&alg, 50, Duration::from_millis(10));
+            alg.force_interval_with_throughput(800.0);
+        }
+
+        // knee = ceil(16 * 0.85 / 2.0) = ceil(6.8) = 7
+        // limit = ceil(7 * 0.6) = ceil(4.2) = 5
+        assert_eq!(alg.current(), 5);
+
+        let state = alg.inner.lock().unwrap();
+        assert_eq!(state.knee_limit, Some(7));
+        assert!(state.knee_throughput.is_none());
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::Cruise { .. })
+        ));
+    }
+
+    #[test]
+    fn cruise_suppresses_probe_up_with_target_utilization() {
+        let config = AdaptiveConfig {
+            initial_limit: 60,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            probe_bw_intervals: 3,
+            target_utilization: 0.6,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 60;
+            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                intervals_since_probe: 0,
+            });
+            state.knee_limit = Some(100);
+            alg.gauge.store(60, Ordering::Release);
+        }
+
+        // Many intervals with high throughput — ProbeUp should NOT trigger
+        for _ in 0..10 {
+            feed_successes(&alg, 50, Duration::from_millis(10));
+            alg.force_interval_with_throughput(600.0);
+        }
+
+        assert_eq!(alg.current(), 60);
+        let state = alg.inner.lock().unwrap();
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::Cruise { .. })
+        ));
+    }
+
+    #[test]
+    fn re_probe_timer_fires() {
+        let config = AdaptiveConfig {
+            initial_limit: 60,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            target_utilization: 0.6,
+            re_probe_interval_ms: 300_000,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 60;
+            state.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                intervals_since_probe: 0,
+            });
+            state.knee_limit = Some(100);
+            state.knee_throughput = Some(1000.0);
+            alg.gauge.store(60, Ordering::Release);
+        }
+
+        // Timer hasn't expired — should stay in Cruise
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(600.0);
+        {
+            let state = alg.inner.lock().unwrap();
+            assert!(matches!(
+                state.phase,
+                Phase::ProbeBW(ProbeBWState::Cruise { .. })
+            ));
+        }
+
+        // Expire timer
+        alg.expire_re_probe_timer();
+
+        // Now should enter ReProbeBaseline at knee limit
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(600.0);
+
+        assert_eq!(alg.current(), 100);
+        let state = alg.inner.lock().unwrap();
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::ReProbeBaseline)
+        ));
+    }
+
+    #[test]
+    fn re_probe_discovers_higher_capacity() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            target_utilization: 0.6,
+            probe_up_gain: 1.25,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 100;
+            state.knee_limit = Some(100);
+            state.knee_throughput = Some(1000.0);
+            state.throughput_ema = Some(1000.0);
+            state.phase = Phase::ProbeBW(ProbeBWState::ReProbeBaseline);
+            alg.gauge.store(100, Ordering::Release);
+        }
+
+        // ReProbeBaseline: throughput maintained (1000 >= 1000*0.85) → ProbeUp
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1000.0);
+
+        assert_eq!(alg.current(), 125); // ceil(100 * 1.25)
+        {
+            let state = alg.inner.lock().unwrap();
+            assert!(matches!(
+                state.phase,
+                Phase::ProbeBW(ProbeBWState::ProbeUp {
+                    is_re_probe: true,
+                    ..
+                })
+            ));
+        }
+
+        // ProbeUp: throughput scales proportionally → capacity increased
+        // concurrency_ratio = 125/100 = 1.25, threshold = 1.25 * 0.9 = 1.125
+        // Need EMA >= 1000 * 1.125 = 1125
+        // Current EMA = 0.3*1000 + 0.7*1000 = 1000
+        // Feed 1500 → EMA = 0.3*1500 + 0.7*1000 = 1150 >= 1125 ✓
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1500.0);
+
+        let state = alg.inner.lock().unwrap();
+        assert_eq!(state.knee_limit, Some(125));
+        // limit = ceil(125 * 0.6) = 75
+        assert_eq!(state.limit, 75);
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::Cruise { .. })
+        ));
+    }
+
+    #[test]
+    fn re_probe_confirms_unchanged_capacity() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            target_utilization: 0.6,
+            probe_up_gain: 1.25,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 100;
+            state.knee_limit = Some(100);
+            state.knee_throughput = Some(1000.0);
+            state.throughput_ema = Some(1000.0);
+            state.phase = Phase::ProbeBW(ProbeBWState::ReProbeBaseline);
+            alg.gauge.store(100, Ordering::Release);
+        }
+
+        // ReProbeBaseline: throughput ok → ProbeUp
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1000.0);
+        assert_eq!(alg.current(), 125);
+
+        // ProbeUp: throughput flat (doesn't scale) → knee confirmed unchanged
+        // EMA = 0.3*1000 + 0.7*1000 = 1000, need >= 1125, 1000 < 1125 → no growth
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1000.0);
+
+        // Knee confirmed: limit = ceil(100 * 0.6) = 60
+        let state = alg.inner.lock().unwrap();
+        assert_eq!(state.knee_limit, Some(100));
+        assert_eq!(state.limit, 60);
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::Cruise { .. })
+        ));
+    }
+
+    #[test]
+    fn re_probe_detects_capacity_decrease() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            target_utilization: 0.6,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 100;
+            state.knee_limit = Some(100);
+            state.knee_throughput = Some(1000.0);
+            state.throughput_ema = Some(600.0);
+            state.phase = Phase::ProbeBW(ProbeBWState::ReProbeBaseline);
+            alg.gauge.store(100, Ordering::Release);
+        }
+
+        // Throughput = 700, which is < 1000 * 0.85 = 850 → capacity decrease
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(700.0);
+
+        // ratio = 700/1000 = 0.7, new_knee = ceil(100 * 0.7) = 70
+        // limit = ceil(70 * 0.6) = 42
+        let state = alg.inner.lock().unwrap();
+        assert_eq!(state.knee_limit, Some(70));
+        assert_eq!(state.limit, 42);
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::Cruise { .. })
+        ));
+    }
+
+    #[test]
+    fn re_probe_major_growth_enters_startup() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            target_utilization: 0.6,
+            probe_up_gain: 1.25,
+            full_pipe_threshold: 1.25,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 100;
+            state.knee_limit = Some(100);
+            state.knee_throughput = Some(1000.0);
+            state.throughput_ema = Some(1000.0);
+            state.phase = Phase::ProbeBW(ProbeBWState::ReProbeBaseline);
+            alg.gauge.store(100, Ordering::Release);
+        }
+
+        // ReProbeBaseline: throughput maintained → ProbeUp
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(1000.0);
+        assert_eq!(alg.current(), 125);
+
+        // ProbeUp with major growth:
+        // startup_threshold = 1.25 * 1.25 = 1.5625
+        // Need EMA >= 1000 * 1.5625 = 1562.5
+        // Current EMA = 1000. Feed 3000 → EMA = 0.3*3000 + 0.7*1000 = 1600 >= 1562.5 ✓
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(3000.0);
+
+        let state = alg.inner.lock().unwrap();
+        assert!(
+            matches!(state.phase, Phase::Startup { .. }),
+            "Should re-enter Startup on major throughput gain"
+        );
+    }
+
+    #[test]
+    fn re_probe_decrease_threshold_ignores_noise() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            target_utilization: 0.6,
+            probe_up_gain: 1.25,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        {
+            let mut state = alg.inner.lock().unwrap();
+            state.limit = 100;
+            state.knee_limit = Some(100);
+            state.knee_throughput = Some(1000.0);
+            state.throughput_ema = Some(600.0);
+            state.phase = Phase::ProbeBW(ProbeBWState::ReProbeBaseline);
+            alg.gauge.store(100, Ordering::Release);
+        }
+
+        // 90% of stored knee throughput (900 >= 850) → NOT a decrease, proceed to ProbeUp
+        feed_successes(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(900.0);
+
+        assert_eq!(alg.current(), 125); // ceil(100 * 1.25)
+        let state = alg.inner.lock().unwrap();
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::ProbeUp {
+                is_re_probe: true,
+                ..
+            })
+        ));
+        assert_eq!(state.knee_throughput, Some(900.0));
+    }
+
+    #[test]
+    fn error_brake_resets_re_probe_timer() {
+        let config = AdaptiveConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 10000,
+            target_utilization: 0.6,
+            error_rate_threshold: 0.05,
+            error_backoff_ratio: 0.5,
+            probe_interval_ms: 60_000,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // Expire the timer
+        alg.expire_re_probe_timer();
+
+        {
+            let state = alg.inner.lock().unwrap();
+            assert!(state.last_re_probe.elapsed() >= Duration::from_secs(3600));
+        }
+
+        // Trigger error brake (window=200, need >5% error rate)
+        for _ in 0..190 {
+            alg.update(0, 0, Outcome::Success, Duration::from_millis(10));
+        }
+        for _ in 0..11 {
+            alg.update(0, 0, Outcome::Dropped, Duration::from_millis(10));
+        }
+
+        // Timer should be reset (recent)
+        let state = alg.inner.lock().unwrap();
+        assert!(state.last_re_probe.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn zero_throughput_startup_drain_applies_target_utilization() {
+        let config = AdaptiveConfig {
+            initial_limit: 16,
+            min_limit: 1,
+            max_limit: 10000,
+            probe_interval_ms: 1000,
+            target_utilization: 0.6,
+            startup_growth_factor: 2.0,
+            full_pipe_rounds: 3,
+            headroom_factor: 0.85,
+            ..default_config()
+        };
+        let alg = adaptive(config);
+
+        // Force zero-throughput intervals (no successes → zero throughput path)
+        for _ in 0..3 {
+            alg.force_interval();
+        }
+
+        // knee = ceil(16 * 0.85 / 2.0) = ceil(6.8) = 7
+        // limit = ceil(7 * 0.6) = ceil(4.2) = 5
+        assert_eq!(alg.current(), 5);
+
+        let state = alg.inner.lock().unwrap();
+        assert_eq!(state.knee_limit, Some(7));
+    }
+
+    #[test]
+    fn config_serialization_new_fields() {
+        // JSON round-trip with new fields
+        let config = AdaptiveConfig {
+            target_utilization: 0.6,
+            re_probe_interval_ms: 180_000,
+            ..AdaptiveConfig::default()
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: AdaptiveConfig = serde_json::from_str(&json).unwrap();
+        assert!((deserialized.target_utilization - 0.6).abs() < f64::EPSILON);
+        assert_eq!(deserialized.re_probe_interval_ms, 180_000);
+
+        // Backwards compat: absent fields get defaults
+        let json_old = r#"{"initial-limit": 10}"#;
+        let config: AdaptiveConfig = serde_json::from_str(json_old).unwrap();
+        assert!((config.target_utilization - 1.0).abs() < f64::EPSILON);
+        assert_eq!(config.re_probe_interval_ms, 300_000);
+
+        // TOML with new fields
+        let toml_str = r#"
+            target-utilization = 0.7
+            re-probe-interval-ms = 60000
+        "#;
+        let config: AdaptiveConfig = toml::from_str(toml_str).unwrap();
+        assert!((config.target_utilization - 0.7).abs() < f64::EPSILON);
+        assert_eq!(config.re_probe_interval_ms, 60000);
     }
 }
