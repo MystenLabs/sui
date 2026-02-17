@@ -1366,76 +1366,7 @@ fn value(
             let base_types = base_types(&context.reporter, &arg_types);
 
             let decl_fields = context.info.struct_fields(&module_ident, &struct_name);
-
-            let mut texp_fields: Vec<(usize, Field, usize, N::Type, T::Exp)> =
-                if let Some(ref field_map) = decl_fields {
-                    fields
-                        .into_iter()
-                        .map(|(f, (exp_idx, (bt, tf)))| {
-                            (*field_map.get(&f).unwrap(), f, exp_idx, bt, tf)
-                        })
-                        .collect()
-                } else {
-                    // If no field map, compiler error in typing.
-                    fields
-                        .into_iter()
-                        .enumerate()
-                        .map(|(ndx, (f, (exp_idx, (bt, tf))))| (ndx, f, exp_idx, bt, tf))
-                        .collect()
-                };
-            texp_fields.sort_by(|(_, _, eidx1, _, _), (_, _, eidx2, _, _)| eidx1.cmp(eidx2));
-
-            let reorder_fields = texp_fields
-                .iter()
-                .any(|(decl_idx, _, exp_idx, _, _)| decl_idx != exp_idx);
-
-            let fields = if !reorder_fields {
-                let mut fields = vec![];
-                let field_exps = texp_fields
-                    .into_iter()
-                    .map(|(_, f, _, bt, te)| {
-                        let bt = base_type(&context.reporter, &bt);
-                        fields.push((f, bt.clone()));
-                        let t = H::Type_::base(bt);
-                        (te, Some(t))
-                    })
-                    .collect();
-                let field_exps = value_evaluation_order(context, block, field_exps);
-                assert!(
-                    fields.len() == field_exps.len(),
-                    "ICE exp_evaluation_order changed arity"
-                );
-                field_exps
-                    .into_iter()
-                    .zip(fields)
-                    .map(|(e, (f, bt))| (f, bt, e))
-                    .collect()
-            } else {
-                let num_fields = decl_fields.as_ref().map(|m| m.len()).unwrap_or(0);
-                let mut fields = (0..num_fields).map(|_| None).collect::<Vec<_>>();
-                for (decl_idx, field, _exp_idx, bt, tf) in texp_fields {
-                    // Might have too many arguments, there will be an error from typing
-                    if decl_idx >= fields.len() {
-                        debug_assert!(context.env.has_errors());
-                        break;
-                    }
-                    let base_ty = base_type(&context.reporter, &bt);
-                    let t = H::Type_::base(base_ty.clone());
-                    let field_expr = value(context, block, Some(&t), tf);
-                    assert!(fields.get(decl_idx).unwrap().is_none());
-                    let move_tmp = bind_exp(context, block, field_expr);
-                    fields[decl_idx] = Some((field, base_ty, move_tmp))
-                }
-                // Might have too few arguments, there will be an error from typing if so
-                fields
-                    .into_iter()
-                    .filter_map(|o| {
-                        // if o is None, context should have errors
-                        debug_assert!(o.is_some() || context.env.has_errors());
-                        o
-                    })
-                    .collect()
-            };
+            let fields = value_fields(context, block, decl_fields, fields);
             make_exp(HE::Pack(struct_name, base_types, fields))
         }
 
@@ -1446,76 +1377,7 @@ fn value(
                 context
                     .info
                     .enum_variant_fields(&module_ident, &enum_name, &variant_name);
-
-            let mut texp_fields: Vec<(usize, Field, usize, N::Type, T::Exp)> =
-                if let Some(ref field_map) = decl_fields {
-                    fields
-                        .into_iter()
-                        .map(|(f, (exp_idx, (bt, tf)))| {
-                            (*field_map.get(&f).unwrap(), f, exp_idx, bt, tf)
-                        })
-                        .collect()
-                } else {
-                    // If no field map, compiler error in typing.
-                    fields
-                        .into_iter()
-                        .enumerate()
-                        .map(|(ndx, (f, (exp_idx, (bt, tf))))| (ndx, f, exp_idx, bt, tf))
-                        .collect()
-                };
-            texp_fields.sort_by(|(_, _, eidx1, _, _), (_, _, eidx2, _, _)| eidx1.cmp(eidx2));
-
-            let reorder_fields = texp_fields
-                .iter()
-                .any(|(decl_idx, _, exp_idx, _, _)| decl_idx != exp_idx);
-
-            let fields = if !reorder_fields {
-                let mut fields = vec![];
-                let field_exps = texp_fields
-                    .into_iter()
-                    .map(|(_, f, _, bt, te)| {
-                        let bt = base_type(&context.reporter, &bt);
-                        fields.push((f, bt.clone()));
-                        let t = H::Type_::base(bt);
-                        (te, Some(t))
-                    })
-                    .collect();
-                let field_exps = value_evaluation_order(context, block, field_exps);
-                assert!(
-                    fields.len() == field_exps.len(),
-                    "ICE exp_evaluation_order changed arity"
-                );
-                field_exps
-                    .into_iter()
-                    .zip(fields)
-                    .map(|(e, (f, bt))| (f, bt, e))
-                    .collect()
-            } else {
-                let num_fields = decl_fields.as_ref().map(|m| m.len()).unwrap_or(0);
-                let mut fields = (0..num_fields).map(|_| None).collect::<Vec<_>>();
-                for (decl_idx, field, _exp_idx, bt, tf) in texp_fields {
-                    // Might have too many arguments, there will be an error from typing
-                    if decl_idx >= fields.len() {
-                        debug_assert!(context.env.has_errors());
-                        break;
-                    }
-                    let base_ty = base_type(&context.reporter, &bt);
-                    let t = H::Type_::base(base_ty.clone());
-                    let field_expr = value(context, block, Some(&t), tf);
-                    debug_assert!(fields.get(decl_idx).unwrap().is_none());
-                    let move_tmp = bind_exp(context, block, field_expr);
-                    fields[decl_idx] = Some((field, base_ty, move_tmp))
-                }
-                // Might have too few arguments, there will be an error from typing if so
-                fields
-                    .into_iter()
-                    .filter_map(|o| {
-                        // if o is None, context should have errors
-                        debug_assert!(o.is_some() || context.env.has_errors());
-                        o
-                    })
-                    .collect()
-            };
+            let fields = value_fields(context, block, decl_fields, fields);
             make_exp(HE::PackVariant(enum_name, variant_name, base_types, fields))
         }
 
@@ -1647,6 +1509,76 @@ fn value(
         }
     };
     maybe_freeze(context, block, expected_type.cloned(), preresult)
+}
+
+// Handles fields for both Pack and PackVariant
+fn value_fields(
+    context: &mut Context,
+    block: &mut Block,
+    // Field declaration indices
+    decl_fields: Option<UniqueMap<Field, usize>>,
+    fields: Fields<(N::Type, T::Exp)>,
+) -> Vec<(Field, H::BaseType, H::Exp)> {
+    let mut texp_fields: Vec<(usize, Field, usize, N::Type, T::Exp)> =
+        if let Some(field_map) = &decl_fields {
+            let field_len = field_map.len();
+            fields
+                .into_iter()
+                .map(|(f, (exp_idx, (bt, tf)))| {
+                    // If the field is not a valid one, typing will produce an error.
+                    // So keep the field in a consistent order, but after all of the
+                    // valid fields.
+                    let decl_idx = field_map.get(&f).copied().unwrap_or(field_len + exp_idx);
+                    (decl_idx, f, exp_idx, bt, tf)
+                })
+                .collect()
+        } else {
+            // If no field map, compiler error in typing.
+            fields
+                .into_iter()
+                .enumerate()
+                .map(|(ndx, (f, (exp_idx, (bt, tf))))| (ndx, f, exp_idx, bt, tf))
+                .collect()
+        };
+    texp_fields.sort_by(|(_, _, eidx1, _, _), (_, _, eidx2, _, _)| eidx1.cmp(eidx2));
+
+    let reorder_fields = texp_fields
+        .iter()
+        .any(|(decl_idx, _, exp_idx, _, _)| decl_idx != exp_idx);
+
+    if !reorder_fields {
+        let mut fields = vec![];
+        let field_exps = texp_fields
+            .into_iter()
+            .map(|(_, f, _, bt, te)| {
+                let bt = base_type(&context.reporter, &bt);
+                fields.push((f, bt.clone()));
+                let t = H::Type_::base(bt);
+                (te, Some(t))
+            })
+            .collect();
+        let field_exps = value_evaluation_order(context, block, field_exps);
+        assert!(
+            fields.len() == field_exps.len(),
+            "ICE exp_evaluation_order changed arity"
+        );
+        field_exps
+            .into_iter()
+            .zip(fields)
+            .map(|(e, (f, bt))| (f, bt, e))
+            .collect()
+    } else {
+        let mut fields: BTreeMap<usize, (_, _, _)> = BTreeMap::new();
+        for (decl_idx, field, _exp_idx, bt, tf) in texp_fields {
+            let base_ty = base_type(&context.reporter, &bt);
+            let t = H::Type_::base(base_ty.clone());
+            let field_expr = value(context, block, Some(&t), tf);
+            debug_assert!(fields.get(&decl_idx).is_none());
+            let move_tmp = bind_exp(context, block, field_expr);
+            fields.insert(decl_idx, (field, base_ty, move_tmp));
+        }
+        fields.into_values().collect()
+    }
 }
 
 fn value_block(

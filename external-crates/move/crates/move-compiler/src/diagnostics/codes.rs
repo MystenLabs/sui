@@ -208,7 +208,7 @@ codes!(
         TooManyTypeArguments: { msg: "too many type arguments", severity: NonblockingError },
         TooFewTypeArguments: { msg: "too few type arguments", severity: BlockingError },
         UnboundVariable: { msg: "unbound variable", severity: BlockingError },
-        UnboundField: { msg: "unbound field", severity: BlockingError },
+        UnboundField: { msg: "unbound field", severity: NonblockingError },
         ReservedName: { msg: "invalid use of reserved name", severity: BlockingError },
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
         PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
@@ -240,7 +240,7 @@ codes!(
             { msg: "invalid statement or expression in constant", severity: BlockingError },
         InvalidLoopControl: { msg: "invalid loop control", severity: BlockingError },
         InvalidNativeUsage: { msg: "invalid use of native item", severity: BlockingError },
-        TooFewArguments: { msg: "too few arguments", severity: BlockingError },
+        TooFewArguments: { msg: "too few arguments", severity: NonblockingError },
         TooManyArguments: { msg: "too many arguments", severity: NonblockingError },
         CyclicData: { msg: "cyclic data", severity: NonblockingError },
         CyclicInstantiation:

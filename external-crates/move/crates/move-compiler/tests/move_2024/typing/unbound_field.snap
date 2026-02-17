@@ -1,0 +1,131 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:14:5
+   │
+14 │     S { f: false };
+   │     ^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::S'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/typing/unbound_field.move:14:5
+   │
+14 │     S { f: false };
+   │     ^^^^^^^^^^^^^^ Missing argument for field 'a' in '0x0::m::S'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:15:5
+   │
+15 │     T { f: false, a: 0 };
+   │     ^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::T'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/typing/unbound_field.move:15:5
+   │
+15 │     T { f: false, a: 0 };
+   │     ^^^^^^^^^^^^^^^^^^^^ Missing argument for field 'b' in '0x0::m::T'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:16:5
+   │
+16 │     E::B { f: false };
+   │     ^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::E::B'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/typing/unbound_field.move:16:5
+   │
+16 │     E::B { f: false };
+   │     ^^^^^^^^^^^^^^^^^ Missing argument for field 'a' in '0x0::m::E::B'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:17:5
+   │
+17 │     E::C { a: 0, f: false };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::E::C'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/typing/unbound_field.move:17:5
+   │
+17 │     E::C { a: 0, f: false };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^ Missing argument for field 'b' in '0x0::m::E::C'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:20:5
+   │
+20 │     S { a: 0, f: false };
+   │     ^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::S'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:21:5
+   │
+21 │     S { f: false, a: 0 };
+   │     ^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::S'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:22:5
+   │
+22 │     T { a: 0, b: 0, f: false };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::T'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:23:5
+   │
+23 │     T { f: false, a: 0, b: 0 };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::T'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:24:5
+   │
+24 │     T { a: 0, f: false, b: 0 };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::T'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:25:5
+   │
+25 │     E::A { f: false };
+   │     ^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::E::A'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:26:5
+   │
+26 │     E::B { a: 0, f: false };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::E::B'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:27:5
+   │
+27 │     E::B { f: false, a: 0 };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::E::B'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:28:5
+   │
+28 │     E::C { a: 0, b: 0, f: false };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::E::C'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:29:5
+   │
+29 │     E::C { a: 0, f: false, b: 0 };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::E::C'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field.move:30:5
+   │
+30 │     E::C { f: false, a: 0, b: 0 };
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::E::C'
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_2024/typing/unbound_field.move:35:5
+   │
+34 │     move x;
+   │     ------
+   │     │
+   │     The value of 'x' was previously moved here.
+   │     Suggestion: use 'copy x' to avoid the move.
+35 │     move x;
+   │     ^^^^^^ Invalid usage of previously moved variable 'x'.
