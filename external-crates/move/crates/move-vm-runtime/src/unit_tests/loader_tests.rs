@@ -208,11 +208,10 @@ impl Adapter {
     ) -> DepthFormula {
         let vm = self.runtime_adapter.write();
         let mut session = vm.make_vm(self.store.linkage.clone()).unwrap();
-        let key = session.virtual_tables.to_virtual_table_key(
-            module_id.address(),
-            module_id.name(),
-            struct_name,
-        );
+        let key = session
+            .virtual_tables
+            .to_virtual_table_key_for_testing(module_id.address(), module_id.name(), struct_name)
+            .unwrap();
         session
             .virtual_tables
             .calculate_depth_of_type(&key)

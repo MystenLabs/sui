@@ -126,11 +126,13 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
             StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
                 ExecutionErrorKind::TypeArityMismatch.into()
             }
-            StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
-                argument_idx,
-                kind: TypeArgumentError::TypeNotFound,
+            StatusCode::EXTERNAL_RESOLUTION_REQUEST_ERROR => {
+                ExecutionErrorKind::TypeArgumentError {
+                    argument_idx,
+                    kind: TypeArgumentError::TypeNotFound,
+                }
+                .into()
             }
-            .into(),
             StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
                 argument_idx,
                 kind: TypeArgumentError::ConstraintNotSatisfied,

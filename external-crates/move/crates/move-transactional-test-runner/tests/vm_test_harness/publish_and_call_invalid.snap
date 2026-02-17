@@ -6,10 +6,10 @@ processed 1 task
 task 0, lines 1-10:
 //# publish-and-call --call 0x42::m::a --call 0x42::m::d
 Error: Function execution failed with VMError: {
-    major_status: VTABLE_KEY_LOOKUP_ERROR,
+    major_status: EXTERNAL_RESOLUTION_REQUEST_ERROR,
     sub_status: None,
-    location: undefined,
+    location: 0x42::m,
     indices: [],
     offsets: [],
-    message: "Could not find function 0000000000000000000000000000000000000000000000000000000000000042::m::d",
+    message: "Failed to find function 0000000000000000000000000000000000000000000000000000000000000042::m::d",
 }
