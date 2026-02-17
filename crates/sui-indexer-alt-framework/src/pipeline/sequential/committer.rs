@@ -17,6 +17,7 @@ use tracing::warn;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::IndexedCheckpoint;
+use crate::pipeline::PendingRowsGuard;
 use crate::pipeline::WARN_PENDING_WATERMARKS;
 use crate::pipeline::logging::WatermarkLogger;
 use crate::pipeline::sequential::Handler;
@@ -72,6 +73,7 @@ where
         let mut batch = H::Batch::default();
         let mut batch_rows = 0;
         let mut batch_checkpoints = 0;
+        let mut batch_guards: Vec<PendingRowsGuard> = Vec::new();
 
         // The task keeps track of the highest (inclusive) checkpoint it has added to the batch
         // through `next_checkpoint`, and whether that batch needs to be written out. By extension
@@ -149,8 +151,10 @@ where
                                 let indexed = entry.remove();
                                 batch_rows += indexed.len();
                                 batch_checkpoints += 1;
-                                handler.batch(&mut batch, indexed.values.into_iter());
-                                watermark = Some(indexed.watermark);
+                                let IndexedCheckpoint { values, watermark: wm, guard } = indexed;
+                                handler.batch(&mut batch, values.into_iter());
+                                watermark = Some(wm);
+                                batch_guards.extend(guard);
                                 next_checkpoint += 1;
                             }
 
@@ -164,6 +168,7 @@ where
 
                                 let indexed = entry.remove();
                                 pending_rows -= indexed.len();
+                                drop(indexed);
                             }
                         }
                     }
@@ -325,6 +330,7 @@ where
 
                     let _ = std::mem::take(&mut batch);
                     pending_rows -= batch_rows;
+                    batch_guards.clear();
                     batch_checkpoints = 0;
                     batch_rows = 0;
                     attempt = 0;
@@ -393,6 +399,7 @@ fn can_process_pending<T>(
 
 #[cfg(test)]
 mod tests {
+    use crate::pipeline::PendingRowsGuard;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -493,11 +500,12 @@ mod tests {
 
     fn create_checkpoint(checkpoint: u64) -> IndexedCheckpoint<TestHandler> {
         IndexedCheckpoint::new(
-            checkpoint,        // epoch
-            checkpoint,        // checkpoint number
-            checkpoint,        // tx_hi
-            checkpoint * 1000, // timestamp
-            vec![checkpoint],  // values
+            checkpoint,                // epoch
+            checkpoint,                // checkpoint number
+            checkpoint,                // tx_hi
+            checkpoint * 1000,         // timestamp
+            vec![checkpoint],          // values
+            PendingRowsGuard::mock(1), // guard
         )
     }
 
@@ -604,6 +612,49 @@ mod tests {
         let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
         assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
+    }
+
+    /// When the committer starts at a checkpoint higher than what it receives (e.g., after a
+    /// restart), earlier checkpoints hit the `Ordering::Greater` path and are dropped. The guard
+    /// on those dropped checkpoints must decrement the shared counter to avoid leaking
+    /// backpressure.
+    #[tokio::test]
+    async fn test_committer_drops_past_checkpoints_and_releases_pending_rows() {
+        let config = SequentialConfig {
+            committer: CommitterConfig::default(),
+            checkpoint_lag: 0,
+        };
+        // Start at checkpoint 5 — any checkpoint < 5 that arrives will be dropped.
+        let setup = setup_test(5, config, MockStore::default());
+
+        // Use a shared counter so we can observe the total pending rows.
+        let shared_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let shared_notify = Arc::new(tokio::sync::Notify::new());
+
+        // Send checkpoints 3, 4 (will be dropped) and 5, 6 (will be committed).
+        for cp in [3, 4, 5, 6] {
+            let checkpoint = IndexedCheckpoint::new(
+                cp,
+                cp,
+                cp,
+                cp * 1000,
+                vec![cp],
+                PendingRowsGuard::new(shared_counter.clone(), shared_notify.clone(), 1),
+            );
+            setup.checkpoint_tx.send(checkpoint).await.unwrap();
+        }
+
+        assert_eq!(shared_counter.load(std::sync::atomic::Ordering::Relaxed), 4,);
+
+        // Wait for processing — checkpoints 3,4 are dropped, 5,6 are committed.
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Only checkpoints 5 and 6 should have been written.
+        assert_eq!(setup.store.get_sequential_data(), vec![5, 6]);
+
+        // The counter should be 0: guards for 3,4 were dropped (Ordering::Greater) and
+        // guards for 5,6 were cleared after successful commit.
+        assert_eq!(shared_counter.load(std::sync::atomic::Ordering::Relaxed), 0,);
     }
 
     #[tokio::test]

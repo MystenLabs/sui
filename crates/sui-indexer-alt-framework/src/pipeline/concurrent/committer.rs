@@ -61,6 +61,7 @@ pub(super) fn committer<H: Handler + 'static>(
                      batch,
                      batch_len,
                      watermark,
+                     _guard,
                  }| {
                     let batch = Arc::new(batch);
                     let handler = handler.clone();

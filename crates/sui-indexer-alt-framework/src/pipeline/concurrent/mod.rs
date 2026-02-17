@@ -16,6 +16,7 @@ use crate::Task;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::PIPELINE_BUFFER;
+use crate::pipeline::PendingRowsGuard;
 use crate::pipeline::Processor;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::collector::collector;
@@ -153,6 +154,8 @@ struct BatchedRows<H: Handler> {
     batch_len: usize,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
+    /// RAII guard tracking these rows in the pending count. Dropped after commit to decrement.
+    _guard: Option<PendingRowsGuard>,
 }
 
 impl<H, V> BatchedRows<H>
@@ -166,6 +169,7 @@ where
             batch,
             batch_len,
             watermark,
+            _guard: None,
         }
     }
 }
@@ -240,6 +244,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
     let main_reader_lo = Arc::new(SetOnce::new());
 
+    let pending_rows = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let pending_rows_notify = Arc::new(tokio::sync::Notify::new());
+
     let handler = Arc::new(handler);
 
     let s_processor = processor(
@@ -247,6 +254,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
+        Some(H::MAX_PENDING_ROWS),
+        pending_rows.clone(),
+        pending_rows_notify.clone(),
     );
 
     let s_collector = collector::<H>(
@@ -449,16 +459,6 @@ mod tests {
         ) -> anyhow::Result<()> {
             timeout(timeout_duration, self.send_checkpoint(checkpoint)).await?
         }
-
-        async fn send_checkpoint_expect_timeout(
-            &self,
-            checkpoint: u64,
-            timeout_duration: Duration,
-        ) {
-            timeout(timeout_duration, self.send_checkpoint(checkpoint))
-                .await
-                .unwrap_err(); // Panics if send succeeds
-        }
     }
 
     #[tokio::test]
@@ -644,17 +644,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_back_pressure_collector_max_pending_rows() {
-        // Pipeline Diagram - Collector Back Pressure via MAX_PENDING_ROWS:
+        // Pipeline Diagram - Processor Back Pressure via MAX_PENDING_ROWS:
         //
         // ┌────────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐
         // │ Checkpoint │ ─► │ Processor  │ ─► │ Collector  │ ─► │ Committer  │
-        // │   Input    │    │ (FANOUT=2) │    │            │    │            │
-        // └────────────┘    └────────────┘    └[BOTTLENECK]┘    └────────────┘
+        // │   Input    │    │[BOTTLENECK]│    │            │    │            │
+        // └────────────┘    └────────────┘    └────────────┘    └────────────┘
         //                │                 │                 │
         //              [●●●]           [●●●●●●●]         [●●●●●●]
         //            buffer: 3         buffer: 7         buffer: 6
         //
-        // BOTTLENECK: Collector stops accepting when pending rows ≥ MAX_PENDING_ROWS (4)
+        // BOTTLENECK: Processor stops pulling when pending rows ≥ MAX_PENDING_ROWS (4)
 
         let config = ConcurrentConfig {
             committer: CommitterConfig {
@@ -670,33 +670,48 @@ mod tests {
         // Wait for initial setup
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        // Pipeline capacity analysis with collector back pressure:
-        // Configuration: MAX_PENDING_ROWS=4, FANOUT=2, PIPELINE_BUFFER=5
-        //
         // Channel and task breakdown:
         // - Checkpoint->Processor channel: 3 slots (TEST_CHECKPOINT_BUFFER_SIZE)
         // - Processor tasks: 2 tasks (FANOUT=2)
         // - Processor->Collector channel: 7 slots (FANOUT=2 + PIPELINE_BUFFER=5)
-        // - Collector pending: 2 checkpoints × 2 values = 4 values (hits MAX_PENDING_ROWS=4)
+        // - Collector->Committer channel: 6 slots (write_concurrency=1 + PIPELINE_BUFFER=5)
         //
-        // Total capacity: 3 + 2 + 7 + 2 = 14 checkpoints
+        // Row-count backpressure (the binding constraint):
+        // The processor gates on pending_rows >= MAX_PENDING_ROWS (4) before pulling
+        // from the input channel. Each checkpoint produces 2 rows, so the gate fires
+        // after ~2 checkpoints worth of rows are in-flight. This is tighter than any
+        // channel capacity, so it's the bottleneck.
+        //
+        // Total capacity: ~7 checkpoints, with some non-determinism due to timing
 
-        // Fill pipeline to capacity - these should all succeed
-        for i in 0..14 {
+        // Fill pipeline conservatively - these should all succeed
+        for i in 0..5 {
             setup
                 .send_checkpoint_with_timeout(i, Duration::from_millis(200))
                 .await
                 .unwrap();
         }
 
-        // Checkpoint 14 should block due to MAX_PENDING_ROWS back pressure
-        setup
-            .send_checkpoint_expect_timeout(14, Duration::from_millis(200))
-            .await;
+        // Find the actual back pressure point
+        let mut back_pressure_checkpoint = None;
+        for checkpoint in 5..10 {
+            if setup
+                .send_checkpoint_with_timeout(checkpoint, Duration::from_millis(200))
+                .await
+                .is_err()
+            {
+                back_pressure_checkpoint = Some(checkpoint);
+                break;
+            }
+        }
+        assert!(
+            back_pressure_checkpoint.is_some(),
+            "Back pressure should occur between checkpoints 5-9"
+        );
 
         // Allow pipeline to drain by sending the blocked checkpoint with longer timeout
         setup
-            .send_checkpoint_with_timeout(14, TEST_TIMEOUT)
+            .send_checkpoint_with_timeout(back_pressure_checkpoint.unwrap(), TEST_TIMEOUT)
             .await
             .unwrap();
 
@@ -714,13 +729,15 @@ mod tests {
         //
         // ┌────────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐
         // │ Checkpoint │ ─► │ Processor  │ ─► │ Collector  │ ─► │ Committer  │
-        // │   Input    │    │ (FANOUT=2) │    │            │    │🐌 10s Delay│
-        // └────────────┘    └────────────┘    └────────────┘    └[BOTTLENECK]┘
+        // │   Input    │    │[BOTTLENECK]│    │            │    │🐌 10s Delay│
+        // └────────────┘    └────────────┘    └────────────┘    └────────────┘
         //                │                 │                 │
         //              [●●●]           [●●●●●●●]         [●●●●●●]
         //            buffer: 3         buffer: 7         buffer: 6
         //
-        // BOTTLENECK: Committer with 10s delay blocks entire pipeline
+        // BOTTLENECK: Processor stops pulling when pending rows ≥ MAX_PENDING_ROWS (4).
+        // The slow committer (10s delay) prevents guards from being dropped, so
+        // pending_rows stays high and the processor gate remains the binding constraint.
 
         let config = ConcurrentConfig {
             committer: CommitterConfig {
@@ -732,34 +749,28 @@ mod tests {
         let store = MockStore::default().with_commit_delay(10_000); // 10 seconds delay
         let setup = TestSetup::new(config, store, 0).await;
 
-        // Pipeline capacity analysis with slow commits:
-        // Configuration: FANOUT=2, write_concurrency=1, PIPELINE_BUFFER=5
+        // Channel and task breakdown: same as test_back_pressure_collector_max_pending_rows.
         //
-        // Channel and task breakdown:
-        // - Checkpoint->Processor channel: 3 slots (TEST_CHECKPOINT_BUFFER_SIZE)
-        // - Processor tasks: 2 tasks (FANOUT=2)
-        // - Processor->Collector channel: 7 slots (FANOUT=2 + PIPELINE_BUFFER=5)
-        // - Collector->Committer channel: 6 slots (write_concurrency=1 + PIPELINE_BUFFER=5)
-        // - Committer task: 1 task (blocked by slow commit)
+        // Row-count backpressure (the binding constraint):
+        // Same processor gate (pending_rows >= MAX_PENDING_ROWS=4), but here the slow
+        // committer (10s delay) prevents guards from dropping, so pending_rows stays
+        // high and the processor gate remains the bottleneck.
         //
-        // Total theoretical capacity: 3 + 2 + 7 + 6 + 1 = 19 checkpoints
+        // Total capacity: ~7 checkpoints (same as collector test), with non-determinism
 
-        // Fill pipeline to theoretical capacity - these should all succeed
-        for i in 0..19 {
+        // Fill pipeline conservatively - these should all succeed
+        for i in 0..5 {
             setup
-                .send_checkpoint_with_timeout(i, Duration::from_millis(100))
+                .send_checkpoint_with_timeout(i, Duration::from_millis(200))
                 .await
                 .unwrap();
         }
 
         // Find the actual back pressure point
-        // Due to non-determinism in collector's tokio::select!, the collector may consume
-        // up to 2 checkpoints (filling MAX_PENDING_ROWS=4) before applying back pressure.
-        // This means back pressure occurs somewhere in range 19-21.
         let mut back_pressure_checkpoint = None;
-        for checkpoint in 19..22 {
+        for checkpoint in 5..10 {
             if setup
-                .send_checkpoint_with_timeout(checkpoint, Duration::from_millis(100))
+                .send_checkpoint_with_timeout(checkpoint, Duration::from_millis(200))
                 .await
                 .is_err()
             {
@@ -769,7 +780,7 @@ mod tests {
         }
         assert!(
             back_pressure_checkpoint.is_some(),
-            "Back pressure should occur between checkpoints 19-21"
+            "Back pressure should occur between checkpoints 5-9"
         );
 
         // Verify that some data has been processed (pipeline is working)

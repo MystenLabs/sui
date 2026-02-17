@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
@@ -9,7 +10,9 @@ use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
 use sui_types::full_checkpoint_content::Checkpoint;
+use tokio::sync::Notify;
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 use tracing::error;
@@ -20,6 +23,7 @@ use async_trait::async_trait;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::IndexedCheckpoint;
+use crate::pipeline::PendingRowsGuard;
 
 /// If the processor needs to retry processing a checkpoint, it will wait this long initially.
 const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
@@ -67,6 +71,9 @@ pub(super) fn processor<P: Processor>(
     rx: mpsc::Receiver<Arc<Checkpoint>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
+    max_pending_rows: Option<usize>,
+    pending_rows: Arc<AtomicUsize>,
+    pending_rows_notify: Arc<Notify>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = P::NAME, "Starting processor");
@@ -76,12 +83,31 @@ pub(super) fn processor<P: Processor>(
             &metrics.latest_processed_checkpoint,
         );
 
-        match ReceiverStream::new(rx)
+        let backpressured_stream = ReceiverStream::new(rx).then({
+            let pending_rows = pending_rows.clone();
+            let pending_rows_notify = pending_rows_notify.clone();
+            move |checkpoint| {
+                let pending_rows = pending_rows.clone();
+                let pending_rows_notify = pending_rows_notify.clone();
+                async move {
+                    if let Some(max) = max_pending_rows {
+                        while pending_rows.load(std::sync::atomic::Ordering::Relaxed) >= max {
+                            pending_rows_notify.notified().await;
+                        }
+                    }
+                    checkpoint
+                }
+            }
+        });
+
+        match backpressured_stream
             .try_for_each_spawned(P::FANOUT, |checkpoint| {
                 let tx = tx.clone();
                 let metrics = metrics.clone();
                 let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                 let processor = processor.clone();
+                let pending_rows = pending_rows.clone();
+                let pending_rows_notify = pending_rows_notify.clone();
 
                 async move {
                     metrics
@@ -137,12 +163,19 @@ pub(super) fn processor<P: Processor>(
                         .with_label_values(&[P::NAME])
                         .inc_by(values.len() as u64);
 
+                    let guard = PendingRowsGuard::new(
+                        pending_rows.clone(),
+                        pending_rows_notify.clone(),
+                        values.len(),
+                    );
+
                     tx.send(IndexedCheckpoint::new(
                         epoch,
                         cp_sequence_number,
                         tx_hi,
                         timestamp_ms,
                         values,
+                        guard,
                     ))
                     .await
                     .map_err(|_| Break::Break)?;
@@ -174,11 +207,13 @@ pub(super) fn processor<P: Processor>(
 mod tests {
     use std::sync::Arc;
     use std::sync::atomic::AtomicU32;
+    use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
 
     use anyhow::ensure;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+    use tokio::sync::Notify;
     use tokio::sync::mpsc;
     use tokio::time::timeout;
 
@@ -235,7 +270,15 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
-        let _svc = super::processor(processor, data_rx, indexed_tx, metrics);
+        let _svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            None,
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(Notify::new()),
+        );
 
         // Send both checkpoints
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -289,7 +332,15 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
-        let svc = super::processor(processor, data_rx, indexed_tx, metrics);
+        let svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            None,
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(Notify::new()),
+        );
 
         // Send first checkpoint.
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -357,7 +408,15 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
-        let _svc = super::processor(processor, data_rx, indexed_tx, metrics);
+        let _svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            None,
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(Notify::new()),
+        );
 
         // Send and verify first checkpoint (should succeed immediately)
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -417,7 +476,15 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn processor task
-        let _svc = super::processor(processor, data_rx, indexed_tx, metrics);
+        let _svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            None,
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(Notify::new()),
+        );
 
         // Send all checkpoints and measure time
         let start = std::time::Instant::now();

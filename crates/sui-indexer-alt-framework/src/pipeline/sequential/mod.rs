@@ -46,6 +46,10 @@ pub trait Handler: Processor {
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
 
+    /// If there are more than this many rows pending, the processor applies backpressure by
+    /// pausing before pulling the next checkpoint from the ingestion channel.
+    const MAX_PENDING_ROWS: usize = 5000;
+
     /// Maximum number of checkpoints to try and write in a single batch. The larger this number
     /// is, the more chances the pipeline has to merge redundant writes, but the longer each write
     /// transaction is likely to be.
@@ -127,6 +131,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
+    let pending_rows = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let pending_rows_notify = Arc::new(tokio::sync::Notify::new());
+
     let handler = Arc::new(handler);
 
     let s_processor = processor(
@@ -134,6 +141,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
+        Some(H::MAX_PENDING_ROWS),
+        pending_rows.clone(),
+        pending_rows_notify.clone(),
     );
 
     let s_committer = committer::<H>(
