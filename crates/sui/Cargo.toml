@@ -82,6 +82,7 @@ sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 sui-transaction-builder.workspace = true
 move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
 move-trace-format.workspace = true
 move-bytecode-source-map.workspace = true
 mysten-common.workspace = true
