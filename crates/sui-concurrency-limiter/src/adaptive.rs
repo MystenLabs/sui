@@ -281,8 +281,24 @@ impl AdaptiveState {
     }
 
     fn process_interval(&mut self, config: &AdaptiveConfig, gauge: &AtomicUsize) {
-        // Skip if zero successful samples — extend interval, don't treat as stall
         if self.stats.successes == 0 {
+            // No throughput data this interval. Decay still runs — it only needs
+            // peak_inflight vs limit, not throughput. Without this, bursty workloads
+            // where most intervals have zero completions never decay.
+            if let Phase::ProbeBW(ProbeBWState::Cruise {
+                intervals_since_probe,
+            }) = &mut self.phase
+            {
+                let underutilized = self.stats.peak_inflight * 2 < self.limit;
+                if underutilized && *intervals_since_probe > 3 {
+                    self.limit = ((self.limit as f64) * 0.95).ceil() as usize;
+                    self.limit = self.limit.clamp(config.min_limit, config.max_limit);
+                    gauge.store(self.limit, Ordering::Release);
+                }
+                *intervals_since_probe += 1;
+            }
+            self.stats
+                .reset(Duration::from_millis(config.probe_interval_ms));
             return;
         }
 
