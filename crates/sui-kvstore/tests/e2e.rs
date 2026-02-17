@@ -458,7 +458,8 @@ async fn test_indexer_e2e() -> Result<()> {
     // since execute_transaction_and_wait_for_checkpoint already waited).
     let mut tx_checkpoints = Vec::new();
 
-    // Include the publish transaction
+    // Look up the publish transaction's checkpoint separately so that
+    // tx_checkpoints stays aligned with tx_digests (transfers only).
     let publish_cp_resp = harness
         .grpc_client
         .ledger_client()
@@ -474,7 +475,6 @@ async fn test_indexer_e2e() -> Result<()> {
         .transaction
         .and_then(|t| t.checkpoint)
         .context("publish tx missing checkpoint")?;
-    tx_checkpoints.push(publish_cp);
 
     for digest in &tx_digests {
         let resp = harness
@@ -495,7 +495,7 @@ async fn test_indexer_e2e() -> Result<()> {
         tx_checkpoints.push(cp);
     }
 
-    let max_checkpoint = *tx_checkpoints.iter().max().unwrap();
+    let max_checkpoint = *tx_checkpoints.iter().max().unwrap().max(&publish_cp);
 
     // Wait for all pipelines to catch up via the same path GraphQL uses.
     harness.wait_for_watermark(max_checkpoint, 0).await?;
