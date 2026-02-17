@@ -1382,7 +1382,8 @@ fn value(
                                             f.value()
                                         ))
                                     ));
-                                    None
+                                    // Use dummy index 0 to allow compilation to continue
+                                    Some((0, f, exp_idx, bt, tf))
                                 }
                             }
                         })
@@ -1474,7 +1475,8 @@ fn value(
                                             f.value()
                                         ))
                                     ));
-                                    None
+                                    // Use dummy index 0 to allow compilation to continue
+                                    Some((0, f, exp_idx, bt, tf))
                                 }
                             }
                         })
