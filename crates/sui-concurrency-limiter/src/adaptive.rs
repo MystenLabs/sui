@@ -43,7 +43,11 @@ pub struct AdaptiveConfig {
     // Throughput tracking
     /// EMA smoothing weight for current interval (0.0–1.0). Lower = smoother, less noise.
     pub throughput_ema_alpha: f64,
-    /// Minimum EMA growth ratio to allow Cruise to increase the limit.
+    /// Throughput scaling efficiency required by ProbeUp (0.0–1.0). The effective
+    /// threshold is `concurrency_ratio × efficiency`, requiring throughput to
+    /// scale proportionally to the concurrency increase. 1.0 = require perfectly
+    /// linear scaling; 0.9 = allow 10% sublinearity. Values > 1.0 demand
+    /// super-linear scaling and should not be used.
     pub throughput_growth_threshold: f64,
 
     // Startup phase
@@ -63,10 +67,11 @@ pub struct AdaptiveConfig {
     pub probe_up_gain: f64,
     /// Number of cruise intervals between probe cycles.
     pub probe_bw_intervals: usize,
-    /// Minimum throughput fraction to accept when probing down (0.0–1.0).
-    /// ProbeDown keeps the lower concurrency limit if throughput stays above this
-    /// fraction of pre-probe throughput. Lower values (e.g. 0.80) trade throughput
-    /// for lower latency; higher values (e.g. 0.95) keep concurrency closer to peak.
+    /// Throughput scaling efficiency for ProbeDown (0.0–1.0). The effective
+    /// threshold is `concurrency_ratio × efficiency`. ProbeDown keeps the lower
+    /// limit if throughput-per-concurrency held up to at least this fraction of
+    /// linear. 1.0 = keep if throughput scaled linearly; 0.9 = keep even if
+    /// throughput-per-concurrency dropped up to 10%.
     pub probe_down_min_throughput: f64,
 
     // Braking
@@ -84,7 +89,7 @@ impl Default for AdaptiveConfig {
             max_limit: 100_000,
             probe_interval_ms: 1000,
             throughput_ema_alpha: 0.3,
-            throughput_growth_threshold: 1.10,
+            throughput_growth_threshold: 0.90,
             startup_growth_factor: 2.0,
             full_pipe_threshold: 1.25,
             full_pipe_rounds: 3,
@@ -419,7 +424,18 @@ impl AdaptiveState {
                         pre_probe_limit,
                         start_throughput_ema,
                     } => {
-                        if throughput >= *start_throughput_ema * config.full_pipe_threshold {
+                        // Proportional threshold: scale required throughput gain by the
+                        // actual concurrency increase so the bar is consistent at all
+                        // concurrency levels (ceil() at low limits no longer gives a
+                        // free pass).
+                        let concurrency_ratio =
+                            self.limit as f64 / *pre_probe_limit as f64;
+                        let proportional_threshold = concurrency_ratio
+                            * config.throughput_growth_threshold;
+                        let startup_threshold = concurrency_ratio
+                            * config.full_pipe_threshold;
+
+                        if throughput >= *start_throughput_ema * startup_threshold {
                             // Major headroom discovered — re-enter Startup for fast
                             // exploration (e.g., backend autoscaled).
                             self.phase = Phase::Startup {
@@ -427,9 +443,9 @@ impl AdaptiveState {
                                 stall_count: 0,
                             };
                         } else if throughput
-                            >= *start_throughput_ema * config.throughput_growth_threshold
+                            >= *start_throughput_ema * proportional_threshold
                         {
-                            // Modest throughput gain — keep the higher limit
+                            // Throughput grew proportionally — keep the higher limit
                             self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
                                 intervals_since_probe: 0,
                             });
@@ -449,15 +465,19 @@ impl AdaptiveState {
                         pre_down_limit,
                         pre_probe_throughput_ema,
                     } => {
-                        // If throughput at reduced concurrency is within threshold of what we
-                        // had before probing, the extra concurrency wasn't helping —
-                        // keep the lower limit.
-                        if throughput
-                            >= *pre_probe_throughput_ema * config.probe_down_min_throughput
+                        // Proportional threshold: expected throughput at reduced
+                        // concurrency if the backend scales linearly.
+                        let concurrency_ratio =
+                            self.limit as f64 / *pre_down_limit as f64;
+                        let proportional_threshold = concurrency_ratio
+                            * config.probe_down_min_throughput;
+
+                        if throughput >= *pre_probe_throughput_ema * proportional_threshold
                         {
-                            // Throughput maintained — keep reduced limit
+                            // Throughput held up proportionally — the extra concurrency
+                            // wasn't helping, keep the lower limit.
                         } else {
-                            // Throughput dropped — restore original limit
+                            // Throughput dropped more than expected — restore original
                             self.limit = *pre_down_limit;
                         }
                         self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
@@ -890,9 +910,10 @@ mod tests {
             alg.gauge.store(125, Ordering::Release);
         }
 
-        // Feed samples with modest throughput gain (115 >= 100*1.10 but 115 < 100*1.25)
+        // Proportional threshold: ratio=125/100=1.25, threshold=1.25*1.10=1.375.
+        // Need throughput >= 100*1.375=137.5. Feed 140 (proportional gain).
         feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(115.0);
+        alg.force_interval_with_throughput(140.0);
 
         // Should transition to Cruise, keeping the higher limit
         let limit = alg.current();
@@ -928,9 +949,10 @@ mod tests {
             alg.gauge.store(125, Ordering::Release);
         }
 
-        // Major throughput gain: 130 >= 100*1.25=125 → re-enter Startup
+        // Proportional startup threshold: ratio=1.25, threshold=1.25*1.25=1.5625.
+        // Need throughput >= 100*1.5625=156.25. Feed 160.
         feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(130.0);
+        alg.force_interval_with_throughput(160.0);
 
         let state = alg.inner.lock().unwrap();
         assert!(
