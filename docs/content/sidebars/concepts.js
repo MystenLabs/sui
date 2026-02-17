@@ -67,7 +67,6 @@ const concepts = [
 			id: 'concepts/data-access/data-serving',
 		},
 		items: [
-			'concepts/data-access/custom-indexers',
 			'concepts/data-access/grpc',
 			'concepts/data-access/graphql-rpc',
 			'concepts/data-access/archival-store',

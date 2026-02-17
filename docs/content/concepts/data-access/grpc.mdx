@@ -10,17 +10,15 @@ The [Sui Full Node gRPC API](/references/fullnode-protocol.mdx) provides a fast,
 
 <ImportContent source="json-rpc-deprecation.mdx" mode="snippet" />
 
-<ImportContent source="data-serving-msg.mdx" mode="snippet" />
-
 :::
 
 gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client and server development across multiple languages. 
 
-The [gRPC API](/concepts/data-access/grpc) replaces JSON-RPC on full nodes. JSON-RPC is **deprecated** and the gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
+The [gRPC API](/references/fullnode-protocol) replaces JSON-RPC on full nodes. JSON-RPC is **deprecated** and the gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
 
 - Use streaming or subscription API endpoints to consume real-time streaming data in your application without polling for those records. This support replaces the deprecated WebSocket support in JSON-RPC.
 
-- There is no implicit fallback on the [Sui Foundation-managed Archival Store for historical data](#archival-store-and-service). Full node operators, RPC providers, and data indexer operators are encouraged to run their own instance of a similar Archival Store that can be an explicit dependency to fetch historical data.
+- There is no implicit fallback on the [Sui Foundation-managed Archival Store for historical data](/concepts/data-access/archival-store). Full node operators, RPC providers, and data indexer operators are encouraged to run their own instance of a similar Archival Store that can be an explicit dependency to fetch historical data.
 
 ## High-level release timeline
 
@@ -53,9 +51,9 @@ The following gRPC services are available on Sui. Protocol buffers define the gR
 | `TransactionExecutionService` | `sui/rpc/v2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use this service to send user actions to the network. |
 | `LedgerService` | `sui/rpc/v2/ledger_service.proto` | Look up specific checkpoints, transactions, objects, and more from the current state and recent history of the Sui network. History refers to the recent past, limited to what a full node retains. |
 | `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. It also supports dry-run simulations for transactions. |
-| `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. See [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
+| `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. See Subscriptions for streaming data. |
 | `MovePackageService` | `sui/rpc/v2/move_package_service.proto` | Access metadata and the content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
-| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that might include [zkLogin](/concepts/cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
+| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that might include [zkLogin](/concepts/cryptography/zklogin) or other signatures, simulate authentication, or build custom signing workflows. |
 | `NameService` | `sui/rpc/v2/name_service.proto` | Resolve human-readable SuiNS names to their underlying name records, and perform reverse lookups from Sui addresses back to linked names. |
 
 Use these definitions to generate client libraries in various programming languages.
@@ -154,17 +152,17 @@ Streaming APIs are useful for building indexers, dashboards, or bots that need t
 
 ## Handling pruned data
 
-If a full node does not return a specific object, transaction, or event, the data has likely been pruned based on the node's retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store and Service](/guides/developer/accessing-data/archival-store.mdx). The Archival Store retains historical data for the network.
+If a full node does not return a specific object, transaction, or event, the data has likely been pruned based on the node's retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store and Service](/guides/developer/accessing-data/archival-store). The Archival Store retains historical data for the network.
 
 You can reuse the same gRPC `LedgerService` methods for this lookup. Simply change the endpoint in your client from the full node's address to the Archival Service endpoint. This ensures that your application can access both recent and historical data reliably, regardless of a full node's pruning settings.
 
 ## Best practices
 
-1. Always use [field masks](#field-masks) when applicable to reduce response size and latency, especially for large resources.
+1. Always use field masks when applicable to reduce response size and latency, especially for large resources.
 
 1. Use `TLS (port 443)` for production traffic to ensure encrypted transport and prevent downgrade attacks.
 
-1. Use [streaming subscriptions](#subscriptions-for-streaming-data) for real-time use cases instead of polling repeatedly.
+1. Use streaming subscriptions for real-time use cases instead of polling repeatedly.
 
 1. Generate client code from the official `.proto` definitions in [`sui-apis`](https://github.com/MystenLabs/sui-apis/tree/main/proto) to ensure compatibility and type safety.
 

@@ -4,13 +4,25 @@ description: Learn how to use gRPC clients for the Sui network with grpcurl, Buf
 keywords: [ grpc, grpc client, grpcurl, typescript grpc, golang grpc, python grpc, sui grpc tutorial ]
 ---
 
-Before you begin, ensure you have access to a [gRPC](/concepts/data-access/grpc.mdx)-enabled Sui full node. Refer to the [list of RPC or data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that have enabled gRPC on their full nodes. Contact a provider directly to request access. If your RPC or data provider doesn't yet support gRPC, ask them to enable support or contact the Sui Foundation team on Discord or Telegram for help.
+This guide provides practical examples for querying the Sui network using gRPC. For core concepts, see the [corresponding concepts page](/concepts/data-access/grpc).
 
-## Access using `grpcurl`
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
-The simplest way to experiment with gRPC is by using [`grpcurl`](https://github.com/fullstorydev/grpcurl).
+Before you begin, ensure you have access to a [gRPC](/concepts/data-access/grpc)-enabled Sui full node. Check the [list of RPC and data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that support gRPC on their full nodes, and contact a provider directly to request access.
 
-Your results might differ from the examples that follow, depending on the breadth, maturity, and data retention of the gRPC APIs available on the Sui full node you use.
+If your provider doesn't yet support gRPC, you can:
+
+- Ask them to enable it.
+
+- Reach out to the Sui Foundation team on Discord or Telegram for help.
+
+</TabItem>
+</Tabs>
+
+## Access data using `grpcurl`
+
+Interact with gRPC by using [`grpcurl`](https://github.com/fullstorydev/grpcurl). 
 
 ### List available gRPC services
 
@@ -20,42 +32,11 @@ $ grpcurl <full node URL:port> list
 
 The port on Sui Foundation managed full nodes is `443`. 
 
-<details>
-<summary>Output</summary>
-
-```shell
-grpc.health.v1.Health
-grpc.reflection.v1.ServerReflection
-sui.rpc.v2.LedgerService
-sui.rpc.v2.MovePackageService
-sui.rpc.v2.NameService
-sui.rpc.v2.SignatureVerificationService
-sui.rpc.v2.StateService
-sui.rpc.v2.SubscriptionService
-sui.rpc.v2.TransactionExecutionService
-```
-
-</details>
-
 ### List available APIs in the `LedgerService`
 
 ```shell
 $ grpcurl <full node URL:port> list sui.rpc.v2.LedgerService
 ```
-
-<details>
-<summary>Output</summary>
-
-```shell
-sui.rpc.v2.LedgerService.BatchGetObjects
-sui.rpc.v2.LedgerService.BatchGetTransactions
-sui.rpc.v2.LedgerService.GetCheckpoint
-sui.rpc.v2.LedgerService.GetEpoch
-sui.rpc.v2.LedgerService.GetObject
-sui.rpc.v2.LedgerService.GetServiceInfo
-sui.rpc.v2.LedgerService.GetTransaction
-```
-</details>
 
 ### Get the events and effects details of a particular transaction
 
@@ -95,52 +76,11 @@ $ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e
 $ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
 ```
 
-<details>
-<summary>Output</summary>
-
-```json
-{
-  "cursor": "164324277",
-  "checkpoint": {
-    "sequenceNumber": "164324277",
-    "digest": "AJsK688sDPbzWro1VSN3gVPxR1hfM9v3Bk1M9EhPBc3A",
-    "summary": {
-      "timestamp": "2025-07-05T16:49:09.788Z"
-    }
-  }
-}
-{
-  "cursor": "164324278",
-  "checkpoint": {
-    "sequenceNumber": "164324278",
-    "digest": "J35nDAwZm9YRZ4kHJH9oSqCMQ2ZrkbpmshCTi6N5TCpV",
-    "summary": {
-      "timestamp": "2025-07-05T16:49:10.032Z"
-    }
-  }
-}
-{
-  "cursor": "164324279",
-  "checkpoint": {
-    "sequenceNumber": "164324279",
-    "digest": "DgoaWNGtWojozP88AnmHskkDbdvyMApP1jVz2wRzPsC5",
-    "summary": {
-      "timestamp": "2025-07-05T16:49:10.292Z"
-    }
-  }
-}
-...
-...
-...
-```
-
-</details>
-
 ## Build gRPC clients
 
 :::info
 
-For Rust, consider using the [Sui Rust SDK](https://github.com/MystenLabs/sui-rust-sdk).
+It is recomemnded to use one of the [supported SDKs](/concepts/data-access/data-serving#supported-sdks) for building gRPC clients. If those SDKs do not satisfy your use case, refer to the examples below.
 
 :::
 
@@ -150,7 +90,7 @@ For Rust, consider using the [Sui Rust SDK](https://github.com/MystenLabs/sui-ru
 
 This example shows how to build a TypeScript client for the Sui gRPC API. 
 
-###step: Install dependencies
+#### Step 1: Install dependencies
 
 ```shell
 npm init -y
@@ -174,7 +114,7 @@ The default project has this structure:
 
 Download all of the `sui/rpc/v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto) in the same folder.
 
-###step: Edit `client.ts` to get events and effects details of a particular transaction
+#### Step 2: Edit `client.ts` to get events and effects details of a particular transaction
 
 ```ts
 import * as grpc from '@grpc/grpc-js';
@@ -223,7 +163,7 @@ client.GetTransaction(request, (err: any, response: any) => {
 });
 ```
 
-###step: Run the sample client
+#### Step 3: Run the sample client
 
 ```shell
 npx tsx c
@@ -241,7 +181,7 @@ npx tsx c
 
 This example shows how to build a Go client for the Sui gRPC API. 
 
-###step: Install dependencies
+#### Step 1: Install dependencies
 
 First make sure you have `go` and `protoc` installed in your environment, and then install:
 
@@ -250,18 +190,18 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 ```
 
-###step: Edit `go.mod` 
+#### Step 2: Edit `go.mod` 
 
 Add the following content, making sure to update the version numbers to the latest versions:
 
-```
+```go
 require (
   google.golang.org/grpc v1.60.0
   google.golang.org/protobuf v1.33.0
 )
 ```
 
-###step: Generate Go code from proto files
+#### Step 3: Generate Go code from proto files
 
 Assuming you have the `v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), run:
 
@@ -269,7 +209,7 @@ Assuming you have the `v2` proto files from [Github](https://github.com/MystenLa
 protoc --proto_path=./protos --go_out=. --go-grpc_out=. protos/sui/rpc/v2/ledger_service.proto
 ```
 
-### Step 4: Edit `main.go` to get events and effects details of a particular transaction
+#### Step 4: Edit `main.go` to get events and effects details of a particular transaction
 
 ```go
 package main
@@ -323,7 +263,7 @@ func main() {
 }
 ```
 
-###step: Run the sample client
+#### Step 5: Run the sample client
 
 If your `go.mod` is properly set up, and you've already generated the gRPC code (`*.pb.go`, `*_grpc.pb.go`), simply run:
 
@@ -348,7 +288,7 @@ The example assumes that gRPC is available on port `443` which requires SSL. The
 
 This example shows how to build a Python client for the Sui gRPC API. Optionally, refer to [`pysui`](https://github.com/FrankC01/pysui/), a community contributed SDK.
 
-###step: Install dependencies
+#### Step 1: Install dependencies
 
 First make sure you have `python` and `protoc` installed in your environment, and then install:
 
@@ -356,7 +296,7 @@ First make sure you have `python` and `protoc` installed in your environment, an
 pip install grpcio grpcio-tools protobuf
 ```
 
-###step: Generate Python code from proto files
+#### Step 2: Generate Python code from proto files
 
 Assuming you have the `v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), run:
 
@@ -364,7 +304,7 @@ Assuming you have the `v2` proto files from [Github](https://github.com/MystenLa
 python -m grpc_tools.protoc -I./protos --python_out=. --grpc_python_out=. ./protos/sui/rpc/v2/ledger_service.proto
 ```
 
-###step: Edit `client.py` to get events and effects details of a particular transaction
+#### Step 3: Edit `client.py` to get events and effects details of a particular transaction
 
 ```python
 import grpc
@@ -394,7 +334,7 @@ if __name__ == "__main__":
     main()
 ```
 
-###step: Run the sample client
+#### Step 4: Run the sample client
 
 ```shell
 python client.py
@@ -411,4 +351,4 @@ The example assumes that gRPC is available on port `443` which requires SSL. Dig
 ## Related links
 
 - [gRPC](/concepts/data-access/grpc.mdx): Learn about gRPC concepts, services, and best practices for the Sui network.
-- [Full Node Operator Configuration](/guides/operator/sui-full-node.mdx#considerations-to-enable-grpc): Configuration options for enabling gRPC on your full node.
+- [Full Node Operator Configuration](/guides/operator/sui-full-node#considerations-to-enable-grpc): Configuration options for enabling gRPC on your full node.

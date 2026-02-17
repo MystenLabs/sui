@@ -1,15 +1,10 @@
 ---
 title: Using the Archival Store and Service (Beta)
 description: Overview of the Archival Store and Service to access historical Sui network data.
-beta: testnet, mainnet
 keywords: [ archival store, archival service, historical data, grpc, ledger service, bigtable, data retention, sui-kv-store ]
 ---
 
-:::info
-
-<ImportContent source="data-serving-msg.mdx" mode="snippet" />
-
-:::
+This guide provides practical examples using the Archival Store and Service. For core concepts, see the [corresponding concepts page](/concepts/data-access/archival-store).
 
 For developers, access an Archival Service hosted by any participating provider. The Sui Foundation offers an Archival Store and Service as a public good on a Bigtable-based store through the endpoints:
 
@@ -20,7 +15,7 @@ This service has strict rate limits.
 
 ## Integration points
 
-- **gRPC APIs**: Apps can query the Archival Service directly when gRPC on full nodes returns retention-related errors. This approach provides a graceful fallback without requiring the app or full node to store historical data itself. Access the Archival Service in the same way you access [gRPC `LedgerService` APIs](./grpc-overview.mdx) on a full node. Replace the full node URL with the Archival Service endpoint.
+- **gRPC APIs**: Apps can query the Archival Service directly when gRPC on full nodes returns retention-related errors. This approach provides a graceful fallback without requiring the app or full node to store historical data itself. Access the Archival Service in the same way you access [gRPC `LedgerService` APIs](/guides/developer/accessing-data/grpc-overview) on a full node. Replace the full node URL with the Archival Service endpoint.
 
 - **GraphQL RPC**: GraphQL RPC delegates historical lookups to the Archival Service using the planned integration. It enables cost-efficient setup of a General-purpose Indexer database with limited retention.
 
@@ -48,7 +43,7 @@ $ ./crates/sui-kvstore/src/bigtable/init.sh <name_of_bigtable_cluster>
 $ cargo run --bin sui-kvstore <name_of_your_bigtable_cluster> ingestion <mainnet|testnet>
 ```
 
-If you are using a different storage backend, build a compatible indexer using the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx) and ensure it emits data in a structure that is compatible with the [gRPC API's](/concepts/data-access/grpc) `LedgerService` endpoints.
+If you are using a different storage backend, build a compatible indexer using the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework) and ensure it emits data in a structure that is compatible with the [gRPC API's](/concepts/data-access/grpc) `LedgerService` endpoints.
 
 ### Running the Archival Service
 

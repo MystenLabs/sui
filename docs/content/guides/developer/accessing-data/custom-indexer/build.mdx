@@ -4,15 +4,9 @@ description: Build a custom indexer using the `sui-indexer-alt-framework` module
 keywords: [ indexer, custom indexer, indexer framework, indexer pipeline ]
 ---
 
-:::info
+This guide provide a practical example for building a custom indexer. Refer to [Custom Indexing Framework](/concepts/data-access/custom-indexers) and [Indexer Pipeline Architecture](/concepts/data-access/pipeline-architecture) for a conceptual overview of the indexer framework.
 
-Refer to [Custom Indexing Framework](/guides/developer/accessing-data/custom-indexing-framework.mdx) and [Indexer Pipeline Architecture](/concepts/data-access/pipeline-architecture.mdx) for a conceptual overview of the indexer framework.
-
-<ImportContent source="data-serving-msg.mdx" mode="snippet" />
-
-:::
-
-To build a complete custom indexer, you use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
+To build a complete custom indexer, use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
 
 :::tip
 
@@ -44,12 +38,8 @@ $ diesel --version
 
 </details>
 
-- [x] Read the [Custom Indexing Framework](/guides/developer/accessing-data/custom-indexing-framework.mdx) and [Indexer Pipeline Architecture](/concepts/data-access/pipeline-architecture.mdx) topics first to understand the overall architecture and concurrent pipeline concepts.
-
 </TabItem>
 </Tabs>
-
-## What you build
 
 The following steps show how to create an indexer that:
 
@@ -448,5 +438,5 @@ The key concepts covered here apply to any custom indexer: define your data stru
 <RelatedLink href="https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt" label="Sui Indexer Alt" desc="The `sui-indexer-alt` crate in the Sui repo." />
 <RelatedLink href="https://github.com/MystenLabs/mvr/tree/main/crates/mvr-indexer" label="Move Registry" desc="The indexer that the Move Registry (MVR) implements." />
 <RelatedLink href="https://github.com/MystenLabs/deepbookv3/tree/main/crates/indexer" label="DeepBook Indexer" desc="The indexer that DeepBook implements." />
-<RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework.mdx" />
+<RelatedLink to="/concepts/data-access/custom-indexers.mdx" />
 <RelatedLink to="/concepts/data-access/pipeline-architecture.mdx" />

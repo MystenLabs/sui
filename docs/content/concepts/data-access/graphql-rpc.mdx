@@ -11,25 +11,67 @@ For practical examples and a quick start guide, see [Querying Sui RPC with Graph
 
 For comprehensive GraphQL fundamentals, consult the introductory documentation from [GraphQL](https://graphql.org/learn/) and [GitHub](https://docs.github.com/en/graphql/guides/introduction-to-graphql).
 
-The [GraphQL RPC Service](/concepts/data-access/graphql-rpc.mdx) is a performant GraphQL RPC layer that reads data from the General-purpose Indexer's Postgres-compatible database, [Archival Store and Service](#archival-store-and-service), and a full node. GraphQL RPC is an alternative to the gRPC API. 
+The GraphQL RPC Service is a performant GraphQL RPC layer that reads data from the General-purpose Indexer's Postgres-compatible database, [Archival Store and Service](#archival-store-and-service), and a full node. GraphQL RPC is an alternative to the gRPC API. 
 
-The GraphQL RPC Service can be used with the General-purpose Indexer, a performant and scalable implementation of the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx). The underlying framework uses the remote checkpoint store and full node RPCs to ingest data.
+The GraphQL RPC Service is used with the General-purpose Indexer, a performant and scalable implementation of the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx). The underlying framework uses the remote checkpoint store and full node RPCs to ingest data.
 
 The General-purpose Indexer is declarative in the sense that you can seamlessly configure it to load different kinds of Sui network data into Postgres relational tables in parallel. This improves the performance of data ingestion into the Postgres-compatible database. In addition, you can configure pruning for different tables in the Postgres-compatible database, allowing you to tune it for the desired combination of performance and cost characteristics.
 
-:::info
+The key components of the GraphQL and General-purpose Indexer stack include the following:
 
-GraphQL RPC and General-purpose Indexer are in beta, which is a near-stable release that is subject to change based on user feedback. You can use them for testing and production readiness in non-production environments.
+- **General-purpose Indexer:** Ingests and transforms Sui checkpoint data using configurable and parallel pipelines, then writes it into a Postgres-compatible database. It can be configured to use the Sui remote checkpoint store and a full node as its sources.
 
-:::
+- **Postgres-compatible database:** Stores indexed data for GraphQL queries. It is tested using [GCP AlloyDB](https://cloud.google.com/products/alloydb), but you can run any Postgres-compatible database. Test alternative databases and share feedback on performance, cost, and operational characteristics.
+
+- **GraphQL service:** Serves structured queries over indexed data. It follows the [GraphQL specification](https://graphql.org/) and the supported schema is documented in the [GraphQL API reference](/references/sui-graphql).
+
+- **Archival Service:** Enables point lookups for historical data from a key-value store. If unavailable, the GraphQL service falls back to the Postgres-compatible database for lookups, which might be limited by that database's retention policy. See [Archival Store and Service](/guides/developer/accessing-data/archival-store) for more information.
+
+- **Consistent Store:** Answers queries about the latest state of the network within the last hour (objects owned by addresses, objects by type, balances by address and type). Consistency is guaranteed by pinning queries to a specific (recent) checkpoint.
+
+- **Full node:** Enables transaction execution and simulation. 
 
 ## When to use
 
 Use GraphQL RPC with the General-purpose Indexer as a flexible and ergonomic data API to build rich dashboards, explorers, and data-driven apps. The API is powered by an indexer created using the custom indexing framework.
 
+Use GraphQL if your application:
+
+- Requires historical data with configurable retention or filtered access to data, such as all transactions sent by an address.
+
+- Needs to display structured results in a frontend, such as wallets and dashboards.
+
+- Benefits from flexible, composable queries that reduce overfetching.
+
+- Relies on multiple data entities, such as transactions, objects, or events, in a single request, or in a consistent fashion when spread over multiple requests as if the responses came from a snapshot at some checkpoint.
+
 ## How GraphQL RPC and General-purpose Indexer fit into the application stack
 
 If you are using the **deprecated** JSON-RPC in your application, you can migrate to GraphQL RPC by either self-operating the combined stack of General-purpose Indexer, Postgres-compatible database, and GraphQL RPC server, or by utilizing it as a service from an RPC provider or indexer operator.
+
+You can run or use the GraphQL and Indexer data stack in the following configurations.
+
+### Fully managed service
+
+As a developer, you can access GraphQL as a service from an indexer operator or data provider who runs and operates the full stack behind the scenes. Reach out to your data provider and ask if they already offer or plan to offer this service.
+
+### Partial self-managed
+
+As a developer, you can:
+
+- Run the Indexer pipelines and GraphQL service, while using the Archival Service and a full node from an RPC provider or indexer operator.
+
+- Configure and manage a Postgres-compatible database (local Postgres, AlloyDB, and so on) as the primary data store.
+
+- Deploy the self-managed components on cloud infrastructure or baremetal.
+
+### Fully self-managed
+
+As a developer, indexer operator, or RPC provider, you can:
+
+- Run the complete stack: Indexer pipelines, GraphQL service, Postgres-compatible database, Archival Service, Consistent Store and full node on cloud infrastructure or bare metal.
+
+- Serve GraphQL to your own applications or to other builders and third-party services.
 
 ## High-level release timeline
 
@@ -39,8 +81,8 @@ The target times indicated are tentative and subject to updates based on project
 | -------- | ------- | ------- |
 | :heavy_check_mark: September 2025 | Beta release of GraphQL RPC Server and General-purpose Indexer. | You can start validating the setup of General-purpose Indexer, along with testing the GraphQL RPC Server to access the indexed Sui data. You can also start migrating your application in the non-production environments, and share feedback on the improvements you want to see. |
 | :heavy_check_mark: September-October 2025 | Deprecation of JSON-RPC. | **JSON-RPC is deprecated at this point and migration notice period starts.** |
-| December-January 2025 | GA release of GraphQL RPC Server and General-purpose Indexer. | Begin migration and cutover of your application in the production environment. |
-| April 2026 | End of migration timeline. | **JSON-RPC is fully deactivated at this point.** This timeline assumes about 7 months of migration notice period. |
+| February-March 2026 | GA release of GraphQL RPC Server and General-purpose Indexer. | Begin migration and cutover of your application in the production environment. |
+| July 2026 | End of migration timeline. | **JSON-RPC is fully deactivated at this point.** This timeline assumes about 7 months of migration notice period. |
 
 
 :::info
@@ -49,15 +91,100 @@ The target times indicated are tentative and subject to updates based on project
 
 :::
 
-:::caution
+## Working with the GraphQL service
 
-Switch any apps that still use the GraphQL Alpha endpoints (`https://graphql.mainnet.sui.io/graphql`, `https://sui-testnet.mystenlabs.com/graphql`, and `https://sui-devnet.mystenlabs.com/graphql`) to the GraphQL Beta endpoints as soon as possible to avoid disruption of service.
+The GraphQL service exposes a query surface conforming to [GraphQL concepts](/concepts/data-access/graphql-rpc). It allows pagination, filtering, and consistent snapshot queries. The service also supports runtime configuration for schema, query cost limits, and logging.
 
-- GraphQL Beta Mainnet: `https://graphql.mainnet.sui.io/graphql`
-- GraphQL Beta Testnet: `https://graphql.testnet.sui.io/graphql`
-- GraphQL Beta Devnet: `https://graphql.devnet.sui.io/graphql`
+The GraphQL schema is defined in the [GraphQL reference](/references/sui-graphql). You can explore supported types and fields there, use the GraphiQL IDE to test queries, and read documentation on the up-to-date schema.
 
-:::
+The GraphQL service is deployed as a single binary implementing a stateless, horizontally scalable service. Queries are served with data from one or more of a Postgres-compatible database (filters over historical data), Archival Service (point lookups), Consistent Store (live data), or full node (execution and simulation), based on need. Access to these stores must be configured with the service on start-up, otherwise the service might fail to respond correctly to requests. More details on how to set up, configure, and run the service is available in its [README](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-graphql).
+
+Requests to GraphQL are subject to various limits, to ensure resources are shared fairly between clients. Each limit is configurable, and the values configured for an instance can be queried through [`Query.serviceConfig`](/references/sui-api/sui-graphql/beta/reference/operations/queries/service-config). Requests that do not meet limits return with an error. The following limits are in effect:
+
+- **Request size:** Requests might not exceed a certain size in bytes. The limit is spread across a transaction payload limit, which applies to all values and variable bindings that are parameters to transaction signing, execution, and simulation fields (default: 175KB), and a query payload limit which applies to all other parts of the query (default: 5KB).
+
+- **Request timeout:** Time spent on each request is bounded, with different bounds for execution (default: 74s) and regular reads (default: 40s).
+
+- **Query input nodes and depth:** The query cannot be too complex, meaning it cannot contain too many input nodes or field names (default: 300) or be too deeply nested (default: 20).
+
+- **Output nodes:** The service estimates the maximum number of output nodes the query might produce, assuming every requested field is present, every paginated field returns full pages, and every multi-get finds all requested keys. This estimate must be bounded (default: 1,000,000).
+
+- **Page and multi-get size:** Each paginated field (default: 50) and multi-get (default: 200) is subject to a maximum size. Certain paginated fields might override this to provide a higher or lower maximum.
+
+- **(TBD) Rich queries:** A request can contain only a bounded number (default: 5) of queries that require dedicated access to the database (cannot be grouped with other requests).
+
+## Working with General-purpose Indexer
+
+General-purpose indexer fetches checkpoints data from either a remote object store, local files, or a full node RPC, and indexes data into multiple database tables through a set of specialized pipelines. Each pipeline is responsible for extracting specific data and writing to its target tables.
+
+<details>
+<summary>
+Full list of tables and their schemas
+</summary>
+<ImportContent source="crates/sui-indexer-alt-schema/src/schema.rs" mode="code" />
+</details>
+
+Below are brief descriptions of the various categories of pipelines based on the type of data they handle:
+
+### Blockchain raw content pipelines
+
+These pipelines capture the core blockchain data in its raw form, preserving complete checkpoint information, full transaction and objects contents, and Move package bytecode and metadata. They ensure the complete blockchain state is available for direct lookup by key (such as object ID and version, transaction digest, checkpoint sequence number). Some production deployments use the Archival Store for looking up checkpoints, transactions, and objects contents instead of the corresponding `kv_` tables.
+
+The following pipelines create indexed views that allow efficient filtering and querying based on different attributes (such as object owner, transaction type, affected addresses, event type). These indexes help identify the keys of interest, which can then fetch detailed content from the raw content `kv_` tables:
+
+**Tables:** `kv_checkpoints`, `kv_transactions`, `kv_objects`, `kv_packages` 
+
+### Transaction pipelines
+
+These pipelines extract and index key transaction attributes to support efficient filtering and querying. `tx_kinds`, `tx_calls`, `tx_affected_addresses`, and `tx_affected_objects` enable fast lookups of transactions based on types, function calls, sender and receiver addresses, and changed objects. `tx_digests` enable conversions between transaction sequence numbers and transaction digests needed for looking up transactions in `kv_` tables by digests and `tx_balance_changes` stores balance changes information of each transaction.
+
+**Tables** : `tx_digests`, `tx_kinds`, `tx_calls`, `tx_affected_addresses`, `tx_affected_objects`, `tx_balance_changes`
+
+### Object pipelines
+
+These pipelines manage current and historical object information. They store active object metadata, maintain version histories for each object, and categorize coin balances into buckets for efficient coin queries sorted by balances. `obj_versions` table is particularly important for the GraphQL service. It tracks the version history of all blockchain objects, storing object ID, version number, digest, and checkpoint sequence number. The GraphQL service uses this table as an efficient index to resolve object queries by version bounds, checkpoint bounds, or exact versions without loading full object data, enabling features like version pagination and temporal consistency.
+
+Pruning policies can be configured for `obj_info` and `coin_balance_buckets` to retain historical data within a specified time range, balancing query needs with storage management. This allows supporting use cases that require querying recent object history without retaining all historical data indefinitely.
+
+**Tables**: `obj_info`, `obj_versions`, `coin_balance_buckets`
+
+### Epoch information pipelines
+
+These pipelines capture protocol upgrades and epoch transition points. They track the system state, reward distribution, validator committee and protocol configurations of each epoch, providing a historical record of network evolution.
+
+**Tables**: `kv_epoch_starts`, `kv_epoch_ends`, `kv_feature_flags`, `kv_protocol_configs`
+
+### Event processing pipelines
+
+These pipelines index blockchain events for efficient querying by sender, emitting module, or event type.
+
+**Tables**: `ev_emit_mod`, `ev_struct_inst`
+
+### Utility and support pipelines
+
+These pipelines provide support infrastructure, such as checkpoint sequence number tracking for pruning and watermark tracking for ensuring consistent reads across different tables in a GraphQL query.
+
+**Tables**: `cp_sequence_numbers`, `watermarks`
+
+### Other pipelines
+
+`sum_displays` tables stores the latest version of the `Display` object for each object type, used for rendering [the off-chain representation (display) for a type](/standards/display).
+
+## Working with Consistent Store
+
+The Consistent Store is a combined indexer and RPC service that is responsible for indexing live data on-chain, and serving queries about it for recent checkpoints. Retention is configurable and is typically measured in minutes or hours. Its indexer fetches checkpoints from the same sources as the General-purpose Indexer, and writes data to an embedded RocksDB store, while requests are served through gRPC, answering the following queries:
+
+- Owner's live objects at a recent checkpoint, optionally filtered by type
+
+- Live objects for a given type at a recent checkpoint
+
+- Address balance at a recent checkpoint
+
+This service is not stateless as it maintains its own database. A new instance can be spun up similar to the indexer by syncing it from genesis, or possibly by restoring it from a formal snapshot.
+
+## For RPC providers and data operators
+
+If you're running the GraphQL RPC and General-purpose Indexer stack as a service, here are a few key considerations for configuring your setup to offer builders a performant and cost-effective experience. For step-by-step setup and operations instructions, see the [GraphQL and General-Purpose Indexer guide](/guides/operator/indexer-stack-setup.mdx).
 
 ## Headers
 

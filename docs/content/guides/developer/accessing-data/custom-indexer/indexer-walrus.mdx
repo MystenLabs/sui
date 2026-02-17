@@ -4,13 +4,7 @@ description: Walrus is a content-addressable storage protocol, where data is ret
 keywords: [ walrus, indexer, custom indexer, custom indexer framework, blob, sequential pipeline, blog ]
 ---
 
-:::tip
-
-This topic examines how to use a custom indexer with [Walrus](https://www.walrus.xyz/). For a more in-depth look at creating a custom indexer, see [Build Your First Custom Indexer](/guides/developer/accessing-data/custom-indexer/build.mdx). 
-
-:::
-
-Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs.  It is a content-addressable storage protocol, meaning data is identified and retrieved using a unique identifier called a  _blob_. Blobs are derived from the content itself rather than from a file path or location. Consequently, if different users upload the same content, Walrus reuses the existing blob rather than creating a new one. 
+[Walrus](https://walrus.xyz) is a decentralized storage and data availability protocol designed specifically for large binary files. It is a content-addressable storage protocol, meaning data is identified and retrieved using a unique identifier called a blob. Blobs are derived from the content itself rather than from a file path or location. Consequently, if different users upload the same content, Walrus reuses the existing blob rather than creating a new one. 
 
 For uniqueness, each blob uploaded to Walrus also creates a corresponding [`Blob` NFT object on Sui](https://docs.wal.app/dev-guide/sui-struct.html#blob-and-storage-objects) with a unique ID. Furthermore, the associated `Blob` object can optionally have a `Metadata` [dynamic field](/guides/developer/objects/dynamic-fields.mdx). 
 
@@ -125,6 +119,6 @@ If you don't want to perform additional work on the write side, then you are lim
 ## Related links
 
 <RelatedLink href="https://docs.wal.app/" label="Walrus Docs" desc="Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs." />
-<RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework.mdx" />
+<RelatedLink to="/concepts/data-access/custom-indexers.mdx" />
 <RelatedLink to="/guides/developer/objects/dynamic-fields.mdx" />
 <RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/rust/walrus-attributes-indexer" label="Indexer with Walrus example files" desc="Directory in the Sui repo containing the files for this example." />
