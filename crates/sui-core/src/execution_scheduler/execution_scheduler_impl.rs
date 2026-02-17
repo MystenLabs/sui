@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    accumulators::funds_read::AccountFundsRead,
+    accumulators::{self, AccumulatorSettlementTxBuilder, funds_read::AccountFundsRead},
     authority::{
-        AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
+        AuthorityMetrics, ExecutionEnv,
+        authority_per_epoch_store::{AuthorityPerEpochStore, SettlementResult},
+        epoch_start_configuration::EpochStartConfigTrait,
         shared_object_version_manager::Schedulable,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
@@ -18,7 +20,7 @@ use crate::{
 };
 use futures::stream::{FuturesUnordered, StreamExt};
 use mysten_common::{assert_reachable, debug_fatal};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -29,12 +31,13 @@ use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     base_types::{FullObjectID, ObjectID},
     digests::TransactionDigest,
+    effects::TransactionEffectsAPI,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::InputKey,
     transaction::{
         SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
-        TransactionDataAPI, TransactionKey,
+        TransactionDataAPI, TransactionKey, VerifiedTransaction,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -42,6 +45,22 @@ use tokio::time::Instant;
 use tracing::{debug, error, instrument};
 
 use super::{PendingCertificate, overload_tracker::OverloadTracker};
+
+struct SettlementWorkItem {
+    settlement_key: TransactionKey,
+    env: ExecutionEnv,
+}
+
+#[derive(Clone)]
+struct SettlementQueueSender {
+    sender: monitored_mpsc::UnboundedSender<SettlementWorkItem>,
+}
+
+impl SettlementQueueSender {
+    fn send(&self, item: SettlementWorkItem) {
+        let _ = self.sender.send(item);
+    }
+}
 
 /// Utility struct for collecting barrier dependencies
 pub(crate) struct BarrierDependencyBuilder {
@@ -93,6 +112,7 @@ pub struct ExecutionScheduler {
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     address_funds_withdraw_scheduler: Arc<Mutex<Option<FundsWithdrawScheduler>>>,
     funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
+    settlement_queue_sender: Arc<Mutex<Option<SettlementQueueSender>>>,
     metrics: Arc<AuthorityMetrics>,
     address_funds_scheduler_metrics: Arc<AddressFundsSchedulerMetrics>,
 }
@@ -160,6 +180,7 @@ impl ExecutionScheduler {
                 address_funds_withdraw_scheduler,
             )),
             funds_withdraw_scheduler_type,
+            settlement_queue_sender: Arc::new(Mutex::new(None)),
             metrics,
             address_funds_scheduler_metrics,
         }
@@ -189,6 +210,47 @@ impl ExecutionScheduler {
         );
 
         Some(address_funds_withdraw_scheduler)
+    }
+
+    fn get_or_start_settlement_queue(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SettlementQueueSender {
+        let mut guard = self.settlement_queue_sender.lock();
+        if let Some(sender) = guard.as_ref() {
+            return sender.clone();
+        }
+
+        let (sender, recv) = monitored_mpsc::unbounded_channel("settlement_queue");
+        let queue_sender = SettlementQueueSender { sender };
+        *guard = Some(queue_sender.clone());
+
+        let scheduler = self.clone();
+        let epoch_store = epoch_store.clone();
+        spawn_monitored_task!(Self::run_settlement_queue(recv, scheduler, epoch_store));
+
+        queue_sender
+    }
+
+    async fn run_settlement_queue(
+        mut recv: monitored_mpsc::UnboundedReceiver<SettlementWorkItem>,
+        scheduler: ExecutionScheduler,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+    ) {
+        while let Some(item) = recv.recv().await {
+            let result = epoch_store
+                .within_alive_epoch(scheduler.construct_and_execute_settlement_early(
+                    item.settlement_key,
+                    item.env,
+                    &epoch_store,
+                ))
+                .await;
+            if result.is_err() {
+                debug!("Settlement queue task ended: epoch is no longer alive");
+                return;
+            }
+        }
+        debug!("Settlement queue task ended: channel closed");
     }
 
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?cert.digest()))]
@@ -422,10 +484,24 @@ impl ExecutionScheduler {
         settlement_txns: Vec<(TransactionKey, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        if !settlement_txns.is_empty() {
+        if settlement_txns.is_empty() {
+            return;
+        }
+
+        if epoch_store
+            .protocol_config()
+            .split_checkpoints_in_consensus_handler()
+        {
+            let queue = self.get_or_start_settlement_queue(epoch_store);
+            for (settlement_key, env) in settlement_txns {
+                queue.send(SettlementWorkItem {
+                    settlement_key,
+                    env,
+                });
+            }
+        } else {
             let scheduler = self.clone();
             let epoch_store = epoch_store.clone();
-
             spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
                 let mut futures: FuturesUnordered<_> = settlement_txns
                     .into_iter()
@@ -470,6 +546,168 @@ impl ExecutionScheduler {
                 }
             }));
         }
+    }
+
+    async fn construct_and_execute_settlement_early(
+        &self,
+        settlement_key: TransactionKey,
+        env: ExecutionEnv,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        let batch_info = match epoch_store.take_settlement_batch_info(&settlement_key) {
+            Some(info) => info,
+            None => {
+                debug_fatal!("SettlementBatchInfo not found for key {:?}", settlement_key);
+                return;
+            }
+        };
+
+        let digests = match epoch_store
+            .notify_read_tx_key_to_digest(&batch_info.tx_keys)
+            .await
+        {
+            Ok(digests) => digests,
+            Err(e) => {
+                error!("Failed to read tx digests for settlement: {:?}", e);
+                return;
+            }
+        };
+
+        let effects = self
+            .transaction_cache_read
+            .notify_read_executed_effects(
+                "ExecutionScheduler::construct_and_execute_settlement_early",
+                &digests,
+            )
+            .await;
+
+        let epoch = epoch_store.epoch();
+        let accumulator_root_obj_initial_shared_version = epoch_store
+            .epoch_start_config()
+            .accumulator_root_obj_initial_shared_version()
+            .expect("accumulator root object must exist");
+
+        let checkpoint_seq = batch_info.checkpoint_seq;
+
+        let builder = AccumulatorSettlementTxBuilder::new(
+            Some(self.transaction_cache_read.as_ref()),
+            &effects,
+            checkpoint_seq,
+            batch_info.tx_index_offset,
+        );
+
+        let funds_changes = builder.collect_funds_changes();
+        let settlement_txns = builder.build_tx(
+            epoch_store.protocol_config(),
+            epoch,
+            accumulator_root_obj_initial_shared_version,
+            batch_info.checkpoint_height,
+            checkpoint_seq,
+        );
+
+        let settlement_txns: Vec<_> = settlement_txns
+            .into_iter()
+            .map(|tx| {
+                VerifiedExecutableTransaction::new_system(
+                    VerifiedTransaction::new_system_transaction(tx),
+                    epoch,
+                )
+            })
+            .collect();
+
+        let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
+
+        debug!(
+            ?settlement_digests,
+            ?settlement_key,
+            "early settlement: created settlement transactions"
+        );
+
+        let mut barrier_deps = BarrierDependencyBuilder::new();
+        let txns = settlement_txns
+            .into_iter()
+            .map(|tx| {
+                let deps = barrier_deps.process_tx(*tx.digest(), tx.transaction_data());
+                let env = env.clone().with_barrier_dependencies(deps);
+                (tx, env)
+            })
+            .collect::<Vec<_>>();
+
+        self.enqueue_transactions(txns, epoch_store);
+
+        let settlement_effects = self
+            .transaction_cache_read
+            .notify_read_executed_effects(
+                "ExecutionScheduler::settlement_effects",
+                &settlement_digests,
+            )
+            .await;
+
+        let barrier_tx = accumulators::build_accumulator_barrier_tx(
+            epoch,
+            accumulator_root_obj_initial_shared_version,
+            batch_info.checkpoint_height,
+            &settlement_effects,
+        );
+
+        let barrier_tx = VerifiedExecutableTransaction::new_system(
+            VerifiedTransaction::new_system_transaction(barrier_tx),
+            epoch,
+        );
+        let barrier_digest = *barrier_tx.digest();
+
+        let deps = barrier_deps.process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
+        let env = env.with_barrier_dependencies(deps);
+        self.enqueue_transactions(vec![(barrier_tx, env)], epoch_store);
+
+        let barrier_effects = self
+            .transaction_cache_read
+            .notify_read_executed_effects("ExecutionScheduler::barrier_effects", &[barrier_digest])
+            .await;
+
+        let all_settlement_effects: Vec<_> = settlement_effects
+            .into_iter()
+            .chain(barrier_effects)
+            .collect();
+
+        let mut next_accumulator_version = None;
+        for fx in all_settlement_effects.iter() {
+            assert!(
+                fx.status().is_ok(),
+                "settlement transaction cannot fail (digest: {:?}) {:#?}",
+                fx.transaction_digest(),
+                fx
+            );
+            if let Some(version) = fx
+                .mutated()
+                .iter()
+                .find_map(|(oref, _)| (oref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID).then_some(oref.1))
+            {
+                assert!(
+                    next_accumulator_version.is_none(),
+                    "Only one settlement transaction should mutate the accumulator root object"
+                );
+                next_accumulator_version = Some(version);
+            }
+        }
+
+        let funds_settlement = FundsSettlement {
+            next_accumulator_version: next_accumulator_version
+                .expect("Accumulator root object should be mutated"),
+            funds_changes,
+        };
+
+        self.settle_address_funds(funds_settlement.clone());
+
+        epoch_store.notify_settlement_result_ready(
+            settlement_key,
+            SettlementResult {
+                settlement_effects: all_settlement_effects,
+                funds_settlement,
+            },
+        );
+
+        debug!(?settlement_key, "early settlement: completed");
     }
 
     fn schedule_tx_keys(
@@ -662,6 +900,9 @@ impl ExecutionScheduler {
         }
         *guard = address_funds_withdraw_scheduler;
         drop(guard);
+
+        let mut settlement_guard = self.settlement_queue_sender.lock();
+        *settlement_guard = None;
     }
 
     pub fn check_execution_overload(
