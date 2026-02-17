@@ -33,6 +33,7 @@ use sui_kvstore::BigTableStore;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::set_write_legacy_data;
+use sui_protocol_config::Chain;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
@@ -61,6 +62,7 @@ const TABLES: &[&str] = &[
     sui_kvstore::tables::checkpoints_by_digest::NAME,
     sui_kvstore::tables::watermark_alt_legacy::NAME,
     sui_kvstore::tables::epochs::NAME,
+    sui_kvstore::tables::protocol_configs::NAME,
 ];
 
 /// Resolve the path to `cbtemulator` relative to the gcloud SDK root.
@@ -326,6 +328,7 @@ impl TestHarness {
             ingestion_config.into(),
             CommitterConfig::default(),
             PipelineLayer::default(),
+            Chain::Unknown,
             &registry,
         )
         .await
