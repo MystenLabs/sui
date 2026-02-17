@@ -111,13 +111,7 @@ trait LimitAlgorithm: Send + Sync + 'static {
     /// `delivered` is the number of requests that completed between when this token was
     /// acquired and when it completed (including itself). This is the TCP BBR-style
     /// delivery count, measuring actual backend throughput rather than sender concurrency.
-    fn update(
-        &self,
-        inflight: usize,
-        delivered: usize,
-        outcome: Outcome,
-        rtt: Duration,
-    ) -> usize;
+    fn update(&self, inflight: usize, delivered: usize, outcome: Outcome, rtt: Duration) -> usize;
 
     /// Shared atomic gauge tracking the current concurrency limit.
     fn gauge(&self) -> Arc<AtomicUsize>;
@@ -283,10 +277,7 @@ impl Token {
     pub fn record_sample(mut self, outcome: Outcome) -> usize {
         let inner = self.inner.take().expect("record_sample called twice");
         let rtt = self.start.elapsed();
-        let completed_now = inner
-            .total_completed
-            .fetch_add(1, Ordering::Relaxed)
-            + 1;
+        let completed_now = inner.total_completed.fetch_add(1, Ordering::Relaxed) + 1;
         let delivered = completed_now - self.completed_at_acquire;
         let result = inner
             .algorithm
@@ -681,13 +672,7 @@ impl Vegas {
 }
 
 impl LimitAlgorithm for Vegas {
-    fn update(
-        &self,
-        inflight: usize,
-        _delivered: usize,
-        outcome: Outcome,
-        rtt: Duration,
-    ) -> usize {
+    fn update(&self, inflight: usize, _delivered: usize, outcome: Outcome, rtt: Duration) -> usize {
         let mut state = self.inner.lock().unwrap();
 
         if matches!(outcome, Outcome::Ignore) {
@@ -881,13 +866,7 @@ impl Bbr {
 }
 
 impl LimitAlgorithm for Bbr {
-    fn update(
-        &self,
-        _inflight: usize,
-        delivered: usize,
-        outcome: Outcome,
-        rtt: Duration,
-    ) -> usize {
+    fn update(&self, _inflight: usize, delivered: usize, outcome: Outcome, rtt: Duration) -> usize {
         let mut state = self.inner.lock().unwrap();
 
         if matches!(outcome, Outcome::Ignore) {
@@ -1050,13 +1029,7 @@ impl Gradient {
 }
 
 impl LimitAlgorithm for Gradient {
-    fn update(
-        &self,
-        inflight: usize,
-        _delivered: usize,
-        outcome: Outcome,
-        rtt: Duration,
-    ) -> usize {
+    fn update(&self, inflight: usize, _delivered: usize, outcome: Outcome, rtt: Duration) -> usize {
         let mut state = self.inner.lock().unwrap();
 
         if matches!(outcome, Outcome::Ignore) {
@@ -2304,5 +2277,4 @@ mod tests {
         let limiter = config.build();
         assert_eq!(limiter.current(), 10);
     }
-
 }

@@ -285,17 +285,34 @@ impl AdaptiveState {
             // No throughput data this interval. Decay still runs — it only needs
             // peak_inflight vs limit, not throughput. Without this, bursty workloads
             // where most intervals have zero completions never decay.
-            if let Phase::ProbeBW(ProbeBWState::Cruise {
-                intervals_since_probe,
-            }) = &mut self.phase
-            {
-                let underutilized = self.stats.peak_inflight * 2 < self.limit;
-                if underutilized && *intervals_since_probe > 3 {
-                    self.limit = ((self.limit as f64) * 0.95).ceil() as usize;
-                    self.limit = self.limit.clamp(config.min_limit, config.max_limit);
-                    gauge.store(self.limit, Ordering::Release);
+            let underutilized = self.stats.peak_inflight * 2 < self.limit;
+            match &mut self.phase {
+                Phase::ProbeBW(ProbeBWState::Cruise {
+                    intervals_since_probe,
+                }) => {
+                    if underutilized && *intervals_since_probe > 3 {
+                        self.limit = ((self.limit as f64) * 0.95).ceil() as usize;
+                        self.limit = self.limit.clamp(config.min_limit, config.max_limit);
+                        gauge.store(self.limit, Ordering::Release);
+                    }
+                    *intervals_since_probe += 1;
                 }
-                *intervals_since_probe += 1;
+                Phase::Startup { stall_count, .. } => {
+                    if underutilized {
+                        *stall_count += 1;
+                    }
+                    if *stall_count >= config.full_pipe_rounds {
+                        self.limit = ((self.limit as f64) * config.headroom_factor
+                            / config.startup_growth_factor)
+                            .ceil() as usize;
+                        self.limit = self.limit.clamp(config.min_limit, config.max_limit);
+                        gauge.store(self.limit, Ordering::Release);
+                        self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
+                            intervals_since_probe: 0,
+                        });
+                    }
+                }
+                _ => {}
             }
             self.stats
                 .reset(Duration::from_millis(config.probe_interval_ms));
@@ -357,9 +374,9 @@ impl AdaptiveState {
                     } else {
                         *stall_count += 1;
                     }
+                } else {
+                    *stall_count += 1;
                 }
-                // When underutilized, skip — don't grow or count stalls until
-                // the pipeline catches up to the current limit.
 
                 if *stall_count >= config.full_pipe_rounds {
                     // Full pipe detected. The last successful growth step overshot,
@@ -804,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn startup_skips_when_underutilized() {
+    fn startup_counts_underutilized_as_stall() {
         let config = AdaptiveConfig {
             initial_limit: 8,
             min_limit: 1,
@@ -822,14 +839,29 @@ mod tests {
         alg.force_interval_with_throughput(800.0);
         assert_eq!(alg.current(), 16);
 
-        // Now feed with zero inflight (underutilized). Should neither grow nor count as stall.
+        // Feed with zero inflight (underutilized). Should not grow but should count as stall.
         feed_successes_idle(&alg, 50, Duration::from_millis(10));
         alg.force_interval_with_throughput(900.0);
         assert_eq!(alg.current(), 16, "Should not double when underutilized");
 
-        // Still in Startup, stall_count should still be 0
+        {
+            let state = alg.inner.lock().unwrap();
+            assert!(matches!(state.phase, Phase::Startup { stall_count: 1, .. }));
+        }
+
+        // Two more underutilized intervals → stall_count=3 → drain
+        feed_successes_idle(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(900.0);
+        feed_successes_idle(&alg, 50, Duration::from_millis(10));
+        alg.force_interval_with_throughput(900.0);
+
+        // drain: ceil(16 * 0.85 / 2.0) = ceil(6.8) = 7
+        assert_eq!(alg.current(), 7);
         let state = alg.inner.lock().unwrap();
-        assert!(matches!(state.phase, Phase::Startup { stall_count: 0, .. }));
+        assert!(matches!(
+            state.phase,
+            Phase::ProbeBW(ProbeBWState::Cruise { .. })
+        ));
     }
 
     // ======================== ProbeUp tests ========================

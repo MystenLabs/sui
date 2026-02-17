@@ -88,7 +88,6 @@ pub struct CommitterConfig {
 
     /// Maximum random jitter to add to the watermark interval, in milliseconds.
     pub watermark_interval_jitter_ms: u64,
-
 }
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
