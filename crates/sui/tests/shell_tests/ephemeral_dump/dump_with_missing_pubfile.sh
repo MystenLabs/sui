@@ -1,7 +1,3 @@
----
-source: crates/sui/tests/shell_tests.rs
----
------ script -----
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -25,16 +21,3 @@ sui move --client.config config.yaml build -p main_pkg \
   --dump --pubfile-path Pub.test.toml --no-tree-shaking \
   -e testnet \
   2>&1 > output.json || cat output.json
-
------ results -----
-success: true
-exit_code: 0
------ stdout -----
-=== should fail because of unknown build-env ===
-Active environment `base` does not correspond to any of environments defined for the package. Specify the environment by passing one of the following:
-	-e testnet
-	-e mainnet
-=== should succeed ===
-BUILDING main_pkg
-
------ stderr -----

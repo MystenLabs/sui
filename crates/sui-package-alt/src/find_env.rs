@@ -26,7 +26,7 @@ struct EnvFinder<'a> {
 ///  - the path to a directory containing a Move.toml file
 ///  - the `-e <env>` argument that was passed, if any
 ///  - the CLI's active environment (`wallet`)
-///  - whether the error messages should be publication- or build-oriented.
+///  - whether the error messages should be (true) publication- or (false) build-oriented.
 pub async fn find_environment(
     package_path: &Path,
     explicit_env: Option<EnvironmentName>,
