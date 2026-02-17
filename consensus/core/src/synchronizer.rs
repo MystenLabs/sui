@@ -1378,7 +1378,7 @@ mod tests {
     impl ObserverNetworkClient for MockNetworkClient {
         async fn stream_blocks(
             &self,
-            _peer: crate::network::NodeId,
+            _peer: crate::network::PeerId,
             _request_stream: crate::network::BlockRequestStream,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
@@ -1387,7 +1387,7 @@ mod tests {
 
         async fn fetch_blocks(
             &self,
-            _peer: crate::network::NodeId,
+            _peer: crate::network::PeerId,
             _block_refs: Vec<BlockRef>,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
@@ -1396,7 +1396,7 @@ mod tests {
 
         async fn fetch_commits(
             &self,
-            _peer: crate::network::NodeId,
+            _peer: crate::network::PeerId,
             _commit_range: crate::commit::CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
@@ -1482,6 +1482,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let mock_client = Arc::new(MockNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
@@ -1545,6 +1546,7 @@ mod tests {
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(MockNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
@@ -1664,6 +1666,7 @@ mod tests {
 
         // WHEN start the synchronizer and wait for a couple of seconds
         let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
@@ -1775,6 +1778,7 @@ mod tests {
 
         // WHEN start the synchronizer and wait for a couple of seconds where normally the synchronizer should have kicked in.
         let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
@@ -1919,6 +1923,7 @@ mod tests {
 
         // WHEN start the synchronizer and wait for a couple of seconds
         let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));

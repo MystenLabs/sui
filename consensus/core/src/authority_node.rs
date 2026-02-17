@@ -224,6 +224,7 @@ where
             N::ValidatorClient,
             N::ObserverClient,
         >::new(
+            context.clone(),
             Some(validator_client.clone()),
             None, // TODO: set observer client if want to talk to a peer's observer server.
         ));
@@ -231,6 +232,7 @@ where
             N::ValidatorClient,
             N::ObserverClient,
         >::new(
+            context.clone(),
             Some(validator_client.clone()),
             None, // TODO: set observer client if want to talk to a peer's observer server.
         ));

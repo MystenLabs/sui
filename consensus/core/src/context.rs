@@ -112,6 +112,12 @@ impl Context {
         self.protocol_config = protocol_config;
         self
     }
+
+    // TODO: add a method to check if this node is a validator or an observer. For now it will always return true.
+    // Observer nodes won't really have an authority index associated with them, or we might assign a fake one to them so they can be identified.
+    pub fn is_validator(&self) -> bool {
+        self.committee.is_valid_index(self.own_index)
+    }
 }
 
 /// A clock that allows to derive the current UNIX system timestamp while guaranteeing that timestamp

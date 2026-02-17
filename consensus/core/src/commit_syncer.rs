@@ -966,7 +966,7 @@ mod tests {
     impl ObserverNetworkClient for FakeNetworkClient {
         async fn stream_blocks(
             &self,
-            _peer: crate::network::NodeId,
+            _peer: crate::network::PeerId,
             _request_stream: crate::network::BlockRequestStream,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
@@ -975,7 +975,7 @@ mod tests {
 
         async fn fetch_blocks(
             &self,
-            _peer: crate::network::NodeId,
+            _peer: crate::network::PeerId,
             _block_refs: Vec<BlockRef>,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
@@ -984,7 +984,7 @@ mod tests {
 
         async fn fetch_commits(
             &self,
-            _peer: crate::network::NodeId,
+            _peer: crate::network::PeerId,
             _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
@@ -1013,6 +1013,7 @@ mod tests {
         let core_thread_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(CommitSyncerClient::new(
+            context.clone(),
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));

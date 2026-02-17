@@ -12,7 +12,7 @@ use tokio_stream::Iter;
 use tonic::{Request, Response, Streaming};
 
 use super::{
-    NodeId, ObserverBlockStream, ObserverNetworkClient, ObserverNetworkService,
+    ObserverBlockStream, ObserverNetworkClient, ObserverNetworkService, PeerId,
     tonic_gen::observer_service_server::ObserverService,
 };
 use crate::{
@@ -105,7 +105,7 @@ impl TonicObserverClient {
 impl ObserverNetworkClient for TonicObserverClient {
     async fn stream_blocks(
         &self,
-        _peer: NodeId,
+        _peer: PeerId,
         _request_stream: super::BlockRequestStream,
         _timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream> {
@@ -117,7 +117,7 @@ impl ObserverNetworkClient for TonicObserverClient {
 
     async fn fetch_blocks(
         &self,
-        _peer: NodeId,
+        _peer: PeerId,
         _block_refs: Vec<BlockRef>,
         _timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
@@ -129,7 +129,7 @@ impl ObserverNetworkClient for TonicObserverClient {
 
     async fn fetch_commits(
         &self,
-        _peer: NodeId,
+        _peer: PeerId,
         _commit_range: CommitRange,
         _timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {

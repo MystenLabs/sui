@@ -251,7 +251,7 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
     /// The request_stream contains BlockStreamRequest items with Start/Stop commands for flow control.
     async fn stream_blocks(
         &self,
-        peer: NodeId,
+        peer: PeerId,
         request_stream: BlockRequestStream,
         timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream>;
@@ -259,7 +259,7 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
     /// Fetches serialized blocks by references from a peer.
     async fn fetch_blocks(
         &self,
-        peer: NodeId,
+        peer: PeerId,
         block_refs: Vec<BlockRef>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
@@ -269,7 +269,7 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
     /// votes certifying the last commit.
     async fn fetch_commits(
         &self,
-        peer: NodeId,
+        peer: PeerId,
         commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
