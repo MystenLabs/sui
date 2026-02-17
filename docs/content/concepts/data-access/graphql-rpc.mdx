@@ -714,6 +714,73 @@ This service is not stateless as it maintains its own database. A new instance c
 
 If you're running the GraphQL RPC and General-purpose Indexer stack as a service, here are a few key considerations for configuring your setup to offer builders a performant and cost-effective experience. For step-by-step setup and operations instructions, see the [GraphQL and General-Purpose Indexer guide](/guides/operator/indexer-stack-setup.mdx).
 
+### How much data to index and retain
+
+You should retain 30 to 90 days of recent checkpoint data in your Postgres-compatible database. This provides a strong default for most apps without incurring the high storage costs of full historical indexing.
+
+- 30 days serves as a baseline for dashboards and explorers that need recent activity and assets.
+
+- 90 days improves support for longer-range pagination, historical lookups, or apps with slower engagement cycles.
+
+You can configure your indexing pipelines to scope which data you include, such as events, objects, and transactions, and disable any components that are not needed.
+
+:::note
+
+Retaining long-term historical data in Postgres is not recommended unless required for specific apps.
+
+:::
+
+### Use the Archival Service and Store for historical lookups
+
+For all production deployments, pair Postgres with the [Archival Service](/guides/developer/accessing-data/archival-store.mdx) to support point lookups of transactions, objects, and checkpoints when relevant data does not exist in Postgres. The Archival Service serves as the backend for historical versions and checkpoint data, reducing pressure on your Postgres instance. While not strictly required, use the Archival Service in any production setup that aims to support high-retention GraphQL or gRPC workloads.
+
+Current implementation supports [GCP Bigtable](https://cloud.google.com/bigtable) which is a highly scalable and performant data store. If you plan to operate your own archival store, refer to `sui-kvstore` and `sui-kv-rpc` for indexer setup and RPC service implementation respectively. For the indexer setup, make sure to use the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx). If you're interested in contributing support for other scalable data stores, reach out on GitHub by creating a new issue.
+
+<details>
+<summary>
+`lib.rs` in `sui-kvstore`
+</summary>
+<ImportContent source="crates/sui-kvstore/src/lib.rs" mode="code" />
+</details>
+
+<details>
+<summary>
+`main.rs` in `sui-kv-rpc`
+</summary>
+<ImportContent source="crates/sui-kv-rpc/src/main.rs" mode="code" />
+</details>
+
+### Deployment strategies and trade-offs
+
+You don't need to index everything to provide a reliable and performant GraphQL RPC service. In fact, many developers might need only the latest object and transaction data plus a few weeks to months of history. You can reduce operational overhead and improve query performance by:
+
+- Configuring a clear retention window, such as 30 to 90 days in Postgres.
+
+- Using the Archival Service to handle deep historical queries, rather than retaining all versions in Postgres.
+
+When designing your deployment, consider the trade-offs between cost, reliability, and feature completeness:
+
+- Postgres-only with short-retention results in lower storage cost and faster performance, but limited historical coverage.
+
+- Postgres-only with high retention results in broader data coverage, but relatively higher storage cost and slower performance at scale.
+
+- Postgres with short-retention and Archival Service results in optimization for cost and completeness, ideal for production deployments.
+
+### Best practices 
+
+To improve performance and reliability, also consider these operational best practices:
+
+- Try and co-locate your database, indexing pipelines, GraphQL RPC service, and archival service in the same region as your users to minimize latency.
+
+- Use replication and staged deployments to ensure SLA during upgrades or failures.
+
+- Consider offering different tiers of service to meet different developer needs. For example:
+
+    - A basic tier that serves recent data (30 days, for example) through GraphQL RPC or gRPC.
+
+    - A premium tier with full GraphQL or gRPC and Archival Service access, suited to apps that need historical lookups.
+
+    - Optionally, offer region-specific instances or throughput-based pricing to support diverse client footprints.
 
 ## Related links
 
