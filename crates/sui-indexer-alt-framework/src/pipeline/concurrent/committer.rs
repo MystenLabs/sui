@@ -61,6 +61,7 @@ pub(super) fn committer<H: Handler + 'static>(
                      batch,
                      batch_len,
                      watermark,
+                     _guard,
                  }| {
                     let batch = Arc::new(batch);
                     let handler = handler.clone();
@@ -191,6 +192,7 @@ pub(super) fn committer<H: Handler + 'static>(
                             return Err(Break::<anyhow::Error>::Break);
                         }
 
+                        drop(_guard);
                         Ok(())
                     }
                 },

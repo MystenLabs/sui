@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_futures::service::Service;
+use tokio::sync::Notify;
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -150,6 +152,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_tx,
         metrics.clone(),
         fanout,
+        None,
+        Arc::new(AtomicUsize::new(0)),
+        Arc::new(Notify::new()),
     );
 
     let s_committer = committer::<H>(

@@ -12,8 +12,11 @@ use crate::store::CommitterWatermark;
 
 pub mod concurrent;
 mod logging;
+mod pending_rows;
 mod processor;
 pub mod sequential;
+
+pub(crate) use pending_rows::PendingRowsGuard;
 
 /// Extra buffer added to channels between tasks in a pipeline. There does not need to be a huge
 /// capacity here because tasks already buffer rows to insert internally.
@@ -47,6 +50,8 @@ struct IndexedCheckpoint<P: Processor> {
     values: Vec<P::Value>,
     /// The watermark associated with this checkpoint
     watermark: CommitterWatermark,
+    /// RAII guard tracking these rows in the pipeline's pending count.
+    guard: Option<PendingRowsGuard>,
 }
 
 /// A representation of the proportion of a watermark.
@@ -88,6 +93,7 @@ impl<P: Processor> IndexedCheckpoint<P> {
         tx_hi: u64,
         timestamp_ms: u64,
         values: Vec<P::Value>,
+        guard: PendingRowsGuard,
     ) -> Self {
         Self {
             watermark: CommitterWatermark {
@@ -97,6 +103,7 @@ impl<P: Processor> IndexedCheckpoint<P> {
                 timestamp_ms_hi_inclusive: timestamp_ms,
             },
             values,
+            guard: Some(guard),
         }
     }
 
@@ -269,6 +276,7 @@ mod tests {
             tx_hi,
             timestamp_ms,
             values,
+            PendingRowsGuard::mock(3),
         );
 
         assert_eq!(checkpoint.len(), 3);
@@ -289,6 +297,7 @@ mod tests {
             tx_hi,
             timestamp_ms,
             values,
+            PendingRowsGuard::mock(0),
         );
 
         assert_eq!(checkpoint.len(), 0);
