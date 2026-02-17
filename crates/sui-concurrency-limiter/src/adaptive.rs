@@ -428,12 +428,10 @@ impl AdaptiveState {
                         // actual concurrency increase so the bar is consistent at all
                         // concurrency levels (ceil() at low limits no longer gives a
                         // free pass).
-                        let concurrency_ratio =
-                            self.limit as f64 / *pre_probe_limit as f64;
-                        let proportional_threshold = concurrency_ratio
-                            * config.throughput_growth_threshold;
-                        let startup_threshold = concurrency_ratio
-                            * config.full_pipe_threshold;
+                        let concurrency_ratio = self.limit as f64 / *pre_probe_limit as f64;
+                        let proportional_threshold =
+                            concurrency_ratio * config.throughput_growth_threshold;
+                        let startup_threshold = concurrency_ratio * config.full_pipe_threshold;
 
                         // Compare EMA (not raw throughput) against the baseline to
                         // dampen single-interval noise spikes. A lucky burst in one
@@ -448,9 +446,7 @@ impl AdaptiveState {
                                 round_start_throughput: Some(throughput_ema),
                                 stall_count: 0,
                             };
-                        } else if throughput_ema
-                            >= *start_throughput_ema * proportional_threshold
-                        {
+                        } else if throughput_ema >= *start_throughput_ema * proportional_threshold {
                             // Throughput grew proportionally — keep the higher limit
                             self.phase = Phase::ProbeBW(ProbeBWState::Cruise {
                                 intervals_since_probe: 0,
@@ -473,13 +469,11 @@ impl AdaptiveState {
                     } => {
                         // Proportional threshold: expected throughput at reduced
                         // concurrency if the backend scales linearly.
-                        let concurrency_ratio =
-                            self.limit as f64 / *pre_down_limit as f64;
-                        let proportional_threshold = concurrency_ratio
-                            * config.probe_down_min_throughput;
+                        let concurrency_ratio = self.limit as f64 / *pre_down_limit as f64;
+                        let proportional_threshold =
+                            concurrency_ratio * config.probe_down_min_throughput;
 
-                        if throughput >= *pre_probe_throughput_ema * proportional_threshold
-                        {
+                        if throughput >= *pre_probe_throughput_ema * proportional_threshold {
                             // Throughput held up proportionally — the extra concurrency
                             // wasn't helping, keep the lower limit.
                         } else {

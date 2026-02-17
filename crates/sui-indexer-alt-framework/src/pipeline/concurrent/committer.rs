@@ -7,10 +7,11 @@ use std::time::Duration;
 
 use backoff::ExponentialBackoff;
 use sui_concurrency_limiter::Limiter;
-use sui_concurrency_limiter::stream::{AdaptiveStreamExt, Break};
+use sui_concurrency_limiter::Outcome;
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::sync::mpsc::error::TryRecvError;
+use tokio::task::JoinSet;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -61,238 +62,302 @@ pub(super) fn committer<H: Handler + 'static>(
         );
 
         let watermark_peak_fill = Arc::new(AtomicUsize::new(0));
-        let global_pending_rows_for_stream = global_pending_rows;
-        let stream_fut = ReceiverStream::new(rx).try_for_each_spawned_adaptive(
-            limiter.clone(),
-            // f: measured work (DB commit with internal retries)
-            |BatchedRows {
-                 batch,
-                 batch_len,
-                 watermark,
-             }| {
-                let batch = Arc::new(batch);
-                let handler = handler.clone();
-                let db = db.clone();
-                let metrics = metrics.clone();
-                let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
-                let global_pending_rows = global_pending_rows_for_stream.clone();
 
-                let highest_checkpoint = watermark.iter().map(|w| w.checkpoint()).max();
-                let highest_checkpoint_timestamp = watermark.iter().map(|w| w.timestamp_ms()).max();
+        let mut rx = rx;
+        let mut join_set: JoinSet<Result<Vec<WatermarkPart>, anyhow::Error>> = JoinSet::new();
+        let mut active: usize = 0;
+        let mut draining = false;
+        let mut fatal_error: Option<anyhow::Error> = None;
 
-                let backoff = ExponentialBackoff {
-                    initial_interval: INITIAL_RETRY_INTERVAL,
-                    current_interval: INITIAL_RETRY_INTERVAL,
-                    max_interval: MAX_RETRY_INTERVAL,
-                    max_elapsed_time: None,
-                    ..Default::default()
-                };
+        let mut metrics_interval = tokio::time::interval(Duration::from_secs(30));
 
-                use backoff::Error as BE;
-                let commit = move || {
-                    let batch = batch.clone();
-                    let handler = handler.clone();
-                    let db = db.clone();
-                    let metrics = metrics.clone();
-                    let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
-                    let global_pending_rows = global_pending_rows.clone();
-                    async move {
-                        if batch_len == 0 {
-                            return Ok(());
-                        }
-
-                        metrics
-                            .total_committer_batches_attempted
-                            .with_label_values(&[H::NAME])
-                            .inc();
-
-                        let guard = metrics
-                            .committer_commit_latency
-                            .with_label_values(&[H::NAME])
-                            .start_timer();
-
-                        let mut conn = db.connect().await.map_err(|e| {
-                            warn!(
-                                pipeline = H::NAME,
-                                "Committed failed to get connection for DB"
-                            );
-
-                            metrics
-                                .total_committer_batches_failed
-                                .with_label_values(&[H::NAME])
-                                .inc();
-
-                            BE::transient(Break::Err(e))
-                        })?;
-
-                        let affected = handler.commit(&batch, &mut conn).await;
-                        let elapsed = guard.stop_and_record();
-
-                        match affected {
-                            Ok(affected) => {
-                                debug!(
-                                    pipeline = H::NAME,
-                                    elapsed_ms = elapsed * 1000.0,
-                                    affected,
-                                    committed = batch_len,
-                                    "Wrote batch",
-                                );
-
-                                checkpoint_lag_reporter.report_lag(
-                                    highest_checkpoint.unwrap(),
-                                    highest_checkpoint_timestamp.unwrap(),
-                                );
-
-                                metrics
-                                    .total_committer_batches_succeeded
-                                    .with_label_values(&[H::NAME])
-                                    .inc();
-
-                                metrics
-                                    .total_committer_rows_committed
-                                    .with_label_values(&[H::NAME])
-                                    .inc_by(batch_len as u64);
-
-                                metrics
-                                    .total_committer_rows_affected
-                                    .with_label_values(&[H::NAME])
-                                    .inc_by(affected as u64);
-
-                                metrics
-                                    .total_committer_mutations_committed
-                                    .with_label_values(&[H::NAME])
-                                    .inc_by(batch_len as u64);
-
-                                metrics
-                                    .committer_tx_rows
-                                    .with_label_values(&[H::NAME])
-                                    .observe(affected as f64);
-
-                                global_pending_rows.fetch_sub(batch_len, Ordering::Relaxed);
-
-                                Ok(())
+        loop {
+            // Eager inner loop: dispatch batches while capacity allows.
+            while !draining && active < limiter.current() {
+                match rx.try_recv() {
+                    Ok(batch) => {
+                        if batch.batch_len == 0 {
+                            if tx.send(batch.watermark).await.is_err() {
+                                info!(pipeline = H::NAME, "Watermark closed channel");
+                                draining = true;
                             }
-
-                            Err(e) => {
-                                warn!(
-                                    pipeline = H::NAME,
-                                    elapsed_ms = elapsed * 1000.0,
-                                    committed = batch_len,
-                                    "Error writing batch: {e}",
-                                );
-
-                                metrics
-                                    .total_committer_batches_failed
-                                    .with_label_values(&[H::NAME])
-                                    .inc();
-
-                                Err(BE::transient(Break::Err(e)))
-                            }
+                            continue;
                         }
+                        active += 1;
+                        let token = limiter.acquire();
+                        join_set.spawn(commit_batch::<H>(
+                            handler.clone(),
+                            db.clone(),
+                            metrics.clone(),
+                            checkpoint_lag_reporter.clone(),
+                            global_pending_rows.clone(),
+                            batch,
+                            token,
+                        ));
                     }
-                };
-
-                async move {
-                    backoff::future::retry(backoff, commit).await?;
-                    Ok(watermark)
-                }
-            },
-            // g: unmeasured work (send watermark + channel metrics)
-            {
-                let tx = tx.clone();
-                let watermark_peak_fill = watermark_peak_fill.clone();
-                move |watermark: Vec<WatermarkPart>| {
-                    let tx = tx.clone();
-                    let watermark_peak_fill = watermark_peak_fill.clone();
-                    async move {
-                        if tx.send(watermark).await.is_err() {
-                            info!(pipeline = H::NAME, "Watermark closed channel");
-                            return Err(Break::<anyhow::Error>::Break);
-                        }
-
-                        let fill = tx.max_capacity() - tx.capacity();
-                        watermark_peak_fill.fetch_max(fill, Ordering::Relaxed);
-
-                        Ok(())
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        draining = true;
+                        break;
                     }
                 }
-            },
-        );
+            }
 
-        let metrics_for_timer = metrics.clone();
-        match tokio::select! {
-            result = stream_fut => result,
-            _ = async {
-                let mut interval = tokio::time::interval(Duration::from_secs(30));
-                loop {
-                    interval.tick().await;
-                    metrics_for_timer
+            if draining && active == 0 {
+                break;
+            }
+
+            tokio::select! {
+                biased;
+
+                Some(res) = join_set.join_next() => {
+                    active -= 1;
+                    match res {
+                        Ok(Ok(watermark)) => {
+                            if tx.send(watermark).await.is_err() {
+                                info!(pipeline = H::NAME, "Watermark closed channel");
+                                draining = true;
+                            }
+                            let fill = tx.max_capacity() - tx.capacity();
+                            watermark_peak_fill.fetch_max(fill, Ordering::Relaxed);
+                        }
+                        Ok(Err(e)) => {
+                            fatal_error = Some(e);
+                            draining = true;
+                        }
+                        Err(e) => {
+                            fatal_error = Some(anyhow::anyhow!("Committer task panicked: {e}"));
+                            draining = true;
+                        }
+                    }
+                }
+
+                result = rx.recv(), if !draining && active < limiter.current() => {
+                    match result {
+                        Some(batch) => {
+                            if batch.batch_len == 0 {
+                                if tx.send(batch.watermark).await.is_err() {
+                                    info!(pipeline = H::NAME, "Watermark closed channel");
+                                    draining = true;
+                                }
+                                continue;
+                            }
+                            active += 1;
+                            let token = limiter.acquire();
+                            join_set.spawn(commit_batch::<H>(
+                                handler.clone(),
+                                db.clone(),
+                                metrics.clone(),
+                                checkpoint_lag_reporter.clone(),
+                                global_pending_rows.clone(),
+                                batch,
+                                token,
+                            ));
+                        }
+                        None => {
+                            draining = true;
+                        }
+                    }
+                }
+
+                _ = metrics_interval.tick() => {
+                    metrics
                         .committer_write_concurrency
                         .with_label_values(&[H::NAME])
                         .set(limiter.current() as i64);
-                    metrics_for_timer
+                    metrics
                         .committer_write_peak_concurrency
                         .with_label_values(&[H::NAME])
                         .set(limiter.take_peak_limit() as i64);
-                    metrics_for_timer
+                    metrics
                         .committer_write_peak_inflight
                         .with_label_values(&[H::NAME])
                         .set(limiter.take_peak_inflight() as i64);
                     let processor_peak = processor_peak_fill.swap(0, Ordering::Relaxed);
-                    metrics_for_timer
+                    metrics
                         .processor_peak_channel_fill
                         .with_label_values(&[H::NAME])
                         .set(processor_peak as i64);
                     if processor_capacity > 0 {
-                        metrics_for_timer
+                        metrics
                             .processor_peak_channel_utilization
                             .with_label_values(&[H::NAME])
                             .set(processor_peak as f64 / processor_capacity as f64);
                     }
 
                     let collector_peak = collector_peak_fill.swap(0, Ordering::Relaxed);
-                    metrics_for_timer
+                    metrics
                         .collector_peak_channel_fill
                         .with_label_values(&[H::NAME])
                         .set(collector_peak as i64);
                     if collector_capacity > 0 {
-                        metrics_for_timer
+                        metrics
                             .collector_peak_channel_utilization
                             .with_label_values(&[H::NAME])
                             .set(collector_peak as f64 / collector_capacity as f64);
                     }
 
                     let watermark_peak = watermark_peak_fill.swap(0, Ordering::Relaxed);
-                    metrics_for_timer
+                    metrics
                         .committer_watermark_peak_channel_fill
                         .with_label_values(&[H::NAME])
                         .set(watermark_peak as i64);
                     let watermark_capacity = tx.max_capacity();
                     if watermark_capacity > 0 {
-                        metrics_for_timer
+                        metrics
                             .committer_watermark_peak_channel_utilization
                             .with_label_values(&[H::NAME])
                             .set(watermark_peak as f64 / watermark_capacity as f64);
                     }
                 }
-            } => unreachable!(),
-        } {
-            Ok(()) => {
-                info!(pipeline = H::NAME, "Batches done, stopping committer");
-                Ok(())
             }
+        }
 
-            Err(Break::Break) => {
-                info!(pipeline = H::NAME, "Channels closed, stopping committer");
-                Ok(())
-            }
-
-            Err(Break::Err(e)) => {
+        match fatal_error {
+            Some(e) => {
                 error!(pipeline = H::NAME, "Error from committer: {e}");
                 Err(e.context(format!("Error from committer {}", H::NAME)))
             }
+            None => {
+                info!(pipeline = H::NAME, "Committer finished");
+                Ok(())
+            }
         }
     })
+}
+
+/// Spawned as a JoinSet task: commits a single batch with infinite exponential backoff retries,
+/// then records the outcome with the concurrency limiter token.
+async fn commit_batch<H: Handler + 'static>(
+    handler: Arc<H>,
+    db: H::Store,
+    metrics: Arc<IndexerMetrics>,
+    checkpoint_lag_reporter: Arc<CheckpointLagMetricReporter>,
+    global_pending_rows: Arc<AtomicUsize>,
+    batch_row: BatchedRows<H>,
+    token: sui_concurrency_limiter::Token,
+) -> Result<Vec<WatermarkPart>, anyhow::Error> {
+    let BatchedRows {
+        batch,
+        batch_len,
+        watermark,
+    } = batch_row;
+
+    let batch = Arc::new(batch);
+    let highest_checkpoint = watermark.iter().map(|w| w.checkpoint()).max();
+    let highest_checkpoint_timestamp = watermark.iter().map(|w| w.timestamp_ms()).max();
+
+    let backoff = ExponentialBackoff {
+        initial_interval: INITIAL_RETRY_INTERVAL,
+        current_interval: INITIAL_RETRY_INTERVAL,
+        max_interval: MAX_RETRY_INTERVAL,
+        max_elapsed_time: None,
+        ..Default::default()
+    };
+
+    use backoff::Error as BE;
+    let commit = || {
+        let batch = batch.clone();
+        let handler = handler.clone();
+        let db = db.clone();
+        let metrics = metrics.clone();
+        let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
+        let global_pending_rows = global_pending_rows.clone();
+        async move {
+            metrics
+                .total_committer_batches_attempted
+                .with_label_values(&[H::NAME])
+                .inc();
+
+            let guard = metrics
+                .committer_commit_latency
+                .with_label_values(&[H::NAME])
+                .start_timer();
+
+            let mut conn = db.connect().await.map_err(|e| {
+                warn!(
+                    pipeline = H::NAME,
+                    "Committed failed to get connection for DB"
+                );
+
+                metrics
+                    .total_committer_batches_failed
+                    .with_label_values(&[H::NAME])
+                    .inc();
+
+                BE::transient(e)
+            })?;
+
+            let affected = handler.commit(&batch, &mut conn).await;
+            let elapsed = guard.stop_and_record();
+
+            match affected {
+                Ok(affected) => {
+                    debug!(
+                        pipeline = H::NAME,
+                        elapsed_ms = elapsed * 1000.0,
+                        affected,
+                        committed = batch_len,
+                        "Wrote batch",
+                    );
+
+                    checkpoint_lag_reporter.report_lag(
+                        highest_checkpoint.unwrap(),
+                        highest_checkpoint_timestamp.unwrap(),
+                    );
+
+                    metrics
+                        .total_committer_batches_succeeded
+                        .with_label_values(&[H::NAME])
+                        .inc();
+
+                    metrics
+                        .total_committer_rows_committed
+                        .with_label_values(&[H::NAME])
+                        .inc_by(batch_len as u64);
+
+                    metrics
+                        .total_committer_rows_affected
+                        .with_label_values(&[H::NAME])
+                        .inc_by(affected as u64);
+
+                    metrics
+                        .total_committer_mutations_committed
+                        .with_label_values(&[H::NAME])
+                        .inc_by(batch_len as u64);
+
+                    metrics
+                        .committer_tx_rows
+                        .with_label_values(&[H::NAME])
+                        .observe(affected as f64);
+
+                    global_pending_rows.fetch_sub(batch_len, Ordering::Relaxed);
+
+                    Ok(())
+                }
+
+                Err(e) => {
+                    warn!(
+                        pipeline = H::NAME,
+                        elapsed_ms = elapsed * 1000.0,
+                        committed = batch_len,
+                        "Error writing batch: {e}",
+                    );
+
+                    metrics
+                        .total_committer_batches_failed
+                        .with_label_values(&[H::NAME])
+                        .inc();
+
+                    Err(BE::transient(e))
+                }
+            }
+        }
+    };
+
+    backoff::future::retry(backoff, commit).await.unwrap();
+    token.record_sample(Outcome::Success);
+    Ok(watermark)
 }
 
 #[cfg(test)]
