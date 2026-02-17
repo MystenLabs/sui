@@ -41,6 +41,7 @@ impl KvRpcServer {
             "sui-kv-rpc".to_string(),
             Some(registry),
             app_profile_id,
+            None,
         )
         .await?;
         let genesis = client
