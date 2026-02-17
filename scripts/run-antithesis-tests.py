@@ -129,7 +129,7 @@ def main():
     parser.add_argument(
         "-S", "--stress-commit",
         type=str,
-        help="Sui repo sha for stress image",
+        help="Sui repo sha for stress image (default: same as sui_commit)",
     )
     parser.add_argument(
         "-p", "--protocol-override",
@@ -189,6 +189,8 @@ def main():
     if not sui_commit:
         sui_commit = get_git_output(["rev-parse", "HEAD"])
 
+    stress_commit = args.stress_commit if args.stress_commit else sui_commit
+
     # Determine commit and alt_commit based on split_version mode
     if args.split_version:
         if args.alt_commit:
@@ -207,7 +209,7 @@ def main():
             valid = False
         if alt_commit and not validate_commit_on_remote(alt_commit, "MystenLabs/sui", "alt_commit"):
             valid = False
-        if args.stress_commit and not validate_commit_on_remote(args.stress_commit, "MystenLabs/sui", "stress_commit"):
+        if not validate_commit_on_remote(stress_commit, "MystenLabs/sui", "stress_commit"):
             valid = False
         if args.cli_commit and not validate_commit_on_remote(args.cli_commit, "MystenLabs/sui", "cli_commit"):
             valid = False
@@ -260,8 +262,7 @@ def main():
     if args.cli_commit:
         cmd.extend(["-f", f"sui_cli_commit={args.cli_commit}"])
 
-    if args.stress_commit:
-        cmd.extend(["-f", f"stress_commit={args.stress_commit}"])
+    cmd.extend(["-f", f"stress_commit={stress_commit}"])
 
     if args.protocol_override:
         cmd.extend(["-f", f"protocol_config_override={args.protocol_override}"])
