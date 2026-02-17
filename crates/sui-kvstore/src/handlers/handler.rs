@@ -119,8 +119,8 @@ where
     const CAPACITY_BATCHING: bool = true;
     const MAX_BATCH_WEIGHT: usize = usize::MAX;
 
-    fn batch_weight(_batch: &Self::Batch, batch_len: usize) -> usize {
-        batch_len
+    fn batch_weight(_batch: &Self::Batch, _batch_len: usize) -> usize {
+        1
     }
 
     fn drain_batch(
