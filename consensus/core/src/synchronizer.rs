@@ -37,7 +37,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{ObserverNetworkClient, SynchronizerClient, ValidatorNetworkClient},
+    network::ValidatorNetworkClient,
     round_tracker::RoundTracker,
 };
 use crate::{
@@ -230,12 +230,7 @@ impl SynchronizerHandle {
 /// Additionally to the above, the synchronizer can synchronize and fetch the last own proposed block
 /// from the network peers as best effort approach to recover node from amnesia and avoid making the
 /// node equivocate.
-pub(crate) struct Synchronizer<
-    V: BlockVerifier,
-    D: CoreThreadDispatcher,
-    VC: ValidatorNetworkClient,
-    OC: ObserverNetworkClient,
-> {
+pub(crate) struct Synchronizer<C: ValidatorNetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
     fetch_block_senders: BTreeMap<AuthorityIndex, Sender<BlocksGuard>>,
@@ -244,7 +239,7 @@ pub(crate) struct Synchronizer<
     dag_state: Arc<RwLock<DagState>>,
     fetch_blocks_scheduler_task: JoinSet<()>,
     fetch_own_last_block_task: JoinSet<()>,
-    network_client: Arc<SynchronizerClient<VC, OC>>,
+    network_client: Arc<C>,
     block_verifier: Arc<V>,
     transaction_certifier: TransactionCertifier,
     round_tracker: Arc<RwLock<RoundTracker>>,
@@ -252,15 +247,9 @@ pub(crate) struct Synchronizer<
     commands_sender: Sender<Command>,
 }
 
-impl<V, D, VC, OC> Synchronizer<V, D, VC, OC>
-where
-    V: BlockVerifier,
-    D: CoreThreadDispatcher,
-    VC: ValidatorNetworkClient,
-    OC: ObserverNetworkClient,
-{
+impl<C: ValidatorNetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C, V, D> {
     pub(crate) fn start(
-        network_client: Arc<SynchronizerClient<VC, OC>>,
+        network_client: Arc<C>,
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
@@ -458,7 +447,7 @@ where
 
     async fn fetch_blocks_from_authority(
         peer_index: AuthorityIndex,
-        network_client: Arc<SynchronizerClient<VC, OC>>,
+        network_client: Arc<C>,
         block_verifier: Arc<V>,
         transaction_certifier: TransactionCertifier,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
@@ -703,7 +692,7 @@ where
     }
 
     async fn fetch_blocks_request(
-        network_client: Arc<SynchronizerClient<VC, OC>>,
+        network_client: Arc<C>,
         peer: AuthorityIndex,
         blocks_guard: BlocksGuard,
         highest_rounds: Vec<Round>,
@@ -721,7 +710,7 @@ where
         let resp = timeout(
             request_timeout,
             network_client.fetch_blocks(
-                crate::network::PeerId::Authority(peer),
+                peer,
                 blocks_guard
                     .block_refs
                     .clone()
@@ -1011,7 +1000,7 @@ where
     async fn fetch_blocks_from_authorities(
         context: Arc<Context>,
         inflight_blocks: Arc<InflightBlocksMap>,
-        network_client: Arc<SynchronizerClient<VC, OC>>,
+        network_client: Arc<C>,
         missing_blocks: BTreeSet<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, AuthorityIndex)> {
@@ -1216,7 +1205,7 @@ mod tests {
         core_thread::CoreThreadDispatcher,
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
-        network::{BlockStream, ObserverNetworkClient, SynchronizerClient, ValidatorNetworkClient},
+        network::{BlockStream, ValidatorNetworkClient},
         storage::mem_store::MemStore,
         synchronizer::{
             FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT, InflightBlocksMap, Synchronizer,
@@ -1374,36 +1363,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
-    impl ObserverNetworkClient for MockNetworkClient {
-        async fn stream_blocks(
-            &self,
-            _peer: crate::network::NodeId,
-            _request_stream: crate::network::BlockRequestStream,
-            _timeout: Duration,
-        ) -> ConsensusResult<crate::network::ObserverBlockStream> {
-            unimplemented!("stream_blocks not implemented in mock")
-        }
-
-        async fn fetch_blocks(
-            &self,
-            _peer: crate::network::NodeId,
-            _block_refs: Vec<BlockRef>,
-            _timeout: Duration,
-        ) -> ConsensusResult<Vec<Bytes>> {
-            unimplemented!("Observer fetch_blocks not implemented in mock")
-        }
-
-        async fn fetch_commits(
-            &self,
-            _peer: crate::network::NodeId,
-            _commit_range: crate::commit::CommitRange,
-            _timeout: Duration,
-        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
-            unimplemented!("Observer fetch_commits not implemented in mock")
-        }
-    }
-
     #[test]
     fn test_inflight_blocks_map() {
         // GIVEN
@@ -1481,10 +1440,6 @@ mod tests {
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let mock_client = Arc::new(MockNetworkClient::default());
-        let network_client = Arc::new(SynchronizerClient::new(
-            Some(mock_client.clone()),
-            Some(mock_client.clone()),
-        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1498,7 +1453,7 @@ mod tests {
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let handle = Synchronizer::start(
-            network_client,
+            mock_client.clone(),
             context,
             core_dispatcher.clone(),
             commit_vote_monitor,
@@ -1544,10 +1499,6 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(MockNetworkClient::default());
-        let network_client = Arc::new(SynchronizerClient::new(
-            Some(mock_client.clone()),
-            Some(mock_client.clone()),
-        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1561,7 +1512,7 @@ mod tests {
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let handle = Synchronizer::start(
-            network_client,
+            mock_client.clone(),
             context,
             core_dispatcher.clone(),
             commit_vote_monitor,
@@ -1663,12 +1614,8 @@ mod tests {
             .await;
 
         // WHEN start the synchronizer and wait for a couple of seconds
-        let network_client = Arc::new(SynchronizerClient::new(
-            Some(mock_client.clone()),
-            Some(mock_client.clone()),
-        ));
         let _handle = Synchronizer::start(
-            network_client,
+            mock_client.clone(),
             context,
             core_dispatcher.clone(),
             commit_vote_monitor,
@@ -1774,12 +1721,8 @@ mod tests {
         }
 
         // WHEN start the synchronizer and wait for a couple of seconds where normally the synchronizer should have kicked in.
-        let network_client = Arc::new(SynchronizerClient::new(
-            Some(mock_client.clone()),
-            Some(mock_client.clone()),
-        ));
         let _handle = Synchronizer::start(
-            network_client,
+            mock_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
@@ -1918,12 +1861,8 @@ mod tests {
             .await;
 
         // WHEN start the synchronizer and wait for a couple of seconds
-        let network_client = Arc::new(SynchronizerClient::new(
-            Some(mock_client.clone()),
-            Some(mock_client.clone()),
-        ));
         let handle = Synchronizer::start(
-            network_client,
+            mock_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor,
@@ -2024,10 +1963,9 @@ mod tests {
 
         // Create a Synchronizer
         let result = Synchronizer::<
+            MockNetworkClient,
             NoopBlockVerifier,
             MockCoreThreadDispatcher,
-            MockNetworkClient,
-            MockNetworkClient,
         >::process_fetched_blocks(
             expected_serialized_blocks,
             peer_index,
