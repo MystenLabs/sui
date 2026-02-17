@@ -11,7 +11,7 @@ pub trait TrySpawnStreamExt: Stream {
     /// Attempts to run this stream to completion, executing the provided asynchronous closure on
     /// each element from the stream as elements become available.
     ///
-    /// This is similar to [StreamExt::for_each_concurrent], but it may take advantage of any
+    /// This is similar to [`futures::stream::StreamExt::for_each_concurrent`], but it may take advantage of any
     /// parallelism available in the underlying runtime, because each unit of work is spawned as
     /// its own tokio task.
     ///
