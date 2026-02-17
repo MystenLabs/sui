@@ -239,15 +239,72 @@ impl VMDispatchTables {
         }
     }
 
-    pub fn to_virtual_table_key(
+    /// This returns an `Option` instead of a `Result` because this is used in the function
+    /// resolution logic for external calls, where failure to resolve should be treated as a "not
+    /// found" instead of an error, and the caller will handle the erroring logic for "not found"
+    /// cases.
+    /// NB: It is important that this function return the same error (`None`) in the case where
+    /// either:
+    /// 1. The underlying identifiers were not found in the interner, or
+    /// 2. the underlying package/module/function is not found.
+    pub(crate) fn try_resolve_function_for_external(
+        &self,
+        original_id: &ModuleId,
+        function_name: &IdentStr,
+    ) -> Option<VMPointer<Function>> {
+        let vtable_key = self.try_to_virtual_table_key(
+            original_id.address(),
+            original_id.name(),
+            function_name,
+        )?;
+        let pkg = self.loaded_packages.get(&vtable_key.0.package_key)?;
+        let function_ = pkg.vtable.functions.get(&vtable_key.0.inner_pkg_key)?;
+        Some(function_.ptr_clone())
+    }
+
+    /// This returns an `Option` instead of a `Result` because this is used in the type resolution
+    /// logic for external calls into the VM, where failure to resolve should be treated as a "not
+    /// found"/"failure to resolve" instead of an error, and the caller will handle the erroring
+    /// logic for these cases.
+    /// NB: It is important that this function return the same error (`None`) in the case where
+    /// either:
+    /// 1. The underlying identifiers were not found in the interner, or
+    /// 2. the underlying package/module/type is not found.
+    pub(crate) fn try_resolve_type_for_external(
+        &self,
+        original_id: OriginalId,
+        module_name: &IdentStr,
+        type_name: &IdentStr,
+    ) -> Option<(VMPointer<DatatypeDescriptor>, VirtualTableKey)> {
+        let vtable_key = self.try_to_virtual_table_key(&original_id, module_name, type_name)?;
+        let pkg = self.loaded_packages.get(&vtable_key.0.package_key)?;
+        let type_ = pkg.vtable.types.get(&vtable_key.0.inner_pkg_key)?;
+        Some((type_.ptr_clone(), vtable_key))
+    }
+
+    fn try_to_virtual_table_key(
         &self,
         package_id: &OriginalId,
         module: &IdentStr,
         name: &IdentStr,
-    ) -> VirtualTableKey {
-        let module_name = self.interner.intern_ident_str(module);
-        let member_name = self.interner.intern_ident_str(name);
-        VirtualTableKey::from_parts(*package_id, module_name, member_name)
+    ) -> Option<VirtualTableKey> {
+        let module_name = self.interner.get_ident_str(module)?;
+        let member_name = self.interner.get_ident_str(name)?;
+        Some(VirtualTableKey::from_parts(
+            *package_id,
+            module_name,
+            member_name,
+        ))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn to_virtual_table_key_for_testing(
+        &self,
+        original_id: &OriginalId,
+        module: &IdentStr,
+        name: &IdentStr,
+    ) -> Option<VirtualTableKey> {
+        self.try_to_virtual_table_key(original_id, module, name)
     }
 }
 
@@ -263,7 +320,7 @@ impl VMDispatchTables {
     // Load a type from a TypeTag into a VM type.
     // NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
     // fail.
-    pub fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
+    pub(crate) fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
         Ok(match type_tag {
             TypeTag::Bool => Type::Bool,
             TypeTag::U8 => Type::U8,
@@ -280,17 +337,22 @@ impl VMDispatchTables {
                 let defining_id = struct_tag.address;
                 let package_key = *self.defining_id_origins.get(&defining_id).ok_or_else(|| {
                     partial_vm_error!(
-                        TYPE_RESOLUTION_FAILURE,
+                        EXTERNAL_RESOLUTION_REQUEST_ERROR,
                         "Defining ID {defining_id} for type {type_tag} not found in loaded packages"
                     )
                     .finish(Location::Undefined)
                 })?;
-                let key =
-                    self.to_virtual_table_key(&package_key, &struct_tag.module, &struct_tag.name);
-                let datatype = self
-                    .resolve_type(&key)
-                    .map_err(|e| e.finish(Location::Undefined))?
-                    .to_ref();
+
+                let Some((datatype, key)) = self.try_resolve_type_for_external(
+                    package_key,
+                    &struct_tag.module,
+                    &struct_tag.name,
+                ) else {
+                    return Err(partial_vm_error!(
+                        EXTERNAL_RESOLUTION_REQUEST_ERROR,
+                        "Failed to resolve type for {type_tag} with package key {package_key} and defining ID {defining_id}"
+                    ).finish(Location::Undefined));
+                };
 
                 // The computed runtime ID should match the runtime ID of the datatype that we have
                 // loaded.

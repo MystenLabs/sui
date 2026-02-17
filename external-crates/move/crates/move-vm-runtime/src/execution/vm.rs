@@ -184,14 +184,7 @@ impl<'extensions> MoveVM<'extensions> {
             function,
             parameters,
             return_type,
-        } = self
-            .find_function(module_id, function_name, ty_args)
-            .map_err(|e| {
-                Self::convert_to_external_resolution_error(
-                    e,
-                    format!("Failed to find function {module_id}::{function_name}"),
-                )
-            })?;
+        } = self.find_function(module_id, function_name, ty_args)?;
         let instruction_count = checked_as!(function.to_ref().code.len(), CodeOffset)
             .map_err(|e| e.finish(Location::Module(module_id.clone())))?;
 
@@ -365,15 +358,16 @@ impl<'extensions> MoveVM<'extensions> {
         function_name: &IdentStr,
         ty_args: &[Type],
     ) -> VMResult<MoveVMFunction> {
-        let vtable_key = self.virtual_tables.to_virtual_table_key(
-            original_id.address(),
-            original_id.name(),
-            function_name,
-        );
         let function = self
             .virtual_tables
-            .resolve_function(&vtable_key)
-            .map_err(|err| err.finish(Location::Undefined))?;
+            .try_resolve_function_for_external(original_id, function_name)
+            .ok_or_else(|| {
+                partial_vm_error!(
+                    EXTERNAL_RESOLUTION_REQUEST_ERROR,
+                    "Failed to find function {original_id}::{function_name}"
+                )
+                .finish(Location::Module(original_id.clone()))
+            })?;
 
         let fun_ref = function.to_ref();
 

@@ -62,6 +62,14 @@ impl IdentifierInterner {
         self.get_or_intern_str_internal(ident_str.borrow_str())
     }
 
+    /// Get the interned identifier key for the given string, if it exists. This does not intern
+    /// the string if it does not exist, and will return `None` instead.
+    ///
+    /// BE EXTREMELY CAREFUL WITH THIS FUNCTION: It deals with data that is shared across threads.
+    pub(crate) fn get_ident_str(&self, ident_str: &IdentStr) -> Option<IdentifierKey> {
+        self.0.get(ident_str.borrow_str()).map(IdentifierKey)
+    }
+
     #[allow(clippy::panic)]
     // [SAFETY] The unsafe code is inserting an identifier into the interner without ensuring it
     // will fit. If it fails to fit, it will panic, but that's likely a serious OOM issue, and it's
