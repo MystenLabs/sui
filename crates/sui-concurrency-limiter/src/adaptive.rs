@@ -435,14 +435,20 @@ impl AdaptiveState {
                         let startup_threshold = concurrency_ratio
                             * config.full_pipe_threshold;
 
-                        if throughput >= *start_throughput_ema * startup_threshold {
+                        // Compare EMA (not raw throughput) against the baseline to
+                        // dampen single-interval noise spikes. A lucky burst in one
+                        // 1-second window can push raw throughput well above the true
+                        // mean, causing ProbeUp to falsely succeed and bias the limit
+                        // upward. The EMA blends with history (alpha=0.3), so a spike
+                        // is attenuated before it can trigger a decision.
+                        if throughput_ema >= *start_throughput_ema * startup_threshold {
                             // Major headroom discovered — re-enter Startup for fast
                             // exploration (e.g., backend autoscaled).
                             self.phase = Phase::Startup {
                                 round_start_throughput: Some(throughput_ema),
                                 stall_count: 0,
                             };
-                        } else if throughput
+                        } else if throughput_ema
                             >= *start_throughput_ema * proportional_threshold
                         {
                             // Throughput grew proportionally — keep the higher limit
@@ -910,10 +916,10 @@ mod tests {
             alg.gauge.store(125, Ordering::Release);
         }
 
-        // Proportional threshold: ratio=125/100=1.25, threshold=1.25*1.10=1.375.
-        // Need throughput >= 100*1.375=137.5. Feed 140 (proportional gain).
+        // Proportional threshold: ratio=125/100=1.25, threshold=1.25*0.90=1.125.
+        // Need EMA >= 100*1.125=112.5. Feed 150 → EMA=0.3*150+0.7*100=115.
         feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(140.0);
+        alg.force_interval_with_throughput(150.0);
 
         // Should transition to Cruise, keeping the higher limit
         let limit = alg.current();
@@ -950,9 +956,9 @@ mod tests {
         }
 
         // Proportional startup threshold: ratio=1.25, threshold=1.25*1.25=1.5625.
-        // Need throughput >= 100*1.5625=156.25. Feed 160.
+        // Need EMA >= 100*1.5625=156.25. Feed 300 → EMA=0.3*300+0.7*100=160.
         feed_successes(&alg, 50, Duration::from_millis(10));
-        alg.force_interval_with_throughput(160.0);
+        alg.force_interval_with_throughput(300.0);
 
         let state = alg.inner.lock().unwrap();
         assert!(
