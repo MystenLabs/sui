@@ -106,6 +106,7 @@ sui/
    - Always run tests before submitting changes
    - Framework changes require snapshot updates
 2. **CRITICAL - Final Development Steps**:
+   - **ALWAYS run `cargo fmt --all` before committing** to ensure code is formatted correctly
    - **ALWAYS run `cargo xclippy` after finishing development** to ensure code passes all linting checks
    - **NEVER disable or ignore tests** - all tests must pass and be enabled
    - **NEVER use `#[allow(dead_code)]`, `#[allow(unused)]`, or any other linting suppressions** - fix the underlying issues instead
