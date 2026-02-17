@@ -96,67 +96,78 @@ pub(super) fn collector<H: Handler + 'static>(
 
         info!(pipeline = H::NAME, "Starting collector");
 
+        // Wait for main_reader_lo to be initialized before processing any checkpoints.
+        let reader_lo_atomic = main_reader_lo.wait().await;
+
         loop {
-            tokio::select! {
-                // Time to create another batch and push it to the committer.
-                _ = poll.tick() => {
-                    let guard = metrics
-                        .collector_gather_latency
-                        .with_label_values(&[H::NAME])
-                        .start_timer();
-
-                    let mut batch = H::Batch::default();
-                    let mut watermark = Vec::new();
-                    let mut batch_len = 0;
-
-                    loop {
-                        let Some(mut entry) = pending.first_entry() else {
-                            break;
-                        };
-
-                        if watermark.len() >= H::MAX_WATERMARK_UPDATES {
-                            break;
+            // Eager inner loop: drain processor channel while under backpressure limit.
+            while pending_rows < H::MAX_PENDING_ROWS {
+                match rx.try_recv() {
+                    Ok(mut indexed) => {
+                        let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
+                        if indexed.checkpoint() < reader_lo {
+                            indexed.values.clear();
+                            metrics
+                                .total_collector_skipped_checkpoints
+                                .with_label_values(&[H::NAME])
+                                .inc();
                         }
 
-                        let indexed = entry.get_mut();
-                        let before = indexed.values.len();
-                        let status = handler.batch(&mut batch, &mut indexed.values);
-                        let taken = before - indexed.values.len();
+                        metrics
+                            .total_collector_rows_received
+                            .with_label_values(&[H::NAME])
+                            .inc_by(indexed.len() as u64);
+                        metrics
+                            .total_collector_checkpoints_received
+                            .with_label_values(&[H::NAME])
+                            .inc();
+                        metrics
+                            .collector_reader_lo
+                            .with_label_values(&[H::NAME])
+                            .set(reader_lo as i64);
 
-                        batch_len += taken;
-                        watermark.push(indexed.watermark.take(taken));
-                        if indexed.is_empty() {
-                            checkpoint_lag_reporter.report_lag(
-                                indexed.watermark.checkpoint(),
-                                indexed.watermark.timestamp_ms(),
-                            );
-                            entry.remove();
-                        }
-
-                        if status == BatchStatus::Ready {
-                            // Batch is full, send it
-                            break;
-                        }
+                        pending_rows += indexed.len();
+                        pending.insert(indexed.checkpoint(), indexed.into());
                     }
-                    pending_rows -= batch_len;
-                    let elapsed = guard.stop_and_record();
-                    debug!(
+                    Err(_) => break,
+                }
+            }
+
+            // Eagerly build and send batches while enough data is pending.
+            while pending_rows >= H::MIN_EAGER_ROWS {
+                let (batch, watermark, batch_len) =
+                    build_batch::<H>(&*handler, &mut pending, &checkpoint_lag_reporter, &metrics);
+                pending_rows -= batch_len;
+
+                let batched_rows = BatchedRows {
+                    batch,
+                    batch_len,
+                    watermark,
+                };
+
+                if tx.send(batched_rows).await.is_err() {
+                    info!(
                         pipeline = H::NAME,
-                        elapsed_ms = elapsed * 1000.0,
-                        rows = batch_len,
-                        pending_rows = pending_rows,
-                        "Gathered batch",
+                        "Committer closed channel, stopping collector"
                     );
+                    return Ok(());
+                }
 
-                    metrics
-                        .total_collector_batches_created
-                        .with_label_values(&[H::NAME])
-                        .inc();
+                if batch_len == 0 {
+                    break;
+                }
+            }
 
-                    metrics
-                        .collector_batch_size
-                        .with_label_values(&[H::NAME])
-                        .observe(batch_len as f64);
+            // Fall back to select! for waiting.
+            tokio::select! {
+                _ = poll.tick() => {
+                    let (batch, watermark, batch_len) = build_batch::<H>(
+                        &*handler,
+                        &mut pending,
+                        &checkpoint_lag_reporter,
+                        &metrics,
+                    );
+                    pending_rows -= batch_len;
 
                     let batched_rows = BatchedRows {
                         batch,
@@ -165,7 +176,10 @@ pub(super) fn collector<H: Handler + 'static>(
                     };
 
                     if tx.send(batched_rows).await.is_err() {
-                        info!(pipeline = H::NAME, "Committer closed channel, stopping collector");
+                        info!(
+                            pipeline = H::NAME,
+                            "Committer closed channel, stopping collector"
+                        );
                         break;
                     }
 
@@ -182,12 +196,11 @@ pub(super) fn collector<H: Handler + 'static>(
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                 Some(mut indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
-                    // Clear the values of outdated checkpoints, so that we don't commit data to the
-                    // store, but can still advance watermarks.
-                    let reader_lo = main_reader_lo.wait().await.load(Ordering::Relaxed);
+                    let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
                     if indexed.checkpoint() < reader_lo {
                         indexed.values.clear();
-                        metrics.total_collector_skipped_checkpoints
+                        metrics
+                            .total_collector_skipped_checkpoints
                             .with_label_values(&[H::NAME])
                             .inc();
                     }
@@ -207,10 +220,6 @@ pub(super) fn collector<H: Handler + 'static>(
 
                     pending_rows += indexed.len();
                     pending.insert(indexed.checkpoint(), indexed.into());
-
-                    if pending_rows >= H::MIN_EAGER_ROWS {
-                        poll.reset_immediately()
-                    }
                 }
                 // docs::/#collector
             }
@@ -218,6 +227,72 @@ pub(super) fn collector<H: Handler + 'static>(
 
         Ok(())
     })
+}
+
+/// Builds a single batch from pending checkpoints, returning the batch, watermarks, and row count.
+fn build_batch<H: Handler>(
+    handler: &H,
+    pending: &mut BTreeMap<u64, PendingCheckpoint<H>>,
+    checkpoint_lag_reporter: &CheckpointLagMetricReporter,
+    metrics: &IndexerMetrics,
+) -> (H::Batch, Vec<WatermarkPart>, usize) {
+    let guard = metrics
+        .collector_gather_latency
+        .with_label_values(&[H::NAME])
+        .start_timer();
+
+    let mut batch = H::Batch::default();
+    let mut watermark = Vec::new();
+    let mut batch_len = 0;
+
+    loop {
+        let Some(mut entry) = pending.first_entry() else {
+            break;
+        };
+
+        if watermark.len() >= H::MAX_WATERMARK_UPDATES {
+            break;
+        }
+
+        let indexed = entry.get_mut();
+        let before = indexed.values.len();
+        let status = handler.batch(&mut batch, &mut indexed.values);
+        let taken = before - indexed.values.len();
+
+        batch_len += taken;
+        watermark.push(indexed.watermark.take(taken));
+        if indexed.is_empty() {
+            checkpoint_lag_reporter.report_lag(
+                indexed.watermark.checkpoint(),
+                indexed.watermark.timestamp_ms(),
+            );
+            entry.remove();
+        }
+
+        if status == BatchStatus::Ready {
+            break;
+        }
+    }
+
+    let elapsed = guard.stop_and_record();
+    debug!(
+        pipeline = H::NAME,
+        elapsed_ms = elapsed * 1000.0,
+        rows = batch_len,
+        "Gathered batch",
+    );
+
+    metrics
+        .total_collector_batches_created
+        .with_label_values(&[H::NAME])
+        .inc();
+
+    metrics
+        .collector_batch_size
+        .with_label_values(&[H::NAME])
+        .observe(batch_len as f64);
+
+    (batch, watermark, batch_len)
 }
 
 #[cfg(test)]
