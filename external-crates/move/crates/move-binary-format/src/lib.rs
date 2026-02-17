@@ -192,16 +192,37 @@ macro_rules! safe_assert {
 #[macro_export]
 macro_rules! partial_vm_error {
     ($error_name:ident $(,)?) => {{
-        $crate::errors::PartialVMError::new(
+
+        let _e = $crate::errors::PartialVMError::new(
             move_core_types::vm_status::StatusCode::$error_name,
-        )
+        );
+        #[cfg(all(debug_assertions, not(test)))]
+        {
+            if _e.major_status().status_type() == move_core_types::vm_status::StatusType::InvariantViolation {
+                panic!(
+                    "INVARIANT VIOLATION: {:?}",
+                    _e
+                );
+            }
+        }
+        _e
     }};
     ($error_name:ident, $($body:tt)*) => {{
-        $crate::errors::PartialVMError::new(
+        let _e = $crate::errors::PartialVMError::new(
             move_core_types::vm_status::StatusCode::$error_name,
         ).with_message(
             format!($($body)*),
-        )
+        );
+        #[cfg(all(debug_assertions, not(test)))]
+        {
+            if _e.major_status().status_type() == move_core_types::vm_status::StatusType::InvariantViolation {
+                panic!(
+                    "INVARIANT VIOLATION: {:?}",
+                    _e
+                );
+            }
+        }
+        _e
     }};
 }
 
