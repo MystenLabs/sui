@@ -22,6 +22,7 @@ use sui_types::clock::Clock;
 use sui_types::error::SuiErrorKind;
 use sui_types::message_envelope::Envelope;
 use sui_types::storage::ReadStore;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
 use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
 use sui_types::transaction::{SenderSignedData, Transaction};
 use sui_types::{
@@ -66,6 +67,10 @@ pub struct ForkingStore {
     // The checkpoint at which this forked network was forked
     forked_at_checkpoint: u64,
 
+    /// Optional validator-set override used when building epoch state for checkpoint production.
+    /// This keeps the committee aligned with locally available validator keys in forking mode.
+    validator_set_override: Option<ValidatorSetV1>,
+
     // Simulacrum inserts checkpoint summary and contents in two separate calls.
     // Keep the summary only until contents arrives so we can persist one full checkpoint payload.
     pending_checkpoint: Option<VerifiedCheckpoint>,
@@ -84,6 +89,7 @@ impl ForkingStore {
             fs_store,
             fs_gql_store,
             forked_at_checkpoint,
+            validator_set_override: None,
             pending_checkpoint: None,
         }
     }
@@ -283,7 +289,25 @@ impl ForkingStore {
 
     /// Returns the current system state view derived from this store.
     pub fn get_system_state(&self) -> SuiSystemState {
-        get_sui_system_state(self).expect("system state should exist")
+        let system_state = get_sui_system_state(self).expect("system state should exist");
+        let Some(validators) = &self.validator_set_override else {
+            return system_state;
+        };
+
+        match system_state {
+            SuiSystemState::V1(mut inner) => {
+                inner.validators = validators.clone();
+                SuiSystemState::V1(inner)
+            }
+            SuiSystemState::V2(mut inner) => {
+                inner.validators = validators.clone();
+                SuiSystemState::V2(inner)
+            }
+            #[cfg(msim)]
+            state @ (SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_)) => state,
+        }
     }
 
     /// Gets the clock object, which should always be present in the store since it's a system
@@ -300,6 +324,11 @@ impl ForkingStore {
         self.fs_store
             .get_objects_by_owner(owner)
             .unwrap_or_default()
+    }
+
+    /// Installs a validator-set override used by `get_system_state` for epoch-state derivation.
+    pub fn set_system_state_validator_set_override(&mut self, validators: ValidatorSetV1) {
+        self.validator_set_override = Some(validators);
     }
 }
 
@@ -467,35 +496,64 @@ impl ChildObjectResolver for ForkingStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        // Child-object resolution during execution must stay local to avoid pulling stale
-        // pre-fork data through read-through fallbacks.
-        let child_object =
-            match self.fs_store.get_object_latest(child).map_err(|e| {
-                sui_types::error::SuiError::from(SuiErrorKind::Storage(e.to_string()))
-            })? {
-                None => return Ok(None),
-                Some((obj, _)) => obj,
-            };
-
-        let parent = *parent;
-        if child_object.owner != Owner::ObjectOwner(parent.into()) {
-            return Err(SuiErrorKind::InvalidChildObjectAccess {
-                object: *child,
-                given_parent: parent,
-                actual_owner: child_object.owner.clone(),
+        let validate = |child_object: Object| -> sui_types::error::SuiResult<Option<Object>> {
+            let parent = *parent;
+            if child_object.owner != Owner::ObjectOwner(parent.into()) {
+                return Err(SuiErrorKind::InvalidChildObjectAccess {
+                    object: *child,
+                    given_parent: parent,
+                    actual_owner: child_object.owner.clone(),
+                }
+                .into());
             }
-            .into());
+
+            if child_object.version() > child_version_upper_bound {
+                return Err(SuiErrorKind::UnsupportedFeatureError {
+                    error:
+                        "TODO ForkingStore::read_child_object does not yet support bounded reads"
+                            .to_owned(),
+                }
+                .into());
+            }
+
+            Ok(Some(child_object))
+        };
+
+        let local_latest = self
+            .fs_store
+            .get_object_latest(child)
+            .map_err(|e| SuiErrorKind::Storage(e.to_string()))?;
+        if let Some((child_object, _)) = &local_latest {
+            if child_object.version() <= child_version_upper_bound {
+                return validate(child_object.clone());
+            }
         }
 
-        if child_object.version() > child_version_upper_bound {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "TODO ForkingStore::read_child_object does not yet support bounded reads"
-                    .to_owned(),
-            }
-            .into());
-        }
+        let object_key = ObjectKey {
+            object_id: *child,
+            version_query: VersionQuery::RootVersion(child_version_upper_bound.value()),
+        };
+        let mut object = self
+            .get_objects(&[object_key])
+            .map_err(|e| SuiErrorKind::Storage(e.to_string()))?;
+        debug_assert!(object.len() == 1, "Expected one object for {}", child);
+        let object = object.pop().unwrap().map(|(obj, _version)| obj);
 
-        Ok(Some(child_object))
+        match object {
+            Some(obj) => validate(obj),
+            None => {
+                if local_latest.is_some() {
+                    Err(SuiErrorKind::UnsupportedFeatureError {
+                        error:
+                            "TODO ForkingStore::read_child_object does not yet support bounded reads"
+                                .to_owned(),
+                    }
+                    .into())
+                } else {
+                    Ok(None)
+                }
+            }
+        }
     }
 
     fn get_object_received_at_version(

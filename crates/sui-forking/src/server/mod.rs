@@ -28,7 +28,7 @@ use sui_types::{
     effects::TransactionEffectsAPI,
     message_envelope::Envelope,
     messages_checkpoint::VerifiedCheckpoint,
-    sui_system_state::SuiSystemState,
+    sui_system_state::{SuiSystemState, SuiSystemStateTrait},
     supported_protocol_versions::Chain::{self},
     transaction::Transaction,
 };
@@ -508,7 +508,6 @@ async fn initialize_simulacrum(
     let mut store = ForkingStore::new(at_checkpoint, fs_store, fs_gql_store);
     store.insert_checkpoint(verified_checkpoint.clone());
     store.insert_checkpoint_contents(startup_checkpoint.contents.clone());
-    store.insert_committee(config.genesis.committee());
     initial_accounts
         .prefetch_owned_objects(&store, client.endpoint(), at_checkpoint)
         .await
@@ -526,6 +525,18 @@ async fn initialize_simulacrum(
         SuiSystemState::V2(genesis_inner) => genesis_inner.validators,
     };
     let initial_sui_system_state = SuiSystemState::V2(inner);
+
+    let validator_set_override = match &initial_sui_system_state {
+        SuiSystemState::V1(inner) => inner.validators.clone(),
+        SuiSystemState::V2(inner) => inner.validators.clone(),
+    };
+    store.set_system_state_validator_set_override(validator_set_override);
+
+    let initial_committee = initial_sui_system_state
+        .get_current_epoch_committee()
+        .committee()
+        .clone();
+    store.insert_committee(initial_committee);
 
     let keystore = KeyStore::from_network_config(&config);
 
