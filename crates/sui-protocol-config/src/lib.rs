@@ -994,6 +994,11 @@ struct FeatureFlags {
     // If true perform consistent verification of metadata
     #[serde(skip_serializing_if = "is_false")]
     validator_metadata_verify_v2: bool,
+
+    // If true, defer transactions with unpaid consensus amplification
+    // (where duplicate count exceeds gas_price / RGP + 1)
+    #[serde(skip_serializing_if = "is_false")]
+    defer_unpaid_amplification: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2610,6 +2615,10 @@ impl ProtocolConfig {
 
     pub fn validator_metadata_verify_v2(&self) -> bool {
         self.feature_flags.validator_metadata_verify_v2
+    }
+
+    pub fn defer_unpaid_amplification(&self) -> bool {
+        self.feature_flags.defer_unpaid_amplification
     }
 }
 
@@ -4595,6 +4604,7 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_ristretto255_group_ops = true;
+                        cfg.feature_flags.defer_unpaid_amplification = true;
                     }
                 }
                 113 => {

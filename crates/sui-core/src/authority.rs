@@ -296,6 +296,7 @@ pub struct AuthorityMetrics {
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
+    pub(crate) consensus_handler_duplicate_tx_count: Histogram,
 
     pub(crate) authority_overload_status: IntGauge,
     pub(crate) authority_load_shedding_percentage: IntGauge,
@@ -315,6 +316,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
+    pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
@@ -591,6 +593,13 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            consensus_handler_duplicate_tx_count: register_histogram_with_registry!(
+                "consensus_handler_duplicate_tx_count",
+                "Number of times each transaction appears in its first consensus commit",
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             post_processing_total_events_emitted: register_int_counter_with_registry!(
                 "post_processing_total_events_emitted",
                 "Total number of events emitted in post processing",
@@ -647,6 +656,11 @@ impl AuthorityMetrics {
             consensus_handler_congested_transactions: register_int_counter_with_registry!(
                 "consensus_handler_congested_transactions",
                 "Number of transactions deferred by consensus handler due to congestion",
+                registry,
+            ).unwrap(),
+            consensus_handler_unpaid_amplification_deferrals: register_int_counter_with_registry!(
+                "consensus_handler_unpaid_amplification_deferrals",
+                "Number of transactions deferred due to unpaid consensus amplification",
                 registry,
             ).unwrap(),
             consensus_handler_cancelled_transactions: register_int_counter_with_registry!(

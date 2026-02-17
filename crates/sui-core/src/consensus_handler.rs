@@ -891,6 +891,8 @@ struct CommitHandlerState {
     output: ConsensusCommitOutput,
     indirect_state_observer: Option<IndirectStateObserver>,
     initial_reconfig_state: ReconfigState,
+    // Occurrence counts for user transactions, used for unpaid amplification detection.
+    occurrence_counts: HashMap<TransactionDigest, u32>,
 }
 
 impl CommitHandlerState {
@@ -1070,6 +1072,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .epoch_store
                 .get_reconfig_state_read_lock_guard()
                 .clone(),
+            occurrence_counts: HashMap::new(),
         };
 
         let FilteredConsensusOutput {
@@ -1966,6 +1969,54 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         execution_time_estimator: &ExecutionTimeEstimator,
     ) {
+        // Check for unpaid amplification before other deferral checks.
+        // SIP-45: Paid amplification allows (gas_price / RGP + 1) submissions.
+        // Transactions with more duplicates than paid for are deferred.
+        if protocol_config.defer_unpaid_amplification() {
+            let occurrence_count = state
+                .occurrence_counts
+                .get(transaction.tx().digest())
+                .copied()
+                .unwrap_or(1);
+
+            let rgp = self.epoch_store.reference_gas_price();
+            let gas_price = transaction.tx().transaction_data().gas_price();
+            let allowed_count = (gas_price / rgp.max(1)) + 1;
+
+            if occurrence_count as u64 > allowed_count {
+                self.metrics
+                    .consensus_handler_unpaid_amplification_deferrals
+                    .inc();
+
+                let deferred_from_round = previously_deferred_tx_digests
+                    .get(transaction.tx().digest())
+                    .map(|k| k.deferred_from_round())
+                    .unwrap_or(commit_info.round);
+
+                let deferral_key = DeferralKey::new_for_consensus_round(
+                    commit_info.round + 1,
+                    deferred_from_round,
+                );
+
+                if transaction_deferral_within_limit(
+                    &deferral_key,
+                    protocol_config.max_deferral_rounds_for_congestion_control(),
+                ) {
+                    debug!(
+                        "Deferring transaction {:?} due to unpaid amplification (count={}, allowed={})",
+                        transaction.tx().digest(),
+                        occurrence_count,
+                        allowed_count
+                    );
+                    deferred_txns
+                        .entry(deferral_key)
+                        .or_default()
+                        .push(transaction);
+                    return;
+                }
+            }
+        }
+
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             transaction.tx(),
@@ -2815,18 +2866,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         commit_info: &ConsensusCommitInfo,
         transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     ) -> Vec<VerifiedSequencedConsensusTransaction> {
-        // We need a set here as well, since the processed_cache is a LRU cache and can drop
-        // entries while we're iterating over the sequenced transactions.
-        let mut processed_set = HashSet::new();
-
         let mut all_transactions = Vec::new();
 
-        // All of these TODOs are handled here in the new code, whereas in the old code, they were
-        // each handled separately. The key thing to see is that all messages are marked as processed
-        // here, except for ones that are filtered out earlier (e.g. due to !should_accept_consensus_certs()).
+        // Track occurrence counts for each transaction key within this commit.
+        // Also serves as the deduplication set (count > 1 means duplicate within commit).
+        let mut occurrence_counts: HashMap<SequencedConsensusTransactionKey, u32> = HashMap::new();
+        // Keys being seen for the first time (not duplicates from previous commits).
+        let mut first_commit_keys: HashSet<SequencedConsensusTransactionKey> = HashSet::new();
 
         for (seq, (transaction, cert_origin)) in transactions.into_iter().enumerate() {
-            // SequencedConsensusTransaction for commit prologue any more.
             // In process_consensus_transactions_and_commit_boundary(), we will add a system consensus commit
             // prologue transaction, which will be the first transaction in this consensus commit batch.
             // Therefore, the transaction sequence number starts from 1 here.
@@ -2865,9 +2913,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .cache_recently_finalized_transaction(tx_digest);
             }
 
-            let in_set = !processed_set.insert(key.clone());
+            // Increment count and check if this is a duplicate within this commit.
+            // This replaces the separate processed_set HashSet.
+            let count = occurrence_counts.entry(key.clone()).or_insert(0);
+            *count += 1;
+            let in_commit = *count > 1;
+
             let in_cache = self.processed_cache.put(key.clone(), ()).is_some();
-            if in_set || in_cache {
+            if in_commit || in_cache {
                 self.metrics.skipped_consensus_txns_cache_hit.inc();
                 continue;
             }
@@ -2880,10 +2933,30 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 continue;
             }
 
+            first_commit_keys.insert(key.clone());
+
             state.output.record_consensus_message_processed(key);
 
             all_transactions.push(verified_transaction);
         }
+
+        for key in first_commit_keys {
+            if let Some(&count) = occurrence_counts.get(&key)
+                && count > 1
+            {
+                self.metrics
+                    .consensus_handler_duplicate_tx_count
+                    .observe(count as f64);
+            }
+        }
+
+        // Copy user transaction occurrence counts to state for unpaid amplification detection.
+        state.occurrence_counts.reserve(occurrence_counts.len());
+        state.occurrence_counts.extend(
+            occurrence_counts
+                .into_iter()
+                .filter_map(|(key, count)| key.user_transaction_digest().map(|d| (d, count))),
+        );
 
         all_transactions
     }
