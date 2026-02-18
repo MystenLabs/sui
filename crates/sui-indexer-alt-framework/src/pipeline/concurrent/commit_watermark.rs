@@ -15,6 +15,7 @@ use tracing::warn;
 
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
+use crate::monitored_channel;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::WARN_PENDING_WATERMARKS;
 use crate::pipeline::WatermarkPart;
@@ -46,7 +47,7 @@ use crate::store::pipeline_task;
 pub(super) fn commit_watermark<H: Handler + 'static>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
-    mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
+    mut rx: monitored_channel::Receiver<Vec<WatermarkPart>>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
     task: Option<String>,
@@ -314,12 +315,14 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
+    use prometheus::IntGauge;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
 
     use crate::FieldCount;
     use crate::metrics::IndexerMetrics;
     use crate::mocks::store::*;
+    use crate::monitored_channel;
     use crate::pipeline::CommitterConfig;
     use crate::pipeline::Processor;
     use crate::pipeline::WatermarkPart;
@@ -327,6 +330,10 @@ mod tests {
     use crate::store::CommitterWatermark;
 
     use super::*;
+
+    fn test_gauge() -> IntGauge {
+        IntGauge::new("test", "test").unwrap()
+    }
 
     #[derive(Clone, FieldCount)]
     pub struct StoredData;
@@ -368,7 +375,7 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        watermark_tx: mpsc::Sender<Vec<WatermarkPart>>,
+        watermark_tx: monitored_channel::Sender<Vec<WatermarkPart>>,
         #[allow(unused)]
         commit_watermark: Service,
     }
@@ -378,7 +385,7 @@ mod tests {
         next_checkpoint: u64,
         store: MockStore,
     ) -> TestSetup {
-        let (watermark_tx, watermark_rx) = mpsc::channel(100);
+        let (watermark_tx, watermark_rx) = monitored_channel::channel(100, test_gauge());
         #[allow(clippy::disallowed_methods)]
         let (commit_hi_tx, _commit_hi_rx) = mpsc::unbounded_channel();
         let metrics = IndexerMetrics::new(None, &Default::default());

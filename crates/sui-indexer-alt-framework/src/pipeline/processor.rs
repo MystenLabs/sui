@@ -11,9 +11,7 @@ use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
 use sui_types::full_checkpoint_content::Checkpoint;
 use tokio::sync::Notify;
-use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -22,6 +20,7 @@ use async_trait::async_trait;
 
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
+use crate::monitored_channel;
 use crate::pipeline::IndexedCheckpoint;
 use crate::pipeline::PendingRowsGuard;
 
@@ -77,8 +76,8 @@ pub(super) struct RowBackpressure {
 
 pub(super) fn processor<P: Processor>(
     processor: Arc<P>,
-    rx: mpsc::Receiver<Arc<Checkpoint>>,
-    tx: mpsc::Sender<IndexedCheckpoint<P>>,
+    rx: monitored_channel::Receiver<Arc<Checkpoint>>,
+    tx: monitored_channel::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     backpressure: Option<RowBackpressure>,
 ) -> Service {
@@ -90,7 +89,7 @@ pub(super) fn processor<P: Processor>(
             &metrics.latest_processed_checkpoint,
         );
 
-        let backpressured_stream = ReceiverStream::new(rx).then({
+        let backpressured_stream = monitored_channel::ReceiverStream::new(rx).then({
             let backpressure = backpressure
                 .as_ref()
                 .map(|bp| (bp.max, bp.pending_row_count.clone(), bp.notify.clone()));
@@ -219,14 +218,19 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::time::Duration;
 
+    use crate::monitored_channel;
     use anyhow::ensure;
+    use prometheus::IntGauge;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
-    use tokio::sync::mpsc;
     use tokio::time::timeout;
 
     use crate::metrics::IndexerMetrics;
 
     use super::*;
+
+    fn test_gauge() -> IntGauge {
+        IntGauge::new("test", "test").unwrap()
+    }
 
     pub struct StoredData {
         pub value: u64,
@@ -272,8 +276,8 @@ mod tests {
 
         // Set up the processor, channels, and metrics
         let processor = Arc::new(DataPipeline);
-        let (data_tx, data_rx) = mpsc::channel(2);
-        let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
+        let (data_tx, data_rx) = monitored_channel::channel(2, test_gauge());
+        let (indexed_tx, mut indexed_rx) = monitored_channel::channel(2, test_gauge());
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
@@ -326,8 +330,8 @@ mod tests {
 
         // Set up the processor, channels, and metrics
         let processor = Arc::new(DataPipeline);
-        let (data_tx, data_rx) = mpsc::channel(2);
-        let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
+        let (data_tx, data_rx) = monitored_channel::channel(2, test_gauge());
+        let (indexed_tx, mut indexed_rx) = monitored_channel::channel(2, test_gauge());
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
@@ -393,8 +397,8 @@ mod tests {
             attempt_count: attempt_count.clone(),
         });
 
-        let (data_tx, data_rx) = mpsc::channel(2);
-        let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
+        let (data_tx, data_rx) = monitored_channel::channel(2, test_gauge());
+        let (indexed_tx, mut indexed_rx) = monitored_channel::channel(2, test_gauge());
 
         let metrics = IndexerMetrics::new(None, &Default::default());
 
@@ -454,8 +458,8 @@ mod tests {
 
         // Set up channels and metrics
         let processor = Arc::new(SlowProcessor);
-        let (data_tx, data_rx) = mpsc::channel(10);
-        let (indexed_tx, mut indexed_rx) = mpsc::channel(10);
+        let (data_tx, data_rx) = monitored_channel::channel(10, test_gauge());
+        let (indexed_tx, mut indexed_rx) = monitored_channel::channel(10, test_gauge());
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn processor task

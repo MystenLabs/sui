@@ -14,6 +14,7 @@ use tracing::info;
 
 use crate::Task;
 use crate::metrics::IndexerMetrics;
+use crate::monitored_channel;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::PIPELINE_BUFFER;
 use crate::pipeline::PendingRowsGuard;
@@ -222,7 +223,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     config: ConcurrentConfig,
     store: H::Store,
     task: Option<Task>,
-    checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
+    checkpoint_rx: monitored_channel::Receiver<Arc<Checkpoint>>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
@@ -236,13 +237,39 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner: pruner_config,
     } = config;
 
-    let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
+    let processor_channel_size = H::FANOUT + PIPELINE_BUFFER;
+    let (processor_tx, collector_rx) = monitored_channel::channel(
+        processor_channel_size,
+        metrics.processor_channel_fill.with_label_values(&[H::NAME]),
+    );
+    metrics
+        .processor_channel_capacity
+        .with_label_values(&[H::NAME])
+        .set(processor_channel_size as i64);
+
     //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-    let (collector_tx, committer_rx) =
-        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
+    let collector_channel_size = committer_config.write_concurrency + PIPELINE_BUFFER;
+    let (collector_tx, committer_rx) = monitored_channel::channel(
+        collector_channel_size,
+        metrics.collector_channel_fill.with_label_values(&[H::NAME]),
+    );
     //docs::/#buff
-    let (committer_tx, watermark_rx) =
-        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
+    metrics
+        .collector_channel_capacity
+        .with_label_values(&[H::NAME])
+        .set(collector_channel_size as i64);
+
+    let watermark_channel_size = committer_config.write_concurrency + PIPELINE_BUFFER;
+    let (committer_tx, watermark_rx) = monitored_channel::channel(
+        watermark_channel_size,
+        metrics
+            .committer_watermark_channel_fill
+            .with_label_values(&[H::NAME]),
+    );
+    metrics
+        .committer_watermark_channel_capacity
+        .with_label_values(&[H::NAME])
+        .set(watermark_channel_size as i64);
     let main_reader_lo = Arc::new(SetOnce::new());
 
     let handler = Arc::new(handler);
@@ -296,7 +323,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let s_reader_watermark =
         reader_watermark::<H>(pruner_config.clone(), store.clone(), metrics.clone());
 
-    let s_pruner = pruner(handler, pruner_config, store, metrics);
+    let s_pruner = pruner(handler, pruner_config, store, metrics.clone());
 
     s_processor
         .merge(s_collector)
@@ -312,6 +339,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use prometheus::IntGauge;
     use prometheus::Registry;
     use tokio::sync::mpsc;
     use tokio::time::timeout;
@@ -320,11 +348,16 @@ mod tests {
     use crate::metrics::IndexerMetrics;
     use crate::mocks::store::MockConnection;
     use crate::mocks::store::MockStore;
+    use crate::monitored_channel;
     use crate::pipeline::Processor;
     use crate::types::full_checkpoint_content::Checkpoint;
     use crate::types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
+
+    fn test_gauge() -> IntGauge {
+        IntGauge::new("test", "test").unwrap()
+    }
 
     const TEST_TIMEOUT: Duration = Duration::from_secs(60);
     const TEST_CHECKPOINT_BUFFER_SIZE: usize = 3; // Critical for back-pressure testing calculations
@@ -410,14 +443,15 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        checkpoint_tx: mpsc::Sender<Arc<Checkpoint>>,
+        checkpoint_tx: monitored_channel::Sender<Arc<Checkpoint>>,
         #[allow(unused)]
         pipeline: Service,
     }
 
     impl TestSetup {
         async fn new(config: ConcurrentConfig, store: MockStore, next_checkpoint: u64) -> Self {
-            let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
+            let (checkpoint_tx, checkpoint_rx) =
+                monitored_channel::channel(TEST_CHECKPOINT_BUFFER_SIZE, test_gauge());
             #[allow(clippy::disallowed_methods)]
             let (commit_hi_tx, _commit_hi_rx) = mpsc::unbounded_channel();
             let metrics = IndexerMetrics::new(None, &Registry::default());

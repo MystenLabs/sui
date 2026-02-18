@@ -23,6 +23,7 @@ use crate::ingestion::ingestion_client::IngestionClientArgs;
 use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
+use crate::monitored_channel;
 use crate::types::full_checkpoint_content::Checkpoint;
 
 mod broadcaster;
@@ -82,7 +83,7 @@ pub struct IngestionService {
     streaming_client: Option<GrpcStreamingClient>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
+    subscribers: Vec<(&'static str, monitored_channel::Sender<Arc<Checkpoint>>)>,
     metrics: Arc<IngestionMetrics>,
 }
 
@@ -157,12 +158,22 @@ impl IngestionService {
     /// Returns the channel to receive checkpoints from and the channel to send commit_hi values to.
     pub fn subscribe(
         &mut self,
+        name: &'static str,
     ) -> (
-        mpsc::Receiver<Arc<Checkpoint>>,
+        monitored_channel::Receiver<Arc<Checkpoint>>,
         mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
-        let (sender, receiver) = mpsc::channel(self.config.checkpoint_channel_size);
-        self.subscribers.push(sender);
+        let inflight = self
+            .metrics
+            .ingestion_channel_fill
+            .with_label_values(&[name]);
+        let (sender, receiver) =
+            monitored_channel::channel(self.config.checkpoint_channel_size, inflight);
+        self.metrics
+            .ingestion_channel_capacity
+            .with_label_values(&[name])
+            .set(self.config.checkpoint_channel_size as i64);
+        self.subscribers.push((name, sender));
         (receiver, self.commit_hi_tx.clone())
     }
 
@@ -201,6 +212,11 @@ impl IngestionService {
         if subscribers.is_empty() {
             return Err(Error::NoSubscribers);
         }
+
+        let (_subscriber_names, subscribers): (
+            Vec<&'static str>,
+            Vec<monitored_channel::Sender<Arc<Checkpoint>>>,
+        ) = subscribers.into_iter().unzip();
 
         Ok(broadcaster(
             checkpoints,
@@ -243,6 +259,7 @@ mod tests {
     use crate::ingestion::store_client::tests::respond_with;
     use crate::ingestion::store_client::tests::status;
     use crate::ingestion::test_utils::test_checkpoint_data;
+    use crate::monitored_channel;
 
     use super::*;
 
@@ -273,7 +290,7 @@ mod tests {
 
     async fn test_subscriber(
         stop_after: usize,
-        mut rx: mpsc::Receiver<Arc<Checkpoint>>,
+        mut rx: monitored_channel::Receiver<Arc<Checkpoint>>,
     ) -> TaskGuard<Vec<u64>> {
         TaskGuard::new(tokio::spawn(async move {
             let mut seqs = vec![];
@@ -317,7 +334,7 @@ mod tests {
 
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
-        let (rx, _) = ingestion_service.subscribe();
+        let (rx, _) = ingestion_service.subscribe("test");
         let subscriber = test_subscriber(usize::MAX, rx).await;
         let svc = ingestion_service.run(0.., false).await.unwrap();
 
@@ -338,7 +355,7 @@ mod tests {
 
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
-        let (rx, _) = ingestion_service.subscribe();
+        let (rx, _) = ingestion_service.subscribe("test");
         let subscriber = test_subscriber(1, rx).await;
         let mut svc = ingestion_service.run(0.., false).await.unwrap();
 
@@ -365,7 +382,7 @@ mod tests {
 
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
-        let (rx, _) = ingestion_service.subscribe();
+        let (rx, _) = ingestion_service.subscribe("test");
         let subscriber = test_subscriber(5, rx).await;
         let _svc = ingestion_service.run(0.., false).await.unwrap();
 
@@ -391,7 +408,7 @@ mod tests {
 
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
-        let (rx, _) = ingestion_service.subscribe();
+        let (rx, _) = ingestion_service.subscribe("test");
         let subscriber = test_subscriber(5, rx).await;
         let _svc = ingestion_service.run(0.., false).await.unwrap();
 
@@ -416,13 +433,13 @@ mod tests {
         let mut ingestion_service = test_ingestion(server.uri(), 3, 1).await;
 
         // This subscriber will take its sweet time processing checkpoints.
-        let (mut laggard, _) = ingestion_service.subscribe();
-        async fn unblock(laggard: &mut mpsc::Receiver<Arc<Checkpoint>>) -> u64 {
+        let (mut laggard, _) = ingestion_service.subscribe("laggard");
+        async fn unblock(laggard: &mut monitored_channel::Receiver<Arc<Checkpoint>>) -> u64 {
             let checkpoint = laggard.recv().await.unwrap();
             checkpoint.summary.sequence_number
         }
 
-        let (rx, _) = ingestion_service.subscribe();
+        let (rx, _) = ingestion_service.subscribe("test");
         let subscriber = test_subscriber(5, rx).await;
         let _svc = ingestion_service.run(0.., false).await.unwrap();
 

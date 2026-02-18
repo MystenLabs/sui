@@ -74,6 +74,9 @@ pub struct IngestionMetrics {
     pub ingested_checkpoint_timestamp_lag: Histogram,
 
     pub ingested_checkpoint_latency: Histogram,
+
+    pub ingestion_channel_fill: IntGaugeVec,
+    pub ingestion_channel_capacity: IntGaugeVec,
 }
 
 #[derive(Clone)]
@@ -148,6 +151,14 @@ pub struct IndexerMetrics {
     pub watermark_timestamp_in_db_ms: IntGaugeVec,
     pub watermark_reader_lo_in_db: IntGaugeVec,
     pub watermark_pruner_hi_in_db: IntGaugeVec,
+
+    pub processor_channel_fill: IntGaugeVec,
+    pub collector_channel_fill: IntGaugeVec,
+    pub committer_watermark_channel_fill: IntGaugeVec,
+
+    pub processor_channel_capacity: IntGaugeVec,
+    pub collector_channel_capacity: IntGaugeVec,
+    pub committer_watermark_channel_capacity: IntGaugeVec,
 }
 
 /// A helper struct to report metrics regarding the checkpoint lag at various points in the indexer.
@@ -271,6 +282,20 @@ impl IngestionMetrics {
                 name("ingested_checkpoint_latency"),
                 "Time taken to fetch a checkpoint from the remote store, including retries",
                 INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            ingestion_channel_fill: register_int_gauge_vec_with_registry!(
+                name("ingestion_channel_fill"),
+                "Point-in-time fill of the ingestion channel per pipeline",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            ingestion_channel_capacity: register_int_gauge_vec_with_registry!(
+                name("ingestion_channel_capacity"),
+                "Capacity of the ingestion channel per pipeline",
+                &["pipeline"],
                 registry,
             )
             .unwrap(),
@@ -667,6 +692,48 @@ impl IndexerMetrics {
             watermark_pruner_hi_in_db: register_int_gauge_vec_with_registry!(
                 name("watermark_pruner_hi_in_db"),
                 "Last pruner high watermark this pruner wrote to the DB",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            processor_channel_fill: register_int_gauge_vec_with_registry!(
+                name("processor_channel_fill"),
+                "Point-in-time fill of the processor-to-collector channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            collector_channel_fill: register_int_gauge_vec_with_registry!(
+                name("collector_channel_fill"),
+                "Point-in-time fill of the collector-to-committer channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_watermark_channel_fill: register_int_gauge_vec_with_registry!(
+                name("committer_watermark_channel_fill"),
+                "Point-in-time fill of the committer-to-watermark channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            processor_channel_capacity: register_int_gauge_vec_with_registry!(
+                name("processor_channel_capacity"),
+                "Capacity of the processor-to-collector channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            collector_channel_capacity: register_int_gauge_vec_with_registry!(
+                name("collector_channel_capacity"),
+                "Capacity of the collector-to-committer channel",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            committer_watermark_channel_capacity: register_int_gauge_vec_with_registry!(
+                name("committer_watermark_channel_capacity"),
+                "Capacity of the committer-to-watermark channel",
                 &["pipeline"],
                 registry,
             )
