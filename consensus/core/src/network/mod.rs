@@ -33,18 +33,7 @@ use crate::{
 };
 
 /// Identifies an observer node by its network public key.
-#[allow(dead_code)]
 pub(crate) type NodeId = NetworkPublicKey;
-
-/// Identifies a peer in the network, which can be either a validator or an observer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum PeerId {
-    /// A validator node identified by its authority index.
-    Authority(AuthorityIndex),
-    /// An observer node identified by its network public key.
-    #[allow(dead_code)]
-    Observer(NodeId),
-}
 
 // Tonic generated RPC stubs.
 mod tonic_gen {
@@ -52,7 +41,6 @@ mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ObserverService.rs"));
 }
 
-mod clients;
 pub(crate) mod metrics;
 mod metrics_layer;
 #[cfg(all(test, not(msim)))]
@@ -192,39 +180,12 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
-/// A stream item for observer block streaming that includes both the block and highest commit index.
-#[allow(dead_code)]
-pub(crate) struct ObserverBlockStreamItem {
-    pub(crate) block: Bytes,
-    pub(crate) highest_commit_index: u64,
-}
-
-/// Observer block stream type.
-#[allow(dead_code)]
-pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send>>;
-
-/// Observer block request stream type for bidirectional streaming.
-#[allow(dead_code)]
-pub(crate) type BlockRequestStream =
-    Pin<Box<dyn Stream<Item = crate::network::observer::BlockStreamRequest> + Send>>;
-
 /// Observer network service for handling requests from observer nodes.
-/// Unlike NetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
+/// Unlike ValidatorNetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
 /// to identify peers since observers are not part of the committee.
 #[async_trait]
-#[allow(dead_code)]
 pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
-    /// Handles the bidirectional block streaming request from an observer peer.
-    /// Returns a stream of blocks with the highest commit index for each block.
-    /// The input stream contains BlockStreamRequest items with Start/Stop commands for flow control.
-    async fn handle_stream_blocks(
-        &self,
-        peer: NodeId,
-        request_stream: BlockRequestStream,
-    ) -> ConsensusResult<ObserverBlockStream>;
-
     /// Handles the request to fetch blocks by references from an observer peer.
-    /// Returns serialized blocks.
     async fn handle_fetch_blocks(
         &self,
         peer: NodeId,
@@ -232,7 +193,6 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<Vec<Bytes>>;
 
     /// Handles the request to fetch commits by index range from an observer peer.
-    /// Returns serialized commits and certifier blocks.
     async fn handle_fetch_commits(
         &self,
         peer: NodeId,
@@ -240,56 +200,16 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
 }
 
-/// Observer network client for communicating with validators' observer ports or other observers.
-/// Unlike NetworkClient which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
-/// to identify peers since observers are not part of the committee.
-#[async_trait]
-#[allow(dead_code)]
-pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
-    /// Initiates bidirectional block streaming with a peer (validator or observer).
-    /// Returns a stream of blocks with the highest commit index.
-    /// The request_stream contains BlockStreamRequest items with Start/Stop commands for flow control.
-    async fn stream_blocks(
-        &self,
-        peer: NodeId,
-        request_stream: BlockRequestStream,
-        timeout: Duration,
-    ) -> ConsensusResult<ObserverBlockStream>;
-
-    /// Fetches serialized blocks by references from a peer.
-    async fn fetch_blocks(
-        &self,
-        peer: NodeId,
-        block_refs: Vec<BlockRef>,
-        timeout: Duration,
-    ) -> ConsensusResult<Vec<Bytes>>;
-
-    /// Fetches serialized commits in the commit range from a peer.
-    /// Returns a tuple of both the serialized commits, and serialized blocks that contain
-    /// votes certifying the last commit.
-    async fn fetch_commits(
-        &self,
-        peer: NodeId,
-        commit_range: CommitRange,
-        timeout: Duration,
-    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
-}
-
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.
 /// Dropping `NetworkManager` will shutdown the network service.
 pub(crate) trait NetworkManager: Send + Sync {
     type ValidatorClient: ValidatorNetworkClient;
-    type ObserverClient: ObserverNetworkClient;
 
     /// Creates a new network manager.
     fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self;
 
     /// Returns the validator network client.
     fn validator_client(&self) -> Arc<Self::ValidatorClient>;
-
-    /// Returns the observer network client.
-    #[allow(dead_code)]
-    fn observer_client(&self) -> Arc<Self::ObserverClient>;
 
     /// Starts the validator network server with the provided service.
     async fn start_validator_server<V>(&mut self, service: Arc<V>)
@@ -308,9 +228,6 @@ pub(crate) trait NetworkManager: Send + Sync {
     /// If address is None, the override is cleared and the committee address will be used.
     fn update_peer_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>);
 }
-
-// Re-export the concrete client implementations.
-pub(crate) use clients::{CommitSyncerClient, SynchronizerClient};
 
 /// Serialized block with extended information from the proposing authority.
 #[derive(Clone, PartialEq, Eq, Debug)]
