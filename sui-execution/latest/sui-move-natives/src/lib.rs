@@ -17,7 +17,7 @@ use self::{
         groth16::{
             Groth16PrepareVerifyingKeyCostParams, Groth16VerifyGroth16ProofInternalCostParams,
         },
-        hash::{HashBlake2b256CostParams, HashKeccak256CostParams},
+        hash::{HashBlake2b256CostParams, HashBlake3_256CostParams, HashKeccak256CostParams},
         hmac::HmacHmacSha3256CostParams,
         poseidon,
     },
@@ -174,6 +174,7 @@ pub struct NativesCostTable {
 
     // hash
     pub hash_blake2b256_cost_params: HashBlake2b256CostParams,
+    pub hash_blake3_256_cost_params: HashBlake3_256CostParams,
     pub hash_keccak256_cost_params: HashKeccak256CostParams,
 
     // poseidon
@@ -344,6 +345,17 @@ impl NativesCostTable {
                 hash_blake2b256_data_cost_per_block: protocol_config
                     .hash_blake2b256_data_cost_per_block()
                     .into(),
+            },
+            hash_blake3_256_cost_params: HashBlake3_256CostParams {
+                hash_blake3_256_cost_base: protocol_config
+                    .hash_blake3_256_cost_base_as_option()
+                    .map(Into::into),
+                hash_blake3_256_data_cost_per_byte: protocol_config
+                    .hash_blake3_256_data_cost_per_byte_as_option()
+                    .map(Into::into),
+                hash_blake3_256_data_cost_per_block: protocol_config
+                    .hash_blake3_256_data_cost_per_block_as_option()
+                    .map(Into::into),
             },
             hash_keccak256_cost_params: HashKeccak256CostParams {
                 hash_keccak256_cost_base: protocol_config.hash_keccak256_cost_base().into(),
@@ -936,6 +948,7 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ("address", "to_u256", make_native!(address::to_u256)),
         ("address", "from_u256", make_native!(address::from_u256)),
         ("hash", "blake2b256", make_native!(hash::blake2b256)),
+        ("hash", "blake3_256", make_native!(hash::blake3_256)),
         (
             "bls12381",
             "bls12381_min_sig_verify",

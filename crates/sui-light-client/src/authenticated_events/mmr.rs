@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::hash::{Blake2b256, HashFunction};
+use fastcrypto::hash::{Blake3_256, HashFunction};
 use move_core_types::u256::U256;
 use sui_types::accumulator_root::{EventCommitment, EventStreamHead, build_event_merkle_root};
 
@@ -10,7 +10,7 @@ const U256_ZERO: U256 = U256::zero();
 fn hash_two_to_one_u256(left: U256, right: U256) -> U256 {
     let mut concatenated = bcs::to_bytes(&left).expect("Failed to serialize left U256");
     concatenated.extend_from_slice(&bcs::to_bytes(&right).expect("Failed to serialize right U256"));
-    let hash = Blake2b256::digest(&concatenated);
+    let hash = Blake3_256::digest(&concatenated);
     U256::from_le_bytes(&hash.digest)
 }
 
@@ -88,7 +88,7 @@ mod tests {
                 U256::from(0u64),
                 U256::from(0u64),
                 U256::from_str(
-                    "69725770072863840208899320192042305265295220676851872214494910464384102654361"
+                    "40067942994840507579929636973317541452817478905824243946969556859461681142739"
                 )
                 .unwrap()
             ]

@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "112",
+              "maxSupportedProtocolVersion": "113",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1759,6 +1759,9 @@
                 "hash_blake2b256_data_cost_per_byte": {
                   "u64": "2"
                 },
+                "hash_blake3_256_cost_base": null,
+                "hash_blake3_256_data_cost_per_block": null,
+                "hash_blake3_256_data_cost_per_byte": null,
                 "hash_keccak256_cost_base": {
                   "u64": "52"
                 },

@@ -7,7 +7,7 @@ use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
-use fastcrypto_tbls::{dkg_v1, dkg_v1::Output, nodes, nodes::PartyId};
+use fastcrypto_tbls::{dkg_v1, dkg_v1::Output, nodes, nodes::PartyId, random_oracle::RandomOracle};
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use mysten_common::debug_fatal;
@@ -269,7 +269,7 @@ impl RandomnessManager {
             ),
             nodes,
             t,
-            fastcrypto::random_oracle::RandomOracle::new(prefix_str.as_str()),
+            RandomOracle::new(prefix_str.as_str()),
             &mut rand::thread_rng(),
         ) {
             Ok(party) => party,

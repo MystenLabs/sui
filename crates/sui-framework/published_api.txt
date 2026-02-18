@@ -1633,6 +1633,9 @@ get_accumulator_object_count
 blake2b256
 	public fun
 	0x2::hash
+blake3_256
+	public fun
+	0x2::hash
 keccak256
 	public fun
 	0x2::hash

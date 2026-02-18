@@ -4,7 +4,7 @@
 use std::str::FromStr;
 
 use anyhow::ensure;
-use fastcrypto::hash::Blake2b256;
+use fastcrypto::hash::Blake3_256;
 use fastcrypto::hash::HashFunction;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::MoveDatatypeLayout;
@@ -148,7 +148,7 @@ impl Event {
 
     /// Hash of event contents. Not guaranteed to be unique as event contents can be identical.
     pub fn digest(&self) -> Digest {
-        let mut h = Blake2b256::new();
+        let mut h = Blake3_256::new();
         bcs::serialize_into(&mut h, &self).unwrap();
         let digest = h.finalize();
         Digest::new(digest.digest)

@@ -106,7 +106,7 @@ fun hash_two_to_one_u256(left: u256, right: u256): u256 {
     let right_bytes = bcs::to_bytes(&right);
     let mut concatenated = left_bytes;
     vector::append(&mut concatenated, right_bytes);
-    u256_from_bytes(hash::blake2b256(&concatenated))
+    u256_from_bytes(hash::blake3_256(&concatenated))
 }
 
 fun new_stream_head(new_root: u256, event_count_delta: u64, checkpoint_seq: u64): EventStreamHead {
@@ -228,6 +228,6 @@ fun test_mmr_digest_compat_with_rust() {
     assert!(mmr[1] == 0);
     assert!(mmr[2] == 0);
     assert!(
-        mmr[3] == 69725770072863840208899320192042305265295220676851872214494910464384102654361,
+        mmr[3] == 40067942994840507579929636973317541452817478905824243946969556859461681142739,
     );
 }

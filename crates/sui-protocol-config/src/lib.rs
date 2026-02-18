@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 112;
+const MAX_PROTOCOL_VERSION: u64 = 113;
 
 // Record history of protocol version allocations here:
 //
@@ -297,6 +297,7 @@ const MAX_PROTOCOL_VERSION: u64 = 112;
 //              Enable additional validation on zkLogin public identifier.
 // Version 111: Validator metadata
 // Version 112: Enable Ristretto255 in devnet.
+// Version 113: Add blake3_256 hash native.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1601,6 +1602,11 @@ pub struct ProtocolConfig {
     hash_blake2b256_cost_base: Option<u64>,
     hash_blake2b256_data_cost_per_byte: Option<u64>,
     hash_blake2b256_data_cost_per_block: Option<u64>,
+
+    // hash::blake3_256
+    hash_blake3_256_cost_base: Option<u64>,
+    hash_blake3_256_data_cost_per_byte: Option<u64>,
+    hash_blake3_256_data_cost_per_block: Option<u64>,
 
     // hash::keccak256
     hash_keccak256_cost_base: Option<u64>,
@@ -2996,6 +3002,11 @@ impl ProtocolConfig {
             hash_blake2b256_cost_base: Some(52),
             hash_blake2b256_data_cost_per_byte: Some(2),
             hash_blake2b256_data_cost_per_block: Some(2),
+
+            // hash::blake3_256
+            hash_blake3_256_cost_base: None,
+            hash_blake3_256_data_cost_per_byte: None,
+            hash_blake3_256_data_cost_per_block: None,
 
             // hash::keccak256
             hash_keccak256_cost_base: Some(52),
@@ -4587,6 +4598,11 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_ristretto255_group_ops = true;
                     }
+                }
+                113 => {
+                    cfg.hash_blake3_256_cost_base = Some(52);
+                    cfg.hash_blake3_256_data_cost_per_byte = Some(2);
+                    cfg.hash_blake3_256_data_cost_per_block = Some(2);
                 }
                 // Use this template when making changes:
                 //

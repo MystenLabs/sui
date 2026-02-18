@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension};
-use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
+use fastcrypto::hash::{Blake2b256, Blake3_256, HashFunction, Keccak256};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -15,6 +15,7 @@ use smallvec::smallvec;
 use std::{collections::VecDeque, ops::Mul};
 
 const BLAKE_2B256_BLOCK_SIZE: u16 = 128;
+const BLAKE3_256_BLOCK_SIZE: u16 = 64;
 const KECCAK_256_BLOCK_SIZE: u16 = 136;
 
 fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
@@ -130,5 +131,32 @@ pub fn blake2b256(
         hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_byte,
         hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_block,
         BLAKE_2B256_BLOCK_SIZE,
+    )
+}
+
+#[derive(Clone)]
+pub struct HashBlake3_256CostParams {
+    pub hash_blake3_256_cost_base: Option<InternalGas>,
+    pub hash_blake3_256_data_cost_per_byte: Option<InternalGas>,
+    pub hash_blake3_256_data_cost_per_block: Option<InternalGas>,
+}
+
+pub fn blake3_256(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    let cost_params = get_extension!(context, NativesCostTable)?
+        .hash_blake3_256_cost_params
+        .clone();
+    native_charge_gas_early_exit!(context, cost_params.hash_blake3_256_cost_base.unwrap());
+
+    hash::<Blake3_256, 32>(
+        context,
+        ty_args,
+        args,
+        cost_params.hash_blake3_256_data_cost_per_byte.unwrap(),
+        cost_params.hash_blake3_256_data_cost_per_block.unwrap(),
+        BLAKE3_256_BLOCK_SIZE,
     )
 }

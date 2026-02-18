@@ -289,7 +289,7 @@ Called by the settlement transaction to track conservation of SUI.
     <b>let</b> right_bytes = <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&right);
     <b>let</b> <b>mut</b> concatenated = left_bytes;
     vector::append(&<b>mut</b> concatenated, right_bytes);
-    <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_u256_from_bytes">u256_from_bytes</a>(<a href="../sui/hash.md#sui_hash_blake2b256">hash::blake2b256</a>(&concatenated))
+    <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_u256_from_bytes">u256_from_bytes</a>(<a href="../sui/hash.md#sui_hash_blake3_256">hash::blake3_256</a>(&concatenated))
 }
 </code></pre>
 

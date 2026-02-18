@@ -456,7 +456,7 @@ impl Ord for EventCommitment {
 }
 
 pub fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
-    use fastcrypto::hash::Blake2b256;
+    use fastcrypto::hash::Blake3_256;
     use fastcrypto::merkle::MerkleTree;
 
     debug_assert!(
@@ -464,7 +464,7 @@ pub fn build_event_merkle_root(events: &[EventCommitment]) -> Digest {
         "Events must be ordered by (checkpoint_seq, transaction_idx, event_idx)"
     );
 
-    let merkle_tree = MerkleTree::<Blake2b256>::build_from_unserialized(events.to_vec())
+    let merkle_tree = MerkleTree::<Blake3_256>::build_from_unserialized(events.to_vec())
         .expect("failed to serialize event commitments for merkle root");
     let root_node = merkle_tree.root();
     let root_digest = root_node.bytes();
