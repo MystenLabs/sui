@@ -80,6 +80,9 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
                         join_set.spawn(f(item));
                     }
                     Some(None) => {
+                        // If the stream is empty, signal that the worker pool is going to
+                        // start draining now, so that once we get all our permits back, we
+                        // know we can wind down the pool.
                         draining = true;
                     }
                     None => break,
