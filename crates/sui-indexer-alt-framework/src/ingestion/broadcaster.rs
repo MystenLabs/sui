@@ -472,6 +472,7 @@ mod tests {
             streaming_backoff_max_batch_size: 16,
             streaming_connection_timeout_ms: 100,
             streaming_statement_timeout_ms: 100,
+            checkpoint_channel_size: None,
         }
     }
 
