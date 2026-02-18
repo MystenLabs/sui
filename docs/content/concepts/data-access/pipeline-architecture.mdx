@@ -475,7 +475,7 @@ Database connection limits are also in place. The `Committer` blocks when all co
 
 #### Per-pipeline row-count backpressure
 
-Each pipeline enforces a per-pipeline row limit via the `MAX_PENDING_ROWS` constant on its `Handler` trait. Before pulling the next checkpoint from the ingestion channel, the pipeline's processor waits until its own uncommitted row count drops below this threshold.
+Each concurrent pipeline enforces a per-pipeline row limit via the `MAX_PENDING_ROWS` constant on its `Handler` trait. Before pulling the next checkpoint from the ingestion channel, the pipeline's processor waits until its own uncommitted row count drops below this threshold. Sequential pipelines do not use row-count backpressure because their in-order commit requirement can create deadlocks: the committer may need future checkpoints to make progress, but row-count backpressure prevents the processor from delivering them.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="MAX_PENDING_ROWS" />
 
