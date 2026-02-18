@@ -20,63 +20,6 @@ If your provider doesn't yet support gRPC, you can:
 </TabItem>
 </Tabs>
 
-## Access data using `grpcurl`
-
-Interact with gRPC by using [`grpcurl`](https://github.com/fullstorydev/grpcurl). 
-
-### List available gRPC services
-
-```shell
-$ grpcurl <full node URL:port> list
-```
-
-The port on Sui Foundation managed full nodes is `443`. 
-
-### List available APIs in the `LedgerService`
-
-```shell
-$ grpcurl <full node URL:port> list sui.rpc.v2.LedgerService
-```
-
-### Get the events and effects details of a particular transaction
-
-```shell
-$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <full node URL:port> sui.rpc.v2.LedgerService/GetTransaction
-```
-
-### Get the transactions in a particular checkpoint
-
-```shell
-$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
-```
-
-### Get the latest information for a coin type
-
-```shell
-$ grpcurl -d '{ "coin_type": "0x2::sui::SUI" }' <full node URL:port> sui.rpc.v2.StateService/GetCoinInfo
-```
-
-### List the objects owned by a particular address
-
-```shell
-$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
-```
-
-### List the dynamic fields in a particular object
-
-```shell
-$ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <full node URL:port> sui.rpc.v2.StateService/ListDynamicFields
-```
-
-## Access streaming data with Buf
-
-`grpcurl` does not support server-side streaming RPCs. To test or experiment with `SubscriptionService`, use the [Buf CLI](https://buf.build/docs/cli/) instead.
-
-```shell
-$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
-```
-
-
 ## Field masks
 
 A [`FieldMask` in protocol buffers](https://protobuf.dev/reference/protobuf/google.protobuf/#field-mask) is a mechanism used to specify a subset of fields within a message that should be read, updated, or returned. Instead of retrieving the entire object, a client can request only the specific fields they need by providing a list of field paths. This improves performance and reduces unnecessary data transfer.
@@ -154,6 +97,64 @@ Here are the headers you might encounter:
 - `x-sui-timestamp`: The network timestamp in milliseconds since the Unix epoch in human-readable [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339) format.
 
 Not all headers are guaranteed to be present in every API response. They are only included when applicable to the given RPC.
+
+## Access data using `grpcurl`
+
+Interact with gRPC by using [`grpcurl`](https://github.com/fullstorydev/grpcurl). 
+
+### List available gRPC services
+
+```shell
+$ grpcurl <full node URL:port> list
+```
+
+The port on Sui Foundation managed full nodes is `443`. 
+
+### List available APIs in the `LedgerService`
+
+```shell
+$ grpcurl <full node URL:port> list sui.rpc.v2.LedgerService
+```
+
+### Get the events and effects details of a particular transaction
+
+```shell
+$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <full node URL:port> sui.rpc.v2.LedgerService/GetTransaction
+```
+
+### Get the transactions in a particular checkpoint
+
+```shell
+$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
+```
+
+### Get the latest information for a coin type
+
+```shell
+$ grpcurl -d '{ "coin_type": "0x2::sui::SUI" }' <full node URL:port> sui.rpc.v2.StateService/GetCoinInfo
+```
+
+### List the objects owned by a particular address
+
+```shell
+$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
+```
+
+### List the dynamic fields in a particular object
+
+```shell
+$ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <full node URL:port> sui.rpc.v2.StateService/ListDynamicFields
+```
+
+## Access streaming data with Buf
+
+`grpcurl` does not support server-side streaming RPCs. To test or experiment with `SubscriptionService`, use the [Buf CLI](https://buf.build/docs/cli/) instead.
+
+```shell
+$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
+```
+
+
 
 ## Build gRPC clients
 
@@ -429,5 +430,5 @@ The example assumes that gRPC is available on port `443` which requires SSL. Dig
 
 ## Related links
 
-- [gRPC](/concepts/data-access/grpc.mdx): Learn about gRPC concepts, services, and best practices for the Sui network.
-- [Full Node Operator Configuration](/guides/operator/sui-full-node#considerations-to-enable-grpc): Configuration options for enabling gRPC on your full node.
+<RelatedLink to="/guides/operator/sui-full-node.mdx" />
+<RelatedLink to="/concepts/data-access/grpc.mdx" />

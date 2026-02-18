@@ -8,6 +8,12 @@ GraphQL provides a flexible way to query the Sui network. This page covers the c
 
 For practical examples, see [Querying Sui RPC with GraphQL](/guides/developer/accessing-data/query-with-graphql.mdx). For comprehensive GraphQL fundamentals, consult the introductory documentation from [GraphQL](https://graphql.org/learn/) and [GitHub](https://docs.github.com/en/graphql/guides/introduction-to-graphql).
 
+:::info
+
+<ImportContent source="json-rpc-deprecation.mdx" mode="snippet" />
+
+:::
+
 The GraphQL RPC Service reads data from the General-purpose Indexer's Postgres-compatible database, Archival Store and Service, and a full node. GraphQL RPC is an alternative to the gRPC API. The General-purpose Indexer is a scalable implementation of the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx). The framework ingests data using the remote checkpoint store and full node RPCs. It lets you configure it to load different types of Sui network data into Postgres tables in parallel, improving data ingestion performance. You can also configure pruning for different tables to balance performance and cost.
 
 #### High-level release timeline

@@ -98,7 +98,7 @@ You can reuse the same gRPC `LedgerService` methods for this lookup. Simply chan
 
 #### Can I use field masks in batch requests?
 
-Only the top-level `read_mask` field is respected in batch requests like `BatchGetObjects`. Any [field masks](#field-masks) within individual `GetObjectRequest` items are ignored.
+Only the top-level `read_mask` field is respected in batch requests like `BatchGetObjects`. Any [field masks](/guides/developer/accessing-data/grpc-overview#field-masks) within individual `GetObjectRequest` items are ignored.
 
 #### Why does the API return fewer results than the requested `page_size`?
 
@@ -106,7 +106,7 @@ Even if you request a specific `page_size`, the server might return fewer items.
 
 #### Why do some fields say `optional` if they're required?
 
-In `proto3`, marking a field as `optional` gives the API the ability to detect [field presence](#field-presence), that is, whether a field value is explicitly set or simply defaulted. This doesn't mean the field is optional in practice. You still need to follow the API contract to ensure the request is valid.
+In `proto3`, marking a field as `optional` gives the API the ability to detect [field presence](/guides/developer/accessing-data/grpc-overview#field-presence), that is, whether a field value is explicitly set or simply defaulted. This doesn't mean the field is optional in practice. You still need to follow the API contract to ensure the request is valid.
 
 #### Are all services and related data guaranteed to be available on all full nodes?
 
@@ -114,5 +114,6 @@ Full nodes might vary in which services and retention they support. Some service
 
 ## Related links
 
+<RelatedLink to="/references/fullnode-protocol" />
 <RelatedLink to="/guides/developer/accessing-data/grpc-overview" label="Instructions for using and building gRPC clients in TypeScript, Go, and Python." />
 <RelatedLink to="/guides/operator/sui-full-node#considerations-to-enable-grpc" label="Configuration options for enabling gRPC on your full node." />
