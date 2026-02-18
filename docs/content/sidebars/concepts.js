@@ -68,8 +68,21 @@ const concepts = [
 		},
 		items: [
 			'concepts/data-access/grpc',
-			'concepts/data-access/graphql-indexer',
 			'concepts/data-access/graphql-rpc',
+			'concepts/data-access/archival-store',
+			{
+				type: 'category',
+				label: 'Custom Indexers',
+				link: {
+					type: 'doc',
+					id: 'concepts/data-access/custom-indexers',
+				},
+				items: [
+					'concepts/data-access/pipeline-architecture',
+					'concepts/data-access/indexer-data-integration',
+					'concepts/data-access/indexer-runtime-perf',
+				],
+			},
 		],
 	},
 	{

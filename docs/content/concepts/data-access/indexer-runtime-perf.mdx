@@ -16,7 +16,7 @@ Together, these techniques help you run indexers that are fast, resource-efficie
 
 ## Fine-tuning configurations
 
-The indexing framework provides multiple levels of configuration to optimize performance for different use cases. This section covers basic configuration options, while complex pipeline-specific tuning is covered in [Indexer Pipeline Architecture](/guides/developer/accessing-data/pipeline-architecture.mdx).
+The indexing framework provides multiple levels of configuration to optimize performance for different use cases. This section covers basic configuration options, while complex pipeline-specific tuning is covered in [Indexer Pipeline Architecture](/concepts/data-access/pipeline-architecture.mdx).
 
 ### Ingestion layer configuration
 
@@ -91,6 +91,7 @@ Include the following command-line arguments to help focus processing. These val
 # Pipeline selection
 --pipeline "tx_counts"          # Run specific pipeline only
 --pipeline "events"             # Can specify multiple pipelines
+```
 
 **Use cases:**
 
@@ -102,8 +103,8 @@ Include the following command-line arguments to help focus processing. These val
 
 For complex configuration scenarios requiring deep understanding of pipeline internals:
 
-- [Sequential pipeline architecture](/guides/developer/accessing-data/pipeline-architecture.mdx#sequential-pipeline-architecture)
-- [Concurrent pipeline architecture](/guides/developer/accessing-data/pipeline-architecture.mdx#concurrent-pipeline-architecture)
+- [Sequential pipeline architecture](/concepts/data-access/pipeline-architecture.mdx#sequential-pipeline-architecture)
+- [Concurrent pipeline architecture](/concepts/data-access/pipeline-architecture.mdx#concurrent-pipeline-architecture)
 
 ## Tokio runtime debugging
 
