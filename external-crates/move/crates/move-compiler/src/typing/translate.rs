@@ -2608,15 +2608,18 @@ fn match_pattern_(
         P::Or(lhs, rhs) => {
             let lpat = match_pattern_(context, *lhs, mut_ref, rhs_binders, wildcard_needs_drop);
             let rpat = match_pattern_(context, *rhs, mut_ref, rhs_binders, wildcard_needs_drop);
-            let ty = join(
+            if let Some(ty) = join_opt(
                 context,
                 loc,
-                || -> String { panic!("ICE unresolved error join, failed") },
+                || "Incompatible types in or-pattern",
                 &lpat.ty,
                 &rpat.ty,
-            );
-            let pat = sp(loc, TP::Or(Box::new(lpat), Box::new(rpat)));
-            T::pat(ty, pat)
+            ) {
+                let pat = sp(loc, TP::Or(Box::new(lpat), Box::new(rpat)));
+                T::pat(ty, pat)
+            } else {
+                T::pat(context.error_type(loc), sp(loc, TP::ErrorPat))
+            }
         }
 
         // At patterns are a bit of a mess for typing. The rules are as follows:
