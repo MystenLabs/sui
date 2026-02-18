@@ -1738,7 +1738,8 @@ pub(crate) mod tests {
         db.write("test", wm(0), batch).unwrap();
         db.take_snapshot(wm(0));
 
-        let mut iter: iter::FwdIter<'_, u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
+        // let mut iter = db.iter(0, &cf, (U::<u64>, U::<u64>)).unwrap();
 
         // Skip past prefix that covers keys 4, 6 (e.g., skip to first key >= 7)
         // This tests the skip primitive
@@ -1749,7 +1750,7 @@ pub(crate) mod tests {
         assert_eq!((k, v), (8, 9));
 
         // Skip past end
-        let mut iter: iter::FwdIter<'_, u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         iter.skip_past(key::encode(&100u64));
         assert!(iter.next().is_none());
     }
@@ -1771,7 +1772,7 @@ pub(crate) mod tests {
         db.take_snapshot(wm(0));
 
         // Create iterator, seek to start
-        let mut iter: iter::RevIter<'_, u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
 
         // Skip to last key before 6
         iter.skip_past(key::encode(&6u64));
@@ -1779,7 +1780,7 @@ pub(crate) mod tests {
         assert_eq!((k, v), (5, 6));
 
         // Reset and skip past end
-        let mut iter: iter::RevIter<'_, u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         iter.skip_past(key::encode(&0u64));
         assert!(iter.next().is_none());
     }
