@@ -256,7 +256,7 @@ Sequential pipelines use two layers of backpressure to prevent memory overflow a
 
 Sequential pipelines use channel-based flow control with a simpler topology due to fewer components:
 
-- **Broadcaster → Processor:** `checkpoint_buffer_size` slots.
+- **Broadcaster → Processor:** `checkpoint_channel_size` slots (default: 1000).
 - **Processor → Committer:** `FANOUT + PIPELINE_BUFFER` slots.
 
 When any channel fills, senders automatically block, creating upstream pressure that cascades back through the pipeline. This mechanism works identically to concurrent pipelines but with fewer channel hops. See [concurrent pipeline backpressure](#concurrent-backpressure) for detailed mechanics of how channel-based blocking propagates.
@@ -456,10 +456,12 @@ With the component architecture detailed, let's examine how the pipeline prevent
 
 Each channel has a fixed buffer size that automatically blocks when full:
 
-**`Broadcaster` to `Processor`**: `checkpoint_buffer_size` slots → `Broadcaster` blocks, upstream pressure.
+**`Broadcaster` to `Processor`**: `checkpoint_channel_size` slots (default: 1000) → `Broadcaster` blocks, upstream pressure.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="checkpoint_buffer_size" />   
-    
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="checkpoint_channel_size" />
+
+The per-pipeline channel defaults to 1000 checkpoints. This is independent from `checkpoint_buffer_size`, which controls the lag regulation window. You can tune `checkpoint_channel_size` to control per-pipeline memory usage without affecting how far ahead the ingestion service fetches.
+
 **`Processor` to `Collector`**: `FANOUT + PIPELINE_BUFFER` slots → All workers block on `send()`.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="processor_tx" />
@@ -485,6 +487,12 @@ Database connection limits are also in place. The `Committer` blocks when all co
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" fun="spawn_aborting" /> 
     
 Finally, memory protection ensures the entire system operates within predictable memory bounds.
+
+:::tip
+
+If your indexer uses only concurrent pipelines, watermark-based regulation is not strictly necessary — concurrent pipelines already have channel-based and row-count backpressure to bound memory. You can set `checkpoint_buffer_size` to a high value to effectively disable regulation, allowing the ingestion service to fetch further ahead and improve throughput during backfills.
+
+:::
 
 #### Backpressure in practice
 

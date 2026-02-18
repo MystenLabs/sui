@@ -89,6 +89,7 @@ pub struct IngestionConfig {
     pub streaming_backoff_max_batch_size: usize,
     pub streaming_connection_timeout_ms: u64,
     pub streaming_statement_timeout_ms: u64,
+    pub checkpoint_channel_size: usize,
 }
 
 impl Default for IngestionConfig {
@@ -107,6 +108,7 @@ impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            checkpoint_channel_size: config.checkpoint_channel_size,
         }
     }
 }
@@ -121,6 +123,7 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            checkpoint_channel_size: config.checkpoint_channel_size,
         }
     }
 }
