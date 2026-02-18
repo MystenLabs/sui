@@ -979,10 +979,6 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     disable_entry_point_signature_check: bool,
 
-    // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
-    #[serde(skip_serializing_if = "is_false")]
-    convert_withdrawal_compatibility_ptb_arguments: bool,
-
     // If true, additional restrictions for hot or not entry functions are enforced.
     #[serde(skip_serializing_if = "is_false")]
     restrict_hot_or_not_entry_functions: bool,
@@ -2604,11 +2600,6 @@ impl ProtocolConfig {
     pub fn consensus_skip_gced_blocks_in_direct_finalization(&self) -> bool {
         self.feature_flags
             .consensus_skip_gced_blocks_in_direct_finalization
-    }
-
-    pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
-        self.feature_flags
-            .convert_withdrawal_compatibility_ptb_arguments
     }
 
     pub fn restrict_hot_or_not_entry_functions(&self) -> bool {
@@ -4600,6 +4591,10 @@ impl ProtocolConfig {
                 }
                 111 => {
                     cfg.feature_flags.validator_metadata_verify_v2 = true;
+                    // Enable coin reservation backward compatibility layer in devnet/localnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_coin_reservation_obj_refs = true;
+                    }
                 }
                 112 => {
                     cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
@@ -4950,8 +4945,10 @@ impl ProtocolConfig {
 
     pub fn enable_coin_reservation_for_testing(&mut self) {
         self.feature_flags.enable_coin_reservation_obj_refs = true;
-        self.feature_flags
-            .convert_withdrawal_compatibility_ptb_arguments = true;
+    }
+
+    pub fn disable_coin_reservation_for_testing(&mut self) {
+        self.feature_flags.enable_coin_reservation_obj_refs = false;
     }
 
     pub fn create_root_accumulator_object_for_testing(&mut self) {
