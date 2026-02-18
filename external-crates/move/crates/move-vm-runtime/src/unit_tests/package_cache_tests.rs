@@ -778,11 +778,11 @@ fn relinker_pkg(
 //   B v0 (0x3): fun b() = c::c() + 1  (depends on C)
 //   A v0 (0x4): fun a() = b::b() + c::d()  (depends on B and C v1)
 
-//Stores 4 packages with a relinking dependency chain: C v0 (0x2), C v1 (0x5, upgrade of C), B v0 (0x3, depends on C), A v0 (0x4, depends on B + C v1)
-//Loads B's dependency tree (B + C v0) into cache — verifies cache = 2
-//Loads A's dependency tree (A + B + C v1) into cache — verifies cache = 4 and that B v0 is reused from cache (Arc::ptr_eq) rather than recompiled
-//Verifies C v0 and C v1 are separate cache entries (different VersionIds)
-//Attempts a bad publish of A linked against C v0 (A calls d() which only exists in C v1) — verifies it fails and cache is unchanged
+// Stores 4 packages with a relinking dependency chain: C v0 (0x2), C v1 (0x5, upgrade of C), B v0 (0x3, depends on C), A v0 (0x4, depends on B + C v1)
+// Loads B's dependency tree (B + C v0) into cache — verifies cache = 2
+// Loads A's dependency tree (A + B + C v1) into cache — verifies cache = 4 and that B v0 is reused from cache (Arc::ptr_eq) rather than recompiled
+// Verifies C v0 and C v1 are separate cache entries (different VersionIds)
+// Attempts a bad publish of A linked against C v0 (A calls d() which only exists in C v1) — verifies it fails and cache is unchanged
 #[test]
 fn relink() {
     let c_orig = AccountAddress::from_hex_literal("0x2").unwrap();
