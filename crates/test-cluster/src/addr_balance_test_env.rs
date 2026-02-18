@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 
 use crate::{TestCluster, TestClusterBuilder};
 use sui_keys::keystore::AccountKeystore;
@@ -198,6 +198,24 @@ impl TestEnv {
             .await;
         self.update_all_gas().await;
         res
+    }
+
+    pub async fn setup_test_package(&mut self, path: impl AsRef<Path>) -> ObjectID {
+        let context = &mut self.cluster.wallet;
+        let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = context.get_reference_gas_price().await.unwrap();
+        let txn = context
+            .sign_transaction(
+                &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                    .publish_async(path.as_ref().to_path_buf())
+                    .await
+                    .build(),
+            )
+            .await;
+        let resp = context.execute_transaction_must_succeed(txn).await;
+        let package_ref = resp.get_new_package_obj().unwrap();
+        self.update_all_gas().await;
+        package_ref.0
     }
 
     pub fn encode_coin_reservation(

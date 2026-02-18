@@ -15,7 +15,7 @@ use sui_core::accumulators::balances::get_all_balances_for_owner;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
-use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
+use sui_test_transaction_builder::FundSource;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_root::AccumulatorValue,
@@ -208,8 +208,7 @@ async fn test_accumulators_disabled() {
             vec![(1000, dbg_addr(2))],
         )
         .build();
-    let err = test_env.exec_tx_directly(withdraw_tx).await.unwrap_err();
-    dbg!(err);
+    test_env.exec_tx_directly(withdraw_tx).await.unwrap_err();
 
     // Transfer fails at execution time
     let tx = test_env
@@ -234,8 +233,7 @@ async fn test_accumulators_disabled() {
             vec![(1000, dbg_addr(2))],
         )
         .build();
-    let err = test_env.exec_tx_directly(withdraw_tx).await.unwrap_err();
-    dbg!(err);
+    test_env.exec_tx_directly(withdraw_tx).await.unwrap_err();
 
     // transfer fails at execution time
     let (_, gas) = test_env.get_sender_and_gas(0);
@@ -623,7 +621,7 @@ async fn test_sponsored_address_balance_storage_rebates() {
         .build()
         .await;
 
-    let gas_test_package_id = setup_test_package(&mut test_env).await;
+    let gas_test_package_id = test_env.setup_test_package(move_test_code_path()).await;
 
     let (sender, sender_gas) = test_env.get_sender_and_gas(0);
     let (sponsor, sponsor_gas) = test_env.get_sender_and_gas(1);
@@ -774,36 +772,17 @@ async fn test_sponsored_address_balance_storage_rebates() {
     test_env.cluster.trigger_reconfiguration().await;
 }
 
-async fn setup_test_package(test_env: &mut TestEnv) -> ObjectID {
-    let ret = {
-        let context = &mut test_env.cluster.wallet;
-        let mut move_test_code_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        move_test_code_path.push("tests/move_test_code");
-
-        let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
-        let gas_price = context.get_reference_gas_price().await.unwrap();
-        let txn = context
-            .sign_transaction(
-                &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                    .publish_async(move_test_code_path)
-                    .await
-                    .build(),
-            )
-            .await;
-        let resp = context.execute_transaction_must_succeed(txn).await;
-        let package_ref = resp.get_new_package_obj().unwrap();
-        package_ref.0
-    };
-
-    test_env.update_all_gas().await;
-    ret
+fn move_test_code_path() -> PathBuf {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests/move_test_code");
+    path
 }
 
 async fn setup_address_balance_account(
     test_env: &mut TestEnv,
     deposit_amount: u64,
 ) -> (SuiAddress, ObjectID) {
-    let gas_package_id = setup_test_package(test_env).await;
+    let gas_package_id = test_env.setup_test_package(move_test_code_path()).await;
 
     let (sender, gas) = test_env.get_sender_and_gas(0);
 
@@ -1653,7 +1632,7 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
         .build()
         .await;
 
-    let gas_test_package_id = setup_test_package(&mut test_env).await;
+    let gas_test_package_id = test_env.setup_test_package(move_test_code_path()).await;
 
     test_env.update_all_gas().await;
     let (sender, sender_gas) = test_env.get_sender_and_gas(0);
@@ -1927,7 +1906,7 @@ async fn test_soft_bundle_different_gas_payers() {
         .build()
         .await;
 
-    let gas_test_package_id = setup_test_package(&mut test_env).await;
+    let gas_test_package_id = test_env.setup_test_package(move_test_code_path()).await;
 
     let (sender1, sender1_gas) = test_env.get_sender_and_gas(0);
     let (sender2, sender2_gas) = test_env.get_sender_and_gas(1);
@@ -2451,7 +2430,7 @@ async fn test_sponsored_address_balance_storage_oog() {
         .build()
         .await;
 
-    let gas_package_id = setup_test_package(&mut test_env).await;
+    let gas_package_id = test_env.setup_test_package(move_test_code_path()).await;
 
     let (sender, sender_gas) = test_env.get_sender_and_gas(0);
     let (sponsor, sponsor_gas) = test_env.get_sender_and_gas(1);
@@ -2696,7 +2675,7 @@ async fn test_reject_transaction_executed_in_previous_epoch() {
         .sui_node
         .with(|node| node.state().epoch_store_for_testing().epoch());
 
-    let gas_test_package_id = setup_test_package(&mut test_env).await;
+    let gas_test_package_id = test_env.setup_test_package(move_test_code_path()).await;
 
     let fund_tx = test_env
         .tx_builder(sender)
@@ -2773,7 +2752,7 @@ async fn test_transaction_executes_in_next_epoch_with_one_epoch_range() {
         .sui_node
         .with(|node| node.state().epoch_store_for_testing().epoch());
 
-    let gas_test_package_id = setup_test_package(&mut test_env).await;
+    let gas_test_package_id = test_env.setup_test_package(move_test_code_path()).await;
 
     let fund_tx = test_env
         .tx_builder(sender)
@@ -2825,7 +2804,7 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
         .sui_node
         .with(|node| node.state().epoch_store_for_testing().epoch());
 
-    let gas_test_package_id = setup_test_package(&mut test_env).await;
+    let gas_test_package_id = test_env.setup_test_package(move_test_code_path()).await;
 
     let fund_tx = test_env
         .tx_builder(sender)
