@@ -22,12 +22,6 @@ pub struct PendingCertificateStats {
     pub ready_time: Option<Instant>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum SchedulingSource {
-    MysticetiFastPath,
-    NonFastPath,
-}
-
 #[derive(Debug)]
 pub struct PendingCertificate {
     // Certified transaction to be executed.

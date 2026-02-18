@@ -15,7 +15,6 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
-use crate::execution_scheduler::SchedulingSource;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
@@ -232,10 +231,6 @@ mod batch_verification_tests;
 #[cfg(test)]
 #[path = "unit_tests/coin_deny_list_tests.rs"]
 mod coin_deny_list_tests;
-
-#[cfg(test)]
-#[path = "unit_tests/mysticeti_fastpath_execution_tests.rs"]
-mod mysticeti_fastpath_execution_tests;
 
 #[cfg(test)]
 #[path = "unit_tests/auth_unit_test_utils.rs"]
@@ -765,8 +760,6 @@ pub struct ExecutionEnv {
     /// The expected digest of the effects of the transaction, if executing from checkpoint or
     /// other sources where the effects are known in advance.
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
-    /// The source of the scheduling of the transaction.
-    pub scheduling_source: SchedulingSource,
     /// Status of the address funds withdraw scheduling of the transaction,
     /// including both address and object funds withdraws.
     pub funds_withdraw_status: FundsWithdrawStatus,
@@ -780,7 +773,6 @@ impl Default for ExecutionEnv {
         Self {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
-            scheduling_source: SchedulingSource::NonFastPath,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
         }
@@ -790,11 +782,6 @@ impl Default for ExecutionEnv {
 impl ExecutionEnv {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    pub fn with_scheduling_source(mut self, scheduling_source: SchedulingSource) -> Self {
-        self.scheduling_source = scheduling_source;
-        self
     }
 
     pub fn with_expected_effects_digest(
@@ -1405,7 +1392,7 @@ impl AuthorityState {
             self.execution_scheduler.enqueue(
                 vec![(
                     Schedulable::Transaction(transaction.clone()),
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                    ExecutionEnv::new(),
                 )],
                 epoch_store,
             );
@@ -1491,48 +1478,19 @@ impl AuthorityState {
             return ExecutionOutput::EpochEnded;
         }
 
-        let scheduling_source = execution_env.scheduling_source;
         let accumulator_version = execution_env.assigned_versions.accumulator_version;
-        let mysticeti_fp_outputs = if epoch_store.protocol_config().mysticeti_fastpath() {
-            tx_cache_reader.get_mysticeti_fastpath_outputs(tx_digest)
-        } else {
-            None
-        };
 
-        let (transaction_outputs, timings, execution_error_opt) = if let Some(outputs) =
-            mysticeti_fp_outputs
-        {
-            assert!(
-                !certificate.is_consensus_tx(),
-                "Mysticeti fastpath executed transactions cannot be consensus transactions"
-            );
-            // If this transaction is not scheduled from fastpath, it must be either
-            // from consensus or from checkpoint, i.e. it must be finalized.
-            // To avoid re-executing fastpath transactions, we check if the outputs are already
-            // in the mysticeti fastpath outputs cache. If so, we skip the execution and commit the transaction.
-            debug!(
-                ?tx_digest,
-                "Mysticeti fastpath certified transaction outputs found in cache, skipping execution and committing"
-            );
-            (outputs, None, None)
-        } else {
-            let (transaction_outputs, timings, execution_error_opt) = match self
-                .process_certificate(
-                    &tx_guard,
-                    &execution_guard,
-                    certificate,
-                    execution_env,
-                    epoch_store,
-                ) {
-                ExecutionOutput::Success(result) => result,
-                output => return output.unwrap_err(),
-            };
-            (
-                Arc::new(transaction_outputs),
-                Some(timings),
-                execution_error_opt,
-            )
+        let (transaction_outputs, timings, execution_error_opt) = match self.process_certificate(
+            &tx_guard,
+            &execution_guard,
+            certificate,
+            execution_env,
+            epoch_store,
+        ) {
+            ExecutionOutput::Success(result) => result,
+            output => return output.unwrap_err(),
         };
+        let transaction_outputs = Arc::new(transaction_outputs);
 
         fail_point!("crash");
 
@@ -1544,17 +1502,11 @@ impl AuthorityState {
             (execution_start_time.elapsed().as_micros() as f64) / 1000.0
         );
 
-        if scheduling_source == SchedulingSource::MysticetiFastPath {
-            self.get_cache_writer()
-                .write_fastpath_transaction_outputs(transaction_outputs);
-        } else {
-            let commit_result =
-                self.commit_certificate(certificate, transaction_outputs, epoch_store);
-            if let Err(err) = commit_result {
-                error!(?tx_digest, "Error committing transaction: {err}");
-                tx_guard.release();
-                return ExecutionOutput::Fatal(err);
-            }
+        let commit_result = self.commit_certificate(certificate, transaction_outputs, epoch_store);
+        if let Err(err) = commit_result {
+            error!(?tx_digest, "Error committing transaction: {err}");
+            tx_guard.release();
+            return ExecutionOutput::Fatal(err);
         }
 
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
@@ -1608,14 +1560,12 @@ impl AuthorityState {
         tx_guard.commit_tx();
 
         let elapsed = execution_start_time.elapsed();
-        if let Some(timings) = timings {
-            epoch_store.record_local_execution_time(
-                certificate.data().transaction_data(),
-                &effects,
-                timings,
-                elapsed,
-            );
-        }
+        epoch_store.record_local_execution_time(
+            certificate.data().transaction_data(),
+            &effects,
+            timings,
+            elapsed,
+        );
 
         let elapsed_us = elapsed.as_micros() as f64;
         if elapsed_us > 0.0 {

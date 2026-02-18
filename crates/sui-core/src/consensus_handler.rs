@@ -87,7 +87,7 @@ use crate::{
         reconfiguration::ReconfigState,
     },
     execution_cache::ObjectCacheRead,
-    execution_scheduler::{ExecutionScheduler, SchedulingSource},
+    execution_scheduler::ExecutionScheduler,
     post_consensus_tx_reorder::PostConsensusTxReorder,
     scoring_decision::update_low_scoring_authorities,
     traffic_controller::{TrafficController, policies::TrafficTally},
@@ -1306,11 +1306,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let mut schedulables = schedulables;
         schedulables.extend(randomness_schedulables);
-        self.execution_scheduler_sender.send(
-            schedulables,
-            assigned_versions,
-            SchedulingSource::NonFastPath,
-        );
+        self.execution_scheduler_sender
+            .send(schedulables, assigned_versions);
 
         self.send_end_of_publish_if_needed().await;
     }
@@ -3062,11 +3059,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 #[derive(Clone)]
 pub(crate) struct ExecutionSchedulerSender {
     // Using unbounded channel to avoid blocking consensus commit and transaction handler.
-    sender: monitored_mpsc::UnboundedSender<(
-        Vec<Schedulable>,
-        AssignedTxAndVersions,
-        SchedulingSource,
-    )>,
+    sender: monitored_mpsc::UnboundedSender<(Vec<Schedulable>, AssignedTxAndVersions)>,
 }
 
 impl ExecutionSchedulerSender {
@@ -3080,36 +3073,21 @@ impl ExecutionSchedulerSender {
     }
 
     pub(crate) fn new_for_testing(
-        sender: monitored_mpsc::UnboundedSender<(
-            Vec<Schedulable>,
-            AssignedTxAndVersions,
-            SchedulingSource,
-        )>,
+        sender: monitored_mpsc::UnboundedSender<(Vec<Schedulable>, AssignedTxAndVersions)>,
     ) -> Self {
         Self { sender }
     }
 
-    fn send(
-        &self,
-        transactions: Vec<Schedulable>,
-        assigned_versions: AssignedTxAndVersions,
-        scheduling_source: SchedulingSource,
-    ) {
-        let _ = self
-            .sender
-            .send((transactions, assigned_versions, scheduling_source));
+    fn send(&self, transactions: Vec<Schedulable>, assigned_versions: AssignedTxAndVersions) {
+        let _ = self.sender.send((transactions, assigned_versions));
     }
 
     async fn run(
-        mut recv: monitored_mpsc::UnboundedReceiver<(
-            Vec<Schedulable>,
-            AssignedTxAndVersions,
-            SchedulingSource,
-        )>,
+        mut recv: monitored_mpsc::UnboundedReceiver<(Vec<Schedulable>, AssignedTxAndVersions)>,
         execution_scheduler: Arc<ExecutionScheduler>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        while let Some((transactions, assigned_versions, scheduling_source)) = recv.recv().await {
+        while let Some((transactions, assigned_versions)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
             let assigned_versions = assigned_versions.into_map();
             let txns = transactions
@@ -3118,11 +3096,9 @@ impl ExecutionSchedulerSender {
                     let key = txn.key();
                     (
                         txn,
-                        ExecutionEnv::new()
-                            .with_scheduling_source(scheduling_source)
-                            .with_assigned_versions(
-                                assigned_versions.get(&key).cloned().unwrap_or_default(),
-                            ),
+                        ExecutionEnv::new().with_assigned_versions(
+                            assigned_versions.get(&key).cloned().unwrap_or_default(),
+                        ),
                     )
                 })
                 .collect();

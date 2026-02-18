@@ -39,7 +39,6 @@ use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_network::validator::server::SUI_TLS_SERVER_NAME;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
 use sui_core::storage::RestReadStore;
 use sui_json_rpc::bridge_api::BridgeReadApi;
@@ -772,11 +771,7 @@ impl SuiNode {
                     ),
                 );
             state
-                .try_execute_immediately(
-                    &transaction,
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-                    &epoch_store,
-                )
+                .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
                 .instrument(span)
                 .await
                 .unwrap();

@@ -36,11 +36,9 @@ use crate::consensus_handler::{
 };
 use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use crate::consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction};
-use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
 
-pub(crate) type CapturedTransactions =
-    Arc<Mutex<Vec<(Vec<Schedulable>, AssignedTxAndVersions, SchedulingSource)>>>;
+pub(crate) type CapturedTransactions = Arc<Mutex<Vec<(Vec<Schedulable>, AssignedTxAndVersions)>>>;
 
 pub struct TestConsensusCommit {
     pub transactions: Vec<ConsensusTransaction>,
@@ -354,7 +352,6 @@ where
     let captured_transactions = Arc::new(Mutex::new(Vec::<(
         Vec<Schedulable>,
         AssignedTxAndVersions,
-        SchedulingSource,
     )>::new()));
     let captured_tx_clone = captured_transactions.clone();
 
