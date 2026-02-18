@@ -54,11 +54,11 @@ A 30-day retention adds 1.8 TB on top, while a 90-day retention contributes up t
 | cp_sequence_numbers | 10 | 5 |
 | **TOTAL** | **755–842** | **2,440–3,181** |
 
-### Pipeline Categories
+### Pipeline categories
 
 The indexer pipelines are divided into two categories based on their data retention requirements:
 
-#### Unpruned Pipelines (Must index from genesis)
+#### Unpruned pipelines (must index from genesis)
 These pipelines contain foundational data that must be indexed from genesis (checkpoint 0):
 - `obj_versions.toml` - Object versions table containing complete object version to checkpoint sequence number mappings since genesis
 - `unpruned.toml` - Foundational reference data and smaller kv tables
@@ -67,7 +67,7 @@ These pipelines contain foundational data that must be indexed from genesis (che
 The GraphQL RPC service will only operate normally once unpruned pipelines have caught up to the network tip. Plan accordingly as these pipelines can take 10-14 days to fully backfill from genesis.
 :::
 
-#### Pruned Pipelines (Can start from recent checkpoint)
+#### Pruned pipelines (can start from recent checkpoint)
 These pipelines can be configured with a `first-checkpoint` parameter based on your retention requirements:
 - `events.toml`
 - `tx_affected_addresses.toml`
@@ -83,7 +83,7 @@ For pruned pipelines, calculate the `first-checkpoint` based on your retention p
 
 Run an indexer instance using this command for each of the configuration files:
 
-#### For unpruned pipelines (must start from genesis):
+#### For unpruned pipelines (must start from genesis)
 ```sh
 $ sui-indexer-alt indexer \
     --config <CONFIG_FILE> \
@@ -91,7 +91,7 @@ $ sui-indexer-alt indexer \
     --remote-store-url <REMOTE_STORE_URL>
 ```
 
-#### For pruned pipelines with retention period:
+#### For pruned pipelines with retention period
 ```sh
 $ sui-indexer-alt indexer \
     --config <CONFIG_FILE> \
@@ -100,14 +100,14 @@ $ sui-indexer-alt indexer \
     --first-checkpoint <CHECKPOINT_NUMBER>
 ```
 
-| CLI param            | Description                                                                                                                          |
+| **CLI param**            | **Description**                                                                                                                          |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `<CONFIG_FILE>`      | Path to indexer configuration file.                                                                                                  |
 | `<DATABASE_URL>`     | Postgres database connection string.                                                                                                 |
 | `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/guides/developer/accessing-data/custom-indexing-framework#data-sources). |
 | `<CHECKPOINT_NUMBER>`| (Optional) For pruned pipelines only - the checkpoint to start indexing from based on retention requirements.                        |
 
-#### Examples:
+#### Examples
 
 **Unpruned pipeline (from genesis):**
 ```sh
