@@ -4613,9 +4613,7 @@ impl ProtocolConfig {
     }
 
     pub fn apply_seeded_test_overrides(&mut self, seed: &[u8; 32]) {
-        if !self.feature_flags.randomize_checkpoint_tx_limit_in_tests
-            || !self.feature_flags.split_checkpoints_in_consensus_handler
-        {
+        if !self.feature_flags.randomize_checkpoint_tx_limit_in_tests {
             return;
         }
 
