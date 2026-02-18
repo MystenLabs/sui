@@ -512,6 +512,14 @@ impl PatternMatrix {
         })
     }
 
+    pub fn has_errors(&self) -> bool {
+        self.patterns.iter().any(|arm| {
+            arm.pats
+                .iter()
+                .any(|pat| matches!(pat.pat.value, TP::ErrorPat))
+        })
+    }
+
     /// Returns true if there is an arm made up entirely of wildcards / binders with no guard.
     pub fn has_default_arm(&self) -> bool {
         self.patterns

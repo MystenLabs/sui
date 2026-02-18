@@ -232,7 +232,10 @@ fn find_counterexample(
 ) -> bool {
     // If the matrix is only errors (or empty), it was all error or something else (like typing)
     // went wrong; no counterexample is required.
-    if !matrix.is_empty() && !matrix.patterns_empty() && matrix.all_errors() {
+    if !matrix.is_empty()
+        && !matrix.patterns_empty()
+        && (matrix.all_errors() || matrix.has_errors())
+    {
         debug_print!(context.debug().match_counterexample, (msg "errors"), ("matrix" => matrix; dbg));
         assert!(context.env().has_errors());
         return true;

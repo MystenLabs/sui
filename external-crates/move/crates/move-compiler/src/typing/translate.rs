@@ -2327,15 +2327,20 @@ fn match_arm(
         .collect();
 
     let ploc = pattern.loc;
-    let pattern = match_pattern(context, pattern, ref_mut, &rhs_binders);
+    let mut pattern = match_pattern(context, pattern, ref_mut, &rhs_binders);
 
-    subtype(
+    if subtype_opt(
         context,
         ploc,
         || "Invalid pattern",
         &pattern.ty,
         subject_type,
-    );
+    )
+    .is_none()
+    {
+        pattern.ty = context.error_type(ploc);
+        pattern.pat.value = T::UnannotatedPat_::ErrorPat;
+    }
 
     let binder_map: BTreeMap<N::Var, Type> = binders.clone().into_iter().collect();
     for (pat_var, guard_var) in guard_binders.clone() {
@@ -2349,17 +2354,24 @@ fn match_arm(
         context.declare_local(Mutability::Imm, guard_var, ty);
     }
 
-    let guard = guard.map(|guard| exp(context, guard));
+    let mut guard = guard.map(|guard| exp(context, guard));
 
-    if let Some(guard) = &guard {
-        let gloc = guard.exp.loc;
-        subtype(
+    if let Some(ref guard_exp) = guard {
+        let gloc = guard_exp.exp.loc;
+        if subtype_opt(
             context,
             gloc,
             || "Invalid guard condition",
-            &guard.ty,
+            &guard_exp.ty,
             &Type_::bool(gloc),
-        );
+        )
+        .is_none()
+        {
+            guard = Some(Box::new(T::exp(
+                context.error_type(gloc),
+                sp(gloc, T::UnannotatedExp_::UnresolvedError),
+            )));
+        }
     }
 
     let rhs = exp(context, rhs);

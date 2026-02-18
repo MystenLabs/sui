@@ -5,12 +5,6 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:10:12
-   │
-10 │     match (e) {
-   │            ^ Pattern 'E::Z { z: _ }' not covered
-
 error[E03019]: invalid pattern
    ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:11:30
    │
