@@ -247,7 +247,7 @@ impl VMDispatchTables {
     /// either:
     /// 1. The underlying identifiers were not found in the interner, or
     /// 2. the underlying package/module/function is not found.
-    pub(crate) fn try_resolve_function_for_external(
+    pub(super) fn try_resolve_function_for_external(
         &self,
         original_id: &ModuleId,
         function_name: &IdentStr,
@@ -270,7 +270,7 @@ impl VMDispatchTables {
     /// either:
     /// 1. The underlying identifiers were not found in the interner, or
     /// 2. the underlying package/module/type is not found.
-    pub(crate) fn try_resolve_type_for_external(
+    pub(super) fn try_resolve_type_for_external(
         &self,
         original_id: OriginalId,
         module_name: &IdentStr,

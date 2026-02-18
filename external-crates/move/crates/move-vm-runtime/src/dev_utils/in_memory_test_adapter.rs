@@ -71,10 +71,6 @@ impl InMemoryTestAdapter {
         self.runtime.vm_config()
     }
 
-    pub fn runtime(&self) -> &MoveRuntime {
-        &self.runtime
-    }
-
     /// Compute all of the transitive dependencies for a `root_package`, including itself.
     pub fn transitive_dependencies(
         &self,
