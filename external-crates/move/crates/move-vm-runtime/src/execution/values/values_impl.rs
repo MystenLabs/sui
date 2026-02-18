@@ -350,6 +350,19 @@ impl<T: Debug> MemBox<T> {
         Self(std::rc::Rc::new(std::cell::RefCell::new(t)))
     }
 
+    pub fn try_borrow(&self) -> PartialVMResult<std::cell::Ref<'_, T>> {
+        self.0.try_borrow().map_err(|err| {
+            partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "failed to borrow reference due to existing mutable borrow {:?}",
+                err
+            )
+        })
+    }
+
+    /// Panics if the RefCell is already mutably borrowed. Only use in Display/Debug
+    /// implementations and test code where PartialVMResult is not the return type.
+    /// Prefer `try_borrow()` in all production code paths.
     pub fn borrow(&self) -> std::cell::Ref<'_, T> {
         self.0.borrow()
     }
@@ -454,7 +467,7 @@ trait IndexRef {
 impl IndexRef for Box<(MemBox<Value>, usize)> {
     fn copy_element(&self) -> PartialVMResult<Value> {
         let (vec, ndx) = self.as_ref();
-        let opt_ = match vec.borrow().prim_vec_ref()? {
+        let opt_ = match vec.try_borrow()?.prim_vec_ref()? {
             PrimVec::VecU8(items) => items.get(*ndx).copied().map(Value::U8),
             PrimVec::VecU16(items) => items.get(*ndx).copied().map(Value::U16),
             PrimVec::VecU32(items) => items.get(*ndx).copied().map(Value::U32),
@@ -729,11 +742,15 @@ impl Value {
                 )?),
             (Self::Vec(v1), Self::Vec(v2)) => Ok(v1.len() == v2.len()
                 && v1.iter().zip(v2.iter()).try_fold(true, |acc, (a, b)| {
-                    a.borrow().equals(&b.borrow()).map(|eq| acc && eq)
+                    let a_ref = a.try_borrow()?;
+                    let b_ref = b.try_borrow()?;
+                    a_ref.equals(&b_ref).map(|eq| acc && eq)
                 })?),
             (Self::Struct(v1), Self::Struct(v2)) => Ok(v1.len() == v2.len()
                 && v1.iter().zip(v2.iter()).try_fold(true, |acc, (a, b)| {
-                    a.borrow().equals(&b.borrow()).map(|eq| acc && eq)
+                    let a_ref = a.try_borrow()?;
+                    let b_ref = b.try_borrow()?;
+                    a_ref.equals(&b_ref).map(|eq| acc && eq)
                 })?),
             (Self::Variant(tv1), Self::Variant(tv2)) => {
                 let (tag1, v1) = tv1.as_ref();
@@ -741,7 +758,9 @@ impl Value {
                 Ok(tag1 == tag2
                     && v1.len() == v2.len()
                     && v1.iter().zip(v2.iter()).try_fold(true, |acc, (a, b)| {
-                        a.borrow().equals(&b.borrow()).map(|eq| acc && eq)
+                        let a_ref = a.try_borrow()?;
+                        let b_ref = b.try_borrow()?;
+                        a_ref.equals(&b_ref).map(|eq| acc && eq)
                     })?)
             }
             _ => Err(partial_vm_error!(
@@ -763,14 +782,16 @@ impl Reference {
                 Ok(true)
             }
             (Reference::Value(mem_box_1), Reference::Value(mem_box_2)) => {
-                mem_box_1.borrow().equals(&mem_box_2.borrow())
+                let ref_1 = mem_box_1.try_borrow()?;
+                let ref_2 = mem_box_2.try_borrow()?;
+                ref_1.equals(&ref_2)
             }
             (Reference::Indexed(ref_1), Reference::Indexed(ref_2)) => {
                 let (vec_1, ndx_1) = ref_1.as_ref();
                 let (vec_2, ndx_2) = ref_2.as_ref();
                 match_prim_vec_pair!(
-                    vec_1.borrow().prim_vec_ref()?,
-                    vec_2.borrow().prim_vec_ref()?,
+                    vec_1.try_borrow()?.prim_vec_ref()?,
+                    vec_2.try_borrow()?.prim_vec_ref()?,
                     items1,
                     items2,
                     items1.safe_get(*ndx_1)? == items2.safe_get(*ndx_2)?,
@@ -784,9 +805,9 @@ impl Reference {
             }
             (Reference::Value(mem_box), Reference::Indexed(entry))
             | (Reference::Indexed(entry), Reference::Value(mem_box)) => {
-                let box_value = &*mem_box.borrow();
+                let box_value = &*mem_box.try_borrow()?;
                 let (vec, ndx) = entry.as_ref();
-                let Value::PrimVec(vec) = &*vec.borrow() else {
+                let Value::PrimVec(vec) = &*vec.try_borrow()? else {
                     return Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
                         "invalid indexed reference: {:?}",
@@ -827,7 +848,9 @@ impl FixedSizeVec {
             ));
         }
         for (a, b) in self.iter().zip(other.iter()) {
-            if !a.borrow().equals(&b.borrow())? {
+            let a_ref = a.try_borrow()?;
+            let b_ref = b.try_borrow()?;
+            if !a_ref.equals(&b_ref)? {
                 return Ok(false);
             }
         }
@@ -843,7 +866,7 @@ impl FixedSizeVec {
 impl Reference {
     pub fn read_ref(self) -> PartialVMResult<Value> {
         match self {
-            Reference::Value(mem_box) => Ok(mem_box.borrow().copy_value()),
+            Reference::Value(mem_box) => Ok(mem_box.try_borrow()?.copy_value()),
             Reference::Indexed(index_ref) => index_ref.copy_element(),
         }
     }
@@ -851,7 +874,7 @@ impl Reference {
 
 impl StructRef {
     pub fn read_ref(self) -> PartialVMResult<Value> {
-        Ok(self.0.borrow().copy_value())
+        Ok(self.0.try_borrow()?.copy_value())
     }
 }
 
@@ -926,7 +949,7 @@ impl Reference {
 impl StructRef {
     pub fn borrow_field(&self, index: usize) -> PartialVMResult<Value> {
         // Borrow the inner Value from the MemBox.
-        let container = self.0.borrow();
+        let container = self.0.try_borrow()?;
         match &*container {
             // If the contained value is a Struct (i.e. a FixedSizeVec),
             // index into it to obtain the desired field.
@@ -971,12 +994,12 @@ impl StructRef {
 impl VariantRef {
     /// Returns the variant tag if the contained value is a variant.
     pub fn get_tag(&self) -> PartialVMResult<VariantTag> {
-        Ok(*self.0.borrow().variant_ref()?.as_ref().0)
+        Ok(*self.0.try_borrow()?.variant_ref()?.as_ref().0)
     }
 
     /// Checks that the variant tag matches the expected tag.
     pub fn check_tag(&self, expected_tag: VariantTag) -> PartialVMResult<()> {
-        let tag = *self.0.borrow().variant_ref()?.as_ref().0;
+        let tag = *self.0.try_borrow()?.variant_ref()?.as_ref().0;
         if tag == expected_tag {
             Ok(())
         } else {
@@ -992,7 +1015,7 @@ impl VariantRef {
     /// Unpacks the variant and returns a Vec of field references (in order).
     /// Each field is returned as a Value::Reference wrapping a cloned pointer.
     pub fn unpack_variant(&self) -> PartialVMResult<Vec<Value>> {
-        let value_ref = self.0.borrow();
+        let value_ref = self.0.try_borrow()?;
         if let Value::Variant(boxed_variant) = &*value_ref {
             let (_tag, fixed_vec) = boxed_variant.as_ref();
             // fixed_vec is a FixedSizeVec; we iterate over its fields.
@@ -1016,7 +1039,7 @@ impl VectorRef {
     /// The result is a `PartialVmResult<ValueImpl>` containing the element as a `Reference`.
     pub fn borrow_elem(&self, index: usize, type_param: &Type) -> PartialVMResult<Value> {
         // Borrow the container inside the MemBox.
-        let value = &*self.0.borrow();
+        let value = &*self.0.try_borrow()?;
         check_elem_layout(type_param, value)?;
         match value {
             // For a Vec container, extract the element.
@@ -1071,7 +1094,7 @@ impl SignerRef {
     /// Borrows the signer’s field (at index 0) as a reference.
     pub fn borrow_signer(&self) -> PartialVMResult<Value> {
         // Borrow the inner value from the MemBox.
-        let container = self.0.borrow();
+        let container = self.0.try_borrow()?;
         match &*container {
             // Expect a struct, i.e. a FixedSizeVec of fields.
             Value::Struct(fixed_vec) => {
@@ -1085,7 +1108,7 @@ impl SignerRef {
                 // Retrieve the 0th element.
                 let field = fixed_vec.safe_get(0)?;
                 // Check that the field is an address.
-                let Value::Address(_) = &*field.borrow() else {
+                let Value::Address(_) = &*field.try_borrow()? else {
                     return Err(partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "Signer struct field must be an address"
@@ -1243,7 +1266,7 @@ impl VMValueCast<StructRef> for Value {
                 match r {
                     // For a direct reference, check the inner value.
                     Reference::Value(mem_box) => {
-                        let inner = mem_box.borrow();
+                        let inner = mem_box.try_borrow()?;
                         if let Value::Struct(_) = &*inner {
                             // The reference holds a struct; return a StructRef by cloning the pointer.
                             Ok(StructRef(mem_box.ptr_clone()))
@@ -1279,7 +1302,7 @@ impl VMValueCast<VariantRef> for Value {
                 match r {
                     // For a direct reference, check the inner value.
                     Reference::Value(mem_box) => {
-                        let inner = mem_box.borrow();
+                        let inner = mem_box.try_borrow()?;
                         if let Value::Variant(_) = &*inner {
                             // The reference holds a struct; return a StructRef by cloning the pointer.
                             Ok(VariantRef(mem_box.ptr_clone()))
@@ -1315,7 +1338,7 @@ impl VMValueCast<SignerRef> for Value {
                 match r {
                     // For a direct reference, check the inner value.
                     Reference::Value(mem_box) => {
-                        let inner = mem_box.borrow();
+                        let inner = mem_box.try_borrow()?;
                         if let Value::Struct(struct_) = &*inner {
                             if struct_.len() != 1 {
                                 return Err(partial_vm_error!(
@@ -1359,7 +1382,7 @@ impl VMValueCast<VectorRef> for Value {
             // A reference may also wrap a vector-like value.
             Value::Reference(r) => match r {
                 Reference::Value(mem_box) => {
-                    let inner = mem_box.borrow();
+                    let inner = mem_box.try_borrow()?;
                     match &*inner {
                         Value::Vec(_) | Value::PrimVec(_) => Ok(VectorRef(mem_box.ptr_clone())),
                         _ => Err(partial_vm_error!(
@@ -1979,7 +2002,7 @@ impl std::ops::Deref for VecU8Ref<'_> {
 
 impl VectorRef {
     pub fn len(&self, type_param: &Type) -> PartialVMResult<Value> {
-        let value = &*self.0.borrow();
+        let value = &*self.0.try_borrow()?;
         check_elem_layout(type_param, value)?;
         value
             .vector_ref()
@@ -2010,7 +2033,7 @@ impl VectorRef {
     }
 
     pub fn as_bytes_ref(&self) -> PartialVMResult<std::cell::Ref<'_, Vec<u8>>> {
-        let borrowed = self.0.borrow();
+        let borrowed = self.0.try_borrow()?;
         match &*borrowed {
             Value::PrimVec(PrimVec::VecU8(_)) => {
                 #[allow(clippy::unreachable)]
@@ -2281,11 +2304,11 @@ impl GlobalValueImpl {
                         "global value is not empty"
                     ));
                 }
-                if !matches!(&*container.borrow(), Value::Struct(_)) {
+                if !matches!(&*container.try_borrow()?, Value::Struct(_)) {
                     return Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
                         "global value is not a struct: {:#?}",
-                        container.borrow()
+                        container.try_borrow()?
                     ));
                 }
                 container
@@ -2315,11 +2338,11 @@ impl GlobalValueImpl {
         match self {
             Self::Empty => Err(partial_vm_error!(MISSING_DATA)),
             GlobalValueImpl::Filled(container) => {
-                if !matches!(&*container.borrow(), Value::Struct(_)) {
+                if !matches!(&*container.try_borrow()?, Value::Struct(_)) {
                     return Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
                         "borrow_global: global value is not a struct: {:#?}",
-                        container.borrow()
+                        container.try_borrow()?
                     ));
                 }
                 Ok(Value::Reference(Reference::Value(container.ptr_clone())))
@@ -2638,7 +2661,8 @@ pub mod debug {
 
     #[allow(clippy::borrowed_box)]
     fn print_box_value_impl<B: Write>(buf: &mut B, val: &MemBox<Value>) -> PartialVMResult<()> {
-        print_value_impl(buf, &val.borrow())
+        let val_ref = val.try_borrow()?;
+        print_value_impl(buf, &val_ref)
     }
 
     fn print_list<'a, B, I, X, F>(
@@ -2674,7 +2698,8 @@ pub mod debug {
         // REVIEW: The number of spaces in the indent is currently hard coded.
         for (idx, val) in stack_frame.iter().enumerate() {
             debug_write!(buf, "            [{}] ", idx);
-            print_value_impl(buf, &val.borrow())?;
+            let val_ref = val.try_borrow()?;
+            print_value_impl(buf, &val_ref)?;
             debug_writeln!(buf);
         }
         Ok(())
@@ -3243,12 +3268,14 @@ impl Reference {
     fn visit_impl(&self, visitor: &mut impl ValueVisitor, depth: usize) -> PartialVMResult<()> {
         if visitor.visit_ref(depth)? {
             match self {
-                Reference::Value(mem_box) => mem_box.borrow().visit_impl(visitor, depth)?,
+                Reference::Value(mem_box) => mem_box.try_borrow()?.visit_impl(visitor, depth)?,
                 Reference::Indexed(entry) => {
                     let (vec, ndx) = entry.as_ref();
-                    vec.borrow()
-                        .prim_vec_ref()?
-                        .visit_indexed(*ndx, visitor, depth.safe_add(1)?)?
+                    vec.try_borrow()?.prim_vec_ref()?.visit_indexed(
+                        *ndx,
+                        visitor,
+                        depth.safe_add(1)?,
+                    )?
                 }
             }
         }
@@ -3275,7 +3302,7 @@ impl Value {
             Value::Vec(items) => {
                 if visitor.visit_vec(depth, items.len())? {
                     for item in items {
-                        item.borrow().visit_impl(visitor, depth.safe_add(1)?)?;
+                        item.try_borrow()?.visit_impl(visitor, depth.safe_add(1)?)?;
                     }
                 }
                 Ok(())
@@ -3293,7 +3320,7 @@ impl Value {
             Value::Struct(struct_) => {
                 if visitor.visit_struct(depth, struct_.len())? {
                     for item in struct_.iter() {
-                        item.borrow().visit_impl(visitor, depth.safe_add(1)?)?;
+                        item.try_borrow()?.visit_impl(visitor, depth.safe_add(1)?)?;
                     }
                 }
                 Ok(())
@@ -3302,7 +3329,7 @@ impl Value {
                 let (_tag, fields) = entry.as_ref();
                 if visitor.visit_struct(depth, fields.len())? {
                     for item in fields.iter() {
-                        item.borrow().visit_impl(visitor, depth.safe_add(1)?)?;
+                        item.try_borrow()?.visit_impl(visitor, depth.safe_add(1)?)?;
                     }
                 }
                 Ok(())
@@ -3319,7 +3346,7 @@ impl ValueView for Value {
 
 impl ValueView for MemBox<Value> {
     fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
-        self.0.borrow().visit_impl(visitor, 0)
+        self.try_borrow()?.visit_impl(visitor, 0)
     }
 }
 
@@ -3327,7 +3354,7 @@ impl ValueView for Struct {
     fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
         if visitor.visit_struct(0, self.0.len())? {
             for val in self.0.iter() {
-                val.borrow().visit_impl(visitor, 1)?;
+                val.try_borrow()?.visit_impl(visitor, 1)?;
             }
         }
         Ok(())
@@ -3366,7 +3393,7 @@ macro_rules! impl_container_ref_views {
         $(
             impl ValueView for $type_name {
                 fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
-                    self.0.borrow().visit_impl(visitor, 0)
+                    self.0.try_borrow()?.visit_impl(visitor, 0)
                 }
             }
         )+
@@ -3406,7 +3433,7 @@ impl Vector {
         impl ValueView for ElemView<'_> {
             fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 match &self.container {
-                    Value::Vec(v) => v.safe_get(self.ndx)?.borrow().visit(visitor),
+                    Value::Vec(v) => v.safe_get(self.ndx)?.try_borrow()?.visit(visitor),
                     Value::PrimVec(v) => v.visit_indexed(self.ndx, visitor, 0),
                     _ => Err(partial_vm_error!(
                         UNREACHABLE,
@@ -3435,10 +3462,10 @@ impl Reference {
         impl<'b> ValueView for ValueBehindRef<'b> {
             fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
                 match self.0 {
-                    Reference::Value(mem_box) => mem_box.borrow().visit_impl(visitor, 0),
+                    Reference::Value(mem_box) => mem_box.try_borrow()?.visit_impl(visitor, 0),
                     Reference::Indexed(entry) => {
                         let (vec, ndx) = entry.as_ref();
-                        let Value::PrimVec(prim_vec) = &*vec.borrow() else {
+                        let Value::PrimVec(prim_vec) = &*vec.try_borrow()? else {
                             return Err(partial_vm_error!(
                                 UNREACHABLE,
                                 "Expected prim vec for indexed reference, got {:?}",
@@ -3464,16 +3491,17 @@ impl GlobalValue {
 
         impl<'b> ValueView for Wrapper<'b> {
             fn visit(&self, visitor: &mut impl ValueVisitor) -> PartialVMResult<()> {
-                let Value::Struct(struct_) = &*self.0.borrow() else {
+                let borrowed = self.0.try_borrow()?;
+                let Value::Struct(struct_) = &*borrowed else {
                     return Err(partial_vm_error!(
                         UNREACHABLE,
                         "Expected a struct value for global value, got {:?}",
-                        self.0.borrow()
+                        borrowed
                     ));
                 };
                 if visitor.visit_struct(0, struct_.len())? {
                     for val in struct_.iter() {
-                        val.borrow().visit_impl(visitor, 1)?;
+                        val.try_borrow()?.visit_impl(visitor, 1)?;
                     }
                 }
                 Ok(())
@@ -3646,7 +3674,7 @@ impl Value {
                 let field_layouts = variants.safe_get(tag as usize)?;
                 let mut fields = vec![];
                 for (v, field_layout) in values.iter().zip(field_layouts) {
-                    fields.push(v.borrow().as_move_value(field_layout)?);
+                    fields.push(v.try_borrow()?.as_move_value(field_layout)?);
                 }
                 RuntimeValue::Variant(RuntimeVariant { tag, fields })
             }
@@ -3655,7 +3683,7 @@ impl Value {
             (L::Struct(struct_layout), Value::Struct(values)) => {
                 let mut fields = vec![];
                 for (v, field_layout) in values.iter().zip(struct_layout.fields().iter()) {
-                    fields.push(v.borrow().as_move_value(field_layout)?);
+                    fields.push(v.try_borrow()?.as_move_value(field_layout)?);
                 }
                 RuntimeValue::Struct(RuntimeStruct::new(fields))
             }
@@ -3664,7 +3692,7 @@ impl Value {
             (L::Vector(inner_layout), Value::Vec(values)) => RuntimeValue::Vector(
                 values
                     .iter()
-                    .map(|v| v.borrow().as_move_value(inner_layout.as_ref()))
+                    .map(|v| v.try_borrow()?.as_move_value(inner_layout.as_ref()))
                     .collect::<PartialVMResult<_>>()?,
             ),
             (L::Vector(inner_layout), Value::PrimVec(values)) => {
@@ -3720,7 +3748,7 @@ impl Value {
                         values
                     ));
                 }
-                match &*values.safe_get(0)?.borrow() {
+                match &*values.safe_get(0)?.try_borrow()? {
                     Value::Address(a) => RuntimeValue::Signer(**a),
                     v => {
                         return Err(partial_vm_error!(

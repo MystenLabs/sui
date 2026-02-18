@@ -1224,16 +1224,7 @@ pub(crate) fn flatten_and_renumber_input_bytcode_and_jumptables(
             )
         })?;
 
-        current_offset = current_offset
-            .checked_add(bytecode_len_u16)
-            .ok_or_else(|| {
-                partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Bytecode offset overflow: {} + {} exceeds u16::MAX",
-                    current_offset,
-                    bytecode_len_u16
-                )
-            })?;
+        current_offset = current_offset.safe_add(bytecode_len_u16)?;
 
         concatenated_bytecode.extend_from_slice(bytecodes);
     }

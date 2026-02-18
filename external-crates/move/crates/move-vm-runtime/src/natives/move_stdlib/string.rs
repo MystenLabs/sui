@@ -198,17 +198,15 @@ fn native_index_of(
     let s_arg = pop_arg!(args, VectorRef);
     let s_ref = s_arg.as_bytes_ref()?;
     let s_str = unsafe { std::str::from_utf8_unchecked(s_ref.as_slice()) };
+    // Charge search fee upfront based on haystack length (worst-case cost)
+    native_charge_gas_early_exit!(
+        context,
+        gas_params.per_byte_searched * NumBytes::new(s_str.len() as u64)
+    );
     let pos = match s_str.find(r_str) {
         Some(size) => size,
         None => s_str.len(),
     };
-    // TODO(Gas): What is the algorithm used for the search?
-    //            Ideally it should be something like KMP with O(n) time complexity...
-    // Charge search fee
-    native_charge_gas_early_exit!(
-        context,
-        gas_params.per_byte_searched * NumBytes::new(pos as u64)
-    );
     NativeResult::map_partial_vm_result_one(context.gas_used(), Ok(Value::u64(pos as u64)))
 }
 
