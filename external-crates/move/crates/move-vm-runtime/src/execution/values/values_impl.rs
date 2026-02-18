@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::arena::{Arena, ArenaVec},
+    cache::arena::{ArenaBuilder, ArenaVec},
     jit::execution::ast::Type,
     shared::{
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
@@ -540,7 +540,10 @@ impl Reference {
 
 impl Value {
     /// Allocates the constant in the provided arena
-    pub(crate) fn into_constant_value(self, arena: &Arena) -> PartialVMResult<ConstantValue> {
+    pub(crate) fn into_constant_value(
+        self,
+        arena: &ArenaBuilder,
+    ) -> PartialVMResult<ConstantValue> {
         macro_rules! alloc_vec {
             ($values:expr) => {
                 arena.alloc_vec($values.into_iter())?

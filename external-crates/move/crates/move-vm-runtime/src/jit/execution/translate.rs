@@ -4,7 +4,7 @@
 
 use crate::{
     cache::{
-        arena::{Arena, ArenaBox, ArenaVec},
+        arena::{ArenaBox, ArenaBuilder, ArenaVec},
         identifier_interner::{IdentifierInterner, IdentifierKey},
     },
     dbg_println,
@@ -55,7 +55,7 @@ struct PackageContext<'borrows> {
     pub loaded_modules: IndexMap<IdentifierKey, Module>,
 
     // NB: All things except for types are allocated into this arena.
-    pub package_arena: Arena,
+    pub package_arena: ArenaBuilder,
 
     pub vtable_funs: DefinitionMap<VMPointer<Function>>,
     pub vtable_types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
@@ -215,7 +215,7 @@ pub fn package(
         version_id,
         original_id,
         loaded_modules: IndexMap::new(),
-        package_arena: Arena::new_bounded(),
+        package_arena: ArenaBuilder::new_bounded(),
         vtable_funs: DefinitionMap::empty(),
         vtable_types: DefinitionMap::empty(),
         type_origin_table,
@@ -241,7 +241,7 @@ pub fn package(
         version_id,
         original_id,
         loaded_modules,
-        package_arena,
+        package_arena: package_arena.finish(),
         vtable,
     })
 }
