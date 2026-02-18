@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod cargo_runner;
-pub mod extensions;
 pub mod test_reporter;
 pub mod test_runner;
 pub mod vm_test_setup;

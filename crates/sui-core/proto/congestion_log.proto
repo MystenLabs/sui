@@ -1,0 +1,26 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+package sui.logs;
+
+message CongestionCommitLog {
+  uint64 epoch = 1;
+  uint64 round = 2;
+  uint64 timestamp_ms = 3;
+  uint64 commit_budget = 4;
+  bool for_randomness = 5;
+  repeated ObjectCost final_object_execution_costs = 6;
+  repeated TransactionCostEntry transaction_entries = 7;
+}
+
+message ObjectCost {
+  bytes object_id = 1;
+  uint64 cost = 2;
+}
+
+message TransactionCostEntry {
+  bytes tx_digest = 1;
+  uint64 start_cost = 2;
+  uint64 end_cost = 3;
+}

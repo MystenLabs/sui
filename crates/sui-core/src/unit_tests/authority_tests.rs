@@ -6011,6 +6011,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
             [(shared_obj_0_id, 198_000)],
             execution_time_params,
             false,
+            false,
         ))
     });
 
@@ -6283,6 +6284,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         Some(SharedObjectCongestionTracker::new(
             [(shared_obj_0_id, 10_000_000)],
             execution_time_params,
+            false,
             false,
         ))
     });

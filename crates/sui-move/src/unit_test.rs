@@ -7,12 +7,9 @@ use move_cli::base::{
     test::{self, UnitTestResult},
 };
 use move_package_alt_compilation::build_config::BuildConfig;
-use move_unit_test::{
-    UnitTestingConfig, extensions::set_extension_hook, vm_test_setup::VMTestSetup,
-};
+use move_unit_test::{UnitTestingConfig, vm_test_setup::VMTestSetup};
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::natives::extensions::NativeContextExtensions;
-use once_cell::sync::Lazy;
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -96,16 +93,6 @@ impl Test {
     }
 }
 
-// Create a separate test store per-thread.
-thread_local! {
-    static TEST_STORE_INNER: RefCell<InMemoryStorage> = RefCell::new(InMemoryStorage::default());
-}
-
-static TEST_STORE: Lazy<InMemoryTestStore> = Lazy::new(|| InMemoryTestStore(&TEST_STORE_INNER));
-
-static SET_EXTENSION_HOOK: Lazy<()> =
-    Lazy::new(|| set_extension_hook(Box::new(new_testing_object_and_natives_cost_runtime)));
-
 /// This function returns a result of UnitTestResult. The outer result indicates whether it
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub async fn run_move_unit_tests(
@@ -115,9 +102,6 @@ pub async fn run_move_unit_tests(
     compute_coverage: bool,
     save_disassembly: bool,
 ) -> anyhow::Result<UnitTestResult> {
-    // bind the extension hook if it has not yet been done
-    Lazy::force(&SET_EXTENSION_HOOK);
-
     let config = config.unwrap_or_else(|| {
         UnitTestingConfig::default_with_bound(Some(*MAX_UNIT_TEST_INSTRUCTIONS))
     });
@@ -144,39 +128,6 @@ pub async fn run_move_unit_tests(
         }
         test_result
     })
-}
-
-fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions) {
-    // Use a throwaway metrics registry for testing.
-    let registry = prometheus::Registry::new();
-    let metrics = Arc::new(LimitsMetrics::new(&registry));
-    let store = Lazy::force(&TEST_STORE);
-    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-
-    ext.add(ObjectRuntime::new(
-        store,
-        BTreeMap::new(),
-        false,
-        Box::leak(Box::new(ProtocolConfig::get_for_max_version_UNSAFE())), // leak for testing
-        metrics,
-        0, // epoch id
-    ));
-    ext.add(NativesCostTable::from_protocol_config(&protocol_config));
-    let tx_context = TxContext::new_from_components(
-        &SuiAddress::ZERO,
-        &TransactionDigest::default(),
-        &0,
-        0,
-        0,
-        0,
-        0,
-        None,
-        &protocol_config,
-    );
-    ext.add(TransactionContext::new_for_testing(Rc::new(RefCell::new(
-        tx_context,
-    ))));
-    ext.add(store);
 }
 
 pub struct SuiVMTestSetup {
@@ -212,6 +163,7 @@ impl SuiVMTestSetup {
 
 impl VMTestSetup for SuiVMTestSetup {
     type Meter<'a> = SuiGasMeter<SuiGasStatusTestWrapper>;
+    type ExtensionsBuilder<'a> = InMemoryTestStore;
 
     fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a> {
         SuiGasMeter(SuiGasStatusTestWrapper(
@@ -239,6 +191,48 @@ impl VMTestSetup for SuiVMTestSetup {
 
     fn native_function_table(&self) -> move_vm_runtime::natives::functions::NativeFunctionTable {
         self.native_function_table.clone()
+    }
+
+    fn new_extensions_builder(&self) -> InMemoryTestStore {
+        InMemoryTestStore(RefCell::new(InMemoryStorage::default()))
+    }
+
+    fn new_native_context_extensions<'ext>(
+        &self,
+        store: &'ext InMemoryTestStore,
+    ) -> NativeContextExtensions<'ext> {
+        let mut ext = NativeContextExtensions::default();
+        // Use a throwaway metrics registry for testing.
+        let registry = prometheus::Registry::new();
+        let metrics = Arc::new(LimitsMetrics::new(&registry));
+
+        ext.add(ObjectRuntime::new(
+            store,
+            BTreeMap::new(),
+            false,
+            Box::leak(Box::new(ProtocolConfig::get_for_max_version_UNSAFE())), // leak for testing
+            metrics,
+            0, // epoch id
+        ));
+        ext.add(NativesCostTable::from_protocol_config(
+            &self.protocol_config,
+        ));
+        let tx_context = TxContext::new_from_components(
+            &SuiAddress::ZERO,
+            &TransactionDigest::default(),
+            &0,
+            0,
+            0,
+            0,
+            0,
+            None,
+            &self.protocol_config,
+        );
+        ext.add(TransactionContext::new_for_testing(Rc::new(RefCell::new(
+            tx_context,
+        ))));
+        ext.add(store);
+        ext
     }
 }
 

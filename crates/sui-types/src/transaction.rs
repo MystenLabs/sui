@@ -1548,6 +1548,42 @@ impl TransactionKind {
             })
     }
 
+    /// If this is an accumulator barrier settlement transaction, returns its
+    /// `AccumulatorSettlement` transaction key by extracting epoch and
+    /// checkpoint_height from the prologue call arguments.
+    pub fn accumulator_barrier_settlement_key(&self) -> Option<TransactionKey> {
+        let TransactionKind::ProgrammableSystemTransaction(pt) = self else {
+            return None;
+        };
+        let has_mutable_acc_root = pt.inputs.iter().any(|input| {
+            matches!(
+                input,
+                CallArg::Object(ObjectArg::SharedObject {
+                    id,
+                    mutability: SharedObjectMutability::Mutable,
+                    ..
+                }) if *id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+            )
+        });
+        if !has_mutable_acc_root {
+            return None;
+        }
+        // The prologue embeds epoch as Input(1) and checkpoint_height as Input(2),
+        // both as BCS-encoded u64 pure values.
+        let epoch = pt.inputs.get(1).and_then(|arg| match arg {
+            CallArg::Pure(bytes) => bcs::from_bytes::<u64>(bytes).ok(),
+            _ => None,
+        })?;
+        let checkpoint_height = pt.inputs.get(2).and_then(|arg| match arg {
+            CallArg::Pure(bytes) => bcs::from_bytes::<u64>(bytes).ok(),
+            _ => None,
+        })?;
+        Some(TransactionKey::AccumulatorSettlement(
+            epoch,
+            checkpoint_height,
+        ))
+    }
+
     /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
     /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
     /// directly.

@@ -36,6 +36,7 @@ use tonic::transport::ClientTlsConfig;
 
 use crate::CheckpointData;
 use crate::KeyValueStoreReader;
+use crate::ProtocolConfigData;
 use crate::TransactionData;
 use crate::TransactionEventsData;
 use crate::Watermark;
@@ -54,6 +55,13 @@ use crate::bigtable::proto::bigtable::v2::row_filter::Chain;
 use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::tables;
+
+const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
+
+/// Default number of gRPC channels in the pool. Each channel is an independent HTTP/2
+/// connection, allowing concurrent RPCs to spread across multiple TCP sockets instead
+/// of multiplexing on a single one. Matches the Google java-bigtable client default.
+const DEFAULT_CHANNEL_POOL_SIZE: usize = 10;
 
 /// Error returned when a batch write has per-entry failures.
 /// Contains the keys and error details for each failed mutation.
@@ -118,10 +126,15 @@ impl BigTableClient {
         project_id: Option<String>,
         is_read_only: bool,
         timeout: Option<Duration>,
+        max_decoding_message_size: Option<usize>,
         client_name: String,
         registry: Option<&Registry>,
         app_profile_id: Option<String>,
+        channel_pool_size: Option<usize>,
     ) -> Result<Self> {
+        let pool_size = channel_pool_size
+            .unwrap_or(DEFAULT_CHANNEL_POOL_SIZE)
+            .max(1);
         let policy = if is_read_only {
             "https://www.googleapis.com/auth/bigtable.data.readonly"
         } else {
@@ -143,15 +156,31 @@ impl BigTableClient {
             None => token_provider.project_id().await?.to_string(),
         };
         let table_prefix = format!("projects/{}/instances/{}/tables/", project_id, instance_id);
+        let channel = if pool_size > 1 {
+            let (channel, tx) = Channel::balance_channel::<usize>(64);
+            for i in 0..pool_size {
+                tx.try_send(tonic::transport::channel::Change::Insert(
+                    i,
+                    endpoint.clone(),
+                ))
+                .expect("channel balancer dropped");
+            }
+            channel
+        } else {
+            endpoint.connect_lazy()
+        };
         let auth_channel = AuthChannel {
-            channel: endpoint.connect_lazy(),
+            channel,
             policy: policy.to_string(),
             token_provider: Some(token_provider),
             token: Arc::new(RwLock::new(None)),
         };
+        let client = BigtableInternalClient::new(auth_channel).max_decoding_message_size(
+            max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
+        );
         Ok(Self {
             table_prefix,
-            client: BigtableInternalClient::new(auth_channel),
+            client,
             client_name,
             metrics: registry.map(KvMetrics::new),
             app_profile_id,
@@ -247,7 +276,7 @@ impl BigTableClient {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
-        let mut response = self.client.mutate_rows(request).await?.into_inner();
+        let mut response = self.client.clone().mutate_rows(request).await?.into_inner();
         let mut failed_keys: Vec<MutationError> = Vec::new();
 
         while let Some(part) = response.message().await? {
@@ -330,7 +359,7 @@ impl BigTableClient {
             request.app_profile_id = app_profile_id.clone();
         }
         let mut result = vec![];
-        let mut response = self.client.read_rows(request).await?.into_inner();
+        let mut response = self.client.clone().read_rows(request).await?.into_inner();
 
         let mut row_key: Option<Bytes> = None;
         let mut row = vec![];
@@ -692,6 +721,21 @@ impl KeyValueStoreReader for BigTableClient {
             .pop()
         {
             Some((_, row)) => Ok(Some(tables::epochs::decode(&row)?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn get_protocol_configs(
+        &mut self,
+        protocol_version: u64,
+    ) -> Result<Option<ProtocolConfigData>> {
+        let key = tables::protocol_configs::encode_key(protocol_version);
+        match self
+            .multi_get(tables::protocol_configs::NAME, vec![key], None)
+            .await?
+            .pop()
+        {
+            Some((_, row)) => Ok(Some(tables::protocol_configs::decode(&row)?)),
             None => Ok(None),
         }
     }

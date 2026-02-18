@@ -25,11 +25,10 @@ export default function EffortBox(props) {
 
   const [time, effort] = timeAndEffort(props.effort);
   return (
-    <Admonition
+    <Admonition type="info"
       title="Expected effort"
       icon="🧠"
       className="!my-12 bg-sui-ghost-white border-sui-ghost-dark dark:bg-sui-ghost-dark dark:border-sui-ghost-white"
-      type="info"
     >
       <p className="pt-2">
         This guide is rated as <span className="font-bold">{effort}</span>.

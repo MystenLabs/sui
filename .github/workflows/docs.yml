@@ -23,7 +23,7 @@ jobs:
   examples:
     name: Notify Slack if examples directory changed
     needs: diff
-    if: needs.diff.outputs.isExamples == 'true'
+    if: needs.diff.outputs.isExamples == 'true' && github.event_name == 'pull_request'
     runs-on: [ubuntu-latest]
     
     steps:
@@ -38,16 +38,3 @@ jobs:
               "pr_number": "${{ github.event.number }}",
               "repository": "${{ github.repository }}"
             }
-  
-  spelling:
-    name: Lint documentation
-    needs: diff
-    if: needs.diff.outputs.isDoc == 'true'
-    runs-on: [ubuntu-latest]
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
-      - name: Spell Check Docs
-        uses: crate-ci/typos@73edd198fc9a18a49c00475ca869188a13ae0117 # pin@v1.42.3
-        with:
-          files: ./docs/content

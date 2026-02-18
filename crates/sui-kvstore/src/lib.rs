@@ -1,50 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub use crate::bigtable::client::BigTableClient;
-pub use crate::bigtable::store::BigTableConnection;
-pub use crate::bigtable::store::BigTableStore;
-pub use crate::handlers::BIGTABLE_MAX_MUTATIONS;
-pub use crate::handlers::BigTableHandler;
-pub use crate::handlers::CheckpointsByDigestPipeline;
-pub use crate::handlers::CheckpointsPipeline;
-pub use crate::handlers::EpochEndPipeline;
-pub use crate::handlers::EpochLegacyBatch;
-pub use crate::handlers::EpochLegacyPipeline;
-pub use crate::handlers::EpochStartPipeline;
-pub use crate::handlers::ObjectsPipeline;
-pub use crate::handlers::PrevEpochUpdate;
-pub use crate::handlers::TransactionsPipeline;
-pub use crate::handlers::set_max_mutations;
-
-pub const CHECKPOINTS_PIPELINE: &str =
-    <BigTableHandler<CheckpointsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
-pub const CHECKPOINTS_BY_DIGEST_PIPELINE: &str =
-    <BigTableHandler<CheckpointsByDigestPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
-pub const TRANSACTIONS_PIPELINE: &str =
-    <BigTableHandler<TransactionsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
-pub const OBJECTS_PIPELINE: &str =
-    <BigTableHandler<ObjectsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
-pub const EPOCH_START_PIPELINE: &str =
-    <BigTableHandler<EpochStartPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
-pub const EPOCH_END_PIPELINE: &str =
-    <BigTableHandler<EpochEndPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
-pub const EPOCH_LEGACY_PIPELINE: &str =
-    <EpochLegacyPipeline as sui_indexer_alt_framework::pipeline::Processor>::NAME;
-
-/// All pipeline names registered by the indexer. Single source of truth used for:
-/// - Pipeline registration in `BigTableIndexer::new()`
-/// - Per-pipeline watermark queries in `get_watermark()`
-/// - Legacy watermark tracker expected count
-pub const ALL_PIPELINE_NAMES: [&str; 7] = [
-    CHECKPOINTS_PIPELINE,
-    CHECKPOINTS_BY_DIGEST_PIPELINE,
-    TRANSACTIONS_PIPELINE,
-    OBJECTS_PIPELINE,
-    EPOCH_START_PIPELINE,
-    EPOCH_END_PIPELINE,
-    EPOCH_LEGACY_PIPELINE,
-];
+mod bigtable;
+pub mod config;
+mod handlers;
+pub mod tables;
 
 use std::sync::OnceLock;
 
@@ -58,6 +18,7 @@ use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_protocol_config::Chain;
 use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::EpochId;
@@ -74,16 +35,68 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
 
-mod bigtable;
-pub mod config;
-mod handlers;
-pub mod tables;
-
+pub use crate::bigtable::client::BigTableClient;
+pub use crate::bigtable::store::BigTableConnection;
+pub use crate::bigtable::store::BigTableStore;
+pub use crate::handlers::BIGTABLE_MAX_MUTATIONS;
+pub use crate::handlers::BigTableHandler;
+pub use crate::handlers::CheckpointsByDigestPipeline;
+pub use crate::handlers::CheckpointsPipeline;
+pub use crate::handlers::EpochEndPipeline;
+pub use crate::handlers::EpochLegacyBatch;
+pub use crate::handlers::EpochLegacyPipeline;
+pub use crate::handlers::EpochStartPipeline;
+pub use crate::handlers::ObjectsPipeline;
+pub use crate::handlers::PrevEpochUpdate;
+pub use crate::handlers::ProtocolConfigsPipeline;
+pub use crate::handlers::TransactionsPipeline;
+pub use crate::handlers::set_max_mutations;
 pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
 pub use config::IndexerConfig;
 pub use config::IngestionConfig;
 pub use config::PipelineLayer;
+
+pub const CHECKPOINTS_PIPELINE: &str =
+    <BigTableHandler<CheckpointsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const CHECKPOINTS_BY_DIGEST_PIPELINE: &str =
+    <BigTableHandler<CheckpointsByDigestPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const TRANSACTIONS_PIPELINE: &str =
+    <BigTableHandler<TransactionsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const OBJECTS_PIPELINE: &str =
+    <BigTableHandler<ObjectsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const EPOCH_START_PIPELINE: &str =
+    <BigTableHandler<EpochStartPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const EPOCH_END_PIPELINE: &str =
+    <BigTableHandler<EpochEndPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const PROTOCOL_CONFIGS_PIPELINE: &str =
+    <BigTableHandler<ProtocolConfigsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const EPOCH_LEGACY_PIPELINE: &str =
+    <EpochLegacyPipeline as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+
+/// All pipeline names registered by the indexer. Used by `LegacyWatermarkTracker`
+/// to know when all pipelines have reported.
+pub const ALL_PIPELINE_NAMES: [&str; 8] = [
+    CHECKPOINTS_PIPELINE,
+    CHECKPOINTS_BY_DIGEST_PIPELINE,
+    TRANSACTIONS_PIPELINE,
+    OBJECTS_PIPELINE,
+    EPOCH_START_PIPELINE,
+    EPOCH_END_PIPELINE,
+    PROTOCOL_CONFIGS_PIPELINE,
+    EPOCH_LEGACY_PIPELINE,
+];
+
+/// Non-legacy pipeline names used for the default `get_watermark` implementation.
+const WATERMARK_PIPELINES: [&str; 7] = [
+    CHECKPOINTS_PIPELINE,
+    CHECKPOINTS_BY_DIGEST_PIPELINE,
+    TRANSACTIONS_PIPELINE,
+    OBJECTS_PIPELINE,
+    EPOCH_START_PIPELINE,
+    EPOCH_END_PIPELINE,
+    PROTOCOL_CONFIGS_PIPELINE,
+];
 
 static WRITE_LEGACY_DATA: OnceLock<bool> = OnceLock::new();
 
@@ -140,6 +153,26 @@ pub struct EpochData {
     pub system_state: Option<sui_types::sui_system_state::SuiSystemState>,
     pub end_timestamp_ms: Option<u64>,
     pub end_checkpoint: Option<u64>,
+    pub cp_hi: Option<u64>,
+    pub tx_hi: Option<u64>,
+    pub safe_mode: Option<bool>,
+    pub total_stake: Option<u64>,
+    pub storage_fund_balance: Option<u64>,
+    pub storage_fund_reinvestment: Option<u64>,
+    pub storage_charge: Option<u64>,
+    pub storage_rebate: Option<u64>,
+    pub stake_subsidy_amount: Option<u64>,
+    pub total_gas_fees: Option<u64>,
+    pub total_stake_rewards_distributed: Option<u64>,
+    pub leftover_storage_fund_inflow: Option<u64>,
+    pub epoch_commitments: Option<Vec<u8>>,
+}
+
+/// Protocol config data returned by reader methods.
+#[derive(Clone, Debug, Default)]
+pub struct ProtocolConfigData {
+    pub configs: std::collections::BTreeMap<String, Option<String>>,
+    pub flags: std::collections::BTreeMap<String, bool>,
 }
 
 /// Serializable watermark for per-pipeline tracking in BigTable.
@@ -151,16 +184,6 @@ pub struct Watermark {
     pub tx_hi: u64,
     pub timestamp_ms_hi_inclusive: u64,
 }
-
-/// Non-legacy pipeline names used for the default `get_watermark` implementation.
-const WATERMARK_PIPELINES: [&str; 6] = [
-    CHECKPOINTS_PIPELINE,
-    CHECKPOINTS_BY_DIGEST_PIPELINE,
-    TRANSACTIONS_PIPELINE,
-    OBJECTS_PIPELINE,
-    EPOCH_START_PIPELINE,
-    EPOCH_END_PIPELINE,
-];
 
 #[async_trait]
 pub trait KeyValueStoreReader {
@@ -191,6 +214,10 @@ pub trait KeyValueStoreReader {
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochData>>;
     async fn get_latest_epoch(&mut self) -> Result<Option<EpochData>>;
+    async fn get_protocol_configs(
+        &mut self,
+        protocol_version: u64,
+    ) -> Result<Option<ProtocolConfigData>>;
     async fn get_events_for_transactions(
         &mut self,
         keys: &[TransactionDigest],
@@ -205,6 +232,7 @@ impl BigTableIndexer {
         ingestion_config: IngestionConfig,
         committer: CommitterConfig,
         pipeline: PipelineLayer,
+        chain: Chain,
         registry: &Registry,
     ) -> Result<Self> {
         let mut indexer = Indexer::new(
@@ -256,6 +284,12 @@ impl BigTableIndexer {
             .concurrent_pipeline(
                 BigTableHandler::new(EpochEndPipeline),
                 pipeline.epoch_end.finish(base.clone()),
+            )
+            .await?;
+        indexer
+            .concurrent_pipeline(
+                BigTableHandler::new(ProtocolConfigsPipeline(chain)),
+                pipeline.protocol_configs.finish(base.clone()),
             )
             .await?;
 

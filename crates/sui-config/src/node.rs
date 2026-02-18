@@ -87,6 +87,13 @@ pub struct NodeConfig {
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
 
+    /// When true, post-processing (JSON-RPC indexing and event emission) runs
+    /// synchronously on the execution path instead of being spawned to a
+    /// background thread. This is the legacy behavior and can be used as a
+    /// rollback mechanism or for testing.
+    #[serde(default)]
+    pub sync_post_process_one_tx: bool,
+
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub remove_deprecated_tables: bool,
 
@@ -242,6 +249,11 @@ pub struct NodeConfig {
     /// Configuration for the transaction driver.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_driver_config: Option<TransactionDriverConfig>,
+
+    /// Configuration for congestion tracker binary logging.
+    /// When set, enables per-commit binary logs of congestion tracker state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub congestion_log: Option<CongestionLogConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -273,6 +285,24 @@ impl Default for TransactionDriverConfig {
             enable_early_validation: true,
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct CongestionLogConfig {
+    pub path: PathBuf,
+    #[serde(default = "default_congestion_log_max_file_size")]
+    pub max_file_size: u64,
+    #[serde(default = "default_congestion_log_max_files")]
+    pub max_files: u32,
+}
+
+fn default_congestion_log_max_file_size() -> u64 {
+    100 * 1024 * 1024 // 100MB
+}
+
+fn default_congestion_log_max_files() -> u32 {
+    10
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -1037,6 +1067,13 @@ impl ExpensiveSafetyCheckConfig {
             enable_state_consistency_check: true,
             force_disable_state_consistency_check: false,
             enable_secondary_index_checks: false, // Disable by default for now
+        }
+    }
+
+    pub fn new_enable_all_with_secondary_index_checks() -> Self {
+        Self {
+            enable_secondary_index_checks: true,
+            ..Self::new_enable_all()
         }
     }
 

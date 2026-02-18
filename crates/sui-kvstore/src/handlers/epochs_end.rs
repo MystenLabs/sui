@@ -4,15 +4,18 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
+use anyhow::bail;
 use sui_indexer_alt_framework::pipeline::Processor;
+use sui_types::event::SystemEpochInfoEvent;
 use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionKind;
 
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::handlers::BigTableProcessor;
 use crate::tables;
 
 /// Pipeline that writes epoch end data to BigTable.
-/// This is written when a new epoch starts (for the previous epoch).
 pub struct EpochEndPipeline;
 
 #[async_trait::async_trait]
@@ -21,26 +24,102 @@ impl Processor for EpochEndPipeline {
     type Value = Entry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
-        let Some(epoch_info) = checkpoint.epoch_info()? else {
+        let summary = &checkpoint.summary;
+
+        let Some(end_of_epoch) = summary.end_of_epoch_data.as_ref() else {
             return Ok(vec![]);
         };
 
-        if epoch_info.epoch == 0 {
-            return Ok(vec![]);
-        }
+        let Some(transaction) = checkpoint.transactions.iter().find(|tx| {
+            matches!(
+                tx.transaction.kind(),
+                TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
+            )
+        }) else {
+            bail!(
+                "Failed to get end of epoch transaction in checkpoint {} with EndOfEpochData",
+                summary.sequence_number,
+            );
+        };
 
-        let epoch_id = epoch_info.epoch - 1;
-        let start_checkpoint = epoch_info
-            .start_checkpoint
-            .context("missing start_checkpoint for epoch end")?;
-        let end_timestamp_ms = epoch_info
-            .start_timestamp_ms
-            .context("missing start_timestamp_ms for epoch end")?;
-        let end_checkpoint = start_checkpoint - 1;
+        let epoch_id = summary.epoch;
+        let end_timestamp_ms = summary.timestamp_ms;
+        let end_checkpoint = summary.sequence_number;
+        let cp_hi = summary.sequence_number + 1;
+        let tx_hi = summary.network_total_transactions;
+
+        let epoch_commitments = bcs::to_bytes(&end_of_epoch.epoch_commitments)
+            .context("Failed to serialize EpochCommitment-s")?;
+
+        let (
+            safe_mode,
+            total_stake,
+            storage_fund_balance,
+            storage_fund_reinvestment,
+            storage_charge,
+            storage_rebate,
+            stake_subsidy_amount,
+            total_gas_fees,
+            total_stake_rewards_distributed,
+            leftover_storage_fund_inflow,
+        ) = if let Some(SystemEpochInfoEvent {
+            total_stake,
+            storage_fund_reinvestment,
+            storage_charge,
+            storage_rebate,
+            storage_fund_balance,
+            stake_subsidy_amount,
+            total_gas_fees,
+            total_stake_rewards_distributed,
+            leftover_storage_fund_inflow,
+            ..
+        }) = transaction
+            .events
+            .iter()
+            .flat_map(|events| &events.data)
+            .find_map(|event| {
+                event
+                    .is_system_epoch_info_event()
+                    .then(|| bcs::from_bytes(&event.contents))
+            })
+            .transpose()
+            .context("Failed to deserialize SystemEpochInfoEvent")?
+        {
+            (
+                false,
+                Some(total_stake),
+                Some(storage_fund_balance),
+                Some(storage_fund_reinvestment),
+                Some(storage_charge),
+                Some(storage_rebate),
+                Some(stake_subsidy_amount),
+                Some(total_gas_fees),
+                Some(total_stake_rewards_distributed),
+                Some(leftover_storage_fund_inflow),
+            )
+        } else {
+            (true, None, None, None, None, None, None, None, None, None)
+        };
 
         let entry = tables::make_entry(
             tables::epochs::encode_key(epoch_id),
-            tables::epochs::encode_end(end_timestamp_ms, end_checkpoint),
+            tables::epochs::encode_end(
+                end_timestamp_ms,
+                end_checkpoint,
+                cp_hi,
+                tx_hi,
+                safe_mode,
+                total_stake,
+                storage_fund_balance,
+                storage_fund_reinvestment,
+                storage_charge,
+                storage_rebate,
+                stake_subsidy_amount,
+                total_gas_fees,
+                total_stake_rewards_distributed,
+                leftover_storage_fund_inflow,
+                &epoch_commitments,
+            ),
             Some(end_timestamp_ms),
         );
 

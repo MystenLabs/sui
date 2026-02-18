@@ -17,6 +17,7 @@ use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::set_max_mutations;
 use sui_kvstore::set_write_legacy_data;
+use sui_protocol_config::Chain;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
 
@@ -49,9 +50,21 @@ struct Args {
     #[arg(long)]
     app_profile_id: Option<String>,
 
+    /// Maximum gRPC decoding message size for Bigtable responses, in bytes.
+    #[arg(long)]
+    bigtable_max_decoding_message_size: Option<usize>,
+
+    /// Number of gRPC channels in the connection pool (default: 10)
+    #[arg(long)]
+    channel_pool_size: Option<usize>,
+
     /// Maximum mutations per BigTable batch (must be < 100k)
     #[arg(long, value_parser = parse_max_mutations)]
     max_mutations: Option<usize>,
+
+    /// Chain identifier for resolving protocol configs (mainnet, testnet, or unknown)
+    #[arg(long)]
+    chain: Chain,
 
     /// Enable writing legacy data: watermark \[0\] row, epoch DEFAULT_COLUMN, and transaction tx column
     #[arg(long)]
@@ -98,9 +111,11 @@ async fn main() -> Result<()> {
         args.bigtable_project,
         false,
         None,
+        args.bigtable_max_decoding_message_size,
         "sui-kvstore-alt".to_string(),
         None,
         args.app_profile_id,
+        args.channel_pool_size,
     )
     .await?;
 
@@ -118,6 +133,7 @@ async fn main() -> Result<()> {
         config.ingestion,
         committer,
         config.pipeline,
+        args.chain,
         &registry,
     )
     .await?;

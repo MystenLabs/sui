@@ -20,6 +20,7 @@ pub mod checkpoints;
 pub mod checkpoints_by_digest;
 pub mod epochs;
 pub mod objects;
+pub mod protocol_configs;
 pub mod transactions;
 pub mod watermarks;
 

@@ -129,6 +129,10 @@ moka = { workspace = true, default-features = false, features = [
 [target.'cfg(not(msim))'.dependencies]
 moka = { workspace = true, features = ["sync"] }
 
+[build-dependencies]
+prost-build.workspace = true
+protox.workspace = true
+
 [[bench]]
 name = "verified_cert_cache_bench"
 harness = false

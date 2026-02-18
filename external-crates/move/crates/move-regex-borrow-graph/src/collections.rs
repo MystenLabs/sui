@@ -506,21 +506,21 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     // - both graphs satisfy their invariants
     // - all nodes are canonical
     // - all nodes in self are also in other
-    fn check_join_invariants(&self, other: &Self) {
+    fn check_join_invariants(&self, _other: &Self) {
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
-            other.check_invariants();
+            _other.check_invariants();
             for self_r in self.keys() {
                 debug_assert!(self_r.is_canonical());
-                debug_assert!(other.nodes.contains_key(&self_r));
+                debug_assert!(_other.nodes.contains_key(&self_r));
             }
-            for other_r in other.keys() {
+            for other_r in _other.keys() {
                 debug_assert!(other_r.is_canonical());
                 // there can be nodes in other that are not in self
             }
             for (self_r, self_node) in &self.nodes {
-                let other_node = other.node(self_r).unwrap();
+                let other_node = _other.node(self_r).unwrap();
                 debug_assert_eq!(self_node.is_mutable(), other_node.is_mutable());
             }
         }
@@ -561,14 +561,14 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         }
     }
 
-    pub fn check_self_epsilon_invariant(&self, r: Ref) {
+    pub fn check_self_epsilon_invariant(&self, _r: Ref) {
         #[cfg(debug_assertions)]
         {
-            let edge_opt = self.graph.edge_weight(r, r);
+            let edge_opt = self.graph.edge_weight(_r, _r);
             debug_assert!(edge_opt.is_some());
             let rs = self
                 .graph
-                .edge_weight(r, r)
+                .edge_weight(_r, _r)
                 .unwrap()
                 .regexes()
                 .collect::<Vec<_>>();

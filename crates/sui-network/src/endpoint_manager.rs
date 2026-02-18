@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
 use mysten_network::Multiaddr;
+use serde::{Deserialize, Serialize};
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::error::{SuiErrorKind, SuiResult};
 use tap::TapFallible;
@@ -103,6 +104,7 @@ impl EndpointManager {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum EndpointId {
     P2p(anemo::PeerId),
     Consensus(NetworkPublicKey),

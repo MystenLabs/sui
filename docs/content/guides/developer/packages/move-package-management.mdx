@@ -334,6 +334,12 @@ The command `sui client test-publish --pubfile-path <pubfile> --build-env <env>`
 
 If `<pubfile>` is omitted, it defaults to `Pub.<env-name>.toml` where `<env-name>` is the name of the active CLI environment, irrespective of the environments defined in the manifest. This file contains the addresses to use for publication.
 
+You can also prepare bytecode for publication without actually publishing it by passing `--pubfile-path <pubfile>` to `sui move build --dump-bytecode-as-base64`:
+
+```sh
+sui move build --dump-bytecode-as-base64 --pubfile-path Pub.localnet.toml --build-env testnet
+```
+
 The format of an ephemeral publication file is as follows:
 
 ```toml

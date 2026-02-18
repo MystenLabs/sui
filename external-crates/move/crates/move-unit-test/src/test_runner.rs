@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    extensions, format_module_id,
+    format_module_id,
     test_reporter::{
         FailureReason, MoveError, TestFailure, TestResults, TestRunInfo, TestStatistics,
     },
@@ -285,10 +285,15 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
                 .vm_test_adapter
                 .read()
                 .get_linkage_context(*module_id.address())?;
-            let extensions = extensions::new_extensions();
+            let extensions_builder = test_config.vm_test_setup.new_extensions_builder();
+            let native_context_extensions = test_config
+                .vm_test_setup
+                .new_native_context_extensions(&extensions_builder);
             let adapter = test_config.vm_test_adapter.read();
-            let mut vm_instance =
-                adapter.make_vm_with_native_extensions(link_context, extensions)?;
+            let mut vm_instance = adapter.make_vm_with_native_extensions(
+                link_context,
+                Arc::new(RwLock::new(native_context_extensions)),
+            )?;
 
             let function_name = IdentStr::new(function_name).unwrap();
 

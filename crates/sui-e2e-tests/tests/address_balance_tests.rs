@@ -3176,7 +3176,8 @@ async fn address_balance_stress_test() {
 
     // Counters for success/failure tracking
     let success_count = Arc::new(AtomicU64::new(0));
-    let failure_count = Arc::new(AtomicU64::new(0));
+    let exec_failure_count = Arc::new(AtomicU64::new(0));
+    let signing_failure_count = Arc::new(AtomicU64::new(0));
 
     // Spawn 8 tasks (2 per address)
     let mut handles = Vec::new();
@@ -3192,7 +3193,8 @@ async fn address_balance_stress_test() {
             let all_addresses = addresses.clone();
             let coin_types = coin_types.clone();
             let success_count = Arc::clone(&success_count);
-            let failure_count = Arc::clone(&failure_count);
+            let exec_failure_count = Arc::clone(&exec_failure_count);
+            let signing_failure_count = Arc::clone(&signing_failure_count);
 
             let handle = tokio::spawn(async move {
                 let start_time = std::time::Instant::now();
@@ -3262,14 +3264,14 @@ async fn address_balance_stress_test() {
                             if effects.status().is_ok() {
                                 success_count.fetch_add(1, Ordering::Relaxed);
                             } else {
-                                failure_count.fetch_add(1, Ordering::Relaxed);
+                                exec_failure_count.fetch_add(1, Ordering::Relaxed);
                             }
                             current_gas = effects.gas_object().0;
                         }
                         Err(err) => {
                             let err_str = err.to_string();
-                            if err_str.contains("Available balance for object id") {
-                                failure_count.fetch_add(1, Ordering::Relaxed);
+                            if err_str.contains("Available amount in account for object id") {
+                                signing_failure_count.fetch_add(1, Ordering::Relaxed);
                             }
                         }
                     }
@@ -3285,12 +3287,14 @@ async fn address_balance_stress_test() {
     }
 
     let final_success = success_count.load(Ordering::Relaxed);
-    let final_failure = failure_count.load(Ordering::Relaxed);
+    let final_exec_failure = exec_failure_count.load(Ordering::Relaxed);
+    let final_signing_failure = signing_failure_count.load(Ordering::Relaxed);
 
     tracing::info!(
-        "Stress test completed: {} successes, {} failures",
+        "Stress test completed: {} successes, {} execution failures, {} signing failures",
         final_success,
-        final_failure
+        final_exec_failure,
+        final_signing_failure
     );
 
     // Ensure we had both successes and failures (the random amounts should cause some failures)
@@ -3300,13 +3304,18 @@ async fn address_balance_stress_test() {
         final_success
     );
     assert!(
-        final_failure > 0,
-        "Expected at least some failed transactions (due to insufficient balance), got {}",
-        final_failure
+        final_exec_failure > 0,
+        "Expected at least some execution failed transactions (due to insufficient balance), got {}",
+        final_exec_failure
+    );
+    assert!(
+        final_signing_failure > 0,
+        "Expected at least some signing failed transactions (due to insufficient balance), got {}",
+        final_signing_failure
     );
 
     // Verify total transactions is reasonable (should have executed many in 30 seconds)
-    let total = final_success + final_failure;
+    let total = final_success + final_exec_failure + final_signing_failure;
     assert!(
         total >= 10,
         "Expected at least 10 total transactions, got {}",

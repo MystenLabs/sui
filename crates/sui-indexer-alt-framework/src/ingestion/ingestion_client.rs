@@ -10,6 +10,7 @@ use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Constant;
 use bytes::Bytes;
+use clap::ArgGroup;
 use object_store::ClientOptions;
 use object_store::ObjectStore;
 use object_store::aws::AmazonS3Builder;
@@ -50,7 +51,7 @@ pub(crate) trait IngestionClientTrait: Send + Sync {
 }
 
 #[derive(clap::Args, Clone, Debug)]
-#[group(required = true)]
+#[command(group(ArgGroup::new("source").required(true).multiple(false)))]
 pub struct IngestionClientArgs {
     /// Remote Store to fetch checkpoints from over HTTP.
     #[arg(long, group = "source")]
@@ -80,11 +81,11 @@ pub struct IngestionClientArgs {
     pub rpc_api_url: Option<Url>,
 
     /// Optional username for the gRPC service.
-    #[arg(long, env)]
+    #[arg(long, env, requires = "rpc_api_url")]
     pub rpc_username: Option<String>,
 
     /// Optional password for the gRPC service.
-    #[arg(long, env)]
+    #[arg(long, env, requires = "rpc_api_url")]
     pub rpc_password: Option<String>,
 
     /// How long to wait for a checkpoint file to be downloaded (milliseconds). Set to 0 to disable
@@ -405,6 +406,8 @@ impl IngestionClient {
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
+    use clap::error::ErrorKind;
     use dashmap::DashMap;
     use prometheus::Registry;
     use std::sync::Arc;
@@ -414,6 +417,12 @@ mod tests {
     use crate::ingestion::test_utils::test_checkpoint_data;
 
     use super::*;
+
+    #[derive(Debug, Parser)]
+    struct TestArgs {
+        #[clap(flatten)]
+        ingestion: IngestionClientArgs,
+    }
 
     /// Mock implementation of IngestionClientTrait for testing
     #[derive(Default)]
@@ -472,6 +481,55 @@ mod tests {
         let mock_client = Arc::new(MockIngestionClient::default());
         let client = IngestionClient::new_impl(mock_client.clone(), metrics);
         (client, mock_client)
+    }
+
+    #[test]
+    fn test_args_multiple_ingestion_sources_are_rejected() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-url",
+            "https://example.com",
+            "--rpc-api-url",
+            "http://localhost:8080",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn test_args_optional_credentials() {
+        let args = TestArgs::try_parse_from([
+            "cmd",
+            "--rpc-api-url",
+            "http://localhost:8080",
+            "--rpc-username",
+            "alice",
+            "--rpc-password",
+            "secret",
+        ])
+        .unwrap();
+
+        assert_eq!(args.ingestion.rpc_username.as_deref(), Some("alice"));
+        assert_eq!(args.ingestion.rpc_password.as_deref(), Some("secret"));
+        assert_eq!(
+            args.ingestion.rpc_api_url,
+            Some(Url::parse("http://localhost:8080").unwrap())
+        );
+    }
+
+    #[test]
+    fn test_args_credentials_require_rpc_url() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--rpc-username",
+            "alice",
+            "--rpc-password",
+            "secret",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
     }
 
     #[tokio::test]
