@@ -83,7 +83,7 @@ pub struct IngestionConfig {
     pub streaming_backoff_max_batch_size: usize,
     pub streaming_connection_timeout_ms: u64,
     pub streaming_statement_timeout_ms: u64,
-    pub checkpoint_channel_size: Option<usize>,
+    pub checkpoint_channel_size: usize,
 }
 
 impl Default for IngestionConfig {
