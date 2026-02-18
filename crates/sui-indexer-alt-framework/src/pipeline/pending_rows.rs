@@ -26,9 +26,10 @@ impl PendingRowsGuard {
         }
     }
 
-    /// Create a mock guard for tests that uses its own isolated counter and a dummy notify.
-    #[cfg(test)]
-    pub(crate) fn mock(count: usize) -> Self {
+    /// Create a no-op guard with its own isolated counter and a dummy notify. Dropping this guard
+    /// is effectively free (decrements a counter nobody reads). Used for pipelines that don't
+    /// participate in row-count backpressure (e.g. sequential pipelines).
+    pub(crate) fn noop(count: usize) -> Self {
         let counter = Arc::new(AtomicUsize::new(0));
         counter.fetch_add(count, Ordering::Relaxed);
         Self {

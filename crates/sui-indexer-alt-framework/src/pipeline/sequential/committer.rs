@@ -17,7 +17,6 @@ use tracing::warn;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::IndexedCheckpoint;
-use crate::pipeline::PendingRowsGuard;
 use crate::pipeline::WARN_PENDING_WATERMARKS;
 use crate::pipeline::logging::WatermarkLogger;
 use crate::pipeline::sequential::Handler;
@@ -73,7 +72,6 @@ where
         let mut batch = H::Batch::default();
         let mut batch_rows = 0;
         let mut batch_checkpoints = 0;
-        let mut batch_guards: Vec<PendingRowsGuard> = Vec::new();
 
         // The task keeps track of the highest (inclusive) checkpoint it has added to the batch
         // through `next_checkpoint`, and whether that batch needs to be written out. By extension
@@ -151,10 +149,8 @@ where
                                 let indexed = entry.remove();
                                 batch_rows += indexed.len();
                                 batch_checkpoints += 1;
-                                let IndexedCheckpoint { values, watermark: wm, guard } = indexed;
-                                handler.batch(&mut batch, values.into_iter());
-                                watermark = Some(wm);
-                                batch_guards.extend(guard);
+                                handler.batch(&mut batch, indexed.values.into_iter());
+                                watermark = Some(indexed.watermark);
                                 next_checkpoint += 1;
                             }
 
@@ -330,7 +326,6 @@ where
 
                     let _ = std::mem::take(&mut batch);
                     pending_rows -= batch_rows;
-                    batch_guards.clear();
                     batch_checkpoints = 0;
                     batch_rows = 0;
                     attempt = 0;
@@ -505,7 +500,7 @@ mod tests {
             checkpoint,                // tx_hi
             checkpoint * 1000,         // timestamp
             vec![checkpoint],          // values
-            PendingRowsGuard::mock(1), // guard
+            PendingRowsGuard::noop(1), // guard
         )
     }
 

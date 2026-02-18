@@ -25,6 +25,7 @@ use crate::pipeline::concurrent::committer::committer;
 use crate::pipeline::concurrent::main_reader_lo::track_main_reader_lo;
 use crate::pipeline::concurrent::pruner::pruner;
 use crate::pipeline::concurrent::reader_watermark::reader_watermark;
+use crate::pipeline::processor;
 use crate::pipeline::processor::processor;
 use crate::store::Store;
 use crate::types::full_checkpoint_content::Checkpoint;
@@ -244,9 +245,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
     let main_reader_lo = Arc::new(SetOnce::new());
 
-    let pending_rows = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let pending_rows_notify = Arc::new(tokio::sync::Notify::new());
-
     let handler = Arc::new(handler);
 
     let s_processor = processor(
@@ -254,9 +252,11 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
-        Some(H::MAX_PENDING_ROWS),
-        pending_rows.clone(),
-        pending_rows_notify.clone(),
+        Some(processor::RowBackpressure {
+            max: H::MAX_PENDING_ROWS,
+            pending_row_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            notify: Arc::new(tokio::sync::Notify::new()),
+        }),
     );
 
     let s_collector = collector::<H>(

@@ -277,7 +277,7 @@ mod tests {
             tx_hi,
             timestamp_ms,
             values,
-            PendingRowsGuard::mock(3),
+            PendingRowsGuard::noop(3),
         );
 
         assert_eq!(checkpoint.len(), 3);
@@ -298,7 +298,7 @@ mod tests {
             tx_hi,
             timestamp_ms,
             values,
-            PendingRowsGuard::mock(0),
+            PendingRowsGuard::noop(0),
         );
 
         assert_eq!(checkpoint.len(), 0);
