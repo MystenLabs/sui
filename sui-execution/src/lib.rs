@@ -14,6 +14,9 @@ pub use verifier::Verifier;
 pub mod executor;
 pub mod verifier;
 
+#[cfg(feature = "custom-natives")]
+pub mod custom_natives;
+
 mod latest;
 mod v0;
 mod v1;
