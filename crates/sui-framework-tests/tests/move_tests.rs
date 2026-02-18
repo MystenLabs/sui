@@ -7,7 +7,7 @@ use move_cli::base::test::UnitTestResult;
 use move_package_alt_compilation::lint_flag::LintFlag;
 use move_unit_test::UnitTestingConfig;
 use sui_framework_tests::setup_examples;
-use sui_move::unit_test::{MAX_UNIT_TEST_INSTRUCTIONS, run_move_unit_tests};
+use sui_move::unit_test::{MAX_UNIT_TEST_INSTRUCTIONS, SuiVMTestSetup, run_move_unit_tests};
 use sui_move_build::BuildConfig;
 use sui_package_alt::SuiFlavor;
 
@@ -88,7 +88,8 @@ pub(crate) async fn tests(path: &Path) -> datatest_stable::Result<()> {
             Some(testing_config),
             false,
             false,
-            SuiFlavor::new()
+            SuiFlavor::new(),
+            SuiVMTestSetup::new(),
         )
         .await
         .unwrap(),
