@@ -12,7 +12,10 @@ use tokio_stream::StreamExt;
 
 #[sim_test]
 async fn subscribe_checkpoint() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
 

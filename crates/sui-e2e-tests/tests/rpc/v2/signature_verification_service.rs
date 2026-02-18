@@ -21,6 +21,7 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
     }
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(10000)
         .with_default_jwks()
         .build()
