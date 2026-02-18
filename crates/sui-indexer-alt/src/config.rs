@@ -188,7 +188,7 @@ impl IngestionLayer {
                 .unwrap_or(base.streaming_statement_timeout_ms),
             checkpoint_channel_size: self
                 .checkpoint_channel_size
-                .or(base.checkpoint_channel_size),
+                .unwrap_or(base.checkpoint_channel_size),
         })
     }
 }
@@ -417,7 +417,7 @@ impl From<IngestionConfig> for IngestionLayer {
             streaming_backoff_max_batch_size: Some(config.streaming_backoff_max_batch_size),
             streaming_connection_timeout_ms: Some(config.streaming_connection_timeout_ms),
             streaming_statement_timeout_ms: Some(config.streaming_statement_timeout_ms),
-            checkpoint_channel_size: config.checkpoint_channel_size,
+            checkpoint_channel_size: Some(config.checkpoint_channel_size),
         }
     }
 }

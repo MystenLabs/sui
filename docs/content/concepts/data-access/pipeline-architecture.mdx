@@ -257,7 +257,7 @@ Sequential pipelines use two layers of backpressure to prevent memory overflow a
 
 Sequential pipelines use channel-based flow control with a simpler topology due to fewer components:
 
-- **Broadcaster → Processor:** `checkpoint_channel_size` slots (defaults to `checkpoint_buffer_size`).
+- **Broadcaster → Processor:** `checkpoint_channel_size` slots (default: 1000).
 - **Processor → Committer:** `FANOUT + PIPELINE_BUFFER` slots.
 
 When any channel fills, senders automatically block, creating upstream pressure that cascades back through the pipeline. This mechanism works identically to concurrent pipelines but with fewer channel hops. See [concurrent pipeline backpressure](#concurrent-backpressure) for detailed mechanics of how channel-based blocking propagates.
@@ -455,11 +455,11 @@ With the component architecture detailed, let's examine how the pipeline prevent
 
 Each channel has a fixed buffer size that automatically blocks when full:
 
-**`Broadcaster` to `Processor`**: `checkpoint_channel_size` slots (defaults to `checkpoint_buffer_size`) → `Broadcaster` blocks, upstream pressure.
+**`Broadcaster` to `Processor`**: `checkpoint_channel_size` slots (default: 1000) → `Broadcaster` blocks, upstream pressure.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="checkpoint_channel_size" />
 
-By default the per-pipeline channel is sized to `checkpoint_buffer_size`, coupling channel depth with the lag regulation window. Setting `checkpoint_channel_size` independently lets you keep a large lag window (so the ingestion service can fetch far ahead) while using a smaller channel per pipeline to limit memory. This can be helpful to increase backfill throughput.
+The per-pipeline channel defaults to 1000 checkpoints. This is independent from `checkpoint_buffer_size`, which controls the lag regulation window. You can tune `checkpoint_channel_size` to control per-pipeline memory usage without affecting how far ahead the ingestion service fetches.
 
 **`Processor` to `Collector`**: `FANOUT + PIPELINE_BUFFER` slots → All workers block on `send()`.
 
