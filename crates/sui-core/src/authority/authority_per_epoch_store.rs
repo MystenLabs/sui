@@ -1212,7 +1212,7 @@ impl AuthorityPerEpochStore {
         );
 
         let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
-            Some(ConsensusTxStatusCache::new(protocol_config.gc_depth()))
+            Some(ConsensusTxStatusCache::new())
         } else {
             None
         };
@@ -3518,10 +3518,6 @@ impl AuthorityPerEpochStore {
 
         // EOP can only be sent after finalizing remaining transactions.
         self.pending_consensus_certificates_empty()
-            && self
-                .consensus_tx_status_cache
-                .as_ref()
-                .is_none_or(|c| c.get_num_fastpath_certified() == 0)
     }
 
     pub(crate) fn write_pending_checkpoint(

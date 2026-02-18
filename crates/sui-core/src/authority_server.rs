@@ -81,7 +81,6 @@ use crate::{
     mysticeti_adapter::LazyMysticetiClient,
 };
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
-use sui_types::messages_grpc::PingType;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -1163,9 +1162,9 @@ impl ValidatorService {
         };
         let tx_digests = [tx_digest];
 
-        let fastpath_effects_future: Pin<Box<dyn Future<Output = _> + Send>> =
+        let consensus_status_future: Pin<Box<dyn Future<Output = _> + Send>> =
             if let Some(consensus_position) = request.consensus_position {
-                Box::pin(self.wait_for_fastpath_effects(
+                Box::pin(self.wait_for_consensus_status(
                     consensus_position,
                     &tx_digests,
                     request.include_details,
@@ -1176,13 +1175,6 @@ impl ValidatorService {
             };
 
         tokio::select! {
-            // We always wait for effects regardless of consensus position via
-            // notify_read_executed_effects_may_fail. This is safe because we have separated
-            // mysticeti fastpath outputs to a separate dirty cache
-            // UncommittedData::fastpath_transaction_outputs that will only get flushed
-            // once finalized. So the output of notify_read_executed_effects_may_fail is
-            // guaranteed to be finalized effects or effects from QD execution.
-            // We use _may_fail variant because effects may have been pruned for old transactions.
             effects_result = self.state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_may_fail(
@@ -1204,9 +1196,8 @@ impl ValidatorService {
                 })
             }
 
-            fastpath_response = fastpath_effects_future => {
-                tracing::Span::current().record("fast_path_effects", true);
-                fastpath_response
+            consensus_response = consensus_status_future => {
+                consensus_response
             }
         }
     }
@@ -1247,61 +1238,38 @@ impl ValidatorService {
 
         consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
 
-        let mut last_status = None;
         let details = if request.include_details {
             Some(Box::new(ExecutedData::default()))
         } else {
             None
         };
 
-        loop {
-            let status = consensus_tx_status_cache
-                .notify_read_transaction_status_change(consensus_position, last_status)
-                .await;
-            match status {
-                NotifyReadConsensusTxStatusResult::Status(status) => match status {
-                    ConsensusTxStatus::FastpathCertified => {
-                        // If the request is for consensus, we need to wait for the transaction to be finalised via Consensus.
-                        if ping == PingType::Consensus {
-                            last_status = Some(status);
-                            continue;
-                        }
-                        return Ok(WaitForEffectsResponse::Executed {
-                            effects_digest: TransactionEffectsDigest::ZERO,
-                            details,
-                            fast_path: true,
-                        });
-                    }
-                    ConsensusTxStatus::Rejected => {
-                        return Ok(WaitForEffectsResponse::Rejected { error: None });
-                    }
-                    ConsensusTxStatus::Finalized => {
-                        return Ok(WaitForEffectsResponse::Executed {
-                            effects_digest: TransactionEffectsDigest::ZERO,
-                            details,
-                            fast_path: false,
-                        });
-                    }
-                    ConsensusTxStatus::Dropped => {
-                        // Transaction was dropped post-consensus, currently only due to invalid owned object inputs..
-                        // Fetch the detailed error (e.g., ObjectLockConflict) from the rejection reason cache.
-                        return Ok(WaitForEffectsResponse::Rejected {
-                            error: epoch_store.get_rejection_vote_reason(consensus_position),
-                        });
-                    }
-                },
-                NotifyReadConsensusTxStatusResult::Expired(round) => {
-                    return Ok(WaitForEffectsResponse::Expired {
-                        epoch: epoch_store.epoch(),
-                        round: Some(round),
-                    });
-                }
+        let status = consensus_tx_status_cache
+            .notify_read_transaction_status_change(consensus_position, None)
+            .await;
+        match status {
+            NotifyReadConsensusTxStatusResult::Status(status) => match status {
+                ConsensusTxStatus::Rejected => Ok(WaitForEffectsResponse::Rejected { error: None }),
+                ConsensusTxStatus::Finalized => Ok(WaitForEffectsResponse::Executed {
+                    effects_digest: TransactionEffectsDigest::ZERO,
+                    details,
+                    fast_path: false,
+                }),
+                ConsensusTxStatus::Dropped => Ok(WaitForEffectsResponse::Rejected {
+                    error: epoch_store.get_rejection_vote_reason(consensus_position),
+                }),
+            },
+            NotifyReadConsensusTxStatusResult::Expired(round) => {
+                Ok(WaitForEffectsResponse::Expired {
+                    epoch: epoch_store.epoch(),
+                    round: Some(round),
+                })
             }
         }
     }
 
     #[instrument(level = "error", skip_all, err(level = "debug"))]
-    async fn wait_for_fastpath_effects(
+    async fn wait_for_consensus_status(
         &self,
         consensus_position: ConsensusPosition,
         tx_digests: &[TransactionDigest],
@@ -1342,61 +1310,47 @@ impl ValidatorService {
 
         consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
 
-        // FastpathCertified is non-terminal (tx may still be rejected), so loop
-        // until we see a terminal status.
-        let mut current_status = None;
-        loop {
-            let status = consensus_tx_status_cache
-                .notify_read_transaction_status_change(consensus_position, current_status)
-                .await;
-            match status {
-                NotifyReadConsensusTxStatusResult::Status(new_status) => match new_status {
-                    ConsensusTxStatus::Rejected => {
-                        return Ok(WaitForEffectsResponse::Rejected {
-                            error: epoch_store.get_rejection_vote_reason(consensus_position),
-                        });
-                    }
-                    ConsensusTxStatus::FastpathCertified => {
-                        current_status = Some(new_status);
-                        continue;
-                    }
-                    ConsensusTxStatus::Finalized => {
-                        let effects = self
-                            .state
+        let status = consensus_tx_status_cache
+            .notify_read_transaction_status_change(consensus_position, None)
+            .await;
+        match status {
+            NotifyReadConsensusTxStatusResult::Status(new_status) => match new_status {
+                ConsensusTxStatus::Rejected => Ok(WaitForEffectsResponse::Rejected {
+                    error: epoch_store.get_rejection_vote_reason(consensus_position),
+                }),
+                ConsensusTxStatus::Finalized => {
+                    let effects = self.state
                             .get_transaction_cache_reader()
                             .notify_read_executed_effects_may_fail(
-                                "AuthorityServer::wait_for_fastpath_effects::notify_read_executed_effects",
+                                "AuthorityServer::wait_for_consensus_status::notify_read_executed_effects",
                                 tx_digests,
                             )
                             .await?
                             .pop()
                             .unwrap();
-                        let effects_digest = effects.digest();
+                    let effects_digest = effects.digest();
 
-                        let details = if include_details {
-                            Some(self.complete_executed_data(effects).await?)
-                        } else {
-                            None
-                        };
+                    let details = if include_details {
+                        Some(self.complete_executed_data(effects).await?)
+                    } else {
+                        None
+                    };
 
-                        return Ok(WaitForEffectsResponse::Executed {
-                            effects_digest,
-                            details,
-                            fast_path: false,
-                        });
-                    }
-                    ConsensusTxStatus::Dropped => {
-                        return Ok(WaitForEffectsResponse::Rejected {
-                            error: epoch_store.get_rejection_vote_reason(consensus_position),
-                        });
-                    }
-                },
-                NotifyReadConsensusTxStatusResult::Expired(round) => {
-                    return Ok(WaitForEffectsResponse::Expired {
-                        epoch: epoch_store.epoch(),
-                        round: Some(round),
-                    });
+                    Ok(WaitForEffectsResponse::Executed {
+                        effects_digest,
+                        details,
+                        fast_path: false,
+                    })
                 }
+                ConsensusTxStatus::Dropped => Ok(WaitForEffectsResponse::Rejected {
+                    error: epoch_store.get_rejection_vote_reason(consensus_position),
+                }),
+            },
+            NotifyReadConsensusTxStatusResult::Expired(round) => {
+                Ok(WaitForEffectsResponse::Expired {
+                    epoch: epoch_store.epoch(),
+                    round: Some(round),
+                })
             }
         }
     }
