@@ -94,12 +94,11 @@ impl<'d, K, V> RevIter<'d, K, V> {
     /// key exists.
     pub(crate) fn skip_past(&mut self, prefix: impl AsRef<[u8]>) {
         if let Some(inner) = &mut self.inner {
-            let mut end = prefix.as_ref().to_vec();
-            if key::prev(&mut end) {
-                inner.seek_for_prev(end);
-            } else {
-                // Underflow
-                inner.seek_to_first();
+            let end = prefix.as_ref();
+            inner.seek_for_prev(end);
+            // The only way to land on something in the prefix range is if the prefix itself is an
+            // exact key, so an exact match check is sufficient.
+            if inner.key() == Some(end) {
                 inner.prev();
             }
         }
