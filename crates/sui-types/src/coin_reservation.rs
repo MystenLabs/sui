@@ -175,24 +175,6 @@ pub fn mask_or_unmask_id(object_id: ObjectID, chain_identifier: ChainIdentifier)
     ObjectID::new(masked_object_id_bytes)
 }
 
-pub fn is_coin_reservation_digest(digest: &ObjectDigest) -> bool {
-    ParsedDigest::is_coin_reservation_digest(digest)
-}
-
-/// Creates a fake ObjectRef representing an address balance, suitable for returning from
-/// JSON-RPC APIs to backward-compatible clients. The object_id is masked with the chain
-/// identifier to prevent cross-chain replay.
-pub fn encode_object_ref(
-    unmasked_object_id: ObjectID,
-    version: SequenceNumber,
-    epoch: EpochId,
-    balance: u64,
-    chain_identifier: ChainIdentifier,
-) -> ObjectRef {
-    ParsedObjectRefWithdrawal::new(unmasked_object_id, epoch, balance)
-        .encode(version, chain_identifier)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
