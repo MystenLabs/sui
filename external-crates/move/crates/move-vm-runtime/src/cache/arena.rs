@@ -13,6 +13,12 @@ use crate::shared::vm_pointer::VMPointer;
 // Types - Arenas for Cache Allocations
 // -------------------------------------------------------------------------------------------------
 
+/// Mutable construction phase of a package arena. Allocation methods are only available here.
+/// Once construction is complete, call `finish()` to produce a frozen `Arena` that is safe to share.
+pub struct ArenaBuilder(Bump);
+
+/// Frozen arena that owns the underlying memory but exposes no allocation methods.
+/// Because no mutation is possible, this is safe to share across threads.
 pub struct Arena(Bump);
 
 /// An arena-allocated vector. Notably, `Drop` does not drop the elements it holds, as that is the
@@ -35,18 +41,16 @@ const ARENA_SIZE: usize = 10_000_000;
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-impl Arena {
+impl ArenaBuilder {
     pub fn new_bounded() -> Self {
         let bump = Bump::new();
         bump.set_allocation_limit(Some(ARENA_SIZE));
-        Arena(bump)
+        ArenaBuilder(bump)
     }
 
     /// SAFETY:
-    /// 1. It is the caller's responsibility to ensure that `self` is not shared across threads
-    ///    during this call.
-    /// 2. This vector is allocated in the arena, and thus even it is dropped its memory will not
-    ///    be reclaimed until the arena is discarded.
+    /// This vector is allocated in the arena, and thus even it is dropped its memory will not
+    /// be reclaimed until the arena is discarded.
     pub fn alloc_vec<T>(
         &self,
         items: impl ExactSizeIterator<Item = T>,
@@ -66,8 +70,6 @@ impl Arena {
     ///    allocations or pointers), as they have heap-allocated byte arrays that will be leaked
     ///    when the arena is released. This box is allocated in the arena, and thus even if it is
     ///    dropped, any internal memory will not be reclaimed.
-    /// 1. It is the caller's responsibility to ensure that `self` is not shared across threads
-    ///    during this call.
     pub fn alloc_box<T>(&self, item: T) -> PartialVMResult<ArenaBox<T>> {
         if let Ok(slice) = self.0.try_alloc(item) {
             Ok(ArenaBox(unsafe {
@@ -78,6 +80,17 @@ impl Arena {
         }
     }
 
+    pub fn allocated_bytes(&self) -> usize {
+        self.0.allocated_bytes()
+    }
+
+    /// Freeze the arena, consuming the builder and returning an immutable `Arena`.
+    pub fn finish(self) -> Arena {
+        Arena(self.0)
+    }
+}
+
+impl Arena {
     pub fn allocated_bytes(&self) -> usize {
         self.0.allocated_bytes()
     }
@@ -122,9 +135,8 @@ impl<T> ArenaBox<T> {
 // Trait Implementations
 // -------------------------------------------------------------------------------------------------
 
-// SAFETY: these are okay, if callers follow the documented safety requirements for `Arena`'s
-// unsafe methods.
-
+// SAFETY: Arena is both Send and Sync. Unlike `ArenaBuilder`, no allocation mechs exposed, so the
+// underlying Bump is read-only, which is safe across threads.
 unsafe impl Send for Arena {}
 unsafe impl Sync for Arena {}
 
