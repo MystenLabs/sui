@@ -104,7 +104,12 @@ macro_rules! object_runtime {
     ($context:ident) => {
         $context
             .native_extensions
-            .read()
+            .try_borrow()
+            .map_err(|_| {
+                make_invariant_violation!(
+                    "Should be able to borrow object runtime native extension"
+                )
+            })?
             .get::<sui_move_natives::object_runtime::ObjectRuntime>()
             .map_err(|e| {
                 $context
@@ -118,7 +123,12 @@ macro_rules! object_runtime_mut {
     ($context:ident) => {
         $context
             .native_extensions
-            .write()
+            .try_borrow_mut()
+            .map_err(|_| {
+                make_invariant_violation!(
+                    "Should be able to borrow object runtime native extension"
+                )
+            })?
             .get_mut::<ObjectRuntime>()
             .map_err(|e| $context.env.convert_vm_error(e.finish(Location::Undefined)))
     };
@@ -347,7 +357,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             env.protocol_config,
             metrics.clone(),
             tx_context.clone(),
-        );
+        )?;
 
         debug_assert_eq!(gas_charger.move_gas_status().stack_height_current(), 0);
         let tx_context_value = Locals::new(vec![Some(Value::new_tx_context(
@@ -451,7 +461,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         let tx_digest = ref_context.borrow().digest();
 
         let object_runtime: ObjectRuntime = native_extensions
-            .write()
+            .try_borrow_mut().map_err(|_| make_invariant_violation!(
+                "Should be able to borrow object runtime native extension at the end of execution"
+            ))?
             .remove()
             .map_err(|e| env.convert_vm_error(e.finish(Location::Undefined)))?;
 

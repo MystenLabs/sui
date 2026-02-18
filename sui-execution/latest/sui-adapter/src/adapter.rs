@@ -83,10 +83,15 @@ mod checked {
         protocol_config: &'r ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
-    ) -> NativeExtensions<'r> {
+    ) -> Result<NativeExtensions<'r>, ExecutionError> {
         let current_epoch_id: EpochId = tx_context.borrow().epoch();
         let extensions = NativeExtensions::default();
-        extensions.write().add(ObjectRuntime::new(
+        let mut exts = extensions.try_borrow_mut().map_err(|_| {
+            make_invariant_violation!(
+                "Failed to mutably borrow native extensions to populate them right after creating them"
+            )
+        })?;
+        exts.add(ObjectRuntime::new(
             child_resolver,
             input_objects,
             is_metered,
@@ -94,11 +99,10 @@ mod checked {
             metrics,
             current_epoch_id,
         ));
-        extensions
-            .write()
-            .add(NativesCostTable::from_protocol_config(protocol_config));
-        extensions.write().add(TransactionContext::new(tx_context));
-        extensions
+        exts.add(NativesCostTable::from_protocol_config(protocol_config));
+        exts.add(TransactionContext::new(tx_context));
+        drop(exts);
+        Ok(extensions)
     }
 
     /// Given a list of `modules` and an `object_id`, mutate each module's self ID (which must be

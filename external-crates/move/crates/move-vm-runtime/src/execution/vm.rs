@@ -403,7 +403,13 @@ impl<'extensions> MoveVM<'extensions> {
             &mut self.virtual_tables,
             txn_telemetry,
             self.vm_config.clone(),
-            &mut self.native_extensions.write(),
+            &mut *self.native_extensions.try_borrow_mut().map_err(|e| {
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "native extensions already mutably borrowed: {e}"
+                )
+                .finish(Location::Undefined)
+            })?,
             tracer,
             gas_meter,
             func,

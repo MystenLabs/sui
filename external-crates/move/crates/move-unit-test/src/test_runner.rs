@@ -44,9 +44,11 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 use regex::Regex;
 use std::{
+    cell::RefCell,
     collections::BTreeMap,
     io::Write,
     marker::Send,
+    rc::Rc,
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -292,7 +294,7 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
             let adapter = test_config.vm_test_adapter.read();
             let mut vm_instance = adapter.make_vm_with_native_extensions(
                 link_context,
-                Arc::new(RwLock::new(native_context_extensions)),
+                Rc::new(RefCell::new(native_context_extensions)),
             )?;
 
             let function_name = IdentStr::new(function_name).unwrap();
