@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 
 use crate::{TestCluster, TestClusterBuilder};
 use sui_keys::keystore::AccountKeystore;
@@ -27,6 +27,7 @@ use sui_types::{
 
 pub struct TestEnvBuilder {
     num_validators: usize,
+    test_cluster_builder_cb: Option<Box<dyn Fn(TestClusterBuilder) -> TestClusterBuilder + Send>>,
     proto_override_cb:
         Option<Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send>>,
 }
@@ -40,6 +41,7 @@ impl Default for TestEnvBuilder {
 impl TestEnvBuilder {
     pub fn new() -> Self {
         Self {
+            test_cluster_builder_cb: None,
             proto_override_cb: None,
             num_validators: 1,
         }
@@ -59,15 +61,27 @@ impl TestEnvBuilder {
         self
     }
 
+    pub fn with_test_cluster_builder_cb(
+        mut self,
+        cb: Box<dyn Fn(TestClusterBuilder) -> TestClusterBuilder + Send>,
+    ) -> Self {
+        self.test_cluster_builder_cb = Some(cb);
+        self
+    }
+
     pub async fn build(self) -> TestEnv {
         let _guard = self
             .proto_override_cb
             .map(ProtocolConfig::apply_overrides_for_testing);
 
-        let test_cluster = TestClusterBuilder::new()
-            .with_num_validators(self.num_validators)
-            .build()
-            .await;
+        let mut test_cluster_builder =
+            TestClusterBuilder::new().with_num_validators(self.num_validators);
+
+        if let Some(cb) = self.test_cluster_builder_cb {
+            test_cluster_builder = cb(test_cluster_builder);
+        }
+
+        let test_cluster = test_cluster_builder.build().await;
 
         let chain_id = test_cluster.get_chain_identifier();
         let rgp = test_cluster.get_reference_gas_price().await;
@@ -153,6 +167,14 @@ impl TestEnv {
         (sender, gas)
     }
 
+    pub fn get_all_senders(&self) -> Vec<SuiAddress> {
+        self.cluster.wallet.get_addresses()
+    }
+
+    pub fn get_gas_for_sender(&self, sender: SuiAddress) -> Vec<ObjectRef> {
+        self.gas_objects.get(&sender).unwrap().clone()
+    }
+
     pub fn tx_builder(&self, sender: SuiAddress) -> TestTransactionBuilder {
         let gas = self.gas_objects.get(&sender).unwrap()[0];
         TestTransactionBuilder::new(sender, gas, self.rgp)
@@ -176,6 +198,24 @@ impl TestEnv {
             .await;
         self.update_all_gas().await;
         res
+    }
+
+    pub async fn setup_test_package(&mut self, path: impl AsRef<Path>) -> ObjectID {
+        let context = &mut self.cluster.wallet;
+        let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = context.get_reference_gas_price().await.unwrap();
+        let txn = context
+            .sign_transaction(
+                &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                    .publish_async(path.as_ref().to_path_buf())
+                    .await
+                    .build(),
+            )
+            .await;
+        let resp = context.execute_transaction_must_succeed(txn).await;
+        let package_ref = resp.get_new_package_obj().unwrap();
+        self.update_all_gas().await;
+        package_ref.0
     }
 
     pub fn encode_coin_reservation(
