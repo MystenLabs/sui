@@ -55,8 +55,8 @@ impl ArenaBuilder {
         &self,
         items: impl ExactSizeIterator<Item = T>,
     ) -> PartialVMResult<ArenaVec<T>> {
-        let size = items.len();
         if let Ok(slice) = self.0.try_alloc_slice_fill_iter(items) {
+            let size = slice.len();
             Ok(ArenaVec(unsafe {
                 std::mem::ManuallyDrop::new(Vec::from_raw_parts(slice.as_mut_ptr(), size, size))
             }))

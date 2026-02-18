@@ -313,6 +313,9 @@ impl<'b> NativeContext<'_, 'b, '_> {
         self.gas_budget
     }
 
+    /// SAFETY: Uses `RefCell::borrow()` rather than `try_borrow()` because `gas_left` is only
+    /// mutably borrowed during `charge_gas`, which always drops its `RefMut` before returning.
+    /// This function is only called after charging completes, so no concurrent borrow is possible.
     pub fn gas_used(&self) -> InternalGas {
         self.gas_budget.saturating_sub(*self.gas_left.borrow())
     }

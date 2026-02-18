@@ -118,10 +118,10 @@ impl BaseHeap {
     pub fn is_invalid(&self, ndx: BaseHeapId) -> PartialVMResult<bool> {
         self.values
             .get(&ndx)
-            .map(|value| matches!(&*value.borrow(), &Value::Invalid))
             .ok_or_else(|| {
                 partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "Invalid index: {}", ndx)
             })
+            .and_then(|value| Ok(matches!(&*value.try_borrow()?, &Value::Invalid)))
     }
 }
 
@@ -148,13 +148,7 @@ impl MachineHeap {
         // Calculate how many invalid values need to be added
         let invalids_len = size.safe_sub(params.len())?;
 
-        self.cur_size = self.cur_size.checked_add(size).ok_or_else(|| {
-            partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Heap overflow: cannot allocate stack frame of size {}",
-                size
-            )
-        })?;
+        self.cur_size = self.cur_size.safe_add(size)?;
 
         // Initialize the stack frame with the provided parameters and fill remaining slots with `Invalid`
         let local_values = params
@@ -170,15 +164,7 @@ impl MachineHeap {
 
     /// Frees the given stack frame, ensuring that it is the last frame on the heap.
     pub fn free_stack_frame(&mut self, frame: StackFrame) -> PartialVMResult<()> {
-        self.cur_size = self
-            .cur_size
-            .checked_sub(frame.slice.len())
-            .ok_or_else(|| {
-                partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Attempting to free more stack frame slots than are allocated"
-                )
-            })?;
+        self.cur_size = self.cur_size.safe_sub(frame.slice.len())?;
         Ok(())
     }
 }
@@ -194,7 +180,8 @@ impl StackFrame {
 
     /// Makes a copy of the value, via `value.copy_value`
     pub fn copy_loc(&self, ndx: usize) -> PartialVMResult<Value> {
-        self.get_valid(ndx).map(|value| value.borrow().copy_value())
+        self.get_valid(ndx)
+            .and_then(|value| Ok(value.try_borrow()?.copy_value()))
     }
 
     /// Moves a location out of memory, swapping it with `ValueImpl::Invalid`
@@ -241,7 +228,7 @@ impl StackFrame {
                 partial_vm_error!(INTERNAL_TYPE_ERROR, "Local index out of bounds: {}", ndx)
             })
             .and_then(|value| {
-                if matches!(&*value.borrow(), &Value::Invalid) {
+                if matches!(&*value.try_borrow()?, &Value::Invalid) {
                     Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
                         "Local index {} is unset",
@@ -261,7 +248,7 @@ impl StackFrame {
                 partial_vm_error!(INTERNAL_TYPE_ERROR, "Local index out of bounds: {}", ndx)
             })
             .and_then(|value| {
-                if matches!(&*value.borrow(), &Value::Invalid) {
+                if matches!(&*value.try_borrow()?, &Value::Invalid) {
                     Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
                         "Local index {} is unset",
