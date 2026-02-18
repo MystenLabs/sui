@@ -257,10 +257,14 @@ fn modules(
             // "current" friends because all the new friends are generated off of
             // `public(package)` usage, which disallows other friends.
             mdef.friends = friends;
-        } else {
+        } else if compilation_env.ide_mode() {
             // if a module is not in the typed modules, it must be in pre-compiled library
             // (info contains both typed and pre-compiled modules)
-            assert!(info.modules.contains_key(&mident));
+            assert!(
+                info.modules.contains_key(&mident),
+                "ICE compiler added a friend to module {} that is neither in typed modules nor in pre-compiled library (in IDE mode)",
+                mident
+            );
             // This can happen if some (dependency) modules from the same package are in typed
             // modules and some are in pre-compiled library. Technically this could lead to
             // incorrect friends list for one of the pre-compiled modules, but in practice
@@ -285,6 +289,11 @@ fn modules(
             // which is not a problem as M1 cannot have both friend and public(package) functions
             // - when building dependency info for typed modules, which is not a problem
             // because M1 is in pre-compiled library and not in typed modules
+        } else {
+            panic!(
+                "ICE compiler added a friend to module {} that is not in typed modules",
+                mident
+            );
         }
     }
 
