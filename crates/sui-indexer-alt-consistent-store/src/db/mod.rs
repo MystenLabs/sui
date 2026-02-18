@@ -1742,7 +1742,7 @@ pub(crate) mod tests {
 
         // Skip past prefix that covers keys 4, 6 (e.g., skip to first key >= 7)
         // This tests the skip primitive
-        iter.skip_prefix(key::encode(&7u64));
+        iter.skip_past(key::encode(&7u64));
 
         // Should land on 8
         let (k, v) = iter.next().unwrap().unwrap();
@@ -1750,7 +1750,7 @@ pub(crate) mod tests {
 
         // Skip past end
         let mut iter: iter::FwdIter<'_, u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
-        iter.skip_prefix(key::encode(&100u64));
+        iter.skip_past(key::encode(&100u64));
         assert!(iter.next().is_none());
     }
 
@@ -1774,13 +1774,13 @@ pub(crate) mod tests {
         let mut iter: iter::RevIter<'_, u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
 
         // Skip to last key before 6
-        iter.skip_prefix(key::encode(&6u64));
+        iter.skip_past(key::encode(&6u64));
         let (k, v) = iter.next().unwrap().unwrap();
         assert_eq!((k, v), (5, 6));
 
         // Reset and skip past end
         let mut iter: iter::RevIter<'_, u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
-        iter.skip_prefix(key::encode(&0u64));
+        iter.skip_past(key::encode(&0u64));
         assert!(iter.next().is_none());
     }
 }

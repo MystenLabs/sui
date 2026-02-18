@@ -41,7 +41,7 @@ impl<'d, K, V> FwdIter<'d, K, V> {
     /// Skip past all keys that start with the given `prefix`. The iterator will be positioned at
     /// the first key that does not start with the `prefix`, or will be invalid if no such key
     /// exists.
-    pub(crate) fn skip_prefix(&mut self, prefix: impl AsRef<[u8]>) {
+    pub(crate) fn skip_past(&mut self, prefix: impl AsRef<[u8]>) {
         if let Some(inner) = &mut self.inner {
             let mut end = prefix.as_ref().to_vec();
             if key::next(&mut end) {
@@ -92,13 +92,14 @@ impl<'d, K, V> RevIter<'d, K, V> {
     /// Skip past all keys that start with the given `prefix` in reverse order. The iterator will be
     /// positioned at the last key that does not start with `prefix`, or will be invalid if no such
     /// key exists.
-    pub(crate) fn skip_prefix(&mut self, prefix: impl AsRef<[u8]>) {
+    pub(crate) fn skip_past(&mut self, prefix: impl AsRef<[u8]>) {
         if let Some(inner) = &mut self.inner {
-            let end = prefix.as_ref();
-            inner.seek_for_prev(end);
-            // The only way to land on something in the prefix range is if the prefix itself is an
-            // exact key, so an exact match check is sufficient.
-            if inner.key() == Some(end) {
+            let mut end = prefix.as_ref().to_vec();
+            if key::prev(&mut end) {
+                inner.seek_for_prev(end);
+            } else {
+                // Underflow
+                inner.seek_to_first();
                 inner.prev();
             }
         }

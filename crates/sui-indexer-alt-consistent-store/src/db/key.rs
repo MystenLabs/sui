@@ -45,3 +45,18 @@ pub(crate) fn next(bs: &mut [u8]) -> bool {
 
     false
 }
+
+/// Modify the key `bs` in place to the lexicographically previous key.
+///
+/// Returns a boolean indicating whether the decrement succeeded without underflow or not. On an
+/// underflow, the key is reset to 0xFF.
+pub(crate) fn prev(bs: &mut [u8]) -> bool {
+    for b in bs.iter_mut().rev() {
+        *b = b.wrapping_sub(1);
+        if *b != 0xFF {
+            return true;
+        }
+    }
+
+    false
+}

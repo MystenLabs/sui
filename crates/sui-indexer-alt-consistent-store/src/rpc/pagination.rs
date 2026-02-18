@@ -130,6 +130,7 @@ impl<'r> Page<'r> {
         K: Encode + Decode<()>,
         V: Serialize + DeserializeOwned,
     {
+        // TODO: support paginating over multiple inclusion and exclusion regions.
         let exclude_prefix = key::encode(&(base, exclude));
         if self.is_from_front {
             self.paginate_from_front(
@@ -195,7 +196,7 @@ impl<'r> Page<'r> {
             if let Some(excl) = exclude_prefix
                 && cursor.starts_with(excl)
             {
-                iter.skip_prefix(excl);
+                iter.skip_past(excl);
                 continue;
             }
 
@@ -221,7 +222,7 @@ impl<'r> Page<'r> {
         if let Some(excl) = exclude_prefix
             && iter.raw_key().is_some_and(|k| k.starts_with(excl))
         {
-            iter.skip_prefix(excl);
+            iter.skip_past(excl);
         }
 
         Ok(Response {
@@ -268,7 +269,7 @@ impl<'r> Page<'r> {
             if let Some(excl) = exclude_prefix
                 && cursor.starts_with(excl)
             {
-                iter.skip_prefix(excl);
+                iter.skip_past(excl);
                 continue;
             }
 
@@ -295,7 +296,7 @@ impl<'r> Page<'r> {
         if let Some(excl) = exclude_prefix
             && iter.raw_key().is_some_and(|k| k.starts_with(excl))
         {
-            iter.skip_prefix(excl);
+            iter.skip_past(excl);
         }
 
         results.reverse();
