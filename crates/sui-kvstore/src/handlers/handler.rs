@@ -20,7 +20,7 @@ use crate::bigtable::store::BigTableStore;
 /// BigTable's hard limit for mutations per batch.
 pub const BIGTABLE_MAX_MUTATIONS: usize = 100_000;
 
-const DEFAULT_MAX_MUTATIONS: usize = 10_000;
+const DEFAULT_MAX_MUTATIONS: usize = 100;
 static MAX_MUTATIONS: OnceLock<usize> = OnceLock::new();
 
 /// Extension of `Processor` that specifies a BigTable table name.
@@ -86,6 +86,7 @@ where
     type Batch = BigTableBatch;
 
     const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
+    const MAX_PENDING_ROWS: usize = 1_000_000;
 
     fn batch(
         &self,
@@ -98,7 +99,7 @@ where
             inner.total_mutations += entry.mutations.len();
             inner.entries.insert(entry.row_key.clone(), entry);
 
-            if inner.total_mutations == max_mutations() {
+            if inner.total_mutations >= max_mutations() {
                 return BatchStatus::Ready;
             }
         }
