@@ -252,10 +252,16 @@ impl StateRead for AuthorityState {
     fn get_object_read(&self, object_id: &ObjectID) -> StateReadResult<ObjectRead> {
         let result = self.get_object_read(object_id)?;
 
+        // Backward compatibility: if the object doesn't exist, check if it's a masked
+        // coin reservation ID pointing to an address balance accumulator.
+        // Coin reservations use masked IDs (XORed with chain identifier) to prevent
+        // cross-chain replay. Unmasking reveals the actual accumulator object ID.
         if let ObjectRead::NotExists(object_id) = result {
             let chain_identifier = self.get_chain_identifier();
             let unmasked_id = coin_reservation::mask_or_unmask_id(object_id, chain_identifier);
 
+            // If unmasking yields an existing accumulator object, synthesize a fake Coin
+            // object to return to the client.
             if let ObjectRead::Exists(_, object, _) = self.get_object_read(&unmasked_id)? {
                 let accumulator_version = object.version();
                 let Some(move_object) = object.data.try_as_move() else {
@@ -480,7 +486,12 @@ impl StateRead for AuthorityState {
             .as_ref()
             .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
 
-        // Get currency types for address balances
+        // Backward compatibility: synthesize fake Coin objects for address balances.
+        // These are merged with real coins below, sorted by (coin_type, inverted_balance, object_id).
+        //
+        // First, determine which currency types have address balances for this owner.
+        // If querying all coin types, filter to types >= cursor position (lexicographic).
+        // If querying a single coin type, use only that type.
         let address_balance_currency_types: Vec<TypeTag> = if !one_coin_type_only {
             indexes
                 .get_address_balance_coin_types_iter(owner)
@@ -495,7 +506,7 @@ impl StateRead for AuthorityState {
         let cursor_key =
             CoinIndexKey2::new_from_cursor(owner, cursor.0.clone(), cursor.1, cursor.2);
 
-        // Build address balance coins
+        // Build fake coins for each address balance, applying cursor-based filtering.
         let mut address_balance_coins = vec![];
         for currency_type in address_balance_currency_types {
             let balance_type = Balance::type_tag(currency_type.clone());
@@ -503,7 +514,10 @@ impl StateRead for AuthorityState {
                 self.get_address_balance_coin_info(owner, balance_type)?
             {
                 let key = CoinIndexKey2::new(owner, currency_type.to_string(), balance, obj_ref.0);
-                if key < cursor_key {
+                // Skip coins at or before the cursor position. We must skip the cursor's
+                // object_id explicitly because the fake coin's key may compare equal to
+                // the cursor key (same balance), but we shouldn't return it again.
+                if key < cursor_key || key.object_id == cursor.2 {
                     continue;
                 }
                 address_balance_coins.push((

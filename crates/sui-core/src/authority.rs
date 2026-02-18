@@ -4728,13 +4728,12 @@ impl AuthorityState {
             return Ok(None);
         };
 
-        let object_ref = coin_reservation::encode_object_ref(
+        let object_ref = coin_reservation::ParsedObjectRefWithdrawal::new(
             accumulator_obj.id(),
-            accumulator_obj.version(),
             self.load_epoch_store_one_call_per_task().epoch(),
             balance,
-            self.get_chain_identifier(),
-        );
+        )
+        .encode(accumulator_obj.version(), self.get_chain_identifier());
 
         Ok(Some((
             object_ref,
