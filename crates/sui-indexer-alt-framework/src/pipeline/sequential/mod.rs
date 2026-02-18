@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 use tracing::info;
 
 use crate::metrics::IndexerMetrics;
+use crate::monitored_channel;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::PIPELINE_BUFFER;
 use crate::pipeline::Processor;
@@ -116,7 +117,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     next_checkpoint: u64,
     config: SequentialConfig,
     db: H::Store,
-    checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
+    checkpoint_rx: monitored_channel::Receiver<Arc<Checkpoint>>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
@@ -125,7 +126,15 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         "Starting pipeline with config: {config:#?}",
     );
 
-    let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
+    let processor_channel_size = H::FANOUT + PIPELINE_BUFFER;
+    let (processor_tx, committer_rx) = monitored_channel::channel(
+        processor_channel_size,
+        metrics.processor_channel_fill.with_label_values(&[H::NAME]),
+    );
+    metrics
+        .processor_channel_capacity
+        .with_label_values(&[H::NAME])
+        .set(processor_channel_size as i64);
 
     let handler = Arc::new(handler);
 

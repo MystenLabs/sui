@@ -8,7 +8,6 @@ use std::sync::atomic::Ordering;
 
 use sui_futures::service::Service;
 use tokio::sync::SetOnce;
-use tokio::sync::mpsc;
 use tokio::time::MissedTickBehavior;
 use tokio::time::interval;
 use tracing::debug;
@@ -16,6 +15,7 @@ use tracing::info;
 
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
+use crate::monitored_channel;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::IndexedCheckpoint;
 use crate::pipeline::PendingRowsGuard;
@@ -78,8 +78,8 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 pub(super) fn collector<H: Handler + 'static>(
     handler: Arc<H>,
     config: CommitterConfig,
-    mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
-    tx: mpsc::Sender<BatchedRows<H>>,
+    mut rx: monitored_channel::Receiver<IndexedCheckpoint<H>>,
+    tx: monitored_channel::Sender<BatchedRows<H>>,
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
@@ -315,18 +315,22 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use std::time::Duration;
 
-    use async_trait::async_trait;
-    use sui_pg_db::Connection;
-    use sui_pg_db::Db;
-    use tokio::sync::mpsc;
-
     use crate::metrics::tests::test_metrics;
+    use crate::monitored_channel;
     use crate::pipeline::PendingRowsGuard;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::BatchStatus;
     use crate::types::full_checkpoint_content::Checkpoint;
+    use async_trait::async_trait;
+    use prometheus::IntGauge;
+    use sui_pg_db::Connection;
+    use sui_pg_db::Db;
 
     use super::*;
+
+    fn test_gauge() -> IntGauge {
+        IntGauge::new("test", "test").unwrap()
+    }
 
     #[derive(Clone)]
     struct Entry;
@@ -384,7 +388,7 @@ mod tests {
 
     /// Wait for a timeout on the channel, expecting this operation to timeout.
     async fn expect_timeout<H: Handler + 'static>(
-        rx: &mut mpsc::Receiver<BatchedRows<H>>,
+        rx: &mut monitored_channel::Receiver<BatchedRows<H>>,
         duration: Duration,
     ) {
         match tokio::time::timeout(duration, rx.recv()).await {
@@ -396,7 +400,7 @@ mod tests {
     /// Receive from the channel with a given timeout, panicking if the timeout is reached or the
     /// channel is closed.
     async fn recv_with_timeout<H: Handler + 'static>(
-        rx: &mut mpsc::Receiver<BatchedRows<H>>,
+        rx: &mut monitored_channel::Receiver<BatchedRows<H>>,
         timeout: Duration,
     ) -> BatchedRows<H> {
         match tokio::time::timeout(timeout, rx.recv()).await {
@@ -408,8 +412,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_collector_batches_data() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let (processor_tx, processor_rx) = monitored_channel::channel(10, test_gauge());
+        let (collector_tx, mut collector_rx) = monitored_channel::channel(10, test_gauge());
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let handler = Arc::new(TestHandler);
@@ -469,8 +473,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_collector_shutdown() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let (processor_tx, processor_rx) = monitored_channel::channel(10, test_gauge());
+        let (collector_tx, mut collector_rx) = monitored_channel::channel(10, test_gauge());
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let handler = Arc::new(TestHandler);
@@ -512,8 +516,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_collector_accumulates_across_checkpoints_until_eager_threshold() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let (processor_tx, processor_rx) = monitored_channel::channel(10, test_gauge());
+        let (collector_tx, mut collector_rx) = monitored_channel::channel(10, test_gauge());
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         // Set a very long collect interval (60 seconds) to ensure timing doesn't trigger batching
@@ -574,8 +578,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_immediate_batch_on_min_eager_rows() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let (processor_tx, processor_rx) = monitored_channel::channel(10, test_gauge());
+        let (collector_tx, mut collector_rx) = monitored_channel::channel(10, test_gauge());
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         // Set a very long collect interval (60 seconds) to ensure timing doesn't trigger batching
@@ -624,8 +628,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_collector_waits_for_timer_when_below_eager_threshold() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let (processor_tx, processor_rx) = monitored_channel::channel(10, test_gauge());
+        let (collector_tx, mut collector_rx) = monitored_channel::channel(10, test_gauge());
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         // Set a reasonable collect interval for this test (3 seconds).
@@ -671,8 +675,8 @@ mod tests {
     /// checkpoints for commit.
     #[tokio::test(start_paused = true)]
     async fn test_collector_waits_for_main_reader_lo_init() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let (processor_tx, processor_rx) = monitored_channel::channel(10, test_gauge());
+        let (collector_tx, mut collector_rx) = monitored_channel::channel(10, test_gauge());
         let main_reader_lo = Arc::new(SetOnce::new());
 
         let handler = Arc::new(TestHandler);
@@ -724,8 +728,8 @@ mod tests {
     /// immediately.
     #[tokio::test]
     async fn test_collector_drops_checkpoints_immediately_if_le_main_reader_lo() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let (processor_tx, processor_rx) = monitored_channel::channel(10, test_gauge());
+        let (collector_tx, mut collector_rx) = monitored_channel::channel(10, test_gauge());
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(5))));
         let metrics = test_metrics();
 
@@ -791,8 +795,8 @@ mod tests {
     /// must still decrement the shared counter so that row-count backpressure doesn't leak.
     #[tokio::test]
     async fn test_collector_skipped_checkpoints_release_pending_rows() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let (processor_tx, processor_rx) = monitored_channel::channel(10, test_gauge());
+        let (collector_tx, mut collector_rx) = monitored_channel::channel(10, test_gauge());
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(5))));
 
         let collector = collector(
@@ -860,8 +864,8 @@ mod tests {
     /// remaining checkpoint parts.
     #[tokio::test(start_paused = true)]
     async fn test_collector_only_filters_whole_checkpoints() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let (processor_tx, processor_rx) = monitored_channel::channel(10, test_gauge());
+        let (collector_tx, mut collector_rx) = monitored_channel::channel(10, test_gauge());
         let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let metrics = test_metrics();

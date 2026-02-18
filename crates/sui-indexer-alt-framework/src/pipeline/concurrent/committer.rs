@@ -8,8 +8,6 @@ use backoff::ExponentialBackoff;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -17,6 +15,7 @@ use tracing::warn;
 
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
+use crate::monitored_channel;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::BatchedRows;
@@ -41,8 +40,8 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 pub(super) fn committer<H: Handler + 'static>(
     handler: Arc<H>,
     config: CommitterConfig,
-    rx: mpsc::Receiver<BatchedRows<H>>,
-    tx: mpsc::Sender<Vec<WatermarkPart>>,
+    rx: monitored_channel::Receiver<BatchedRows<H>>,
+    tx: monitored_channel::Sender<Vec<WatermarkPart>>,
     db: H::Store,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
@@ -54,7 +53,7 @@ pub(super) fn committer<H: Handler + 'static>(
             &metrics.latest_partially_committed_checkpoint,
         );
 
-        match ReceiverStream::new(rx)
+        match monitored_channel::ReceiverStream::new(rx)
             .try_for_each_spawned(
                 config.write_concurrency,
                 |BatchedRows {
@@ -225,12 +224,13 @@ mod tests {
 
     use anyhow::ensure;
     use async_trait::async_trait;
+    use prometheus::IntGauge;
     use sui_types::full_checkpoint_content::Checkpoint;
-    use tokio::sync::mpsc;
 
     use crate::FieldCount;
     use crate::metrics::IndexerMetrics;
     use crate::mocks::store::*;
+    use crate::monitored_channel;
     use crate::pipeline::Processor;
     use crate::pipeline::WatermarkPart;
     use crate::pipeline::concurrent::BatchStatus;
@@ -239,6 +239,10 @@ mod tests {
     use crate::store::CommitterWatermark;
 
     use super::*;
+
+    fn test_gauge() -> IntGauge {
+        IntGauge::new("test", "test").unwrap()
+    }
 
     #[derive(Clone, FieldCount, Default)]
     pub struct StoredData {
@@ -315,8 +319,8 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        batch_tx: mpsc::Sender<BatchedRows<DataPipeline>>,
-        watermark_rx: mpsc::Receiver<Vec<WatermarkPart>>,
+        batch_tx: monitored_channel::Sender<BatchedRows<DataPipeline>>,
+        watermark_rx: monitored_channel::Receiver<Vec<WatermarkPart>>,
         committer: Service,
     }
 
@@ -330,8 +334,9 @@ mod tests {
         let config = CommitterConfig::default();
         let metrics = IndexerMetrics::new(None, &Default::default());
 
-        let (batch_tx, batch_rx) = mpsc::channel::<BatchedRows<DataPipeline>>(10);
-        let (watermark_tx, watermark_rx) = mpsc::channel(10);
+        let (batch_tx, batch_rx) =
+            monitored_channel::channel::<BatchedRows<DataPipeline>>(10, test_gauge());
+        let (watermark_tx, watermark_rx) = monitored_channel::channel(10, test_gauge());
 
         let store_clone = store.clone();
         let handler = Arc::new(DataPipeline);

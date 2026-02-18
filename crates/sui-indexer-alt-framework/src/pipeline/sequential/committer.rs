@@ -16,6 +16,7 @@ use tracing::warn;
 
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
+use crate::monitored_channel;
 use crate::pipeline::IndexedCheckpoint;
 use crate::pipeline::WARN_PENDING_WATERMARKS;
 use crate::pipeline::logging::WatermarkLogger;
@@ -44,7 +45,7 @@ pub(super) fn committer<H>(
     handler: Arc<H>,
     config: SequentialConfig,
     mut next_checkpoint: u64,
-    mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
+    mut rx: monitored_channel::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
@@ -399,16 +400,22 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
+    use prometheus::IntGauge;
     use prometheus::Registry;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
 
     use crate::mocks::store::MockConnection;
     use crate::mocks::store::MockStore;
+    use crate::monitored_channel;
     use crate::pipeline::CommitterConfig;
     use crate::pipeline::Processor;
 
     use super::*;
+
+    fn test_gauge() -> IntGauge {
+        IntGauge::new("test", "test").unwrap()
+    }
 
     // Test implementation of Handler
     #[derive(Default)]
@@ -450,7 +457,7 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        checkpoint_tx: mpsc::Sender<IndexedCheckpoint<TestHandler>>,
+        checkpoint_tx: monitored_channel::Sender<IndexedCheckpoint<TestHandler>>,
         commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
         #[allow(unused)]
         committer: Service,
@@ -461,7 +468,7 @@ mod tests {
     fn setup_test(next_checkpoint: u64, config: SequentialConfig, store: MockStore) -> TestSetup {
         let metrics = IndexerMetrics::new(None, &Registry::default());
 
-        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
+        let (checkpoint_tx, checkpoint_rx) = monitored_channel::channel(10, test_gauge());
         #[allow(clippy::disallowed_methods)]
         let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
 

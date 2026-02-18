@@ -40,6 +40,7 @@ pub use sui_types as types;
 pub mod cluster;
 pub mod ingestion;
 pub mod metrics;
+pub(crate) mod monitored_channel;
 pub mod pipeline;
 #[cfg(feature = "postgres")]
 pub mod postgres;
@@ -284,7 +285,7 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
-        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe();
+        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe(H::NAME);
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
             next_checkpoint,
@@ -407,7 +408,7 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
-        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe();
+        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe(H::NAME);
 
         self.pipelines.push(sequential::pipeline::<H>(
             handler,

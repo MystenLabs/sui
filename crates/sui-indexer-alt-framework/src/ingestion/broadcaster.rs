@@ -26,6 +26,7 @@ use crate::ingestion::error::Error;
 use crate::ingestion::ingestion_client::IngestionClient;
 use crate::ingestion::streaming_client::CheckpointStreamingClient;
 use crate::metrics::IngestionMetrics;
+use crate::monitored_channel;
 use crate::types::full_checkpoint_content::Checkpoint;
 
 /// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges
@@ -50,13 +51,15 @@ pub(super) fn broadcaster<R, S>(
     config: IngestionConfig,
     client: IngestionClient,
     mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
+    subscribers: Vec<monitored_channel::Sender<Arc<Checkpoint>>>,
     metrics: Arc<IngestionMetrics>,
 ) -> Service
 where
     R: std::ops::RangeBounds<u64> + Send + 'static,
     S: CheckpointStreamingClient + Send + 'static,
 {
+    let subscribers = Arc::new(subscribers);
+
     Service::new().spawn_aborting(async move {
         info!("Starting broadcaster");
 
@@ -79,8 +82,6 @@ where
         };
 
         let buffer_size = config.checkpoint_buffer_size as u64;
-
-        let subscribers = Arc::new(subscribers);
 
         // Track subscriber watermarks
         let mut subscribers_hi = HashMap::<&'static str, u64>::new();
@@ -218,7 +219,7 @@ fn ingest_and_broadcast_range(
     ingest_concurrency: usize,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     client: IngestionClient,
-    subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    subscribers: Arc<Vec<monitored_channel::Sender<Arc<Checkpoint>>>>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
         // Backpressure is enforced at the stream level: checkpoints are only yielded when
@@ -256,7 +257,7 @@ async fn setup_streaming_task<S>(
     end_cp: u64,
     streaming_backoff_batch_size: &mut u64,
     config: &IngestionConfig,
-    subscribers: &Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    subscribers: &Arc<Vec<monitored_channel::Sender<Arc<Checkpoint>>>>,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: &Arc<IngestionMetrics>,
 ) -> (TaskGuard<u64>, u64)
@@ -348,7 +349,7 @@ async fn stream_and_broadcast_range(
     mut lo: u64,
     hi: u64,
     mut stream: impl Stream<Item = Result<Checkpoint, Error>> + Unpin,
-    subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    subscribers: Arc<Vec<monitored_channel::Sender<Arc<Checkpoint>>>>,
     mut ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: Arc<IngestionMetrics>,
 ) -> u64 {
@@ -414,7 +415,7 @@ async fn stream_and_broadcast_range(
 /// Returns an error if any subscriber's channel is closed.
 async fn send_checkpoint(
     checkpoint: Arc<Checkpoint>,
-    subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
+    subscribers: &[monitored_channel::Sender<Arc<Checkpoint>>],
 ) -> Result<Vec<()>, mpsc::error::SendError<Arc<Checkpoint>>> {
     let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
     try_join_all(futures).await
@@ -429,11 +430,12 @@ fn noop_streaming_task(checkpoint_hi: u64) -> TaskGuard<u64> {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
-    use std::fmt::Debug;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::error::Elapsed;
     use tokio::time::timeout;
+
+    use prometheus::IntGauge;
 
     use super::*;
     use crate::ingestion::IngestionConfig;
@@ -441,6 +443,10 @@ mod tests {
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
+
+    fn test_gauge() -> IntGauge {
+        IntGauge::new("test_inflight", "test").unwrap()
+    }
 
     /// Create a mock IngestionClient for tests
     fn mock_client(metrics: Arc<IngestionMetrics>) -> IngestionClient {
@@ -478,12 +484,14 @@ mod tests {
 
     /// Wait up to a second for a response on the channel, and return it, expecting this operation
     /// to succeed.
-    async fn expect_recv<T>(rx: &mut mpsc::Receiver<T>) -> Option<T> {
+    async fn expect_recv<T>(rx: &mut monitored_channel::Receiver<T>) -> Option<T> {
         timeout(Duration::from_secs(1), rx.recv()).await.unwrap()
     }
 
     /// Wait up to a second for a response on the channel, but expecting this operation to timeout.
-    async fn expect_timeout<T: Debug>(rx: &mut mpsc::Receiver<T>) -> Elapsed {
+    async fn expect_timeout<T: std::fmt::Debug>(
+        rx: &mut monitored_channel::Receiver<T>,
+    ) -> Elapsed {
         timeout(Duration::from_secs(1), rx.recv())
             .await
             .unwrap_err()
@@ -491,7 +499,10 @@ mod tests {
 
     /// Receive `count` checkpoints from the channel and return their sequence numbers as a Vec.
     /// Maintains order, useful for verifying sequential delivery (e.g., from streaming).
-    async fn recv_vec(rx: &mut mpsc::Receiver<Arc<Checkpoint>>, count: usize) -> Vec<u64> {
+    async fn recv_vec(
+        rx: &mut monitored_channel::Receiver<Arc<Checkpoint>>,
+        count: usize,
+    ) -> Vec<u64> {
         let mut result = Vec::with_capacity(count);
         for _ in 0..count {
             let checkpoint = expect_recv(rx).await.unwrap();
@@ -502,7 +513,10 @@ mod tests {
 
     /// Receive `count` checkpoints from the channel and return their sequence numbers as a BTreeSet.
     /// Useful for verifying unordered delivery (e.g., from concurrent ingestion).
-    async fn recv_set(rx: &mut mpsc::Receiver<Arc<Checkpoint>>, count: usize) -> BTreeSet<u64> {
+    async fn recv_set(
+        rx: &mut monitored_channel::Receiver<Arc<Checkpoint>>,
+        count: usize,
+    ) -> BTreeSet<u64> {
         let mut result = BTreeSet::new();
         for _ in 0..count {
             let checkpoint = expect_recv(rx).await.unwrap();
@@ -519,7 +533,7 @@ mod tests {
     #[tokio::test]
     async fn finite_list_of_checkpoints() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(1, test_gauge());
 
         let cps = 0..5;
         let metrics = test_ingestion_metrics();
@@ -545,7 +559,7 @@ mod tests {
     #[tokio::test]
     async fn shutdown_on_sender_closed() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(1, test_gauge());
 
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster::<_, MockStreamingClient>(
@@ -571,7 +585,7 @@ mod tests {
     #[tokio::test]
     async fn shutdown() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(1, test_gauge());
 
         let metrics = test_ingestion_metrics();
         let svc = broadcaster::<_, MockStreamingClient>(
@@ -596,7 +610,7 @@ mod tests {
     #[tokio::test]
     async fn halted() {
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(1, test_gauge());
 
         hi_tx.send(("test", 4)).unwrap();
 
@@ -627,7 +641,7 @@ mod tests {
     #[tokio::test]
     async fn halted_buffered() {
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(1, test_gauge());
 
         hi_tx.send(("test", 2)).unwrap();
 
@@ -658,7 +672,7 @@ mod tests {
     #[tokio::test]
     async fn resumption() {
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(1, test_gauge());
 
         hi_tx.send(("test", 2)).unwrap();
 
@@ -698,7 +712,7 @@ mod tests {
     #[tokio::test]
     async fn multiple_subscribers() {
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(1, test_gauge());
 
         hi_tx.send(("a", 2)).unwrap();
         hi_tx.send(("b", 3)).unwrap();
@@ -752,8 +766,8 @@ mod tests {
     #[tokio::test]
     async fn multiple_physical_subscribers() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx1, mut subscriber_rx1) = mpsc::channel(1);
-        let (subscriber_tx2, mut subscriber_rx2) = mpsc::channel(1);
+        let (subscriber_tx1, mut subscriber_rx1) = monitored_channel::channel(1, test_gauge());
+        let (subscriber_tx2, mut subscriber_rx2) = monitored_channel::channel(1, test_gauge());
 
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster::<_, MockStreamingClient>(
@@ -787,7 +801,7 @@ mod tests {
     #[tokio::test]
     async fn start_from_non_zero() {
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(1, test_gauge());
 
         // Set watermark before starting
         hi_tx.send(("test", 1005)).unwrap();
@@ -834,7 +848,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_only() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(10);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(10, test_gauge());
 
         // Create a mock streaming service with checkpoints 0..5
         let streaming_client = MockStreamingClient::new(0..5, None);
@@ -865,7 +879,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_with_transition() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(100);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(100, test_gauge());
 
         // Create a mock streaming service that starts at checkpoint 50
         // This simulates streaming being ahead of ingestion
@@ -902,7 +916,7 @@ mod tests {
     async fn streaming_beyond_end_checkpoint() {
         // Test scenario where streaming service starts beyond the requested end checkpoint.
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(30);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(30, test_gauge());
 
         // Streaming starts at checkpoint 100, but we only want 0..30.
         let streaming_client = MockStreamingClient::new(100..110, None);
@@ -936,7 +950,7 @@ mod tests {
     async fn streaming_before_start_checkpoint() {
         // Test scenario where streaming starts before the requested start checkpoint.
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(30);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(30, test_gauge());
 
         // Streaming starts at checkpoint 0 but indexing starts at 30.
         let streaming_client = MockStreamingClient::new(0..100, None);
@@ -971,7 +985,7 @@ mod tests {
         // Test scenario where streaming service provides checkpoints behind the current watermark,
         // which should be skipped.
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(50, test_gauge());
 
         // Create streaming client that returns some checkpoints behind the watermark
         let mut streaming_client = MockStreamingClient::new(0..15, None);
@@ -1010,7 +1024,7 @@ mod tests {
         // Test scenario where streaming service has a gap ahead of the watermark,
         // requiring fallback to ingestion to fill the gap.
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(50, test_gauge());
 
         // Create streaming client that has a gap (checkpoint ahead of expected watermark)
         let mut streaming_client = MockStreamingClient::new(0..3, None);
@@ -1050,7 +1064,7 @@ mod tests {
         // Test scenario where streaming is regulated by watermark backpressure.
 
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(30);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(30, test_gauge());
 
         hi_tx.send(("test", 5)).unwrap();
 
@@ -1102,7 +1116,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_error_during_streaming() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(20, test_gauge());
 
         // Create streaming client with error injected mid-stream
         let mut streaming_client = MockStreamingClient::new(0..5, None);
@@ -1143,7 +1157,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_multiple_errors_with_recovery() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(50, test_gauge());
 
         // Create streaming client with multiple errors injected
         let mut streaming_client = MockStreamingClient::new(0..5, None);
@@ -1181,7 +1195,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_start_failure_fallback_to_ingestion() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(20, test_gauge());
 
         // Streaming service that fails to start
         let streaming_service = MockStreamingClient::new(0..20, None).fail_connection_times(1);
@@ -1222,7 +1236,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_peek_failure_fallback_to_ingestion() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(20, test_gauge());
 
         // Streaming service where peek fails on first attempt
         let mut streaming_client = MockStreamingClient::new(vec![], None);
@@ -1266,7 +1280,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_connection_retry_with_backoff() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(50, test_gauge());
 
         // Streaming client where connection always fails (never recovers)
         let streaming_client =
@@ -1305,7 +1319,7 @@ mod tests {
         // Test that after a successful streaming connection, the backoff state resets.
 
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(50, test_gauge());
 
         let mut streaming_client = MockStreamingClient::new(0..40, None).fail_connection_times(4);
         streaming_client.insert_error(); // First error to get back to main loop
@@ -1363,7 +1377,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_connection_timeout_fallback_to_ingestion() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(20, test_gauge());
 
         // Streaming service that times out on connection
         let streaming_service = MockStreamingClient::new(0..20, Some(Duration::from_millis(150)))
@@ -1407,7 +1421,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_peek_timeout_fallback_to_ingestion() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(20, test_gauge());
 
         // Streaming service where peek times out on first attempt
         let mut streaming_client =
@@ -1453,7 +1467,7 @@ mod tests {
     #[tokio::test]
     async fn streaming_timeout_during_streaming() {
         let (_, hi_rx) = mpsc::unbounded_channel();
-        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let (subscriber_tx, mut subscriber_rx) = monitored_channel::channel(20, test_gauge());
 
         // Create streaming client with timeout injected mid-stream
         let mut streaming_client = MockStreamingClient::new(0..5, Some(Duration::from_millis(150)));
