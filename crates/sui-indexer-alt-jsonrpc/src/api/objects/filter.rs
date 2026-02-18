@@ -270,7 +270,21 @@ pub(super) async fn owned_objects(
             by_sequential_scan(ctx, owner, &f.to_raw(ctx)?, cursor, limit).await
         }
         filter => {
-            by_type_indices(ctx, owner, StoredOwnerKind::Address, filter, cursor, limit).await
+            let (default_page_size, max_page_size) = (
+                ctx.config().objects.default_page_size,
+                ctx.config().objects.max_page_size,
+            );
+            by_type_indices(
+                ctx,
+                owner,
+                StoredOwnerKind::Address,
+                filter,
+                cursor,
+                limit,
+                default_page_size,
+                max_page_size,
+            )
+            .await
         }
     }
 }
@@ -284,6 +298,10 @@ pub(crate) async fn dynamic_fields(
     cursor: Option<String>,
     limit: Option<usize>,
 ) -> Result<ObjectIDs, RpcError<Error>> {
+    let (default_page_size, max_page_size) = (
+        ctx.config().dynamic_fields.default_page_size,
+        ctx.config().dynamic_fields.max_page_size,
+    );
     by_type_indices(
         ctx,
         owner.into(),
@@ -296,6 +314,8 @@ pub(crate) async fn dynamic_fields(
         })),
         cursor,
         limit,
+        default_page_size,
+        max_page_size,
     )
     .await
 }
@@ -470,6 +490,8 @@ async fn by_type_indices(
     filter: &Option<SuiObjectDataFilter>,
     cursor: Option<String>,
     limit: Option<usize>,
+    default_page_size: usize,
+    max_page_size: usize,
 ) -> Result<ObjectIDs, RpcError<Error>> {
     use obj_info::dsl as o;
 
@@ -487,14 +509,8 @@ async fn by_type_indices(
         };
     }
 
-    let config = &ctx.config().objects;
-    let page: Page<Cursor> = Page::from_params(
-        config.default_page_size,
-        config.max_page_size,
-        cursor,
-        limit,
-        None,
-    )?;
+    let page: Page<Cursor> =
+        Page::from_params(default_page_size, max_page_size, cursor, limit, None)?;
 
     let mut query = candidates
         .select(candidates!(object_id, cp_sequence_number))
