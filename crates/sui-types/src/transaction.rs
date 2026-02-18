@@ -3021,6 +3021,18 @@ impl TransactionDataAPI for TransactionDataV1 {
             .into()
         );
 
+        // Check if any gas payment contains a coin reservation
+        if !config.enable_coin_reservation_obj_refs() {
+            for gas_ref in self.gas() {
+                if ParsedDigest::is_coin_reservation_digest(&gas_ref.2) {
+                    return Err(UserInputError::Unsupported(
+                        "coin reservation backward compatibility layer is not enabled".to_string(),
+                    )
+                    .into());
+                }
+            }
+        }
+
         if !self.is_system_tx() {
             fp_ensure!(
                 !check_for_gas_price_too_high(config.gas_model_version())
