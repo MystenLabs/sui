@@ -2442,14 +2442,15 @@ fn match_pattern_(
                     match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 // This double-clone should not be necessary, but the borrow checker is unhappy.
                 let fty_ref = rtype!(tpat.pat.loc, fty.clone());
-                let pat_ty = subtype(
+                if let Some(pat_ty) = subtype_opt(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     &tpat.ty,
                     &fty_ref,
-                );
-                tpat.ty = pat_ty;
+                ) {
+                    tpat.ty = pat_ty;
+                }
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2497,14 +2498,15 @@ fn match_pattern_(
                     match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 // This double-clone should not be necessary, but the borrow checker is unhappy.
                 let fty_ref = rtype!(tpat.pat.loc, fty.clone());
-                let pat_ty = subtype(
+                if let Some(pat_ty) = subtype_opt(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     &tpat.ty,
                     &fty_ref,
-                );
-                tpat.ty = pat_ty;
+                ) {
+                    tpat.ty = pat_ty;
+                }
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
