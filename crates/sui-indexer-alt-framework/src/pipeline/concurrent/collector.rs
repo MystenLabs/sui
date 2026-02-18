@@ -103,31 +103,13 @@ pub(super) fn collector<H: Handler + 'static>(
             // Eager inner loop: drain processor channel while under backpressure limit.
             while pending_rows < H::MAX_PENDING_ROWS {
                 match rx.try_recv() {
-                    Ok(mut indexed) => {
-                        let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
-                        if indexed.checkpoint() < reader_lo {
-                            indexed.values.clear();
-                            metrics
-                                .total_collector_skipped_checkpoints
-                                .with_label_values(&[H::NAME])
-                                .inc();
-                        }
-
-                        metrics
-                            .total_collector_rows_received
-                            .with_label_values(&[H::NAME])
-                            .inc_by(indexed.len() as u64);
-                        metrics
-                            .total_collector_checkpoints_received
-                            .with_label_values(&[H::NAME])
-                            .inc();
-                        metrics
-                            .collector_reader_lo
-                            .with_label_values(&[H::NAME])
-                            .set(reader_lo as i64);
-
-                        pending_rows += indexed.len();
-                        pending.insert(indexed.checkpoint(), indexed.into());
+                    Ok(indexed) => {
+                        pending_rows += receive_checkpoint::<H>(
+                            indexed,
+                            &mut pending,
+                            reader_lo_atomic,
+                            &metrics,
+                        );
                     }
                     Err(_) => break,
                 }
@@ -195,31 +177,13 @@ pub(super) fn collector<H: Handler + 'static>(
                 }
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                Some(mut indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
-                    let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
-                    if indexed.checkpoint() < reader_lo {
-                        indexed.values.clear();
-                        metrics
-                            .total_collector_skipped_checkpoints
-                            .with_label_values(&[H::NAME])
-                            .inc();
-                    }
-
-                    metrics
-                        .total_collector_rows_received
-                        .with_label_values(&[H::NAME])
-                        .inc_by(indexed.len() as u64);
-                    metrics
-                        .total_collector_checkpoints_received
-                        .with_label_values(&[H::NAME])
-                        .inc();
-                    metrics
-                        .collector_reader_lo
-                        .with_label_values(&[H::NAME])
-                        .set(reader_lo as i64);
-
-                    pending_rows += indexed.len();
-                    pending.insert(indexed.checkpoint(), indexed.into());
+                Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
+                    pending_rows += receive_checkpoint::<H>(
+                        indexed,
+                        &mut pending,
+                        reader_lo_atomic,
+                        &metrics,
+                    );
                 }
                 // docs::/#collector
             }
@@ -227,6 +191,41 @@ pub(super) fn collector<H: Handler + 'static>(
 
         Ok(())
     })
+}
+
+/// Processes a single indexed checkpoint: filters rows below `reader_lo`, updates metrics,
+/// and inserts into the pending map. Returns the number of rows added.
+fn receive_checkpoint<H: Handler>(
+    mut indexed: IndexedCheckpoint<H>,
+    pending: &mut BTreeMap<u64, PendingCheckpoint<H>>,
+    reader_lo: &AtomicU64,
+    metrics: &IndexerMetrics,
+) -> usize {
+    let reader_lo = reader_lo.load(Ordering::Relaxed);
+    if indexed.checkpoint() < reader_lo {
+        indexed.values.clear();
+        metrics
+            .total_collector_skipped_checkpoints
+            .with_label_values(&[H::NAME])
+            .inc();
+    }
+
+    metrics
+        .total_collector_rows_received
+        .with_label_values(&[H::NAME])
+        .inc_by(indexed.len() as u64);
+    metrics
+        .total_collector_checkpoints_received
+        .with_label_values(&[H::NAME])
+        .inc();
+    metrics
+        .collector_reader_lo
+        .with_label_values(&[H::NAME])
+        .set(reader_lo as i64);
+
+    let len = indexed.len();
+    pending.insert(indexed.checkpoint(), indexed.into());
+    len
 }
 
 /// Builds a single batch from pending checkpoints, returning the batch, watermarks, and row count.
