@@ -433,7 +433,7 @@ mod tests {
                 10,
                 1000,
                 vec![Entry; part1_length],
-                PendingRowsGuard::mock(part1_length),
+                PendingRowsGuard::noop(part1_length),
             ),
             IndexedCheckpoint::new(
                 0,
@@ -441,7 +441,7 @@ mod tests {
                 20,
                 2000,
                 vec![Entry; part2_length],
-                PendingRowsGuard::mock(part2_length),
+                PendingRowsGuard::noop(part2_length),
             ),
             IndexedCheckpoint::new(
                 0,
@@ -449,7 +449,7 @@ mod tests {
                 30,
                 3000,
                 vec![Entry, Entry],
-                PendingRowsGuard::mock(2),
+                PendingRowsGuard::noop(2),
             ),
         ];
 
@@ -490,7 +490,7 @@ mod tests {
                 10,
                 1000,
                 vec![Entry, Entry],
-                PendingRowsGuard::mock(2),
+                PendingRowsGuard::noop(2),
             ))
             .await
             .unwrap();
@@ -545,7 +545,7 @@ mod tests {
             10,
             1000,
             vec![Entry; count],
-            PendingRowsGuard::mock(count),
+            PendingRowsGuard::noop(count),
         );
         processor_tx.send(below_threshold).await.unwrap();
 
@@ -559,7 +559,7 @@ mod tests {
             20,
             2000,
             vec![Entry; 1], // Just 1 more entry to reach 10 total
-            PendingRowsGuard::mock(1),
+            PendingRowsGuard::noop(1),
         );
         processor_tx.send(threshold_trigger).await.unwrap();
 
@@ -609,7 +609,7 @@ mod tests {
             10,
             1000,
             vec![Entry; count],
-            PendingRowsGuard::mock(count),
+            PendingRowsGuard::noop(count),
         );
         processor_tx.send(exact_threshold).await.unwrap();
 
@@ -655,7 +655,7 @@ mod tests {
             10,
             1000,
             vec![Entry; count],
-            PendingRowsGuard::mock(count),
+            PendingRowsGuard::noop(count),
         );
         processor_tx.send(below_threshold).await.unwrap();
 
@@ -698,7 +698,7 @@ mod tests {
             10,
             1000,
             vec![Entry; count],
-            PendingRowsGuard::mock(count),
+            PendingRowsGuard::noop(count),
         );
         processor_tx.send(test_data).await.unwrap();
 
@@ -754,7 +754,7 @@ mod tests {
                     10,
                     1000,
                     vec![Entry; eager_rows_plus_one],
-                    PendingRowsGuard::mock(eager_rows_plus_one),
+                    PendingRowsGuard::noop(eager_rows_plus_one),
                 )
             })
             .collect();
@@ -883,7 +883,7 @@ mod tests {
             10,
             1000,
             vec![Entry; more_than_max_chunk_rows],
-            PendingRowsGuard::mock(more_than_max_chunk_rows),
+            PendingRowsGuard::noop(more_than_max_chunk_rows),
         );
         processor_tx.send(test_data).await.unwrap();
         tokio::time::advance(Duration::from_secs(1)).await;
@@ -902,7 +902,7 @@ mod tests {
                     10,
                     1000,
                     vec![Entry; count],
-                    PendingRowsGuard::mock(count),
+                    PendingRowsGuard::noop(count),
                 )
             })
             .collect();
