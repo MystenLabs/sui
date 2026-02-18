@@ -214,7 +214,7 @@ async fn test_coin_reservation_gating() {
 
     let sender = test_env.get_sender(0);
 
-    // Verify transaction is rejected if coin reservation is not enabled.
+    // Verify transaction is rejected if coin reservation is not enabled (as input).
     {
         let coin_reservation = test_env.encode_coin_reservation(sender, 0, 1);
 
@@ -224,7 +224,25 @@ async fn test_coin_reservation_gating() {
             .unwrap_err();
         assert!(
             err.to_string()
-                .contains("coin reservation backward compatibility layer is not enabled")
+                .contains("coin reservation backward compatibility layer is not enabled"),
+            "Expected gating error for coin reservation in input, got: {}",
+            err
+        );
+    }
+
+    // Verify transaction is rejected if coin reservation is used as gas payment.
+    {
+        let coin_reservation = test_env.encode_coin_reservation(sender, 0, 5_000_000_000);
+
+        let tx = test_env
+            .tx_builder_with_gas(sender, coin_reservation)
+            .build();
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("coin reservation backward compatibility layer is not enabled"),
+            "Expected gating error for coin reservation in gas payment, got: {}",
+            err
         );
     }
 
