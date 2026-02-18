@@ -135,8 +135,8 @@ impl<T> ArenaBox<T> {
 // Trait Implementations
 // -------------------------------------------------------------------------------------------------
 
-// SAFETY: Arena is both Send and Sync. After `build()`, no allocation methods are exposed, so the
-// underlying Bump is only read (via `allocated_bytes`), which is safe across threads.
+// SAFETY: Arena is both Send and Sync. Unlike `ArenaBuilder`, no allocation mechs exposed, so the
+// underlying Bump is read-only, which is safe across threads.
 unsafe impl Send for Arena {}
 unsafe impl Sync for Arena {}
 
