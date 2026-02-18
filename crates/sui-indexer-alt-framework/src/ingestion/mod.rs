@@ -72,9 +72,8 @@ pub struct IngestionConfig {
     pub streaming_statement_timeout_ms: u64,
 
     /// Size of the per-pipeline checkpoint channel. Controls how many checkpoints can be buffered
-    /// between the broadcaster and each pipeline's processor. Defaults to `checkpoint_buffer_size`
-    /// if not set.
-    pub checkpoint_channel_size: Option<usize>,
+    /// between the broadcaster and each pipeline's processor.
+    pub checkpoint_channel_size: usize,
 }
 
 pub struct IngestionService {
@@ -162,11 +161,7 @@ impl IngestionService {
         mpsc::Receiver<Arc<Checkpoint>>,
         mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
-        let channel_size = self
-            .config
-            .checkpoint_channel_size
-            .unwrap_or(self.config.checkpoint_buffer_size);
-        let (sender, receiver) = mpsc::channel(channel_size);
+        let (sender, receiver) = mpsc::channel(self.config.checkpoint_channel_size);
         self.subscribers.push(sender);
         (receiver, self.commit_hi_tx.clone())
     }
@@ -230,7 +225,7 @@ impl Default for IngestionConfig {
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
             streaming_connection_timeout_ms: 5000,    // 5 seconds
             streaming_statement_timeout_ms: 5000,     // 5 seconds
-            checkpoint_channel_size: None,
+            checkpoint_channel_size: 1000,
         }
     }
 }
