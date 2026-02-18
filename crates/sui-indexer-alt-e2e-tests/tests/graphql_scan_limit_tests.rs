@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use prometheus::Registry;
 use reqwest::Client;
-use serde_json::Value;
+use insta::assert_json_snapshot;
 use serde_json::json;
 use simulacrum::Simulacrum;
 use sui_indexer_alt_e2e_tests::FullCluster;
@@ -49,7 +49,7 @@ async fn test_scan_limit_exceeded() {
     // Query that would scan all 20 checkpoints (exceeds limit of 10)
     let query = r#"
         query($addr: SuiAddress!) {
-            scanTransactions(filter: { affectedAddress: $addr }) {
+            scanTransactions(filter: { affectedAddress: $addr, afterCheckpoint: 0, beforeCheckpoint: 21 }) {
                 edges { node { digest } }
             }
         }
@@ -70,32 +70,6 @@ async fn test_scan_limit_exceeded() {
         .await
         .expect("Failed to send request");
 
-    let result: Value = response.json().await.expect("Failed to parse response");
-
-    let errors = result.get("errors").expect("Expected errors in response");
-    assert!(errors.is_array(), "errors should be an array");
-
-    let error = &errors[0];
-    let message = error
-        .get("message")
-        .and_then(|m| m.as_str())
-        .expect("Expected error message");
-
-    assert!(
-        message.contains("exceeds maximum of 10"),
-        "Error message should mention the limit: {}",
-        message
-    );
-
-    // Check error code
-    let code = error
-        .get("extensions")
-        .and_then(|e| e.get("code"))
-        .and_then(|c| c.as_str())
-        .expect("Expected error code");
-
-    assert_eq!(
-        code, "BAD_USER_INPUT",
-        "Error code should be BAD_USER_INPUT"
-    );
+    let result: serde_json::Value = response.json().await.expect("Failed to parse response");
+    assert_json_snapshot!(result["errors"]);
 }

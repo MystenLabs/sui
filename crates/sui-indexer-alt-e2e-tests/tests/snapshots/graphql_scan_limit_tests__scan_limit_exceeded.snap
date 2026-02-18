@@ -1,0 +1,21 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_scan_limit_tests.rs
+expression: "result[\"errors\"]"
+---
+[
+  {
+    "message": "Scan range of 20 checkpoints exceeds maximum of 10. Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to narrow the range.",
+    "locations": [
+      {
+        "line": 3,
+        "column": 13
+      }
+    ],
+    "path": [
+      "scanTransactions"
+    ],
+    "extensions": {
+      "code": "BAD_USER_INPUT"
+    }
+  }
+]
