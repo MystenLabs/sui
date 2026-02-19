@@ -31,7 +31,10 @@ pub enum Commands {
         #[clap(long, default_value = IP)]
         host: String,
 
-        /// Checkpoint to fork from. If not provided, forks from the latest checkpoint.
+        /// Checkpoint to fork from.
+        /// If a local fork cache exists for this checkpoint, startup resumes from the latest
+        /// locally cached checkpoint in that fork directory.
+        /// If not provided, forks from the remote latest checkpoint.
         #[clap(long)]
         checkpoint: Option<u64>,
 

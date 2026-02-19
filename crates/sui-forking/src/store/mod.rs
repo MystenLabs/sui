@@ -380,6 +380,22 @@ impl ForkingStore {
             return;
         }
 
+        // Startup resume can begin from an already persisted post-fork checkpoint.
+        // Avoid rewriting existing entries and duplicating digest index rows.
+        match self
+            .fs_store
+            .get_checkpoint_by_sequence_number(sequence_number)
+        {
+            Ok(Some(_)) => return,
+            Ok(None) => {}
+            Err(err) => {
+                warn!(
+                    sequence_number,
+                    "failed to check for existing checkpoint before persistence: {err}"
+                );
+            }
+        }
+
         match self.get_checkpoint_data(checkpoint, contents) {
             Ok(full_checkpoint) => {
                 if let Err(err) = self.fs_store.write_checkpoint(&full_checkpoint) {

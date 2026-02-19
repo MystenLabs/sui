@@ -319,25 +319,39 @@ pub async fn start_server(
 ) -> Result<()> {
     let chain_str = chain.as_str();
     let client = GraphQLClient::new(format!("https://graphql.{chain_str}.sui.io/graphql"));
-    let (at_checkpoint, protocol_version) = if let Some(cp) = checkpoint {
+    let (forked_at_checkpoint, protocol_version) = if let Some(cp) = checkpoint {
         (cp, client.fetch_protocol_version(Some(cp)).await?)
     } else {
         client
             .fetch_latest_checkpoint_and_protocol_version()
             .await?
     };
-    println!(
-        "Starting from {} at checkpoint {} with protocol version {}",
-        chain_str, at_checkpoint, protocol_version
-    );
+    let (fs_store, fs_gql_store) = initialize_data_store(chain, forked_at_checkpoint, version);
+    let startup_checkpoint =
+        determine_startup_checkpoint(checkpoint, forked_at_checkpoint, &fs_store)?;
+
+    let is_resuming_existing_fork = checkpoint.is_some() && startup_checkpoint != forked_at_checkpoint;
+    if is_resuming_existing_fork {
+        println!(
+            "Resuming {} forked network, current checkpoint: {}, forked at checkpoint: {}, protocol version {}",
+            chain_str, startup_checkpoint, forked_at_checkpoint, protocol_version
+        );
+    } else {
+        println!(
+            "Starting from {} at checkpoint {} with protocol version {}",
+            chain_str, forked_at_checkpoint, protocol_version
+        );
+    }
 
     let simulacrum = initialize_simulacrum(
-        at_checkpoint,
+        forked_at_checkpoint,
+        startup_checkpoint,
         &client,
         &initial_accounts,
         protocol_version,
         chain,
-        version,
+        fs_store,
+        fs_gql_store,
     )
     .await?;
     let simulacrum = Arc::new(RwLock::new(simulacrum));
@@ -469,12 +483,14 @@ async fn start_grpc_services(
 }
 
 async fn initialize_simulacrum(
-    at_checkpoint: u64,
+    forked_at_checkpoint: u64,
+    startup_checkpoint: u64,
     client: &GraphQLClient,
     initial_accounts: &InitialAccounts,
     protocol_version: u64,
     chain: Chain,
-    version: &'static str,
+    fs_store: FileSystemStore,
+    fs_gql_store: ReadThroughStore<FileSystemStore, DataStore>,
 ) -> Result<Simulacrum<OsRng, ForkingStore>, anyhow::Error> {
     let mut rng = rand::rngs::OsRng;
     let config = ConfigBuilder::new_with_temp_dir()
@@ -485,31 +501,29 @@ async fn initialize_simulacrum(
         .with_chain_override(chain)
         .build();
 
-    let (fs_store, fs_gql_store) = initialize_data_store(chain, at_checkpoint, version);
-
-    let startup_checkpoint = match fs_store
-        .get_checkpoint_by_sequence_number(at_checkpoint)
+    let startup_checkpoint_data = match fs_store
+        .get_checkpoint_by_sequence_number(startup_checkpoint)
         .context("failed to read startup checkpoint from local checkpoint store")?
     {
         Some(checkpoint) => checkpoint,
         None => fs_gql_store
-            .get_checkpoint_by_sequence_number(at_checkpoint)
+            .get_checkpoint_by_sequence_number(startup_checkpoint)
             .context("failed to hydrate startup checkpoint from checkpoint read-through store")?
-            .with_context(|| format!("checkpoint {at_checkpoint} not found"))?,
+            .with_context(|| format!("checkpoint {startup_checkpoint} not found"))?,
     };
 
-    let certified_summary = startup_checkpoint.summary.clone();
+    let certified_summary = startup_checkpoint_data.summary.clone();
     let env_checkpoint = Envelope::new_from_data_and_sig(
         certified_summary.data().clone(),
         certified_summary.auth_sig().clone(),
     );
     let verified_checkpoint = VerifiedCheckpoint::new_unchecked(env_checkpoint);
 
-    let mut store = ForkingStore::new(at_checkpoint, fs_store, fs_gql_store);
+    let mut store = ForkingStore::new(forked_at_checkpoint, fs_store, fs_gql_store);
     store.insert_checkpoint(verified_checkpoint.clone());
-    store.insert_checkpoint_contents(startup_checkpoint.contents.clone());
+    store.insert_checkpoint_contents(startup_checkpoint_data.contents.clone());
     initial_accounts
-        .prefetch_owned_objects(&store, client.endpoint(), at_checkpoint)
+        .prefetch_owned_objects(&store, client.endpoint(), startup_checkpoint)
         .await
         .context("Failed to prefetch startup owned objects")?;
 
@@ -605,6 +619,35 @@ fn initialize_data_store(
     }
 
     (fs_store, fs_gql_store)
+}
+
+fn determine_startup_checkpoint(
+    checkpoint: Option<u64>,
+    forked_at_checkpoint: u64,
+    fs_store: &FileSystemStore,
+) -> Result<u64, anyhow::Error> {
+    let Some(requested_checkpoint) = checkpoint else {
+        return Ok(forked_at_checkpoint);
+    };
+
+    let local_latest = fs_store
+        .get_latest_checkpoint()
+        .context("failed to inspect local checkpoint cache")?;
+
+    match local_latest {
+        None => Ok(requested_checkpoint),
+        Some(checkpoint_data) => {
+            let local_latest_sequence = checkpoint_data.summary.sequence_number;
+            if local_latest_sequence < requested_checkpoint {
+                anyhow::bail!(
+                    "local fork cache for checkpoint {} is stale: latest local checkpoint is {}",
+                    requested_checkpoint,
+                    local_latest_sequence
+                );
+            }
+            Ok(local_latest_sequence)
+        }
+    }
 }
 
 // Where are we at
