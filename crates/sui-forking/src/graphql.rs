@@ -141,17 +141,7 @@ impl GraphQLClient {
             .json()
             .await
             .context("Failed to parse GraphQL response")?;
-
-        if let Some(errors) = graphql_response.errors {
-            let error_messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
-            anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
-        }
-
-        let data = graphql_response
-            .data
-            .context("No data in GraphQL response")?;
-
-        Ok(data.checkpoint.query.protocol_configs.protocol_version)
+        extract_protocol_version(graphql_response)
     }
 
     pub async fn fetch_latest_checkpoint_and_protocol_version(&self) -> Result<(u64, u64)> {
@@ -197,20 +187,7 @@ impl GraphQLClient {
             .json()
             .await
             .context("Failed to parse GraphQL response")?;
-
-        if let Some(errors) = graphql_response.errors {
-            let error_messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
-            anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
-        }
-
-        let data = graphql_response
-            .data
-            .context("No data in GraphQL response")?;
-
-        Ok((
-            data.checkpoint.sequence_number,
-            data.checkpoint.query.protocol_configs.protocol_version,
-        ))
+        extract_latest_checkpoint_and_protocol_version(graphql_response)
     }
 
     /// Fetch the network chain identifier from GraphQL.
@@ -245,37 +222,101 @@ impl GraphQLClient {
             .json()
             .await
             .context("Failed to parse GraphQL response")?;
-
-        if let Some(errors) = graphql_response.errors {
-            let error_messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
-            anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
-        }
-
-        let data = graphql_response
-            .data
-            .context("No data in GraphQL response")?;
-        let chain_identifier = data
-            .chain_identifier
-            .context("No chainIdentifier in GraphQL response")?;
-        Ok(chain_identifier)
+        extract_chain_identifier(graphql_response)
     }
+}
+
+fn extract_graphql_data<T>(graphql_response: GraphQLResponse<T>) -> Result<T> {
+    if let Some(errors) = graphql_response.errors {
+        let error_messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
+        anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
+    }
+
+    graphql_response.data.context("No data in GraphQL response")
+}
+
+fn extract_protocol_version(
+    graphql_response: GraphQLResponse<ProtocolVersionResponse>,
+) -> Result<u64> {
+    let data = extract_graphql_data(graphql_response)?;
+    Ok(data.checkpoint.query.protocol_configs.protocol_version)
+}
+
+fn extract_latest_checkpoint_and_protocol_version(
+    graphql_response: GraphQLResponse<LatestCheckpointResponse>,
+) -> Result<(u64, u64)> {
+    let data = extract_graphql_data(graphql_response)?;
+    Ok((
+        data.checkpoint.sequence_number,
+        data.checkpoint.query.protocol_configs.protocol_version,
+    ))
+}
+
+fn extract_chain_identifier(
+    graphql_response: GraphQLResponse<ChainIdentifierResponse>,
+) -> Result<String> {
+    let data = extract_graphql_data(graphql_response)?;
+    data.chain_identifier
+        .context("No chainIdentifier in GraphQL response")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_fetch_protocol_version_mainnet() {
-        let client = GraphQLClient::new("https://graphql.mainnet.sui.io/graphql".to_string());
-        let protocol_version = client.fetch_protocol_version(Some(0)).await.unwrap();
-        assert!(protocol_version > 0);
+    #[test]
+    fn fetch_protocol_version_uses_local_response() {
+        let graphql_response: GraphQLResponse<ProtocolVersionResponse> =
+            serde_json::from_value(serde_json::json!({
+                "data": {
+                    "checkpoint": {
+                        "query": {
+                            "protocolConfigs": {
+                                "protocolVersion": 77
+                            }
+                        }
+                    }
+                }
+            }))
+            .expect("response parse");
+        let protocol_version =
+            extract_protocol_version(graphql_response).expect("protocol version");
+        assert_eq!(protocol_version, 77);
     }
 
-    #[tokio::test]
-    async fn test_fetch_protocol_version_testnet() {
-        let client = GraphQLClient::new("https://graphql.testnet.sui.io/graphql".to_string());
-        let protocol_version = client.fetch_protocol_version(Some(0)).await.unwrap();
-        assert!(protocol_version > 0);
+    #[test]
+    fn fetch_latest_checkpoint_and_chain_identifier_use_local_responses() {
+        let latest_response: GraphQLResponse<LatestCheckpointResponse> =
+            serde_json::from_value(serde_json::json!({
+                "data": {
+                    "checkpoint": {
+                        "sequenceNumber": 111,
+                        "query": {
+                            "protocolConfigs": {
+                                "protocolVersion": 88
+                            }
+                        }
+                    }
+                }
+            }))
+            .expect("latest response parse");
+        let (checkpoint, protocol_version) =
+            extract_latest_checkpoint_and_protocol_version(latest_response)
+                .expect("latest checkpoint");
+        assert_eq!(checkpoint, 111);
+        assert_eq!(protocol_version, 88);
+
+        let chain_response: GraphQLResponse<ChainIdentifierResponse> =
+            serde_json::from_value(serde_json::json!({
+                "data": {
+                    "chainIdentifier": "7f7ad12684f6f7325e5f279ce8f7f46dbf51b97f34f3412f178ff6424fdaceda"
+                }
+            }))
+            .expect("chain response parse");
+        let chain_identifier = extract_chain_identifier(chain_response).expect("chain identifier");
+        assert_eq!(
+            chain_identifier,
+            "7f7ad12684f6f7325e5f279ce8f7f46dbf51b97f34f3412f178ff6424fdaceda"
+        );
     }
 }

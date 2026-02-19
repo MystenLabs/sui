@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    num::NonZeroUsize,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
 
 use anyhow::{Context as _, Result, anyhow};
 use axum::{
@@ -12,8 +18,8 @@ use axum::{
 };
 use prometheus::Registry;
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use serde::Deserialize;
+use tokio::sync::{RwLock, oneshot};
 use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 
@@ -59,35 +65,12 @@ use crate::grpc::{
     transaction_execution_service::ForkingTransactionExecutionService,
 };
 use crate::{
-    graphql::GraphQLClient, network::ForkNetwork, seeds::StartupSeeds, store::ForkingStore,
+    api::types::{AdvanceClockRequest, ApiResponse, ExecuteTxResponse, ForkingStatus},
+    graphql::GraphQLClient,
+    network::ForkNetwork,
+    seeds::StartupSeeds,
+    store::ForkingStore,
 };
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AdvanceClockRequest {
-    pub seconds: u64,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-
-pub struct ExecuteTxResponse {
-    /// Base64 encoded transaction effects
-    pub effects: String,
-    /// Execution error if any
-    pub error: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ApiResponse<T> {
-    pub success: bool,
-    pub data: Option<T>,
-    pub error: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ForkingStatus {
-    pub checkpoint: u64,
-    pub epoch: u64,
-}
 
 /// The shared state for the forking server
 pub struct AppState {
@@ -305,8 +288,8 @@ fn execute_faucet_transfer(
     Ok(effects)
 }
 
-/// Start the forking server
-pub async fn start_server(
+/// Start the forking server with programmatic shutdown/readiness signals.
+pub(crate) async fn start_server_with_signals(
     startup_seeds: StartupSeeds,
     fork_network: ForkNetwork,
     checkpoint: Option<u64>,
@@ -314,8 +297,10 @@ pub async fn start_server(
     host: String,
     server_port: u16,
     rpc_port: u16,
-    _data_ingestion_path: PathBuf,
+    data_ingestion_path: PathBuf,
     version: &'static str,
+    shutdown_receiver: Option<oneshot::Receiver<()>>,
+    ready_sender: Option<oneshot::Sender<()>>,
 ) -> Result<()> {
     let fullnode_endpoint = fork_network
         .resolve_fullnode_endpoint(fullnode_url.as_deref())
@@ -332,6 +317,7 @@ pub async fn start_server(
         &fork_network,
         &fullnode_endpoint,
         forked_at_checkpoint,
+        &data_ingestion_path,
         version,
     )?;
     let startup_checkpoint =
@@ -405,14 +391,34 @@ pub async fn start_server(
     println!("Ready to accept requests");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    if let Some(ready_sender) = ready_sender {
+        let _ = ready_sender.send(());
+    }
 
-    // Set up graceful shutdown handler
-    let shutdown_signal = async {
-        if let Err(err) = tokio::signal::ctrl_c().await {
-            warn!("Failed to install CTRL+C signal handler: {err}");
-            return;
+    let shutdown_signal = async move {
+        match shutdown_receiver {
+            Some(receiver) => {
+                tokio::select! {
+                    _ = receiver => {
+                        info!("received programmatic shutdown signal");
+                    }
+                    ctrl_c = tokio::signal::ctrl_c() => {
+                        if let Err(err) = ctrl_c {
+                            warn!("Failed to install CTRL+C signal handler: {err}");
+                            return;
+                        }
+                        info!("\nReceived CTRL+C, shutting down gracefully...");
+                    }
+                }
+            }
+            None => {
+                if let Err(err) = tokio::signal::ctrl_c().await {
+                    warn!("Failed to install CTRL+C signal handler: {err}");
+                    return;
+                }
+                info!("\nReceived CTRL+C, shutting down gracefully...");
+            }
         }
-        info!("\nReceived CTRL+C, shutting down gracefully...");
     };
 
     // Serve with graceful shutdown
@@ -724,6 +730,7 @@ fn initialize_data_store(
     fork_network: &ForkNetwork,
     fullnode_endpoint: &str,
     at_checkpoint: u64,
+    data_ingestion_path: &Path,
     version: &'static str,
 ) -> Result<
     (
@@ -740,9 +747,7 @@ fn initialize_data_store(
 
     let node = fork_network.node();
 
-    let fs_base_path = FileSystemStore::base_path()
-        .context("failed to resolve base path for file system data store")?
-        .join(forking_path);
+    let fs_base_path = data_ingestion_path.join(forking_path);
     let fs = FileSystemStore::new_with_path(node.clone(), fs_base_path.clone())
         .context("failed to initialize file-system primary cache store")?;
     let gql_rpc_store = DataStore::new_with_endpoints(

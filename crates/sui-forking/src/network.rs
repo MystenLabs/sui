@@ -153,7 +153,9 @@ fn validate_http_url(field_name: &str, value: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::ForkNetwork;
+    use proptest::prelude::*;
+
+    use super::{ForkNetwork, sanitize_custom_namespace};
 
     #[test]
     fn parses_known_network_keywords() {
@@ -239,5 +241,23 @@ mod tests {
             network.cache_namespace(),
             "custom_https_graphql_devnet_sui_io_graphql_foo_bar_baz_1"
         );
+    }
+
+    proptest! {
+        #[test]
+        fn sanitization_output_is_valid(input in ".*") {
+            let output = sanitize_custom_namespace(&input);
+            prop_assert!(output.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_'));
+            prop_assert!(!output.starts_with('_'));
+            prop_assert!(!output.ends_with('_'));
+            prop_assert!(!output.contains("__"));
+        }
+
+        #[test]
+        fn sanitization_is_idempotent(input in ".*") {
+            let once = sanitize_custom_namespace(&input);
+            let twice = sanitize_custom_namespace(&once);
+            prop_assert_eq!(once, twice);
+        }
     }
 }

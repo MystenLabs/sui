@@ -43,6 +43,31 @@ cargo build
 
 Now use the `sui-forking` binary located in `sui/target/debug/sui-forking`.
 
+### Programmatic Usage (Rust)
+
+`sui-forking` also exposes a library API for starting and controlling a local fork in-process.
+
+```rust
+use sui_forking::{ForkingNetwork, ForkingNode, ForkingNodeConfig, StartupSeeding};
+
+# async fn run() -> anyhow::Result<()> {
+let config = ForkingNodeConfig::builder()
+    .network(ForkingNetwork::Testnet)
+    .server_port(9001)
+    .rpc_port(9000)
+    .startup_seeding(StartupSeeding::None)
+    .build()?;
+
+let node = ForkingNode::start(config).await?;
+let client = node.client();
+let status = client.status().await?;
+println!("checkpoint={} epoch={}", status.checkpoint, status.epoch);
+
+node.shutdown().await?;
+# Ok(())
+# }
+```
+
 ### Starting a Local Forked Network
 
 Start a local forked network at the latest checkpoint:

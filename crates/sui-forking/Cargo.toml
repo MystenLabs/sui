@@ -57,5 +57,8 @@ prost-types.workspace = true
 [build-dependencies]
 cynic-codegen.workspace = true
 
+[dev-dependencies]
+proptest.workspace = true
+
 [lints]
 workspace = true

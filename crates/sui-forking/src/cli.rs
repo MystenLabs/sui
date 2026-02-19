@@ -3,9 +3,7 @@
 
 use clap::{Parser, Subcommand};
 
-use sui_types::base_types::SuiAddress;
-
-use crate::seeds::StartupSeeds;
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 const RPC_PORT: &str = "9000";
 const SERVER_PORT: &str = "9001";
@@ -18,6 +16,21 @@ const DEFAULT_ADDRESS: &str = "http://127.0.0.1:9001";
 pub struct Args {
     #[clap(subcommand)]
     pub command: Commands,
+}
+
+#[derive(clap::Args, Clone, Debug, Default)]
+pub struct StartupSeedArgs {
+    /// Addresses whose owned objects should be prefetched at startup.
+    ///
+    /// Mutually exclusive with `--objects`.
+    #[clap(long, value_delimiter = ',', conflicts_with = "objects")]
+    pub accounts: Vec<SuiAddress>,
+
+    /// Explicit object IDs to prefetch at startup.
+    ///
+    /// Mutually exclusive with `--accounts`.
+    #[clap(long, value_delimiter = ',', conflicts_with = "accounts")]
+    pub objects: Vec<ObjectID>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -60,7 +73,7 @@ pub enum Commands {
         /// Startup seed inputs.
         /// Use either `--accounts` or `--objects` (mutually exclusive), or neither.
         #[clap(flatten)]
-        seeds: StartupSeeds,
+        seeds: StartupSeedArgs,
     },
     /// Advance checkpoint by 1
     AdvanceCheckpoint {

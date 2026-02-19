@@ -2,58 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod cli;
-mod context;
-mod execution;
-mod graphql;
-mod grpc;
-mod network;
-mod seeds;
-mod server;
-mod store;
+
+use std::net::IpAddr;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use sui_forking::{ForkingClient, ForkingNetwork, ForkingNode, ForkingNodeConfig, StartupSeeding};
 use tracing::info;
+use url::Url;
 
 use crate::cli::{Args, Commands};
-use crate::network::ForkNetwork;
-use crate::server::start_server;
-use crate::server::{AdvanceClockRequest, ApiResponse, ForkingStatus};
-use std::path::PathBuf;
 
-// Define the `GIT_REVISION` const
-bin_version::git_revision!();
+fn client_from_server_url(server_url: &str) -> Result<ForkingClient> {
+    let base_url =
+        Url::parse(server_url).with_context(|| format!("invalid server URL '{}'", server_url))?;
+    Ok(ForkingClient::new(base_url))
+}
 
-static VERSION: &str = const_str::concat!(
-    env!("CARGO_PKG_VERSION_MAJOR"),
-    ".",
-    env!("CARGO_PKG_VERSION_MINOR"),
-    ".",
-    env!("CARGO_PKG_VERSION_PATCH"),
-    "-",
-    GIT_REVISION
-);
-
-async fn send_command(url: &str, endpoint: &str, body: Option<serde_json::Value>) -> Result<()> {
-    let client = reqwest::Client::new();
-    let full_url = format!("{}/{}", url, endpoint);
-
-    let response = if let Some(body) = body {
-        client.post(&full_url).json(&body).send().await?
-    } else {
-        client.post(&full_url).send().await?
-    };
-
-    if response.status().is_success() {
-        let result: ApiResponse<serde_json::Value> = response.json().await?;
-        if !result.success {
-            println!("Error: {:?}", result.error);
-        }
-    } else {
-        println!("Server error: {}", response.status());
+fn startup_seeding(args: cli::StartupSeedArgs) -> StartupSeeding {
+    if !args.accounts.is_empty() {
+        return StartupSeeding::Accounts(args.accounts);
     }
-
-    Ok(())
+    if !args.objects.is_empty() {
+        return StartupSeeding::Objects(args.objects);
+    }
+    StartupSeeding::None
 }
 
 #[tokio::main]
@@ -73,84 +46,67 @@ async fn main() -> Result<()> {
             data_dir,
             seeds,
         } => {
-            let fork_network = ForkNetwork::parse(&network)?;
+            let fork_network = ForkingNetwork::parse(&network)?;
+            let host: IpAddr = host
+                .parse()
+                .with_context(|| format!("invalid host IP '{}'", host))?;
 
             info!(
                 "Starting forking server with {} as the starting point...",
-                fork_network.display_name()
+                fork_network
             );
 
-            let data_ingestion_path = if let Some(data_dir) = data_dir {
-                let path = PathBuf::from(data_dir);
-                if !path.exists() {
-                    std::fs::create_dir_all(&path).with_context(|| {
-                        format!("failed to create data directory at {}", path.display())
-                    })?;
-                }
-                path
-            } else {
-                mysten_common::tempdir()
-                    .context("failed to create temporary data directory")?
-                    .keep()
-            };
-            start_server(
-                seeds,
-                fork_network,
-                checkpoint,
-                fullnode_url,
-                host,
-                server_port,
-                rpc_port,
-                data_ingestion_path,
-                VERSION,
-            )
-            .await?
+            let mut builder = ForkingNodeConfig::builder()
+                .network(fork_network)
+                .host(host)
+                .server_port(server_port)
+                .rpc_port(rpc_port)
+                .startup_seeding(startup_seeding(seeds));
+
+            if let Some(checkpoint) = checkpoint {
+                builder = builder.checkpoint(checkpoint);
+            }
+            if let Some(fullnode_url) = fullnode_url {
+                let url = Url::parse(&fullnode_url)
+                    .with_context(|| format!("invalid fullnode URL '{}'", fullnode_url))?;
+                builder = builder.fullnode_url(url);
+            }
+            if let Some(data_dir) = data_dir {
+                builder = builder.data_dir(data_dir);
+            }
+
+            let node = ForkingNode::start(builder.build()?).await?;
+            node.wait().await?;
         }
         Commands::AdvanceCheckpoint { server_url } => {
-            send_command(&server_url, "advance-checkpoint", None).await?
+            client_from_server_url(&server_url)?
+                .advance_checkpoint()
+                .await?
         }
         Commands::AdvanceClock {
             server_url,
             seconds,
         } => {
-            let body = serde_json::json!(AdvanceClockRequest { seconds });
-            send_command(&server_url, "advance-clock", Some(body)).await?
+            client_from_server_url(&server_url)?
+                .advance_clock(seconds)
+                .await?
         }
         Commands::AdvanceEpoch { server_url } => {
-            send_command(&server_url, "advance-epoch", None).await?
+            client_from_server_url(&server_url)?.advance_epoch().await?
         }
         Commands::Status { server_url } => {
-            let client = reqwest::Client::new();
-            let response = client.get(format!("{}/status", server_url)).send().await?;
-
-            if response.status().is_success() {
-                let result: ApiResponse<ForkingStatus> = response.json().await?;
-                if let Some(status) = result.data {
-                    println!("Checkpoint: {}", status.checkpoint);
-                    println!("Epoch: {}", status.epoch);
-                } else {
-                    println!("Error: {:?}", result.error);
-                }
-            } else {
-                println!("Server error: {}", response.status());
-            }
+            let status = client_from_server_url(&server_url)?.status().await?;
+            println!("Checkpoint: {}", status.checkpoint);
+            println!("Epoch: {}", status.epoch);
         }
         Commands::Faucet {
             server_url,
             address,
             amount,
         } => {
-            send_command(
-                &server_url,
-                "faucet",
-                Some(serde_json::json!({
-                    "address": address,
-                    "amount": amount,
-                })),
-            )
-            .await?;
-
-            send_command(&server_url, "advance-checkpoint", None).await?;
+            let client = client_from_server_url(&server_url)?;
+            client.faucet(address, amount).await?;
+            client.advance_checkpoint().await?;
             println!("Faucet request completed");
         }
     }
