@@ -12,10 +12,7 @@ use tokio_stream::{Iter, iter};
 use tonic::{Request, Response, Streaming};
 use tracing::debug;
 
-use super::{
-    ObserverNetworkService,
-    tonic_gen::observer_service_server::ObserverService,
-};
+use super::{ObserverNetworkService, tonic_gen::observer_service_server::ObserverService};
 
 // Observer block streaming messages
 #[derive(Clone, prost::Message)]

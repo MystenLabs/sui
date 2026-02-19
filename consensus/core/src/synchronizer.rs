@@ -230,7 +230,8 @@ impl SynchronizerHandle {
 /// Additionally to the above, the synchronizer can synchronize and fetch the last own proposed block
 /// from the network peers as best effort approach to recover node from amnesia and avoid making the
 /// node equivocate.
-pub(crate) struct Synchronizer<C: ValidatorNetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
+pub(crate) struct Synchronizer<C: ValidatorNetworkClient, V: BlockVerifier, D: CoreThreadDispatcher>
+{
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
     fetch_block_senders: BTreeMap<AuthorityIndex, Sender<BlocksGuard>>,
