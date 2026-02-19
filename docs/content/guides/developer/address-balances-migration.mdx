@@ -55,12 +55,6 @@ if (selected.length > 1) {
 const [coin] = tx.splitCoins(selected[0].coinObjectId, [requiredAmount]);
 ```
 
-This approach has several challenges:
-- Requires up-to-date object state (version, digest) at transaction construction time
-- Concurrent transactions risk using stale object references
-- Complex coin selection algorithms needed for optimal gas usage
-- Must handle coin fragmentation over time
-
 ### After: Address Balance Withdrawals
 
 With address balances, declare the amount needed and the protocol handles the rest:
@@ -132,11 +126,17 @@ public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: With
 
 ### TypeScript SDK
 
-For manual PTB construction with address balance withdrawals:
+For manual PTB construction with address balance withdrawals, use `Inputs.FundsWithdrawal`:
 
 ```typescript
+import { Transaction, Inputs } from '@mysten/sui/transactions';
+
+const coinType = '0x2::sui::SUI';
+const amount = 1_000_000_000n; // 1 SUI in MIST
+
 const tx = new Transaction();
 
+// Create a FundsWithdrawal input to withdraw from sender's address balance
 const withdrawal = tx.addInput(
     'withdrawal',
     Inputs.FundsWithdrawal({
@@ -155,13 +155,47 @@ const withdrawal = tx.addInput(
     }),
 );
 
-// Redeem the withdrawal to a coin
+// Redeem the withdrawal to a Coin<T>
 const coin = tx.moveCall({
     target: '0x2::coin::redeem_funds',
     typeArguments: [coinType],
     arguments: [withdrawal],
 });
+
+// Use the coin (e.g., transfer to recipient)
+tx.transferObjects([coin], recipient);
 ```
+
+The `FundsWithdrawal` input takes three fields:
+- `reservation`: Specifies the maximum amount to withdraw. Use `{ $kind: 'MaxAmountU64', MaxAmountU64: string }`.
+- `typeArg`: The balance type. Use `{ $kind: 'Balance', Balance: coinType }` where `coinType` is like `'0x2::sui::SUI'`.
+- `withdrawFrom`: The source of funds. Use `{ $kind: 'Sender', Sender: true }` for the transaction sender, or `{ $kind: 'Sponsor', Sponsor: true }` for the gas sponsor.
+
+#### Withdrawing from Sponsor's Address Balance
+
+To withdraw from the gas sponsor's address balance instead of the sender's:
+
+```typescript
+const withdrawal = tx.addInput(
+    'withdrawal',
+    Inputs.FundsWithdrawal({
+        reservation: {
+            $kind: 'MaxAmountU64',
+            MaxAmountU64: String(amount),
+        },
+        typeArg: {
+            $kind: 'Balance',
+            Balance: coinType,
+        },
+        withdrawFrom: {
+            $kind: 'Sponsor',
+            Sponsor: true,
+        },
+    }),
+);
+```
+
+This requires the transaction to have a sponsor (via `tx.setSponsor()`) and the sponsor must sign.
 
 ## Sending Funds
 
