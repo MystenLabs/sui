@@ -561,7 +561,12 @@ async fn initialize_simulacrum(
     store.insert_checkpoint(verified_checkpoint.clone());
     store.insert_checkpoint_contents(startup_checkpoint_data.contents.clone());
     initial_accounts
-        .prefetch_owned_objects(&store, client.endpoint(), startup_checkpoint)
+        .prefetch_owned_objects(
+            &store,
+            client.endpoint(),
+            startup_checkpoint,
+            startup_checkpoint_data.summary.timestamp_ms,
+        )
         .await
         .context("Failed to prefetch startup owned objects")?;
 

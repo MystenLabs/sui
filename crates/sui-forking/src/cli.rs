@@ -39,6 +39,7 @@ pub enum Commands {
         /// Checkpoint to fork from.
         /// If a local fork cache exists for this checkpoint, startup resumes from the latest
         /// locally cached checkpoint in that fork directory.
+        /// For older checkpoints, use `--objects` instead of `--accounts` to seed startup data.
         /// If not provided, forks from the remote latest checkpoint.
         #[clap(long)]
         checkpoint: Option<u64>,
@@ -56,7 +57,8 @@ pub enum Commands {
         /// Optional data directory for storing forked data
         #[clap(long)]
         data_dir: Option<String>,
-        /// Initial accounts to restore with their owned objects.
+        /// Startup seed inputs.
+        /// Use either `--accounts` or `--objects` (mutually exclusive), or neither.
         #[clap(flatten)]
         accounts: InitialAccounts,
     },
