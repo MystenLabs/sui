@@ -228,6 +228,7 @@ const guides = [
       'guides/developer/nautilus/using-nautilus',
       'guides/developer/nautilus/customize-nautilus',
       'guides/developer/nautilus/marlin',
+      'guides/developer/nautilus/seal',
     ],
   },
   {
