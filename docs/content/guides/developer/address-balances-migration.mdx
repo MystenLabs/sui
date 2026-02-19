@@ -4,6 +4,7 @@
 ---
 title: Address Balances Migration Guide
 description: Migrating from Coin objects to address balances on Sui.
+keywords: [address balances, migration, coin objects, funds withdrawal, balance transfer, gas payment, SIP-58, fungible assets]
 ---
 
 Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This replaces the UTXO-style `Coin<T>` model with direct address-owned balances, simplifying transaction construction and eliminating coin selection complexity.
@@ -518,12 +519,13 @@ buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService
 
 ### GraphQL
 
-[GraphQL Reference - IAddressable.balance](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/interfaces/iaddressable):
+[GraphQL Reference - IAddressable.balance](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/interfaces/iaddressable) |
+[GraphQL IDE (Testnet)](https://graphql.testnet.sui.io/graphql) - copy the examples below into the IDE to try them
 
 ```graphql
 # Single balance
 {
-    address(address: "<address>") {
+    address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
         balance(coinType: "0x2::sui::SUI") {
             coinType { repr }
             addressBalance
@@ -535,7 +537,7 @@ buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService
 
 # All balances
 {
-    address(address: "<address>") {
+    address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
         balances {
             nodes {
                 coinType { repr }
