@@ -16,7 +16,6 @@ fastcrypto.workspace = true
 lru.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
-sui-config.workspace = true
 sui-rpc.workspace = true
 sui-rpc-api.workspace = true
 sui-types.workspace = true
@@ -28,3 +27,6 @@ tonic.workspace = true
 
 [build-dependencies]
 cynic-codegen.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["cynic-codegen"]
