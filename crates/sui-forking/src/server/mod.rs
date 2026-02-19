@@ -43,6 +43,7 @@ use sui_types::{
     effects::TransactionEffectsAPI,
     message_envelope::Envelope,
     messages_checkpoint::VerifiedCheckpoint,
+    object::Object,
     sui_system_state::{SuiSystemState, SuiSystemStateTrait},
     supported_protocol_versions::Chain::{self},
     transaction::Transaction,
@@ -537,6 +538,7 @@ async fn initialize_simulacrum(
         .with_protocol_version(protocol_version.into())
         .with_chain_override(chain)
         .build();
+    let keystore = KeyStore::from_network_config(&config);
 
     let startup_checkpoint_data = match fs_store
         .get_checkpoint_by_sequence_number(startup_checkpoint)
@@ -559,6 +561,7 @@ async fn initialize_simulacrum(
     let mut store = ForkingStore::new(forked_at_checkpoint, fs_store, fs_gql_store);
     store.insert_checkpoint(verified_checkpoint.clone());
     store.insert_checkpoint_contents(startup_checkpoint_data.contents.clone());
+    seed_genesis_faucet_coin(&mut store, config.genesis.objects(), &keystore);
     startup_seeds
         .prefetch_startup_objects(
             &store,
@@ -596,8 +599,6 @@ async fn initialize_simulacrum(
         .clone();
     store.insert_committee(initial_committee);
 
-    let keystore = KeyStore::from_network_config(&config);
-
     // The mock checkpoint builder relies on the accumulator root object to be present in the store
     // with the correct initial shared version, so we need to fetch it here and pass it to the
     // simulacrum. This is needed if protocol config has enabled accumulators
@@ -617,6 +618,62 @@ async fn initialize_simulacrum(
     // simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
     // println!("Data ingestion path: {:?}", data_ingestion_path);
     Ok(simulacrum)
+}
+
+/// Seeds a local faucet gas object from genesis for the first local account used by simulacrum
+/// faucet operations.
+fn seed_genesis_faucet_coin(
+    store: &mut ForkingStore,
+    genesis_objects: &[Object],
+    keystore: &KeyStore,
+) {
+    let Some((faucet_owner, _)) = keystore.accounts().next() else {
+        warn!("No local account keys available; skipping faucet coin seeding");
+        return;
+    };
+
+    let Some(faucet_coin) = genesis_objects
+        .iter()
+        .filter(|object| object.is_gas_coin())
+        .filter(|object| object.owner.get_address_owner_address().ok() == Some(*faucet_owner))
+        .max_by_key(|object| object.get_coin_value_unsafe())
+        .cloned()
+    else {
+        warn!(
+            faucet_owner = %faucet_owner,
+            "No genesis gas coin found for local faucet owner; faucet may fail until a local gas coin is available"
+        );
+        return;
+    };
+
+    let faucet_coin_id = faucet_coin.id();
+    let faucet_coin_version = faucet_coin.version().value();
+    let faucet_coin_balance = faucet_coin.get_coin_value_unsafe();
+    match store.seed_local_object_if_missing(faucet_coin) {
+        Ok(true) => {
+            info!(
+                faucet_owner = %faucet_owner,
+                faucet_coin_id = %faucet_coin_id,
+                faucet_coin_version,
+                faucet_coin_balance,
+                "Seeded genesis faucet coin into local fork store"
+            );
+        }
+        Ok(false) => {
+            info!(
+                faucet_owner = %faucet_owner,
+                faucet_coin_id = %faucet_coin_id,
+                "Genesis faucet coin already present in local fork store"
+            );
+        }
+        Err(err) => {
+            warn!(
+                faucet_owner = %faucet_owner,
+                faucet_coin_id = %faucet_coin_id,
+                "Failed to seed genesis faucet coin into local fork store: {err}"
+            );
+        }
+    }
 }
 
 /// Create the data stores for the forking server, including a file system store for transactions
