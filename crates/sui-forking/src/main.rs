@@ -18,7 +18,7 @@ use tracing::info;
 use crate::cli::{Args, Commands};
 use crate::network::ForkNetwork;
 use crate::server::start_server;
-use crate::server::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
+use crate::server::{AdvanceClockRequest, ApiResponse, ForkingStatus};
 use std::path::PathBuf;
 
 // Define the `GIT_REVISION` const
@@ -135,14 +135,6 @@ async fn main() -> Result<()> {
                 println!("Server error: {}", response.status());
             }
         }
-        Commands::ExecuteTx {
-            server_url,
-            tx_bytes,
-        } => {
-            let body = serde_json::json!(ExecuteTxRequest { tx_bytes });
-            send_command(&server_url, "execute-tx", Some(body)).await?
-        }
-
         Commands::Faucet {
             server_url,
             address,

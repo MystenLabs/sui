@@ -49,7 +49,7 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     sui_system_state::{SuiSystemState, SuiSystemStateTrait},
     supported_protocol_versions::Chain::{self},
-    transaction::{GasData, Transaction, TransactionData, TransactionKind},
+    transaction::{GasData, TransactionData, TransactionKind},
 };
 
 use crate::grpc::{
@@ -65,12 +65,6 @@ use crate::{
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AdvanceClockRequest {
     pub seconds: u64,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ExecuteTxRequest {
-    /// Base64 encoded transaction bytes
-    pub tx_bytes: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -219,6 +213,7 @@ async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl IntoResponse 
     })
 }
 
+#[derive(serde::Deserialize)]
 struct FaucetRequest {
     address: SuiAddress,
     amount: u64,
@@ -402,7 +397,6 @@ pub async fn start_server(
         .route("/advance-checkpoint", post(advance_checkpoint))
         .route("/advance-clock", post(advance_clock))
         .route("/advance-epoch", post(advance_epoch))
-        .route("/execute-tx", post(execute_tx))
         .route("/faucet", post(faucet))
         .layer(CorsLayer::permissive())
         .with_state(state);
