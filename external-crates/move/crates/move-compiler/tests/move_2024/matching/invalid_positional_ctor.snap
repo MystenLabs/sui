@@ -22,6 +22,12 @@ error[E04016]: too few arguments
 8 │         let _x = Entry::E;
   │                  ^^^^^^^^ Missing argument for field '0' in '0x42::m::Entry::E'
 
+error[E03010]: unbound field
+  ┌─ tests/move_2024/matching/invalid_positional_ctor.move:9:18
+  │
+9 │         let _x = Entry::E { x: 32 };
+  │                  ^^^^^^^^^^^^^^^^^^ Unbound field 'x' in '0x42::m::Entry::E'
+
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/matching/invalid_positional_ctor.move:9:18
   │
@@ -32,12 +38,6 @@ error[E03013]: positional call mismatch
   │                  ^^^^^^^^^^^^^^^^^^ Invalid variant instantiation. Positional variant declarations require positional instantiations
   │
   = Positional instantiations take arguments using '()'
-
-error[E03010]: unbound field
-  ┌─ tests/move_2024/matching/invalid_positional_ctor.move:9:18
-  │
-9 │         let _x = Entry::E { x: 32 };
-  │                  ^^^^^^^^^^^^^^^^^^ Unbound field 'x' in '0x42::m::Entry::E'
 
 error[E04016]: too few arguments
   ┌─ tests/move_2024/matching/invalid_positional_ctor.move:9:18

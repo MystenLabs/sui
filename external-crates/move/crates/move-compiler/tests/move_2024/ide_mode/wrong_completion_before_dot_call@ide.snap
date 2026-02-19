@@ -5,6 +5,14 @@ info:
   edition: 2024.alpha
   lint: false
 ---
+warning[W09009]: unused struct field
+  ┌─ tests/move_2024/ide_mode/wrong_completion_before_dot_call.move:5:9
+  │
+5 │         some_field: u64,
+  │         ^^^^^^^^^^ The 'some_field' field of the 'SomeStruct' type is unused
+  │
+  = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E03010]: unbound field
    ┌─ tests/move_2024/ide_mode/wrong_completion_before_dot_call.move:16:9
    │  
