@@ -715,20 +715,3 @@ fn determine_startup_checkpoint(
         }
     }
 }
-
-// Where are we at
-// - new sui system state from forked checkpoint, with the validator set updated to match a custom
-// one in the config
-// - the system should start now from the forked checkpoint itself
-//
-// Next
-// - don't forget to look into if we need to init_with_genesis for the new stuff
-// - wrong shared initial object error when running a transaction, so start looking into that
-// - finalize the checkpoint stream implementation
-// - make sure
-//  - execute faucet tx
-//  - execute advance checkpoint
-//  - execute advance epoch
-//  - execute advance clock
-//  - execute pay-sui tx
-//
