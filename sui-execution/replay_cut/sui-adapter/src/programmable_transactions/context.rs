@@ -9,9 +9,9 @@ mod checked {
     use crate::{
         adapter::new_native_extensions,
         data_store::{
+            PackageStore,
             cached_package_store::CachedPackageStore,
             legacy::{linkage_view::LinkageView, sui_data_store::SuiDataStore},
-            PackageStore,
         },
         execution_mode::ExecutionMode,
         execution_value::{
@@ -25,9 +25,9 @@ mod checked {
     };
     use indexmap::IndexSet;
     use move_binary_format::{
+        CompiledModule,
         errors::{Location, PartialVMError, VMError, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
-        CompiledModule,
     };
     use move_core_types::{
         account_address::AccountAddress,
@@ -53,8 +53,8 @@ mod checked {
         sync::Arc,
     };
     use sui_move_natives::object_runtime::{
-        self, get_all_uids, max_event_error, LoadedRuntimeObject, MoveAccumulatorEvent,
-        MoveAccumulatorValue, ObjectRuntime, RuntimeResults,
+        self, LoadedRuntimeObject, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
+        RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
@@ -64,7 +64,7 @@ mod checked {
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
         effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
-        error::{command_argument_error, ExecutionError, ExecutionErrorKind, SuiError},
+        error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
         execution_status::CommandArgumentError,

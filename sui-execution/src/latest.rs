@@ -51,7 +51,7 @@ const GAS_USAGE_DELTA_THRESHOLD: u64 = 50;
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 static OLD_VAL: AtomicUsize = AtomicUsize::new(0);
 static TELEM_COUNTER: AtomicUsize = AtomicUsize::new(0);
-const COLLECT_TIMINGS: bool = true;
+const COLLECT_TIMINGS: bool = false;
 
 // const FILE_PREFIX: &str = "";
 const FILE_PREFIX: &str = "/opt/sui/";
@@ -448,74 +448,7 @@ fn compare_effects(
     normal_effects: (&InnerTemporaryStore, &SuiGasStatus, &TransactionEffects),
     new_effects: (&InnerTemporaryStore, &SuiGasStatus, &TransactionEffects),
 ) {
-    // if normal_effects.1.gas_used() != new_effects.1.gas_used() {
-    //     tracing::warn!(
-    //         "{} Gas used differ: normal={} new={}",
-    //         normal_effects.2.transaction_digest(),
-    //         normal_effects.1.gas_used(),
-    //         new_effects.1.gas_used()
-    //     );
-    // }
-
-    // |current - new| <= threshold
-    // n - k <= L <= n + k
-    let gas_used_within_range = normal_effects
-        .1
-        .gas_used()
-        .saturating_sub(GAS_USAGE_DELTA_THRESHOLD)
-        <= new_effects.1.gas_used()
-        && new_effects.1.gas_used()
-            <= normal_effects
-                .1
-                .gas_used()
-                .saturating_add(GAS_USAGE_DELTA_THRESHOLD);
-
-    let ok = normal_effects.2.status() == new_effects.2.status()
-        && normal_effects.2 == new_effects.2
-        && gas_used_within_range;
-
-    //     match (normal_effects.2.status(), new_effects.2.status()) {
-    //     // success => success
-    //     (ExecutionStatus::Success, ExecutionStatus::Success) => true,
-    //     // Invariant violation in new
-    //     (
-    //         _,
-    //         ExecutionStatus::Failure {
-    //             error: ExecutionFailureStatus::InvariantViolation,
-    //             ..
-    //         },
-    //     ) => false,
-    //     // failure => failure
-    //     (
-    //         ExecutionStatus::Failure { error: _, .. },
-    //         ExecutionStatus::Failure {
-    //             error: _other_error,
-    //             ..
-    //         },
-    //     ) => true,
-    //     // Ran out of gas in the new one
-    //     (
-    //         _,
-    //         ExecutionStatus::Failure {
-    //             error: ExecutionFailureStatus::InsufficientGas,
-    //             ..
-    //         },
-    //     ) => true,
-    //     _ => false,
-    // };
-
-    // If you want to log gas usage differences, uncomment this line
-    // and add the gas row writing function from the other replay branch here: https://github.com/MystenLabs/sui/pull/24042/files#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
-    // write_gas_row
-    //     normal_effects.2.transaction_digest().to_string(),
-    //     &new_effects.1.gas_usage_report(),
-    //     &normal_effects.1.gas_usage_report(),
-    // );
-
-    // Probably want to only log this when they differ, but set to always log for now just for you
-    // to play with.
-    if !ok {
-        // if true {
+    if normal_effects.2 != new_effects.2 {
         tracing::warn!(
             "{} TransactionEffects differ",
             normal_effects.2.transaction_digest()
