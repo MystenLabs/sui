@@ -10,12 +10,14 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority::authority_test_utils::submit_and_execute;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_move_build::BuildConfig;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::crypto::get_authority_key_pair;
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::object::Object;
-use sui_types::transaction::{Transaction, TransactionData};
+use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
 use sui_types::utils::to_sender_signed_transaction;
 use tokio::runtime::Runtime;
 
@@ -71,6 +73,20 @@ impl Executor {
     pub fn new() -> Self {
         let rt = Runtime::new().unwrap();
         let state = rt.block_on(TestAuthorityBuilder::new().build());
+        Self {
+            state,
+            rt: Arc::new(rt),
+        }
+    }
+
+    pub fn new_fullnode() -> Self {
+        let rt = Runtime::new().unwrap();
+        let fullnode_key_pair = get_authority_key_pair().1;
+        let state = rt.block_on(
+            TestAuthorityBuilder::new()
+                .with_keypair(&fullnode_key_pair)
+                .build(),
+        );
         Self {
             state,
             rt: Arc::new(rt),
@@ -148,5 +164,36 @@ impl Executor {
         txn.into_iter()
             .map(|txn| self.execute_transaction(txn))
             .collect()
+    }
+
+    pub fn dry_run_transaction(&self, tx_data: TransactionData) -> Result<(), SuiError> {
+        let digest = TransactionDigest::random();
+        self.rt
+            .block_on(self.state.dry_exec_transaction(tx_data, digest))
+            .map(|_| ())
+    }
+
+    pub fn dev_inspect_transaction(
+        &self,
+        sender: SuiAddress,
+        kind: TransactionKind,
+        gas_price: Option<u64>,
+        gas_budget: Option<u64>,
+        gas_sponsor: Option<SuiAddress>,
+        gas_objects: Option<Vec<ObjectRef>>,
+        skip_checks: Option<bool>,
+    ) -> Result<(), SuiError> {
+        self.rt
+            .block_on(self.state.dev_inspect_transaction_block(
+                sender,
+                kind,
+                gas_price,
+                gas_budget,
+                gas_sponsor,
+                gas_objects,
+                None,
+                skip_checks,
+            ))
+            .map(|_| ())
     }
 }
