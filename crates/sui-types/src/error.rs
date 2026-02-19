@@ -1176,7 +1176,7 @@ impl ExecutionErrorTrait for ExecutionErrorKind {
     }
 
     fn kind(&self) -> &ExecutionErrorKind {
-        &self
+        self
     }
 
     fn command(&self) -> Option<CommandIndex> {
@@ -1212,7 +1212,7 @@ pub trait ExecutionErrorTrait:
     where
         Self: Sized,
     {
-        Self::new_with_source(ExecutionFailureStatus::InvariantViolation, source.into())
+        Self::new_with_source(ExecutionErrorKind::InvariantViolation, source.into())
     }
 
     fn from_kind(kind: ExecutionErrorKind) -> Self;

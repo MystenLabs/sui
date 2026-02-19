@@ -1646,7 +1646,7 @@ mod checked {
         Ok(())
     }
 
-    fn to_identifier<Mode: ExecutionMode>(
+    fn to_identifier(
         context: &mut ExecutionContext<'_, '_, '_>,
         ident: String,
     ) -> Result<Identifier, ExecutionError> {
@@ -1740,7 +1740,7 @@ mod checked {
         })
     }
 
-    fn resolve_datatype_names<Mode: ExecutionMode>(
+    fn resolve_datatype_names(
         context: &ExecutionContext<'_, '_, '_>,
         addr: AccountAddress,
         module: String,
