@@ -32,7 +32,7 @@ With the coin-based model, funding a transaction requires:
 4. **Merge if needed**: If multiple coins are selected, add `MergeCoins` commands to combine them before use
 5. **Manage concurrency**: Track which coins are "in flight" to avoid double-spending across parallel transactions
 
-[TypeScript SDK - SuiClient.getCoins](https://sdk.mystenlabs.com/typedoc/classes/_mysten_sui.client.SuiClient.html#getCoins):
+[TypeScript SDK - SuiClient](https://sdk.mystenlabs.com/sui/clients):
 
 ```typescript
 // Before: Coin-based funding
@@ -63,7 +63,7 @@ const [coin] = tx.splitCoins(selected[0].coinObjectId, [requiredAmount]);
 
 With address balances, declare the amount needed and the protocol handles the rest.
 
-[TypeScript SDK - CoinWithBalance](https://sdk.mystenlabs.com/typescript/transaction-building/intents#coinwithbalance):
+[TypeScript SDK - CoinWithBalance](https://sdk.mystenlabs.com/sui/transaction-building/intents#coinwithbalance):
 
 ```typescript
 // After: Address balance funding
@@ -221,7 +221,7 @@ To send funds to another address with coins:
 2. **Transfer the object**: Use `transfer::public_transfer` to send the coin object to the recipient
 3. **Recipient receives an object**: The recipient now owns a new `Coin<T>` object they must manage
 
-[TypeScript SDK - Transaction.transferObjects](https://sdk.mystenlabs.com/typescript/transaction-building/basics#transferobjects):
+[TypeScript SDK - Transaction.transferObjects](https://sdk.mystenlabs.com/sui/transaction-building/basics#transferobjects):
 
 ```typescript
 // Before: Transfer a coin object
@@ -420,17 +420,17 @@ Benefits over coin-based sponsorship:
 
 To determine total balance, the RPC layer sums all coin objects for you:
 
-[TypeScript SDK - SuiClient.getBalance](https://sdk.mystenlabs.com/typescript/sui-client#getbalance):
+[TypeScript SDK - Core API](https://sdk.mystenlabs.com/sui/clients/core):
 
 ```typescript
 // Before: Get balance (RPC sums all coin objects)
-const balance = await client.getBalance({ owner: address, coinType: '0x2::sui::SUI' });
+const balance = await client.core.getBalance({ owner: address, coinType: '0x2::sui::SUI' });
 console.log(balance.totalBalance);  // Sum of all Coin<SUI> objects
 ```
 
 ```typescript
-// Get all balances for an address
-const balances = await client.getAllBalances({ owner: address });
+// List all balances for an address
+const { balances } = await client.core.listBalances({ owner: address });
 for (const balance of balances) {
     console.log(`${balance.coinType}: ${balance.totalBalance}`);
 }
@@ -681,7 +681,7 @@ sui client ptb \
 
 Or using `CoinWithBalance` in TypeScript:
 
-[TypeScript SDK - CoinWithBalance](https://sdk.mystenlabs.com/typescript/transaction-building/intents#coinwithbalance):
+[TypeScript SDK - CoinWithBalance](https://sdk.mystenlabs.com/sui/transaction-building/intents#coinwithbalance):
 
 ```typescript
 const tx = new Transaction();
