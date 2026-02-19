@@ -44,6 +44,7 @@ use crate::{
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::{
+        to_host_port_str,
         tonic_gen::{
             consensus_service_server::ConsensusServiceServer,
             observer_service_server::ObserverServiceServer,
@@ -357,7 +358,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
 }
 
 // Tonic channel wrapped with layers.
-type Channel = mysten_network::callback::Callback<
+pub(crate) type Channel = mysten_network::callback::Callback<
     tower_http::trace::Trace<
         tonic_rustls::Channel,
         tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
@@ -964,17 +965,30 @@ impl TonicManager {
             return;
         };
 
-        // Parse observer allowlist from configuration
+        // Parse observer allowlist from configuration and create TLS verifier
         let observer_allowlist = parse_observer_allowlist(&config.observer_allowlist);
-
-        if observer_allowlist.is_empty() {
+        let observer_tls_config = if observer_allowlist.is_empty() {
             info!("Observer server allowlist disabled - all observers allowed");
+            sui_tls::create_rustls_server_config_with_client_verifier(
+                self.network_keypair.clone().private_key().into_inner(),
+                certificate_server_name(&self.context),
+                sui_tls::AllowAll,
+            )
         } else {
             info!(
                 "Observer server allowlist enabled with {} keys",
                 observer_allowlist.len()
             );
-        }
+            let allowed_keys = observer_allowlist
+                .into_iter()
+                .map(|k| k.into_inner())
+                .collect();
+            sui_tls::create_rustls_server_config_with_client_verifier(
+                self.network_keypair.clone().private_key().into_inner(),
+                certificate_server_name(&self.context),
+                AllowPublicKeys::new(allowed_keys),
+            )
+        };
 
         info!("Starting observer service on port {observer_port}");
 
@@ -994,7 +1008,7 @@ impl TonicManager {
                     request.extensions().get::<sui_http::PeerCertificates>()
                 {
                     if let Some(observer_peer_info) =
-                        observer_peer_info_from_certs(peer_certificates, &observer_allowlist)
+                        observer_peer_info_from_certs(peer_certificates)
                     {
                         debug!("Inserting observer peer info: {:?}", observer_peer_info);
                         request.extensions_mut().insert(observer_peer_info);
@@ -1020,11 +1034,6 @@ impl TonicManager {
         let observer_service = tonic::service::Routes::new(observer_service_server)
             .into_axum_router()
             .route_layer(layers);
-
-        let observer_tls_config = sui_tls::create_rustls_server_config(
-            self.network_keypair.clone().private_key().into_inner(),
-            certificate_server_name(&self.context),
-        );
 
         let http_config = sui_http::Config::default()
             .initial_connection_window_size(HTTP2_INITIAL_CONNECTION_WINDOW_SIZE)
@@ -1101,11 +1110,9 @@ fn peer_info_from_certs(
 
 /// Extracts observer peer information from TLS certificates.
 /// Unlike validator peers, observers are not required to be in the committee.
-/// If allowlist is non-empty, only public keys in the allowlist are allowed.
-/// If allowlist is empty, all observers are allowed.
+/// The allowlist filtering is enforced at the TLS level via AllowPublicKeys or AllowAll.
 fn observer_peer_info_from_certs(
     peer_certificates: &sui_http::PeerCertificates,
-    allowlist: &[NetworkPublicKey],
 ) -> Option<ObserverPeerInfo> {
     let certs = peer_certificates.peer_certs();
 
@@ -1125,20 +1132,10 @@ fn observer_peer_info_from_certs(
         .ok()?;
     let client_public_key = NetworkPublicKey::new(public_key);
 
-    // Check allowlist if non-empty
-    if !allowlist.is_empty() {
-        if !allowlist.contains(&client_public_key) {
-            warn!(
-                "Observer connection rejected: public key {:?} not in allowlist",
-                client_public_key
-            );
-            return None;
-        }
-        debug!(
-            "Observer connection accepted: public key {:?} is in allowlist",
-            client_public_key
-        );
-    }
+    debug!(
+        "Observer connection accepted: public key {:?}",
+        client_public_key
+    );
 
     Some(ObserverPeerInfo {
         public_key: client_public_key,
@@ -1175,26 +1172,6 @@ fn parse_observer_allowlist(allowlist_strings: &[String]) -> Vec<NetworkPublicKe
             }
         })
         .collect()
-}
-
-/// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into
-/// a host:port string.
-fn to_host_port_str(addr: &Multiaddr) -> Result<String, String> {
-    let mut iter = addr.iter();
-
-    match (iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => {
-            Ok(format!("{}:{}", ipaddr, port))
-        }
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => {
-            Ok(format!("{}", SocketAddrV6::new(ipaddr, port, 0, 0)))
-        }
-        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port))) => {
-            Ok(format!("{}:{}", hostname, port))
-        }
-
-        _ => Err(format!("unsupported multiaddr: {addr}")),
-    }
 }
 
 /// Attempts to convert a multiaddr of the form `/[ip4,ip6]/{}/[udp,tcp]/{port}` into
