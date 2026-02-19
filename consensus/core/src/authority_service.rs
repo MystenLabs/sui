@@ -32,7 +32,7 @@ use crate::{
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{BlockStream, ExtendedSerializedBlock, ValidatorNetworkService},
+    network::{BlockStream, ExtendedSerializedBlock, PeerId, ValidatorNetworkService},
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
@@ -373,7 +373,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         };
 
         let broadcasted_blocks = BroadcastedBlockStream::new(
-            peer,
+            PeerId::Validator(peer),
             self.rx_block_broadcast.resubscribe(),
             self.subscription_counter.clone(),
         );
@@ -641,7 +641,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
 struct Counter {
     count: usize,
-    subscriptions_by_authority: Vec<usize>,
+    subscriptions_by_peer: BTreeMap<PeerId, usize>,
 }
 
 /// Atomically counts the number of active subscriptions to the block broadcast stream.
@@ -665,41 +665,71 @@ impl SubscriptionCounter {
         Self {
             counter: parking_lot::Mutex::new(Counter {
                 count: 0,
-                subscriptions_by_authority: vec![0; context.committee.size()],
+                subscriptions_by_peer: BTreeMap::new(),
             }),
             context,
         }
     }
 
-    fn increment(&self, peer: AuthorityIndex) -> Result<(), ConsensusError> {
+    fn increment(&self, peer: &PeerId) -> Result<(), ConsensusError> {
         let mut counter = self.counter.lock();
         counter.count += 1;
-        counter.subscriptions_by_authority[peer] += 1;
+        *counter
+            .subscriptions_by_peer
+            .entry(peer.clone())
+            .or_insert(0) += 1;
 
-        let peer_hostname = &self.context.committee.authority(peer).hostname;
-        self.context
-            .metrics
-            .node_metrics
-            .subscribed_by
-            .with_label_values(&[peer_hostname])
-            .set(1);
+        match peer {
+            PeerId::Validator(authority) => {
+                let peer_hostname = &self.context.committee.authority(*authority).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .subscribed_by
+                    .with_label_values(&[peer_hostname])
+                    .set(1);
+            }
+            PeerId::Observer(_) => {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .subscribed_by
+                    .with_label_values(&["observer"])
+                    .inc();
+            }
+        }
 
         Ok(())
     }
 
-    fn decrement(&self, peer: AuthorityIndex) -> Result<(), ConsensusError> {
+    fn decrement(&self, peer: &PeerId) -> Result<(), ConsensusError> {
         let mut counter = self.counter.lock();
         counter.count -= 1;
-        counter.subscriptions_by_authority[peer] -= 1;
+        *counter
+            .subscriptions_by_peer
+            .entry(peer.clone())
+            .or_insert(0) -= 1;
 
-        if counter.subscriptions_by_authority[peer] == 0 {
-            let peer_hostname = &self.context.committee.authority(peer).hostname;
-            self.context
-                .metrics
-                .node_metrics
-                .subscribed_by
-                .with_label_values(&[peer_hostname])
-                .set(0);
+        if counter.subscriptions_by_peer[peer] == 0 {
+            match peer {
+                PeerId::Validator(authority) => {
+                    let peer_hostname = &self.context.committee.authority(*authority).hostname;
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .subscribed_by
+                        .with_label_values(&[peer_hostname])
+                        .set(0);
+                }
+                PeerId::Observer(_) => {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .subscribed_by
+                        .with_label_values(&["observer"])
+                        .dec();
+                }
+            }
         }
 
         Ok(())
@@ -713,7 +743,7 @@ type BroadcastedBlockStream = BroadcastStream<ExtendedBlock>;
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
 struct BroadcastStream<T> {
-    peer: AuthorityIndex,
+    peer: PeerId,
     // Stores the receiver across poll_next() calls.
     inner: ReusableBoxFuture<
         'static,
@@ -728,11 +758,11 @@ struct BroadcastStream<T> {
 
 impl<T: 'static + Clone + Send> BroadcastStream<T> {
     pub fn new(
-        peer: AuthorityIndex,
+        peer: PeerId,
         rx: broadcast::Receiver<T>,
         subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
-        if let Err(err) = subscription_counter.increment(peer) {
+        if let Err(err) = subscription_counter.increment(&peer) {
             match err {
                 ConsensusError::Shutdown => {}
                 _ => panic!("Unexpected error: {err}"),
@@ -753,7 +783,7 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
         mut self: Pin<&mut Self>,
         cx: &mut task::Context<'_>,
     ) -> task::Poll<Option<Self::Item>> {
-        let peer = self.peer;
+        let peer = self.peer.clone();
         let maybe_item = loop {
             let (result, rx) = ready!(self.inner.poll(cx));
             self.inner.set(make_recv_future(rx));
@@ -779,7 +809,7 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
 
 impl<T> Drop for BroadcastStream<T> {
     fn drop(&mut self) {
-        if let Err(err) = self.subscription_counter.decrement(self.peer) {
+        if let Err(err) = self.subscription_counter.decrement(&self.peer) {
             match err {
                 ConsensusError::Shutdown => {}
                 _ => panic!("Unexpected error: {err}"),
