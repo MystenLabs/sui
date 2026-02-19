@@ -353,7 +353,7 @@ TransactionData::V1(TransactionDataV1 {
     },
     expiration: TransactionExpiration::ValidDuring {
         min_epoch: Some(current_epoch),
-        max_epoch: Some(current_epoch),  // At most min_epoch + 1
+        max_epoch: Some(current_epoch + 1),
         min_timestamp: None,
         max_timestamp: None,
         chain: chain_identifier,
@@ -398,7 +398,7 @@ TransactionData::V1(TransactionDataV1 {
     },
     expiration: TransactionExpiration::ValidDuring {
         min_epoch: Some(epoch),
-        max_epoch: Some(epoch),
+        max_epoch: Some(epoch + 1),
         min_timestamp: None,
         max_timestamp: None,
         chain: chain_id,
