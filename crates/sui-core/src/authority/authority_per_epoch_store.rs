@@ -763,7 +763,7 @@ impl AuthorityEpochTables {
                 ThConfig::new_with_config(
                     8 + 8,
                     mutexes,
-                    uniform_key,
+                    sequence_key,
                     pending_checkpoint_signatures_config,
                 ),
             ),
