@@ -367,7 +367,7 @@ mod tests {
         let gather = registry.gather();
         let gather: HashMap<_, _> = gather
             .into_iter()
-            .map(|f| (f.get_name().to_string(), f))
+            .map(|f| (f.name().to_string(), f))
             .collect();
         let hist = gather.get("test").unwrap();
         let sum = gather.get("test_sum").unwrap();
@@ -396,7 +396,7 @@ mod tests {
                 let mut key = String::new();
                 for label in m.get_label() {
                     key.push_str("::");
-                    key.push_str(label.get_value());
+                    key.push_str(label.value());
                 }
                 (key, value)
             })
@@ -412,7 +412,7 @@ mod tests {
                 let mut key = String::new();
                 for label in m.get_label() {
                     key.push_str("::");
-                    key.push_str(label.get_value());
+                    key.push_str(label.value());
                 }
                 (key, value)
             })
