@@ -48,6 +48,8 @@ pub(super) fn committer<H>(
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
+    min_eager_rows: usize,
+    max_batch_checkpoints: usize,
 ) -> Service
 where
     H: Handler + Send + Sync + 'static,
@@ -131,7 +133,7 @@ where
                     // and batch together as a way to impose some limit on the size of the batch
                     // (and therefore the length of the write transaction).
                     // docs::#batch  (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                    while batch_checkpoints < H::MAX_BATCH_CHECKPOINTS {
+                    while batch_checkpoints < max_batch_checkpoints {
                         if !can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
                             break;
                         }
@@ -352,7 +354,7 @@ where
                     // next polling interval. This is appropriate if there are a minimum number of
                     // rows to write, and they are already in the batch, or we can process the next
                     // checkpoint to extract them.
-                    if pending_rows < H::MIN_EAGER_ROWS {
+                    if pending_rows < min_eager_rows {
                         continue;
                     }
 
@@ -459,6 +461,13 @@ mod tests {
     fn setup_test(next_checkpoint: u64, config: SequentialConfig, store: MockStore) -> TestSetup {
         let metrics = IndexerMetrics::new(None, &Registry::default());
 
+        let min_eager_rows = config
+            .min_eager_rows
+            .unwrap_or(<TestHandler as super::Handler>::MIN_EAGER_ROWS);
+        let max_batch_checkpoints = config
+            .max_batch_checkpoints
+            .unwrap_or(<TestHandler as super::Handler>::MAX_BATCH_CHECKPOINTS);
+
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
         #[allow(clippy::disallowed_methods)]
         let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
@@ -473,6 +482,8 @@ mod tests {
             commit_hi_tx,
             store_clone,
             metrics,
+            min_eager_rows,
+            max_batch_checkpoints,
         );
 
         TestSetup {
@@ -506,6 +517,7 @@ mod tests {
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
+            ..Default::default()
         };
         let mut setup = setup_test(0, config, MockStore::default());
 
@@ -579,6 +591,7 @@ mod tests {
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
+            ..Default::default()
         };
         let mut setup = setup_test(0, config, MockStore::default());
 
@@ -611,6 +624,7 @@ mod tests {
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
+            ..Default::default()
         };
         let mut setup = setup_test(0, config, MockStore::default());
 
@@ -644,6 +658,7 @@ mod tests {
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 1, // Only commit checkpoints that are at least 1 behind
+            ..Default::default()
         };
         let mut setup = setup_test(0, config, MockStore::default());
 
@@ -680,6 +695,7 @@ mod tests {
                 ..Default::default()
             },
             checkpoint_lag: 0, // Zero checkpoint lag to not block the eager logic
+            ..Default::default()
         };
         let mut setup = setup_test(0, config, MockStore::default());
 
@@ -712,6 +728,7 @@ mod tests {
                 ..Default::default()
             },
             checkpoint_lag: 4, // High checkpoint lag to block eager commits
+            ..Default::default()
         };
         let mut setup = setup_test(0, config, MockStore::default());
 
@@ -747,6 +764,7 @@ mod tests {
                 ..Default::default()
             },
             checkpoint_lag: 0,
+            ..Default::default()
         };
 
         // Create store with transaction failure configuration

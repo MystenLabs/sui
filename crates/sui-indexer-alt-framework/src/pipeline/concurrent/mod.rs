@@ -120,6 +120,18 @@ pub struct ConcurrentConfig {
 
     /// Configuration for the pruner, that deletes old data.
     pub pruner: Option<PrunerConfig>,
+
+    /// Override for `Processor::FANOUT` (processor concurrency).
+    pub fanout: Option<usize>,
+
+    /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
+    pub min_eager_rows: Option<usize>,
+
+    /// Override for `Handler::MAX_PENDING_ROWS` (backpressure threshold).
+    pub max_pending_rows: Option<usize>,
+
+    /// Override for `Handler::MAX_WATERMARK_UPDATES` (watermarks per batch cap).
+    pub max_watermark_updates: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -229,9 +241,19 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let ConcurrentConfig {
         committer: committer_config,
         pruner: pruner_config,
+        fanout,
+        min_eager_rows,
+        max_pending_rows,
+        max_watermark_updates,
     } = config;
 
-    let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
+    let fanout = fanout.unwrap_or(H::FANOUT);
+    let min_eager_rows = min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
+    let max_pending_rows = max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
+    let max_watermark_updates = max_watermark_updates.unwrap_or(H::MAX_WATERMARK_UPDATES);
+
+    let (processor_tx, collector_rx) = mpsc::channel(fanout + PIPELINE_BUFFER);
+
     //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
     let (collector_tx, committer_rx) =
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
@@ -247,6 +269,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
+        fanout,
     );
 
     let s_collector = collector::<H>(
@@ -256,6 +279,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         collector_tx,
         main_reader_lo.clone(),
         metrics.clone(),
+        min_eager_rows,
+        max_pending_rows,
+        max_watermark_updates,
     );
 
     let s_committer = committer::<H>(

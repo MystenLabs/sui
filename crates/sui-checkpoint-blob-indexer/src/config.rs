@@ -42,6 +42,10 @@ impl CommitterLayer {
 #[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
+    pub fanout: Option<usize>,
+    pub min_eager_rows: Option<usize>,
+    pub max_pending_rows: Option<usize>,
+    pub max_watermark_updates: Option<usize>,
 }
 
 impl ConcurrentLayer {
@@ -53,6 +57,10 @@ impl ConcurrentLayer {
                 base.committer
             },
             pruner: None,
+            fanout: self.fanout.or(base.fanout),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
+            max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
+            max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
         }
     }
 }
