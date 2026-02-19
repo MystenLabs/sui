@@ -238,7 +238,7 @@ impl LedgerService for ForkingLedgerService {
         request: tonic::Request<GetCheckpointRequest>,
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
         let simulacrum = self.context.simulacrum.read().await;
-        let store = simulacrum.store_static();
+        let store = simulacrum.store_typed();
 
         let GetCheckpointRequest {
             checkpoint_id,
@@ -445,11 +445,11 @@ impl ForkingLedgerService {
         version: Option<u64>,
     ) -> Result<sui_types::object::Object, RpcError> {
         let sim = self.context.simulacrum.read().await;
-        let store = sim.store_static();
+        let store = sim.store();
         let object = if let Some(version) = version {
             store.get_object_at_version(&object_id, version.into())
         } else {
-            store.get_object(&object_id)
+            sui_types::storage::ObjectStore::get_object(store, &object_id)
         };
 
         match object {
@@ -466,14 +466,14 @@ impl ForkingLedgerService {
         use sui_types::storage::ReadStore;
 
         let sim = self.context.simulacrum.read().await;
-        let store = sim.store_static();
+        let store = sim.store();
 
         let transaction = store
             .get_transaction(&digest)
             .ok_or_else(|| TransactionNotFoundError(digest.into()))?;
 
         let effects = store.get_transaction_effects(&digest);
-        let events = store.get_events(&digest);
+        let events = sim.get_events(&digest);
 
         let mut message = ExecutedTransaction::default();
 

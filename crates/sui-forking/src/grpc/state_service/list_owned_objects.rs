@@ -89,7 +89,7 @@ pub async fn list_owned_objects(
 
     let mut candidates = {
         let sim = service.context.simulacrum.read().await;
-        let store = sim.store_static();
+        let store = sim.store();
 
         store
             .owned_objects(owner_sui)

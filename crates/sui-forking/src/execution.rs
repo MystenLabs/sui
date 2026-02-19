@@ -14,7 +14,6 @@ use sui_types::{
 use tracing::{info, warn};
 
 use crate::context::Context;
-use crate::store::ForkingStore;
 
 /// Result of executing a transaction.
 pub struct ExecutionResult {
@@ -38,12 +37,7 @@ pub async fn execute_transaction(
     tx_data: TransactionData,
 ) -> Result<ExecutionResult, RpcError> {
     // Fetch and cache input objects
-    {
-        let simulacrum = context.simulacrum.clone();
-        let mut sim = simulacrum.write().await;
-        let data_store = sim.store_mut();
-        fetch_input_objects(context, data_store, &tx_data).await?;
-    }
+    fetch_input_objects(context, &tx_data).await?;
 
     // Execute the transaction
     let simulacrum = &context.simulacrum;
@@ -96,12 +90,7 @@ pub async fn dry_run_transaction(
     tx_data: TransactionData,
 ) -> Result<DryRunResult, RpcError> {
     // Fetch and cache input objects
-    {
-        let simulacrum = context.simulacrum.clone();
-        let mut sim = simulacrum.write().await;
-        let data_store = sim.store_mut();
-        fetch_input_objects(context, data_store, &tx_data).await?;
-    }
+    fetch_input_objects(context, &tx_data).await?;
 
     // Perform dry run simulation (read-only)
     let simulacrum = &context.simulacrum;
@@ -125,7 +114,6 @@ pub async fn dry_run_transaction(
 /// Fetch and cache all input objects for a transaction.
 pub async fn fetch_input_objects(
     context: &Context,
-    data_store: &ForkingStore,
     tx_data: &TransactionData,
 ) -> Result<(), RpcError> {
     let input_objs = tx_data.input_objects().map_err(|e| {
@@ -142,8 +130,7 @@ pub async fn fetch_input_objects(
             InputObjectKind::SharedMoveObject { id, .. } => id,
         };
 
-        // crate::rpc::fetch_and_cache_object_from_rpc(data_store, context, &object_id)
-        fetch_and_cache_object_from_rpc(data_store, context, &object_id)
+        fetch_and_cache_object_from_rpc(context, &object_id)
             .await
             .map_err(|e| {
                 RpcError::new(
@@ -157,10 +144,11 @@ pub async fn fetch_input_objects(
 }
 
 async fn fetch_and_cache_object_from_rpc(
-    data_store: &ForkingStore,
-    _context: &Context,
+    context: &Context,
     object_id: &ObjectID,
 ) -> Result<(), anyhow::Error> {
+    let simulacrum = context.simulacrum.read().await;
+    let data_store = simulacrum.store_typed();
     let obj = data_store.get_object(object_id);
     obj.ok_or_else(|| anyhow::anyhow!("Object {} not found in store during execution", object_id))?;
 

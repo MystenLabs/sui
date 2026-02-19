@@ -153,7 +153,7 @@ async fn execute_transaction_impl(
             // Backfill it from the local store so clients (for example publish dry-run) get
             // the same type metadata they rely on in upstream RPC flows.
             let sim = context.simulacrum.read().await;
-            let store = sim.store_static();
+            let store = sim.store();
             annotate_effects_object_types(&mut effects_message, |object_id, version| {
                 store
                     .get_object_at_version(&object_id, SequenceNumber::from_u64(version))
@@ -168,9 +168,8 @@ async fn execute_transaction_impl(
     // Get events if requested
     if let Some(submask) = read_mask.subtree(ExecutedTransaction::EVENTS_FIELD.name) {
         let sim = context.simulacrum.read().await;
-        let store = sim.store_static();
         if let Some(events) =
-            sui_types::storage::ReadStore::get_events(&store, effects.transaction_digest())
+            sui_types::storage::ReadStore::get_events(&*sim, effects.transaction_digest())
         {
             let events_sdk: sui_sdk_types::TransactionEvents = events.try_into().map_err(|e| {
                 RpcError::new(

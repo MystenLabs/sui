@@ -213,7 +213,7 @@ async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl IntoResponse 
     })
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 struct FaucetRequest {
     address: SuiAddress,
     amount: u64,
@@ -273,7 +273,6 @@ fn execute_faucet_transfer(
     let Some(faucet_coin) = simulacrum
         .store()
         .owned_objects(faucet_owner)
-        .into_iter()
         .filter(|object| object.is_gas_coin() && object.get_coin_value_unsafe() >= required_balance)
         .max_by_key(|object| object.get_coin_value_unsafe())
     else {

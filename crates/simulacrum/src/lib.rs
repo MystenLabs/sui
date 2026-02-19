@@ -632,7 +632,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &self.store
     }
 
-    pub fn store_static(&self) -> &S {
+    pub fn store_typed(&self) -> &S {
         &self.store
     }
 

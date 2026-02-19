@@ -34,20 +34,20 @@ impl Context {
     ) -> anyhow::Result<()> {
         let checkpoint = {
             let sim = self.simulacrum.read().await;
-            let store = sim.store_static();
+            let store = sim.store();
 
             let verified_checkpoint = store
-                .get_checkpoint_by_sequence_number(checkpoint_sequence_number, true)
+                .get_checkpoint_by_sequence_number(checkpoint_sequence_number)
                 .with_context(|| {
                     format!("missing checkpoint summary at sequence {checkpoint_sequence_number}")
                 })?;
             let checkpoint_contents = store
-                .get_checkpoint_contents_by_digest(&verified_checkpoint.content_digest, true)
+                .get_checkpoint_contents(&verified_checkpoint.content_digest)
                 .with_context(|| {
                     format!("missing checkpoint contents for sequence {checkpoint_sequence_number}")
                 })?;
 
-            store.get_checkpoint_data(verified_checkpoint.clone(), checkpoint_contents)?
+            sim.get_checkpoint_data(verified_checkpoint.clone(), checkpoint_contents)?
         };
 
         self.checkpoint_sender
