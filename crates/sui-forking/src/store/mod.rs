@@ -365,33 +365,6 @@ impl ForkingStore {
             .unwrap_or_default()
     }
 
-    /// Persists an object directly to the local object cache when it is not already present.
-    ///
-    /// Returns `Ok(true)` when the object was inserted and `Ok(false)` when an object with the
-    /// same ID is already cached locally.
-    pub fn seed_local_object_if_missing(&mut self, object: Object) -> Result<bool, anyhow::Error> {
-        let object_id = object.id();
-        if self
-            .fs_store
-            .get_object_latest(&object_id)
-            .map_err(|err| anyhow!("failed to inspect local object cache for {object_id}: {err}"))?
-            .is_some()
-        {
-            return Ok(false);
-        }
-
-        let version: u64 = object.version().into();
-        let object_key = ObjectKey {
-            object_id,
-            version_query: VersionQuery::Version(version),
-        };
-
-        self.fs_gql_store
-            .write_objects(vec![(object_key, object, version)])
-            .map_err(|err| anyhow!("failed to seed local object {object_id}: {err}"))?;
-        Ok(true)
-    }
-
     /// Installs a validator-set override used by `get_system_state` for epoch-state derivation.
     pub fn set_system_state_validator_set_override(&mut self, validators: ValidatorSetV1) {
         self.validator_set_override = Some(validators);

@@ -14794,7 +14794,7 @@ dependencies = [
 
 [[package]]
 name = "sui-forking"
-version = "1.66.0"
+version = "1.67.0"
 dependencies = [
  "anyhow",
  "axum 0.8.3",

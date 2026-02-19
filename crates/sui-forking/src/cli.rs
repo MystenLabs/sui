@@ -84,14 +84,6 @@ pub enum Commands {
         #[clap(long, default_value = DEFAULT_ADDRESS)]
         server_url: String,
     },
-    /// Execute a transaction
-    ExecuteTx {
-        #[clap(long, default_value = DEFAULT_ADDRESS)]
-        server_url: String,
-        /// Base64 encoded transaction bytes
-        #[clap(long)]
-        tx_bytes: String,
-    },
     Faucet {
         #[clap(long, default_value = DEFAULT_ADDRESS)]
         server_url: String,

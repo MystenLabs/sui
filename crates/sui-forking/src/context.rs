@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use rand::rngs::OsRng;
 use sui_rpc_api::subscription::SubscriptionServiceHandle;
+use sui_types::base_types::SuiAddress;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::storage::ReadStore;
 use tokio::sync::RwLock;
@@ -21,6 +22,7 @@ pub(crate) struct Context {
     pub subscription_service_handle: SubscriptionServiceHandle,
     pub checkpoint_sender: mpsc::Sender<Checkpoint>,
     pub chain_id: ChainIdentifier,
+    pub faucet_owner: Option<SuiAddress>,
 }
 
 impl Context {

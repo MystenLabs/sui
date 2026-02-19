@@ -3,7 +3,7 @@
 
 use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr, sync::Arc};
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, anyhow};
 use axum::{
     Json, Router,
     extract::State,
@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 use simulacrum::{AdvanceEpochConfig, Simulacrum, store::in_mem_store::KeyStore};
 use sui_data_store::{
-    CheckpointStore as _, SetupStore as _,
+    CheckpointStore as _, FullCheckpointData, ObjectKey, SetupStore as _, VersionQuery,
     stores::{DataStore, FileSystemStore, ReadThroughStore},
 };
 use sui_futures::service::Service;
@@ -32,6 +32,7 @@ use sui_rpc::proto::sui::rpc::v2::{
     transaction_execution_service_server::TransactionExecutionServiceServer,
 };
 use sui_rpc_api::subscription::SubscriptionService as RpcSubscriptionService;
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::{
     accumulator_root::get_accumulator_root_obj_initial_shared_version,
@@ -40,13 +41,15 @@ use sui_types::{
         ChainIdentifier, CheckpointDigest, get_mainnet_chain_identifier,
         get_testnet_chain_identifier,
     },
-    effects::TransactionEffectsAPI,
+    effects::TransactionEffects,
+    gas_coin::MIST_PER_SUI,
     message_envelope::Envelope,
     messages_checkpoint::VerifiedCheckpoint,
     object::Object,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
     sui_system_state::{SuiSystemState, SuiSystemStateTrait},
     supported_protocol_versions::Chain::{self},
-    transaction::Transaction,
+    transaction::{GasData, Transaction, TransactionData, TransactionKind},
 };
 
 use crate::grpc::{
@@ -101,6 +104,11 @@ impl AppState {
     pub async fn new(context: crate::context::Context) -> Self {
         Self { context }
     }
+}
+
+struct InitializedSimulacrum {
+    simulacrum: Simulacrum<OsRng, ForkingStore>,
+    faucet_owner: Option<SuiAddress>,
 }
 
 async fn health() -> &'static str {
@@ -211,67 +219,6 @@ async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl IntoResponse 
     })
 }
 
-async fn execute_tx(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<ExecuteTxRequest>,
-) -> impl IntoResponse {
-    // Decode the base64 transaction bytes
-    let tx_bytes = match base64::Engine::decode(
-        &base64::engine::general_purpose::STANDARD,
-        &request.tx_bytes,
-    ) {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            return Json(ApiResponse::<ExecuteTxResponse> {
-                success: false,
-                data: None,
-                error: Some(format!("Failed to decode base64: {}", e)),
-            });
-        }
-    };
-
-    // Deserialize the transaction
-    let transaction: Transaction = match bcs::from_bytes(&tx_bytes) {
-        Ok(tx) => tx,
-        Err(e) => {
-            return Json(ApiResponse::<ExecuteTxResponse> {
-                success: false,
-                data: None,
-                error: Some(format!("Failed to deserialize transaction: {}", e)),
-            });
-        }
-    };
-
-    // Execute the transaction
-    let mut sim = state.context.simulacrum.write().await;
-    match sim.execute_transaction(transaction) {
-        Ok((effects, execution_error)) => {
-            let effects_bytes = bcs::to_bytes(&effects).unwrap();
-            let effects_base64 =
-                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &effects_bytes);
-
-            let error_str = execution_error.map(|e| format!("{:?}", e));
-
-            info!("Executed transaction successfully");
-
-            Json(ApiResponse {
-                success: true,
-                data: Some(ExecuteTxResponse {
-                    effects: effects_base64,
-                    error: error_str,
-                }),
-                error: None,
-            })
-        }
-        Err(e) => Json(ApiResponse::<ExecuteTxResponse> {
-            success: false,
-            data: None,
-            error: Some(format!("Failed to execute transaction: {}", e)),
-        }),
-    }
-}
-
-#[derive(serde::Deserialize)]
 struct FaucetRequest {
     address: SuiAddress,
     amount: u64,
@@ -282,13 +229,22 @@ async fn faucet(
     Json(request): Json<FaucetRequest>,
 ) -> impl IntoResponse {
     let FaucetRequest { address, amount } = request;
+    let Some(faucet_owner) = state.context.faucet_owner else {
+        return Json(ApiResponse::<ExecuteTxResponse> {
+            success: false,
+            data: None,
+            error: Some(
+                "Faucet is unavailable: no local faucet owner was configured at startup"
+                    .to_string(),
+            ),
+        });
+    };
 
     let mut simulacrum = state.context.simulacrum.write().await;
-    let response = simulacrum.request_gas(address, amount);
+    let response = execute_faucet_transfer(&mut simulacrum, faucet_owner, address, amount);
 
     match response {
         Ok(effects) => {
-            println!("Effects {:?}", effects.created());
             let effects_bytes = bcs::to_bytes(&effects).unwrap();
             let effects_base64 =
                 base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &effects_bytes);
@@ -304,12 +260,55 @@ async fn faucet(
                 error: None,
             })
         }
-        Err(e) => Json(ApiResponse::<ExecuteTxResponse> {
+        Err(err) => Json(ApiResponse::<ExecuteTxResponse> {
             success: false,
             data: None,
-            error: Some(format!("Failed to execute transaction: {}", e)),
+            error: Some(format!("Failed to execute faucet transfer: {}", err)),
         }),
     }
+}
+
+fn execute_faucet_transfer(
+    simulacrum: &mut Simulacrum<OsRng, ForkingStore>,
+    faucet_owner: SuiAddress,
+    recipient: SuiAddress,
+    amount: u64,
+) -> Result<TransactionEffects, anyhow::Error> {
+    let required_balance = amount.saturating_add(MIST_PER_SUI);
+    let Some(faucet_coin) = simulacrum
+        .store()
+        .owned_objects(faucet_owner)
+        .into_iter()
+        .filter(|object| object.is_gas_coin() && object.get_coin_value_unsafe() >= required_balance)
+        .max_by_key(|object| object.get_coin_value_unsafe())
+    else {
+        anyhow::bail!(
+            "No faucet coin with enough balance for {} Mist (required balance >= {})",
+            amount,
+            required_balance
+        );
+    };
+
+    let programmable_tx = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_sui(recipient, Some(amount));
+        builder.finish()
+    };
+    let kind = TransactionKind::ProgrammableTransaction(programmable_tx);
+    let gas_data = GasData {
+        payment: vec![faucet_coin.compute_object_reference()],
+        owner: faucet_owner,
+        price: simulacrum.reference_gas_price(),
+        budget: MIST_PER_SUI,
+    };
+    let tx_data = TransactionData::new_with_gas_data(kind, faucet_owner, gas_data);
+    let (effects, execution_error) = simulacrum.execute_transaction_impersonating(tx_data)?;
+
+    if let Some(err) = execution_error {
+        anyhow::bail!("faucet transfer execution error: {err:?}");
+    }
+
+    Ok(effects)
 }
 
 /// Start the forking server
@@ -363,7 +362,10 @@ pub async fn start_server(
         );
     }
 
-    let simulacrum = initialize_simulacrum(
+    let InitializedSimulacrum {
+        simulacrum,
+        faucet_owner,
+    } = initialize_simulacrum(
         forked_at_checkpoint,
         startup_checkpoint,
         &client,
@@ -386,6 +388,7 @@ pub async fn start_server(
         subscription_service_handle,
         checkpoint_sender,
         chain_id,
+        faucet_owner,
     };
 
     let grpc = start_grpc_services(context.clone(), version, &registry, rpc_port).await?;
@@ -453,43 +456,6 @@ async fn resolve_chain_identifier(
     }
 }
 
-// // const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6", "0xacc"];
-//
-// /// Update system objects to the versions at the forking checkpoint
-// async fn update_system_objects(context: crate::context::Context) -> anyhow::Result<()> {
-//     let crate::context::Context { at_checkpoint, .. } = context;
-//
-//     info!(
-//         "Fetching system objects from RPC at checkpoint {}",
-//         at_checkpoint
-//     );
-//     let object_ids: Vec<ObjectID> = SYSTEM_OBJECT_IDS
-//         .iter()
-//         .map(|id| ObjectID::from_hex_literal(id).unwrap())
-//         .collect();
-//
-//     let keys: Vec<ObjectKey> = object_ids
-//         .iter()
-//         .map(|&object_id| ObjectKey {
-//             object_id,
-//             version_query: VersionQuery::AtCheckpoint(at_checkpoint),
-//         })
-//         .collect();
-//
-//     let simulacrum = context.simulacrum.write().await;
-//     let data_store = simulacrum.store_static();
-//     data_store.object_store().get_objects(&keys).unwrap();
-//
-//     Ok(())
-// }
-
-async fn get_sui_system_state(
-    forking_store: &ForkingStore,
-) -> Result<SuiSystemState, anyhow::Error> {
-    let state = sui_types::sui_system_state::get_sui_system_state(forking_store)?;
-    Ok(state)
-}
-
 /// Start the gRPC services for the forking server
 async fn start_grpc_services(
     context: crate::context::Context,
@@ -520,63 +486,123 @@ async fn start_grpc_services(
     Ok(handle)
 }
 
-async fn initialize_simulacrum(
-    forked_at_checkpoint: u64,
-    startup_checkpoint: u64,
-    client: &GraphQLClient,
-    startup_seeds: &StartupSeeds,
-    protocol_version: u64,
-    chain: Chain,
-    fs_store: FileSystemStore,
-    fs_gql_store: ReadThroughStore<FileSystemStore, DataStore>,
-) -> Result<Simulacrum<OsRng, ForkingStore>, anyhow::Error> {
-    let mut rng = rand::rngs::OsRng;
-    let config = ConfigBuilder::new_with_temp_dir()
-        .rng(&mut rng)
+fn build_network_config(protocol_version: u64, chain: Chain, rng: &mut OsRng) -> NetworkConfig {
+    ConfigBuilder::new_with_temp_dir()
+        .rng(rng)
         .with_chain_start_timestamp_ms(0)
         .deterministic_committee_size(NonZeroUsize::MIN)
         .with_protocol_version(protocol_version.into())
         .with_chain_override(chain)
-        .build();
-    let keystore = KeyStore::from_network_config(&config);
+        .build()
+}
 
-    let startup_checkpoint_data = match fs_store
+fn load_startup_checkpoint_data(
+    fs_store: &FileSystemStore,
+    fs_gql_store: &ReadThroughStore<FileSystemStore, DataStore>,
+    startup_checkpoint: u64,
+) -> Result<FullCheckpointData, anyhow::Error> {
+    match fs_store
         .get_checkpoint_by_sequence_number(startup_checkpoint)
         .context("failed to read startup checkpoint from local checkpoint store")?
     {
-        Some(checkpoint) => checkpoint,
+        Some(checkpoint) => Ok(checkpoint),
         None => fs_gql_store
             .get_checkpoint_by_sequence_number(startup_checkpoint)
             .context("failed to fetch startup checkpoint from rpc")?
-            .with_context(|| format!("checkpoint {startup_checkpoint} not found"))?,
-    };
+            .with_context(|| format!("checkpoint {startup_checkpoint} not found")),
+    }
+}
 
+fn build_verified_startup_checkpoint(
+    startup_checkpoint_data: &FullCheckpointData,
+) -> VerifiedCheckpoint {
     let certified_summary = startup_checkpoint_data.summary.clone();
     let env_checkpoint = Envelope::new_from_data_and_sig(
         certified_summary.data().clone(),
         certified_summary.auth_sig().clone(),
     );
-    let verified_checkpoint = VerifiedCheckpoint::new_unchecked(env_checkpoint);
+    VerifiedCheckpoint::new_unchecked(env_checkpoint)
+}
 
-    let mut store = ForkingStore::new(forked_at_checkpoint, fs_store, fs_gql_store);
-    store.insert_checkpoint(verified_checkpoint.clone());
-    store.insert_checkpoint_contents(startup_checkpoint_data.contents.clone());
-    seed_genesis_faucet_coin(&mut store, config.genesis.objects(), &keystore);
-    startup_seeds
-        .prefetch_startup_objects(
-            &store,
-            client.endpoint(),
-            startup_checkpoint,
-            startup_checkpoint_data.summary.timestamp_ms,
-        )
-        .await
-        .context("Failed to prefetch startup owned objects")?;
+fn resolve_faucet_owner(keystore: &KeyStore) -> Option<SuiAddress> {
+    keystore.accounts().next().map(|(owner, _)| *owner)
+}
 
-    // Fetch the system state at this forked checkpoint and update the validator set to match the
-    // one in our custom config, because we do not have the actual validators' keys from network.
-    let system_state = get_sui_system_state(&store)
-        .await
-        .context("failed to read Sui system state from startup checkpoint")?;
+fn cache_object_if_missing(
+    fs_store: &FileSystemStore,
+    fs_gql_store: &ReadThroughStore<FileSystemStore, DataStore>,
+    object: Object,
+) -> Result<bool, anyhow::Error> {
+    let object_id = object.id();
+    if fs_store
+        .get_object_latest(&object_id)
+        .with_context(|| format!("failed to inspect local object cache for {object_id}"))?
+        .is_some()
+    {
+        return Ok(false);
+    }
+
+    let version: u64 = object.version().into();
+    let object_key = ObjectKey {
+        object_id,
+        version_query: VersionQuery::Version(version),
+    };
+    fs_gql_store
+        .write_objects(vec![(object_key, object, version)])
+        .with_context(|| format!("failed to seed local object {object_id}"))?;
+    Ok(true)
+}
+
+/// Seeds a local faucet gas object from genesis for the configured faucet owner.
+fn seed_genesis_faucet_coin(
+    fs_store: &FileSystemStore,
+    fs_gql_store: &ReadThroughStore<FileSystemStore, DataStore>,
+    genesis_objects: &[Object],
+    faucet_owner: SuiAddress,
+) -> Result<(), anyhow::Error> {
+    let Some(faucet_coin) = genesis_objects
+        .iter()
+        .filter(|object| object.is_gas_coin())
+        .filter(|object| object.owner.get_address_owner_address().ok() == Some(faucet_owner))
+        .max_by_key(|object| object.get_coin_value_unsafe())
+        .cloned()
+    else {
+        warn!(
+            faucet_owner = %faucet_owner,
+            "No genesis gas coin found for local faucet owner; faucet may fail until a local gas coin is available"
+        );
+        return Ok(());
+    };
+
+    let faucet_coin_id = faucet_coin.id();
+    let faucet_coin_version = faucet_coin.version().value();
+    let faucet_coin_balance = faucet_coin.get_coin_value_unsafe();
+    if cache_object_if_missing(fs_store, fs_gql_store, faucet_coin)? {
+        info!(
+            faucet_owner = %faucet_owner,
+            faucet_coin_id = %faucet_coin_id,
+            faucet_coin_version,
+            faucet_coin_balance,
+            "Seeded genesis faucet coin into local fork store"
+        );
+    } else {
+        info!(
+            faucet_owner = %faucet_owner,
+            faucet_coin_id = %faucet_coin_id,
+            "Genesis faucet coin already present in local fork store"
+        );
+    }
+
+    Ok(())
+}
+
+fn build_initial_system_state(
+    store: &ForkingStore,
+    config: &NetworkConfig,
+) -> Result<SuiSystemState, anyhow::Error> {
+    let system_state = sui_types::sui_system_state::get_sui_system_state(store)
+        .map_err(|err| anyhow!("failed to read Sui system state from startup checkpoint: {err}"))?;
+
     let mut inner = match system_state {
         SuiSystemState::V2(inner) => inner,
         _ => anyhow::bail!("Unsupported system state version, expected SuiSystemState::V2"),
@@ -585,9 +611,15 @@ async fn initialize_simulacrum(
         SuiSystemState::V1(genesis_inner) => genesis_inner.validators,
         SuiSystemState::V2(genesis_inner) => genesis_inner.validators,
     };
-    let initial_sui_system_state = SuiSystemState::V2(inner);
 
-    let validator_set_override = match &initial_sui_system_state {
+    Ok(SuiSystemState::V2(inner))
+}
+
+fn install_validator_override_and_committee(
+    store: &mut ForkingStore,
+    initial_sui_system_state: &SuiSystemState,
+) {
+    let validator_set_override = match initial_sui_system_state {
         SuiSystemState::V1(inner) => inner.validators.clone(),
         SuiSystemState::V2(inner) => inner.validators.clone(),
     };
@@ -598,82 +630,98 @@ async fn initialize_simulacrum(
         .committee()
         .clone();
     store.insert_committee(initial_committee);
+}
 
+fn build_simulacrum_from_bootstrap(
+    keystore: KeyStore,
+    verified_checkpoint: VerifiedCheckpoint,
+    initial_sui_system_state: SuiSystemState,
+    config: &NetworkConfig,
+    store: ForkingStore,
+    rng: OsRng,
+) -> Result<Simulacrum<OsRng, ForkingStore>, anyhow::Error> {
     // The mock checkpoint builder relies on the accumulator root object to be present in the store
     // with the correct initial shared version, so we need to fetch it here and pass it to the
     // simulacrum. This is needed if protocol config has enabled accumulators
     // TODO: do we need this if protocol config does not have enabled accumulators?
     let acc_initial_shared_version = get_accumulator_root_obj_initial_shared_version(&store)?
-        .ok_or_else(|| anyhow::anyhow!("Failed to get accumulator root object from store"))?;
-    let simulacrum = Simulacrum::new_from_custom_state(
+        .ok_or_else(|| anyhow!("Failed to get accumulator root object from store"))?;
+
+    Ok(Simulacrum::new_from_custom_state(
+        keystore,
+        verified_checkpoint,
+        initial_sui_system_state,
+        config,
+        store,
+        rng,
+        Some(acc_initial_shared_version),
+    ))
+}
+
+async fn initialize_simulacrum(
+    forked_at_checkpoint: u64,
+    startup_checkpoint: u64,
+    client: &GraphQLClient,
+    startup_seeds: &StartupSeeds,
+    protocol_version: u64,
+    chain: Chain,
+    fs_store: FileSystemStore,
+    fs_gql_store: ReadThroughStore<FileSystemStore, DataStore>,
+) -> Result<InitializedSimulacrum, anyhow::Error> {
+    let mut rng = OsRng;
+    let config = build_network_config(protocol_version, chain, &mut rng);
+    let keystore = KeyStore::from_network_config(&config);
+    let faucet_owner = resolve_faucet_owner(&keystore);
+
+    let startup_checkpoint_data =
+        load_startup_checkpoint_data(&fs_store, &fs_gql_store, startup_checkpoint)?;
+    let verified_checkpoint = build_verified_startup_checkpoint(&startup_checkpoint_data);
+
+    if let Some(faucet_owner) = faucet_owner {
+        if let Err(err) = seed_genesis_faucet_coin(
+            &fs_store,
+            &fs_gql_store,
+            config.genesis.objects(),
+            faucet_owner,
+        ) {
+            warn!(
+                faucet_owner = %faucet_owner,
+                "Failed to seed genesis faucet coin into local fork store: {err}"
+            );
+        }
+    } else {
+        warn!("No local account keys available; faucet will be unavailable");
+    }
+
+    let mut store = ForkingStore::new(forked_at_checkpoint, fs_store, fs_gql_store);
+    store.insert_checkpoint(verified_checkpoint.clone());
+    store.insert_checkpoint_contents(startup_checkpoint_data.contents.clone());
+    startup_seeds
+        .prefetch_startup_objects(
+            &store,
+            client.endpoint(),
+            startup_checkpoint,
+            startup_checkpoint_data.summary.timestamp_ms,
+        )
+        .await
+        .context("Failed to prefetch startup objects")?;
+
+    let initial_sui_system_state = build_initial_system_state(&store, &config)?;
+    install_validator_override_and_committee(&mut store, &initial_sui_system_state);
+
+    let simulacrum = build_simulacrum_from_bootstrap(
         keystore,
         verified_checkpoint,
         initial_sui_system_state,
         &config,
         store,
         rng,
-        Some(acc_initial_shared_version),
-    );
+    )?;
 
-    // simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
-    // println!("Data ingestion path: {:?}", data_ingestion_path);
-    Ok(simulacrum)
-}
-
-/// Seeds a local faucet gas object from genesis for the first local account used by simulacrum
-/// faucet operations.
-fn seed_genesis_faucet_coin(
-    store: &mut ForkingStore,
-    genesis_objects: &[Object],
-    keystore: &KeyStore,
-) {
-    let Some((faucet_owner, _)) = keystore.accounts().next() else {
-        warn!("No local account keys available; skipping faucet coin seeding");
-        return;
-    };
-
-    let Some(faucet_coin) = genesis_objects
-        .iter()
-        .filter(|object| object.is_gas_coin())
-        .filter(|object| object.owner.get_address_owner_address().ok() == Some(*faucet_owner))
-        .max_by_key(|object| object.get_coin_value_unsafe())
-        .cloned()
-    else {
-        warn!(
-            faucet_owner = %faucet_owner,
-            "No genesis gas coin found for local faucet owner; faucet may fail until a local gas coin is available"
-        );
-        return;
-    };
-
-    let faucet_coin_id = faucet_coin.id();
-    let faucet_coin_version = faucet_coin.version().value();
-    let faucet_coin_balance = faucet_coin.get_coin_value_unsafe();
-    match store.seed_local_object_if_missing(faucet_coin) {
-        Ok(true) => {
-            info!(
-                faucet_owner = %faucet_owner,
-                faucet_coin_id = %faucet_coin_id,
-                faucet_coin_version,
-                faucet_coin_balance,
-                "Seeded genesis faucet coin into local fork store"
-            );
-        }
-        Ok(false) => {
-            info!(
-                faucet_owner = %faucet_owner,
-                faucet_coin_id = %faucet_coin_id,
-                "Genesis faucet coin already present in local fork store"
-            );
-        }
-        Err(err) => {
-            warn!(
-                faucet_owner = %faucet_owner,
-                faucet_coin_id = %faucet_coin_id,
-                "Failed to seed genesis faucet coin into local fork store: {err}"
-            );
-        }
-    }
+    Ok(InitializedSimulacrum {
+        simulacrum,
+        faucet_owner,
+    })
 }
 
 /// Create the data stores for the forking server, including a file system store for transactions
