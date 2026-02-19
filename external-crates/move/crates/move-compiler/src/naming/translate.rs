@@ -4308,12 +4308,20 @@ fn resolve_call(
                     );
                     // If no abort code is given for the assert, we add in the abort code as the
                     // bitset-line-number if `CleverAssertions` is set.
-                    if args.value.len() == 1 && is_macro.is_some() {
-                        context.check_feature(
+                    if args.value.len() == 1 {
+                        let is_supported = context.check_feature(
                             context.current_package,
                             FeatureGate::CleverAssertions,
                             subject_loc,
                         );
+                        if is_supported && is_macro.is_none() {
+                            let dep_msg = format!(
+                                "'{}' function syntax has been deprecated and cannot be used with clever assertions",
+                                B::ASSERT_MACRO
+                            );
+                            context
+                                .add_diag(diag!(Editions::DeprecatedFeature, (call_loc, dep_msg)));
+                        }
                         args.value.push(sp(
                             call_loc,
                             N::Exp_::ErrorConstant {
