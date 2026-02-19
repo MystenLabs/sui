@@ -31,7 +31,9 @@ use crate::{
     leader_schedule::LeaderSchedule,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{CommitSyncerClient, NetworkManager, SynchronizerClient, tonic_network::TonicManager},
+    network::{
+        CommitSyncerClient, NetworkManager, SynchronizerClient, tonic_network::TonicManager,
+    },
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::RoundTracker,

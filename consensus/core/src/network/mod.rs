@@ -42,6 +42,7 @@ pub(crate) enum PeerId {
     /// A validator node identified by its authority index.
     Validator(AuthorityIndex),
     /// An observer node identified by its network public key.
+    #[allow(dead_code)]
     Observer(NodeId),
 }
 
@@ -192,15 +193,18 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
 }
 
 /// A stream item for observer block streaming that includes both the block and highest commit index.
+#[allow(dead_code)]
 pub(crate) struct ObserverBlockStreamItem {
     pub(crate) block: Bytes,
     pub(crate) highest_commit_index: u64,
 }
 
 /// Observer block stream type.
+#[allow(dead_code)]
 pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send>>;
 
 /// Observer block request stream type for bidirectional streaming.
+#[allow(dead_code)]
 pub(crate) type BlockRequestStream =
     Pin<Box<dyn Stream<Item = crate::network::observer::BlockStreamRequest> + Send>>;
 
@@ -208,6 +212,7 @@ pub(crate) type BlockRequestStream =
 /// Unlike ValidatorNetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
 /// to identify peers since observers are not part of the committee.
 #[async_trait]
+#[allow(dead_code)]
 pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     /// Handles the bidirectional block streaming request from an observer peer.
     async fn handle_stream_blocks(
@@ -238,6 +243,7 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
 /// Unlike ValidatorNetworkClient which uses AuthorityIndex, this uses PeerId to identify peers
 /// since the observer server can serve both validators and observer nodes.
 #[async_trait]
+#[allow(dead_code)]
 pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
     /// Initiates bidirectional block streaming with a peer.
     async fn stream_blocks(
@@ -279,6 +285,7 @@ pub(crate) trait NetworkManager: Send + Sync {
     fn validator_client(&self) -> Arc<Self::ValidatorClient>;
 
     /// Returns the observer network client.
+    #[allow(dead_code)]
     fn observer_client(&self) -> Arc<Self::ObserverClient>;
 
     /// Starts the validator network server with the provided service.

@@ -743,6 +743,7 @@ pub(crate) struct TonicManager {
     network_keypair: NetworkKeyPair,
     own_address: SocketAddr,
     validator_client: Arc<TonicValidatorClient>,
+    #[allow(dead_code)]
     observer_client: Arc<TonicObserverClient>,
     server: Option<ServerHandle>,
     observer_server: Option<ServerHandle>,
