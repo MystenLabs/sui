@@ -441,8 +441,9 @@ impl ReferencesTest {
             // Extract identifier text from source content
             let ident = if let Some((_, content)) = symbols.files.get(&ref_loc.fhash) {
                 if let Some(src_line) = content.lines().nth(ref_loc.start.line as usize)
-                    && let Some((start, _)) =
-                        src_line.char_indices().nth(ref_loc.start.character as usize)
+                    && let Some((start, _)) = src_line
+                        .char_indices()
+                        .nth(ref_loc.start.character as usize)
                     && let Some((end, _)) = src_line.char_indices().nth(ref_loc.col_end as usize)
                 {
                     src_line[start..end].to_string()
