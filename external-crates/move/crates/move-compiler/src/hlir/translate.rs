@@ -2207,8 +2207,7 @@ fn assign(
             let bs = base_types(&context.reporter, &tbs);
 
             let mut fields = vec![];
-            for (decl_idx, f, bt, tfa) in assign_struct_fields(context, &m, &s, tfields) {
-                assert!(fields.len() == decl_idx);
+            for (f, bt, tfa) in assign_struct_fields(context, &m, &s, tfields) {
                 let st = &H::SingleType_::base(bt);
                 let (fa, mut fafter) = assign(context, case, tfa, st);
                 after.append(&mut fafter);
@@ -2235,11 +2234,7 @@ fn assign(
                 H::exp(H::Type_::single(rvalue_ty.clone()), sp(loc, copy_tmp_))
             };
             let from_unpack = Some(loc);
-            let fields = assign_struct_fields(context, &m, &s, tfields)
-                .into_iter()
-                .enumerate();
-            for (idx, (decl_idx, f, bt, tfa)) in fields {
-                assert!(idx == decl_idx);
+            for (f, bt, tfa) in assign_struct_fields(context, &m, &s, tfields) {
                 let floc = tfa.loc;
                 let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f, from_unpack);
                 let borrow_ty = H::Type_::single(sp(floc, H::SingleType_::Ref(mut_, bt)));
@@ -2256,8 +2251,7 @@ fn assign(
             let bs = base_types(&context.reporter, &tbs);
 
             let mut fields = vec![];
-            for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
-                assert!(fields.len() == decl_idx);
+            for (f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
                 let st = &H::SingleType_::base(bt);
                 let (fa, mut fafter) = assign(context, case, tfa, st);
                 after.append(&mut fafter);
@@ -2275,8 +2269,7 @@ fn assign(
             };
 
             let mut fields = vec![];
-            for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
-                assert!(fields.len() == decl_idx);
+            for (f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
                 let borrow_ty = sp(tfa.loc, H::SingleType_::Ref(mut_, bt));
                 let (fa, mut fafter) = assign(context, case, tfa, &borrow_ty);
                 after.append(&mut fafter);
@@ -2293,28 +2286,9 @@ fn assign_struct_fields(
     m: &ModuleIdent,
     s: &DatatypeName,
     tfields: Fields<(N::Type, T::LValue)>,
-) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
+) -> Vec<(Field, H::BaseType, T::LValue)> {
     let decl_fields = context.info.struct_fields(m, s);
-    let mut tfields_vec: Vec<_> = match decl_fields {
-        Some(m) => tfields
-            .into_iter()
-            .map(|(f, (_idx, (tbt, tfa)))| {
-                let field = *m.get(&f).unwrap();
-                let base_ty = base_type(&context.reporter, &tbt);
-                (field, f, base_ty, tfa)
-            })
-            .collect(),
-        None => tfields
-            .into_iter()
-            .enumerate()
-            .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
-                let base_ty = base_type(&context.reporter, &tbt);
-                (ndx, f, base_ty, tfa)
-            })
-            .collect(),
-    };
-    tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
-    tfields_vec
+    assign_fields(context, decl_fields, tfields)
 }
 
 fn assign_variant_fields(
@@ -2323,28 +2297,39 @@ fn assign_variant_fields(
     e: &DatatypeName,
     v: &VariantName,
     tfields: Fields<(N::Type, T::LValue)>,
-) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
+) -> Vec<(Field, H::BaseType, T::LValue)> {
     let decl_fields = context.info.enum_variant_fields(m, e, v);
-    let mut tfields_vec: Vec<_> = match decl_fields {
-        Some(m) => tfields
-            .into_iter()
-            .map(|(f, (_idx, (tbt, tfa)))| {
-                let field = *m.get(&f).unwrap();
+    assign_fields(context, decl_fields, tfields)
+}
+
+fn assign_fields(
+    context: &mut Context,
+    decl_fields: Option<UniqueMap<Field, usize>>,
+    tfields: Fields<(N::Type, T::LValue)>,
+) -> Vec<(Field, H::BaseType, T::LValue)> {
+    match decl_fields {
+        Some(field_map) => {
+            let field_len = field_map.len();
+            let mut fields: BTreeMap<usize, (_, _, _)> = BTreeMap::new();
+            for (f, (exp_idx, (tbt, tfa))) in tfields {
+                // If the field is not a valid one, typing will produce an error.
+                // So keep the field in a consistent order, but after all of the
+                // valid fields.
+                let decl_idx = field_map.get(&f).copied().unwrap_or(field_len + exp_idx);
                 let base_ty = base_type(&context.reporter, &tbt);
-                (field, f, base_ty, tfa)
-            })
-            .collect(),
+                debug_assert!(fields.get(&decl_idx).is_none());
+                fields.insert(decl_idx, (f, base_ty, tfa));
+            }
+            fields.into_values().collect()
+        }
         None => tfields
             .into_iter()
-            .enumerate()
-            .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
+            .map(|(f, (_idx, (tbt, tfa)))| {
                 let base_ty = base_type(&context.reporter, &tbt);
-                (ndx, f, base_ty, tfa)
+                (f, base_ty, tfa)
             })
             .collect(),
-    };
-    tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
-    tfields_vec
+    }
 }
 
 //**************************************************************************************************

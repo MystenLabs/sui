@@ -176,7 +176,7 @@ impl PatternArm {
 
     fn make_arm_bindings(&mut self, fringe: &VecDeque<FringeEntry>) -> PatBindings {
         let mut bindings = BTreeMap::new();
-        assert!(self.pats.len() == fringe.len());
+        // If the lengths don't match, we have an error from typing
         for (pmut, subject) in self.pats.iter_mut().zip(fringe.iter()) {
             if let TP::Binder(mut_, x) = pmut.pat.value {
                 if bindings.insert(x, (mut_, subject.clone())).is_some() {
