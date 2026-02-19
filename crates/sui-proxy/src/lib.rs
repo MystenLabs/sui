@@ -44,7 +44,6 @@ mod tests {
     use axum::routing::post;
     use prometheus::Encoder;
     use prometheus::PROTOBUF_FORMAT;
-    use protobuf::RepeatedField;
     use std::net::TcpListener;
     use std::time::Duration;
     use sui_tls::{ClientCertVerifier, TlsAcceptor};
@@ -174,10 +173,10 @@ mod tests {
             "foo_metric",
             "some help this is",
             None,
-            RepeatedField::from_vec(vec![create_metric_counter(
-                RepeatedField::from_vec(create_labels(vec![("some", "label")])),
+            vec![create_metric_counter(
+                create_labels(vec![("some", "label")]),
                 create_counter(2046.0),
-            )]),
+            )],
         );
 
         let mut buf = vec![];
@@ -197,7 +196,7 @@ mod tests {
         assert_eq!(status, reqwest::StatusCode::CREATED);
     }
 
-    /// this is a long test to ensure we are timing out clients that are slow  
+    /// this is a long test to ensure we are timing out clients that are slow
     #[tokio::test]
     async fn test_client_timeout() {
         // generate self-signed certificates
@@ -287,10 +286,10 @@ mod tests {
             "foo_metric",
             "some help this is",
             None,
-            RepeatedField::from_vec(vec![create_metric_counter(
-                RepeatedField::from_vec(create_labels(vec![("some", "label")])),
+            vec![create_metric_counter(
+                create_labels(vec![("some", "label")]),
                 create_counter(2046.0),
-            )]),
+            )],
         );
 
         let mut buf = vec![];

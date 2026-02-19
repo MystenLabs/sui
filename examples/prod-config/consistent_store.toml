@@ -1,6 +1,8 @@
 [ingestion]
 ingest-concurrency = 20
 
+[pipeline.address-balances]
+
 [pipeline.balances]
 
 [pipeline.object-by-owner]

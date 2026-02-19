@@ -9,7 +9,7 @@ edition = "2024"
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap.workspace = true
-prometheus = "0.13.3"
+prometheus = "0.14"
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.36"
 once_cell.workspace = true

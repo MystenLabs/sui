@@ -30,11 +30,12 @@ use fastcrypto::{
 use reqwest::StatusCode;
 
 use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_bytecode_verifier_meter::Scope;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
-    language_storage::{StructTag, TypeTag},
+    language_storage::{ModuleId, StructTag, TypeTag},
 };
 use move_package_alt::{PackageLoader, schema::ModeName};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
@@ -46,7 +47,11 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::Coin;
+use sui_json_rpc_types::{
+    BalanceChange as RpcBalanceChange, BcsEvent, Coin, DryRunTransactionBlockResponse,
+    ObjectChange as RpcObjectChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockEffects,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse,
+};
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{BuildConfig, CompiledPackage, PackageDependencies};
@@ -69,6 +74,7 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
     error::SuiErrorKind,
+    event::EventID,
     execution_status::ExecutionStatus,
     gas::GasCostSummary,
     gas_coin::GasCoin,
@@ -79,8 +85,9 @@ use sui_types::{
     parse_sui_type_tag,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     signature::GenericSignature,
+    sui_sdk_types_conversions::type_tag_sdk_to_core,
     transaction::{
-        InputObjectKind, ObjectArg, SenderSignedData, SharedObjectMutability, Transaction,
+        Command, InputObjectKind, ObjectArg, SenderSignedData, SharedObjectMutability, Transaction,
         TransactionData, TransactionDataAPI, TransactionKind,
     },
 };
@@ -745,30 +752,17 @@ pub struct UpgradeArgs {
     pub processing: TxProcessingArgs,
 }
 
-#[derive(Args, Debug, Default, Clone)]
-pub struct EphemeralArgs {
-    /// The build environment
-    #[clap(long)]
-    pub build_env: Option<String>,
-    /// Path to publication file
-    #[clap(long)]
-    pub pubfile_path: Option<PathBuf>,
-}
-
-impl EphemeralArgs {
-    pub fn get_pubfile_path_or_default(&self, alias: &str) -> PathBuf {
-        self.pubfile_path
-            .clone()
-            .unwrap_or_else(|| PathBuf::from(format!("Pub.{alias}.toml")))
-    }
+/// Returns the pubfile path, or a default based on the environment alias if not specified
+fn get_pubfile_path_or_default(pubfile_path: Option<&PathBuf>, alias: &str) -> PathBuf {
+    pubfile_path
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from(format!("Pub.{alias}.toml")))
 }
 
 #[derive(Args, Debug, Default)]
 pub struct TestPublishArgs {
     #[clap(flatten)]
     pub publish_args: PublishArgs,
-    #[clap(flatten)]
-    pub ephemeral: EphemeralArgs,
     #[clap(long, default_value = "false")]
     /// Publishes transitive dependencies that have not already been published.
     pub publish_unpublished_deps: bool,
@@ -778,8 +772,6 @@ pub struct TestPublishArgs {
 pub struct TestUpgradeArgs {
     #[clap(flatten)]
     pub upgrade_args: UpgradeArgs,
-    #[clap(flatten)]
-    pub ephemeral: EphemeralArgs,
 }
 #[derive(serde::Deserialize, Debug)]
 struct FaucetResponse {
@@ -910,17 +902,19 @@ impl SuiClientCommands {
 
             SuiClientCommands::Upgrade(args) => {
                 verify_no_test_mode(&args.build_config)?;
+                verify_no_pubfile_path(&args.build_config, "upgrade")?;
                 let _ = context.cache_chain_id().await?;
-                upgrade_command(args, context, None).await?
+                upgrade_command(args, context, false).await?
             }
 
             SuiClientCommands::TestUpgrade(args) => {
                 verify_no_test_mode(&args.upgrade_args.build_config)?;
-                upgrade_command(args.upgrade_args, context, Some(args.ephemeral)).await?
+                upgrade_command(args.upgrade_args, context, true).await?
             }
 
             SuiClientCommands::Publish(args) => {
                 verify_no_test_mode(&args.build_config)?;
+                verify_no_pubfile_path(&args.build_config, "publish")?;
                 let _ = context.cache_chain_id().await?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
                     context,
@@ -941,9 +935,12 @@ impl SuiClientCommands {
                 let alias = active_env.alias.clone();
 
                 let modes = args.publish_args.build_config.mode_set();
-                let build_env = args.ephemeral.build_env.clone();
+                let build_env = args.publish_args.build_config.environment.clone();
                 // We produce a pub file path only once, even for transitive deps.
-                let pubfile_path = args.ephemeral.get_pubfile_path_or_default(&alias);
+                let pubfile_path = get_pubfile_path_or_default(
+                    args.publish_args.build_config.pubfile_path.as_ref(),
+                    &alias,
+                );
 
                 // Do a transitive publication for each dependency that is not yet published
                 if args.publish_unpublished_deps {
@@ -1881,7 +1878,7 @@ pub(crate) async fn compile_package(
 ) -> Result<CompiledPackage, anyhow::Error> {
     let dependency_ids = check_for_unpublished_deps(root_pkg, with_unpublished_deps)?;
 
-    let chain_id = client.get_chain_identifier().await?;
+    let chain_id = client.get_chain_identifier().await?.to_string();
     debug!("Current client has {chain_id} as chain identifier");
 
     debug!("Loaded package from {:?}", package_path.display());
@@ -2171,11 +2168,7 @@ impl Display for SuiClientCommandResult {
                 }
             }
             SuiClientCommandResult::TransactionBlock(response) => {
-                write!(
-                    writer,
-                    "{}",
-                    serde_json::to_string_pretty(&response).unwrap()
-                )?;
+                write!(writer, "{}", to_legacy_transaction_block_response(response))?;
             }
             SuiClientCommandResult::RawObject(o) => match o.to_bcs_base64() {
                 Ok(b64) => writeln!(writer, "{b64}")?,
@@ -2328,7 +2321,11 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::NoOutput => {}
             SuiClientCommandResult::DryRun(response) => {
-                writeln!(f, "{}", Pretty(response))?;
+                if let Some(legacy) = to_legacy_dry_run_transaction_block_response(response) {
+                    writeln!(f, "{}", Pretty(&legacy))?;
+                } else {
+                    writeln!(f, "{}", Pretty(response))?;
+                }
             }
             SuiClientCommandResult::DevInspect(response) => {
                 writeln!(f, "{}", Pretty(response))?;
@@ -2336,6 +2333,224 @@ impl Display for SuiClientCommandResult {
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
+}
+
+struct NoopModuleCache;
+
+impl GetModule for NoopModuleCache {
+    type Error = ();
+    type Item = CompiledModule;
+
+    fn get_module_by_id(&self, _id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
+        Ok(None)
+    }
+}
+
+fn extract_published_module_names(transaction: &TransactionData) -> Vec<String> {
+    let mut modules = Vec::new();
+    let commands = match transaction.kind() {
+        TransactionKind::ProgrammableTransaction(ptb)
+        | TransactionKind::ProgrammableSystemTransaction(ptb) => &ptb.commands,
+        _ => return modules,
+    };
+
+    for command in commands {
+        let module_bytes = match command {
+            Command::Publish(module_bytes, _) | Command::Upgrade(module_bytes, _, _, _) => {
+                module_bytes
+            }
+            _ => continue,
+        };
+        for bytes in module_bytes {
+            if let Ok(module) = CompiledModule::deserialize_with_defaults(bytes) {
+                modules.push(module.self_id().name().to_string());
+            }
+        }
+    }
+
+    modules.sort();
+    modules.dedup();
+    modules
+}
+
+fn parse_object_type_tag(object_type: &str) -> Option<StructTag> {
+    match parse_sui_type_tag(object_type).ok()? {
+        TypeTag::Struct(struct_tag) => Some(*struct_tag),
+        _ => None,
+    }
+}
+
+fn to_legacy_object_changes(response: &ExecutedTransaction) -> Vec<RpcObjectChange> {
+    use proto::changed_object::{IdOperation, OutputObjectState};
+
+    let sender = response.transaction.sender();
+    let published_modules = extract_published_module_names(&response.transaction);
+    let wrapped = response
+        .effects
+        .wrapped()
+        .iter()
+        .map(|(object_id, version, _)| (*object_id, *version))
+        .collect::<BTreeSet<_>>();
+
+    response
+        .changed_objects
+        .iter()
+        .filter_map(|changed| {
+            let object_id = changed.object_id().parse().ok()?;
+            match changed.output_state() {
+                OutputObjectState::PackageWrite => Some(RpcObjectChange::Published {
+                    package_id: object_id,
+                    version: changed.output_version().into(),
+                    digest: changed.output_digest().parse().ok()?,
+                    modules: published_modules.clone(),
+                }),
+                OutputObjectState::ObjectWrite => {
+                    let object_type = parse_object_type_tag(changed.object_type())?;
+                    let owner = changed.output_owner_opt().and_then(|owner| {
+                        <sui_sdk::sui_sdk_types::Owner as TryFrom<&proto::Owner>>::try_from(owner)
+                            .ok()
+                            .map(Owner::from)
+                    })?;
+                    let version: SequenceNumber = changed.output_version().into();
+                    let digest = changed.output_digest().parse().ok()?;
+                    if changed.id_operation() == IdOperation::Created {
+                        Some(RpcObjectChange::Created {
+                            sender,
+                            owner,
+                            object_type,
+                            object_id,
+                            version,
+                            digest,
+                        })
+                    } else {
+                        Some(RpcObjectChange::Mutated {
+                            sender,
+                            owner,
+                            object_type,
+                            object_id,
+                            version,
+                            previous_version: changed
+                                .input_version_opt()
+                                .unwrap_or_default()
+                                .into(),
+                            digest,
+                        })
+                    }
+                }
+                OutputObjectState::DoesNotExist => {
+                    let object_type = parse_object_type_tag(changed.object_type())?;
+                    let version: SequenceNumber = changed.output_version().into();
+                    if wrapped.contains(&(object_id, version)) {
+                        Some(RpcObjectChange::Wrapped {
+                            sender,
+                            object_type,
+                            object_id,
+                            version,
+                        })
+                    } else {
+                        Some(RpcObjectChange::Deleted {
+                            sender,
+                            object_type,
+                            object_id,
+                            version,
+                        })
+                    }
+                }
+                OutputObjectState::Unknown | OutputObjectState::AccumulatorWrite => None,
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+fn to_legacy_balance_changes(response: &ExecutedTransaction) -> Vec<RpcBalanceChange> {
+    response
+        .balance_changes
+        .iter()
+        .filter_map(|balance_change| {
+            Some(RpcBalanceChange {
+                owner: Owner::AddressOwner(balance_change.address.into()),
+                coin_type: type_tag_sdk_to_core(balance_change.coin_type.clone()).ok()?,
+                amount: balance_change.amount,
+            })
+        })
+        .collect()
+}
+
+fn to_legacy_events(response: &ExecutedTransaction) -> Option<SuiTransactionBlockEvents> {
+    let events = response.events.as_ref()?;
+    let digest = response.transaction.digest();
+    let timestamp_ms = response.timestamp_ms();
+    Some(SuiTransactionBlockEvents {
+        data: events
+            .data
+            .iter()
+            .enumerate()
+            .map(|(event_seq, event)| SuiEvent {
+                id: EventID {
+                    tx_digest: digest,
+                    event_seq: event_seq as u64,
+                },
+                package_id: event.package_id,
+                transaction_module: event.transaction_module.clone(),
+                sender: event.sender,
+                type_: event.type_.clone(),
+                parsed_json: response
+                    .event_json
+                    .get(event_seq)
+                    .cloned()
+                    .flatten()
+                    .unwrap_or_else(|| json!({})),
+                bcs: BcsEvent::new(event.contents.clone()),
+                timestamp_ms,
+            })
+            .collect(),
+    })
+}
+
+fn to_legacy_transaction(response: &ExecutedTransaction) -> Option<SuiTransactionBlock> {
+    let signed_data =
+        SenderSignedData::new(response.transaction.clone(), response.signatures.clone());
+    SuiTransactionBlock::try_from(signed_data, &NoopModuleCache).ok()
+}
+
+fn to_legacy_transaction_block_response(
+    response: &ExecutedTransaction,
+) -> SuiTransactionBlockResponse {
+    let object_changes = to_legacy_object_changes(response);
+    let balance_changes = to_legacy_balance_changes(response);
+
+    let mut legacy_response = SuiTransactionBlockResponse::new(response.transaction.digest());
+    legacy_response.transaction = to_legacy_transaction(response);
+    legacy_response.effects = SuiTransactionBlockEffects::try_from(response.effects.clone()).ok();
+    legacy_response.events = to_legacy_events(response);
+    legacy_response.object_changes = (!object_changes.is_empty()).then_some(object_changes);
+    legacy_response.balance_changes = (!balance_changes.is_empty()).then_some(balance_changes);
+    legacy_response.timestamp_ms = response.timestamp_ms();
+    legacy_response.checkpoint = response.checkpoint;
+    legacy_response
+}
+
+fn to_legacy_dry_run_transaction_block_response(
+    response: &SimulateTransactionResponse,
+) -> Option<DryRunTransactionBlockResponse> {
+    let effects =
+        SuiTransactionBlockEffects::try_from(response.transaction.effects.clone()).ok()?;
+    let input = to_legacy_transaction(&response.transaction)?.data;
+    let execution_error_source = match response.transaction.effects.status() {
+        ExecutionStatus::Failure { error, .. } => Some(format!("{error:?}")),
+        ExecutionStatus::Success => None,
+    };
+
+    Some(DryRunTransactionBlockResponse {
+        effects,
+        events: to_legacy_events(&response.transaction).unwrap_or_default(),
+        object_changes: to_legacy_object_changes(&response.transaction),
+        balance_changes: to_legacy_balance_changes(&response.transaction),
+        input,
+        execution_error_source,
+        suggested_gas_price: response.suggested_gas_price,
+    })
 }
 
 fn convert_number_to_string(value: Value) -> Value {
@@ -2363,6 +2578,16 @@ impl Debug for SuiClientCommandResult {
             }
             SuiClientCommandResult::Object(object) => Ok(serde_json::to_string_pretty(&object)?),
             SuiClientCommandResult::RawObject(object) => Ok(serde_json::to_string_pretty(&object)?),
+            SuiClientCommandResult::TransactionBlock(response) => Ok(serde_json::to_string_pretty(
+                &to_legacy_transaction_block_response(response),
+            )?),
+            SuiClientCommandResult::DryRun(response) => {
+                if let Some(legacy) = to_legacy_dry_run_transaction_block_response(response) {
+                    Ok(serde_json::to_string_pretty(&legacy)?)
+                } else {
+                    Ok(serde_json::to_string_pretty(response)?)
+                }
+            }
             _ => Ok(serde_json::to_string_pretty(self)?),
         });
         write!(f, "{}", s)
@@ -3263,7 +3488,7 @@ pub async fn load_root_pkg_for_publish_upgrade(
     Ok(build_config.package_loader(path, &env).load().await?)
 }
 
-async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
+pub async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
     package_path: &Path,
     chain_id: &str,
     build_env: Option<String>,
@@ -3417,7 +3642,7 @@ async fn publish_command(
 async fn upgrade_command(
     args: UpgradeArgs,
     context: &mut WalletContext,
-    ephemeral_args: Option<EphemeralArgs>,
+    is_ephemeral: bool,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let UpgradeArgs {
         package_path,
@@ -3449,13 +3674,14 @@ async fn upgrade_command(
                 error: format!("Failed to canonicalize package path: {}", e),
             })?;
 
-    let mut root_pkg = if let Some(ephemeral_args) = ephemeral_args {
+    let mut root_pkg = if is_ephemeral {
         let alias = context.get_active_env()?.alias.clone();
+        let pubfile_path = get_pubfile_path_or_default(build_config.pubfile_path.as_ref(), &alias);
         load_root_pkg_for_ephemeral_publish_or_upgrade(
             &package_path,
             &chain_id,
-            ephemeral_args.build_env.clone(),
-            ephemeral_args.get_pubfile_path_or_default(&alias),
+            build_config.environment.clone(),
+            pubfile_path,
             build_config.mode_set(),
         )
         .await?
@@ -3663,6 +3889,21 @@ fn verify_no_test_mode(build_config: &MoveBuildConfig) -> anyhow::Result<()> {
                 You can ensure all test-only dependencies have been removed by \
                 compiling the package normally with `sui move build`."
                     .to_string(),
+        }
+        .into());
+    }
+    Ok(())
+}
+
+/// Make sure --pubfile-path is not used with publish or upgrade (use test-publish/test-upgrade instead)
+fn verify_no_pubfile_path(build_config: &MoveBuildConfig, command: &str) -> anyhow::Result<()> {
+    if build_config.pubfile_path.is_some() {
+        return Err(SuiErrorKind::ModulePublishFailure {
+            error: format!(
+                "The `{command}` subcommand should not be used with the `--pubfile-path` flag.\n\
+                \n\
+                Use `test-{command}` instead for ephemeral publication."
+            ),
         }
         .into());
     }

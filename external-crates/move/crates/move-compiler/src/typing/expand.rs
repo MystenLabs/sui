@@ -83,8 +83,8 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                     (ty.clone(), false)
                 }
             }
-            tv @ TI::Var(_) => {
-                debug_print!(context.debug().type_elaboration, ("before" => tv));
+            _tv @ TI::Var(_) => {
+                debug_print!(context.debug().type_elaboration, ("before" => _tv));
                 let replacement = core::unfold_type(&context.subst, ty);
                 debug_print!(context.debug().type_elaboration, ("resolved" => replacement));
                 let loc = replacement.loc;

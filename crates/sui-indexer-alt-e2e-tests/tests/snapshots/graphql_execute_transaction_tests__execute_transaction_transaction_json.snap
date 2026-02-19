@@ -71,6 +71,5 @@ expression: "result.pointer(\"/data/executeTransaction\")"
         }
       }
     }
-  },
-  "errors": null
+  }
 }

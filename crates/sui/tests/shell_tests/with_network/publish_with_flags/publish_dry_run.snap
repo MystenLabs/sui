@@ -18,6 +18,7 @@ success: true
 exit_code: 0
 ----- stdout -----
 Dry run completed, execution status: success
+Dry run completed, execution status: success
 
 ----- stderr -----
 BUILDING test_pkg

@@ -21,6 +21,15 @@ error[E03002]: unbound module
    │                                   ^^^^^^ Unbound module '0x2::x'
 
 error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/expected_failure_constants_invalid.move:13:35
+   │
+13 │     #[expected_failure(abort_code=0x2::x::C)]
+   │                                   ^^^^^^^^^
+   │                                   │
+   │                                   Invalid value in attribute assignment
+   │                                   Unbound module '0x2::x'
+
+error[E10003]: invalid attribute value
    ┌─ tests/move_check/unit_test/expected_failure_constants_invalid.move:17:35
    │
 17 │     #[expected_failure(abort_code=0x1::A::C0)]

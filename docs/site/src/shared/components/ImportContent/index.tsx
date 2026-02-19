@@ -103,6 +103,10 @@ snippetReq.keys().forEach((k: string) => {
   }
 });
 
+// Snippet directories to ignore for build error reporting
+// These are generated at runtime or by separate prebuild steps
+const IGNORED_SNIPPET_DIRS = ["console-output/"];
+
 type Props = {
   /** For mode="snippet": path under /snippets. For mode="code": repo-relative path like "packages/foo/src/x.ts". */
   source: string;
@@ -206,6 +210,12 @@ export default function ImportContent({
 
     // Validate component before rendering
     if (!isValidComponent(Comp)) {
+      const isIgnored = IGNORED_SNIPPET_DIRS.some((dir) =>
+        normalized.startsWith(dir),
+      );
+      if (!isIgnored) {
+        console.error(`[ERROR] Missing or invalid snippet: ${source}`);
+      }
       return (
         <div className="alert alert--warning" role="alert">
           Missing or invalid snippet: <code>{source}</code>
@@ -293,6 +303,9 @@ export default function ImportContent({
   }
 
   if (content == null) {
+    if (!isGitHub) {
+      console.error(`[ERROR] Missing file for ImportContent: ${cleaned}`);
+    }
     return (
       <div className="alert alert--warning" role="alert">
         File not found in manifest: <code>{cleaned}</code>. You probably need to

@@ -237,37 +237,18 @@ struct UncommittedData {
     // table as they are flushed to the db.
     pending_transaction_writes: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
 
-    // Transactions outputs from Mysticeti fastpath certified transaction executions.
-    // These outputs are not written to pending_transaction_writes until we are sure
-    // that they will not get rejected by consensus. This ensures that no dependent
-    // transactions can sign using the outputs of a fastpath certified transaction.
-    // Otherwise it will be challenging to revert them.
-    // We use a cache because it is possible to have entries that are not finalized
-    // due to data races, i.e. a transaction is first fastpath certified, then
-    // rejected through consensus commit, but at the same time it was executed
-    // and outputs are written here. We won't have a chance to remove them anymore.
-    // So we rely on the cache to evict them eventually.
-    // It is also safe to evict a transaction that will eventually be finalized,
-    // as we will just re-execute it.
-    fastpath_transaction_outputs: MokaCache<TransactionDigest, Arc<TransactionOutputs>>,
-
     total_transaction_inserts: AtomicU64,
     total_transaction_commits: AtomicU64,
 }
 
 impl UncommittedData {
-    fn new(config: &ExecutionCacheConfig) -> Self {
+    fn new() -> Self {
         Self {
             objects: DashMap::with_shard_amount(2048),
             markers: DashMap::with_shard_amount(2048),
             transaction_effects: DashMap::with_shard_amount(2048),
             executed_effects_digests: DashMap::with_shard_amount(2048),
             pending_transaction_writes: DashMap::with_shard_amount(2048),
-            fastpath_transaction_outputs: MokaCache::builder(8)
-                .max_capacity(randomize_cache_capacity_in_tests(
-                    config.fastpath_transaction_outputs_cache_size(),
-                ))
-                .build(),
             transaction_events: DashMap::with_shard_amount(2048),
             unchanged_loaded_runtime_objects: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
@@ -281,7 +262,6 @@ impl UncommittedData {
         self.transaction_effects.clear();
         self.executed_effects_digests.clear();
         self.pending_transaction_writes.clear();
-        self.fastpath_transaction_outputs.invalidate_all();
         self.transaction_events.clear();
         self.unchanged_loaded_runtime_objects.clear();
         self.total_transaction_inserts
@@ -466,8 +446,6 @@ pub struct WritebackCache {
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     object_notify_read: NotifyRead<InputKey, ()>,
-    fastpath_transaction_outputs_notify_read:
-        NotifyRead<TransactionDigest, Arc<TransactionOutputs>>,
 
     store: Arc<AuthorityStore>,
     backpressure_threshold: u64,
@@ -525,7 +503,7 @@ impl WritebackCache {
             ))
             .build();
         Self {
-            dirty: UncommittedData::new(config),
+            dirty: UncommittedData::new(),
             cached: CachedCommittedData::new(config),
             object_by_id_cache: MonotonicCache::new(randomize_cache_capacity_in_tests(
                 config.object_by_id_cache_size(),
@@ -534,7 +512,6 @@ impl WritebackCache {
             object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
             object_notify_read: NotifyRead::new(),
-            fastpath_transaction_outputs_notify_read: NotifyRead::new(),
             store,
             backpressure_manager,
             backpressure_threshold: config.backpressure_threshold(),
@@ -924,8 +901,6 @@ impl WritebackCache {
             tx_digest,
             epoch_id.saturating_sub(1)
         );
-
-        self.dirty.fastpath_transaction_outputs.remove(&tx_digest);
 
         let TransactionOutputs {
             transaction,
@@ -2293,31 +2268,6 @@ impl TransactionCacheRead for WritebackCache {
             })
     }
 
-    fn get_mysticeti_fastpath_outputs(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Option<Arc<TransactionOutputs>> {
-        self.dirty.fastpath_transaction_outputs.get(tx_digest)
-    }
-
-    fn notify_read_fastpath_transaction_outputs<'a>(
-        &'a self,
-        tx_digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, Vec<Arc<TransactionOutputs>>> {
-        self.fastpath_transaction_outputs_notify_read
-            .read(
-                "notify_read_fastpath_transaction_outputs",
-                tx_digests,
-                |tx_digests| {
-                    tx_digests
-                        .iter()
-                        .map(|tx_digest| self.get_mysticeti_fastpath_outputs(tx_digest))
-                        .collect()
-                },
-            )
-            .boxed()
-    }
-
     fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
         self.dirty
             .pending_transaction_writes
@@ -2333,19 +2283,6 @@ impl ExecutionCacheWrite for WritebackCache {
 
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs);
-    }
-
-    fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>) {
-        let tx_digest = *tx_outputs.transaction.digest();
-        debug!(
-            ?tx_digest,
-            "writing mysticeti fastpath certified transaction outputs"
-        );
-        self.dirty
-            .fastpath_transaction_outputs
-            .insert(tx_digest, tx_outputs.clone());
-        self.fastpath_transaction_outputs_notify_read
-            .notify(&tx_digest, &tx_outputs);
     }
 
     #[cfg(test)]

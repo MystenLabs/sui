@@ -3604,6 +3604,66 @@ generate_u8_in_range
 shuffle
 	public fun
 	0x2::random
+Scalar
+	public struct
+	0x2::ristretto255
+G
+	public struct
+	0x2::ristretto255
+scalar_from_bytes
+	public fun
+	0x2::ristretto255
+scalar_from_u64
+	public fun
+	0x2::ristretto255
+scalar_zero
+	public fun
+	0x2::ristretto255
+scalar_one
+	public fun
+	0x2::ristretto255
+scalar_add
+	public fun
+	0x2::ristretto255
+scalar_sub
+	public fun
+	0x2::ristretto255
+scalar_mul
+	public fun
+	0x2::ristretto255
+scalar_div
+	public fun
+	0x2::ristretto255
+scalar_neg
+	public fun
+	0x2::ristretto255
+scalar_inv
+	public fun
+	0x2::ristretto255
+g_from_bytes
+	public fun
+	0x2::ristretto255
+g_identity
+	public fun
+	0x2::ristretto255
+g_generator
+	public fun
+	0x2::ristretto255
+g_add
+	public fun
+	0x2::ristretto255
+g_sub
+	public fun
+	0x2::ristretto255
+g_mul
+	public fun
+	0x2::ristretto255
+g_div
+	public fun
+	0x2::ristretto255
+g_neg
+	public fun
+	0x2::ristretto255
 TableVec
 	public struct
 	0x2::table_vec

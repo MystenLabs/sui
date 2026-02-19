@@ -6,7 +6,7 @@ keywords: [indexer, consistent store, graphql, setup, dex]
 
 <ImportContent source="indexer-graphql.mdx" mode="snippet" />
 
-See [GraphQL and General-Purpose Indexer](/concepts/data-access/graphql-indexer.mdx) for more information on the stack.
+See [GraphQL and General-Purpose Indexer](/concepts/data-access/custom-indexers.mdx) for more information on the stack.
 
 ## Indexer setup
 
@@ -75,14 +75,18 @@ Example:
 
 ```sh
 $ sui-indexer-alt indexer \
-    --config misc.toml \
+    --config unpruned.toml \
     --database-url postgres://username:password@localhost:5432/database \
     --remote-store-url https://checkpoints.mainnet.sui.io
 ```
 
 ### Run config recommendations {#indexer-run-config}
 
-We recommend using the TOML files below which are grouped by pipeline speed. All pipelines in an instance are limited by the slowest pipeline in that instance so these files each contain pipelines that run at approximately the same speed.
+Use the TOML files below; they are grouped by pipeline speed. All pipelines in an instance are limited by the slowest pipeline in that instance so these files each contain pipelines that run at approximately the same speed.
+
+:::info
+When backfilling, you should set the `ingest-concurrency` to a higher value, e.g. 200, then reduce it to 20 for normal operation at network tip.
+:::
 
 <table>
 	<thead>
@@ -111,34 +115,7 @@ We recommend using the TOML files below which are grouped by pipeline speed. All
 			<td colspan={5}>
 				<details>
 					<summary>`events.toml`</summary>
-					<ImportContent source="examples/prod-config/events.toml" mode="code" />
-				</details>
-			</td>
-		</tr>
-		<tr>
-			<td>`misc.toml`</td>
-			<td>Lightweight miscellaneous tables.</td>
-			<td>
-				<ul className="pl-4">
-					<li>`cp_sequence_numbers`</li>
-					<li>`tx_balance_changes`</li>
-					<li>`tx_digests`</li>
-					<li>`kv_epoch_ends`</li>
-					<li>`kv_epoch_starts`</li>
-					<li>`kv_feature_flags`</li>
-					<li>`kv_packages`</li>
-					<li>`kv_protocol_configs`</li>
-					<li>`sum_displays`</li>
-				</ul>
-			</td>
-			<td>2-4 days</td>
-			<td>90 days</td>
-		</tr>
-		<tr>
-			<td colspan={5}>
-				<details>
-					<summary>`misc.toml`</summary>
-					<ImportContent source="examples/prod-config/misc.toml" mode="code" />
+					<ImportContent source="examples/prod-config/indexer/events.toml" mode="code" />
 				</details>
 			</td>
 		</tr>
@@ -147,13 +124,13 @@ We recommend using the TOML files below which are grouped by pipeline speed. All
 			<td>Heavyweight object versions table containing data since genesis.</td>
 			<td>`obj_versions`</td>
 			<td>10-14 days</td>
-			<td>unpruned</td>
+			<td>Unpruned</td>
 		</tr>
 		<tr>
 			<td colspan={5}>
 				<details>
 					<summary>`obj_versions.toml`</summary>
-					<ImportContent source="examples/prod-config/obj_versions.toml" mode="code" />
+					<ImportContent source="examples/prod-config/indexer/obj_versions.toml" mode="code" />
 				</details>
 			</td>
 		</tr>
@@ -168,7 +145,7 @@ We recommend using the TOML files below which are grouped by pipeline speed. All
 			<td colspan={5}>
 				<details>
 					<summary>`tx_affected_addresses.toml`</summary>
-					<ImportContent source="examples/prod-config/tx_affected_addresses.toml" mode="code" />
+					<ImportContent source="examples/prod-config/indexer/tx_affected_addresses.toml" mode="code" />
 				</details>
 			</td>
 		</tr>
@@ -183,7 +160,7 @@ We recommend using the TOML files below which are grouped by pipeline speed. All
 			<td colspan={5}>
 				<details>
 					<summary>`tx_affected_objects.toml`</summary>
-					<ImportContent source="examples/prod-config/tx_affected_objects.toml" mode="code" />
+					<ImportContent source="examples/prod-config/indexer/tx_affected_objects.toml" mode="code" />
 				</details>
 			</td>
 		</tr>
@@ -198,7 +175,7 @@ We recommend using the TOML files below which are grouped by pipeline speed. All
 			<td colspan={5}>
 				<details>
 					<summary>`tx_calls.toml`</summary>
-					<ImportContent source="examples/prod-config/tx_calls.toml" mode="code" />
+					<ImportContent source="examples/prod-config/indexer/tx_calls.toml" mode="code" />
 				</details>
 			</td>
 		</tr>
@@ -213,7 +190,34 @@ We recommend using the TOML files below which are grouped by pipeline speed. All
 			<td colspan={5}>
 				<details>
 					<summary>`tx_kinds.toml`</summary>
-					<ImportContent source="examples/prod-config/tx_kinds.toml" mode="code" />
+					<ImportContent source="examples/prod-config/indexer/tx_kinds.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`unpruned.toml`</td>
+			<td>Foundational and reference data that other queries and parts of the indexer depend on.</td>
+			<td>
+				<ul className="pl-4">
+					<li>`cp_sequence_numbers`</li>
+					<li>`kv_epoch_ends`</li>
+					<li>`kv_epoch_starts`</li>
+					<li>`kv_feature_flags`</li>
+					<li>`kv_packages`</li>
+					<li>`kv_protocol_configs`</li>
+					<li>`sum_displays`</li>
+					<li>`tx_balance_changes`</li>
+					<li>`tx_digests`</li>
+				</ul>
+			</td>
+			<td>2-4 days</td>
+			<td>Unpruned</td>
+		</tr>
+		<tr>
+			<td colspan={5}>
+				<details>
+					<summary>`unpruned.toml`</summary>
+					<ImportContent source="examples/prod-config/indexer/unpruned.toml" mode="code" />
 				</details>
 			</td>
 		</tr>
@@ -390,12 +394,12 @@ Example:
 sui-indexer-alt-graphql rpc \
     --config graphql.toml \
     --indexer-config events.toml \
-    --indexer-config misc.toml \
     --indexer-config obj_versions.toml \
     --indexer-config tx_affected_addresses.toml \
     --indexer-config tx_affected_objects.toml \
     --indexer-config tx_calls.toml \
     --indexer-config tx_kinds.toml \
+    --indexer-config unpruned.toml \
     --ledger-grpc-url https://archive.mainnet.sui.io:443 \
     --consistent-store-url https://localhost:7001 \
     --database-url postgres://username:password@localhost:5432/database \
@@ -444,10 +448,10 @@ AlloyDB Omni recommends 8GB RAM per vCPU [link](https://docs.cloud.google.com/al
 
 ## Related links
 
-<RelatedLink to="/concepts/data-access/graphql-indexer" />
+<RelatedLink to="/concepts/data-access/custom-indexers" />
 <RelatedLink to="/concepts/data-access/graphql-rpc" />
 <RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework" />
-<RelatedLink to="/guides/developer/accessing-data/pipeline-architecture" />
+<RelatedLink to="/concepts/data-access/pipeline-architecture" />
 <RelatedLink to="/guides/developer/accessing-data/archival-store" />
 <RelatedLink
 	href="https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt"

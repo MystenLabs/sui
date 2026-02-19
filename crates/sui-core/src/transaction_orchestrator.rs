@@ -40,7 +40,7 @@ use tracing::{Instrument, debug, error_span, info, instrument, warn};
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use crate::transaction_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
+use crate::transaction_driver::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::transaction_driver::{
     QuorumTransactionResponse, SubmitTransactionOptions, TransactionDriver, TransactionDriverError,
     TransactionDriverMetrics,
@@ -203,25 +203,24 @@ where
             details: e.to_string(),
         })??;
 
-        if !executed_locally {
-            executed_locally = if matches!(
-                request_type,
-                ExecuteTransactionRequestType::WaitForLocalExecution
-            ) {
-                let executed_locally =
-                    Inner::<A>::wait_for_finalized_tx_executed_locally_with_timeout(
-                        &self.inner.validator_state,
-                        tx_digest,
-                        tx_type,
-                        &self.inner.metrics,
-                    )
-                    .await
-                    .is_ok();
-                add_server_timing("local_execution done");
-                executed_locally
-            } else {
-                false
-            };
+        if matches!(
+            request_type,
+            ExecuteTransactionRequestType::WaitForLocalExecution
+        ) {
+            // Always wait for the checkpoint containing this tx to be finalized,
+            // even when effects are already available locally. With batched index
+            // writes, index data is only committed at checkpoint boundaries, so
+            // callers relying on up-to-date index data after WaitForLocalExecution
+            // need the checkpoint to be processed.
+            executed_locally = Inner::<A>::wait_for_finalized_tx_executed_locally_with_timeout(
+                &self.inner.validator_state,
+                tx_digest,
+                tx_type,
+                &self.inner.metrics,
+            )
+            .await
+            .is_ok();
+            add_server_timing("local_execution done");
         }
 
         let QuorumTransactionResponse {
@@ -432,6 +431,51 @@ where
         result
     }
 
+    fn build_response_from_local_effects(
+        &self,
+        effects: sui_types::effects::TransactionEffects,
+        include_events: bool,
+        include_input_objects: bool,
+        include_output_objects: bool,
+    ) -> Result<QuorumTransactionResponse, TransactionSubmissionError> {
+        let epoch = effects.executed_epoch();
+        let events = if include_events {
+            if effects.events_digest().is_some() {
+                Some(
+                    self.validator_state
+                        .get_transaction_events(effects.transaction_digest())
+                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?,
+                )
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let input_objects = include_input_objects
+            .then(|| self.validator_state.get_transaction_input_objects(&effects))
+            .transpose()
+            .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
+        let output_objects = include_output_objects
+            .then(|| {
+                self.validator_state
+                    .get_transaction_output_objects(&effects)
+            })
+            .transpose()
+            .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
+
+        Ok(QuorumTransactionResponse {
+            effects: FinalizedEffects {
+                effects,
+                finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
+            },
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data: None,
+        })
+    }
+
     /// Shared implementation for executing transactions with parallel local effects waiting
     async fn execute_transaction_with_effects_waiting(
         &self,
@@ -486,6 +530,26 @@ where
         let include_input_objects = request.include_input_objects;
         let include_output_objects = request.include_output_objects;
         let include_auxiliary_data = request.include_auxiliary_data;
+
+        // Check if transaction has already been executed locally and return cached results
+        if let Some(effects) = self
+            .validator_state
+            .get_transaction_cache_reader()
+            .get_executed_effects(&tx_digest)
+        {
+            self.metrics.early_cached_response.inc();
+            debug!(
+                ?tx_digest,
+                "Returning cached results for already-executed transaction"
+            );
+            let response = self.build_response_from_local_effects(
+                effects,
+                include_events,
+                include_input_objects,
+                include_output_objects,
+            )?;
+            return Ok((response, true));
+        }
 
         let finality_timeout = std::env::var("WAIT_FOR_FINALITY_TIMEOUT_SECS")
             .ok()
@@ -564,50 +628,27 @@ where
 
         loop {
             tokio::select! {
-                biased;
-
                 // Local effects might be available
                 all_effects_result = &mut local_effects_future => {
-                    debug!(
-                        "Effects became available while execution was running"
-                    );
                     let all_effects = all_effects_result
                         .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
                     if all_effects.len() != 1 {
-                        break Err(TransactionSubmissionError::TransactionDriverInternalError(SuiErrorKind::Unknown(format!("Unexpected number of effects found: {}", all_effects.len())).into()));
+                        break Err(TransactionSubmissionError::TransactionDriverInternalError(
+                            SuiErrorKind::Unknown(format!("Unexpected number of effects found: {}", all_effects.len())).into()
+                        ));
                     }
+                    debug!(
+                        "Effects became available while execution was running"
+                    );
                     self.metrics.concurrent_execution.inc();
 
                     let effects = all_effects.into_iter().next().unwrap();
-                    let epoch = effects.executed_epoch();
-                    let events = if include_events {
-                        if effects.events_digest().is_some() {
-                            Some(self.validator_state.get_transaction_events(effects.transaction_digest())
-                                .map_err(TransactionSubmissionError::TransactionDriverInternalError)?)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-                    let input_objects = include_input_objects
-                        .then(|| self.validator_state.get_transaction_input_objects(&effects))
-                        .transpose()
-                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
-                    let output_objects = include_output_objects
-                        .then(|| self.validator_state.get_transaction_output_objects(&effects))
-                        .transpose()
-                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
-                    let response = QuorumTransactionResponse {
-                        effects: FinalizedEffects {
-                            effects,
-                            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-                        },
-                        events,
-                        input_objects,
-                        output_objects,
-                        auxiliary_data: None,
-                    };
+                    let response = self.build_response_from_local_effects(
+                        effects,
+                        include_events,
+                        include_input_objects,
+                        include_output_objects,
+                    )?;
                     break Ok((response, true));
                 }
 
@@ -793,15 +834,23 @@ where
             .with_label_values(&[tx_type.as_str()])
             .start_timer();
         debug!("Waiting for finalized tx to be executed locally.");
-        match timeout(
-            LOCAL_EXECUTION_TIMEOUT,
+        match timeout(LOCAL_EXECUTION_TIMEOUT, async move {
             validator_state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_digests(
                     "TransactionOrchestrator::notify_read_wait_for_local_execution",
                     &[tx_digest],
-                ),
-        )
+                )
+                .await;
+            // Wait for the checkpoint containing this tx to be finalized.
+            // Index data is committed before the checkpoint notification fires,
+            // so it is guaranteed to be available when this resolves.
+            let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+            epoch_store
+                .transactions_executed_in_checkpoint_notify(vec![tx_digest])
+                .await
+                .expect("db error waiting for transaction checkpointing");
+        })
         .instrument(error_span!(
             "transaction_orchestrator::local_execution",
             ?tx_digest
@@ -939,6 +988,7 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
 
+    early_cached_response: IntCounter,
     concurrent_execution: IntCounter,
 
     early_validation_rejections: IntCounterVec,
@@ -1033,6 +1083,12 @@ impl TransactionOrchestratorMetrics {
             local_execution_timeout: register_int_counter_with_registry!(
                 "tx_orchestrator_local_execution_timeout",
                 "Total number of timed-out local execution txns Transaction Orchestrator handles",
+                registry,
+            )
+            .unwrap(),
+            early_cached_response: register_int_counter_with_registry!(
+                "tx_orchestrator_early_cached_response",
+                "Total number of requests returning cached results for already-executed transactions",
                 registry,
             )
             .unwrap(),

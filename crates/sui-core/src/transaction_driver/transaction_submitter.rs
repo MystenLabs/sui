@@ -38,6 +38,9 @@ mod transaction_submitter_tests;
 // are chosen first.
 const SUBMIT_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(10);
 
+// Delay to submit the transaction to an additional backup validator.
+const SUBMIT_TRANSACTION_BACKUP_REQUEST_DELAY: Duration = Duration::from_secs(1);
+
 pub(crate) struct TransactionSubmitter {
     metrics: Arc<TransactionDriverMetrics>,
 }
@@ -62,6 +65,10 @@ impl TransactionSubmitter {
     {
         let start_time = Instant::now();
 
+        // Limit the amplification factor to [1.=committee size].
+        let amplification_factor = amplification_factor
+            .max(1)
+            .min(authority_aggregator.committee.num_members() as u64);
         self.metrics
             .submit_amplification_factor
             .observe(amplification_factor as f64);
@@ -78,20 +85,33 @@ impl TransactionSubmitter {
         } else {
             "false"
         };
+        let mut initial_requests = true;
         let mut retries = 0;
+        let mut backups = 0;
         let mut request_rpcs = FuturesUnordered::new();
 
         // This loop terminates when there are enough (f+1) non-retriable errors when submitting the transaction,
         // or all feasible targets returned errors or timed out.
         loop {
-            // Try to fill up to amplification_factor concurrent requests
-            while request_rpcs.len() < amplification_factor as usize {
+            let num_additional_requests = if initial_requests {
+                // Initially, try to fill up to amplification_factor concurrent requests
+                initial_requests = false;
+                amplification_factor
+            } else {
+                // Start another request after seeing a failure (retry) or backup delay has elapsed.
+                1
+            };
+            for _ in 0..num_additional_requests {
                 match retrier.next_target() {
                     Ok((name, client)) => {
                         let display_name = authority_aggregator.get_display_name(&name);
                         self.metrics
                             .validator_selections
-                            .with_label_values(&[&display_name, tx_type.as_str(), ping_label])
+                            .with_label_values(&[
+                                display_name.as_str(),
+                                tx_type.as_str(),
+                                ping_label,
+                            ])
                             .inc();
 
                         // Create a future that returns the name and display_name along with the result
@@ -111,8 +131,12 @@ impl TransactionSubmitter {
 
                         request_rpcs.push(wrapped_fut);
                     }
-                    Err(_) if request_rpcs.is_empty() => {
-                        // No more targets and no requests in flight
+                    Err(_) => {
+                        if !request_rpcs.is_empty() {
+                            // No more targets but still have requests in flight. Continue to wait for them.
+                            break;
+                        }
+                        // No more targets and no requests in flight. Gather the errors and return.
                         return Err(TransactionDriverError::Aborted {
                             submission_non_retriable_errors: aggregate_request_errors(
                                 retrier
@@ -127,62 +151,70 @@ impl TransactionSubmitter {
                             },
                         });
                     }
-                    Err(_) => {
-                        // No more targets but still have requests in flight
-                        break;
-                    }
                 }
             }
 
-            match request_rpcs.next().await {
-                Some((name, display_name, Ok(result))) => {
-                    self.metrics
-                        .validator_submit_transaction_successes
-                        .with_label_values(&[&display_name, tx_type.as_str(), ping_label])
-                        .inc();
-                    self.metrics
-                        .submit_transaction_retries
-                        .observe(retries as f64);
-                    let elapsed = start_time.elapsed().as_secs_f64();
-                    self.metrics
-                        .submit_transaction_latency
-                        .with_label_values(&[tx_type.as_str(), ping_label])
-                        .observe(elapsed);
+            // Wait for the next available result, or backup delay has elapsed.
+            tokio::select! {
+                result = request_rpcs.next() => {
+                    match result {
+                        Some((name, display_name, Ok(result))) => {
+                            self.metrics
+                                .validator_submit_transaction_successes
+                                .with_label_values(&[display_name.as_str(), tx_type.as_str(), ping_label])
+                                .inc();
+                            self.metrics
+                                .submit_transaction_retries
+                                .observe(retries as f64);
+                            self.metrics
+                                .submit_transaction_backups
+                                .observe(backups as f64);
+                            let elapsed = start_time.elapsed().as_secs_f64();
+                            self.metrics
+                                .submit_transaction_latency
+                                .with_label_values(&[tx_type.as_str(), ping_label])
+                                .observe(elapsed);
 
-                    return Ok((name, result));
-                }
-                Some((name, display_name, Err(e))) => {
-                    let error_type = e.categorize().into();
-                    self.metrics
-                        .validator_submit_transaction_errors
-                        .with_label_values(&[
-                            &display_name,
-                            error_type,
-                            tx_type.as_str(),
-                            ping_label,
-                        ])
-                        .inc();
+                            return Ok((name, result));
+                        }
+                        Some((name, display_name, Err(e))) => {
+                            let error_type: &str = e.categorize().into();
+                            self.metrics
+                                .validator_submit_transaction_errors
+                                .with_label_values(&[
+                                    display_name.as_str(),
+                                    error_type,
+                                    tx_type.as_str(),
+                                    ping_label,
+                                ])
+                                .inc();
 
-                    retries += 1;
-                    retrier.add_error(name, e)?;
+                            retries += 1;
+                            retrier.add_error(name, e)?;
+                        }
+                        None => {
+                            // All requests have been processed.
+                            return Err(TransactionDriverError::Aborted {
+                                submission_non_retriable_errors: aggregate_request_errors(
+                                    retrier
+                                        .non_retriable_errors_aggregator
+                                        .status_by_authority(),
+                                ),
+                                submission_retriable_errors: aggregate_request_errors(
+                                    retrier.retriable_errors_aggregator.status_by_authority(),
+                                ),
+                                observed_effects_digests: AggregatedEffectsDigests {
+                                    digests: Vec::new(),
+                                },
+                            });
+                        }
+                    }
                 }
-                None => {
-                    // All requests have been processed.
-                    return Err(TransactionDriverError::Aborted {
-                        submission_non_retriable_errors: aggregate_request_errors(
-                            retrier
-                                .non_retriable_errors_aggregator
-                                .status_by_authority(),
-                        ),
-                        submission_retriable_errors: aggregate_request_errors(
-                            retrier.retriable_errors_aggregator.status_by_authority(),
-                        ),
-                        observed_effects_digests: AggregatedEffectsDigests {
-                            digests: Vec::new(),
-                        },
-                    });
+                _ = tokio::time::sleep(SUBMIT_TRANSACTION_BACKUP_REQUEST_DELAY) => {
+                    // Backup delay elapsed without response, continue to start another request
+                    backups += 1;
                 }
-            };
+            }
 
             // Yield to prevent this retry loop from starving other tasks.
             tokio::task::yield_now().await;

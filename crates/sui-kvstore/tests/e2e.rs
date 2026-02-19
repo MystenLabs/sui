@@ -33,6 +33,7 @@ use sui_kvstore::BigTableStore;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::set_write_legacy_data;
+use sui_protocol_config::Chain;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
@@ -41,9 +42,13 @@ use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::Transaction as GrpcTransaction;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
+use sui_types::object::Owner;
 use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
@@ -61,6 +66,11 @@ const TABLES: &[&str] = &[
     sui_kvstore::tables::checkpoints_by_digest::NAME,
     sui_kvstore::tables::watermark_alt_legacy::NAME,
     sui_kvstore::tables::epochs::NAME,
+    sui_kvstore::tables::protocol_configs::NAME,
+    sui_kvstore::tables::packages::NAME,
+    sui_kvstore::tables::packages_by_id::NAME,
+    sui_kvstore::tables::packages_by_checkpoint::NAME,
+    sui_kvstore::tables::system_packages::NAME,
 ];
 
 /// Resolve the path to `cbtemulator` relative to the gcloud SDK root.
@@ -326,6 +336,7 @@ impl TestHarness {
             ingestion_config.into(),
             CommitterConfig::default(),
             PipelineLayer::default(),
+            Chain::Unknown,
             &registry,
         )
         .await
@@ -396,6 +407,30 @@ impl TestHarness {
         .context("Timeout waiting for watermark to advance")
     }
 
+    /// Build, sign, and execute a package publish via gRPC.
+    async fn publish_basics_package(&mut self) -> Result<Transaction> {
+        let sender = self.cluster.get_address_0();
+        let keystore = &self.cluster.wallet.config.keystore;
+
+        let coins = get_all_coins(&mut self.grpc_client, sender).await?;
+        let gas_object = coins
+            .first()
+            .context("No coins available for sender")?
+            .compute_object_reference();
+
+        let gas_price = self.cluster.get_reference_gas_price().await;
+        let tx_data = TestTransactionBuilder::new(sender, gas_object, gas_price)
+            .publish_examples("basics")
+            .await
+            .build();
+
+        let signed_tx = to_sender_signed_transaction(tx_data, keystore.export(&sender)?);
+
+        grpc_execute_transaction(&mut self.grpc_client, &signed_tx).await?;
+
+        Ok(signed_tx)
+    }
+
     fn bigtable_client(&mut self) -> &mut BigTableClient {
         &mut self.client
     }
@@ -404,6 +439,10 @@ impl TestHarness {
 #[tokio::test]
 async fn test_indexer_e2e() -> Result<()> {
     let mut harness = TestHarness::new().await?;
+
+    // -- Publish a package --
+    let publish_tx = harness.publish_basics_package().await?;
+    let publish_digest = *publish_tx.digest();
 
     // -- Execute 3 transfers --
     // execute_transaction_and_wait_for_checkpoint guarantees each txn is checkpointed
@@ -418,6 +457,25 @@ async fn test_indexer_e2e() -> Result<()> {
     // Look up checkpoint numbers via the fullnode gRPC API (available immediately
     // since execute_transaction_and_wait_for_checkpoint already waited).
     let mut tx_checkpoints = Vec::new();
+
+    // Look up the publish transaction's checkpoint separately so that
+    // tx_checkpoints stays aligned with tx_digests (transfers only).
+    let publish_cp_resp = harness
+        .grpc_client
+        .ledger_client()
+        .get_transaction(
+            GetTransactionRequest::default()
+                .with_digest(publish_digest.to_string())
+                .with_read_mask(FieldMask::from_paths(["checkpoint"])),
+        )
+        .await
+        .context("get_transaction RPC failed for publish tx")?;
+    let publish_cp = publish_cp_resp
+        .into_inner()
+        .transaction
+        .and_then(|t| t.checkpoint)
+        .context("publish tx missing checkpoint")?;
+
     for digest in &tx_digests {
         let resp = harness
             .grpc_client
@@ -437,7 +495,7 @@ async fn test_indexer_e2e() -> Result<()> {
         tx_checkpoints.push(cp);
     }
 
-    let max_checkpoint = *tx_checkpoints.iter().max().unwrap();
+    let max_checkpoint = *tx_checkpoints.iter().max().unwrap().max(&publish_cp);
 
     // Wait for all pipelines to catch up via the same path GraphQL uses.
     harness.wait_for_watermark(max_checkpoint, 0).await?;
@@ -525,6 +583,84 @@ async fn test_indexer_e2e() -> Result<()> {
             obj.id(),
             obj.version().value(),
         );
+    }
+
+    // -- Package reader tests --
+    // Find the package_id from the publish transaction's effects
+    let publish_txns = harness
+        .bigtable_client()
+        .get_transactions(&[publish_digest])
+        .await?;
+    let publish_tx_data = publish_txns.first().context("publish tx not found")?;
+    let created = publish_tx_data.effects.created();
+    let (package_ref, _) = created
+        .iter()
+        .find(|(_, owner)| *owner == Owner::Immutable)
+        .context("no immutable object (package) created")?;
+    let package_id: ObjectID = package_ref.0;
+    let package_version = package_ref.1.value();
+
+    // For a newly published (non-upgrade) package, original_id == package_id
+    let original_id = package_id;
+
+    // get_package_original_ids: resolve package_id → original_id
+    let orig_ids = harness
+        .bigtable_client()
+        .get_package_original_ids(&[package_id])
+        .await?;
+    assert_eq!(orig_ids.len(), 1);
+    assert_eq!(orig_ids[0].0, package_id);
+    assert_eq!(orig_ids[0].1, original_id);
+
+    // get_packages_by_version: fetch by (original_id, version)
+    let pkgs = harness
+        .bigtable_client()
+        .get_packages_by_version(&[(original_id, package_version)])
+        .await?;
+    assert_eq!(pkgs.len(), 1);
+    assert_eq!(pkgs[0].package_id, package_id.to_vec());
+    assert_eq!(pkgs[0].original_id, original_id.to_vec());
+    assert_eq!(pkgs[0].package_version, package_version);
+    assert!(!pkgs[0].is_system_package);
+
+    // get_package_latest: latest version at or before max_checkpoint
+    let latest_pkg = harness
+        .bigtable_client()
+        .get_package_latest(original_id, max_checkpoint)
+        .await?
+        .expect("package should exist");
+    assert_eq!(latest_pkg.package_id, package_id.to_vec());
+    assert_eq!(latest_pkg.package_version, package_version);
+
+    // get_package_versions: paginate versions
+    let versions = harness
+        .bigtable_client()
+        .get_package_versions(original_id, max_checkpoint, None, None, 10, false)
+        .await?;
+    assert_eq!(versions.len(), 1);
+    assert_eq!(versions[0].package_version, package_version);
+
+    // get_packages_by_checkpoint_range: should include the published package
+    let by_cp = harness
+        .bigtable_client()
+        .get_packages_by_checkpoint_range(None, None, 100, false)
+        .await?;
+    assert!(
+        by_cp.iter().any(|p| p.package_id == package_id.to_vec()),
+        "published package should appear in checkpoint range scan",
+    );
+
+    // get_system_packages: genesis system packages (0x1, 0x2, etc.)
+    let sys_pkgs = harness
+        .bigtable_client()
+        .get_system_packages(max_checkpoint, None, 100)
+        .await?;
+    assert!(
+        !sys_pkgs.is_empty(),
+        "there should be system packages from genesis"
+    );
+    for pkg in &sys_pkgs {
+        assert!(pkg.is_system_package);
     }
 
     // -- Epoch 0 before reconfig: start fields set, end fields not yet --

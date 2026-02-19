@@ -436,7 +436,7 @@ impl ToolCommand {
                 start_commit,
                 end_commit,
             } => {
-                let rocks_db_store = RocksDBStore::new(&db_path, true);
+                let rocks_db_store = RocksDBStore::new(&db_path);
 
                 let start_commit = start_commit.unwrap_or(0);
                 let end_commit = end_commit.unwrap_or(u32::MAX);

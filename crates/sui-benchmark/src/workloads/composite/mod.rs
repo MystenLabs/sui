@@ -4,8 +4,8 @@
 mod operations;
 
 use derive_more::Add;
-use mysten_common::debug_fatal;
 use mysten_common::random::get_rng;
+use mysten_common::{assert_reachable, assert_sometimes};
 pub use operations::{
     ALIAS_ADD_FLAG, ALIAS_REMOVE_FLAG, ALIAS_TX_FLAG, ALL_OPERATIONS, AddressBalanceDeposit,
     AddressBalanceOverdraw, AddressBalanceWithdraw, INVALID_ALIAS_TX_FLAG, ObjectBalanceDeposit,
@@ -908,7 +908,6 @@ impl Payload for CompositePayload {
         let mut metrics = self.metrics.lock().unwrap();
 
         let mut permanent_failure_count = 0;
-        let mut unknown_rejection_count = 0;
         let mut expected_alias_failure_count = 0;
 
         let mut gas = self.gas.lock().unwrap();
@@ -966,7 +965,6 @@ impl Payload for CompositePayload {
                     );
                 }
                 BatchedTransactionStatus::UnknownRejection => {
-                    unknown_rejection_count += 1;
                     metrics.record_unknown_rejection(tx_info.op_set);
                     tracing::debug!(
                         "Transaction {} ({}) had unknown rejection",
@@ -976,14 +974,11 @@ impl Payload for CompositePayload {
                 }
             }
         }
-        // we have to be conservative and include unknown rejections here
-        if permanent_failure_count + unknown_rejection_count
-            < self.current_batch_num_conflicting_transactions + expected_alias_failure_count
-        {
-            debug_fatal!(
-                "failure count should be greater than or equal to the number of conflicting transactions"
-            );
-        }
+        assert_sometimes!(
+            permanent_failure_count
+                >= self.current_batch_num_conflicting_transactions + expected_alias_failure_count,
+            "failure count should sometimes be greater than or equal to the number of conflicting transactions"
+        );
         self.current_batch_txs.clear();
     }
 }
@@ -1007,14 +1002,12 @@ impl AccountState {
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             };
+            assert_reachable!("successfully got sui balance for address");
             return Self {
                 sender,
                 sui_balance,
             };
         }
-        // If this panic happens in practice, we could just return a zero balance,
-        // it wouldn't hurt the test suite overall unles it is happening every time
-        debug_fatal!("Failed to get sui balance for address {sender} - return zero balance");
         Self {
             sender,
             sui_balance: 0,

@@ -207,7 +207,6 @@ async fn test_execute_transaction_mutation_schema() {
                             }
                         }
                     }
-                    errors
                 }
             }
         "#,
@@ -225,11 +224,9 @@ async fn test_execute_transaction_mutation_schema() {
             .clone(),
     )
     .unwrap();
-    let errors = result.pointer("/data/executeTransaction/errors");
 
     assert_eq!(effects.status, "SUCCESS");
     assert_eq!(effects.checkpoint, None); // ExecutedTransaction has no checkpoint yet
-    assert_eq!(errors, Some(&serde_json::Value::Null));
 
     // Verify transaction data matches original
     let transaction = effects.transaction.unwrap();
@@ -259,7 +256,6 @@ async fn test_execute_transaction_input_validation() {
             mutation($txData: Base64!, $sigs: [Base64!]!) {
                 executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects { digest }
-                    errors
                 }
             }
         "#,
@@ -309,7 +305,6 @@ async fn test_execute_transaction_with_events() {
                             }
                         }
                     }
-                    errors
                 }
             }
         "#,
@@ -327,10 +322,8 @@ async fn test_execute_transaction_with_events() {
             .clone(),
     )
     .unwrap();
-    let errors = result.pointer("/data/executeTransaction/errors");
 
     assert_eq!(effects.status, "SUCCESS");
-    assert_eq!(errors, Some(&serde_json::Value::Null));
 
     let events = effects.events.unwrap();
     assert!(
@@ -360,7 +353,7 @@ async fn test_execute_transaction_grpc_errors() {
         .await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
 
-    // Create signature mismatch scenario: use transaction data from one tx with signatures from another
+    // Create signature mismatch: use transaction data from one tx with signatures from another
     let recipient1 = SuiAddress::random_for_testing_only();
     let recipient2 = SuiAddress::random_for_testing_only();
 
@@ -374,7 +367,6 @@ async fn test_execute_transaction_grpc_errors() {
     let (tx1_bytes, _) = signed_tx1.to_tx_bytes_and_signatures();
     let (_, tx2_signatures) = signed_tx2.to_tx_bytes_and_signatures();
 
-    // This will pass GraphQL validation but fail at gRPC execution due to signature mismatch
     let result = graphql_cluster
         .execute_graphql(
             r#"
@@ -384,7 +376,6 @@ async fn test_execute_transaction_grpc_errors() {
                         digest
                         status
                     }
-                    errors
                 }
             }
         "#,
@@ -394,17 +385,10 @@ async fn test_execute_transaction_grpc_errors() {
             }),
         )
         .await
-        .expect("GraphQL request failed");
-    let effects = result.pointer("/data/executeTransaction/effects");
-    let errors = result.pointer("/data/executeTransaction/errors").unwrap();
+        .unwrap();
 
-    assert_eq!(
-        effects,
-        Some(&serde_json::Value::Null),
-        "Should have null effects on gRPC error"
-    );
-    let error_array = errors.as_array().unwrap();
-    assert!(!error_array.is_empty());
+    // Verify the error response structure with a snapshot
+    insta::assert_json_snapshot!("execute_transaction_grpc_error", &result);
 }
 
 #[sim_test]
@@ -462,7 +446,6 @@ async fn test_execute_transaction_unchanged_consensus_objects() {
                             }
                         }
                     }
-                    errors
                 }
             }
         "#,
@@ -481,11 +464,8 @@ async fn test_execute_transaction_unchanged_consensus_objects() {
             .clone(),
     )
     .unwrap();
-    let errors = result.pointer("/data/executeTransaction/errors");
 
-    // Verify the transaction succeeded
     assert_eq!(effects.status, "SUCCESS");
-    assert_eq!(errors, Some(&serde_json::Value::Null));
 
     // Verify unchanged consensus objects are returned
     let consensus_objects = effects.unchanged_consensus_objects.unwrap();
@@ -550,7 +530,6 @@ async fn test_execute_transaction_object_changes_input_output() {
                             }
                         }
                     }
-                    errors
                 }
             }
         "#,
@@ -672,7 +651,6 @@ async fn test_execute_transaction_effects_json() {
                         effectsJson
                         balanceChangesJson
                     }
-                    errors
                 }
             }
         "#,
@@ -729,7 +707,6 @@ async fn test_execute_transaction_payload_bypasses_query_limit() {
             mutation($txData: Base64!, $sigs: [Base64!]!) {
                 executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects { status }
-                    errors
                 }
             }
         "#,
@@ -752,10 +729,6 @@ async fn test_execute_transaction_payload_bypasses_query_limit() {
             .and_then(|status| status.as_str())
             .is_some(),
         "Expected executeTransaction status to be populated"
-    );
-    assert_eq!(
-        result.pointer("/data/executeTransaction/errors"),
-        Some(&serde_json::Value::Null)
     );
 }
 
@@ -785,7 +758,6 @@ async fn test_execute_transaction_transaction_json() {
                             transactionJson
                         }
                     }
-                    errors
                 }
             }
         "#,

@@ -37,6 +37,10 @@ cleanup () (
 
 trap cleanup EXIT
 
+if [[ -z "$MSIM_WATCHDOG_TIMEOUT_MS" ]]; then
+  export MSIM_WATCHDOG_TIMEOUT_MS=60000
+fi
+
 if [[ -z "$MSIM_TEST_SEED" ]]; then
   export MSIM_TEST_SEED=1
 else

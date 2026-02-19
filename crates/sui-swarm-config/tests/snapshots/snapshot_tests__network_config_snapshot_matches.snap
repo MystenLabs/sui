@@ -26,6 +26,7 @@ validator_configs:
       submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
+    sync-post-process-one-tx: false
     jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -159,7 +160,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -193,6 +193,7 @@ validator_configs:
       submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
+    sync-post-process-one-tx: false
     jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -326,7 +327,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -360,6 +360,7 @@ validator_configs:
       submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
+    sync-post-process-one-tx: false
     jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -493,7 +494,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -527,6 +527,7 @@ validator_configs:
       submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
+    sync-post-process-one-tx: false
     jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -660,7 +661,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -694,6 +694,7 @@ validator_configs:
       submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
+    sync-post-process-one-tx: false
     jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -827,7 +828,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -861,6 +861,7 @@ validator_configs:
       submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
+    sync-post-process-one-tx: false
     jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -994,7 +995,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -1028,6 +1028,7 @@ validator_configs:
       submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
+    sync-post-process-one-tx: false
     jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
@@ -1161,7 +1162,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~

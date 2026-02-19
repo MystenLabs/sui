@@ -100,17 +100,3 @@ module P::N {
     2
   ]
 }
-
-//# run-jsonrpc --cursors bcs(bcs(@{obj_3_2}),1)
-{
-  "method": "suix_getOwnedObjects",
-  "params": [
-    "@{A}",
-    {
-      "filter": { "Package": "@{P}" },
-      "options": { "showType": true }
-    },
-    "@{cursor_0}",
-    2
-  ]
-}

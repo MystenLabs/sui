@@ -92,10 +92,6 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_batches_ahead")]
     pub commit_sync_batches_ahead: usize,
 
-    /// Whether to use FIFO compaction for RocksDB.
-    #[serde(default = "Parameters::default_use_fifo_compaction")]
-    pub use_fifo_compaction: bool,
-
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
@@ -196,10 +192,6 @@ impl Parameters {
         // while keeping the total number of inflight fetches and unprocessed fetched commits limited.
         32
     }
-
-    pub(crate) fn default_use_fifo_compaction() -> bool {
-        true
-    }
 }
 
 impl Default for Parameters {
@@ -221,7 +213,6 @@ impl Default for Parameters {
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
-            use_fifo_compaction: Parameters::default_use_fifo_compaction(),
             tonic: TonicParameters::default(),
             internal: InternalParameters::default(),
         }

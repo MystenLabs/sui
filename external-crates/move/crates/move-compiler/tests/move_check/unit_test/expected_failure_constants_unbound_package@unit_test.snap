@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03001]: address with no value
+  ┌─ tests/move_check/unit_test/expected_failure_constants_unbound_package.move:4:43
+  │
+4 │     #[test, expected_failure(abort_code = nonsense::nonsense::foo, location = a::m)]
+  │                                           ^^^^^^^^ address 'nonsense' is not assigned a value
+
+error[E10003]: invalid attribute value
+  ┌─ tests/move_check/unit_test/expected_failure_constants_unbound_package.move:4:43
+  │
+4 │     #[test, expected_failure(abort_code = nonsense::nonsense::foo, location = a::m)]
+  │                                           ^^^^^^^^^^^^^^^^^^^^^^^
+  │                                           │
+  │                                           Invalid value in attribute assignment
+  │                                           Unbound module 'nonsense::nonsense'

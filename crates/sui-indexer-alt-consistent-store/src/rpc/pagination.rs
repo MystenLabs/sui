@@ -11,6 +11,7 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::End;
 
 use crate::db::iter::FwdIter;
 use crate::db::iter::RevIter;
+use crate::db::key;
 use crate::db::map::DbMap;
 use crate::rpc::error::RpcError;
 use crate::rpc::error::db_error;
@@ -102,12 +103,48 @@ impl<'r> Page<'r> {
                 map.prefix(checkpoint, prefix)
                     .map_err(|e| db_error(e, "failed to create forward iterator"))?,
                 pred,
+                None,
             )
         } else {
             self.paginate_from_back(
                 map.prefix_rev(checkpoint, prefix)
                     .map_err(|e| db_error(e, "failed to create reverse iterator"))?,
                 pred,
+                None,
+            )
+        }
+    }
+
+    /// Paginate over the key-value pairs in `map` that start with the `base_prefix`, excluding
+    /// those that include the `exclude`, at the given `checkpoint`.
+    pub(super) fn paginate_exclude<B, P, K, V, E>(
+        &self,
+        map: &DbMap<K, V>,
+        checkpoint: u64,
+        base: &B,
+        exclude: &P,
+    ) -> Result<Response<K, V>, RpcError<E>>
+    where
+        B: Encode,
+        P: Encode,
+        K: Encode + Decode<()>,
+        V: Serialize + DeserializeOwned,
+    {
+        // TODO: support paginating over multiple inclusion and exclusion regions.
+        let exclude_prefix = key::encode(&(base, exclude));
+        if self.is_from_front {
+            self.paginate_from_front(
+                map.prefix(checkpoint, base)
+                    .map_err(|e| db_error(e, "failed to create forward iterator"))?,
+                |_, _, _| true,
+                Some(&exclude_prefix),
+            )
+        } else {
+            self.paginate_from_back(
+                map.prefix_rev(checkpoint, base)
+                    .map_err(|e| db_error(e, "failed to create reverse iterator"))?,
+                |_, _, _| true,
+                Some(&exclude_prefix),
             )
         }
     }
@@ -120,10 +157,13 @@ impl<'r> Page<'r> {
         self.is_from_front
     }
 
+    /// Paginate through the iterator, filtering out results that do not match `pred` and skipping
+    /// directly past entries with `exclude_prefix`.
     fn paginate_from_front<K, V, E>(
         &self,
         mut iter: FwdIter<'_, K, V>,
         mut pred: impl FnMut(&[u8], &K, &V) -> bool,
+        exclude_prefix: Option<&[u8]>,
     ) -> Result<Response<K, V>, RpcError<E>>
     where
         K: Decode<()>,
@@ -151,6 +191,15 @@ impl<'r> Page<'r> {
                 break;
             };
 
+            // Cursors should never point into an exclusion range and we expect callers to use
+            // consistent filters across pages.
+            if let Some(excl) = exclude_prefix
+                && cursor.starts_with(excl)
+            {
+                iter.skip_past(excl);
+                continue;
+            }
+
             if self.before.is_some_and(|b| cursor >= b) {
                 return Ok(Response {
                     has_prev: after.is_some(),
@@ -168,6 +217,14 @@ impl<'r> Page<'r> {
             }
         }
 
+        // It's possible to have hit the `limit` such that the iterator points at an excluded entry.
+        // This checks for and advances past it.
+        if let Some(excl) = exclude_prefix
+            && iter.raw_key().is_some_and(|k| k.starts_with(excl))
+        {
+            iter.skip_past(excl);
+        }
+
         Ok(Response {
             has_prev: after.is_some(),
             has_next: iter.valid(),
@@ -175,10 +232,13 @@ impl<'r> Page<'r> {
         })
     }
 
+    /// Paginate through the iterator, filtering out results that do not match `pred` and skipping
+    /// directly past entries with `exclude_prefix`.
     fn paginate_from_back<K, V, E>(
         &self,
         mut iter: RevIter<'_, K, V>,
         mut pred: impl FnMut(&[u8], &K, &V) -> bool,
+        exclude_prefix: Option<&[u8]>,
     ) -> Result<Response<K, V>, RpcError<E>>
     where
         K: Decode<()>,
@@ -206,6 +266,13 @@ impl<'r> Page<'r> {
                 break;
             };
 
+            if let Some(excl) = exclude_prefix
+                && cursor.starts_with(excl)
+            {
+                iter.skip_past(excl);
+                continue;
+            }
+
             if self.after.is_some_and(|a| a >= cursor) {
                 results.reverse();
                 return Ok(Response {
@@ -222,6 +289,14 @@ impl<'r> Page<'r> {
             if pred(&cursor, &key, &value) {
                 results.push((cursor, key, value))
             }
+        }
+
+        // It's possible to have hit the `limit` such that the iterator points at an excluded entry.
+        // This checks for and advances past it.
+        if let Some(excl) = exclude_prefix
+            && iter.raw_key().is_some_and(|k| k.starts_with(excl))
+        {
+            iter.skip_past(excl);
         }
 
         results.reverse();
@@ -691,5 +766,190 @@ mod tests {
                 .expect_err("Should fail with NotInRange error"),
             RpcError::NotInRange(2),
         ));
+    }
+
+    #[test]
+    fn paginate_exclude_forward() {
+        let d = tempfile::tempdir().unwrap();
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+
+        let cfs = vec![("test", rocksdb::Options::default())];
+
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+
+        let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
+
+        let mut batch = rocksdb::WriteBatch::default();
+        map.insert((0, 1, 0x0001), 10, &mut batch).unwrap();
+        map.insert((0, 1, 0x0002), 20, &mut batch).unwrap();
+        map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
+        map.insert((0, 2, 0x0004), 40, &mut batch).unwrap();
+        map.insert((0, 3, 0x0005), 50, &mut batch).unwrap();
+        db.write("batch", wm(0), batch).unwrap();
+        db.take_snapshot(wm(0));
+        // First page: limit 2
+        let resp = Page::from_request(&config(), &[], &[], 2, End::Front)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: false,
+                has_next: true,
+                results: vec![
+                    (key::encode(&(0u8, 1u8, 0x0001u16)), (0, 1, 0x0001), 10),
+                    (key::encode(&(0u8, 1u8, 0x0002u16)), (0, 1, 0x0002), 20),
+                ],
+            }
+        );
+
+        // Second page: cursor after (0,1,0x0002), should skip (0,2,...) and get (0,3,0x0005)
+        let after = &resp.results.last().unwrap().0; // should be key::encode(&(0u8, 1u8, 0x0002u16))
+        let resp = Page::from_request(&config(), after, &[], 2, End::Front)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: true,
+                has_next: false,
+                results: vec![(key::encode(&(0u8, 3u8, 0x0005u16)), (0, 3, 0x0005), 50),],
+            }
+        );
+    }
+
+    #[test]
+    fn paginate_exclude_backward() {
+        let d = tempfile::tempdir().unwrap();
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+
+        let cfs = vec![("test", rocksdb::Options::default())];
+
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+
+        let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
+
+        let mut batch = rocksdb::WriteBatch::default();
+        map.insert((0, 1, 0x0001), 10, &mut batch).unwrap();
+        map.insert((0, 1, 0x0002), 20, &mut batch).unwrap();
+        map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
+        map.insert((0, 2, 0x0004), 40, &mut batch).unwrap();
+        map.insert((0, 3, 0x0005), 50, &mut batch).unwrap();
+        db.write("batch", wm(0), batch).unwrap();
+        db.take_snapshot(wm(0));
+
+        // Page 1 from back: gets last 2 non-excluded results
+        let resp = Page::from_request(&config(), &[], &[], 2, End::Back)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: true,
+                has_next: false,
+                results: vec![
+                    (key::encode(&(0u8, 1u8, 0x0002u16)), (0, 1, 0x0002), 20),
+                    (key::encode(&(0u8, 3u8, 0x0005u16)), (0, 3, 0x0005), 50),
+                ],
+            }
+        );
+        // Results: [(0,1,0x0002), (0,3,0x0005)] - reversed to forward order
+
+        // Page 2: use first result's cursor as `before`
+        let before = &resp.results.first().unwrap().0;
+        let resp = Page::from_request(&config(), &[], before, 2, End::Back)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: false,
+                has_next: true,
+                results: vec![(key::encode(&(0u8, 1u8, 0x0001u16)), (0, 1, 0x0001), 10),],
+            }
+        );
+    }
+
+    /// When only excluded items remain after we hit the page limit, there should be no next page.
+    #[test]
+    fn paginate_exclude_forward_excluded_remaining() {
+        let d = tempfile::tempdir().unwrap();
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+
+        let cfs = vec![("test", rocksdb::Options::default())];
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+        let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
+
+        let mut batch = rocksdb::WriteBatch::default();
+        // 2 non-excluded, then 2 excluded at the end
+        map.insert((0, 1, 0x0001), 10, &mut batch).unwrap();
+        map.insert((0, 1, 0x0002), 20, &mut batch).unwrap();
+        map.insert((0, 2, 0x0003), 30, &mut batch).unwrap(); // excluded
+        map.insert((0, 2, 0x0004), 40, &mut batch).unwrap(); // excluded
+        db.write("batch", wm(0), batch).unwrap();
+        db.take_snapshot(wm(0));
+
+        // Request exactly 2 - should get both non-excluded, has_next should be FALSE
+        let resp = Page::from_request(&config(), &[], &[], 2, End::Front)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: false,
+                has_next: false, // Only excluded items remain
+                results: vec![
+                    (key::encode(&(0u8, 1u8, 0x0001u16)), (0, 1, 0x0001), 10),
+                    (key::encode(&(0u8, 1u8, 0x0002u16)), (0, 1, 0x0002), 20),
+                ],
+            }
+        );
+    }
+
+    /// When only excluded items remain before we hit the page limit, there should be no previous
+    /// page.
+    #[test]
+    fn paginate_exclude_has_prev_with_only_excluded_remaining_backward() {
+        let d = tempfile::tempdir().unwrap();
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+
+        let cfs = vec![("test", rocksdb::Options::default())];
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+        let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
+
+        let mut batch = rocksdb::WriteBatch::default();
+        // 2 excluded at the start, then 2 non-excluded
+        map.insert((0, 1, 0x0001), 10, &mut batch).unwrap(); // excluded
+        map.insert((0, 1, 0x0002), 20, &mut batch).unwrap(); // excluded
+        map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
+        map.insert((0, 2, 0x0004), 40, &mut batch).unwrap();
+        db.write("batch", wm(0), batch).unwrap();
+        db.take_snapshot(wm(0));
+
+        // Request exactly 2 from back - should get both non-excluded, has_prev should be FALSE
+        let resp = Page::from_request(&config(), &[], &[], 2, End::Back)
+            .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &1u8) // exclude type 1
+            .unwrap();
+
+        assert_eq!(
+            resp,
+            Response {
+                has_prev: false, // Only excluded items remain before
+                has_next: false,
+                results: vec![
+                    (key::encode(&(0u8, 2u8, 0x0003u16)), (0, 2, 0x0003), 30),
+                    (key::encode(&(0u8, 2u8, 0x0004u16)), (0, 2, 0x0004), 40),
+                ],
+            }
+        );
     }
 }

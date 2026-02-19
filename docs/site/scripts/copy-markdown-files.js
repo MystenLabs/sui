@@ -73,14 +73,9 @@ function copyMarkdownFiles(dir, baseDir = dir) {
       // Create directory structure if it doesn't exist
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
       fs.writeFileSync(outputPath, cleanContent, 'utf8');
-      console.log(`✓ Copied: ${relativePath}`);
     }
   });
 }
-
-console.log('📝 Starting markdown export...');
-console.log(`Source: ${contentDir}`);
-console.log(`Output: ${outputDir}\n`);
 
 // Create output directory
 fs.mkdirSync(outputDir, { recursive: true });

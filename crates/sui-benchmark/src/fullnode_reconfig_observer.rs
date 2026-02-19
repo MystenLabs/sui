@@ -8,7 +8,7 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
     epoch::committee_store::CommitteeStore,
     safe_client::SafeClientMetricsBase,
-    transaction_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
+    transaction_driver::{AuthorityAggregatorUpdatable, ReconfigObserver},
 };
 use sui_rpc_api::Client;
 use tracing::{debug, error, trace};
