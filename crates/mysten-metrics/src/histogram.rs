@@ -392,7 +392,7 @@ mod tests {
             .get_metric()
             .iter()
             .map(|m| {
-                let value = m.get_gauge().get_value();
+                let value = m.gauge.value();
                 let mut key = String::new();
                 for label in m.get_label() {
                     key.push_str("::");
@@ -408,7 +408,7 @@ mod tests {
             .get_metric()
             .iter()
             .map(|m| {
-                let value = m.get_counter().get_value();
+                let value = m.counter.value();
                 let mut key = String::new();
                 for label in m.get_label() {
                     key.push_str("::");
