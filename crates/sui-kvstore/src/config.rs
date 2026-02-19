@@ -68,6 +68,10 @@ pub struct PipelineLayer {
     pub epoch_end: ConcurrentLayer,
     pub protocol_configs: ConcurrentLayer,
     pub epoch_legacy: ConcurrentLayer,
+    pub packages: ConcurrentLayer,
+    pub packages_by_id: ConcurrentLayer,
+    pub packages_by_checkpoint: ConcurrentLayer,
+    pub system_packages: ConcurrentLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be

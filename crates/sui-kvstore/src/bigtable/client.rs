@@ -36,6 +36,7 @@ use tonic::transport::ClientTlsConfig;
 
 use crate::CheckpointData;
 use crate::KeyValueStoreReader;
+use crate::PackageData;
 use crate::ProtocolConfigData;
 use crate::TransactionData;
 use crate::TransactionEventsData;
@@ -54,6 +55,7 @@ use crate::bigtable::proto::bigtable::v2::request_stats::StatsView;
 use crate::bigtable::proto::bigtable::v2::row_filter::Chain;
 use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
+use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
 use crate::tables;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
@@ -537,13 +539,20 @@ impl BigTableClient {
         Ok(result)
     }
 
-    async fn reversed_scan(
+    /// Scan a range of rows with optional start/end keys, limit, and direction.
+    /// Applies `CellsPerColumnLimitFilter(1)` like `multi_get_internal`.
+    pub(crate) async fn range_scan(
         &mut self,
         table_name: &str,
-        upper_limit: Bytes,
+        start_key: Option<Bytes>,
+        end_key: Option<Bytes>,
+        limit: i64,
+        reversed: bool,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
         let start_time = Instant::now();
-        let result = self.reversed_scan_internal(table_name, upper_limit).await;
+        let result = self
+            .range_scan_internal(table_name, start_key, end_key, limit, reversed)
+            .await;
         let elapsed_ms = start_time.elapsed().as_millis() as f64;
         let labels = [&self.client_name, table_name];
         match &self.metrics {
@@ -568,23 +577,31 @@ impl BigTableClient {
         }
     }
 
-    async fn reversed_scan_internal(
+    async fn range_scan_internal(
         &mut self,
         table_name: &str,
-        upper_limit: Bytes,
+        start_key: Option<Bytes>,
+        end_key: Option<Bytes>,
+        limit: i64,
+        reversed: bool,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
         let range = RowRange {
-            start_key: None,
-            end_key: Some(EndKey::EndKeyClosed(upper_limit)),
+            start_key: start_key.map(StartKey::StartKeyClosed),
+            end_key: end_key.map(EndKey::EndKeyClosed),
         };
+        let filter = Some(RowFilter {
+            filter: Some(Filter::CellsPerColumnLimitFilter(1)),
+        });
         let request = ReadRowsRequest {
             table_name: format!("{}{}", self.table_prefix, table_name),
-            rows_limit: 1,
+            rows_limit: limit,
             rows: Some(RowSet {
                 row_keys: vec![],
                 row_ranges: vec![range],
             }),
-            reversed: true,
+            filter,
+            reversed,
+            request_stats_view: 2,
             ..ReadRowsRequest::default()
         };
         self.read_rows(request, table_name).await
@@ -702,9 +719,9 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
-        let upper_limit = Self::raw_object_key(&ObjectKey::max_for_id(object_id));
+        let upper_limit = Bytes::from(Self::raw_object_key(&ObjectKey::max_for_id(object_id)));
         if let Some((_, row)) = self
-            .reversed_scan(tables::objects::NAME, upper_limit.into())
+            .range_scan(tables::objects::NAME, None, Some(upper_limit), 1, true)
             .await?
             .pop()
         {
@@ -743,7 +760,7 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_latest_epoch(&mut self) -> Result<Option<EpochData>> {
         let upper_limit = tables::epochs::encode_key_upper_bound();
         match self
-            .reversed_scan(tables::epochs::NAME, upper_limit)
+            .range_scan(tables::epochs::NAME, None, Some(upper_limit), 1, true)
             .await?
             .pop()
         {
@@ -787,6 +804,206 @@ impl KeyValueStoreReader for BigTableClient {
             results.push((transaction_digest, events_data));
         }
 
+        Ok(results)
+    }
+
+    async fn get_package_original_ids(
+        &mut self,
+        package_ids: &[ObjectID],
+    ) -> Result<Vec<(ObjectID, ObjectID)>> {
+        let keys: Vec<Vec<u8>> = package_ids
+            .iter()
+            .map(|id| tables::packages_by_id::encode_key(id.as_ref()))
+            .collect();
+        let mut results = vec![];
+        for (key, row) in self
+            .multi_get(tables::packages_by_id::NAME, keys, None)
+            .await?
+        {
+            let original_id_bytes = tables::packages_by_id::decode(&row)?;
+            let pkg_id = ObjectID::from_bytes(key.as_ref())?;
+            let original_id = ObjectID::from_bytes(&original_id_bytes)?;
+            results.push((pkg_id, original_id));
+        }
+        Ok(results)
+    }
+
+    async fn get_packages_by_version(
+        &mut self,
+        keys: &[(ObjectID, u64)],
+    ) -> Result<Vec<PackageData>> {
+        let raw_keys: Vec<Vec<u8>> = keys
+            .iter()
+            .map(|(original_id, version)| {
+                tables::packages::encode_key(original_id.as_ref(), *version)
+            })
+            .collect();
+        let mut results = vec![];
+        for (key, row) in self
+            .multi_get(tables::packages::NAME, raw_keys, None)
+            .await?
+        {
+            results.push(tables::packages::decode(key.as_ref(), &row)?);
+        }
+        Ok(results)
+    }
+
+    async fn get_package_latest(
+        &mut self,
+        original_id: ObjectID,
+        cp_bound: u64,
+    ) -> Result<Option<PackageData>> {
+        // Over-fetch up to 50 versions in reverse order, then filter by cp_bound.
+        // Packages rarely have 50+ upgrades.
+        let start_key = Bytes::from(tables::packages::encode_key(original_id.as_ref(), 0));
+        let end_key = Bytes::from(tables::packages::encode_key_upper_bound(
+            original_id.as_ref(),
+        ));
+
+        let rows = self
+            .range_scan(
+                tables::packages::NAME,
+                Some(start_key),
+                Some(end_key),
+                50,
+                true,
+            )
+            .await?;
+
+        for (key, row) in rows {
+            let pkg = tables::packages::decode(key.as_ref(), &row)?;
+            if pkg.cp_sequence_number <= cp_bound {
+                return Ok(Some(pkg));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn get_package_versions(
+        &mut self,
+        original_id: ObjectID,
+        cp_bound: u64,
+        after_version: Option<u64>,
+        before_version: Option<u64>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<PackageData>> {
+        let start_version = after_version.map(|v| v + 1).unwrap_or(0);
+        let end_version = before_version.map(|v| v - 1).unwrap_or(u64::MAX);
+
+        let start_key = Bytes::from(tables::packages::encode_key(
+            original_id.as_ref(),
+            start_version,
+        ));
+        let end_key = Bytes::from(tables::packages::encode_key(
+            original_id.as_ref(),
+            end_version,
+        ));
+
+        // Over-fetch to account for versions beyond cp_bound that need filtering out.
+        let fetch_limit = (limit as i64).saturating_mul(2).min(200);
+        let rows = self
+            .range_scan(
+                tables::packages::NAME,
+                Some(start_key),
+                Some(end_key),
+                fetch_limit,
+                descending,
+            )
+            .await?;
+
+        let mut results = Vec::with_capacity(limit);
+        for (key, row) in rows {
+            if results.len() >= limit {
+                break;
+            }
+            let pkg = tables::packages::decode(key.as_ref(), &row)?;
+            if pkg.cp_sequence_number <= cp_bound {
+                results.push(pkg);
+            }
+        }
+        Ok(results)
+    }
+
+    async fn get_packages_by_checkpoint_range(
+        &mut self,
+        cp_after: Option<u64>,
+        cp_before: Option<u64>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<PackageData>> {
+        let start_cp = cp_after.map(|c| c + 1).unwrap_or(0);
+        let end_cp = cp_before.map(|c| c - 1).unwrap_or(u64::MAX);
+
+        let start_key = Bytes::from(tables::packages_by_checkpoint::encode_key(
+            start_cp, &[0u8; 32], 0,
+        ));
+        let end_key = Bytes::from(tables::packages_by_checkpoint::encode_key(
+            end_cp,
+            &[0xff; 32],
+            u64::MAX,
+        ));
+
+        let rows = self
+            .range_scan(
+                tables::packages_by_checkpoint::NAME,
+                Some(start_key),
+                Some(end_key),
+                limit as i64,
+                descending,
+            )
+            .await?;
+
+        // Extract (original_id, version) from index keys, then batch-fetch from packages table.
+        let lookup_keys: Vec<(ObjectID, u64)> = rows
+            .iter()
+            .map(|(key, _)| {
+                let (_, original_id, version) =
+                    tables::packages_by_checkpoint::decode_key(key.as_ref())?;
+                Ok((ObjectID::from_bytes(&original_id)?, version))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        self.get_packages_by_version(&lookup_keys).await
+    }
+
+    async fn get_system_packages(
+        &mut self,
+        cp_bound: u64,
+        after_original_id: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<PackageData>> {
+        let start_key = after_original_id.map(|id| {
+            // Start just after the given original_id by appending a byte.
+            let mut key = tables::system_packages::encode_key(id.as_ref());
+            key.push(0);
+            Bytes::from(key)
+        });
+        let end_key = Some(Bytes::from(tables::system_packages::encode_key(
+            &[0xff; 32],
+        )));
+
+        let rows = self
+            .range_scan(
+                tables::system_packages::NAME,
+                start_key,
+                end_key,
+                limit as i64,
+                false,
+            )
+            .await?;
+
+        let mut results = Vec::with_capacity(rows.len());
+        for (key, row) in &rows {
+            let first_cp = tables::system_packages::decode(row)?;
+            if first_cp > cp_bound {
+                continue;
+            }
+            let original_id = ObjectID::from_bytes(key.as_ref())?;
+            if let Some(pkg) = self.get_package_latest(original_id, cp_bound).await? {
+                results.push(pkg);
+            }
+        }
         Ok(results)
     }
 }

@@ -38,6 +38,7 @@ futures.workspace = true
 sui-indexer-alt-framework = { workspace = true, features = ["cluster"] }
 sui-keys.workspace = true
 sui-rpc.workspace = true
+sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 tokio-stream.workspace = true
 url.workspace = true
