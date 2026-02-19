@@ -33,6 +33,7 @@ use crate::{
 };
 
 /// Identifies an observer node by its network public key.
+#[allow(unused)]
 pub(crate) type NodeId = NetworkPublicKey;
 
 // Tonic generated RPC stubs.
@@ -186,6 +187,7 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
 #[async_trait]
 pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     /// Handles the request to fetch blocks by references from an observer peer.
+    #[allow(unused)]
     async fn handle_fetch_blocks(
         &self,
         peer: NodeId,
@@ -193,6 +195,7 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<Vec<Bytes>>;
 
     /// Handles the request to fetch commits by index range from an observer peer.
+    #[allow(unused)]
     async fn handle_fetch_commits(
         &self,
         peer: NodeId,
