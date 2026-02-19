@@ -1094,60 +1094,48 @@ fn value(
         // Expansion-y things
         // These could likely be discharged during expansion instead.
         //
-        E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(None))) => {
+        E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(_))) => {
             use T::ExpListItem as TI;
+            let is_macro = match &*bt {
+                sp!(_, T::BuiltinFunction_::Assert(is_macro)) => is_macro,
+                _ => unreachable!(),
+            };
             let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
-                E::ExpList(arg_list) => arg_list.try_into().unwrap(),
-                _ => {
-                    context.add_diag(ice!((eloc, "ICE type checking assert failed")));
-                    return error_exp(eloc);
-                }
-            };
-            let (econd, ecode) = match (cond_item, code_item) {
-                (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
-                _ => {
-                    context.add_diag(ice!((eloc, "ICE type checking assert failed")));
-                    return error_exp(eloc);
-                }
-            };
-            let cond_value = value(context, block, Some(&tbool(eloc)), econd);
-            let code_value = value(context, block, None, ecode);
-            let cond = bind_exp(context, block, cond_value);
-            let code = bind_exp(context, block, code_value);
-            let if_block = make_block!();
-            let else_block = make_block!(make_command(eloc, C::Abort(code.exp.loc, code)));
-            block.push_back(sp(
-                eloc,
-                S::IfElse {
-                    cond: Box::new(cond),
-                    if_block,
-                    else_block,
+                E::ExpList(arg_list) => match arg_list.try_into() {
+                    Ok(arr) => arr,
+                    Err(_) => {
+                        // invalid call arity should be caught during typing
+                        debug_assert!(context.env.has_errors());
+                        return error_exp(eloc);
+                    }
                 },
-            ));
-            unit_exp(eloc)
-        }
-        E::Builtin(bt, arguments)
-            if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(Some(_)))) =>
-        {
-            use T::ExpListItem as TI;
-            let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
-                E::ExpList(arg_list) => arg_list.try_into().unwrap(),
                 _ => {
-                    context.add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    // invalid call to assert should be caught during typing
+                    debug_assert!(context.env.has_errors());
                     return error_exp(eloc);
                 }
             };
             let (econd, ecode) = match (cond_item, code_item) {
                 (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
                 _ => {
+                    debug_assert!(false, "there should be no splat items yet");
                     context.add_diag(ice!((eloc, "ICE type checking assert failed")));
                     return error_exp(eloc);
                 }
             };
-            let cond = value(context, block, Some(&tbool(eloc)), econd);
-            let mut else_block = make_block!();
-            let code = value(context, &mut else_block, None, ecode);
             let if_block = make_block!();
+            let mut else_block = make_block!();
+            let (cond, code) = if is_macro.is_some() {
+                let cond = value(context, block, Some(&tbool(eloc)), econd);
+                let code = value(context, &mut else_block, None, ecode);
+                (cond, code)
+            } else {
+                let cond_value = value(context, block, Some(&tbool(eloc)), econd);
+                let code_value = value(context, block, None, ecode);
+                let cond = bind_exp(context, block, cond_value);
+                let code = bind_exp(context, block, code_value);
+                (cond, code)
+            };
             else_block.push_back(make_command(eloc, C::Abort(code.exp.loc, code)));
             block.push_back(sp(
                 eloc,
