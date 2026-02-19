@@ -89,10 +89,6 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
                 }
             }
 
-            if draining && permits == limit {
-                break;
-            }
-
             tokio::select! {
                 biased;
 

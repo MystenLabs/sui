@@ -115,28 +115,35 @@ pub(super) fn collector<H: Handler + 'static>(
                 }
             }
 
-            // Eagerly build and send batches while enough data is pending.
-            while pending_rows >= H::MIN_EAGER_ROWS {
-                let (batch, watermark, batch_len) =
-                    build_batch::<H>(&*handler, &mut pending, &checkpoint_lag_reporter, &metrics);
-                pending_rows -= batch_len;
-
-                let batched_rows = BatchedRows {
-                    batch,
-                    batch_len,
-                    watermark,
-                };
-
-                if tx.send(batched_rows).await.is_err() {
-                    info!(
-                        pipeline = H::NAME,
-                        "Committer closed channel, stopping collector"
+            // Eagerly build and send batches if enough data is pending. Once we start
+            // batching, flush everything including any small tail below the threshold.
+            if pending_rows >= H::MIN_EAGER_ROWS {
+                loop {
+                    let (batch, watermark, batch_len) = build_batch::<H>(
+                        &*handler,
+                        &mut pending,
+                        &checkpoint_lag_reporter,
+                        &metrics,
                     );
-                    return Ok(());
-                }
+                    pending_rows -= batch_len;
 
-                if batch_len == 0 {
-                    break;
+                    let batched_rows = BatchedRows {
+                        batch,
+                        batch_len,
+                        watermark,
+                    };
+
+                    if tx.send(batched_rows).await.is_err() {
+                        info!(
+                            pipeline = H::NAME,
+                            "Committer closed channel, stopping collector"
+                        );
+                        return Ok(());
+                    }
+
+                    if batch_len == 0 {
+                        break;
+                    }
                 }
             }
 
