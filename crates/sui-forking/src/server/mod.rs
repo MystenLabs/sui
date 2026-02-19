@@ -11,6 +11,7 @@ use axum::{
     routing::{get, post},
 };
 use prometheus::Registry;
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
@@ -21,6 +22,17 @@ use sui_data_store::{
     CheckpointStore as _, SetupStore as _,
     stores::{DataStore, FileSystemStore, ReadThroughStore},
 };
+use sui_futures::service::Service;
+use sui_rpc::proto::sui::rpc::v2::{
+    ledger_service_server::LedgerServiceServer,
+    subscription_service_server::SubscriptionServiceServer,
+};
+use sui_rpc::proto::sui::rpc::v2::{
+    state_service_server::StateServiceServer,
+    transaction_execution_service_server::TransactionExecutionServiceServer,
+};
+use sui_rpc_api::subscription::SubscriptionService as RpcSubscriptionService;
+use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::{
     accumulator_root::get_accumulator_root_obj_initial_shared_version,
     base_types::SuiAddress,
@@ -43,21 +55,8 @@ use crate::grpc::{
     transaction_execution_service::ForkingTransactionExecutionService,
 };
 use crate::{
-    graphql::GraphQLClient, network::ForkNetwork, seeds::InitialAccounts, store::ForkingStore,
+    graphql::GraphQLClient, network::ForkNetwork, seeds::StartupSeeds, store::ForkingStore,
 };
-
-use rand::rngs::OsRng;
-use sui_futures::service::Service;
-use sui_rpc::proto::sui::rpc::v2::{
-    ledger_service_server::LedgerServiceServer,
-    subscription_service_server::SubscriptionServiceServer,
-};
-use sui_rpc::proto::sui::rpc::v2::{
-    state_service_server::StateServiceServer,
-    transaction_execution_service_server::TransactionExecutionServiceServer,
-};
-use sui_rpc_api::subscription::SubscriptionService as RpcSubscriptionService;
-use sui_swarm_config::network_config_builder::ConfigBuilder;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AdvanceClockRequest {
@@ -314,7 +313,7 @@ async fn faucet(
 
 /// Start the forking server
 pub async fn start_server(
-    initial_accounts: InitialAccounts,
+    startup_seeds: StartupSeeds,
     fork_network: ForkNetwork,
     checkpoint: Option<u64>,
     fullnode_url: Option<String>,
@@ -367,7 +366,7 @@ pub async fn start_server(
         forked_at_checkpoint,
         startup_checkpoint,
         &client,
-        &initial_accounts,
+        &startup_seeds,
         protocol_version,
         fork_network.protocol_chain(),
         fs_store,
@@ -524,7 +523,7 @@ async fn initialize_simulacrum(
     forked_at_checkpoint: u64,
     startup_checkpoint: u64,
     client: &GraphQLClient,
-    initial_accounts: &InitialAccounts,
+    startup_seeds: &StartupSeeds,
     protocol_version: u64,
     chain: Chain,
     fs_store: FileSystemStore,
@@ -560,8 +559,8 @@ async fn initialize_simulacrum(
     let mut store = ForkingStore::new(forked_at_checkpoint, fs_store, fs_gql_store);
     store.insert_checkpoint(verified_checkpoint.clone());
     store.insert_checkpoint_contents(startup_checkpoint_data.contents.clone());
-    initial_accounts
-        .prefetch_owned_objects(
+    startup_seeds
+        .prefetch_startup_objects(
             &store,
             client.endpoint(),
             startup_checkpoint,

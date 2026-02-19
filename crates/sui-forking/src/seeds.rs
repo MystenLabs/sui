@@ -18,7 +18,7 @@ use crate::store::ForkingStore;
 pub const OWNED_OBJECT_LOOKBACK_LIMIT_MS: u64 = 3_600_000;
 
 #[derive(Args, Clone, Debug, Default)]
-pub struct InitialAccounts {
+pub struct StartupSeeds {
     /// Addresses whose owned objects should be prefetched at startup.
     ///
     /// Only allowed when the selected startup checkpoint is at most 1 hour old.
@@ -41,7 +41,7 @@ enum SeedMode {
     Objects,
 }
 
-impl InitialAccounts {
+impl StartupSeeds {
     /// Resolves the startup prefetch mode from CLI inputs.
     fn seed_mode(&self) -> Result<SeedMode> {
         match (self.accounts.is_empty(), self.objects.is_empty()) {
@@ -99,7 +99,7 @@ impl InitialAccounts {
     /// `Accounts` mode discovers owned objects through GraphQL and applies the 1h lookback
     /// restriction. `Objects` mode fetches only explicit IDs and fails startup
     /// if any requested object is missing at the startup checkpoint.
-    pub async fn prefetch_owned_objects(
+    pub async fn prefetch_startup_objects(
         &self,
         store: &ForkingStore,
         graphql_endpoint: &str,
@@ -314,12 +314,12 @@ mod tests {
     use clap::Parser;
     use sui_types::base_types::{ObjectID, SuiAddress};
 
-    use super::{InitialAccounts, OWNED_OBJECT_LOOKBACK_LIMIT_MS, SeedMode};
+    use super::{OWNED_OBJECT_LOOKBACK_LIMIT_MS, SeedMode, StartupSeeds};
 
     #[derive(Parser, Debug)]
     struct SeedCli {
         #[clap(flatten)]
-        seeds: InitialAccounts,
+        seeds: StartupSeeds,
     }
 
     fn parse_address(value: &str) -> SuiAddress {
@@ -334,18 +334,18 @@ mod tests {
 
     #[test]
     fn resolves_seed_mode() {
-        let no_seed = InitialAccounts::default();
+        let no_seed = StartupSeeds::default();
         assert_eq!(no_seed.seed_mode().expect("mode"), SeedMode::NoSeed);
 
         let address =
             parse_address("0x0000000000000000000000000000000000000000000000000000000000000002");
-        let accounts = InitialAccounts {
+        let accounts = StartupSeeds {
             accounts: vec![address],
             objects: vec![],
         };
         assert_eq!(accounts.seed_mode().expect("mode"), SeedMode::Accounts);
 
-        let objects = InitialAccounts {
+        let objects = StartupSeeds {
             accounts: vec![],
             objects: vec![parse_object_id("0x5")],
         };
@@ -354,23 +354,22 @@ mod tests {
 
     #[test]
     fn rejects_accounts_mode_for_old_checkpoint() {
-        let err =
-            InitialAccounts::validate_accounts_mode_age(100, OWNED_OBJECT_LOOKBACK_LIMIT_MS + 1)
-                .expect_err("old checkpoint must fail for accounts mode");
+        let err = StartupSeeds::validate_accounts_mode_age(100, OWNED_OBJECT_LOOKBACK_LIMIT_MS + 1)
+            .expect_err("old checkpoint must fail for accounts mode");
         assert!(err.to_string().contains("--objects"));
     }
 
     #[test]
     fn allows_accounts_mode_at_or_within_limit() {
-        InitialAccounts::validate_accounts_mode_age(100, OWNED_OBJECT_LOOKBACK_LIMIT_MS)
+        StartupSeeds::validate_accounts_mode_age(100, OWNED_OBJECT_LOOKBACK_LIMIT_MS)
             .expect("exactly at limit should pass");
-        InitialAccounts::validate_accounts_mode_age(100, OWNED_OBJECT_LOOKBACK_LIMIT_MS - 1)
+        StartupSeeds::validate_accounts_mode_age(100, OWNED_OBJECT_LOOKBACK_LIMIT_MS - 1)
             .expect("below limit should pass");
     }
 
     #[test]
     fn rejects_accounts_mode_when_old_even_if_resume() {
-        InitialAccounts::validate_accounts_mode_age(100, OWNED_OBJECT_LOOKBACK_LIMIT_MS + 10_000)
+        StartupSeeds::validate_accounts_mode_age(100, OWNED_OBJECT_LOOKBACK_LIMIT_MS + 10_000)
             .expect_err("old checkpoint should fail regardless of fresh/bootstrap state");
     }
 
@@ -381,7 +380,7 @@ mod tests {
         let id3 = parse_object_id("0x33");
         let requested = vec![id1, id2, id3];
         let fetched = vec![Some(()), None, Some(())];
-        let missing = InitialAccounts::collect_missing_object_ids(&requested, &fetched);
+        let missing = StartupSeeds::collect_missing_object_ids(&requested, &fetched);
         assert_eq!(missing, vec![id2]);
     }
 

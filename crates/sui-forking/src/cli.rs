@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 
 use sui_types::base_types::SuiAddress;
 
-use crate::seeds::InitialAccounts;
+use crate::seeds::StartupSeeds;
 
 const RPC_PORT: &str = "9000";
 const SERVER_PORT: &str = "9001";
@@ -60,7 +60,7 @@ pub enum Commands {
         /// Startup seed inputs.
         /// Use either `--accounts` or `--objects` (mutually exclusive), or neither.
         #[clap(flatten)]
-        accounts: InitialAccounts,
+        seeds: StartupSeeds,
     },
     /// Advance checkpoint by 1
     AdvanceCheckpoint {

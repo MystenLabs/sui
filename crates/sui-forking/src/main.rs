@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
             network,
             fullnode_url,
             data_dir,
-            accounts,
+            seeds,
         } => {
             let fork_network = ForkNetwork::parse(&network)?;
 
@@ -94,7 +94,7 @@ async fn main() -> Result<()> {
                     .keep()
             };
             start_server(
-                accounts,
+                seeds,
                 fork_network,
                 checkpoint,
                 fullnode_url,

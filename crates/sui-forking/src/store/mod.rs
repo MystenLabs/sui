@@ -4,13 +4,13 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use tracing::{error, warn};
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
-use anyhow::anyhow;
 use simulacrum::SimulatorStore;
 use sui_data_store::stores::{DataStore, FileSystemStore, ReadThroughStore};
 use sui_data_store::{
