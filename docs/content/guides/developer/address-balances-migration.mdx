@@ -183,33 +183,9 @@ tx.transferObjects([coin], recipient);
 The `FundsWithdrawal` input takes three fields:
 - `reservation`: Specifies the maximum amount to withdraw. Use `{ $kind: 'MaxAmountU64', MaxAmountU64: string }`.
 - `typeArg`: The balance type. Use `{ $kind: 'Balance', Balance: coinType }` where `coinType` is like `'0x2::sui::SUI'`.
-- `withdrawFrom`: The source of funds. Use `{ $kind: 'Sender', Sender: true }` for the transaction sender, or `{ $kind: 'Sponsor', Sponsor: true }` for the gas sponsor.
+- `withdrawFrom`: The source of funds. Use `{ $kind: 'Sender', Sender: true }` for the transaction sender.
 
-#### Withdrawing from Sponsor's Address Balance
-
-To withdraw from the gas sponsor's address balance instead of the sender's:
-
-```typescript
-const withdrawal = tx.addInput(
-    'withdrawal',
-    Inputs.FundsWithdrawal({
-        reservation: {
-            $kind: 'MaxAmountU64',
-            MaxAmountU64: String(amount),
-        },
-        typeArg: {
-            $kind: 'Balance',
-            Balance: coinType,
-        },
-        withdrawFrom: {
-            $kind: 'Sponsor',
-            Sponsor: true,
-        },
-    }),
-);
-```
-
-This requires the transaction to have a sponsor (via `tx.setSponsor()`) and the sponsor must sign.
+Note: Explicit `FundsWithdrawal` inputs currently only support withdrawing from the sender's address balance. Sponsor withdrawals (`withdrawFrom: Sponsor`) are supported for gas payments (empty `gas_data.payment`) but not yet for explicit PTB withdrawal inputs.
 
 ## Sending Funds
 
@@ -285,7 +261,7 @@ public fun send_funds<T>(balance: Balance<T>, recipient: address)
 public fun send_funds<T>(coin: Coin<T>, recipient: address)
 ```
 
-### CLI
+### Sending Funds via the CLI
 
 [Sui CLI Reference - PTB](https://docs.sui.io/references/cli/ptb):
 
@@ -371,7 +347,15 @@ Requirements for address balance gas payments:
 - Timestamp-based expiration is not currently supported
 - The transaction kind must be `ProgrammableTransaction`
 
-The `nonce` field provides replay protection for stateless transactions. Use a unique value (e.g., random number, incrementing counter) for each transaction.
+The `nonce` field differentiates otherwise identical transactions. Unlike EVM chains, the nonce has no semantic requirements—it does not need to be sequential, and there is no "nonce gap" problem. It simply allows you to submit two transactions that would otherwise have the same digest. In most cases, generate the nonce randomly or use an incrementing counter in your application:
+
+```rust
+// Random nonce
+let nonce: u32 = rand::random();
+
+// Or incrementing counter
+let nonce: u32 = self.next_nonce.fetch_add(1, Ordering::SeqCst);
+```
 
 ### Sponsored Transactions
 
