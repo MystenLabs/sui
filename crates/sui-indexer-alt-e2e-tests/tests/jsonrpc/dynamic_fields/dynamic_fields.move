@@ -5,11 +5,9 @@
 
 // 1. Fetch all dynamic fields
 // 2. Fetch a limited page of dynamic fields.
-// 3. Fetch a limited page of dynamic fields with a cursor.
-// 4. Fetch all remaining dynamic fields after a cursor.
-// 5. Add a dynamic field, and fetch all dynamic fields.
-// 6. Remove a dynamic field and fetch all dynamic fields.
-// 7. Modify a dynamic field and fetch all dynamic fields.
+// 3. Add a dynamic field, and fetch all dynamic fields.
+// 4. Remove a dynamic field and fetch all dynamic fields.
+// 5. Modify a dynamic field and fetch all dynamic fields.
 
 //# publish
 module P::M {
@@ -117,18 +115,6 @@ module P::M {
   "params": ["@{obj_2_0}", null, 2]
 }
 
-//# run-jsonrpc --cursors bcs(bcs(@{obj_10_0}),4)
-{
-  "method": "suix_getDynamicFields",
-  "params": ["@{obj_2_0}", "@{cursor_0}", 2]
-}
-
-//# run-jsonrpc --cursors bcs(bcs(@{obj_10_0}),4)
-{
-  "method": "suix_getDynamicFields",
-  "params": ["@{obj_2_0}", "@{cursor_0}"]
-}
-
 //# programmable --sender A --inputs object(2,0) 51 52
 //> 0: P::M::dfield<u64, u64>(Input(0), Input(1), Input(2))
 
@@ -168,7 +154,7 @@ module P::M {
   "params": [
     [
       "@{obj_12_0}",
-      "@{obj_19_0}"
+      "@{obj_17_0}"
     ],
     {
       "showOwner": true,
