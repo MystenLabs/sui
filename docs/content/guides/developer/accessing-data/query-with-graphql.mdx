@@ -628,12 +628,6 @@ query {
 
 ### Find the last 10 transactions that are not a system transaction
 
-:::caution
-
-This example demonstrates future functionality.
-
-:::
-
 ```graphql
 query {
   transactions(last: 10, filter: {kind: PROGRAMMABLE_TX}) {
@@ -691,11 +685,9 @@ When using the online IDE, copy the following JSON to the **Variables** window, 
 
 Find the last 10 transactions that called the `public_transfer` function as a Move call transaction command.
 
-:::caution
+:::info
 
 This example makes use of the `last` filter. In this case, it returns only the last 10 transactions known to the service.
-
-This example demonstrates future functionality.
 
 :::
 
@@ -715,12 +707,6 @@ This example demonstrates future functionality.
 ### Find transaction balance changes
 
 Find the balance changes of all the transactions where a given address called a staking-related function. This might be useful when you want to get your staking or unstaking history.
-
-:::caution
-
-This example demonstrates future functionality.
-
-:::
 
 ```graphql
 query ($address: SuiAddress!) {
@@ -1134,4 +1120,3 @@ query {
 <RelatedLink to="/guides/operator/sui-full-node.mdx" />
 <RelatedLink href="https://graphql.testnet.sui.io/graphql" label="Sui Testnet GraphiQL (public good)" desc="Sui GraphiQL IDE for Testnet (Public good)." />
 <RelatedLink href="https://graphql.mainnet.sui.io/graphql" label="Sui Mainnet GraphiQL (public good)" desc="Sui GraphiQL IDE for Mainnet (Public good)." />
-
