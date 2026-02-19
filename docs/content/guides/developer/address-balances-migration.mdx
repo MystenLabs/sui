@@ -16,13 +16,66 @@ Previously, balances on Sui were computed by summing the values of all `Coin<T>`
 - No coin selection logic required
 - Automatic deposit merging into a single canonical balance
 - Stateless transaction construction without querying object states
-- Direct gas payment from address SUI balances
+- Direct gas payment from SUI address balances
 
 ## Funding Transactions from Address Balances
 
-### Withdrawing Funds
+### Before: Coin Selection
 
-To use address balance funds in a programmable transaction, add a `FundsWithdrawalArg` to declare the withdrawal:
+With the coin-based model, funding a transaction requires:
+
+1. **Query owned coins**: Call `suix_getCoins` or `suix_getAllCoins` to retrieve all `Coin<T>` objects owned by the address
+2. **Select coins**: Implement coin selection logic to choose a set of coins whose values sum to at least the required amount
+3. **Handle object references**: Include the exact `ObjectRef` (object ID, version, digest) for each selected coin in the transaction
+4. **Merge if needed**: If multiple coins are selected, add `MergeCoins` commands to combine them before use
+5. **Manage concurrency**: Track which coins are "in flight" to avoid double-spending across parallel transactions
+
+```typescript
+// Before: Coin-based funding
+const coins = await client.getCoins({ owner: address, coinType: '0x2::sui::SUI' });
+
+// Select coins that sum to required amount
+let selected = [];
+let total = 0n;
+for (const coin of coins.data) {
+    selected.push(coin);
+    total += BigInt(coin.balance);
+    if (total >= requiredAmount) break;
+}
+
+if (total < requiredAmount) {
+    throw new Error('Insufficient balance');
+}
+
+// Use selected coins in transaction
+const tx = new Transaction();
+if (selected.length > 1) {
+    tx.mergeCoins(selected[0].coinObjectId, selected.slice(1).map(c => c.coinObjectId));
+}
+const [coin] = tx.splitCoins(selected[0].coinObjectId, [requiredAmount]);
+```
+
+This approach has several challenges:
+- Requires up-to-date object state (version, digest) at transaction construction time
+- Concurrent transactions risk using stale object references
+- Complex coin selection algorithms needed for optimal gas usage
+- Must handle coin fragmentation over time
+
+### After: Address Balance Withdrawals
+
+With address balances, declare the amount needed and the protocol handles the rest:
+
+```typescript
+// After: Address balance funding
+const tx = new Transaction();
+
+// CoinWithBalance handles everything automatically
+const coin = tx.add(coinWithBalance({ type: '0x2::sui::SUI', balance: requiredAmount }));
+```
+
+The SDK's `CoinWithBalance` intent automatically selects address balance funds or coins as needed. No object queries, no coin selection, no concurrency management.
+
+For manual PTB construction, add a `FundsWithdrawalArg` to declare the withdrawal:
 
 ```rust
 // Rust
@@ -79,17 +132,6 @@ public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: With
 
 ### TypeScript SDK
 
-The TypeScript SDK's `CoinWithBalance` intent automatically selects address balance funds or coins as needed:
-
-```typescript
-import { Transaction, Inputs } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-
-// CoinWithBalance handles address balance vs coin selection automatically
-tx.add(coinWithBalance({ type: '0x2::sui::SUI', balance: 1000n }));
-```
-
 For manual PTB construction with address balance withdrawals:
 
 ```typescript
@@ -121,11 +163,57 @@ const coin = tx.moveCall({
 });
 ```
 
-## Sending Funds to Address Balances
+## Sending Funds
 
-To deposit funds into a recipient's address balance instead of transferring a coin object:
+### Before: Coin Transfers
 
-### Move
+To send funds to another address with coins:
+
+1. **Select or create a coin**: Either use an existing coin of the exact amount, or split from a larger coin
+2. **Transfer the object**: Use `transfer::public_transfer` to send the coin object to the recipient
+3. **Recipient receives an object**: The recipient now owns a new `Coin<T>` object they must manage
+
+```typescript
+// Before: Transfer a coin object
+const tx = new Transaction();
+const [coin] = tx.splitCoins(tx.gas, [amount]);
+tx.transferObjects([coin], recipient);
+```
+
+```move
+// Before: In Move contract
+public fun send_payment(coin: Coin<SUI>, recipient: address) {
+    transfer::public_transfer(coin, recipient);
+}
+```
+
+Each transfer creates a new object for the recipient, contributing to object proliferation. Recipients accumulate many small coin objects over time, requiring periodic consolidation.
+
+### After: Address Balance Deposits
+
+With address balances, funds merge automatically into the recipient's canonical balance:
+
+```typescript
+// After: Send to address balance
+const tx = new Transaction();
+const [coin] = tx.splitCoins(tx.gas, [amount]);
+tx.moveCall({
+    target: '0x2::coin::send_funds',
+    typeArguments: ['0x2::sui::SUI'],
+    arguments: [coin, tx.pure.address(recipient)],
+});
+```
+
+```move
+// After: In Move contract
+public fun send_payment(coin: Coin<SUI>, recipient: address) {
+    coin::send_funds(coin, recipient);
+}
+```
+
+The recipient's balance increases without creating new objects. Multiple deposits from different senders all merge into one balance.
+
+### Move Functions
 
 ```move
 // Send a Balance<T> to an address balance
@@ -133,21 +221,6 @@ public fun send_funds<T>(balance: Balance<T>, recipient: address)
 
 // Send a Coin<T> to an address balance (converts to balance internally)
 public fun send_funds<T>(coin: Coin<T>, recipient: address)
-```
-
-### PTB Construction
-
-Replace `transfer::public_transfer(coin, recipient)` with:
-
-```rust
-// Rust
-builder.programmable_move_call(
-    SUI_FRAMEWORK_PACKAGE_ID,
-    Identifier::new("coin").unwrap(),
-    Identifier::new("send_funds").unwrap(),
-    vec![coin_type],
-    vec![coin_arg, recipient_arg],
-);
 ```
 
 ### CLI
@@ -168,19 +241,47 @@ sui client ptb \
 
 ## Paying Gas from Address Balances
 
-To pay gas from your address balance instead of a gas coin:
+### Before: Gas Coin Management
 
-1. Leave `gas_data.payment` empty (no gas coins)
-2. Use `TransactionExpiration::ValidDuring` with epoch constraints
-3. Include a chain identifier and nonce for replay protection
+With coin-based gas payment:
+
+1. **Query gas coins**: Fetch owned SUI coins to find suitable gas payment objects
+2. **Select gas coin(s)**: Choose coin(s) with sufficient balance for the gas budget
+3. **Include object references**: Provide exact `ObjectRef` for each gas coin in `gas_data.payment`
+4. **Handle gas coin mutations**: The gas coin is mutated by the transaction, changing its version
 
 ```rust
+// Before: Gas paid from coin objects
+TransactionData::V1(TransactionDataV1 {
+    kind: tx_kind,
+    sender,
+    gas_data: GasData {
+        payment: vec![gas_coin_ref],  // Must have current ObjectRef
+        owner: sender,
+        price: rgp,
+        budget: 10_000_000,
+    },
+    expiration: TransactionExpiration::None,
+})
+```
+
+Gas coin management creates coordination challenges:
+- Must query current gas coin state before each transaction
+- Parallel transactions require separate gas coins or careful sequencing
+- Gas coin version changes after each transaction
+
+### After: Stateless Gas Payment
+
+With address balance gas payment, no gas coin queries needed:
+
+```rust
+// After: Gas paid from address balance
 TransactionData::V1(TransactionDataV1 {
     kind: tx_kind,
     sender,
     gas_data: GasData {
         payment: vec![],  // Empty - gas paid from address balance
-        owner: sender,    // Gas owner (sender or sponsor)
+        owner: sender,
         price: rgp,
         budget: 10_000_000,
     },
@@ -202,9 +303,20 @@ Requirements for address balance gas payments:
 - Timestamp-based expiration is not currently supported
 - The transaction kind must be `ProgrammableTransaction`
 
+The `nonce` field provides replay protection for stateless transactions. Use a unique value (e.g., random number, incrementing counter) for each transaction.
+
 ### Sponsored Transactions
 
-For sponsored transactions with address balance gas:
+#### Before: Sponsored Gas with Coins
+
+Gas sponsorship with coins requires coordination between user and sponsor:
+
+1. User constructs transaction without gas
+2. Sponsor selects gas coin(s) and adds to transaction
+3. Both parties sign
+4. Risk: sponsor's gas coins could be locked if user doesn't complete signing
+
+#### After: Sponsored Gas with Address Balances
 
 ```rust
 TransactionData::V1(TransactionDataV1 {
@@ -229,14 +341,37 @@ TransactionData::V1(TransactionDataV1 {
 
 Both sender and sponsor must sign. Storage rebates are credited to the sponsor's address balance.
 
-## Querying Address Balances via RPC
+Benefits over coin-based sponsorship:
+- No gas coin locking risk
+- Sponsor doesn't need to manage gas coin inventory
+- Enables permissionless public gas stations
 
-### JSON-RPC
+## Querying Balances via RPC
 
-Use the existing balance methods. A new `fundsInAddressBalance` field indicates address balance holdings:
+### Before: Summing Coin Objects
+
+To determine total balance with coins:
+
+```typescript
+// Before: Sum all coin objects
+const coins = await client.getAllCoins({ owner: address, coinType: '0x2::sui::SUI' });
+const totalBalance = coins.data.reduce((sum, coin) => sum + BigInt(coin.balance), 0n);
+```
+
+Or use the convenience method that does this server-side:
 
 ```bash
-# Get single balance
+curl -s https://fullnode.testnet.sui.io \
+    -H 'Content-Type: application/json' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"suix_getBalance","params":["<address>", "0x2::sui::SUI"]}'
+```
+
+### After: Including Address Balances
+
+The same RPC methods now include address balance information. A new `fundsInAddressBalance` field indicates address balance holdings:
+
+```bash
+# JSON-RPC
 curl -s https://fullnode.testnet.sui.io \
     -H 'Content-Type: application/json' \
     -d '{
@@ -258,7 +393,7 @@ Response:
 }
 ```
 
-The `totalBalance` includes both coin objects and address balance funds.
+The `totalBalance` includes both coin objects and address balance funds. To get only the coin-based balance, subtract `fundsInAddressBalance` from `totalBalance`.
 
 ```bash
 # Get all balances
@@ -277,7 +412,6 @@ curl -s https://fullnode.testnet.sui.io \
 Use `GetBalance` and `ListBalances` from `StateService`:
 
 ```bash
-# Get balance for specific coin type
 buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService/GetBalance \
     -d '{
         "owner": "<address>",
@@ -340,17 +474,46 @@ buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService
 
 ## Computing Balance Changes from Checkpoint Data
 
-Balance changes from a transaction combine coin object changes and accumulator events.
+### Before: Coin Object Diffs
 
-### Algorithm
+To compute balance changes from checkpoint data with coins only:
 
-1. **Subtract input coins**: For each input coin object, subtract its value from `(owner, coin_type)`
-2. **Add output coins**: For each mutated/created coin object, add its value to `(owner, coin_type)`
-3. **Process accumulator events**: For each accumulator event with a `Balance<T>` type:
-   - `Split` operation: Subtract the amount (funds withdrawn)
-   - `Merge` operation: Add the amount (funds deposited)
+1. Get input objects (coins at their pre-transaction versions)
+2. Get output objects (coins at their post-transaction versions)
+3. For each `(address, coin_type)` pair, sum output coin values minus input coin values
 
 ```rust
+// Before: Coin-only balance changes
+fn derive_coin_balance_changes(
+    input_objects: &[Object],
+    output_objects: &[Object],
+) -> BTreeMap<(SuiAddress, TypeTag), i128> {
+    let mut balances = BTreeMap::new();
+
+    // Subtract input coins
+    for obj in input_objects {
+        if let Some((owner, coin_type, value)) = extract_coin_info(obj) {
+            *balances.entry((owner, coin_type)).or_default() -= value as i128;
+        }
+    }
+
+    // Add output coins
+    for obj in output_objects {
+        if let Some((owner, coin_type, value)) = extract_coin_info(obj) {
+            *balances.entry((owner, coin_type)).or_default() += value as i128;
+        }
+    }
+
+    balances
+}
+```
+
+### After: Coins Plus Accumulator Events
+
+With address balances, you must also process accumulator events from `TransactionEffects`:
+
+```rust
+// After: Include accumulator events
 use sui_types::balance_change::{derive_balance_changes, BalanceChange};
 
 let balance_changes: Vec<BalanceChange> = derive_balance_changes(
@@ -360,9 +523,16 @@ let balance_changes: Vec<BalanceChange> = derive_balance_changes(
 );
 ```
 
-### Accumulator Events
+The algorithm:
+1. **Subtract input coins**: For each input coin object, subtract its value from `(owner, coin_type)`
+2. **Add output coins**: For each mutated/created coin object, add its value to `(owner, coin_type)`
+3. **Process accumulator events**: For each accumulator event with a `Balance<T>` type:
+   - `Split` operation: Subtract the amount (funds withdrawn from address balance)
+   - `Merge` operation: Add the amount (funds deposited to address balance)
 
-Accumulator events are embedded in `TransactionEffects`. Access them via:
+### Accessing Accumulator Events
+
+Accumulator events are embedded in `TransactionEffects`:
 
 ```rust
 use sui_types::effects::TransactionEffectsAPI;
