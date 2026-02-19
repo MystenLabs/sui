@@ -376,8 +376,7 @@ pub async fn start_server(
     let simulacrum = Arc::new(RwLock::new(simulacrum));
 
     let registry = Registry::new_custom(Some("sui_forking".into()), None)
-        .context("Failed to create Prometheus registry.")
-        .unwrap();
+        .context("Failed to create Prometheus registry.")?;
     let (checkpoint_sender, subscription_service_handle) = RpcSubscriptionService::build(&registry);
 
     let chain_id = resolve_chain_identifier(&fork_network, &client).await?;
@@ -412,9 +411,10 @@ pub async fn start_server(
 
     // Set up graceful shutdown handler
     let shutdown_signal = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to install CTRL+C signal handler");
+        if let Err(err) = tokio::signal::ctrl_c().await {
+            warn!("Failed to install CTRL+C signal handler: {err}");
+            return;
+        }
         info!("\nReceived CTRL+C, shutting down gracefully...");
     };
 
@@ -532,7 +532,7 @@ async fn initialize_simulacrum(
     let config = ConfigBuilder::new_with_temp_dir()
         .rng(&mut rng)
         .with_chain_start_timestamp_ms(0)
-        .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
+        .deterministic_committee_size(NonZeroUsize::MIN)
         .with_protocol_version(protocol_version.into())
         .with_chain_override(chain)
         .build();
@@ -565,10 +565,12 @@ async fn initialize_simulacrum(
 
     // Fetch the system state at this forked checkpoint and update the validator set to match the
     // one in our custom config, because we do not have the actual validators' keys from network.
-    let system_state = get_sui_system_state(&store).await.unwrap();
+    let system_state = get_sui_system_state(&store)
+        .await
+        .context("failed to read Sui system state from startup checkpoint")?;
     let mut inner = match system_state {
         SuiSystemState::V2(inner) => inner,
-        _ => panic!("Unsupported system state version, expected SuiSystemState::V2"),
+        _ => anyhow::bail!("Unsupported system state version, expected SuiSystemState::V2"),
     };
     inner.validators = match config.genesis.sui_system_object() {
         SuiSystemState::V1(genesis_inner) => genesis_inner.validators,

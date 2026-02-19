@@ -11,7 +11,7 @@ mod seeds;
 mod server;
 mod store;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use tracing::info;
 
@@ -82,11 +82,15 @@ async fn main() -> Result<()> {
             let data_ingestion_path = if let Some(data_dir) = data_dir {
                 let path = PathBuf::from(data_dir);
                 if !path.exists() {
-                    std::fs::create_dir_all(&path).expect("Failed to create data directory");
+                    std::fs::create_dir_all(&path).with_context(|| {
+                        format!("failed to create data directory at {}", path.display())
+                    })?;
                 }
                 path
             } else {
-                mysten_common::tempdir().unwrap().keep()
+                mysten_common::tempdir()
+                    .context("failed to create temporary data directory")?
+                    .keep()
             };
             start_server(
                 accounts,

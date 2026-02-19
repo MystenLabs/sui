@@ -170,12 +170,12 @@ impl<'d> RpcService<'d> {
         let reflection_v1 = reflection_v1
             .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
             .build_v1()
-            .unwrap();
+            .context("Failed to build v1 gRPC reflection service")?;
 
         let reflection_v1alpha = reflection_v1alpha
             .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
             .build_v1alpha()
-            .unwrap();
+            .context("Failed to build v1alpha gRPC reflection service")?;
 
         let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -255,7 +255,7 @@ impl<'d> RpcService<'d> {
 impl Default for RpcArgs {
     fn default() -> Self {
         Self {
-            rpc_listen_address: "0.0.0.0:7001".parse().unwrap(),
+            rpc_listen_address: SocketAddr::from(([0, 0, 0, 0], 7001)),
             tls: TlsArgs::default(),
         }
     }

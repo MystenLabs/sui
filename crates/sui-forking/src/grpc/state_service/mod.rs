@@ -24,8 +24,10 @@ impl StateService for ForkingStateService {
         &self,
         request: tonic::Request<grpc::GetCoinInfoRequest>,
     ) -> Result<tonic::Response<grpc::GetCoinInfoResponse>, tonic::Status> {
-        println!("get_coin: request={:?}", request);
-        todo!()
+        let _ = (&self.context, request);
+        Err(tonic::Status::unimplemented(
+            "get_coin_info is not implemented in sui-forking yet",
+        ))
         // let checkpoint = self.checkpoint(&request)?;
         // let response = get_coin(self, checkpoint, request.into_inner())?;
         // Ok(checkpointed_response(checkpoint, response)?)
@@ -35,8 +37,10 @@ impl StateService for ForkingStateService {
         &self,
         request: tonic::Request<grpc::ListDynamicFieldsRequest>,
     ) -> Result<tonic::Response<grpc::ListDynamicFieldsResponse>, tonic::Status> {
-        println!("list_dynamic_fields: request={:?}", request);
-        todo!()
+        let _ = (&self.context, request);
+        Err(tonic::Status::unimplemented(
+            "list_dynamic_fields is not implemented in sui-forking yet",
+        ))
         // let checkpoint = self.checkpoint(&request)?;
         // let response = list_dynamic_fields(self, checkpoint, request.into_inner())?;
         // Ok(checkpointed_response(checkpoint, response)?)
@@ -46,8 +50,10 @@ impl StateService for ForkingStateService {
         &self,
         request: tonic::Request<grpc::GetBalanceRequest>,
     ) -> Result<tonic::Response<grpc::GetBalanceResponse>, tonic::Status> {
-        println!("get balance: request={:?}", request);
-        todo!()
+        let _ = (&self.context, request);
+        Err(tonic::Status::unimplemented(
+            "get_balance is not implemented in sui-forking yet",
+        ))
         // let checkpoint = self.checkpoint(&request)?;
         // let response = get_balance(self, checkpoint, request.into_inner())?;
         // Ok(checkpointed_response(checkpoint, response)?)
@@ -57,8 +63,10 @@ impl StateService for ForkingStateService {
         &self,
         request: tonic::Request<grpc::ListBalancesRequest>,
     ) -> Result<tonic::Response<grpc::ListBalancesResponse>, tonic::Status> {
-        println!("list balances: request={:?}", request);
-        todo!()
+        let _ = (&self.context, request);
+        Err(tonic::Status::unimplemented(
+            "list_balances is not implemented in sui-forking yet",
+        ))
         // let checkpoint = self.checkpoint(&request)?;
         // let response = list_balances(self, checkpoint, request.into_inner())?;
         // Ok(checkpointed_response(checkpoint, response)?)

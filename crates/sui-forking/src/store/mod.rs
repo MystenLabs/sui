@@ -4,12 +4,13 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use tracing::warn;
+use tracing::{error, warn};
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
+use anyhow::anyhow;
 use simulacrum::SimulatorStore;
 use sui_data_store::stores::{DataStore, FileSystemStore, ReadThroughStore};
 use sui_data_store::{
@@ -197,10 +198,19 @@ impl ForkingStore {
 
     /// Returns the transaction by digest from local filesystem transaction cache.
     pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
-        let tx = self
+        let tx = match self
             .fs_store
             .transaction_data_and_effects(&digest.to_string())
-            .unwrap();
+        {
+            Ok(tx) => tx,
+            Err(err) => {
+                error!(
+                    transaction_digest = %digest,
+                    "failed to read transaction data/effects from local store: {err}"
+                );
+                return None;
+            }
+        };
 
         let tx = match tx {
             None => return None,
@@ -220,10 +230,19 @@ impl ForkingStore {
         &self,
         digest: &TransactionDigest,
     ) -> Option<TransactionEffects> {
-        let tx = self
+        let tx = match self
             .fs_store
             .transaction_data_and_effects(&digest.to_string())
-            .unwrap();
+        {
+            Ok(tx) => tx,
+            Err(err) => {
+                error!(
+                    transaction_digest = %digest,
+                    "failed to read transaction effects from local store: {err}"
+                );
+                return None;
+            }
+        };
 
         tx.map(|tx_info| tx_info.effects)
     }
@@ -237,7 +256,16 @@ impl ForkingStore {
     /// RPC at the forked checkpoint.
     pub fn get_object(&self, id: &ObjectID) -> Option<Object> {
         // fetch object at latest version from the primary cache (FileSystem).
-        let object = self.fs_store.get_object_latest(id).unwrap();
+        let object = match self.fs_store.get_object_latest(id) {
+            Ok(object) => object,
+            Err(err) => {
+                error!(
+                    object_id = %id,
+                    "failed to read latest object from local filesystem store: {err}"
+                );
+                None
+            }
+        };
 
         if let Some((obj, _)) = object {
             return Some(obj);
@@ -247,15 +275,20 @@ impl ForkingStore {
         // first try in the primary cache (FileSystemStore) and then fallback to the RPC data store
         // (DataStore) if not found, and it will be written back to the primary cache for future
         // reads.
-        let objects = self
-            .fs_gql_store
-            .get_objects(&[ObjectKey {
-                object_id: *id,
-                version_query: sui_data_store::VersionQuery::AtCheckpoint(
-                    self.forked_at_checkpoint,
-                ),
-            }])
-            .unwrap();
+        let objects = match self.fs_gql_store.get_objects(&[ObjectKey {
+            object_id: *id,
+            version_query: sui_data_store::VersionQuery::AtCheckpoint(self.forked_at_checkpoint),
+        }]) {
+            Ok(objects) => objects,
+            Err(err) => {
+                error!(
+                    object_id = %id,
+                    checkpoint = self.forked_at_checkpoint,
+                    "failed to fetch object at fork checkpoint via read-through store: {err}"
+                );
+                return None;
+            }
+        };
 
         let first = objects.first().and_then(|opt| opt.as_ref());
         first.map(|(obj, _)| obj.clone())
@@ -263,13 +296,20 @@ impl ForkingStore {
 
     /// Returns an object at an exact version using read-through object fetch.
     pub fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
-        let objects = self
-            .fs_gql_store
-            .get_objects(&[ObjectKey {
-                object_id: *id,
-                version_query: sui_data_store::VersionQuery::Version(version.into()),
-            }])
-            .unwrap();
+        let objects = match self.fs_gql_store.get_objects(&[ObjectKey {
+            object_id: *id,
+            version_query: sui_data_store::VersionQuery::Version(version.into()),
+        }]) {
+            Ok(objects) => objects,
+            Err(err) => {
+                error!(
+                    object_id = %id,
+                    object_version = version.value(),
+                    "failed to fetch object version via read-through store: {err}"
+                );
+                return None;
+            }
+        };
         let first = objects.first().and_then(|opt| opt.as_ref());
 
         first.map(|(obj, _)| obj.clone())
@@ -342,9 +382,16 @@ impl ForkingStore {
                 .iter()
                 .cloned()
                 .collect();
-            let committee =
-                Committee::new(checkpoint.epoch().checked_add(1).unwrap(), next_committee);
-            self.insert_committee(committee);
+            if let Some(next_epoch) = checkpoint.epoch().checked_add(1) {
+                let committee = Committee::new(next_epoch, next_committee);
+                self.insert_committee(committee);
+            } else {
+                warn!(
+                    sequence_number = *checkpoint.sequence_number(),
+                    current_epoch = checkpoint.epoch(),
+                    "skipping committee insertion due to epoch overflow"
+                );
+            }
         }
 
         if let Some(previous_pending) = &self.pending_checkpoint {
@@ -389,7 +436,7 @@ impl ForkingStore {
             Ok(Some(_)) => return,
             Ok(None) => {}
             Err(err) => {
-                warn!(
+                error!(
                     sequence_number,
                     "failed to check for existing checkpoint before persistence: {err}"
                 );
@@ -399,14 +446,14 @@ impl ForkingStore {
         match self.get_checkpoint_data(checkpoint, contents) {
             Ok(full_checkpoint) => {
                 if let Err(err) = self.fs_store.write_checkpoint(&full_checkpoint) {
-                    warn!(
+                    error!(
                         sequence_number,
                         "failed to persist checkpoint to checkpoint store: {err}"
                     );
                 }
             }
             Err(err) => {
-                warn!(
+                error!(
                     sequence_number,
                     "failed to build full checkpoint data for persistence: {err}"
                 );
@@ -419,17 +466,6 @@ impl ForkingStore {
         self.epoch_to_committee
             .entry(committee.epoch)
             .or_insert(committee);
-        // let epoch = committee.epoch as usize;
-        //
-        // if self.epoch_to_committee.get(epoch).is_some() {
-        //     return;
-        // }
-        //
-        // if self.epoch_to_committee.len() == epoch {
-        //     self.epoch_to_committee.push(committee);
-        // } else {
-        //     panic!("committee was inserted into EpochCommitteeMap out of order");
-        // }
     }
 
     /// Inserts the transaction, its effects, events, and the written objects into the store. The
@@ -446,14 +482,27 @@ impl ForkingStore {
     ) {
         let transaction_digest = *effects.transaction_digest();
         let tx_digest = transaction_digest.to_string();
+        let checkpoint_sequence = match self.get_latest_checkpoint_sequence_number() {
+            Ok(sequence) => sequence,
+            Err(err) => {
+                error!(
+                    transaction_digest = %transaction_digest,
+                    "skipping transaction persistence because latest checkpoint is unavailable: {err}"
+                );
+                return;
+            }
+        };
         let tx_info = TransactionInfo {
             data: transaction.data().inner().intent_message().value.clone(),
             effects,
-            checkpoint: self.get_latest_checkpoint_sequence_number().unwrap(),
+            checkpoint: checkpoint_sequence,
         };
-        self.fs_store
-            .write_transaction(&tx_digest, tx_info)
-            .unwrap();
+        if let Err(err) = self.fs_store.write_transaction(&tx_digest, tx_info) {
+            error!(
+                transaction_digest = %transaction_digest,
+                "failed to persist transaction data/effects to local store: {err}"
+            );
+        }
         self.events.insert(transaction_digest, events);
 
         let objects = written_objects
@@ -468,17 +517,28 @@ impl ForkingStore {
             })
             .collect();
 
-        self.fs_gql_store.write_objects(objects).unwrap();
+        if let Err(err) = self.fs_gql_store.write_objects(objects) {
+            error!(
+                transaction_digest = %transaction_digest,
+                "failed to persist written objects for executed transaction: {err}"
+            );
+        }
     }
 
-    /// Placeholder for direct transaction insertion; currently unused.
-    pub fn insert_transaction(&mut self, _transaction: VerifiedTransaction) {
-        todo!()
+    /// Placeholder for direct transaction insertion; currently unused in forking mode.
+    pub fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
+        warn!(
+            transaction_digest = %transaction.digest(),
+            "insert_transaction is not implemented for ForkingStore; use insert_executed_transaction"
+        );
     }
 
-    /// Placeholder for direct effects insertion; currently unused.
-    pub fn insert_transaction_effects(&mut self, _effects: TransactionEffects) {
-        todo!()
+    /// Placeholder for direct effects insertion; currently unused in forking mode.
+    pub fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
+        warn!(
+            transaction_digest = %effects.transaction_digest(),
+            "insert_transaction_effects is not implemented for ForkingStore; use insert_executed_transaction"
+        );
     }
 
     /// Stores transaction events in-memory.
@@ -489,10 +549,24 @@ impl ForkingStore {
     /// Placeholder for object update path; currently unused.
     pub fn update_objects(
         &mut self,
-        _written_objects: BTreeMap<ObjectID, Object>,
+        written_objects: BTreeMap<ObjectID, Object>,
         _deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
-        todo!()
+        let objects = written_objects
+            .into_iter()
+            .map(|(id, object)| {
+                let version = object.version().into();
+                let key = ObjectKey {
+                    object_id: id,
+                    version_query: sui_data_store::VersionQuery::Version(version),
+                };
+                (key, object, version)
+            })
+            .collect();
+
+        if let Err(err) = self.fs_gql_store.write_objects(objects) {
+            error!("failed to persist updated objects to local store: {err}");
+        }
     }
 }
 
@@ -601,7 +675,11 @@ impl GetModule for ForkingStore {
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
         let module = self
             .get_module(id)?
-            .map(|bytes| CompiledModule::deserialize_with_defaults(&bytes).unwrap());
+            .map(|bytes| {
+                CompiledModule::deserialize_with_defaults(&bytes)
+                    .map_err(|err| anyhow!("failed to deserialize compiled module {id:?}: {err}"))
+            })
+            .transpose()?;
 
         Ok(module.map(Arc::new))
     }
@@ -611,7 +689,7 @@ impl ModuleResolver for ForkingStore {
     type Error = anyhow::Error;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        get_module(self, module_id).map_err(|e| anyhow::anyhow!(e.to_string()))
+        get_module(self, module_id).map_err(|e| anyhow!(e.to_string()))
     }
 }
 
@@ -743,36 +821,6 @@ impl SimulatorStore for ForkingStore {
         self
     }
 }
-
-// #[async_trait]
-// impl ObjectProvider for ForkingStore {
-//     type Error = anyhow::Error;
-//     async fn get_object(
-//         &self,
-//         id: &ObjectID,
-//         version: &SequenceNumber,
-//     ) -> Result<Object, Self::Error> {
-//         match self.get_object_at_version(id, *version) {
-//             Some(obj) => Ok(obj.clone()),
-//             None => Err(anyhow::anyhow!(
-//                 "Object {:?} at version {:?} not found",
-//                 id,
-//                 version
-//             )),
-//         }
-//     }
-//
-//     async fn find_object_lt_or_eq_version(
-//         &self,
-//         id: &ObjectID,
-//         version: &SequenceNumber,
-//     ) -> Result<Option<Object>, Self::Error> {
-//         match self.get_object(id) {
-//             Some(obj) if obj.version() <= *version => Ok(Some(obj.clone())),
-//             _ => Ok(None),
-//         }
-//     }
-// }
 
 impl ReadStore for ForkingStore {
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
