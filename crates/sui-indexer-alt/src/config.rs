@@ -79,6 +79,7 @@ pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
+    pub max_rows_per_second: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -153,6 +154,7 @@ impl IndexerConfig {
                     collect_interval_ms: Some(50),
                     watermark_interval_ms: Some(50),
                     write_concurrency: Some(1),
+                    ..Default::default()
                 },
                 pruner: PrunerLayer {
                     interval_ms: Some(50),
@@ -229,6 +231,7 @@ impl CommitterLayer {
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
             watermark_interval_jitter_ms: 0,
+            max_rows_per_second: self.max_rows_per_second.or(base.max_rows_per_second),
         })
     }
 }
@@ -334,6 +337,7 @@ impl Merge for CommitterLayer {
             write_concurrency: other.write_concurrency.or(self.write_concurrency),
             collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
             watermark_interval_ms: other.watermark_interval_ms.or(self.watermark_interval_ms),
+            max_rows_per_second: other.max_rows_per_second.or(self.max_rows_per_second),
         })
     }
 }
@@ -438,6 +442,7 @@ impl From<CommitterConfig> for CommitterLayer {
             write_concurrency: Some(config.write_concurrency),
             collect_interval_ms: Some(config.collect_interval_ms),
             watermark_interval_ms: Some(config.watermark_interval_ms),
+            max_rows_per_second: config.max_rows_per_second,
         }
     }
 }
@@ -477,6 +482,7 @@ mod tests {
                     write_concurrency: Some(10),
                     collect_interval_ms: Some(1000),
                     watermark_interval_ms: None,
+                    ..Default::default()
                 }),
                 checkpoint_lag: Some(100),
             }),
@@ -485,6 +491,7 @@ mod tests {
                     write_concurrency: Some(5),
                     collect_interval_ms: Some(500),
                     watermark_interval_ms: None,
+                    ..Default::default()
                 }),
                 ..Default::default()
             }),
@@ -497,6 +504,7 @@ mod tests {
                     write_concurrency: Some(5),
                     collect_interval_ms: None,
                     watermark_interval_ms: Some(500),
+                    ..Default::default()
                 }),
                 checkpoint_lag: Some(200),
             }),
@@ -515,6 +523,7 @@ mod tests {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
+                        ..
                     }),
                     checkpoint_lag: Some(200),
                 }),
@@ -523,6 +532,7 @@ mod tests {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
+                        ..
                     }),
                     pruner: None,
                 }),
@@ -538,6 +548,7 @@ mod tests {
                         write_concurrency: Some(10),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
+                        ..
                     }),
                     checkpoint_lag: Some(100),
                 }),
@@ -546,6 +557,7 @@ mod tests {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
+                        ..
                     }),
                     pruner: None,
                 }),
