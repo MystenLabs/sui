@@ -416,19 +416,25 @@ Benefits over coin-based sponsorship:
 
 ## Querying Balances via RPC
 
-### Before: Summing Coin Objects
+### Before: Querying Coin-Based Balances
 
-To determine total balance with coins:
+To determine total balance, the RPC layer sums all coin objects for you:
 
-[TypeScript SDK - SuiClient.getAllCoins](https://sdk.mystenlabs.com/typedoc/classes/_mysten_sui.client.SuiClient.html#getAllCoins):
+[TypeScript SDK - SuiClient.getBalance](https://sdk.mystenlabs.com/typescript/sui-client#getbalance):
 
 ```typescript
-// Before: Sum all coin objects
-const coins = await client.getAllCoins({ owner: address, coinType: '0x2::sui::SUI' });
-const totalBalance = coins.data.reduce((sum, coin) => sum + BigInt(coin.balance), 0n);
+// Before: Get balance (RPC sums all coin objects)
+const balance = await client.getBalance({ owner: address, coinType: '0x2::sui::SUI' });
+console.log(balance.totalBalance);  // Sum of all Coin<SUI> objects
 ```
 
-Or use the convenience method that does this server-side.
+```typescript
+// Get all balances for an address
+const balances = await client.getAllBalances({ owner: address });
+for (const balance of balances) {
+    console.log(`${balance.coinType}: ${balance.totalBalance}`);
+}
+```
 
 [JSON-RPC Reference - suix_getBalance](https://docs.sui.io/sui-api-ref#suix_getbalance):
 
@@ -437,6 +443,8 @@ curl -s https://fullnode.testnet.sui.io \
     -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"suix_getBalance","params":["<address>", "0x2::sui::SUI"]}'
 ```
+
+The `totalBalance` field represented the sum of all `Coin<T>` object values owned by the address.
 
 ### After: Including Address Balances
 
