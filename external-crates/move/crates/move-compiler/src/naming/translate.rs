@@ -14,7 +14,7 @@ use crate::{
         ast::{self as E, AbilitySet, Ellipsis, ModuleIdent, Mutability, Visibility},
         name_validation::is_valid_datatype_or_constant_name as is_constant_name,
     },
-    ice,
+    ice, ice_assert,
     naming::{
         ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
         fake_natives,
@@ -4039,18 +4039,26 @@ fn lvalue(
                     context.add_diag(diag!(Declarations::DuplicateItem, primary, secondary));
                 }
                 if v.is_syntax_identifier() {
-                    debug_assert!(
-                        matches!(case, C::Assign),
-                        "ICE this should fail during parsing"
-                    );
-                    let msg = format!(
-                        "Cannot assign to argument for parameter '{}'. \
-                        Arguments must be used in value positions",
-                        v.0
-                    );
-                    let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
-                    diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
-                    context.add_diag(diag);
+                    match case {
+                        C::Bind => {
+                            ice_assert!(
+                                context,
+                                context.env.has_errors(),
+                                loc,
+                                "Syntax identifiers for macros should have been rejected already"
+                            );
+                        }
+                        C::Assign => {
+                            let msg = format!(
+                                "Cannot assign to argument for parameter '{}'. \
+                                Arguments must be used in value positions",
+                                v.0
+                            );
+                            let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
+                            diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
+                            context.add_diag(diag);
+                        }
+                    }
                     return None;
                 }
                 let nv = match case {
