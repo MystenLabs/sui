@@ -21,6 +21,7 @@ pub struct CommitterLayer {
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
     pub watermark_interval_jitter_ms: Option<u64>,
+    pub max_rows_per_second: Option<u64>,
 }
 
 impl CommitterLayer {
@@ -34,6 +35,7 @@ impl CommitterLayer {
             watermark_interval_jitter_ms: self
                 .watermark_interval_jitter_ms
                 .unwrap_or(base.watermark_interval_jitter_ms),
+            max_rows_per_second: self.max_rows_per_second.or(base.max_rows_per_second),
         }
     }
 }
