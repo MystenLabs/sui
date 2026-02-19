@@ -33,8 +33,8 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
-        BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream, ObserverNetworkService,
-        ValidatorNetworkService,
+        BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream, ObserverBlockStreamItem,
+        ObserverNetworkService, ValidatorNetworkService,
     },
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
@@ -53,6 +53,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
+    rx_accepted_block_broadcast: broadcast::Receiver<VerifiedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
     transaction_certifier: TransactionCertifier,
     dag_state: Arc<RwLock<DagState>>,
@@ -69,6 +70,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
+        rx_accepted_block_broadcast: broadcast::Receiver<VerifiedBlock>,
         transaction_certifier: TransactionCertifier,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
@@ -81,6 +83,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             synchronizer,
             core_dispatcher,
             rx_block_broadcast,
+            rx_accepted_block_broadcast,
             subscription_counter,
             transaction_certifier,
             dag_state,
@@ -647,10 +650,96 @@ impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
     async fn handle_stream_blocks(
         &self,
         _peer: NodeId,
-        _highest_round_per_authority: Vec<u64>,
+        highest_round_per_authority: Vec<u64>,
     ) -> ConsensusResult<ObserverBlockStream> {
-        // TODO: Implement observer block streaming
-        todo!("Observer block streaming not yet implemented")
+        if highest_round_per_authority.len() != self.context.committee.size() {
+            return Err(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
+                highest_round_per_authority.len(),
+                self.context.committee.size(),
+            ));
+        }
+
+        // Subscribe to the live channel BEFORE reading the DagState snapshot. This eliminates
+        // a race where a block accepted between the snapshot read and resubscribe() would fall
+        // in neither stream. With this ordering, such a block is guaranteed to be delivered via
+        // the live channel. Blocks accepted in the narrow window between resubscribe() and the
+        // snapshot read may appear in both streams; they are deduplicated below.
+        let rx = self.rx_accepted_block_broadcast.resubscribe();
+
+        // Collect all accepted blocks from DagState that the observer hasn't yet seen,
+        // sorted by round for consistent ordering.
+        let (past_blocks, current_commit_index) = {
+            let dag_state = self.dag_state.read();
+            let current_commit_index = dag_state.last_commit_index();
+            let mut past_blocks = Vec::new();
+
+            for (authority, _) in self.context.committee.authorities() {
+                let from_round = highest_round_per_authority[authority.value()] as Round + 1;
+                past_blocks.extend(dag_state.get_cached_blocks(authority, from_round));
+            }
+
+            past_blocks.sort_unstable_by_key(|b| b.round());
+            (past_blocks, current_commit_index)
+        };
+
+        // Track the highest round delivered per authority by the past stream. Any live stream
+        // block with round <= this threshold was already covered by the past stream and must be
+        // skipped to avoid duplicates introduced by the subscribe-before-snapshot ordering.
+        let mut max_past_round_per_authority = vec![0u32; self.context.committee.size()];
+        for block in &past_blocks {
+            let idx = block.author().value();
+            max_past_round_per_authority[idx] =
+                max_past_round_per_authority[idx].max(block.round());
+        }
+
+        let past_stream =
+            stream::iter(
+                past_blocks
+                    .into_iter()
+                    .map(move |block| ObserverBlockStreamItem {
+                        block: block.serialized().clone(),
+                        highest_commit_index: current_commit_index as u64,
+                    }),
+            );
+
+        // Subscribe to newly accepted blocks streamed in real time via the broadcast channel.
+        let dag_state = self.dag_state.clone();
+        let live_stream = stream::unfold(
+            (rx, max_past_round_per_authority),
+            move |(mut rx, max_past_rounds)| {
+                let dag_state = dag_state.clone();
+                async move {
+                    loop {
+                        match rx.recv().await {
+                            Ok(block) => {
+                                // Skip blocks already covered by the past stream to avoid
+                                // duplicates from the subscribe-before-snapshot race window.
+                                if block.round() <= max_past_rounds[block.author().value()] {
+                                    continue;
+                                }
+                                let commit_index = dag_state.read().last_commit_index();
+                                return Some((
+                                    ObserverBlockStreamItem {
+                                        block: block.serialized().clone(),
+                                        highest_commit_index: commit_index as u64,
+                                    },
+                                    (rx, max_past_rounds),
+                                ));
+                            }
+                            Err(broadcast::error::RecvError::Lagged(n)) => {
+                                warn!(
+                                    "Observer block stream lagged by {n} messages, some blocks may have been missed"
+                                );
+                                // Continue to the next available message.
+                            }
+                            Err(broadcast::error::RecvError::Closed) => return None,
+                        }
+                    }
+                }
+            },
+        );
+
+        Ok(Box::pin(past_stream.chain(live_stream)))
     }
 
     async fn handle_fetch_blocks(
@@ -1032,6 +1121,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_accepted_block_broadcast, rx_accepted_block_broadcast) = broadcast::channel(100);
         let fake_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
             context.clone(),
@@ -1068,6 +1158,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            rx_accepted_block_broadcast,
             transaction_certifier,
             dag_state,
             store,
@@ -1156,6 +1247,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_accepted_block_broadcast, rx_accepted_block_broadcast) = broadcast::channel(100);
         let fake_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
             context.clone(),
@@ -1192,6 +1284,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            rx_accepted_block_broadcast,
             transaction_certifier,
             dag_state.clone(),
             store,
@@ -1329,6 +1422,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_accepted_block_broadcast, rx_accepted_block_broadcast) = broadcast::channel(100);
         let fake_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
             context.clone(),
@@ -1365,6 +1459,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            rx_accepted_block_broadcast,
             transaction_certifier,
             dag_state.clone(),
             store,
@@ -1407,6 +1502,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_accepted_block_broadcast, rx_accepted_block_broadcast) = broadcast::channel(100);
         let fake_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
             context.clone(),
@@ -1455,6 +1551,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            rx_accepted_block_broadcast,
             transaction_certifier,
             dag_state.clone(),
             store,
@@ -1502,6 +1599,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let (_tx_accepted_block_broadcast, rx_accepted_block_broadcast) = broadcast::channel(100);
         let fake_client = Arc::new(FakeNetworkClient::default());
         let network_client = Arc::new(SynchronizerClient::new(
             context.clone(),
@@ -1541,6 +1639,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            rx_accepted_block_broadcast,
             transaction_certifier,
             dag_state.clone(),
             store,

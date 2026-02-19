@@ -368,6 +368,7 @@ where
             synchronizer.clone(),
             core_dispatcher,
             signals_receivers.block_broadcast_receiver(),
+            signals_receivers.accepted_block_broadcast_receiver(),
             transaction_certifier,
             dag_state.clone(),
             store,
