@@ -19,15 +19,15 @@ use crate::store::ForkingStore;
 /// Result of executing a transaction.
 pub struct ExecutionResult {
     pub effects: TransactionEffects,
-    pub execution_error: Option<ExecutionError>,
+    pub _execution_error: Option<ExecutionError>,
 }
 
 /// Result of a dry-run (simulation) without committing.
 pub struct DryRunResult {
     pub inner_temp_store: InnerTemporaryStore,
     pub effects: TransactionEffects,
-    pub mock_gas: Option<sui_types::base_types::ObjectID>,
-    pub execution_result: Result<(), ExecutionError>,
+    pub _mock_gas: Option<sui_types::base_types::ObjectID>,
+    pub _execution_result: Result<(), ExecutionError>,
 }
 
 /// Execute a transaction and commit it to the store.
@@ -84,7 +84,7 @@ pub async fn execute_transaction(
 
     Ok(ExecutionResult {
         effects,
-        execution_error,
+        _execution_error: execution_error,
     })
 }
 
@@ -117,8 +117,8 @@ pub async fn dry_run_transaction(
     Ok(DryRunResult {
         inner_temp_store,
         effects,
-        mock_gas,
-        execution_result,
+        _mock_gas: mock_gas,
+        _execution_result: execution_result,
     })
 }
 

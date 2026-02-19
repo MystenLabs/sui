@@ -14,8 +14,6 @@ pub(super) trait StatusCode {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(super) enum RpcError<E = Infallible> {
-    /// Checkpoint requested is not in the available range.
-    NotInRange(u64),
     /// A custom error type to cover the service or method-specific error cases.
     Custom(Arc<E>),
 
@@ -61,10 +59,6 @@ where
 {
     fn from(err: RpcError<E>) -> Self {
         match err {
-            RpcError::NotInRange(checkpoint) => Status::out_of_range(format!(
-                "Checkpoint {checkpoint} not in the consistent range"
-            )),
-
             RpcError::Custom(err) => {
                 let mut status = Status::new(err.code(), err.to_string());
                 status.set_source(err);
@@ -91,13 +85,3 @@ where
         }
     }
 }
-
-// /// Convert a database error into an RPC error. Most database errors map to internal errors, but a
-// /// `NotInRange` error gets its own variant.
-// pub(super) fn db_error<E>(err: db::error::Error, context: &'static str) -> RpcError<E> {
-//     if let db::error::Error::NotInRange { checkpoint } = err {
-//         RpcError::NotInRange(checkpoint)
-//     } else {
-//         anyhow!(err).context(context).into()
-//     }
-// }

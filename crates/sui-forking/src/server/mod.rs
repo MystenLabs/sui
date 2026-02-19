@@ -509,7 +509,7 @@ async fn start_grpc_services(
     let ledger_service = ForkingLedgerService::new(context.clone());
     let state_service = ForkingStateService::new(context.clone());
     let tx_execution_service = ForkingTransactionExecutionService::new(context.clone());
-    let grpc = GrpcRpcService::new(grpc_args, version, &registry)
+    let grpc = GrpcRpcService::new(grpc_args, version, registry)
         .await?
         .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
         .add_service(LedgerServiceServer::new(ledger_service))

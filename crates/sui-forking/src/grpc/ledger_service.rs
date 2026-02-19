@@ -86,13 +86,13 @@ impl LedgerService for ForkingLedgerService {
 
         let (requests, read_mask) =
             validate_get_object_requests(vec![(object_id, version)], read_mask)
-                .map_err(|e| tonic::Status::from(e))?;
+                .map_err(tonic::Status::from)?;
 
         let (object_id, version) = requests[0];
         let object = self
             .get_object_impl(object_id.into(), version)
             .await
-            .map_err(|e| tonic::Status::from(e))?;
+            .map_err(tonic::Status::from)?;
 
         let mut proto_object = Object::default();
         proto_object.merge(&object, &read_mask);
@@ -110,18 +110,13 @@ impl LedgerService for ForkingLedgerService {
             ..
         } = request.into_inner();
 
-        println!(
-            "Received batch_get_object request for ids {:?}",
-            requests.iter().map(|o| o.object_id()).collect::<Vec<_>>()
-        );
-
         let requests: Vec<_> = requests
             .into_iter()
             .map(|req| (req.object_id, req.version))
             .collect();
 
-        let (requests, read_mask) = validate_get_object_requests(requests, read_mask)
-            .map_err(|e| tonic::Status::from(e))?;
+        let (requests, read_mask) =
+            validate_get_object_requests(requests, read_mask).map_err(tonic::Status::from)?;
 
         let mut results = Vec::with_capacity(requests.len());
 
@@ -187,7 +182,7 @@ impl LedgerService for ForkingLedgerService {
         let transaction = self
             .get_transaction_impl(transaction_digest.into(), &read_mask)
             .await
-            .map_err(|e| tonic::Status::from(e))?;
+            .map_err(tonic::Status::from)?;
 
         Ok(tonic::Response::new(GetTransactionResponse::new(
             transaction,
@@ -398,7 +393,7 @@ impl LedgerService for ForkingLedgerService {
             message.last_checkpoint = simulacrum
                 .store()
                 .get_highest_checkpint()
-                .map(|cp| cp.sequence_number.into());
+                .map(|cp| cp.sequence_number);
         }
         if read_mask.contains(Epoch::START_FIELD.name) {
             message.start = Some(sui_rpc_api::proto::timestamp_ms_to_proto(
@@ -509,31 +504,29 @@ impl ForkingLedgerService {
                 .collect();
         }
 
-        if let Some(submask) = read_mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
-            if let Some(effects) = effects {
-                let eff = effects.clone();
-                let effects_sdk: sui_sdk_types::TransactionEffects =
-                    eff.try_into().map_err(|e| {
-                        RpcError::new(
-                            tonic::Code::Internal,
-                            format!("Failed to convert effects: {e}"),
-                        )
-                    })?;
-                message.effects = Some(TransactionEffects::merge_from(&effects_sdk, &submask));
-            }
+        if let Some(submask) = read_mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name)
+            && let Some(effects) = effects
+        {
+            let eff = effects.clone();
+            let effects_sdk: sui_sdk_types::TransactionEffects = eff.try_into().map_err(|e| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("Failed to convert effects: {e}"),
+                )
+            })?;
+            message.effects = Some(TransactionEffects::merge_from(&effects_sdk, &submask));
         }
 
-        if let Some(submask) = read_mask.subtree(ExecutedTransaction::EVENTS_FIELD.name) {
-            if let Some(events) = events {
-                let events_sdk: sui_sdk_types::TransactionEvents =
-                    events.try_into().map_err(|e| {
-                        RpcError::new(
-                            tonic::Code::Internal,
-                            format!("Failed to convert events: {e}"),
-                        )
-                    })?;
-                message.events = Some(TransactionEvents::merge_from(events_sdk, &submask));
-            }
+        if let Some(submask) = read_mask.subtree(ExecutedTransaction::EVENTS_FIELD.name)
+            && let Some(events) = events
+        {
+            let events_sdk: sui_sdk_types::TransactionEvents = events.try_into().map_err(|e| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("Failed to convert events: {e}"),
+                )
+            })?;
+            message.events = Some(TransactionEvents::merge_from(events_sdk, &submask));
         }
 
         Ok(message)

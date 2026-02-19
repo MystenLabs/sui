@@ -217,8 +217,7 @@ impl ForkingStore {
             Some(tx_info) => {
                 let sender_signed_data = SenderSignedData::new(tx_info.data, vec![]).clone();
                 let tx = Transaction::new(sender_signed_data);
-                let verified_tx = VerifiedTransaction::new_unchecked(tx);
-                verified_tx
+                VerifiedTransaction::new_unchecked(tx)
             }
         };
 
@@ -613,10 +612,10 @@ impl ChildObjectResolver for ForkingStore {
             .fs_store
             .get_object_latest(child)
             .map_err(|e| SuiErrorKind::Storage(e.to_string()))?;
-        if let Some((child_object, _)) = &local_latest {
-            if child_object.version() <= child_version_upper_bound {
-                return validate(child_object.clone());
-            }
+        if let Some((child_object, _)) = &local_latest
+            && child_object.version() <= child_version_upper_bound
+        {
+            return validate(child_object.clone());
         }
 
         let object_key = ObjectKey {

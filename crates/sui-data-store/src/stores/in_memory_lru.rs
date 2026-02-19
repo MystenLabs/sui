@@ -286,7 +286,7 @@ impl CheckpointStore for LruMemoryStore {
     }
 
     fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
-        let inner = self.0.write().unwrap();
+        let inner = self.0.read().unwrap();
         let latest = inner
             .checkpoint_data_cache
             .iter()
