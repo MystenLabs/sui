@@ -225,6 +225,7 @@ const guides = [
       id: 'guides/developer/nautilus/index',
     },
     items: [
+      'guides/developer/nautilus/nautilus-design',
       'guides/developer/nautilus/using-nautilus',
       'guides/developer/nautilus/customize-nautilus',
       'guides/developer/nautilus/marlin',
