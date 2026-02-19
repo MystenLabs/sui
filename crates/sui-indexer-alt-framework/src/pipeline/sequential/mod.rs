@@ -85,6 +85,15 @@ pub struct SequentialConfig {
 
     /// How many checkpoints to hold back writes for.
     pub checkpoint_lag: u64,
+
+    /// Override for `Processor::FANOUT` (processor concurrency).
+    pub fanout: Option<usize>,
+
+    /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
+    pub min_eager_rows: Option<usize>,
+
+    /// Override for `Handler::MAX_BATCH_CHECKPOINTS` (checkpoints per write batch).
+    pub max_batch_checkpoints: Option<usize>,
 }
 
 /// Start a new sequential (in-order) indexing pipeline, served by the handler, `H`. Starting
@@ -126,7 +135,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         "Starting pipeline with config: {config:#?}",
     );
 
-    let processor_channel_size = H::FANOUT + PIPELINE_BUFFER;
+    let fanout = config.fanout.unwrap_or(H::FANOUT);
+    let min_eager_rows = config.min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
+    let max_batch_checkpoints = config
+        .max_batch_checkpoints
+        .unwrap_or(H::MAX_BATCH_CHECKPOINTS);
+
+    let processor_channel_size = fanout + PIPELINE_BUFFER;
     let (processor_tx, committer_rx) = monitored_channel::channel(
         processor_channel_size,
         metrics.processor_channel_fill.with_label_values(&[H::NAME]),
@@ -144,6 +159,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_tx,
         metrics.clone(),
         None,
+        fanout,
     );
 
     let s_committer = committer::<H>(
@@ -154,6 +170,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         commit_hi_tx,
         db,
         metrics.clone(),
+        min_eager_rows,
+        max_batch_checkpoints,
     );
 
     s_processor.merge(s_committer)

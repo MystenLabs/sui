@@ -80,6 +80,7 @@ pub(super) fn processor<P: Processor>(
     tx: monitored_channel::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     backpressure: Option<RowBackpressure>,
+    fanout: usize,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = P::NAME, "Starting processor");
@@ -107,7 +108,7 @@ pub(super) fn processor<P: Processor>(
         });
 
         match backpressured_stream
-            .try_for_each_spawned(P::FANOUT, |checkpoint| {
+            .try_for_each_spawned(fanout, |checkpoint| {
                 let tx = tx.clone();
                 let metrics = metrics.clone();
                 let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
@@ -281,7 +282,14 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
-        let _svc = super::processor(processor, data_rx, indexed_tx, metrics, None);
+        let _svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            None,
+            DataPipeline::FANOUT,
+        );
 
         // Send both checkpoints
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -335,7 +343,14 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
-        let svc = super::processor(processor, data_rx, indexed_tx, metrics, None);
+        let svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            None,
+            DataPipeline::FANOUT,
+        );
 
         // Send first checkpoint.
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -403,7 +418,14 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn the processor task
-        let _svc = super::processor(processor, data_rx, indexed_tx, metrics, None);
+        let _svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            None,
+            DataPipeline::FANOUT,
+        );
 
         // Send and verify first checkpoint (should succeed immediately)
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -463,7 +485,14 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         // Spawn processor task
-        let _svc = super::processor(processor, data_rx, indexed_tx, metrics, None);
+        let _svc = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            None,
+            SlowProcessor::FANOUT,
+        );
 
         // Send all checkpoints and measure time
         let start = std::time::Instant::now();

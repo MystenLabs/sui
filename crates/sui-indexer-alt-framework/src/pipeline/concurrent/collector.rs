@@ -82,6 +82,8 @@ pub(super) fn collector<H: Handler + 'static>(
     tx: monitored_channel::Sender<BatchedRows<H>>,
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
+    min_eager_rows: usize,
+    max_watermark_updates: usize,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         // The `poll` interval controls the maximum time to wait between collecting batches,
@@ -112,9 +114,14 @@ pub(super) fn collector<H: Handler + 'static>(
             }
 
             // Eagerly build and send batches while enough data is pending.
-            while pending_rows >= H::MIN_EAGER_ROWS {
-                let (batch, watermark, batch_len, batch_guard) =
-                    build_batch::<H>(&*handler, &mut pending, &checkpoint_lag_reporter, &metrics);
+            while pending_rows >= min_eager_rows {
+                let (batch, watermark, batch_len, batch_guard) = build_batch::<H>(
+                    &*handler,
+                    &mut pending,
+                    &checkpoint_lag_reporter,
+                    &metrics,
+                    max_watermark_updates,
+                );
                 pending_rows -= batch_len;
 
                 let batched_rows = BatchedRows {
@@ -145,6 +152,7 @@ pub(super) fn collector<H: Handler + 'static>(
                         &mut pending,
                         &checkpoint_lag_reporter,
                         &metrics,
+                        max_watermark_updates,
                     );
                     pending_rows -= batch_len;
 
@@ -233,6 +241,7 @@ fn build_batch<H: Handler>(
     pending: &mut BTreeMap<u64, PendingCheckpoint<H>>,
     checkpoint_lag_reporter: &CheckpointLagMetricReporter,
     metrics: &IndexerMetrics,
+    max_watermark_updates: usize,
 ) -> (
     H::Batch,
     Vec<WatermarkPart>,
@@ -254,7 +263,7 @@ fn build_batch<H: Handler>(
             break;
         };
 
-        if watermark.len() >= H::MAX_WATERMARK_UPDATES {
+        if watermark.len() >= max_watermark_updates {
             break;
         }
 
@@ -424,6 +433,8 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         let part1_length = TEST_MAX_CHUNK_ROWS / 2;
@@ -485,6 +496,8 @@ mod tests {
             collector_tx,
             main_reader_lo,
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         processor_tx
@@ -533,6 +546,8 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         let start_time = std::time::Instant::now();
@@ -595,6 +610,8 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         // The collector starts with an immediate poll tick, creating an empty batch
@@ -645,6 +662,8 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         // Consume initial empty batch
@@ -692,6 +711,8 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         // Send enough data to trigger batching.
@@ -745,6 +766,8 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         let eager_rows_plus_one = TestHandler::MIN_EAGER_ROWS + 1;
@@ -809,6 +832,8 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         let rows_per_cp = TestHandler::MIN_EAGER_ROWS + 1;
@@ -877,6 +902,8 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         let more_than_max_chunk_rows = TEST_MAX_CHUNK_ROWS + 10;

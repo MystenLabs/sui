@@ -526,24 +526,49 @@ The following sections detail the configuration settings you can implement for o
 
 #### Concurrent pipeline `Handler` constants
 
-`Handler` constants are the most direct way to tune pipeline behavior. These are implemented as associated constants in your `Handler` trait implementation.
+`Handler` constants are the most direct way to tune pipeline behavior. These are implemented as associated constants in your `Handler` trait implementation and serve as per-handler defaults.
 
 ```rust
 impl concurrent::Handler for MyHandler {
     type Store = Db;
-    
+
     // Number of concurrent processor workers (default: 10)
     const FANOUT: usize = 20;
-    
+
     // Minimum rows to trigger eager commit for committer (default: 50)
     const MIN_EAGER_ROWS: usize = 100;
-    
+
     // Backpressure threshold on processor (default: 5000)
     const MAX_PENDING_ROWS: usize = 10000;
-    
+
     // Maximum watermarks per batch (default: 10,000)
     const MAX_WATERMARK_UPDATES: usize = 5000;
 }
+```
+
+These constants can also be overridden at runtime through `ConcurrentConfig` and `SequentialConfig`, without recompiling. Config values take precedence over trait constants when present. For concurrent pipelines:
+
+```rust
+let config = ConcurrentConfig {
+    committer: committer_config,
+    pruner: Some(pruner_config),
+    fanout: Some(20),
+    min_eager_rows: Some(100),
+    max_pending_rows: Some(10000),
+    max_watermark_updates: Some(5000),
+};
+```
+
+For sequential pipelines:
+
+```rust
+let config = SequentialConfig {
+    committer: committer_config,
+    checkpoint_lag: 0,
+    fanout: Some(20),
+    min_eager_rows: Some(100),
+    max_batch_checkpoints: Some(500),
+};
 ```
 
 Tuning guidelines:

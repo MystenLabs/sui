@@ -162,6 +162,7 @@ async fn main() -> anyhow::Result<()> {
     let base = ConcurrentConfig {
         committer,
         pruner: None,
+        ..Default::default()
     };
 
     indexer
