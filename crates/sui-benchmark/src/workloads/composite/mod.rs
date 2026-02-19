@@ -5,7 +5,7 @@ mod operations;
 
 use derive_more::Add;
 use mysten_common::random::get_rng;
-use mysten_common::{assert_reachable, assert_sometimes};
+use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
     ALIAS_ADD_FLAG, ALIAS_REMOVE_FLAG, ALIAS_TX_FLAG, ALL_OPERATIONS, AddressBalanceDeposit,
     AddressBalanceOverdraw, AddressBalanceWithdraw, INVALID_ALIAS_TX_FLAG, ObjectBalanceDeposit,
