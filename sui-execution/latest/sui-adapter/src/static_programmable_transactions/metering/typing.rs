@@ -4,17 +4,16 @@
 use crate::static_programmable_transactions::{
     metering::translation_meter::TranslationMeter, typing::ast as T,
 };
-use sui_types::base_types::TxContextKind;
-use sui_types::error::ExecutionErrorTrait;
+use sui_types::{base_types::TxContextKind, error::ExecutionError};
 
 /// After loading and type checking, we do a second pass over the typed transaction to charge for
 /// type-related properties (before further analysis is done):
 /// - number of type nodes (including nested)
 /// - number of type references. These are charged non-linearly
-pub fn meter<E: ExecutionErrorTrait>(
+pub fn meter(
     meter: &mut TranslationMeter,
     transaction: &T::Transaction,
-) -> Result<(), E> {
+) -> Result<(), ExecutionError> {
     let mut num_refs: u64 = 0;
     let mut num_nodes: u64 = 0;
 

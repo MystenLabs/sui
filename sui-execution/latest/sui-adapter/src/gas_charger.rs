@@ -20,7 +20,7 @@ pub mod checked {
         accumulator_event::AccumulatorEvent,
         base_types::{ObjectID, ObjectRef, SuiAddress},
         digests::TransactionDigest,
-        error::{ExecutionError, ExecutionErrorTrait},
+        error::ExecutionError,
         gas_model::tables::GasStatus,
         is_system_package,
         object::Data,
@@ -255,10 +255,10 @@ pub mod checked {
             }
         }
 
-        pub fn charge_input_objects<E: ExecutionErrorTrait>(
+        pub fn charge_input_objects(
             &mut self,
             temporary_store: &TemporaryStore<'_>,
-        ) -> Result<(), E> {
+        ) -> Result<(), ExecutionError> {
             let objects = temporary_store.objects();
             // TODO: Charge input object count.
             let _object_count = objects.len();
@@ -270,9 +270,7 @@ pub mod checked {
                 .filter(|(id, _)| !is_system_package(**id))
                 .map(|(_, obj)| obj.object_size_for_gas_metering())
                 .sum();
-            self.gas_status
-                .charge_storage_read(total_size)
-                .map_err(|e| e.into())
+            self.gas_status.charge_storage_read(total_size)
         }
 
         pub fn charge_coin_transfers(
@@ -311,10 +309,10 @@ pub mod checked {
         ///   re-smash gas, then charge for storage
         /// - if we run out of gas while charging for storage, we have to dump all writes +
         ///   re-smash gas, then charge for storage again
-        pub fn charge_gas<T, E: ExecutionErrorTrait>(
+        pub fn charge_gas<T>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
+            execution_result: &mut Result<T, ExecutionError>,
         ) -> GasCostSummary {
             // at this point, we have done *all* charging for computation,
             // but have not yet set the storage rebate or storage gas units
@@ -337,7 +335,7 @@ pub mod checked {
                 if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
                     && execution_result.is_ok()
                 {
-                    *execution_result = Err(err.into());
+                    *execution_result = Err(err);
                 }
 
                 // On error we need to dump writes, deletes, etc before charging storage gas
@@ -424,10 +422,10 @@ pub mod checked {
         /// v2: we charge (computation + storage costs for input objects - storage_rebates)
         ///     if the gas balance is still insufficient, we fall back to set computation_cost = gas_budget
         ///     so we charge net (gas_budget - storage_rebates)
-        fn compute_storage_and_rebate<T, E: ExecutionErrorTrait>(
+        fn compute_storage_and_rebate<T>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
+            execution_result: &mut Result<T, ExecutionError>,
         ) {
             if dont_charge_budget_on_storage_oog(self.gas_model_version) {
                 self.handle_storage_and_rebate_v2(temporary_store, execution_result)
@@ -436,10 +434,10 @@ pub mod checked {
             }
         }
 
-        fn handle_storage_and_rebate_v1<T, E: ExecutionErrorTrait>(
+        fn handle_storage_and_rebate_v1<T>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
+            execution_result: &mut Result<T, ExecutionError>,
         ) {
             if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                 self.reset(temporary_store);
@@ -447,15 +445,15 @@ pub mod checked {
                 temporary_store.ensure_active_inputs_mutated();
                 temporary_store.collect_rebate(self);
                 if execution_result.is_ok() {
-                    *execution_result = Err(err.into());
+                    *execution_result = Err(err);
                 }
             }
         }
 
-        fn handle_storage_and_rebate_v2<T, E: ExecutionErrorTrait>(
+        fn handle_storage_and_rebate_v2<T>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
+            execution_result: &mut Result<T, ExecutionError>,
         ) {
             if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                 // we run out of gas charging storage, reset and try charging for storage again.
@@ -472,10 +470,10 @@ pub mod checked {
                     temporary_store.ensure_active_inputs_mutated();
                     temporary_store.collect_rebate(self);
                     if execution_result.is_ok() {
-                        *execution_result = Err(err.into());
+                        *execution_result = Err(err);
                     }
                 } else if execution_result.is_ok() {
-                    *execution_result = Err(err.into());
+                    *execution_result = Err(err);
                 }
             }
         }

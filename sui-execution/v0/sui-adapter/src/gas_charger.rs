@@ -15,7 +15,7 @@ pub mod checked {
     use sui_types::{
         base_types::{ObjectID, ObjectRef},
         digests::TransactionDigest,
-        error::{ExecutionError, ExecutionErrorTrait},
+        error::{ExecutionError},
         gas_model::tables::GasStatus,
         is_system_package,
         object::Data,

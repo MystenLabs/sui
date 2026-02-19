@@ -47,7 +47,7 @@ mod checked {
             TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
-        error::{command_argument_error, ExecutionError, ExecutionErrorKind, ExecutionErrorTrait},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{

@@ -10,7 +10,7 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_runtime::move_vm::MoveVM;
-use sui_types::error::{ExecutionError, ExecutionErrorTrait, SuiError};
+use sui_types::error::{ExecutionError, SuiError};
 use sui_types::execution_status::{ExecutionFailureStatus, MoveLocation, MoveLocationOpt};
 
 pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(

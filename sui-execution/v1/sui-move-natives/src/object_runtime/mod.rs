@@ -26,7 +26,7 @@ use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
     error::{
-        ExecutionError, ExecutionErrorKind, ExecutionErrorTrait, VMMemoryLimitExceededSubStatusCode,
+        ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode,
     },
     execution::DynamicallyLoadedObjectMetadata,
     id::UID,

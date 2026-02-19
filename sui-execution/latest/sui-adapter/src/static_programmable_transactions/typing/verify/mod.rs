@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_types::error::ExecutionError;
+
 use crate::{
     execution_mode::ExecutionMode,
     static_programmable_transactions::{env, typing::ast as T},
@@ -15,7 +17,7 @@ pub mod private_entry_arguments;
 pub fn transaction<Mode: ExecutionMode>(
     env: &env::Env,
     ast: &mut T::Transaction,
-) -> Result<(), Mode::Error> {
+) -> Result<(), ExecutionError> {
     input_arguments::verify::<Mode>(env, &*ast)?;
     move_functions::verify::<Mode>(env, &*ast)?;
     memory_safety::verify(env, &*ast)?;

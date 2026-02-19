@@ -3,7 +3,7 @@
 
 use crate::gas_charger::GasCharger;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::error::{ExecutionError, ExecutionErrorKind, ExecutionErrorTrait};
+use sui_types::error::{ExecutionError, ExecutionErrorKind};
 
 /// The [`TranslationMeter`] is responsible for metering gas usage for various operations
 /// during the translation of a transaction. It interacts with and exposes interfaces to the

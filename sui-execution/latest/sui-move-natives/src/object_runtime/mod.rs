@@ -37,9 +37,7 @@ use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
-    error::{
-        ExecutionError, ExecutionErrorKind, ExecutionErrorTrait, VMMemoryLimitExceededSubStatusCode,
-    },
+    error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
     execution::DynamicallyLoadedObjectMetadata,
     id::UID,
     metrics::LimitsMetrics,

@@ -47,7 +47,6 @@ use std::{
 use sui_move_natives::object_runtime::{
     self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
 };
-use sui_types::error::ExecutionErrorTrait;
 use sui_types::{
     TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, TxContext},
@@ -304,7 +303,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         })
     }
 
-    pub fn finish<Mode: ExecutionMode>(mut self) -> Result<ExecutionResults, Mode::Error> {
+    pub fn finish<Mode: ExecutionMode>(mut self) -> Result<ExecutionResults, ExecutionError> {
         assert_invariant!(
             !self.locations.tx_context_value.local(0)?.is_invalid()?,
             "tx context value should be present"
@@ -432,7 +431,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             written_objects.insert(id, package_obj);
         }
 
-        legacy_ptb::context::finish::<Mode>(
+        legacy_ptb::context::finish(
             env.protocol_config,
             env.state_view,
             gas_charger,
@@ -816,12 +815,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
     }
 
-    fn publish_and_verify_modules<Mode: ExecutionMode>(
+    fn publish_and_verify_modules(
         &mut self,
         package_id: ObjectID,
         modules: &[CompiledModule],
         linkage: &RootedLinkage,
-    ) -> Result<(), Mode::Error> {
+    ) -> Result<(), ExecutionError> {
         // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
         let binary_version = self.env.protocol_config.move_binary_format_version();
         let new_module_bytes: Vec<_> = modules
@@ -866,13 +865,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(())
     }
 
-    fn init_modules<Mode: ExecutionMode>(
+    fn init_modules(
         &mut self,
         package_id: ObjectID,
         modules: &[CompiledModule],
         linkage: &RootedLinkage,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> Result<(), Mode::Error> {
+    ) -> Result<(), ExecutionError> {
         for module in modules {
             let Some((fdef_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str())
             else {
@@ -937,7 +936,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         dep_ids: &[ObjectID],
         linkage: ResolvedLinkage,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> Result<ObjectID, Mode::Error> {
+    ) -> Result<ObjectID, ExecutionError> {
         let runtime_id = if <Mode>::packages_are_predefined() {
             // do not calculate or substitute id for predefined packages
             (*modules.safe_get(0)?.self_id().address()).into()
@@ -967,10 +966,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
         self.env.linkable_store.push_package(package_id, package)?;
         let res = self
-            .publish_and_verify_modules::<Mode>(runtime_id, &modules, &linkage)
-            .and_then(|_| {
-                self.init_modules::<Mode>(package_id, &modules, &linkage, trace_builder_opt)
-            });
+            .publish_and_verify_modules(runtime_id, &modules, &linkage)
+            .and_then(|_| self.init_modules(package_id, &modules, &linkage, trace_builder_opt));
         match res {
             Ok(()) => Ok(runtime_id),
             Err(e) => {
@@ -980,14 +977,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
     }
 
-    pub fn upgrade<Mode: ExecutionMode>(
+    pub fn upgrade(
         &mut self,
         mut modules: Vec<CompiledModule>,
         dep_ids: &[ObjectID],
         current_package_id: ObjectID,
         upgrade_ticket_policy: u8,
         linkage: ResolvedLinkage,
-    ) -> Result<ObjectID, Mode::Error> {
+    ) -> Result<ObjectID, ExecutionError> {
         // Check that this package ID points to a package and get the package we're upgrading.
         let current_move_package = self.fetch_package(&current_package_id)?;
 
@@ -1009,7 +1006,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         )?;
 
         let linkage = RootedLinkage::new_for_publication(storage_id, runtime_id, linkage);
-        self.publish_and_verify_modules::<Mode>(runtime_id, &modules, &linkage)?;
+        self.publish_and_verify_modules(runtime_id, &modules, &linkage)?;
 
         legacy_ptb::execution::check_compatibility(
             self.env.protocol_config,
@@ -1051,7 +1048,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             });
             if new_module_has_init {
                 // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
-                return Err(Mode::Error::new_with_source(
+                return Err(ExecutionError::new_with_source(
                     ExecutionErrorKind::FeatureNotYetSupported,
                     "`init` in new modules on upgrade is not yet supported",
                 ));

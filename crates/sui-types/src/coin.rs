@@ -10,7 +10,7 @@ use crate::{
 };
 use crate::{
     balance::{Balance, Supply},
-    error::{ExecutionError, ExecutionErrorTrait},
+    error::ExecutionError,
     object::{Data, Object},
 };
 use move_core_types::{

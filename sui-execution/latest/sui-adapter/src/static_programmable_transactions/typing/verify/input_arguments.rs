@@ -14,9 +14,7 @@ use crate::{
 use indexmap::IndexSet;
 use sui_types::{
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
-    error::{
-        ExecutionError, ExecutionErrorKind, ExecutionErrorTrait, SafeIndex, command_argument_error,
-    },
+    error::{ExecutionError, ExecutionErrorKind, SafeIndex, command_argument_error},
     execution_status::CommandArgumentError,
     id::RESOLVED_SUI_ID,
     transfer::RESOLVED_RECEIVING_STRUCT,

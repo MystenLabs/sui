@@ -19,9 +19,7 @@ use sui_types::{
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectRef, TxContextKind},
     coin::{COIN_MODULE_NAME, REDEEM_FUNDS_FUNC_NAME, RESOLVED_COIN_STRUCT},
-    error::{
-        ExecutionError, ExecutionErrorKind, ExecutionErrorTrait, SafeIndex, command_argument_error,
-    },
+    error::{ExecutionError, ExecutionErrorKind, SafeIndex, command_argument_error},
     execution_status::CommandArgumentError,
     funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
 };

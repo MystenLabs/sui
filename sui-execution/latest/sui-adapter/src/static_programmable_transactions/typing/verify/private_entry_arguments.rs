@@ -11,7 +11,7 @@ use crate::static_programmable_transactions::{env::Env, typing::ast as T};
 use move_binary_format::{CompiledModule, file_format::Visibility};
 use sui_types::error::SafeIndex;
 use sui_types::{
-    error::{ExecutionError, ExecutionErrorTrait, command_argument_error},
+    error::{ExecutionError, command_argument_error},
     execution_status::CommandArgumentError,
 };
 

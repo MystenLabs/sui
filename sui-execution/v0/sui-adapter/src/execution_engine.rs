@@ -21,7 +21,7 @@ mod checked {
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
     use sui_types::effects::TransactionEffects;
-    use sui_types::error::{ExecutionError, ExecutionErrorKind, ExecutionErrorTrait};
+    use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;

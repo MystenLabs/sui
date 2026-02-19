@@ -6,7 +6,7 @@
 use move_binary_format::file_format::CompiledModule;
 use move_vm_config::verifier::VerifierConfig;
 use sui_types::{
-    error::{ExecutionError, ExecutionErrorTrait},
+    error::{ExecutionError},
     move_package::FnInfoMap,
 };
 

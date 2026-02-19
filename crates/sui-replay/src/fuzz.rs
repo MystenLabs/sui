@@ -3,7 +3,7 @@
 
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::{
-    digests::TransactionDigest, error::ExecutionErrorTrait,
+    digests::TransactionDigest,
     execution_status::ExecutionFailureStatus, transaction::TransactionKind,
 };
 use thiserror::Error;

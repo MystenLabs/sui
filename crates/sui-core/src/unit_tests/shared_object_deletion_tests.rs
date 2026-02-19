@@ -36,7 +36,7 @@ use move_core_types::ident_str;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{ExecutionError, ExecutionErrorTrait, SuiError};
+use sui_types::error::{ExecutionError, SuiError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionFailureStatus::{
     InputObjectDeleted, SharedObjectOperationNotAllowed,

@@ -42,7 +42,7 @@ mod checked {
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
         coin::Coin,
-        error::{command_argument_error, ExecutionError, ExecutionErrorKind, ExecutionErrorTrait},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV1},
         metrics::LimitsMetrics,

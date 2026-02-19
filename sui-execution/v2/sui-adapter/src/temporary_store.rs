@@ -20,7 +20,7 @@ use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochPara
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
-    error::{ExecutionError, ExecutionErrorTrait, SuiResult},
+    error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
     object::Object,
     object::Owner,

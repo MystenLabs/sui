@@ -15,7 +15,7 @@ pub mod struct_with_key_verifier;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, vm_status::StatusCode,
 };
-use sui_types::error::{ExecutionError, ExecutionErrorKind, ExecutionErrorTrait};
+use sui_types::error::{ExecutionError, ExecutionErrorKind};
 
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 pub const TEST_SCENARIO_MODULE_NAME: &str = "test_scenario";

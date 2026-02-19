@@ -16,7 +16,6 @@ use crate::{
     },
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::error::ExecutionErrorTrait;
 use sui_types::{base_types::ObjectID, error::ExecutionError, transaction as P};
 
 #[derive(Debug)]
@@ -25,7 +24,9 @@ pub struct LinkageAnalyzer {
 }
 
 impl LinkageAnalyzer {
-    pub fn new<Mode: ExecutionMode>(protocol_config: &ProtocolConfig) -> Result<Self, Mode::Error> {
+    pub fn new<Mode: ExecutionMode>(
+        protocol_config: &ProtocolConfig,
+    ) -> Result<Self, ExecutionError> {
         let always_include_system_packages = !Mode::packages_are_predefined();
         let linkage_config = LinkageConfig::legacy_linkage_settings(always_include_system_packages);
         let binary_config = protocol_config.binary_config(None);
@@ -37,23 +38,23 @@ impl LinkageAnalyzer {
         })
     }
 
-    pub fn compute_call_linkage<E: ExecutionErrorTrait>(
+    pub fn compute_call_linkage(
         &self,
         move_call: &P::ProgrammableMoveCall,
         store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, E> {
+    ) -> Result<ResolvedLinkage, ExecutionError> {
         Ok(ResolvedLinkage::from_resolution_table(
             self.compute_call_linkage_(move_call, store)?,
         ))
     }
 
-    pub fn compute_publication_linkage<E: ExecutionErrorTrait>(
+    pub fn compute_publication_linkage(
         &self,
         deps: &[ObjectID],
         store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, E> {
+    ) -> Result<ResolvedLinkage, ExecutionError> {
         Ok(ResolvedLinkage::from_resolution_table(
-            self.compute_publication_linkage_::<E>(deps, store)?,
+            self.compute_publication_linkage_(deps, store)?,
         ))
     }
 
@@ -110,11 +111,11 @@ impl LinkageAnalyzer {
     }
 
     /// Compute the linkage for a publish or upgrade command. This is a special case because
-    fn compute_publication_linkage_<E: ExecutionErrorTrait>(
+    fn compute_publication_linkage_(
         &self,
         deps: &[ObjectID],
         store: &dyn PackageStore,
-    ) -> Result<ResolutionTable, E> {
+    ) -> Result<ResolutionTable, ExecutionError> {
         let mut resolution_table = self
             .internal
             .linkage_config

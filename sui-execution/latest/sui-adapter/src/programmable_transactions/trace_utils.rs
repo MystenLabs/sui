@@ -23,7 +23,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use sui_types::{
     base_types::ObjectID,
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind, ExecutionErrorTrait},
+    error::{ExecutionError, ExecutionErrorKind},
     object::bounded_visitor::BoundedVisitor,
     ptb_trace::{
         ExtMoveValue, ExtMoveValueInfo, ExternalEvent, PTBCommandInfo, PTBEvent, SummaryEvent,
@@ -54,11 +54,11 @@ pub fn trace_move_call_end(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
 
 /// Inserts transfer event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_transfer<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+pub fn trace_transfer(
+    context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     obj_values: &[ObjectValue],
-) -> Result<(), Mode::Error> {
+) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let mut to_transfer = vec![];
         for (idx, v) in obj_values.iter().enumerate() {
@@ -82,10 +82,10 @@ pub fn trace_transfer<Mode: ExecutionMode>(
 /// Inserts PTB summary event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_ptb_summary<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+    context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     commands: &[Command],
-) -> Result<(), Mode::Error> {
+) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let events = commands
             .iter()
@@ -138,7 +138,7 @@ pub fn trace_ptb_summary<Mode: ExecutionMode>(
                     Ok(vec![PTBCommandInfo::ExternalEvent("Upgrade".to_string())])
                 }
             })
-            .collect::<Result<Vec<Vec<PTBCommandInfo>>, Mode::Error>>()?
+            .collect::<Result<Vec<Vec<PTBCommandInfo>>, ExecutionError>>()?
             .into_iter()
             .flatten()
             .collect();
@@ -155,13 +155,13 @@ pub fn trace_ptb_summary<Mode: ExecutionMode>(
 
 /// Inserts split coins event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_split_coins<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+pub fn trace_split_coins(
+    context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     coin_type: &Type,
     input_coin: &Coin,
     split_coin_values: &[Value],
-) -> Result<(), Mode::Error> {
+) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, coin_type)?;
         let mut split_coin_move_values = vec![];
@@ -211,13 +211,13 @@ pub fn trace_split_coins<Mode: ExecutionMode>(
 
 /// Inserts merge coins event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_merge_coins<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+pub fn trace_merge_coins(
+    context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     coin_type: &Type,
     input_infos: &[(u64, ObjectID)],
     target_coin: &Coin,
-) -> Result<(), Mode::Error> {
+) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, coin_type)?;
         let mut input_coin_move_values = vec![];
@@ -267,12 +267,12 @@ pub fn trace_merge_coins<Mode: ExecutionMode>(
 
 /// Inserts make move vec event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_make_move_vec<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+pub fn trace_make_move_vec(
+    context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     move_values: Vec<ExtMoveValueInfo>,
     type_: &Type,
-) -> Result<(), Mode::Error> {
+) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, type_)?;
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
@@ -338,13 +338,13 @@ pub fn trace_execution_error(trace_builder_opt: &mut Option<MoveTraceBuilder>, m
 /// Adds `ExtMoveValueInfo` to the mutable vector passed as an argument.
 /// As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn add_move_value_info_from_value<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+pub fn add_move_value_info_from_value(
+    context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     move_values: &mut Vec<ExtMoveValueInfo>,
     type_: &Type,
     value: &Value,
-) -> Result<(), Mode::Error> {
+) -> Result<(), ExecutionError> {
     if trace_builder_opt.is_some()
         && let Some(move_value_info) = move_value_info_from_value(context, type_, value)?
     {
@@ -356,12 +356,12 @@ pub fn add_move_value_info_from_value<Mode: ExecutionMode>(
 /// Adds `ExtMoveValueInfo` to the mutable vector passed as an argument.
 /// As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn add_move_value_info_from_obj_value<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+pub fn add_move_value_info_from_obj_value(
+    context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     move_values: &mut Vec<ExtMoveValueInfo>,
     obj_val: &ObjectValue,
-) -> Result<(), Mode::Error> {
+) -> Result<(), ExecutionError> {
     if trace_builder_opt.is_some() {
         let move_value_info = move_value_info_from_obj_value(context, obj_val)?;
         move_values.push(move_value_info);
@@ -384,19 +384,19 @@ pub fn add_coin_obj_info(
 }
 
 /// Creates `ExtMoveValueInfo` from raw bytes.
-fn move_value_info_from_raw_bytes<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+fn move_value_info_from_raw_bytes(
+    context: &mut ExecutionContext<'_, '_, '_>,
     type_: &Type,
     bytes: &[u8],
-) -> Result<ExtMoveValueInfo, Mode::Error> {
+) -> Result<ExtMoveValueInfo, ExecutionError> {
     let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, type_)?;
     let layout = context
         .vm
         .get_runtime()
         .type_to_fully_annotated_layout(type_)
-        .map_err(|e| Mode::Error::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
+        .map_err(|e| ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
     let move_value = BoundedVisitor::deserialize_value(bytes, &layout)
-        .map_err(|e| Mode::Error::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
+        .map_err(|e| ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
     let serialized_move_value = SerializableMoveValue::from(move_value);
     Ok(ExtMoveValueInfo {
         type_: type_tag_with_refs,
@@ -405,11 +405,11 @@ fn move_value_info_from_raw_bytes<Mode: ExecutionMode>(
 }
 
 /// Creates `ExtMoveValueInfo` from `Value`.
-fn move_value_info_from_value<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+fn move_value_info_from_value(
+    context: &mut ExecutionContext<'_, '_, '_>,
     type_: &Type,
     value: &Value,
-) -> Result<Option<ExtMoveValueInfo>, Mode::Error> {
+) -> Result<Option<ExtMoveValueInfo>, ExecutionError> {
     match value {
         Value::Object(obj_val) => Ok(Some(move_value_info_from_obj_value(context, obj_val)?)),
         Value::Raw(_, bytes) => Ok(Some(move_value_info_from_raw_bytes(context, type_, bytes)?)),
@@ -418,15 +418,14 @@ fn move_value_info_from_value<Mode: ExecutionMode>(
 }
 
 /// Creates `ExtMoveValueInfo` from `ObjectValue`.
-fn move_value_info_from_obj_value<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+fn move_value_info_from_obj_value(
+    context: &mut ExecutionContext<'_, '_, '_>,
     obj_val: &ObjectValue,
-) -> Result<ExtMoveValueInfo, Mode::Error> {
+) -> Result<ExtMoveValueInfo, ExecutionError> {
     let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, &obj_val.type_)?;
     match &obj_val.contents {
         ObjectContents::Coin(coin) => {
             coin_move_value_info(type_tag_with_refs, *coin.id.object_id(), coin.value())
-                .map_err(Mode::Error::from)
         }
         ObjectContents::Raw(bytes) => {
             move_value_info_from_raw_bytes(context, &obj_val.type_, bytes)
@@ -497,10 +496,10 @@ fn coin_move_value_info(
 }
 
 /// Converts a type to type tag format used in tracing.
-fn trace_type_to_type_tag_with_refs<Mode: ExecutionMode>(
-    context: &mut ExecutionContext<'_, '_, '_, Mode>,
+fn trace_type_to_type_tag_with_refs(
+    context: &mut ExecutionContext<'_, '_, '_>,
     type_: &Type,
-) -> Result<TypeTagWithRefs, Mode::Error> {
+) -> Result<TypeTagWithRefs, ExecutionError> {
     let (deref_type, ref_type) = match type_ {
         Type::Reference(t) => (t.as_ref(), Some(RefType::Imm)),
         Type::MutableReference(t) => (t.as_ref(), Some(RefType::Mut)),
@@ -510,6 +509,6 @@ fn trace_type_to_type_tag_with_refs<Mode: ExecutionMode>(
         .vm
         .get_runtime()
         .get_type_tag(deref_type)
-        .map_err(|e| Mode::Error::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
+        .map_err(|e| ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
     Ok(TypeTagWithRefs { type_, ref_type })
 }

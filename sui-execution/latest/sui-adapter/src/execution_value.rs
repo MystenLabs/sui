@@ -10,7 +10,7 @@ use serde::Deserialize;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind, ExecutionErrorTrait},
+    error::{ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
     funds_accumulator::Withdrawal,
     object::Owner,

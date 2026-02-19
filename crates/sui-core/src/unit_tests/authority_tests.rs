@@ -35,7 +35,7 @@ use sui_protocol_config::{
 };
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
-use sui_types::error::{ExecutionErrorTrait, UserInputError};
+use sui_types::error::{UserInputError};
 use sui_types::execution::SharedInput;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;

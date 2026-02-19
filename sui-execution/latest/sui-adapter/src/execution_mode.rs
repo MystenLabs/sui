@@ -5,11 +5,11 @@ use crate::execution_value::{RawValueType, Value};
 use crate::type_resolver::TypeTagResolver;
 use move_core_types::language_storage::TypeTag;
 use sui_types::{
-    error::{ExecutionError, ExecutionErrorTrait},
     execution::ExecutionResult,
     transaction::Argument,
     transfer::Receiving,
 };
+use sui_types::error::{ExecutionErrorKind, ExecutionErrorTrait};
 
 pub type TransactionIndex = usize;
 
@@ -77,7 +77,7 @@ pub struct Normal;
 impl ExecutionMode for Normal {
     type ArgumentUpdates = ();
     type ExecutionResults = ();
-    type Error = ExecutionError;
+    type Error = ExecutionErrorKind;
 
     fn allow_arbitrary_function_calls() -> bool {
         false
@@ -143,7 +143,7 @@ pub struct Genesis;
 impl ExecutionMode for Genesis {
     type ArgumentUpdates = ();
     type ExecutionResults = ();
-    type Error = ExecutionError;
+    type Error = ExecutionErrorKind;
 
     fn allow_arbitrary_function_calls() -> bool {
         true
@@ -212,7 +212,7 @@ pub struct System;
 impl ExecutionMode for System {
     type ArgumentUpdates = ();
     type ExecutionResults = ();
-    type Error = ExecutionError;
+    type Error = ExecutionErrorKind;
 
     fn allow_arbitrary_function_calls() -> bool {
         // allows bypassing visibility for system calls
@@ -283,7 +283,7 @@ pub struct DevInspect<const SKIP_ALL_CHECKS: bool>;
 impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> {
     type ArgumentUpdates = Vec<(Argument, Vec<u8>, TypeTag)>;
     type ExecutionResults = Vec<ExecutionResult>;
-    type Error = ExecutionError;
+    type Error = ExecutionErrorKind;
 
     fn allow_arbitrary_function_calls() -> bool {
         SKIP_ALL_CHECKS

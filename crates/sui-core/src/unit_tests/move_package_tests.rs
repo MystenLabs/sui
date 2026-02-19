@@ -10,7 +10,7 @@ use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
-    error::{ExecutionErrorKind, ExecutionErrorTrait},
+    error::{ExecutionErrorKind},
     execution_status::PackageUpgradeError,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, OBJECT_START_VERSION, Object},

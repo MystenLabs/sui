@@ -104,7 +104,8 @@ mod checked {
                 withdrawal_compatibility_inputs,
                 pt,
                 trace_builder_opt,
-            );
+            )
+            .map_err(|(e, timings)| (e.into(), timings));
         }
 
         let mut timings = vec![];
@@ -142,7 +143,7 @@ mod checked {
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Mode::ExecutionResults, Mode::Error> {
         let ProgrammableTransaction { inputs, commands } = pt;
-        let mut context = ExecutionContext::<Mode>::new(
+        let mut context = ExecutionContext::new(
             protocol_config,
             metrics,
             vm,
@@ -186,7 +187,7 @@ mod checked {
         let generated_object_ids = object_runtime.generated_object_ids();
 
         // apply changes
-        let finished = context.finish();
+        let finished = context.finish::<Mode>();
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_runtime_objects(loaded_runtime_objects);
         state_view.save_wrapped_object_containers(wrapped_object_containers);
@@ -198,7 +199,7 @@ mod checked {
     /// Execute a single command
     #[instrument(level = "trace", skip_all)]
     fn execute_command<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         mode_results: &mut Mode::ExecutionResults,
         command: Command,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -375,7 +376,7 @@ mod checked {
                     &split_coins,
                 )?;
 
-                context.restore_arg(&mut argument_updates, coin_arg, Value::Object(obj))?;
+                context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
                 split_coins
             }
             Command::MergeCoins(target_arg, coin_args) => {
@@ -429,7 +430,11 @@ mod checked {
                     target_coin,
                 )?;
 
-                context.restore_arg(&mut argument_updates, target_arg, Value::Object(target))?;
+                context.restore_arg::<Mode>(
+                    &mut argument_updates,
+                    target_arg,
+                    Value::Object(target),
+                )?;
                 vec![]
             }
             Command::MoveCall(move_call) => {
@@ -444,8 +449,8 @@ mod checked {
 
                 let arguments = context.splat_args(0, arguments)?;
 
-                let module = to_identifier(context, module)?;
-                let function = to_identifier(context, function)?;
+                let module = to_identifier::<Mode>(context, module)?;
+                let function = to_identifier::<Mode>(context, function)?;
 
                 // Convert type arguments to `Type`s
                 let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
@@ -509,7 +514,7 @@ mod checked {
 
     /// Execute a single Move call
     fn execute_move_call<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         storage_id: &ModuleId,
         runtime_id: &ModuleId,
@@ -584,7 +589,7 @@ mod checked {
     }
 
     fn write_back_results<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         arguments: &[Arg],
         non_entry_move_call: bool,
@@ -597,7 +602,7 @@ mod checked {
             assert_invariant!(i == j, "lost mutable input");
             let arg_idx = i as usize;
             let value = make_value::<Mode>(context, kind, bytes, non_entry_move_call)?;
-            context.restore_arg(argument_updates, arguments[arg_idx], value)?;
+            context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
         }
 
         return_values
@@ -605,7 +610,7 @@ mod checked {
             .zip(return_value_kinds)
             .map(|(bytes, kind)| {
                 // only non entry functions have return values
-                make_value(
+                make_value::<Mode>(
                     context, kind, bytes, /* used_in_non_entry_move_call */ true,
                 )
             })
@@ -613,7 +618,7 @@ mod checked {
     }
 
     fn make_value<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         value_info: ValueKind,
         bytes: Vec<u8>,
         used_in_non_entry_move_call: bool,
@@ -642,7 +647,7 @@ mod checked {
     /// Publish Move modules and call the init functions.  Returns an `UpgradeCap` for the newly
     /// published package on success.
     fn execute_move_publish<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
@@ -683,9 +688,10 @@ mod checked {
         // the last package we pushed is the one we are verifying and running the init from
         context.linkage_view.set_linkage(&package)?;
         context.write_package(package);
-        let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|_| {
-            init_modules::<Mode>(context, argument_updates, &modules, trace_builder_opt)
-        });
+        let res =
+            publish_and_verify_modules::<Mode>(context, runtime_id, &modules).and_then(|_| {
+                init_modules::<Mode>(context, argument_updates, &modules, trace_builder_opt)
+            });
         context.linkage_view.reset_linkage()?;
         if res.is_err() {
             context.pop_package();
@@ -709,7 +715,7 @@ mod checked {
 
     /// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
     fn execute_move_upgrade<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
         current_package_id: ObjectID,
@@ -994,7 +1000,7 @@ mod checked {
      **************************************************************************************************/
 
     fn vm_move_call<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         module_id: &ModuleId,
         function: &IdentStr,
         type_arguments: Vec<Type>,
@@ -1041,7 +1047,7 @@ mod checked {
     }
 
     fn publish_and_verify_modules<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         package_id: ObjectID,
         modules: &[CompiledModule],
     ) -> Result<(), Mode::Error> {
@@ -1081,7 +1087,7 @@ mod checked {
     }
 
     fn init_modules<'a, Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         modules: impl IntoIterator<Item = &'a CompiledModule>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -1165,7 +1171,7 @@ mod checked {
     /// - a public function that does not return references
     /// - module init (only internal usage)
     fn check_visibility_and_signature<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         module_id: &ModuleId,
         function: &IdentStr,
         type_arguments: &[Type],
@@ -1301,7 +1307,7 @@ mod checked {
     /// Checks that the non-entry function does not return references. And marks the return values
     /// as object or non-object return values
     fn check_non_entry_signature<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         _module_id: &ModuleId,
         _function: &IdentStr,
         signature: &LoadedFunctionInstantiation,
@@ -1443,7 +1449,7 @@ mod checked {
     /// Serializes the arguments into BCS values for Move. Performs the necessary type checking for
     /// each value
     fn build_move_args<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         _module_id: &ModuleId,
         function: &IdentStr,
         function_kind: FunctionKind,
@@ -1453,7 +1459,7 @@ mod checked {
         // check the arity
         let parameters = &signature.parameters;
         let tx_ctx_kind = match parameters.last() {
-            Some(t) => is_tx_context(context, t)?,
+            Some(t) => is_tx_context::<Mode>(context, t)?,
             None => TxContextKind::None,
         };
         // an init function can have one or two arguments, with the last one always being of type
@@ -1546,7 +1552,7 @@ mod checked {
 
     /// checks that the value is compatible with the specified type
     fn check_param_type<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         idx: usize,
         value: &Value,
         param_ty: &Type,
@@ -1566,7 +1572,8 @@ mod checked {
             // generated from a Move function). Meaning we only allow "primitive" values
             // and might need to run validation in addition to the BCS layout
             Value::Raw(RawValueType::Any, bytes) => {
-                let Some(layout) = primitive_serialization_layout(context, param_ty)? else {
+                let Some(layout) = primitive_serialization_layout::<Mode>(context, param_ty)?
+                else {
                     let msg = format!(
                         "Non-primitive argument at index {}. If it is an object, it must be \
                         populated by an object",
@@ -1640,7 +1647,7 @@ mod checked {
     }
 
     fn to_identifier<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         ident: String,
     ) -> Result<Identifier, ExecutionError> {
         if context.protocol_config.validate_identifier_inputs() {
@@ -1665,11 +1672,11 @@ mod checked {
     // be much cleaner however, we'll hold off on adding that in here, and instead add it in the
     // new execution code.
     fn to_type_tag<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         type_input: TypeInput,
         idx: usize,
     ) -> Result<TypeTag, Mode::Error> {
-        let type_tag_no_def_ids = to_type_tag_(context, type_input, idx)?;
+        let type_tag_no_def_ids = to_type_tag_::<Mode>(context, type_input, idx)?;
         if context
             .protocol_config
             .resolve_type_input_ids_to_defining_id()
@@ -1693,7 +1700,7 @@ mod checked {
     }
 
     fn to_type_tag_<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         type_input: TypeInput,
         idx: usize,
     ) -> Result<TypeTag, ExecutionError> {
@@ -1709,7 +1716,7 @@ mod checked {
             I::U256 => T::U256,
             I::Address => T::Address,
             I::Signer => T::Signer,
-            I::Vector(t) => T::Vector(Box::new(to_type_tag_(context, *t, idx)?)),
+            I::Vector(t) => T::Vector(Box::new(to_type_tag_::<Mode>(context, *t, idx)?)),
             I::Struct(s) => {
                 let StructInput {
                     address,
@@ -1719,9 +1726,10 @@ mod checked {
                 } = *s;
                 let type_params = type_params
                     .into_iter()
-                    .map(|t| to_type_tag_(context, t, idx))
+                    .map(|t| to_type_tag_::<Mode>(context, t, idx))
                     .collect::<Result<_, _>>()?;
-                let (module, name) = resolve_datatype_names(context, address, module, name, idx)?;
+                let (module, name) =
+                    resolve_datatype_names::<Mode>(context, address, module, name, idx)?;
                 T::Struct(Box::new(StructTag {
                     address,
                     module,
@@ -1733,7 +1741,7 @@ mod checked {
     }
 
     fn resolve_datatype_names<Mode: ExecutionMode>(
-        context: &ExecutionContext<'_, '_, '_, Mode>,
+        context: &ExecutionContext<'_, '_, '_>,
         addr: AccountAddress,
         module: String,
         name: String,
@@ -1796,7 +1804,7 @@ mod checked {
     // a MutableReference, and Immutable otherwise.
     // Returns None for all other types
     pub fn is_tx_context<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         t: &Type,
     ) -> Result<TxContextKind, ExecutionError> {
         let (is_mut, inner) = match t {
@@ -1827,7 +1835,7 @@ mod checked {
 
     /// Returns Some(layout) iff it is a primitive, an ID, a String, or an option/vector of a valid type
     fn primitive_serialization_layout<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         param_ty: &Type,
     ) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
         Ok(match param_ty {
@@ -1845,7 +1853,7 @@ mod checked {
             Type::Address => Some(PrimitiveArgumentLayout::Address),
 
             Type::Vector(inner) => {
-                let info_opt = primitive_serialization_layout(context, inner)?;
+                let info_opt = primitive_serialization_layout::<Mode>(context, inner)?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
             }
             Type::DatatypeInstantiation(inst) => {
@@ -1856,7 +1864,7 @@ mod checked {
                 let resolved_struct = get_datatype_ident(&s);
                 // is option of a string
                 if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
-                    let info_opt = primitive_serialization_layout(context, &targs[0])?;
+                    let info_opt = primitive_serialization_layout::<Mode>(context, &targs[0])?;
                     info_opt.map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
                 } else {
                     None
@@ -1885,7 +1893,7 @@ mod checked {
     // in the case where `max_ptb_value_size_v2` is false--this removes any case of diverging
     // based on the result of `get_type_abilities`.
     fn amplification_bound<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         param_ty: &Type,
         abilities: &OnceCell<AbilitySet>,
     ) -> Result<Option<u64>, ExecutionError> {
@@ -1907,7 +1915,7 @@ mod checked {
     }
 
     fn amplification_bound_<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_, Mode>,
+        context: &mut ExecutionContext<'_, '_, '_>,
         param_ty: &Type,
     ) -> Result<Option<u64>, ExecutionError> {
         // Do not cap size for epoch change/genesis
@@ -1930,7 +1938,7 @@ mod checked {
             })
         }
 
-        let mut amplification = match primitive_serialization_layout(context, param_ty)? {
+        let mut amplification = match primitive_serialization_layout::<Mode>(context, param_ty)? {
             // No primitive type layout was able to be determined for the type. Assume the worst
             // and the value is of maximal depth.
             None => context.protocol_config.max_move_value_depth(),

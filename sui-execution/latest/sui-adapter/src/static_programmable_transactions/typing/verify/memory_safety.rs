@@ -16,7 +16,7 @@ use crate::{
 };
 use move_regex_borrow_graph::references::Ref;
 use sui_types::{
-    error::{ExecutionError, ExecutionErrorTrait, SafeIndex, command_argument_error},
+    error::{ExecutionError, SafeIndex, command_argument_error},
     execution_status::CommandArgumentError,
 };
 

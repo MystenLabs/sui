@@ -51,7 +51,7 @@ mod checked {
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind, ExecutionErrorTrait},
+        error::{ExecutionError, ExecutionErrorKind},
         event::Event,
         execution::ExecutionResultsV2,
         metrics::LimitsMetrics,
