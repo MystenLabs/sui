@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf, str::FromStr, sync::Arc};
 
 use anyhow::{Context as _, Result};
 use axum::{
@@ -18,13 +18,16 @@ use tracing::{info, warn};
 
 use simulacrum::{AdvanceEpochConfig, Simulacrum, store::in_mem_store::KeyStore};
 use sui_data_store::{
-    CheckpointStore as _, Node,
-    stores::{DataStore, FileSystemStore, NODE_MAPPING_FILE, ReadThroughStore},
+    CheckpointStore as _, SetupStore as _,
+    stores::{DataStore, FileSystemStore, ReadThroughStore},
 };
 use sui_types::{
     accumulator_root::get_accumulator_root_obj_initial_shared_version,
     base_types::SuiAddress,
-    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
+    digests::{
+        ChainIdentifier, CheckpointDigest, get_mainnet_chain_identifier,
+        get_testnet_chain_identifier,
+    },
     effects::TransactionEffectsAPI,
     message_envelope::Envelope,
     messages_checkpoint::VerifiedCheckpoint,
@@ -39,7 +42,9 @@ use crate::grpc::{
     subscription_service::ForkingSubscriptionService,
     transaction_execution_service::ForkingTransactionExecutionService,
 };
-use crate::{graphql::GraphQLClient, seeds::InitialAccounts, store::ForkingStore};
+use crate::{
+    graphql::GraphQLClient, network::ForkNetwork, seeds::InitialAccounts, store::ForkingStore,
+};
 
 use rand::rngs::OsRng;
 use sui_futures::service::Service;
@@ -310,15 +315,18 @@ async fn faucet(
 /// Start the forking server
 pub async fn start_server(
     initial_accounts: InitialAccounts,
-    chain: Chain,
+    fork_network: ForkNetwork,
     checkpoint: Option<u64>,
+    fullnode_url: Option<String>,
     host: String,
     port: u16,
     _data_ingestion_path: PathBuf,
     version: &'static str,
 ) -> Result<()> {
-    let chain_str = chain.as_str();
-    let client = GraphQLClient::new(format!("https://graphql.{chain_str}.sui.io/graphql"));
+    let fullnode_endpoint = fork_network
+        .resolve_fullnode_endpoint(fullnode_url.as_deref())
+        .context("failed to resolve fullnode RPC endpoint")?;
+    let client = GraphQLClient::new(fork_network.gql_endpoint().to_string());
     let (forked_at_checkpoint, protocol_version) = if let Some(cp) = checkpoint {
         (cp, client.fetch_protocol_version(Some(cp)).await?)
     } else {
@@ -326,20 +334,31 @@ pub async fn start_server(
             .fetch_latest_checkpoint_and_protocol_version()
             .await?
     };
-    let (fs_store, fs_gql_store) = initialize_data_store(chain, forked_at_checkpoint, version);
+    let (fs_store, fs_gql_store) = initialize_data_store(
+        &fork_network,
+        &fullnode_endpoint,
+        forked_at_checkpoint,
+        version,
+    )?;
     let startup_checkpoint =
         determine_startup_checkpoint(checkpoint, forked_at_checkpoint, &fs_store)?;
 
-    let is_resuming_existing_fork = checkpoint.is_some() && startup_checkpoint != forked_at_checkpoint;
+    let is_resuming_existing_fork =
+        checkpoint.is_some() && startup_checkpoint != forked_at_checkpoint;
     if is_resuming_existing_fork {
         println!(
             "Resuming {} forked network, current checkpoint: {}, forked at checkpoint: {}, protocol version {}",
-            chain_str, startup_checkpoint, forked_at_checkpoint, protocol_version
+            fork_network.display_name(),
+            startup_checkpoint,
+            forked_at_checkpoint,
+            protocol_version
         );
     } else {
         println!(
             "Starting from {} at checkpoint {} with protocol version {}",
-            chain_str, forked_at_checkpoint, protocol_version
+            fork_network.display_name(),
+            forked_at_checkpoint,
+            protocol_version
         );
     }
 
@@ -349,7 +368,7 @@ pub async fn start_server(
         &client,
         &initial_accounts,
         protocol_version,
-        chain,
+        fork_network.protocol_chain(),
         fs_store,
         fs_gql_store,
     )
@@ -361,11 +380,7 @@ pub async fn start_server(
         .unwrap();
     let (checkpoint_sender, subscription_service_handle) = RpcSubscriptionService::build(&registry);
 
-    let chain_id = match chain_str {
-        "mainnet" => get_mainnet_chain_identifier(),
-        "testnet" => get_testnet_chain_identifier(),
-        _ => panic!("Unsupported chain, expected mainnet or testnet"),
-    };
+    let chain_id = resolve_chain_identifier(&fork_network, &client).await?;
     let context = crate::context::Context {
         simulacrum: simulacrum.clone(),
         subscription_service_handle,
@@ -414,6 +429,27 @@ pub async fn start_server(
     info!("Server shutdown complete");
 
     Ok(())
+}
+
+async fn resolve_chain_identifier(
+    fork_network: &ForkNetwork,
+    client: &GraphQLClient,
+) -> Result<ChainIdentifier> {
+    match fork_network.protocol_chain() {
+        Chain::Mainnet => Ok(get_mainnet_chain_identifier()),
+        Chain::Testnet => Ok(get_testnet_chain_identifier()),
+        Chain::Unknown => {
+            let chain_identifier = client.fetch_chain_identifier().await?;
+            let digest = CheckpointDigest::from_str(&chain_identifier).with_context(|| {
+                format!(
+                    "invalid chainIdentifier '{}' returned by {}",
+                    chain_identifier,
+                    client.endpoint()
+                )
+            })?;
+            Ok(ChainIdentifier::from(digest))
+        }
+    }
 }
 
 // // const SYSTEM_OBJECT_IDS: &[&str] = &["0x1", "0x2", "0x3", "0x6", "0xacc"];
@@ -508,7 +544,7 @@ async fn initialize_simulacrum(
         Some(checkpoint) => checkpoint,
         None => fs_gql_store
             .get_checkpoint_by_sequence_number(startup_checkpoint)
-            .context("failed to hydrate startup checkpoint from checkpoint read-through store")?
+            .context("failed to fetch startup checkpoint from rpc")?
             .with_context(|| format!("checkpoint {startup_checkpoint} not found"))?,
     };
 
@@ -527,7 +563,7 @@ async fn initialize_simulacrum(
         .await
         .context("Failed to prefetch startup owned objects")?;
 
-    // Fetch the system store at this forked checkpoint and update the validator set to match the
+    // Fetch the system state at this forked checkpoint and update the validator set to match the
     // one in our custom config, because we do not have the actual validators' keys from network.
     let system_state = get_sui_system_state(&store).await.unwrap();
     let mut inner = match system_state {
@@ -579,46 +615,72 @@ async fn initialize_simulacrum(
 /// and a read-through store for objects that combines the file system store and the GraphQL RPC
 /// store.
 fn initialize_data_store(
-    chain: Chain,
+    fork_network: &ForkNetwork,
+    fullnode_endpoint: &str,
     at_checkpoint: u64,
     version: &'static str,
-) -> (
-    FileSystemStore,
-    ReadThroughStore<FileSystemStore, DataStore>,
-) {
+) -> Result<
+    (
+        FileSystemStore,
+        ReadThroughStore<FileSystemStore, DataStore>,
+    ),
+    anyhow::Error,
+> {
     let forking_path = format!(
         "forking/{}/forked_at_checkpoint_{}",
-        chain.as_str(),
+        fork_network.cache_namespace(),
         at_checkpoint
     );
 
-    let node = match chain {
-        Chain::Mainnet => Node::Mainnet,
-        Chain::Testnet => Node::Testnet,
-        Chain::Unknown => todo!("Add support for custom chains"),
-    };
+    let node = fork_network.node();
 
-    let fs_base_path = FileSystemStore::base_path().unwrap().join(forking_path);
-    let fs = FileSystemStore::new_with_path(node.clone(), fs_base_path.clone()).unwrap();
-    let gql_rpc_store = DataStore::new(node.clone(), version).unwrap();
-    let fs_store = FileSystemStore::new_with_path(node.clone(), fs_base_path.clone()).unwrap();
+    let fs_base_path = FileSystemStore::base_path()
+        .context("failed to resolve base path for file system data store")?
+        .join(forking_path);
+    let fs = FileSystemStore::new_with_path(node.clone(), fs_base_path.clone())
+        .context("failed to initialize file-system primary cache store")?;
+    let gql_rpc_store = DataStore::new_with_endpoints(
+        node.clone(),
+        fork_network.gql_endpoint(),
+        fullnode_endpoint,
+        version,
+    )
+    .context("failed to initialize GraphQL/fullnode data store")?;
+    let fs_store = FileSystemStore::new_with_path(node, fs_base_path.clone())
+        .context("failed to initialize file-system checkpoint store")?;
     let fs_gql_store = ReadThroughStore::new(fs, gql_rpc_store);
 
     info!("Fs base path {:?}", fs_base_path.display());
-    let node_mapping_file = fs_base_path.join(NODE_MAPPING_FILE);
-    if !fs_base_path.exists() {
-        std::fs::create_dir_all(fs_base_path).unwrap();
-    }
-    info!("Node mapping file path: {:?}", node_mapping_file.display());
-    if !node_mapping_file.exists() {
-        std::fs::write(
-            node_mapping_file,
-            format!("{},{}", node.network_name(), chain.as_str()),
-        )
-        .unwrap();
+    match fork_network {
+        ForkNetwork::Mainnet => {
+            fs_store
+                .setup(Some(Chain::Mainnet.as_str().to_string()))
+                .context("failed to initialize local mainnet node mapping")?;
+        }
+        ForkNetwork::Testnet => {
+            fs_store
+                .setup(Some(Chain::Testnet.as_str().to_string()))
+                .context("failed to initialize local testnet node mapping")?;
+        }
+        ForkNetwork::Devnet | ForkNetwork::Custom(_) => {
+            let chain_id = fs_gql_store
+                .setup(None)
+                .context("failed to initialize dynamic chain identifier mapping")?
+                .with_context(|| {
+                    format!(
+                        "missing chain identifier while setting up {} data store",
+                        fork_network.display_name()
+                    )
+                })?;
+            info!(
+                "Resolved dynamic chain identifier for {}: {}",
+                fork_network.display_name(),
+                chain_id
+            );
+        }
     }
 
-    (fs_store, fs_gql_store)
+    Ok((fs_store, fs_gql_store))
 }
 
 fn determine_startup_checkpoint(

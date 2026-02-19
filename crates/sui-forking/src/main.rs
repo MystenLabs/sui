@@ -6,6 +6,7 @@ mod context;
 mod execution;
 mod graphql;
 mod grpc;
+mod network;
 mod seeds;
 mod server;
 mod store;
@@ -14,9 +15,8 @@ use anyhow::Result;
 use clap::Parser;
 use tracing::info;
 
-use sui_types::supported_protocol_versions::Chain;
-
 use crate::cli::{Args, Commands};
+use crate::network::ForkNetwork;
 use crate::server::start_server;
 use crate::server::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
 use std::path::PathBuf;
@@ -68,18 +68,15 @@ async fn main() -> Result<()> {
             checkpoint,
             port,
             network,
+            fullnode_url,
             data_dir,
             accounts,
         } => {
-            let chain = match network.as_str() {
-                "mainnet" => Chain::Mainnet,
-                "testnet" => Chain::Testnet,
-                _ => Chain::Unknown,
-            };
+            let fork_network = ForkNetwork::parse(&network)?;
 
             info!(
                 "Starting forking server with {} as the starting point...",
-                chain.as_str()
+                fork_network.display_name()
             );
 
             let data_ingestion_path = if let Some(data_dir) = data_dir {
@@ -93,8 +90,9 @@ async fn main() -> Result<()> {
             };
             start_server(
                 accounts,
-                chain,
+                fork_network,
                 checkpoint,
+                fullnode_url,
                 host,
                 port,
                 data_ingestion_path,

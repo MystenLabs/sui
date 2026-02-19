@@ -252,6 +252,7 @@ impl FileSystemStore {
         let node_key = match &self.node {
             Node::Mainnet => "mainnet",
             Node::Testnet => "testnet",
+            Node::Devnet => "devnet",
             Node::Custom(url) => url,
         };
 
@@ -1166,6 +1167,7 @@ impl FileSystemStore {
         let node_key = match &self.node {
             Node::Mainnet => "mainnet",
             Node::Testnet => "testnet",
+            Node::Devnet => "devnet",
             Node::Custom(url) => url,
         };
 

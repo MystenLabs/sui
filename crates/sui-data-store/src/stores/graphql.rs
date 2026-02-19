@@ -36,6 +36,7 @@ type EpochId = u64;
 pub struct DataStore {
     client: reqwest::Client,
     rpc: reqwest::Url,
+    fullnode_rpc_url: String,
     node: Node,
     // Keep the epoch data considering its small size and footprint
     epoch_map: RwLock<BTreeMap<EpochId, EpochData>>,
@@ -292,19 +293,32 @@ impl SetupStore for DataStore {
 
 impl DataStore {
     pub fn new(node: Node, version: &str) -> Result<Self, Error> {
+        Self::new_with_endpoints(node.clone(), node.gql_url(), node.node_url(), version)
+    }
+
+    pub fn new_with_endpoints(
+        node: Node,
+        gql_url: &str,
+        fullnode_rpc_url: &str,
+        version: &str,
+    ) -> Result<Self, Error> {
         debug!("Start stores creation");
         let client = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(3))
             .timeout(std::time::Duration::from_secs(5))
             .build()?;
-        let url = node.gql_url();
-        let rpc =
-            reqwest::Url::parse(url).context(format!("Failed to parse GQL RPC URL {}", url))?;
+        let rpc = reqwest::Url::parse(gql_url)
+            .context(format!("Failed to parse GQL RPC URL {}", gql_url))?;
+        let _ = reqwest::Url::parse(fullnode_rpc_url).context(format!(
+            "Failed to parse fullnode RPC URL {}",
+            fullnode_rpc_url
+        ))?;
         let epoch_map = RwLock::new(BTreeMap::new());
         debug!("End stores creation");
 
         Ok(Self {
             client,
+            fullnode_rpc_url: fullnode_rpc_url.to_string(),
             node,
             epoch_map,
             rpc,
@@ -405,7 +419,7 @@ impl DataStore {
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> Result<Option<FullCheckpointData>, Error> {
-        let mut client = sui_rpc_api::Client::new(self.node.node_url())
+        let mut client = sui_rpc_api::Client::new(self.fullnode_rpc_url.clone())
             .context("failed to create gRPC client for full checkpoint fetch")?;
 
         match client.get_full_checkpoint(sequence).await {
@@ -419,7 +433,7 @@ impl DataStore {
     }
 
     async fn latest_full_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
-        let mut client = sui_rpc_api::Client::new(self.node.node_url())
+        let mut client = sui_rpc_api::Client::new(self.fullnode_rpc_url.clone())
             .context("failed to create gRPC client for latest checkpoint fetch")?;
 
         let summary = match client.get_latest_checkpoint().await {

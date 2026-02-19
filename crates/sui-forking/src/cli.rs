@@ -38,9 +38,15 @@ pub enum Commands {
         #[clap(long)]
         checkpoint: Option<u64>,
 
-        /// Network to fork from (e.g., mainnet, testnet, devnet, or a custom one).
+        /// Network to fork from: `mainnet`, `testnet`, `devnet`, or a full GraphQL URL.
+        /// Any non-keyword value must be a valid `http(s)` GraphQL endpoint URL.
         #[clap(long, default_value = "mainnet")]
         network: String,
+
+        /// Optional fullnode RPC URL.
+        /// Required when `--network` is a custom GraphQL URL.
+        #[clap(long)]
+        fullnode_url: Option<String>,
 
         /// Optional data directory for storing forked data
         #[clap(long)]

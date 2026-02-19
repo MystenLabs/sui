@@ -36,6 +36,12 @@ struct LatestCheckpointResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ChainIdentifierResponse {
+    chain_identifier: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CheckpointNumberProtocolVersion {
     sequence_number: u64,
     query: QueryData,
@@ -205,6 +211,53 @@ impl GraphQLClient {
             data.checkpoint.sequence_number,
             data.checkpoint.query.protocol_configs.protocol_version,
         ))
+    }
+
+    /// Fetch the network chain identifier from GraphQL.
+    pub async fn fetch_chain_identifier(&self) -> Result<String> {
+        let request = GraphQLRequest {
+            query: "query { chainIdentifier }".to_string(),
+            variables: None,
+        };
+
+        let response = self
+            .client
+            .post(&self.endpoint)
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send GraphQL request")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error response".to_string());
+            anyhow::bail!(
+                "GraphQL request failed with status {}: {}",
+                status,
+                error_text
+            );
+        }
+
+        let graphql_response: GraphQLResponse<ChainIdentifierResponse> = response
+            .json()
+            .await
+            .context("Failed to parse GraphQL response")?;
+
+        if let Some(errors) = graphql_response.errors {
+            let error_messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
+            anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
+        }
+
+        let data = graphql_response
+            .data
+            .context("No data in GraphQL response")?;
+        let chain_identifier = data
+            .chain_identifier
+            .context("No chainIdentifier in GraphQL response")?;
+        Ok(chain_identifier)
     }
 }
 
