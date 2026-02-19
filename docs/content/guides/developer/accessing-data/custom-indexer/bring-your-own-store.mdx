@@ -246,7 +246,7 @@ In checkpoint data, these events arrive as **raw BCS bytes** that need to be con
 
     ```rust
     impl Processor for YourHandler {
-        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             let mut results = Vec::new();
 
             for transaction in &checkpoint.transactions {
