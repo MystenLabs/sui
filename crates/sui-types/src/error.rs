@@ -59,7 +59,6 @@ macro_rules! make_invariant_violation {
         if cfg!(debug_assertions) {
             panic!($($args),*)
         }
-        #[allow(unused_imports)]
         $crate::error::ExecutionError::invariant_violation(format!($($args),*))
     }}
 }
@@ -87,8 +86,6 @@ macro_rules! checked_as {
     ($value:expr, $target_type:ty) => {{
         let v = $value;
         <$target_type>::try_from(v).map_err(|e| {
-            #[allow(unused_imports)]
-            use $crate::error::ExecutionErrorTrait;
             $crate::make_invariant_violation!(
                 "Value {} cannot be safely cast to {}: {:?}",
                 v,
@@ -1251,20 +1248,12 @@ impl ExecutionError {
         }
     }
 
-    pub fn kind(&self) -> &ExecutionErrorKind {
-        &self.inner.kind
-    }
-
-    pub fn command(&self) -> Option<CommandIndex> {
-        self.inner.command
-    }
-
-    pub fn from_kind(kind: ExecutionErrorKind) -> Self {
-        Self::new(kind, None)
-    }
-
     pub fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
         Self::new(kind, Some(source.into()))
+    }
+
+    pub fn invariant_violation<E: Into<BoxError>>(source: E) -> Self {
+        Self::new_with_source(ExecutionFailureStatus::InvariantViolation, source)
     }
 
     pub fn with_command_index(mut self, command: CommandIndex) -> Self {
@@ -1272,8 +1261,16 @@ impl ExecutionError {
         self
     }
 
-    pub fn invariant_violation<E: Into<BoxError>>(source: E) -> Self {
-        Self::new_with_source(ExecutionFailureStatus::InvariantViolation, source)
+    pub fn from_kind(kind: ExecutionErrorKind) -> Self {
+        Self::new(kind, None)
+    }
+
+    pub fn kind(&self) -> &ExecutionErrorKind {
+        &self.inner.kind
+    }
+
+    pub fn command(&self) -> Option<CommandIndex> {
+        self.inner.command
     }
 
     pub fn source(&self) -> &Option<BoxError> {

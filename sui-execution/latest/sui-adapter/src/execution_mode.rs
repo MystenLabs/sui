@@ -4,12 +4,8 @@
 use crate::execution_value::{RawValueType, Value};
 use crate::type_resolver::TypeTagResolver;
 use move_core_types::language_storage::TypeTag;
-use sui_types::{
-    execution::ExecutionResult,
-    transaction::Argument,
-    transfer::Receiving,
-};
 use sui_types::error::{ExecutionErrorKind, ExecutionErrorTrait};
+use sui_types::{execution::ExecutionResult, transaction::Argument, transfer::Receiving};
 
 pub type TransactionIndex = usize;
 

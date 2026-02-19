@@ -5,10 +5,7 @@
 
 use move_binary_format::file_format::CompiledModule;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{
-    error::{ExecutionError},
-    move_package::FnInfoMap,
-};
+use sui_types::{error::ExecutionError, move_package::FnInfoMap};
 
 use crate::{
     entry_points_verifier, global_storage_access_verifier, id_leak_verifier,

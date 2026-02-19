@@ -379,7 +379,7 @@ fn execute_command<Mode: ExecutionMode>(
         let argument_updates = context.argument_updates(args_to_update)?;
         let command_result = context.tracked_results(&result, &result_type)?;
         Mode::finish_command_v2(mode_results, argument_updates, command_result)
-            .map_err(Into::into)?;
+            .map_err(|e| e.into())?;
     }
     assert_invariant!(
         result.len() == drop_values.len(),

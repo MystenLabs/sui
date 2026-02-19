@@ -23,8 +23,7 @@ use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDPar
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{
-    ExecutionError, ExecutionErrorKind, SuiErrorKind, UserInputError,
-    UserInputResult,
+    ExecutionError, ExecutionErrorKind, SuiErrorKind, UserInputError, UserInputResult,
 };
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::GAS;
