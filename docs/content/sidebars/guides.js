@@ -227,6 +227,7 @@ const guides = [
     items: [
       'guides/developer/nautilus/using-nautilus',
       'guides/developer/nautilus/customize-nautilus',
+      'guides/developer/nautilus/custom-pcr',
     ],
   },
   {
