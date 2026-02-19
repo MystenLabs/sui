@@ -7,11 +7,11 @@ use derive_more::Add;
 use mysten_common::random::get_rng;
 use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
-    ALIAS_ADD_FLAG, ALIAS_REMOVE_FLAG, ALIAS_TX_FLAG, ALL_OPERATIONS, AddressBalanceDeposit,
-    AddressBalanceOverdraw, AddressBalanceWithdraw, INVALID_ALIAS_TX_FLAG, ObjectBalanceDeposit,
-    ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead, SharedCounterIncrement,
-    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
-    TestCoinObjectWithdraw, describe_flags,
+    ALIAS_ADD_FLAG, ALIAS_REMOVE_FLAG, ALIAS_TX_FLAG, ALL_OPERATIONS, AccumulatorBalanceRead,
+    AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, INVALID_ALIAS_TX_FLAG,
+    ObjectBalanceDeposit, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
+    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
+    TestCoinMint, TestCoinObjectWithdraw, describe_flags,
 };
 use rand::seq::SliceRandom;
 
@@ -44,7 +44,10 @@ use sui_types::transaction::{
     Argument, CallArg, Command, ObjectArg, SharedObjectMutability, Transaction,
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
-use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
+};
 use tracing::{debug, info, trace};
 
 use super::MultiGas;
@@ -292,6 +295,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(TestCoinAddressWithdraw::FLAG, 0.1);
         probabilities.insert(TestCoinObjectWithdraw::FLAG, 0.1);
         probabilities.insert(AddressBalanceOverdraw::FLAG, 0.1);
+        probabilities.insert(AccumulatorBalanceRead::FLAG, 0.1);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -369,6 +373,7 @@ pub struct OperationPool {
     pub shared_counters: Vec<(ObjectID, SequenceNumber)>,
     pub package_id: ObjectID,
     pub randomness_initial_shared_version: SequenceNumber,
+    pub accumulator_root_initial_shared_version: SequenceNumber,
     pub hotness: f32,
     pub balance_pool: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
@@ -488,6 +493,7 @@ impl CompositePayload {
     ) -> OperationResources {
         let mut counter = None;
         let mut randomness = None;
+        let mut accumulator_root = None;
         let mut balance_pool = None;
         let mut test_coin_cap = None;
 
@@ -506,12 +512,16 @@ impl CompositePayload {
                 ResourceRequest::TestCoinCap => {
                     test_coin_cap = pool.test_coin_cap;
                 }
+                ResourceRequest::AccumulatorRoot => {
+                    accumulator_root = Some(pool.accumulator_root_initial_shared_version);
+                }
             }
         }
 
         OperationResources {
             counter,
             randomness,
+            accumulator_root,
             package_id: pool.package_id,
             address_balance_amount: config.address_balance_amount,
             balance_pool,
@@ -536,7 +546,9 @@ impl CompositePayload {
                     !op.resource_requests().iter().any(|r| {
                         matches!(
                             r,
-                            ResourceRequest::AddressBalance | ResourceRequest::ObjectBalance
+                            ResourceRequest::AddressBalance
+                                | ResourceRequest::ObjectBalance
+                                | ResourceRequest::AccumulatorRoot
                         )
                     })
                 });
@@ -1206,6 +1218,7 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             package_id: None,
             shared_counters: vec![],
             randomness_initial_shared_version: None,
+            accumulator_root_initial_shared_version: None,
             balance_pool: None,
             test_coin_cap: None,
             init_gas,
@@ -1224,6 +1237,7 @@ pub struct CompositeWorkload {
     package_id: Option<ObjectID>,
     shared_counters: Vec<(ObjectID, SequenceNumber)>,
     randomness_initial_shared_version: Option<SequenceNumber>,
+    accumulator_root_initial_shared_version: Option<SequenceNumber>,
     balance_pool: Option<(ObjectID, SequenceNumber)>,
     test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     init_gas: Vec<Gas>,
@@ -1332,6 +1346,22 @@ impl Workload<dyn Payload> for CompositeWorkload {
         info!(
             "Randomness initial shared version: {:?}",
             self.randomness_initial_shared_version
+        );
+
+        let obj = execution_proxy
+            .get_object(SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .await
+            .expect("Failed to get accumulator root object");
+        let Owner::Shared {
+            initial_shared_version,
+        } = obj.owner()
+        else {
+            panic!("AccumulatorRoot object must be shared");
+        };
+        self.accumulator_root_initial_shared_version = Some(*initial_shared_version);
+        info!(
+            "AccumulatorRoot initial shared version: {:?}",
+            self.accumulator_root_initial_shared_version
         );
 
         let protocol_config = system_state_observer.state.borrow().protocol_config.clone();
@@ -1713,6 +1743,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
             shared_counters: self.shared_counters.clone(),
             package_id: self.package_id.unwrap(),
             randomness_initial_shared_version: self.randomness_initial_shared_version.unwrap(),
+            accumulator_root_initial_shared_version: self
+                .accumulator_root_initial_shared_version
+                .unwrap(),
             hotness: self.config.shared_counter_hotness,
             balance_pool: self.balance_pool,
             test_coin_cap: self.test_coin_cap,
