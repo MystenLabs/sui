@@ -1,12 +1,26 @@
 # Modify Protocol Config
 
-Guides you through safely modifying the Sui protocol configuration.
+Guides you through safely modifying the Sui protocol configuration, or verifies that existing changes were made correctly.
 
 ## Usage
 
 ```
 /protocol-config
 ```
+
+## When to Use
+
+This skill serves two purposes:
+
+1. **Making changes** - Use this skill to guide you through adding new features or modifying protocol config settings.
+
+2. **Verifying changes** - Use this skill to check that protocol config changes already made in a branch are correct. This includes verifying that:
+   - A new protocol version was created if needed (not modifying a released version)
+   - The version history comment was added
+   - Chain-specific guards are used appropriately
+   - Snapshots were updated
+
+When verifying existing work, follow steps 1-4 to confirm the changes are safe, then review the actual changes against the patterns in steps 5-7.
 
 ## Background
 
