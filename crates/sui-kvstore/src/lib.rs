@@ -370,25 +370,28 @@ impl BigTableIndexer {
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(PackagesPipeline),
+                BigTableHandler::new(PackagesPipeline, &pipeline.packages),
                 pipeline.packages.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(PackagesByIdPipeline),
+                BigTableHandler::new(PackagesByIdPipeline, &pipeline.packages_by_id),
                 pipeline.packages_by_id.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(PackagesByCheckpointPipeline),
+                BigTableHandler::new(
+                    PackagesByCheckpointPipeline,
+                    &pipeline.packages_by_checkpoint,
+                ),
                 pipeline.packages_by_checkpoint.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(SystemPackagesPipeline),
+                BigTableHandler::new(SystemPackagesPipeline, &pipeline.system_packages),
                 pipeline.system_packages.finish(base.clone()),
             )
             .await?;
