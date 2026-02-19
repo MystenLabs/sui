@@ -270,9 +270,8 @@ impl ConsistentReader {
     }
 
     /// Paginate live objects at `checkpoint`, with owner described by `kind` and `address`, and an
-    /// optional, mutually exclusive `object_type` or `exclude_object_type`. The former filters for
-    /// objects of the given type, while the latter returns objects that are not of the
-    /// `exclude_object_type`.
+    /// optional, `object_type`. If `object_type` is prefaced with `!`, objects of the type prefix
+    /// will be excluded from the page of results.
     #[instrument(skip(self), level = "debug")]
     pub async fn list_owned_objects(
         &self,
@@ -280,7 +279,6 @@ impl ConsistentReader {
         kind: proto::owner::OwnerKind,
         address: Option<String>,
         object_type: Option<String>,
-        exclude_object_type: Option<String>,
         page_size: Option<u32>,
         after_token: Option<Vec<u8>>,
         before_token: Option<Vec<u8>>,
@@ -297,7 +295,6 @@ impl ConsistentReader {
                         address,
                     }),
                     object_type,
-                    exclude_object_type,
                     page_size,
                     after_token: after_token.map(Into::into),
                     before_token: before_token.map(Into::into),

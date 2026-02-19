@@ -83,8 +83,7 @@ pub(super) async fn owned_objects(
                 ctx,
                 owner,
                 StoredOwnerKind::Address,
-                None,
-                Some(filter_to_type_string(&exclusions[0])),
+                Some(format!("!{}", filter_to_type_string(&exclusions[0]))),
                 cursor,
                 limit,
             )
@@ -97,7 +96,6 @@ pub(super) async fn owned_objects(
                 owner,
                 StoredOwnerKind::Address,
                 filter.as_ref().map(filter_to_type_string),
-                None,
                 cursor,
                 limit,
             )
@@ -127,7 +125,6 @@ pub(crate) async fn dynamic_fields(
         owner.into(),
         StoredOwnerKind::Object,
         Some(type_.to_canonical_string(true)),
-        None,
         cursor,
         limit,
     )
@@ -148,7 +145,6 @@ async fn query_objects(
     owner: SuiAddress,
     kind: StoredOwnerKind,
     object_type: Option<String>,
-    exclude_object_type: Option<String>,
     cursor: Option<String>,
     limit: Option<usize>,
 ) -> Result<ObjectIDs, RpcError<Error>> {
@@ -180,7 +176,6 @@ async fn query_objects(
             owner_kind,
             Some(owner.to_string()),
             object_type,
-            exclude_object_type,
             Some(page.limit as u32),
             page.cursor.as_ref().map(|c| c.0.clone()),
             None,
