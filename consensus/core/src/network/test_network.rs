@@ -12,9 +12,7 @@ use crate::{
     block::VerifiedBlock,
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
-    network::{
-        BlockStream, NodeId, ObserverNetworkService, ValidatorNetworkService,
-    },
+    network::{BlockStream, NodeId, ObserverNetworkService, ValidatorNetworkService},
 };
 
 use super::ExtendedSerializedBlock;

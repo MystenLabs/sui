@@ -548,11 +548,7 @@ impl<C: ValidatorNetworkClient> CommitSyncer<C> {
         // 1. Fetch commits in the commit range from the target authority.
         let (serialized_commits, serialized_blocks) = inner
             .network_client
-            .fetch_commits(
-                target_authority,
-                commit_range.clone(),
-                timeout,
-            )
+            .fetch_commits(target_authority, commit_range.clone(), timeout)
             .await?;
 
         // 2. Verify the response contains blocks that can certify the last returned commit,

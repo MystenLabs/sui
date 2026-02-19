@@ -649,10 +649,11 @@ impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
         _peer: NodeId,
         _block_refs: Vec<BlockRef>,
     ) -> ConsensusResult<Vec<Bytes>> {
-        // TODO: Implement observer fetch blocks
-        // Similar to validator fetch_blocks but without highest_accepted_rounds parameter
-        // Observers fetch specific blocks they need for synchronization
-        todo!("Observer fetch blocks not yet implemented")
+        // TODO: implement observer fetch blocks, similar to validator fetch_blocks but
+        // without highest_accepted_rounds.
+        Err(ConsensusError::NetworkRequest(
+            "Observer fetch blocks not yet implemented".to_string(),
+        ))
     }
 
     async fn handle_fetch_commits(
@@ -660,10 +661,10 @@ impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
         _peer: NodeId,
         _commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
-        // TODO: Implement observer fetch commits
-        // Similar to validator fetch_commits
-        // Observers need commits to stay synchronized with consensus
-        todo!("Observer fetch commits not yet implemented")
+        // TODO: implement observer fetch commits, similar to validator fetch_commits.
+        Err(ConsensusError::NetworkRequest(
+            "Observer fetch commits not yet implemented".to_string(),
+        ))
     }
 }
 

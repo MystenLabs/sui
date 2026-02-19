@@ -1255,7 +1255,6 @@ struct PeerInfo {
     authority_index: AuthorityIndex,
 }
 
-
 // Adapt MetricsCallbackMaker and MetricsResponseCallback to http.
 
 impl SizedRequest for http::request::Parts {
