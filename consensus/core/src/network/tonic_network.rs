@@ -32,7 +32,7 @@ use super::{
     BlockStream, ExtendedSerializedBlock, NetworkManager, ObserverNetworkService,
     ValidatorNetworkClient, ValidatorNetworkService,
     metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
-    observer::{ObserverPeerInfo, ObserverServiceProxy},
+    observer::{ObserverPeerInfo, ObserverServiceProxy, TonicObserverClient},
     tonic_gen::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
@@ -734,7 +734,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
 
 /// Manages the lifecycle of Tonic network client and service. Typical usage during initialization:
 /// 1. Create a new `TonicManager`.
-/// 2. Take the validator client from `TonicManager::validator_client()`.
+/// 2. Take validator and observer clients from `TonicManager::validator_client()` and `TonicManager::observer_client()`.
 /// 3. Create consensus components.
 /// 4. Create `TonicService` for consensus service handler.
 /// 5. Install `TonicService` to `TonicManager` with `TonicManager::install_service()`.
@@ -743,6 +743,8 @@ pub(crate) struct TonicManager {
     network_keypair: NetworkKeyPair,
     own_address: SocketAddr,
     validator_client: Arc<TonicValidatorClient>,
+    #[allow(dead_code)]
+    observer_client: Arc<TonicObserverClient>,
     server: Option<ServerHandle>,
     observer_server: Option<ServerHandle>,
 }
@@ -750,6 +752,10 @@ pub(crate) struct TonicManager {
 impl TonicManager {
     pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
         let validator_client = Arc::new(TonicValidatorClient::new(
+            context.clone(),
+            network_keypair.clone(),
+        ));
+        let observer_client = Arc::new(TonicObserverClient::new(
             context.clone(),
             network_keypair.clone(),
         ));
@@ -771,6 +777,7 @@ impl TonicManager {
             network_keypair,
             own_address,
             validator_client,
+            observer_client,
             server: None,
             observer_server: None,
         }
@@ -817,6 +824,7 @@ impl TonicManager {
 
 impl NetworkManager for TonicManager {
     type ValidatorClient = TonicValidatorClient;
+    type ObserverClient = TonicObserverClient;
 
     fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
         TonicManager::new(context, network_keypair)
@@ -824,6 +832,10 @@ impl NetworkManager for TonicManager {
 
     fn validator_client(&self) -> Arc<Self::ValidatorClient> {
         self.validator_client.clone()
+    }
+
+    fn observer_client(&self) -> Arc<Self::ObserverClient> {
+        self.observer_client.clone()
     }
 
     fn update_peer_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>) {

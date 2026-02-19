@@ -1,14 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use consensus_config::NetworkPublicKey;
+use consensus_config::{NetworkKeyPair, NetworkPublicKey};
+use consensus_types::block::BlockRef;
 use futures::Stream;
 use tokio_stream::Iter;
 use tonic::{Request, Response, Streaming};
+
+use crate::{
+    CommitRange, Context,
+    error::{ConsensusError, ConsensusResult},
+    network::{BlockRequestStream, ObserverBlockStream, ObserverNetworkClient, PeerId},
+};
 
 use super::{ObserverNetworkService, tonic_gen::observer_service_server::ObserverService};
 
@@ -128,6 +135,57 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
         // TODO: Implement fetch_commits for observer nodes
         Err(tonic::Status::unimplemented(
             "fetch_commits not yet implemented for observers",
+        ))
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) struct TonicObserverClient {
+    context: Arc<Context>,
+    _network_keypair: NetworkKeyPair,
+}
+
+impl TonicObserverClient {
+    pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
+        Self {
+            context,
+            _network_keypair: network_keypair,
+        }
+    }
+}
+
+#[async_trait]
+impl ObserverNetworkClient for TonicObserverClient {
+    async fn stream_blocks(
+        &self,
+        _peer: PeerId,
+        _request_stream: BlockRequestStream,
+        _timeout: Duration,
+    ) -> ConsensusResult<ObserverBlockStream> {
+        Err(ConsensusError::NetworkRequest(
+            "Not implemented".to_string(),
+        ))
+    }
+
+    async fn fetch_blocks(
+        &self,
+        _peer: PeerId,
+        _block_refs: Vec<BlockRef>,
+        _timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        Err(ConsensusError::NetworkRequest(
+            "Not implemented".to_string(),
+        ))
+    }
+
+    async fn fetch_commits(
+        &self,
+        _peer: PeerId,
+        _commit_range: CommitRange,
+        _timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+        Err(ConsensusError::NetworkRequest(
+            "Not implemented".to_string(),
         ))
     }
 }

@@ -33,8 +33,8 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
-        BlockStream, ExtendedSerializedBlock, NodeId, ObserverNetworkService,
-        ValidatorNetworkService,
+        BlockRequestStream, BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream,
+        ObserverNetworkService, ValidatorNetworkService,
     },
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
@@ -644,6 +644,15 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
 #[async_trait]
 impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
+    async fn handle_stream_blocks(
+        &self,
+        _peer: NodeId,
+        _request_stream: BlockRequestStream,
+    ) -> ConsensusResult<ObserverBlockStream> {
+        // TODO: Implement observer block streaming
+        todo!("Observer block streaming not yet implemented")
+    }
+
     async fn handle_fetch_blocks(
         &self,
         _peer: NodeId,
@@ -857,7 +866,8 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{
-            BlockStream, ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService,
+            BlockStream, ExtendedSerializedBlock, ObserverNetworkClient, SynchronizerClient,
+            ValidatorNetworkClient, ValidatorNetworkService,
         },
         round_tracker::RoundTracker,
         storage::mem_store::MemStore,
@@ -984,6 +994,36 @@ mod tests {
         }
     }
 
+    #[async_trait]
+    impl ObserverNetworkClient for FakeNetworkClient {
+        async fn stream_blocks(
+            &self,
+            _peer: crate::network::PeerId,
+            _request_stream: crate::network::BlockRequestStream,
+            _timeout: Duration,
+        ) -> ConsensusResult<crate::network::ObserverBlockStream> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_blocks(
+            &self,
+            _peer: crate::network::PeerId,
+            _block_refs: Vec<BlockRef>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_commits(
+            &self,
+            _peer: crate::network::PeerId,
+            _commit_range: CommitRange,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Unimplemented")
+        }
+    }
+
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_send_block() {
         let (context, _keys) = Context::new_for_test(4);
@@ -992,7 +1032,12 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
-        let network_client = Arc::new(FakeNetworkClient::default());
+        let fake_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(fake_client.clone()),
+            Some(fake_client.clone()),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1111,7 +1156,12 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
-        let network_client = Arc::new(FakeNetworkClient::default());
+        let fake_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(fake_client.clone()),
+            Some(fake_client.clone()),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1279,7 +1329,12 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
-        let network_client = Arc::new(FakeNetworkClient::default());
+        let fake_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(fake_client.clone()),
+            Some(fake_client.clone()),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1352,7 +1407,12 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
-        let network_client = Arc::new(FakeNetworkClient::default());
+        let fake_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(fake_client.clone()),
+            Some(fake_client.clone()),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
@@ -1442,7 +1502,12 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
-        let network_client = Arc::new(FakeNetworkClient::default());
+        let fake_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(fake_client.clone()),
+            Some(fake_client.clone()),
+        ));
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
