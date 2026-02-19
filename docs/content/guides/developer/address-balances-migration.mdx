@@ -245,7 +245,7 @@ Each transfer creates a new object for the recipient, contributing to object pro
 
 With address balances, funds merge automatically into the recipient's canonical balance.
 
-[Source: sui-framework/sources/coin.move - send_funds](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
+[TypeScript SDK - Transaction.moveCall](https://sdk.mystenlabs.com/sui/transaction-building/basics#movecall):
 
 ```typescript
 // After: Send to address balance
@@ -257,6 +257,8 @@ tx.moveCall({
     arguments: [coin, tx.pure.address(recipient)],
 });
 ```
+
+[Source: sui-framework/sources/coin.move - send_funds](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
 
 ```move
 // After: In Move contract
