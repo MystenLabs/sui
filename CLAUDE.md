@@ -105,7 +105,12 @@ sui/
 1. **Testing Requirements**:
    - Always run tests before submitting changes
    - Framework changes require snapshot updates
-2. **CRITICAL - Final Development Steps**:
+2. **CRITICAL - Protocol Config Changes**:
+   - **STOP! If you have modified or are about to modify `crates/sui-protocol-config/src/lib.rs`, you MUST invoke `/protocol-config` IMMEDIATELY.**
+   - Protocol config errors can break consensus and cause catastrophic network failures.
+   - The skill will verify that you have not modified a released protocol version and that your changes follow the correct patterns.
+   - This is NOT optional. Do not skip this step under any circumstances.
+3. **CRITICAL - Final Development Steps**:
    - **ALWAYS run `cargo xclippy` after finishing development** to ensure code passes all linting checks
    - **NEVER disable or ignore tests** - all tests must pass and be enabled
    - **NEVER use `#[allow(dead_code)]`, `#[allow(unused)]`, or any other linting suppressions** - fix the underlying issues instead
