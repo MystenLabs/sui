@@ -7,35 +7,35 @@ module std::integer_tests;
 
 use std::unit_test::assert_eq;
 
-/// Iterate over cases and apply `$f(a, b, c)`.
-/// When `$exhaustive` is false: for each case, calls `$f(case-1, case, case+1)`.
-/// When `$exhaustive` is true: calls `$f` for all N³ permutations of cases.
-public(package) macro fun cases($max: _, $cases: vector<_>, $exhaustive: bool, $f: |_, _, _|) {
+/// Calls `$f` for all N³ permutations of cases.
+public(package) macro fun exhaustive_cases($cases: vector<_>, $f: |_, _, _|) {
     let cases = $cases;
-    if ($exhaustive) {
-        let len = cases.length();
-        len.do!(|i| {
-            len.do!(|j| {
-                len.do!(|k| {
-                    $f(cases[i], cases[j], cases[k]);
-                });
+    let len = cases.length();
+    len.do!(|i| {
+        len.do!(|j| {
+            len.do!(|k| {
+                $f(cases[i], cases[j], cases[k]);
             });
         });
-    } else {
-        let max_pred = $max - 1;
-        cases.destroy!(|case| {
-            let case_pred = case.max(1) - 1;
-            let case_succ = case.min(max_pred) + 1;
-            $f(case_pred, case, case_succ);
-        });
-    };
+    });
+}
+
+/// Iterate over cases and apply `$f(a, b, c)`.
+public(package) macro fun cases($max: _, $cases: vector<_>, $f: |_, _, _|) {
+    let cases = $cases;
+    let max_pred = $max - 1;
+    cases.destroy!(|case| {
+        let case_pred = case.max(1) - 1;
+        let case_succ = case.min(max_pred) + 1;
+        $f(case_pred, case, case_succ);
+    });
 }
 
 public(package) macro fun test_bitwise_not($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.bitwise_not(), 0);
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(case_pred.bitwise_not().bitwise_not(), case_pred);
         assert_eq!(case_pred.bitwise_not() | case_pred, max);
         assert_eq!(case_pred.bitwise_not() ^ case_pred, max);
@@ -57,7 +57,7 @@ public(package) macro fun test_max($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.max(max), max);
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(max.max(case), max);
         assert_eq!(case.max(max), max);
         assert_eq!(case.max(case), case);
@@ -70,7 +70,7 @@ public(package) macro fun test_min($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.min(max), max);
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(max.min(case), case);
         assert_eq!(case.min(max), case);
         assert_eq!(case.min(case), case);
@@ -83,7 +83,7 @@ public(package) macro fun test_diff($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.diff(max), 0);
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(max.diff(case), max - case);
         assert_eq!(case.diff(max), max - case);
         assert_eq!(case.diff(case), 0);
@@ -106,7 +106,7 @@ public(package) macro fun test_divide_and_round_up($max: _, $cases: vector<_>) {
     let cases = $cases;
     assert_eq!(max.divide_and_round_up(max), 1);
     check_div_round!(max, max);
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         check_div_round!(max, case);
         check_div_round!(case, max);
         check_div_round!(case, case);
@@ -229,11 +229,11 @@ public(package) macro fun check_mul_div_precision($max: _, $x: _, $z: _) {
     };
 }
 
-public(package) macro fun test_mul_div<$T>($max: $T, $cases: vector<$T>, $exhaustive: bool) {
+public(package) macro fun test_mul_div<$T>($max: $T, $cases: vector<$T>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.mul_div(max, max.max(1)), max);
-    cases!(max, cases, $exhaustive, |case_pred, case, case_succ| {
+    exhaustive_cases!(cases, |case_pred, case, case_succ| {
         check_mul_div!(max, case_pred, case, case_succ);
         check_mul_div_ceil!(max, case_pred, case, case_succ);
         check_mul_div_precision!(max, case_pred, case_succ);
@@ -256,7 +256,7 @@ public(package) macro fun slow_pow($base: _, $exp: u8): _ {
 public(package) macro fun test_pow<$T>($max: $T, $cases: vector<$T>) {
     let max = $max;
     let cases = $cases;
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(case_pred.pow(0), 1);
         assert_eq!(case_pred.pow(1), case_pred);
         assert_eq!(case.pow(0), 1);
@@ -279,7 +279,7 @@ public(package) macro fun test_sqrt<$T>(
     let cases = $bound_cases;
     // logical bounds cases
     let max_sqrt = max.sqrt();
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         let sqrt_pred = case_pred.sqrt();
         assert!(sqrt_pred * sqrt_pred <= case_pred);
         let sqrt = case.sqrt();
@@ -299,7 +299,7 @@ public(package) macro fun test_sqrt<$T>(
 
     // simple reflexive cases
     let cases: vector<$T> = $reflexive_cases;
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!((case_pred * case_pred).sqrt(), case_pred);
         assert_eq!((case * case).sqrt(), case);
         assert_eq!((case_succ * case_succ).sqrt(), case_succ);
@@ -409,7 +409,7 @@ public(package) macro fun test_dos<$T>($max: $T, $cases: vector<$T>) {
     let cases = $cases;
     // test bounds/invalid ranges
     (0: $T).do!(|_| assert!(false));
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         if (case == 0) return;
         case.range_do!(0, |_| assert!(false));
         case.range_do_eq!(0, |_| assert!(false));
@@ -427,7 +427,7 @@ public(package) macro fun test_dos<$T>($max: $T, $cases: vector<$T>) {
 
     // test iteration numbers
     let cases: vector<$T> = vector[3, 5, 8, 11, 14];
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         test_dos_case!(case_pred);
         test_dos_case!(case);
         test_dos_case!(case_succ);
@@ -448,7 +448,7 @@ public(package) macro fun test_checked_add<$T>($max: $T, $cases: vector<$T>) {
     assert_eq!((1: $T).checked_add(max), option::none());
     assert_eq!(max.checked_add(max), option::none());
     // case iteration
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(case.checked_add(0), option::some(case));
         assert_eq!((0: $T).checked_add(case), option::some(case));
         if (case <= max - 1) {
@@ -484,7 +484,7 @@ public(package) macro fun test_checked_sub<$T>($max: $T, $cases: vector<$T>) {
     assert_eq!((1: $T).checked_sub(2), option::none());
     assert_eq!((1: $T).checked_sub(max), option::none());
     // case iteration
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(case.checked_sub(0), option::some(case));
         assert_eq!(case.checked_sub(case), option::some(0));
         assert_eq!(case_succ.checked_sub(case), option::some(case_succ - case));
@@ -511,7 +511,7 @@ public(package) macro fun test_checked_mul<$T>($max: $T, $cases: vector<$T>) {
     assert_eq!((2: $T).checked_mul(max), option::none());
     assert_eq!(max.checked_mul(max), option::none());
     // case iteration
-    cases!(max, cases, false, |_case_pred, case, _case_succ| {
+    cases!(max, cases, |_case_pred, case, _case_succ| {
         assert_eq!(case.checked_mul(0), option::some(0));
         assert_eq!((0: $T).checked_mul(case), option::some(0));
         assert_eq!(case.checked_mul(1), option::some(case));
@@ -542,7 +542,7 @@ public(package) macro fun test_checked_div<$T>($max: $T, $cases: vector<$T>) {
     assert_eq!((1: $T).checked_div(0), option::none());
     assert_eq!(max.checked_div(0), option::none());
     // case iteration
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         if (case != 0) {
             assert_eq!(case.checked_div(case), option::some(1));
             assert_eq!((0: $T).checked_div(case), option::some(0));
@@ -568,7 +568,7 @@ public(package) macro fun test_saturating_add<$T>($max: $T, $cases: vector<$T>) 
     assert_eq!((1: $T).saturating_add(max), max);
     assert_eq!(max.saturating_add(max), max);
     // case iteration
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(case.saturating_add(0), case);
         assert_eq!((0: $T).saturating_add(case), case);
         if (case <= max - 1) {
@@ -604,7 +604,7 @@ public(package) macro fun test_saturating_sub<$T>($max: $T, $cases: vector<$T>) 
     assert_eq!((1: $T).saturating_sub(2), 0);
     assert_eq!((1: $T).saturating_sub(max), 0);
     // case iteration
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(case.saturating_sub(0), case);
         assert_eq!(case.saturating_sub(case), 0);
         assert_eq!(case_succ.saturating_sub(case), case_succ - case);
@@ -631,7 +631,7 @@ public(package) macro fun test_saturating_mul<$T>($max: $T, $cases: vector<$T>) 
     assert_eq!((2: $T).saturating_mul(max), max);
     assert_eq!(max.saturating_mul(max), max);
     // case iteration
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         assert_eq!(case.saturating_mul(0), 0);
         assert_eq!((0: $T).saturating_mul(case), 0);
         assert_eq!(case.saturating_mul(1), case);
@@ -742,7 +742,7 @@ public(package) macro fun test_lossless_div<$T>($max: $T, $cases: vector<$T>) {
 
     assert_eq!(max.lossless_div(2), option::none());
     // case iteration
-    cases!(max, cases, false, |case_pred, case, case_succ| {
+    cases!(max, cases, |case_pred, case, case_succ| {
         if (case == 0) return;
 
         // basic cases
