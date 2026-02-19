@@ -7,9 +7,10 @@ use sui_types::base_types::SuiAddress;
 
 use crate::seeds::InitialAccounts;
 
-const PORT: &str = "3001";
+const RPC_PORT: &str = "9000";
+const SERVER_PORT: &str = "9001";
 const IP: &str = "127.0.0.1";
-const DEFAULT_ADDRESS: &str = "http://127.0.0.1:3001";
+const DEFAULT_ADDRESS: &str = "http://127.0.0.1:9001";
 
 #[derive(Parser, Debug)]
 #[clap(name = "sui-forking")]
@@ -23,9 +24,13 @@ pub struct Args {
 pub enum Commands {
     /// Start the forking server
     Start {
-        /// Port to bind the server. Default is 3001
-        #[clap(long, default_value = PORT)]
-        port: u16,
+        /// Port to bind the gRPC RPC service. Default is 9000.
+        #[clap(long, default_value = RPC_PORT)]
+        rpc_port: u16,
+
+        /// Port to bind the HTTP forking server. Default is 9001.
+        #[clap(long, default_value = SERVER_PORT)]
+        server_port: u16,
 
         /// Host IP address to bind the server. Default is localhost.
         #[clap(long, default_value = IP)]

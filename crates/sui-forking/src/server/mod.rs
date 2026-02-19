@@ -319,7 +319,8 @@ pub async fn start_server(
     checkpoint: Option<u64>,
     fullnode_url: Option<String>,
     host: String,
-    port: u16,
+    server_port: u16,
+    rpc_port: u16,
     _data_ingestion_path: PathBuf,
     version: &'static str,
 ) -> Result<()> {
@@ -387,7 +388,7 @@ pub async fn start_server(
         chain_id,
     };
 
-    let grpc = start_grpc_services(context.clone(), version, &registry).await?;
+    let grpc = start_grpc_services(context.clone(), version, &registry, rpc_port).await?;
     let grpc_handle = tokio::spawn(grpc.main());
 
     let state = Arc::new(AppState::new(context.clone()).await);
@@ -403,7 +404,7 @@ pub async fn start_server(
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
+    let addr: SocketAddr = format!("{}:{}", host, server_port).parse()?;
     println!("Forking server listening on {}", addr);
     println!("Ready to accept requests");
 
@@ -494,8 +495,9 @@ async fn start_grpc_services(
     context: crate::context::Context,
     version: &'static str,
     registry: &Registry,
+    rpc_port: u16,
 ) -> Result<Service, anyhow::Error> {
-    let grpc_listen_address = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let grpc_listen_address = SocketAddr::from(([127, 0, 0, 1], rpc_port));
     println!("RPC listening on {}", grpc_listen_address);
 
     let grpc_args = GrpcArgs {

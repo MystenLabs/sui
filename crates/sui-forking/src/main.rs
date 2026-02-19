@@ -66,7 +66,8 @@ async fn main() -> Result<()> {
         Commands::Start {
             host,
             checkpoint,
-            port,
+            rpc_port,
+            server_port,
             network,
             fullnode_url,
             data_dir,
@@ -98,7 +99,8 @@ async fn main() -> Result<()> {
                 checkpoint,
                 fullnode_url,
                 host,
-                port,
+                server_port,
+                rpc_port,
                 data_ingestion_path,
                 VERSION,
             )
