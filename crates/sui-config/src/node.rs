@@ -516,8 +516,6 @@ pub enum ExecutionCacheConfig {
         /// Number of uncommitted transactions at which to refuse new transaction
         /// submissions. Defaults to backpressure_threshold if unset.
         backpressure_threshold_for_rpc: Option<u64>,
-
-        fastpath_transaction_outputs_cache_size: Option<u64>,
     },
 }
 
@@ -536,7 +534,6 @@ impl Default for ExecutionCacheConfig {
             effect_cache_size: None,
             events_cache_size: None,
             transaction_objects_cache_size: None,
-            fastpath_transaction_outputs_cache_size: None,
         }
     }
 }
@@ -689,19 +686,6 @@ impl ExecutionCacheConfig {
                     backpressure_threshold_for_rpc,
                     ..
                 } => backpressure_threshold_for_rpc.unwrap_or(self.backpressure_threshold()),
-            })
-    }
-
-    pub fn fastpath_transaction_outputs_cache_size(&self) -> u64 {
-        std::env::var("SUI_FASTPATH_TRANSACTION_OUTPUTS_CACHE_SIZE")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_else(|| match self {
-                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
-                ExecutionCacheConfig::WritebackCache {
-                    fastpath_transaction_outputs_cache_size,
-                    ..
-                } => fastpath_transaction_outputs_cache_size.unwrap_or(10_000),
             })
     }
 }

@@ -5887,7 +5887,7 @@ where
         (vec![], AssignedTxAndVersions::default())
     } else {
         // Remove and return the first batch of captured transactions
-        let (mut schedulables, assigned_versions, _) = captured.remove(0);
+        let (mut schedulables, assigned_versions) = captured.remove(0);
 
         // Filter out consensus commit prologue transactions if requested
         if filter_prologue {
@@ -6543,8 +6543,7 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
     let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
 
     // Create an execution environment with insufficient balance status
-    let mut execution_env =
-        ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath);
+    let mut execution_env = ExecutionEnv::new();
     execution_env.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
 
     // Test that the transaction fails with InsufficientFundsForWithdraw error

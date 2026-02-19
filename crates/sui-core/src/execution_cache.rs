@@ -591,19 +591,6 @@ pub trait TransactionCacheRead: Send + Sync {
         }
         .boxed()
     }
-
-    /// Get the execution outputs of a mysticeti fastpath certified transaction, if it exists.
-    fn get_mysticeti_fastpath_outputs(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Option<Arc<TransactionOutputs>>;
-
-    /// Wait until the outputs of the given transactions are available
-    /// in the temporary buffer holding mysticeti fastpath outputs.
-    fn notify_read_fastpath_transaction_outputs<'a>(
-        &'a self,
-        tx_digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, Vec<Arc<TransactionOutputs>>>;
 }
 
 pub trait ExecutionCacheWrite: Send + Sync {
@@ -625,13 +612,6 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// called notify_read_objects_for_execution or notify_read_objects_for_signing for the object
     /// in question.
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>);
-
-    /// Write the output of a Mysticeti fastpath certified transaction.
-    /// Such output cannot be written to the dirty cache right away because
-    /// the transaction may end up rejected by consensus later. We need to make sure
-    /// that it is not visible to any subsequent transaction until we observe it
-    /// from consensus or checkpoints.
-    fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>);
 
     /// Validate owned object versions and digests without acquiring locks.
     /// Used to validate transaction input before submitting or voting to accept the transaction.

@@ -160,7 +160,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -328,7 +327,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -496,7 +494,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -664,7 +661,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -832,7 +828,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -1000,7 +995,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -1168,7 +1162,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
