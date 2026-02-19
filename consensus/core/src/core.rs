@@ -38,7 +38,8 @@ use crate::{
     },
     block_manager::BlockManager,
     commit::{
-        CertifiedCommit, CertifiedCommits, CommitAPI, CommittedSubDag, DecidedLeader, Decision,
+        CertifiedCommit, CertifiedCommits, CommitAPI, CommitIndex, CommittedSubDag, DecidedLeader,
+        Decision,
     },
     commit_observer::CommitObserver,
     context::Context,
@@ -253,8 +254,12 @@ impl Core {
         blocks: Vec<VerifiedBlock>,
     ) -> (Vec<VerifiedBlock>, BTreeSet<BlockRef>) {
         let (accepted_blocks, missing_block_refs) = self.block_manager.try_accept_blocks(blocks);
-        for block in &accepted_blocks {
-            self.signals.new_accepted_block(block.clone());
+        if !accepted_blocks.is_empty() {
+            // Read commit index once for the entire batch to avoid repeated lock acquisitions.
+            let commit_index = self.dag_state.read().last_commit_index();
+            for block in &accepted_blocks {
+                self.signals.new_accepted_block(block.clone(), commit_index);
+            }
         }
         (accepted_blocks, missing_block_refs)
     }
@@ -263,8 +268,12 @@ impl Core {
     /// active observer subscribers. Returns all accepted blocks.
     fn accept_committed_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> Vec<VerifiedBlock> {
         let accepted_blocks = self.block_manager.try_accept_committed_blocks(blocks);
-        for block in &accepted_blocks {
-            self.signals.new_accepted_block(block.clone());
+        if !accepted_blocks.is_empty() {
+            // Read commit index once for the entire batch to avoid repeated lock acquisitions.
+            let commit_index = self.dag_state.read().last_commit_index();
+            for block in &accepted_blocks {
+                self.signals.new_accepted_block(block.clone(), commit_index);
+            }
         }
         accepted_blocks
     }
@@ -1310,7 +1319,7 @@ impl Core {
 /// Senders of signals from Core, for outputs and events (ex new block produced).
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<ExtendedBlock>,
-    tx_accepted_block_broadcast: broadcast::Sender<VerifiedBlock>,
+    tx_accepted_block_broadcast: broadcast::Sender<(VerifiedBlock, CommitIndex)>,
     new_round_sender: watch::Sender<Round>,
     context: Arc<Context>,
 }
@@ -1324,7 +1333,7 @@ impl CoreSignals {
             context.parameters.dag_state_cached_rounds as usize,
         );
         let (tx_accepted_block_broadcast, rx_accepted_block_broadcast) =
-            broadcast::channel::<VerifiedBlock>(
+            broadcast::channel::<(VerifiedBlock, CommitIndex)>(
                 context.parameters.dag_state_cached_rounds as usize * context.committee.size(),
             );
         let (new_round_sender, new_round_receiver) = watch::channel(0);
@@ -1370,11 +1379,13 @@ impl CoreSignals {
 
     /// Broadcasts a block that has been accepted into the local DAG to any active observer
     /// subscribers. Unlike `new_block()`, this covers blocks from all authorities, not just
-    /// own proposals. Silently drops the send when there are no active observer subscribers.
-    pub(crate) fn new_accepted_block(&self, block: VerifiedBlock) {
+    /// own proposals. The current commit index is bundled with each block so receivers do not
+    /// need to acquire the dag_state lock on every delivery.
+    /// Silently drops the send when there are no active observer subscribers.
+    pub(crate) fn new_accepted_block(&self, block: VerifiedBlock, commit_index: CommitIndex) {
         if self.context.committee.size() > 1 {
             // Ignoring send errors here: it is normal for there to be no observers subscribed.
-            let _ = self.tx_accepted_block_broadcast.send(block);
+            let _ = self.tx_accepted_block_broadcast.send((block, commit_index));
         }
     }
 
@@ -1389,7 +1400,7 @@ impl CoreSignals {
 /// Intentionally un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
-    rx_accepted_block_broadcast: broadcast::Receiver<VerifiedBlock>,
+    rx_accepted_block_broadcast: broadcast::Receiver<(VerifiedBlock, CommitIndex)>,
     new_round_receiver: watch::Receiver<Round>,
 }
 
@@ -1398,7 +1409,9 @@ impl CoreSignalsReceivers {
         self.rx_block_broadcast.resubscribe()
     }
 
-    pub(crate) fn accepted_block_broadcast_receiver(&self) -> broadcast::Receiver<VerifiedBlock> {
+    pub(crate) fn accepted_block_broadcast_receiver(
+        &self,
+    ) -> broadcast::Receiver<(VerifiedBlock, CommitIndex)> {
         self.rx_accepted_block_broadcast.resubscribe()
     }
 

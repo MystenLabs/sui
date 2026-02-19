@@ -34,6 +34,7 @@ use crate::{
     network::{
         CommitSyncerClient, NetworkManager, SynchronizerClient, tonic_network::TonicManager,
     },
+    observer_service::ObserverService,
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::RoundTracker,
@@ -368,10 +369,9 @@ where
             synchronizer.clone(),
             core_dispatcher,
             signals_receivers.block_broadcast_receiver(),
-            signals_receivers.accepted_block_broadcast_receiver(),
             transaction_certifier,
             dag_state.clone(),
-            store,
+            store.clone(),
         ));
 
         let subscriber = {
@@ -379,7 +379,7 @@ where
                 context.clone(),
                 validator_client,
                 network_service.clone(),
-                dag_state,
+                dag_state.clone(),
             );
             for (peer, _) in context.committee.authorities() {
                 if peer != context.own_index {
@@ -393,7 +393,14 @@ where
             .start_validator_server(network_service.clone())
             .await;
         if context.parameters.tonic.is_observer_server_enabled() {
-            network_manager.start_observer_server(network_service).await;
+            let observer_service = Arc::new(ObserverService::new(
+                context.clone(),
+                dag_state.clone(),
+                signals_receivers.accepted_block_broadcast_receiver(),
+            ));
+            network_manager
+                .start_observer_server(observer_service)
+                .await;
         }
 
         info!(
