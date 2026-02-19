@@ -26,6 +26,7 @@ mod leader_timeout;
 mod linearizer;
 mod metrics;
 mod network;
+mod observer_service;
 mod proposed_block_handler;
 mod round_prober;
 mod round_tracker;
