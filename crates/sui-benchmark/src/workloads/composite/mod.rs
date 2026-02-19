@@ -295,7 +295,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(TestCoinAddressWithdraw::FLAG, 0.1);
         probabilities.insert(TestCoinObjectWithdraw::FLAG, 0.1);
         probabilities.insert(AddressBalanceOverdraw::FLAG, 0.1);
-        probabilities.insert(AccumulatorBalanceRead::FLAG, 0.1);
+        probabilities.insert(AccumulatorBalanceRead::FLAG, 0.3);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
