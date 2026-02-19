@@ -316,7 +316,6 @@ pub struct ExecutionIndicesWithStatsV2 {
     pub height: u64,
     pub stats: ConsensusStats,
     pub last_checkpoint_flush_timestamp: u64,
-    // Reserved for future use.
     pub checkpoint_seq: u64,
 }
 
@@ -448,6 +447,10 @@ pub struct AuthorityPerEpochStore {
     pub(crate) metrics: Arc<EpochMetrics>,
     epoch_start_configuration: Arc<EpochStartConfiguration>,
 
+    /// The last checkpoint sequence number from the previous epoch. Used to derive the
+    /// first checkpoint sequence number of this epoch for the consensus handler.
+    previous_epoch_last_checkpoint: CheckpointSequenceNumber,
+
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
 
@@ -488,6 +491,9 @@ pub struct AuthorityPerEpochStore {
     /// Waiters for barrier transactions. Used by execution scheduler to wait for
     /// barrier transaction (keyed by the same AccumulatorSettlement key as settlements).
     barrier_registrations: Arc<Mutex<HashMap<TransactionKey, BarrierRegistration>>>,
+
+    /// Maps settlement key to batch transaction info for early settlement.
+    settlement_batch_info: Arc<Mutex<HashMap<TransactionKey, SettlementBatchInfo>>>,
 }
 enum SettlementRegistration {
     Ready(Vec<VerifiedExecutableTransaction>),
@@ -496,6 +502,14 @@ enum SettlementRegistration {
 enum BarrierRegistration {
     Ready(Box<VerifiedExecutableTransaction>),
     Waiting(oneshot::Sender<VerifiedExecutableTransaction>),
+}
+
+#[derive(Clone)]
+pub struct SettlementBatchInfo {
+    pub tx_keys: Vec<TransactionKey>,
+    pub checkpoint_height: u64,
+    pub tx_index_offset: u64,
+    pub checkpoint_seq: u64,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -979,6 +993,12 @@ impl AuthorityEpochTables {
             .map(Into::into))
     }
 
+    pub fn get_last_consensus_stats_v2(&self) -> SuiResult<Option<ExecutionIndicesWithStatsV2>> {
+        Ok(self
+            .last_consensus_stats_v2
+            .get(&LAST_CONSENSUS_STATS_ADDR)?)
+    }
+
     pub fn get_locked_transaction(&self, obj_ref: &ObjectRef) -> SuiResult<Option<LockDetails>> {
         Ok(self
             .owned_object_locked_transactions
@@ -1102,6 +1122,7 @@ impl AuthorityPerEpochStore {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
+        previous_epoch_last_checkpoint: CheckpointSequenceNumber,
         submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
@@ -1307,6 +1328,7 @@ impl AuthorityPerEpochStore {
             epoch_close_time: Default::default(),
             metrics,
             epoch_start_configuration,
+            previous_epoch_last_checkpoint,
             execution_component,
             chain,
             jwk_aggregator,
@@ -1322,6 +1344,7 @@ impl AuthorityPerEpochStore {
             finalized_transactions_cache,
             settlement_registrations: Default::default(),
             barrier_registrations: Default::default(),
+            settlement_batch_info: Default::default(),
         });
 
         s.update_buffer_stake_metric();
@@ -1461,6 +1484,14 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration.epoch_start_state()
     }
 
+    pub fn previous_epoch_last_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.previous_epoch_last_checkpoint
+    }
+
+    pub fn first_checkpoint_seq(&self) -> CheckpointSequenceNumber {
+        self.previous_epoch_last_checkpoint + 1
+    }
+
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain.0
     }
@@ -1495,6 +1526,7 @@ impl AuthorityPerEpochStore {
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
             self.chain,
+            previous_epoch_last_checkpoint,
             previous_epoch_last_checkpoint,
             self.submitted_transaction_cache.metrics(),
         )
@@ -2068,6 +2100,23 @@ impl AuthorityPerEpochStore {
         rx.await.unwrap()
     }
 
+    pub(crate) fn store_settlement_batch_info(
+        &self,
+        tx_key: TransactionKey,
+        batch_info: SettlementBatchInfo,
+    ) {
+        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
+        self.settlement_batch_info.lock().insert(tx_key, batch_info);
+    }
+
+    pub(crate) fn take_settlement_batch_info(
+        &self,
+        tx_key: &TransactionKey,
+    ) -> Option<SettlementBatchInfo> {
+        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
+        self.settlement_batch_info.lock().remove(tx_key)
+    }
+
     pub fn insert_effects_digest_and_signature(
         &self,
         tx_digest: &TransactionDigest,
@@ -2259,6 +2308,14 @@ impl AuthorityPerEpochStore {
             .tables()?
             .get_last_consensus_stats()?
             .unwrap_or_default())
+    }
+
+    pub fn get_last_consensus_stats_v2(&self) -> SuiResult<Option<ExecutionIndicesWithStatsV2>> {
+        assert!(
+            self.consensus_quarantine.read().is_empty(),
+            "get_last_consensus_stats_v2 should only be called at startup"
+        );
+        self.tables()?.get_last_consensus_stats_v2()
     }
 
     pub fn get_accumulators_in_checkpoint_range(

@@ -566,6 +566,20 @@ impl SuiNode {
             None => ChainIdentifier::from(*genesis.checkpoint().digest()).chain(),
         };
 
+        let highest_executed_checkpoint = checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .expect("checkpoint store read cannot fail")
+            .unwrap_or(0);
+
+        let previous_epoch_last_checkpoint = if cur_epoch == 0 {
+            0
+        } else {
+            checkpoint_store
+                .get_epoch_last_checkpoint_seq_number(cur_epoch - 1)
+                .expect("checkpoint store read cannot fail")
+                .unwrap_or(highest_executed_checkpoint)
+        };
+
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -580,10 +594,8 @@ impl SuiNode {
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
             (chain_id, chain),
-            checkpoint_store
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("checkpoint store read cannot fail")
-                .unwrap_or(0),
+            highest_executed_checkpoint,
+            previous_epoch_last_checkpoint,
             Arc::new(SubmittedTransactionCacheMetrics::new(
                 &registry_service.default_registry(),
             )),
