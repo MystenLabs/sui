@@ -24,16 +24,11 @@ That means that you have full control over the advancement of checkpoints, time,
 Currently only forking from the last known checkpoint is supported. You cannot specify an arbitrary checkpoint number to fork from.
 
 ## Limitations
-- Only forking from the latest checkpoint is supported, not arbitrary checkpoints.
-- Requires a Postgres DB for storing local network state; it needs to connect to a `sui-indexer-alt` DB.
-- Once the network is stopped, all changes are lost. Persistent state saving is not implemented yet. 
 - Staking and related operations are not supported.
 - Single validator, single authority network.
 - Object fetching overhead: First access to objects requires network download.
-- Random object is not supported yet.
-- If it forks at checkpoint X, you cannot depend on objects created after checkpoint X. You'll need to restart the network at that checkpoint or a later one.
+- If it forks at checkpoint X, you cannot depend on objects created after checkpoint X from the actual real network. You'll need to restart the network at that checkpoint or a later one.
 - Sequential execution: Transactions are executed one at a time, no parallelism.
-- Does not support local network forking.
 
 ## Usage
 
@@ -57,15 +52,38 @@ sui-forking start --network testnet
 ```
 
 This command:
-- Starts a local "server" on port 3001 (default) - this is used to interact with the forked network, e.g., advance-checkpoints, request gas, advance-clock, advance-epoch, etc. You can do so via the CLI commands with the `sui-forking` binary or via the REST API (see below).
-- Starts a local Sui network on port 3000 (default) - this is the (now deprecated) JSON RPC endpoint for interacting with the local network
+- Starts a local "server" on port 9001 (default) - this is used to interact with the forked network, e.g., advance-checkpoints, request gas, advance-clock, advance-epoch, etc. You can do so via the CLI commands with the `sui-forking` binary or via the REST API (see below).
+- Starts a local Sui network on port 9000 (default) - this is the gRPC endpoint you can connect the Sui client to interact with the network. 
 - Allows you to execute transactions against this local state and fetches objects on-demand from the real network
 
 #### Options
 
 - `--checkpoint <number>`: The checkpoint to fork from (required)  - note that this is WIP
 - `--network <network>`: Network to fork from: `mainnet`, `testnet` (mainnet default if none provided). Local network is not currently supported.
-- `--port <port>`: Port for the local network (default: 3001)
+
+### Old checkpoint seeding (`--accounts` vs `--objects`)
+
+When you provide `--checkpoint`, startup seeding supports two exclusive modes:
+
+- `--accounts`: discover owned objects through GraphQL at startup time.
+- `--objects`: provide explicit object IDs to prefetch.
+
+`--accounts` and `--objects` are mutually exclusive.
+
+`--accounts` is only allowed when the startup checkpoint is at most 1 hour old.
+For older checkpoints, provide explicit objects with `--objects`.
+
+Examples:
+
+```bash
+# Recent checkpoint (<=1h), account-based startup seeding
+sui-forking start --network testnet --checkpoint 123456 --accounts 0x123...,0xabc...
+```
+
+```bash
+# Old checkpoint (>1h), explicit object seeding
+sui-forking start --network testnet --checkpoint 123456 --objects 0xabc...,0xdef...
+```
 
 ## Available Commands
 
@@ -155,4 +173,3 @@ The local forked network server exposes a REST API for interaction. The server l
 
 e `sui-replay-2`: A generic data store implementation for downloading and caching objects from the RPC.
 - `simulacrum`: Local network execution in lock-step mode
-
