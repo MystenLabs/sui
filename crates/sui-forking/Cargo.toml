@@ -57,8 +57,5 @@ prost-types.workspace = true
 [build-dependencies]
 cynic-codegen.workspace = true
 
-[package.metadata.cargo-machete]
-ignored = ["cynic-codegen"]
-
 [lints]
 workspace = true

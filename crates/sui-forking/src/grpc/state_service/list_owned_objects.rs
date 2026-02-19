@@ -93,7 +93,6 @@ pub async fn list_owned_objects(
 
         store
             .owned_objects(owner_sui)
-            .into_iter()
             .filter_map(|object| owned_object_entry(object, owner_sui))
             .filter(|entry| {
                 matches_object_type_filter(&entry.info.object_type, object_type.as_ref())
