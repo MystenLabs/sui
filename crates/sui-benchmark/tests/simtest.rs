@@ -1557,6 +1557,10 @@ mod test {
             test_cluster.get_chain_identifier().chain(),
         );
         let address_balance_enabled = protocol_config.enable_address_balance_gas_payments();
+        assert!(
+            protocol_config.address_aliases(),
+            "address aliases must be enabled for this test"
+        );
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
@@ -1572,6 +1576,7 @@ mod test {
             address_balance_amount: 1000,
             address_balance_gas_probability: 0.2,
             conflicting_transaction_probability,
+            alias_tx_probability: 0.3,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -1618,6 +1623,25 @@ mod test {
             assert!(metrics_sum.permanent_failure_count > 50);
         }
         assert!(metrics_sum.cancellation_count > 100);
+
+        let alias_add_stats = metrics
+            .get_stats(OperationSet::new().with(ALIAS_ADD_FLAG))
+            .expect("expected alias add stats");
+        let alias_remove_stats = metrics
+            .get_stats(OperationSet::new().with(ALIAS_REMOVE_FLAG))
+            .expect("expected alias remove stats");
+        info!(
+            "alias metrics: add_success={}, remove_success={}",
+            alias_add_stats.success_count, alias_remove_stats.success_count
+        );
+        assert!(
+            alias_add_stats.success_count > 0,
+            "expected at least one alias add"
+        );
+        assert!(
+            alias_remove_stats.success_count > 0,
+            "expected at least one alias remove"
+        );
     }
 
     #[sim_test(config = "test_config()")]
