@@ -218,7 +218,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     store: H::Store,
     task: Option<Task>,
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
-    commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     info!(
@@ -271,7 +270,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         next_checkpoint,
         committer_config,
         watermark_rx,
-        commit_hi_tx,
         store.clone(),
         task.as_ref().map(|t| t.task.clone()),
         metrics.clone(),
@@ -408,8 +406,6 @@ mod tests {
     impl TestSetup {
         async fn new(config: ConcurrentConfig, store: MockStore, next_checkpoint: u64) -> Self {
             let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
-            #[allow(clippy::disallowed_methods)]
-            let (commit_hi_tx, _commit_hi_rx) = mpsc::unbounded_channel();
             let metrics = IndexerMetrics::new(None, &Registry::default());
 
             let pipeline = pipeline(
@@ -419,7 +415,6 @@ mod tests {
                 store.clone(),
                 None,
                 checkpoint_rx,
-                commit_hi_tx,
                 metrics,
             );
 
