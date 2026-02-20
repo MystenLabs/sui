@@ -131,11 +131,11 @@ pub(super) struct HLIRDebugFlags {
     pub(super) eval_order: bool,
 }
 
-pub(super) struct Context<'env> {
+pub struct Context<'env> {
     pub env: &'env CompilationEnv,
     pub info: Arc<TypingProgramInfo>,
     #[allow(dead_code)]
-    pub debug: HLIRDebugFlags,
+    pub(super) debug: HLIRDebugFlags,
     pub reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
     function_locals: UniqueMap<H::Var, (Mutability, H::SingleType)>,
@@ -144,7 +144,7 @@ pub(super) struct Context<'env> {
     named_block_binders: UniqueMap<H::BlockLabel, Vec<H::LValue>>,
     named_block_types: UniqueMap<H::BlockLabel, H::Type>,
     /// collects all struct fields used in the current module
-    pub used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
+    used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
 }
 
 impl<'env> Context<'env> {
