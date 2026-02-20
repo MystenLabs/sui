@@ -4,7 +4,7 @@
 use crate::{
     diagnostics::DiagnosticReporter,
     expansion::ast::{Fields, ModuleIdent, Mutability, Value},
-    hlir::translate::{Context, NEW_NAME_DELIM},
+    hlir::translate::NEW_NAME_DELIM,
     ice, ice_assert,
     naming::ast::{self as N, Type, Var},
     parser::ast::{BinOp_, ConstantName, Field, VariantName},
@@ -154,13 +154,14 @@ impl PatternArm {
             .all(|pat| matches!(pat.pat.value, TP::Wildcard | TP::Binder(_, _)))
     }
 
-    fn all_wild_arm(
+    fn all_wild_arm<'env>(
         &mut self,
-        context: &mut Context,
+        env: &'env CompilationEnv,
+        reporter: &mut DiagnosticReporter<'env>,
         fringe: &VecDeque<FringeEntry>,
     ) -> Option<ArmResult> {
         if self.is_wild_arm() {
-            let bindings = self.make_arm_bindings(context, fringe);
+            let bindings = self.make_arm_bindings(env, reporter, fringe);
             let PatternArm {
                 pats: _,
                 guard,
@@ -178,16 +179,17 @@ impl PatternArm {
         }
     }
 
-    fn make_arm_bindings(
+    fn make_arm_bindings<'env>(
         &mut self,
-        context: &mut Context,
+        env: &'env CompilationEnv,
+        reporter: &mut DiagnosticReporter<'env>,
         fringe: &VecDeque<FringeEntry>,
     ) -> PatBindings {
         let mut bindings = BTreeMap::new();
         // If the lengths don't match, we have an error from typing
         ice_assert!(
-            context,
-            self.pats.len() == fringe.len() || context.env.has_errors(),
+            reporter,
+            self.pats.len() == fringe.len() || env.has_errors(),
             self.arm.orig_pattern.pat.loc,
             "mismatched length should have caused an error in typing"
         );
@@ -533,21 +535,22 @@ impl PatternMatrix {
             .any(|pat| pat.is_wild_arm() && pat.guard.is_none())
     }
 
-    pub fn wild_tree_opt(
+    pub fn wild_tree_opt<'env>(
         &mut self,
-        context: &mut Context,
+        env: &'env CompilationEnv,
+        reporter: &mut DiagnosticReporter<'env>,
         fringe: &VecDeque<FringeEntry>,
     ) -> Option<Vec<ArmResult>> {
         // NB: If the first row is all wild, we need to collect _all_ wild rows that have guards
         // until we find one that does not. If we do not find one without a guard, then this isn't
         // a wild tree.
-        if let Some(arm) = self.patterns[0].all_wild_arm(context, fringe) {
+        if let Some(arm) = self.patterns[0].all_wild_arm(env, reporter, fringe) {
             if arm.guard.is_none() {
                 return Some(vec![arm]);
             }
             let mut result = vec![arm];
             for pat in self.patterns[1..].iter_mut() {
-                if let Some(arm) = pat.all_wild_arm(context, fringe) {
+                if let Some(arm) = pat.all_wild_arm(env, reporter, fringe) {
                     let has_guard = arm.guard.is_some();
                     result.push(arm);
                     if !has_guard {

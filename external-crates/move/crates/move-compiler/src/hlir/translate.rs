@@ -131,7 +131,7 @@ pub(super) struct HLIRDebugFlags {
     pub(super) eval_order: bool,
 }
 
-pub struct Context<'env> {
+pub(super) struct Context<'env> {
     pub env: &'env CompilationEnv,
     pub info: Arc<TypingProgramInfo>,
     #[allow(dead_code)]
