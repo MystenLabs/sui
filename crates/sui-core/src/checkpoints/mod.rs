@@ -1890,7 +1890,6 @@ impl CheckpointBuilder {
     ) -> SuiResult<(Vec<TransactionEffects>, HashSet<TransactionDigest>)> {
         let _scope = monitored_scope("CheckpointBuilder::resolve_checkpoint_transactions");
 
-        let mut effects_in_current_checkpoint = BTreeSet::new();
         debug!(
             checkpoint_commit_height = pending.details.checkpoint_height,
             "Resolving checkpoint transactions for pending checkpoint.",
@@ -1934,48 +1933,7 @@ impl CheckpointBuilder {
                 .in_monitored_scope("CheckpointNotifyRead")
                 .await;
 
-            let consensus_commit_prologue = {
-                let ccp = self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
-
-                if let Some((ccp_digest, ccp_effects)) = &ccp {
-                    let unsorted_ccp = self.complete_checkpoint_effects(
-                        vec![ccp_effects.clone()],
-                        &mut effects_in_current_checkpoint,
-                    )?;
-
-                    if unsorted_ccp.is_empty() {
-                        // Each CheckpointRoots normally begins with a CCP, unless
-                        // the commit was split across multiple checkpoints; in which case
-                        // the CCP was included in a previous commit.
-                        None
-                    } else if unsorted_ccp.len() != 1 {
-                        fatal!(
-                            "Expected 1 consensus commit prologue, got {:?}",
-                            unsorted_ccp
-                                .iter()
-                                .map(|e| e.transaction_digest())
-                                .collect::<Vec<_>>()
-                        );
-                    } else {
-                        assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
-                        ccp.clone()
-                    }
-                } else {
-                    None
-                }
-            };
-
-            let mut roots_effects: Vec<TransactionEffects> =
-                self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
-
-            if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
-                if cfg!(debug_assertions) {
-                    for tx in roots_effects.iter() {
-                        assert!(tx.transaction_digest() != &ccp_digest);
-                    }
-                }
-                roots_effects.insert(0, ccp_effects);
-            }
+            let mut roots_effects = root_effects;
 
             if let Some(settlement_key) = &checkpoint_roots.settlement_root {
                 let checkpoint_seq = pending
