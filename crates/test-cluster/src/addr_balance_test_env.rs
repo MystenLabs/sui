@@ -323,6 +323,45 @@ impl TestEnv {
     pub async fn trigger_reconfiguration(&self) {
         self.cluster.trigger_reconfiguration().await;
     }
+
+    /// Publishes the `object_balance` example package, creates an owned vault object,
+    /// and funds it with the given amount. Returns (package_id, vault_id).
+    pub async fn setup_funded_object_balance_vault(&mut self, amount: u64) -> (ObjectID, ObjectID) {
+        let sender = self.get_sender(0);
+
+        let tx = self
+            .tx_builder(sender)
+            .publish_examples("object_balance")
+            .await
+            .build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+        let package_id = effects
+            .created()
+            .into_iter()
+            .find(|(_, owner)| owner.is_immutable())
+            .unwrap()
+            .0
+            .0;
+
+        let tx = self
+            .tx_builder(sender)
+            .move_call(package_id, "object_balance", "new_owned", vec![])
+            .build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+        let vault_id = effects.created().into_iter().next().unwrap().0.0;
+
+        let tx = self
+            .tx_builder(sender)
+            .transfer_sui_to_address_balance(
+                FundSource::coin(self.get_sender_and_gas(0).1),
+                vec![(amount, vault_id.into())],
+            )
+            .build();
+        self.exec_tx_directly(tx).await.unwrap();
+        self.trigger_reconfiguration().await;
+
+        (package_id, vault_id)
+    }
 }
 
 pub fn get_sui_accumulator_object_id(sender: SuiAddress) -> ObjectID {
