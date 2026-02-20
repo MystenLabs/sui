@@ -103,41 +103,62 @@ pub(super) fn collector<H: Handler + 'static>(
         let reader_lo_atomic = main_reader_lo.wait().await;
 
         loop {
-            let mut force_flush = false;
             // === IDLE: block until timer fires or enough data accumulates ===
             tokio::select! {
-                _ = poll.tick() => {
-                    // Timer: always flush (even if empty, for watermark progress)
-                    force_flush = true;
-                }
+                biased;
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                Some(indexed) = rx.recv(), if pending_rows < max_pending_rows => {
-                    pending_rows += receive_checkpoint::<H>(
-                        indexed, &mut pending, reader_lo_atomic, &metrics,
-                    );
+                Some(mut indexed) = rx.recv(), if pending_rows < max_pending_rows => {
+                    let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
+
+                    metrics
+                        .collector_reader_lo
+                        .with_label_values(&[H::NAME])
+                        .set(reader_lo as i64);
+
+                    let mut recv_cps = 0usize;
+                    let mut recv_rows = 0usize;
+                    loop {
+                        if indexed.checkpoint() < reader_lo {
+                            indexed.values.clear();
+                            metrics
+                                .total_collector_skipped_checkpoints
+                                .with_label_values(&[H::NAME])
+                                .inc();
+                        }
+
+                        recv_cps += 1;
+                        recv_rows += indexed.len();
+                        pending_rows += indexed.len();
+                        pending.insert(indexed.checkpoint(), indexed.into());
+
+                        if pending_rows >= max_pending_rows {
+                            break;
+                        }
+
+                        match rx.try_recv() {
+                            Ok(next) => indexed = next,
+                            Err(_) => break,
+                        }
+                    }
+
+                    metrics
+                        .total_collector_rows_received
+                        .with_label_values(&[H::NAME])
+                        .inc_by(recv_rows as u64);
+                    metrics
+                        .total_collector_checkpoints_received
+                        .with_label_values(&[H::NAME])
+                        .inc_by(recv_cps as u64);
+
+                    if pending_rows < min_eager_rows {
+                        continue;
+                    }
                 }
                 // docs::/#collector
-            }
 
-            // Eagerly drain anything that arrived alongside the select! trigger.
-            while pending_rows < max_pending_rows {
-                match rx.try_recv() {
-                    Ok(indexed) => {
-                        pending_rows += receive_checkpoint::<H>(
-                            indexed,
-                            &mut pending,
-                            reader_lo_atomic,
-                            &metrics,
-                        );
-                    }
-                    Err(_) => break,
-                }
-            }
-
-            // Only enter the flush loop if timer fired or enough rows accumulated.
-            if !force_flush && pending_rows < min_eager_rows {
-                continue;
+                // Timer: always flush (even if empty, for watermark progress)
+                _ = poll.tick() => {}
             }
 
             // === FLUSHING: send batches until pending is drained ===
@@ -216,21 +237,6 @@ pub(super) fn collector<H: Handler + 'static>(
                     return Ok(());
                 }
 
-                // Top up from channel before deciding whether to continue.
-                while pending_rows < max_pending_rows {
-                    match rx.try_recv() {
-                        Ok(indexed) => {
-                            pending_rows += receive_checkpoint::<H>(
-                                indexed,
-                                &mut pending,
-                                reader_lo_atomic,
-                                &metrics,
-                            );
-                        }
-                        Err(_) => break,
-                    }
-                }
-
                 if pending.is_empty() {
                     break;
                 }
@@ -247,41 +253,6 @@ pub(super) fn collector<H: Handler + 'static>(
 
         Ok(())
     })
-}
-
-/// Processes a single indexed checkpoint: filters rows below `reader_lo`, updates metrics,
-/// and inserts into the pending map. Returns the number of rows added.
-fn receive_checkpoint<H: Handler>(
-    mut indexed: IndexedCheckpoint<H>,
-    pending: &mut BTreeMap<u64, PendingCheckpoint<H>>,
-    reader_lo: &AtomicU64,
-    metrics: &IndexerMetrics,
-) -> usize {
-    let reader_lo = reader_lo.load(Ordering::Relaxed);
-    if indexed.checkpoint() < reader_lo {
-        indexed.values.clear();
-        metrics
-            .total_collector_skipped_checkpoints
-            .with_label_values(&[H::NAME])
-            .inc();
-    }
-
-    metrics
-        .total_collector_rows_received
-        .with_label_values(&[H::NAME])
-        .inc_by(indexed.len() as u64);
-    metrics
-        .total_collector_checkpoints_received
-        .with_label_values(&[H::NAME])
-        .inc();
-    metrics
-        .collector_reader_lo
-        .with_label_values(&[H::NAME])
-        .set(reader_lo as i64);
-
-    let len = indexed.len();
-    pending.insert(indexed.checkpoint(), indexed.into());
-    len
 }
 
 #[cfg(test)]
