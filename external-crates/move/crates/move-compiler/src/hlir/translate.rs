@@ -768,6 +768,10 @@ fn error_base_type(loc: Loc) -> H::BaseType {
     sp(loc, H::BaseType_::UnresolvedError)
 }
 
+fn error_single_type(loc: Loc) -> H::SingleType {
+    sp(loc, H::SingleType_::Base(error_base_type(loc)))
+}
+
 fn error_type(loc: Loc) -> H::Type {
     H::Type_::base(error_base_type(loc))
 }
@@ -2230,7 +2234,17 @@ fn make_assignments(
     let mut lvalues = vec![];
     let mut after = Block::new();
     for (idx, a) in assigns.into_iter().enumerate() {
-        let a_ty = rvalue.ty.value.type_at_index(idx);
+        let error_ty;
+        let a_ty = match rvalue.ty.value.type_at_index(idx) {
+            Some(ty) => ty,
+            None => {
+                // we can only get here if the rvalue was malformed and somewhere has an unresolved
+                // error
+                debug_assert!(context.env.has_errors());
+                error_ty = error_single_type(a.loc);
+                &error_ty
+            }
+        };
         let (ls, mut af) = assign(context, case, a, a_ty);
 
         lvalues.push(ls);
