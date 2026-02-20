@@ -1993,6 +1993,7 @@ impl CheckpointBuilder {
                 let effects = self
                     .resolve_settlement_effects(
                         *settlement_key,
+                        tx_roots,
                         &roots_effects,
                         checkpoint_roots.height,
                         checkpoint_seq,
@@ -2022,6 +2023,7 @@ impl CheckpointBuilder {
     async fn resolve_settlement_effects(
         &self,
         settlement_key: TransactionKey,
+        tx_roots: &[TransactionKey],
         checkpoint_effects: &[TransactionEffects],
         checkpoint_height: CheckpointHeight,
         checkpoint_seq: CheckpointSequenceNumber,
@@ -2052,6 +2054,62 @@ impl CheckpointBuilder {
             .into_iter()
             .map(|tx| *VerifiedTransaction::new_system_transaction(tx).digest())
             .collect();
+
+        let root_keys: Vec<_> = tx_roots
+            .iter()
+            .filter(|k| !matches!(k, TransactionKey::AccumulatorSettlement(..)))
+            .cloned()
+            .collect();
+        let root_digests = self
+            .epoch_store
+            .notify_read_tx_key_to_digest(&root_keys)
+            .await
+            .expect("Failed to read tx digests for settlement");
+        let fixed_root_effects = self
+            .effects_store
+            .notify_read_executed_effects(
+                "CheckpointBuilder::resolve_settlement_root_effects_diagnostic",
+                &root_digests,
+            )
+            .await;
+        let buggy_digests: Vec<_> = checkpoint_effects
+            .iter()
+            .map(|e| *e.transaction_digest())
+            .collect();
+        let fixed_digests: Vec<_> = fixed_root_effects
+            .iter()
+            .map(|e| *e.transaction_digest())
+            .collect();
+
+        if buggy_digests != fixed_digests {
+            let describe_txns =
+                |digests: &[TransactionDigest]| -> Vec<(TransactionDigest, &'static str)> {
+                    self.effects_store
+                        .multi_get_transaction_blocks(digests)
+                        .into_iter()
+                        .zip(digests)
+                        .map(|(tx, d)| {
+                            let kind_name = tx
+                                .map(|t| t.inner().transaction_data().kind().name())
+                                .unwrap_or("unknown");
+                            (*d, kind_name)
+                        })
+                        .collect()
+                };
+
+            debug_fatal!(
+                "Settlement input effects mismatch: \
+                    checkpoint_effects (digest, kind): {:?}, \
+                    root-only effects (digest, kind): {:?}, \
+                    tx_roots keys: {:?}, \
+                    checkpoint_seq: {}, tx_index_offset: {}",
+                describe_txns(&buggy_digests),
+                describe_txns(&fixed_digests),
+                tx_roots,
+                checkpoint_seq,
+                tx_index_offset
+            );
+        }
 
         debug!(
             ?settlement_digests,
