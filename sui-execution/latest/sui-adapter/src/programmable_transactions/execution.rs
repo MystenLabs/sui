@@ -449,8 +449,8 @@ mod checked {
 
                 let arguments = context.splat_args(0, arguments)?;
 
-                let module = to_identifier::<Mode>(context, module)?;
-                let function = to_identifier::<Mode>(context, function)?;
+                let module = to_identifier(context, module)?;
+                let function = to_identifier(context, function)?;
 
                 // Convert type arguments to `Type`s
                 let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
@@ -1728,8 +1728,7 @@ mod checked {
                     .into_iter()
                     .map(|t| to_type_tag_::<Mode>(context, t, idx))
                     .collect::<Result<_, _>>()?;
-                let (module, name) =
-                    resolve_datatype_names::<Mode>(context, address, module, name, idx)?;
+                let (module, name) = resolve_datatype_names(context, address, module, name, idx)?;
                 T::Struct(Box::new(StructTag {
                     address,
                     module,
