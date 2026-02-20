@@ -12,7 +12,7 @@ use crate::{
         detect_dead_code::program as detect_dead_code_analysis,
         match_compilation,
     },
-    ice,
+    ice, ice_assert,
     naming::ast as N,
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, TargetKind,
@@ -1105,13 +1105,23 @@ fn value(
                     Ok(arr) => arr,
                     Err(_) => {
                         // invalid call arity should be caught during typing
-                        debug_assert!(context.env.has_errors());
+                        ice_assert!(
+                            context,
+                            context.env.has_errors(),
+                            eloc,
+                            "invalid assert call should have caused an error during typing"
+                        );
                         return error_exp(eloc);
                     }
                 },
                 _ => {
                     // invalid call to assert should be caught during typing
-                    debug_assert!(context.env.has_errors());
+                    ice_assert!(
+                        context,
+                        context.env.has_errors(),
+                        eloc,
+                        "invalid assert call should have caused an error during typing"
+                    );
                     return error_exp(eloc);
                 }
             };
@@ -1119,12 +1129,16 @@ fn value(
                 (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
                 _ => {
                     debug_assert!(false, "there should be no splat items yet");
-                    context.add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    context.add_diag(ice!((eloc, "type checking assert failed")));
                     return error_exp(eloc);
                 }
             };
             let if_block = make_block!();
             let mut else_block = make_block!();
+            // If the abort is marked as a macro, we evaluate the code only after the branch, and
+            // so we use the `else_block` as its block for lowering.
+            // If it is not a macro, we instead evaluate the condition and code before doing the
+            // branch test. Note this eager evaluation behavior is deprecated.
             let (cond, code) = if is_macro.is_some() {
                 let cond = value(context, block, Some(&tbool(eloc)), econd);
                 let code = value(context, &mut else_block, None, ecode);
@@ -1354,7 +1368,7 @@ fn value(
             let base_types = base_types(&context.reporter, &arg_types);
 
             let decl_fields = context.info.struct_fields(&module_ident, &struct_name);
-            let fields = value_fields(context, block, decl_fields, fields);
+            let fields = value_fields(context, block, decl_fields, eloc, fields);
             make_exp(HE::Pack(struct_name, base_types, fields))
         }
 
@@ -1365,7 +1379,7 @@ fn value(
                 context
                     .info
                     .enum_variant_fields(&module_ident, &enum_name, &variant_name);
-            let fields = value_fields(context, block, decl_fields, fields);
+            let fields = value_fields(context, block, decl_fields, eloc, fields);
             make_exp(HE::PackVariant(enum_name, variant_name, base_types, fields))
         }
 
@@ -1505,6 +1519,7 @@ fn value_fields(
     block: &mut Block,
     // Field declaration indices
     decl_fields: Option<UniqueMap<Field, usize>>,
+    loc: Loc,
     fields: Fields<(N::Type, T::Exp)>,
 ) -> Vec<(Field, H::BaseType, H::Exp)> {
     let mut texp_fields: Vec<(usize, Field, usize, N::Type, T::Exp)> =
@@ -1516,7 +1531,15 @@ fn value_fields(
                     // If the field is not a valid one, typing will produce an error.
                     // So keep the field in a consistent order, but after all of the
                     // valid fields.
-                    let decl_idx = field_map.get(&f).copied().unwrap_or(field_len + exp_idx);
+                    let decl_idx_opt = field_map.get(&f).copied();
+                    ice_assert!(
+                        context,
+                        decl_idx_opt.is_some() || context.env.has_errors(),
+                        f.loc(),
+                        "field '{}' is unbound but there are no errors",
+                        f,
+                    );
+                    let decl_idx = decl_idx_opt.unwrap_or(field_len);
                     (decl_idx, f, exp_idx, bt, tf)
                 })
                 .collect()
@@ -1546,9 +1569,11 @@ fn value_fields(
             })
             .collect();
         let field_exps = value_evaluation_order(context, block, field_exps);
-        assert!(
+        ice_assert!(
+            context,
             fields.len() == field_exps.len(),
-            "ICE exp_evaluation_order changed arity"
+            loc,
+            "exp_evaluation_order changed arity"
         );
         field_exps
             .into_iter()
@@ -1561,7 +1586,12 @@ fn value_fields(
             let base_ty = base_type(&context.reporter, &bt);
             let t = H::Type_::base(base_ty.clone());
             let field_expr = value(context, block, Some(&t), tf);
-            debug_assert!(fields.get(&decl_idx).is_none());
+            ice_assert!(
+                context,
+                fields.get(&decl_idx).is_none(),
+                field.loc(),
+                "duplicate field decl idx"
+            );
             let move_tmp = bind_exp(context, block, field_expr);
             fields.insert(decl_idx, (field, base_ty, move_tmp));
         }
@@ -2303,9 +2333,22 @@ fn assign_fields(
                 // If the field is not a valid one, typing will produce an error.
                 // So keep the field in a consistent order, but after all of the
                 // valid fields.
-                let decl_idx = field_map.get(&f).copied().unwrap_or(field_len + exp_idx);
+                let decl_idx_opt = field_map.get(&f).copied();
+                ice_assert!(
+                    context,
+                    decl_idx_opt.is_some() || context.env.has_errors(),
+                    f.loc(),
+                    "field '{}' is unbound but there are no errors",
+                    f,
+                );
+                let decl_idx = decl_idx_opt.unwrap_or(field_len + exp_idx);
                 let base_ty = base_type(&context.reporter, &tbt);
-                debug_assert!(fields.get(&decl_idx).is_none());
+                ice_assert!(
+                    context,
+                    fields.get(&decl_idx).is_none(),
+                    f.loc(),
+                    "duplicate field decl idx"
+                );
                 fields.insert(decl_idx, (f, base_ty, tfa));
             }
             fields.into_values().collect()

@@ -4282,20 +4282,22 @@ fn resolve_call(
                     }
                 }
                 B::Assert(_) => {
+                    let function_call_help = || {
+                        format!(
+                            "Replace with '{0}!'. '{0}' has been replaced with a '{0}!' built-in \
+                            macro so that arguments are no longer eagerly evaluated",
+                            B::ASSERT_MACRO
+                        )
+                    };
                     if is_macro.is_none() {
                         let dep_msg = format!(
                             "'{}' function syntax has been deprecated and will be removed",
                             B::ASSERT_MACRO
                         );
-                        // TODO make this a tip/hint?
-                        let help_msg = format!(
-                            "Replace with '{0}!'. '{0}' has been replaced with a '{0}!' built-in \
-                            macro so that arguments are no longer eagerly evaluated",
-                            B::ASSERT_MACRO
-                        );
                         let mut diag =
                             diag!(Uncategorized::DeprecatedWillBeRemoved, (call_loc, dep_msg),);
-                        diag.add_note(help_msg);
+                        // TODO make this a tip/hint?
+                        diag.add_note(function_call_help());
                         context.add_diag(diag);
                     }
                     exp_types_opt_with_arity_check(
@@ -4319,8 +4321,10 @@ fn resolve_call(
                                 "'{}' function syntax has been deprecated and cannot be used with clever assertions",
                                 B::ASSERT_MACRO
                             );
-                            context
-                                .add_diag(diag!(Editions::DeprecatedFeature, (call_loc, dep_msg)));
+                            let mut diag = diag!(Editions::DeprecatedFeature, (call_loc, dep_msg));
+                            // TODO make this a tip/hint?
+                            diag.add_note(function_call_help());
+                            context.add_diag(diag);
                         }
                         args.value.push(sp(
                             call_loc,
