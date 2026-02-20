@@ -398,16 +398,23 @@ pub(crate) async fn start_server_with_signals(
     let shutdown_signal = async move {
         match shutdown_receiver {
             Some(receiver) => {
+                let ctrl_c = async {
+                    match tokio::signal::ctrl_c().await {
+                        Ok(()) => {
+                            info!("\nReceived CTRL+C, shutting down gracefully...");
+                        }
+                        Err(err) => {
+                            warn!("Failed to install CTRL+C signal handler: {err}");
+                            std::future::pending::<()>().await;
+                        }
+                    }
+                };
+
                 tokio::select! {
                     _ = receiver => {
                         info!("received programmatic shutdown signal");
                     }
-                    ctrl_c = tokio::signal::ctrl_c() => {
-                        if let Err(err) = ctrl_c {
-                            warn!("Failed to install CTRL+C signal handler: {err}");
-                            return;
-                        }
-                        info!("\nReceived CTRL+C, shutting down gracefully...");
+                    _ = ctrl_c => {
                     }
                 }
             }
@@ -602,16 +609,25 @@ fn build_initial_system_state(
     let system_state = sui_types::sui_system_state::get_sui_system_state(store)
         .map_err(|err| anyhow!("failed to read Sui system state from startup checkpoint: {err}"))?;
 
-    let mut inner = match system_state {
-        SuiSystemState::V2(inner) => inner,
-        _ => anyhow::bail!("Unsupported system state version, expected SuiSystemState::V2"),
-    };
-    inner.validators = match config.genesis.sui_system_object() {
+    let validators = match config.genesis.sui_system_object() {
         SuiSystemState::V1(genesis_inner) => genesis_inner.validators,
         SuiSystemState::V2(genesis_inner) => genesis_inner.validators,
+        #[cfg(msim)]
+        _ => anyhow::bail!("unsupported genesis system state variant"),
     };
 
-    Ok(SuiSystemState::V2(inner))
+    match system_state {
+        SuiSystemState::V1(mut inner) => {
+            inner.validators = validators.clone();
+            Ok(SuiSystemState::V1(inner))
+        }
+        SuiSystemState::V2(mut inner) => {
+            inner.validators = validators;
+            Ok(SuiSystemState::V2(inner))
+        }
+        #[cfg(msim)]
+        _ => anyhow::bail!("unsupported system state variant"),
+    }
 }
 
 fn install_validator_override_and_committee(

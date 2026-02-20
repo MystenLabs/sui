@@ -329,6 +329,8 @@ fn parse_scheme_from_error(message: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
 
     #[test]
@@ -446,5 +448,35 @@ mod tests {
             .build()
             .expect_err("non-http fullnode URL must fail");
         assert!(matches!(err, ConfigError::InvalidUrlScheme { .. }));
+    }
+
+    proptest! {
+        #[test]
+        fn keyword_network_parse_is_deterministic(
+            keyword in prop_oneof![Just("mainnet"), Just("testnet"), Just("devnet")]
+        ) {
+            let first = ForkingNetwork::parse(keyword).expect("valid keyword");
+            let second = ForkingNetwork::parse(keyword).expect("valid keyword");
+
+            prop_assert_eq!(&first, &second);
+            prop_assert_eq!(first.to_string(), keyword);
+        }
+
+        #[test]
+        fn builder_port_invariants_hold_for_arbitrary_ports(
+            rpc_port in any::<u16>(),
+            server_port in any::<u16>()
+        ) {
+            let result = ForkingNodeConfig::builder()
+                .rpc_port(rpc_port)
+                .server_port(server_port)
+                .build();
+
+            if rpc_port == 0 || server_port == 0 {
+                prop_assert!(result.is_err());
+            } else {
+                prop_assert!(result.is_ok());
+            }
+        }
     }
 }

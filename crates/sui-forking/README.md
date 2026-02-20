@@ -21,12 +21,11 @@ A development tool that enables testing and developing against a local Sui netwo
 Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
 That means that you have full control over the advancement of checkpoints, time, and epochs to simulate different scenarios.
 
-Currently only forking from the last known checkpoint is supported. You cannot specify an arbitrary checkpoint number to fork from.
-
 ## Limitations
 - Staking and related operations are not supported.
 - Single validator, single authority network.
 - Object fetching overhead: First access to objects requires network download.
+- Forking from a checkpoint older than 1 hour requires explicit object seeding (you need to know which objects you want to have pulled at startup)
 - If it forks at checkpoint X, you cannot depend on objects created after checkpoint X from the actual real network. You'll need to restart the network at that checkpoint or a later one.
 - Sequential execution: Transactions are executed one at a time, no parallelism.
 

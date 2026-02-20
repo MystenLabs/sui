@@ -59,6 +59,8 @@ cynic-codegen.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+tempfile.workspace = true
+test-cluster.workspace = true
 
 [lints]
 workspace = true

@@ -138,11 +138,11 @@ impl Drop for ForkingNode {
 fn prepare_data_dir(configured: Option<PathBuf>) -> Result<PathBuf, StartError> {
     let path = match configured {
         Some(path) => path,
-        None => mysten_common::tempdir()
-            .map_err(|err| StartError::CreateTempDir {
+        None => sui_data_store::stores::FileSystemStore::base_path().map_err(|err| {
+            StartError::ResolveDefaultDataDir {
                 message: err.to_string(),
-            })?
-            .keep(),
+            }
+        })?,
     };
 
     std::fs::create_dir_all(&path).map_err(|source| StartError::CreateDataDir {
@@ -165,22 +165,33 @@ async fn wait_for_ready(
         ready = ready_receiver => {
             match ready {
                 Ok(()) => Ok(()),
-                Err(_) => Err(StartError::ExitedBeforeReady {
-                    message: "runtime exited before readiness".to_string(),
-                }),
+                Err(_) => exited_before_ready_from_runtime(task).await,
             }
         }
-        runtime_result = task => {
-            let runtime_result = runtime_result.map_err(|source| StartError::Join { source })?;
-            match runtime_result {
-                Ok(()) => Err(StartError::ExitedBeforeReady {
-                    message: "runtime exited before readiness".to_string(),
-                }),
-                Err(err) => Err(StartError::ExitedBeforeReady {
-                    message: err.to_string(),
-                }),
-            }
+        runtime_result = &mut *task => {
+            exited_before_ready_from_result(runtime_result)
         }
+    }
+}
+
+async fn exited_before_ready_from_runtime(
+    task: &mut JoinHandle<anyhow::Result<()>>,
+) -> Result<(), StartError> {
+    let runtime_result = task.await;
+    exited_before_ready_from_result(runtime_result)
+}
+
+fn exited_before_ready_from_result(
+    runtime_result: Result<anyhow::Result<()>, tokio::task::JoinError>,
+) -> Result<(), StartError> {
+    let runtime_result = runtime_result.map_err(|source| StartError::Join { source })?;
+    match runtime_result {
+        Ok(()) => Err(StartError::ExitedBeforeReady {
+            message: "runtime exited before readiness".to_string(),
+        }),
+        Err(err) => Err(StartError::ExitedBeforeReady {
+            message: format!("{err:#}"),
+        }),
     }
 }
 

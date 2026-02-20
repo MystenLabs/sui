@@ -32,7 +32,9 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 
 use crate::context::Context;
 
-const READ_MASK_DEFAULT: &str = "sequence_number,digest";
+const GET_CHECKPOINT_READ_MASK_DEFAULT: &str = "sequence_number,digest";
+const GET_TRANSACTION_READ_MASK_DEFAULT: &str = "digest";
+const GET_EPOCH_READ_MASK_DEFAULT: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
 
 /// A LedgerService implementation backed by the ForkingStore/Simulacrum.
 pub struct ForkingLedgerService {
@@ -167,7 +169,8 @@ impl LedgerService for ForkingLedgerService {
             })?;
 
         let read_mask = {
-            let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
+            let read_mask =
+                read_mask.unwrap_or_else(|| FieldMask::from_str(GET_TRANSACTION_READ_MASK_DEFAULT));
             read_mask
                 .validate::<ExecutedTransaction>()
                 .map_err(|path| {
@@ -198,7 +201,8 @@ impl LedgerService for ForkingLedgerService {
         } = request.into_inner();
 
         let read_mask = {
-            let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
+            let read_mask =
+                read_mask.unwrap_or_else(|| FieldMask::from_str(GET_TRANSACTION_READ_MASK_DEFAULT));
             read_mask
                 .validate::<ExecutedTransaction>()
                 .map_err(|path| {
@@ -247,7 +251,8 @@ impl LedgerService for ForkingLedgerService {
         } = request.into_inner();
 
         let read_mask = {
-            let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
+            let read_mask =
+                read_mask.unwrap_or_else(|| FieldMask::from_str(GET_CHECKPOINT_READ_MASK_DEFAULT));
             read_mask.validate::<Checkpoint>().map_err(|path| {
                 let fv = FieldViolation::new("read_mask")
                     .with_description(format!("invalid read_mask path: {path}"))
@@ -368,7 +373,8 @@ impl LedgerService for ForkingLedgerService {
         } = request.into_inner();
 
         let read_mask = {
-            let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
+            let read_mask =
+                read_mask.unwrap_or_else(|| FieldMask::from_str(GET_EPOCH_READ_MASK_DEFAULT));
             read_mask.validate::<Epoch>().map_err(|path| {
                 let fv = FieldViolation::new("read_mask")
                     .with_description(format!("invalid read_mask path: {path}"))

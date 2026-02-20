@@ -14833,6 +14833,8 @@ dependencies = [
  "sui-swarm-config",
  "sui-types",
  "tap",
+ "tempfile",
+ "test-cluster",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",

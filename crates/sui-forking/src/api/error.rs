@@ -62,9 +62,9 @@ pub enum StartError {
         source: std::io::Error,
     },
 
-    /// Failed to create a temporary directory when no data directory was configured.
-    #[error("failed to create temporary data directory: {message}")]
-    CreateTempDir {
+    /// Failed to resolve the default data directory when none was configured.
+    #[error("failed to resolve default data directory (~/.sui_data_store): {message}")]
+    ResolveDefaultDataDir {
         /// Detailed error message.
         message: String,
     },
