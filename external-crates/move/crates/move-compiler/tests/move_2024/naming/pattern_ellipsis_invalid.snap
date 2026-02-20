@@ -87,6 +87,12 @@ error[E03013]: positional call mismatch
    │
    = Positional patterns take arguments using '()'
 
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:27:13
+   │
+27 │             X::D{x, ..} => 0,
+   │             ^^^^^^^^^^^ Unbound field 'x' in '0x42::m::X::D'
+
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:27:13
    │
@@ -97,12 +103,6 @@ error[E03013]: positional call mismatch
    │             ^^^^^^^^^^^ Invalid variant pattern. Positional variant declarations require positional patterns
    │
    = Positional patterns take arguments using '()'
-
-error[E03010]: unbound field
-   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:27:13
-   │
-27 │             X::D{x, ..} => 0,
-   │             ^^^^^^^^^^^ Unbound field 'x' in '0x42::m::X::D'
 
 warning[W09002]: unused variable
    ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:27:18
@@ -134,6 +134,12 @@ error[E03013]: positional call mismatch
    │
    = Named patterns take arguments using '{ }'
 
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:35:13
+   │
+35 │             Z::D(x, ..) => 0,
+   │             ^^^^^^^^^^^ Unbound field '0' in '0x42::m::Z::D'
+
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:35:13
    │
@@ -144,12 +150,6 @@ error[E03013]: positional call mismatch
    │             ^^^^^^^^^^^ Invalid variant pattern. Named variant declarations require named patterns
    │
    = Named patterns take arguments using '{ }'
-
-error[E03010]: unbound field
-   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:35:13
-   │
-35 │             Z::D(x, ..) => 0,
-   │             ^^^^^^^^^^^ Unbound field '0' in '0x42::m::Z::D'
 
 warning[W09002]: unused variable
    ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:35:18

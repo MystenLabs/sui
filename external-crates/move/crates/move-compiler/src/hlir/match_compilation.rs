@@ -157,7 +157,7 @@ fn build_match_tree(
         return MatchTree::Failure;
     }
 
-    if let Some(leaf) = matrix.wild_tree_opt(&fringe) {
+    if let Some(leaf) = matrix.wild_tree_opt(context.env, &mut context.reporter, &fringe) {
         debug_print!(context.debug.match_specialization, (msg "wild leaf"), ("matrix" => matrix));
         return MatchTree::Leaf(leaf);
     }
