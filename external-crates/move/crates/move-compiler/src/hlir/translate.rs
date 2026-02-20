@@ -2234,22 +2234,18 @@ fn make_assignments(
     let mut lvalues = vec![];
     let mut after = Block::new();
     for (idx, a) in assigns.into_iter().enumerate() {
-        let error_ty;
-        let a_ty = match rvalue.ty.value.type_at_index(idx) {
-            Some(ty) => ty,
-            None => {
-                // we can only get here if the rvalue was malformed and somewhere has an unresolved
-                // error
-                ice_assert!(
-                    context,
-                    context.env.has_errors(),
-                    a.loc,
-                    "Unable to find a type for assignment lvalue from the rvalue"
-                );
-                error_ty = error_single_type(a.loc);
-                &error_ty
-            }
-        };
+        let error_ty = error_single_type(a.loc);
+        let a_ty = rvalue.ty.value.type_at_index(idx).unwrap_or_else(|| {
+            // we can only get here if the rvalue was malformed and somewhere has an unresolved
+            // erro
+            ice_assert!(
+                context,
+                context.env.has_errors(),
+                a.loc,
+                "Unable to find a type for assignment lvalue from the rvalue"
+            );
+            &error_ty
+        });
         let (ls, mut af) = assign(context, case, a, a_ty);
 
         lvalues.push(ls);
