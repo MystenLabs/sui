@@ -260,11 +260,11 @@ fn modules(
         } else if compilation_env.ide_mode() {
             // if a module is not in the typed modules, it must be in pre-compiled library
             // (info contains both typed and pre-compiled modules)
-            assert!(
-                info.modules.contains_key(&mident),
-                "ICE compiler added a friend to module {} that is neither in typed modules nor in pre-compiled library (in IDE mode)",
-                mident
-            );
+            compilation_env
+            .diagnostic_reporter_at_top_level().add_diag(ice!((
+                mident.loc,
+                "Compiler added a friend to module but friend is not in typed modules nor in pre-compiled library (in IDE mode)"
+            )));
             // This can happen if some (dependency) modules from the same package are in typed
             // modules and some are in pre-compiled library. Technically this could lead to
             // incorrect friends list for one of the pre-compiled modules, but in practice
@@ -290,10 +290,12 @@ fn modules(
             // - when building dependency info for typed modules, which is not a problem
             // because M1 is in pre-compiled library and not in typed modules
         } else {
-            panic!(
-                "ICE compiler added a friend to module {} that is not in typed modules",
-                mident
-            );
+            compilation_env
+                .diagnostic_reporter_at_top_level()
+                .add_diag(ice!((
+                    mident.loc,
+                    "Compiler added a friend to module but friend is not in typed modules"
+                )));
         }
     }
 
