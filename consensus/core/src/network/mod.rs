@@ -208,6 +208,7 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
 }
 
 /// A stream item for observer block streaming that includes both the block and highest commit index.
+#[derive(Clone)]
 pub(crate) struct ObserverBlockStreamItem {
     pub(crate) block: Bytes,
     pub(crate) highest_commit_index: u64,
@@ -228,6 +229,14 @@ pub(crate) type BlockRequestStream =
 #[async_trait]
 #[allow(dead_code)]
 pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
+    /// Handles a block received from a peer subscription. Used by ObserverSubscriber to process
+    /// blocks streamed from validators or other observers.
+    async fn handle_block(
+        &self,
+        peer: PeerId,
+        item: ObserverBlockStreamItem,
+    ) -> ConsensusResult<()>;
+
     /// Handles the block streaming request from an observer peer.
     /// Returns a stream of blocks with the highest commit index for each block.
     /// Blocks with rounds higher than the highest_round_per_authority will be streamed.
