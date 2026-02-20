@@ -250,12 +250,57 @@ fn modules(
     let used_module_members = used_module_members.into_inner().unwrap();
 
     for (mident, friends) in all_new_friends {
-        let mdef = typed_modules.get_mut(&mident).unwrap();
-        // point of interest: if we have any new friends, we know there can't be any
-        // "current" friends becahse all thew new friends are generated off of
-        // `public(package)` usage, which disallows other friends.
-        mdef.friends = UniqueMap::maybe_from_iter(friends.into_iter())
+        let friends = UniqueMap::maybe_from_iter(friends.into_iter())
             .expect("ICE compiler added duplicate friends to public(package) friend list");
+        if let Some(mdef) = typed_modules.get_mut(&mident) {
+            // point of interest: if we have any new friends, we know there can't be any
+            // "current" friends because all the new friends are generated off of
+            // `public(package)` usage, which disallows other friends.
+            mdef.friends = friends;
+        } else if compilation_env.ide_mode() {
+            // if a module is not in the typed modules, it must be in pre-compiled library
+            // (info contains both typed and pre-compiled modules)
+            if !info.modules.contains_key(&mident) {
+                compilation_env
+                    .diagnostic_reporter_at_top_level()
+                    .add_diag(ice!((
+                        mident.loc,
+                        "Compiler added a friend to module but friend is not in typed modules \
+                         nor in pre-compiled library (in IDE mode)"
+                    )));
+            }
+            // This can happen if some (dependency) modules from the same package are in typed
+            // modules and some are in pre-compiled library. Technically this could lead to
+            // incorrect friends list for one of the pre-compiled modules, but in practice
+            // it does not appear to be a problem.
+            // Consider two modules M1 and M2 in the same package pkg:
+
+            // module pkg::M1 {
+            //     public(package) fun foo() {}
+            // }
+            // module pkg::M2 {
+            // }
+            //
+            // Further, consider that M2 gets an extension:
+            //
+            // extension module pkg::M2 {
+            //     public fun bar() { pkg::M1::foo() }
+            // }
+            //
+            // If M1 is in pre-compiled library but M2 is not, M1's friend list will not contain M2.
+            // However, friends list is only really used in two places:
+            // - when checking visibility function for a friend function in a given module,
+            // which is not a problem as M1 cannot have both friend and public(package) functions
+            // - when building dependency info for typed modules, which is not a problem
+            // because M1 is in pre-compiled library and not in typed modules
+        } else {
+            compilation_env
+                .diagnostic_reporter_at_top_level()
+                .add_diag(ice!((
+                    mident.loc,
+                    "Compiler added a friend to module but friend is not in typed modules"
+                )));
+        }
     }
 
     for (_, mident, mdef) in &typed_modules {
