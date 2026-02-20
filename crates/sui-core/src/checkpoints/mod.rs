@@ -1970,6 +1970,20 @@ impl CheckpointBuilder {
                 roots_effects.insert(0, ccp_effects);
             }
 
+            let roots_digest_set: HashSet<_> = roots_effects
+                .iter()
+                .map(|e| *e.transaction_digest())
+                .collect();
+            let root_digest_set: HashSet<_> = root_digests.iter().cloned().collect();
+            if roots_digest_set != root_digest_set {
+                debug_fatal!(
+                    "complete_checkpoint_effects should not add or remove effects in the split checkpoint path: \
+                        roots_effects: {:?}, root_digests: {:?}",
+                    roots_digest_set,
+                    root_digest_set
+                );
+            }
+
             if let Some(settlement_key) = &checkpoint_roots.settlement_root {
                 let checkpoint_seq = pending
                     .details
