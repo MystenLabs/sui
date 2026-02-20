@@ -3,11 +3,11 @@ title: Nautilus
 description: Run secure, off-chain logic in trusted execution environments (TEEs), and verify it on-chain to trigger safe smart contract workflows.
 ---
 
-Nautilus is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
+Nautilus is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a marketplace like [Marlin Oyster](/docs/guides/developer/nautilus/marlin) while preserving trust on-chain through smart contract-based verification.
 
 Nautilus supports hybrid decentralized applications that require private data handling, complex computations, or integration with external (Web2) systems. The framework ensures computations are tamper-resistant, isolated, and cryptographically verifiable.
 
-It currently supports self-managed [AWS Nitro Enclave TEEs](https://aws.amazon.com/ec2/nitro/nitro-enclaves/). You can verify AWS-signed enclave attestations on-chain using Sui smart contracts written in Move. Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the reproducible build template.
+It currently supports self-managed [AWS Nitro Enclave TEEs](https://aws.amazon.com/ec2/nitro/nitro-enclaves/) and Dockerized deployments through [Marlin](/docs/guides/developer/nautilus/marlin). You can verify AWS-signed enclave attestations on-chain using Sui smart contracts written in Move. Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the reproducible build template.
 
 ## Features
 
@@ -26,7 +26,7 @@ A Nautilus application consists of 2 components:
 
 ## How it works
 
-- Deploy the off-chain server to a self-managed TEE, such as AWS Nitro Enclaves. You can use the [available reproducible build template](https://github.com/MystenLabs/nautilus).
+- Deploy the off-chain server to a self-managed TEE, such as AWS Nitro Enclaves, or use [Marlin Oyster](/docs/guides/developer/nautilus/marlin) to deploy Dockerized Nautilus apps.
 
 :::danger
 
@@ -60,12 +60,6 @@ Nautilus supports several Web3 use cases for trustworthy and verifiable off-chai
 
 - **Identity management:** Nautilus can provide solutions in the identity management space that require on-chain verifiability for decentralized governance and proof of tamper resistance.
 
-When used together, Nautilus and [Seal](https://github.com/MystenLabs/seal) enable powerful privacy-preserving use cases by combining secure and verifiable computation with secure key access. A common challenge with TEEs is persisting secret keys across restarts and different machines. Seal can address this by securely storing long-term keys and granting access only to properly attested TEEs. In this model, Nautilus handles computation over the encrypted data, while Seal controls key access. Applications that require a shared encrypted state can use both tools to privately process user requests and update encrypted data on public networks.
+## Seal
 
-## Future plans and non-goals
-
-Nautilus will support additional TEE providers in the future. Your suggestions on which platforms to prioritize or support is greatly appreciated. Contact the Nautilus team on [Sui Discord](https://discord.com/channels/916379725201563759/1361500579603546223).
-
-<ImportContent source="contact-nautilus.mdx" mode="snippet" />
-
-Nautilus does not have a native, readily usable TEE network. Nautilus partners might provide such TEE networks, however. Apart from such networks, you are encouraged to deploy and manage your own TEEs for running off-chain Nautilus servers.
+When used together, Nautilus and [Seal](/docs/guides/developer/nautilus/seal) enable powerful privacy-preserving use cases by combining secure and verifiable computation with secure key access. A common challenge with TEEs is persisting secret keys across restarts and different machines. Seal can address this by securely storing long-term keys and granting access only to properly attested TEEs. In this model, Nautilus handles computation over the encrypted data, while Seal controls key access. Applications that require a shared encrypted state can use both tools to privately process user requests and update encrypted data on public networks.

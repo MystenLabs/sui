@@ -8,6 +8,12 @@ The Seal-Nautilus pattern provides secure secret management for enclave applicat
 
 You can define a Seal policy configured with specified Platform Configuration Registers (PCRs) of the enclave. Then, encrypt data using Seal with a fixed ID. Only the enclave with the given PCRs can decrypt it.
 
+:::caution
+
+This pattern has been tested using self-managed TEEs. It has not been tested using [Marlin Oyster deployments](/docs/guides/developer/nautilus/marlin).
+
+:::
+
 ## Components
 
 The following example that demonstrates the Seal-Nautilus pattern uses the following components:
