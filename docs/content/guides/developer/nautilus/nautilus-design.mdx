@@ -3,7 +3,7 @@ title: Nautilus Design
 description: Overview of the design aspects of Nautilus, including its trust model.
 ---
 
-![image](../images/flows.png)
+![image](./images/flows.png)
 
 When the enclave starts, it exposes 3 HTTP endpoints:
 
@@ -43,19 +43,19 @@ An on-chain Move contract checks that the signature matches public key of regist
 
 Move smart contracts do two things in this process:
 
-1. They register the enclave by storing PCR0/1/2, verifying the attestation document, and storing the enclave public key inside a shared object.
+1. They register the enclave by storing the PCRs, verifying the attestation document, and storing the enclave public key inside a shared object.
 
 Example object types created by Move smart contracts include the `EnclaveConfig` object for the PCRs and the `Enclave` object for the public key and metadata.
 
 2. They verify signed responses. The Move app logic calls `verify_signature()` inside the Nautilus Move library. If the call is valid, data is accepted and logic continues. This guarantees that the app only accepts data from a real, authenticated enclave.
 
-## Natilus workflows 
+## Nautilus workflows
 
 Nautilus involves two main participants: app developers who build and deploy the system, and users who interact with it. The framework establishes a trust model that allows users to verify computations without trusting the developer.
 
 ### Developer workflow
 
-As an app developer, follow these steps to deploy an instance of Nautilus:
+As an app developer, follow these steps to deploy a self-managed TEE. Alternatively, you can use the [Marlin Oyster marketplace](/guides/developer/nautilus/marlin) for Docker-based simplicity.
 
 1. Create a Nautilus off-chain server with a reproducible build using the [provided template](https://github.com/MystenLabs/nautilus).
 
