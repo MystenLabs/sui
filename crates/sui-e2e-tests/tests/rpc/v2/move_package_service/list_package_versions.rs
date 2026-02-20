@@ -17,7 +17,10 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn test_list_package_versions_system_package() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -40,7 +43,10 @@ async fn test_list_package_versions_system_package() {
 
 #[sim_test]
 async fn test_list_package_versions_with_upgrades() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -306,7 +312,10 @@ async fn test_list_package_versions_with_upgrades() {
 
 #[sim_test]
 async fn test_list_package_versions_not_found() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -321,7 +330,10 @@ async fn test_list_package_versions_not_found() {
 
 #[sim_test]
 async fn test_list_package_versions_invalid_package_id() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -340,7 +352,10 @@ async fn test_list_package_versions_invalid_package_id() {
 
 #[sim_test]
 async fn test_list_package_versions_missing_package_id() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -358,7 +373,10 @@ async fn test_list_package_versions_missing_package_id() {
 
 #[sim_test]
 async fn test_list_package_versions_invalid_pagination() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();

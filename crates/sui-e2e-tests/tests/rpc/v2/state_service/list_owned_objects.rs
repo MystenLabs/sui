@@ -19,7 +19,10 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn test_indexing_with_tto() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = Client::new(cluster.rpc_url().to_owned()).unwrap();
     let address = cluster.get_address_0();
@@ -277,7 +280,10 @@ async fn test_indexing_with_tto() {
 
 #[sim_test]
 async fn test_filter_by_type() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let sui = "0x2::coin::Coin<0x2::sui::SUI>"
         .parse::<TypeTag>()
@@ -529,7 +535,10 @@ async fn test_filter_by_type() {
 
 #[sim_test]
 async fn test_reverse_sorted_coins_by_balance() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = Client::new(cluster.rpc_url().to_owned()).unwrap();
 
