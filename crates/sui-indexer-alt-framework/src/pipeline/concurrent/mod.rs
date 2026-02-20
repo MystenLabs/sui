@@ -746,6 +746,10 @@ mod tests {
         let config = ConcurrentConfig {
             committer: CommitterConfig {
                 write_concurrency: 1, // Single committer for deterministic blocking
+                // MIN_EAGER_ROWS is 1000 and MAX_PENDING_ROWS is 4, so
+                // this test relies on the collect interval tip to force
+                // batch flushing.
+                collect_interval_ms: 10,
                 ..Default::default()
             },
             ..Default::default()
