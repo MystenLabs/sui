@@ -400,13 +400,21 @@ pub struct CompositePayload {
 enum AliasRevokeCycleState {
     /// The alias needs to be (re-)added. This is the beginning of the cycle.
     NeedAdd,
-    /// An add-alias tx has been sent; waiting for its result.
-    AddPending,
+    /// An add-alias tx has been sent; waiting for its result and checkpoint confirmation.
+    /// Phase 1 (`None`): tx sent, waiting for effects from `handle_batch_results`.
+    /// Phase 2 (`Some(digest)`): effects received, polling for checkpoint inclusion.
+    AddPending {
+        tx_digest: Option<TransactionDigest>,
+    },
     /// Alias is active; alias-signed txs are being injected. Once `successful_alias_txs`
     /// reaches the configured threshold, a remove-alias tx is sent.
     Active { successful_alias_txs: u32 },
-    /// A remove-alias tx has been sent; waiting for its result.
-    RemovePending,
+    /// A remove-alias tx has been sent; waiting for its result and checkpoint confirmation.
+    /// Phase 1 (`None`): tx sent, waiting for effects from `handle_batch_results`.
+    /// Phase 2 (`Some(digest)`): effects received, polling for checkpoint inclusion.
+    RemovePending {
+        tx_digest: Option<TransactionDigest>,
+    },
     /// Alias was successfully removed. Next batch will inject an invalid post-revocation tx.
     Revoked,
     /// An invalid post-revocation tx has been sent; waiting for its (expected) failure.
@@ -593,7 +601,7 @@ impl CompositePayload {
                         ],
                     )
                     .build_and_sign(keypair);
-                alias_state.cycle_state = AliasRevokeCycleState::RemovePending;
+                alias_state.cycle_state = AliasRevokeCycleState::RemovePending { tx_digest: None };
                 (
                     tx,
                     OperationSet::new().with(ALIAS_REMOVE_FLAG),
@@ -646,7 +654,7 @@ impl CompositePayload {
                         ],
                     )
                     .build_and_sign(keypair);
-                alias_state.cycle_state = AliasRevokeCycleState::AddPending;
+                alias_state.cycle_state = AliasRevokeCycleState::AddPending { tx_digest: None };
                 (
                     tx,
                     OperationSet::new().with(ALIAS_ADD_FLAG),
@@ -665,6 +673,56 @@ impl CompositePayload {
                 kind,
             },
         )
+    }
+
+    /// Polls for pending alias checkpoint confirmations and returns true if
+    /// an alias tx should be generated this batch.
+    async fn advance_alias_state(&mut self) -> bool {
+        let Some(ref mut alias_state) = self.alias_state else {
+            return false;
+        };
+
+        match &alias_state.cycle_state {
+            AliasRevokeCycleState::AddPending {
+                tx_digest: Some(digest),
+            } => {
+                let checkpointed = self.fullnode_proxies[0]
+                    .is_transaction_checkpointed(digest)
+                    .await
+                    .unwrap_or(false);
+                if checkpointed {
+                    info!("Add alias tx {digest} checkpoint confirmed");
+                    alias_state.cycle_state = AliasRevokeCycleState::Active {
+                        successful_alias_txs: 0,
+                    };
+                }
+            }
+            AliasRevokeCycleState::RemovePending {
+                tx_digest: Some(digest),
+            } => {
+                let checkpointed = self.fullnode_proxies[0]
+                    .is_transaction_checkpointed(digest)
+                    .await
+                    .unwrap_or(false);
+                if checkpointed {
+                    info!("Remove alias tx {digest} checkpoint confirmed");
+                    alias_state.cycle_state = AliasRevokeCycleState::Revoked;
+                }
+            }
+            _ => {}
+        }
+
+        let mut rng = get_rng();
+        match &alias_state.cycle_state {
+            AliasRevokeCycleState::Active {
+                successful_alias_txs,
+            } if *successful_alias_txs >= self.config.alias_txs_before_revoke => true,
+            AliasRevokeCycleState::Active { .. } => {
+                rng.gen_bool(self.config.alias_tx_probability as f64)
+            }
+            AliasRevokeCycleState::Revoked | AliasRevokeCycleState::NeedAdd => true,
+            _ => false,
+        }
     }
 
     /// Updates alias cycle state based on a transaction result.
@@ -705,8 +763,10 @@ impl CompositePayload {
 
             (BatchTxKind::AliasRemove, BatchedTransactionStatus::Success { effects }) => {
                 if effects.is_ok() {
-                    info!("Remove alias tx succeeded: {digest:?}");
-                    alias_state.cycle_state = AliasRevokeCycleState::Revoked;
+                    info!("Remove alias tx succeeded, waiting for checkpoint: {digest:?}");
+                    alias_state.cycle_state = AliasRevokeCycleState::RemovePending {
+                        tx_digest: Some(digest),
+                    };
                 } else {
                     info!("Remove alias tx aborted: {digest:?}");
                     alias_state.cycle_state = AliasRevokeCycleState::Active {
@@ -725,9 +785,9 @@ impl CompositePayload {
 
             (BatchTxKind::AliasAdd, BatchedTransactionStatus::Success { effects }) => {
                 if effects.is_ok() {
-                    info!("Add alias tx succeeded: {digest:?}");
-                    alias_state.cycle_state = AliasRevokeCycleState::Active {
-                        successful_alias_txs: 0,
+                    info!("Add alias tx succeeded, waiting for checkpoint: {digest:?}");
+                    alias_state.cycle_state = AliasRevokeCycleState::AddPending {
+                        tx_digest: Some(digest),
                     };
                 } else {
                     info!("Add alias tx aborted: {digest:?}");
@@ -773,30 +833,15 @@ impl Payload for CompositePayload {
     }
 
     async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
-        let (alias_tx_needed, batch_size) = {
+        let alias_tx_needed = self.advance_alias_state().await;
+        let batch_size = {
             let mut rng = get_rng();
-
-            // Determine if we need to reserve a gas coin for an alias-related tx this batch.
-            let alias_tx_needed = self.alias_state.is_some()
-                && match self.alias_state.as_ref().map(|s| &s.cycle_state) {
-                    Some(AliasRevokeCycleState::Active {
-                        successful_alias_txs,
-                    }) if *successful_alias_txs >= self.config.alias_txs_before_revoke => true,
-                    Some(AliasRevokeCycleState::Active { .. }) => {
-                        rng.gen_bool(self.config.alias_tx_probability as f64)
-                    }
-                    Some(AliasRevokeCycleState::Revoked) => true,
-                    Some(AliasRevokeCycleState::NeedAdd) => true,
-                    _ => false,
-                };
-
             let max_normal_batch = if alias_tx_needed {
                 MAX_BATCH_SIZE - 1
             } else {
                 MAX_BATCH_SIZE
             };
-            let batch_size = rng.gen_range(1..=max_normal_batch);
-            (alias_tx_needed, batch_size)
+            rng.gen_range(1..=max_normal_batch)
         };
 
         let system_state = self.system_state_observer.state.borrow().clone();
