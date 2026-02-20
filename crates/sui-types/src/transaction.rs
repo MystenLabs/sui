@@ -2964,18 +2964,24 @@ impl TransactionDataAPI for TransactionDataV1 {
                 );
             }
 
+            let requires_valid_during =
+                !(config.relax_valid_during_for_owned_inputs() && self.has_owned_object_inputs());
             match self.expiration() {
                 TransactionExpiration::None => {
-                    // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
-                    // instead of a missing expiration error.
-                    return Err(UserInputError::MissingGasPayment.into());
+                    if requires_valid_during {
+                        // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
+                        // instead of a missing expiration error.
+                        return Err(UserInputError::MissingGasPayment.into());
+                    }
                 }
                 TransactionExpiration::Epoch(_) => {
-                    return Err(UserInputError::InvalidExpiration {
-                        error: "Address balance gas payments require ValidDuring expiration"
-                            .to_string(),
+                    if requires_valid_during {
+                        return Err(UserInputError::InvalidExpiration {
+                            error: "Address balance gas payments require ValidDuring expiration"
+                                .to_string(),
+                        }
+                        .into());
                     }
-                    .into());
                 }
                 TransactionExpiration::ValidDuring { .. } => {}
             }
@@ -3123,6 +3129,19 @@ impl TransactionDataAPI for TransactionDataV1 {
 }
 
 impl TransactionDataV1 {
+    fn has_owned_object_inputs(&self) -> bool {
+        let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
+            return false;
+        };
+        pt.inputs.iter().any(|input| {
+            matches!(
+                input,
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))
+                    if !ParsedDigest::is_coin_reservation_digest(&obj_ref.2)
+            )
+        })
+    }
+
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
         if self.is_gas_paid_from_address_balance() {
             Some(if self.sender() != self.gas_owner() {

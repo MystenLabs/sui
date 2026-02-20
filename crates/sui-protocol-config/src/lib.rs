@@ -301,6 +301,7 @@ const MAX_PROTOCOL_VERSION: u64 = 115;
 // Version 114: Gate seeded test overrides for checkpoint tx limit behind feature flag.
 // Version 115: Gasless transaction drop safety.
 //              Enable address aliases on mainnet.
+//              Relax ValidDuring requirement for transactions with owned inputs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -831,6 +832,10 @@ struct FeatureFlags {
     // Enable multi-epoch transaction expiration (max 1 epoch difference)
     #[serde(skip_serializing_if = "is_false")]
     enable_multi_epoch_transaction_expiration: bool,
+
+    // Relax ValidDuring expiration requirement for transactions with owned inputs
+    #[serde(skip_serializing_if = "is_false")]
+    relax_valid_during_for_owned_inputs: bool,
 
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
@@ -2180,6 +2185,10 @@ impl ProtocolConfig {
 
     pub fn enable_multi_epoch_transaction_expiration(&self) -> bool {
         self.feature_flags.enable_multi_epoch_transaction_expiration
+    }
+
+    pub fn relax_valid_during_for_owned_inputs(&self) -> bool {
+        self.feature_flags.relax_valid_during_for_owned_inputs
     }
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
@@ -4648,6 +4657,7 @@ impl ProtocolConfig {
                 115 => {
                     cfg.feature_flags.gasless_transaction_drop_safety = true;
                     cfg.feature_flags.address_aliases = true;
+                    cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
                 }
                 // Use this template when making changes:
                 //
