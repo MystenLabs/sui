@@ -297,6 +297,7 @@ const MAX_PROTOCOL_VERSION: u64 = 112;
 //              Enable additional validation on zkLogin public identifier.
 // Version 111: Validator metadata
 // Version 112: Enable Ristretto255 in devnet.
+//              Enable address aliases on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4587,6 +4588,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_ristretto255_group_ops = true;
                     }
+
+                    cfg.feature_flags.address_aliases = true;
                 }
                 // Use this template when making changes:
                 //
