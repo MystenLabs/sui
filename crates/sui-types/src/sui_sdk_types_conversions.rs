@@ -31,6 +31,7 @@ use sui_sdk_types::{
 use tap::Pipe;
 
 use crate::crypto::SuiSignature as _;
+use crate::execution_status::ExecutionFailure;
 
 #[derive(Debug)]
 pub struct SdkTypeConversionError(String);
@@ -1102,7 +1103,10 @@ impl From<crate::execution_status::ExecutionStatus> for ExecutionStatus {
     fn from(value: crate::execution_status::ExecutionStatus) -> Self {
         match value {
             crate::execution_status::ExecutionStatus::Success => Self::Success,
-            crate::execution_status::ExecutionStatus::Failure { error, command } => Self::Failure {
+            crate::execution_status::ExecutionStatus::Failure(ExecutionFailure {
+                error,
+                command,
+            }) => Self::Failure {
                 error: error.into(),
                 command: command.map(|c| c as u64),
             },

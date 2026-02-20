@@ -75,7 +75,7 @@ use sui_types::{
     effects::TransactionEffectsAPI,
     error::SuiErrorKind,
     event::EventID,
-    execution_status::ExecutionStatus,
+    execution_status::{ExecutionFailure, ExecutionStatus},
     gas::GasCostSummary,
     gas_coin::GasCoin,
     message_envelope::Envelope,
@@ -2538,7 +2538,7 @@ fn to_legacy_dry_run_transaction_block_response(
         SuiTransactionBlockEffects::try_from(response.transaction.effects.clone()).ok()?;
     let input = to_legacy_transaction(&response.transaction)?.data;
     let execution_error_source = match response.transaction.effects.status() {
-        ExecutionStatus::Failure { error, .. } => Some(format!("{error:?}")),
+        ExecutionStatus::Failure(ExecutionFailure { error, .. }) => Some(format!("{error:?}")),
         ExecutionStatus::Success => None,
     };
 
@@ -3245,7 +3245,9 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
                 .execute_transaction_may_fail(transaction.clone())
                 .await?;
             debug!("Transaction executed: {:?}", transaction);
-            if let ExecutionStatus::Failure { error, command } = response.effects.status() {
+            if let ExecutionStatus::Failure(ExecutionFailure { error, command }) =
+                response.effects.status()
+            {
                 let description = if let Some(command) = command {
                     format!("{error:?} in command {command}")
                 } else {

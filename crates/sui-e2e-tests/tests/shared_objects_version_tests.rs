@@ -8,7 +8,7 @@ use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::object::{OBJECT_START_VERSION, Owner};
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -188,7 +188,7 @@ impl TestEnvironment {
             .await
             .unwrap();
 
-        if let ExecutionStatus::Failure { error, .. } = fx.status() {
+        if let ExecutionStatus::Failure(ExecutionFailure { error, .. }) = fx.status() {
             return Err(error.clone());
         }
 

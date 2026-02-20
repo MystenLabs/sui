@@ -4,7 +4,7 @@
 use crate::displays::Pretty;
 use std::fmt::{Display, Formatter};
 use sui_json_rpc_types::SuiExecutionStatus::{self, Failure, Success};
-use sui_types::execution_status::ExecutionStatus;
+use sui_types::execution_status::{ExecutionFailure, ExecutionStatus};
 
 impl Display for Pretty<'_, SuiExecutionStatus> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -25,7 +25,7 @@ impl Display for Pretty<'_, ExecutionStatus> {
 
         let output = match status {
             ExecutionStatus::Success => "success".to_string(),
-            ExecutionStatus::Failure { error, command } => {
+            ExecutionStatus::Failure(ExecutionFailure { error, command }) => {
                 if let Some(command) = command {
                     format!("failed due to {error:?} in command {command}")
                 } else {
