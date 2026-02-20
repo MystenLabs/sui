@@ -18,3 +18,5 @@ error[E13002]: feature is deprecated in specified edition
   │
 3 │         assert(false);
   │         ^^^^^^^^^^^^^ 'assert' function syntax has been deprecated and cannot be used with clever assertions
+  │
+  = Replace with 'assert!'. 'assert' has been replaced with a 'assert!' built-in macro so that arguments are no longer eagerly evaluated
