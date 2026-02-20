@@ -103,10 +103,12 @@ pub(super) fn collector<H: Handler + 'static>(
         let reader_lo_atomic = main_reader_lo.wait().await;
 
         loop {
+            let mut force_flush = false;
             // === IDLE: block until timer fires or enough data accumulates ===
             tokio::select! {
                 _ = poll.tick() => {
                     // Timer: always flush (even if empty, for watermark progress)
+                    force_flush = true;
                 }
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
@@ -114,33 +116,35 @@ pub(super) fn collector<H: Handler + 'static>(
                     pending_rows += receive_checkpoint::<H>(
                         indexed, &mut pending, reader_lo_atomic, &metrics,
                     );
-                    if pending_rows < min_eager_rows {
-                        continue;
-                    }
                 }
                 // docs::/#collector
             }
 
-            // === FLUSHING: tight loop — drain channel + send batches until empty ===
-            //
-            // This is intentionally a do-while: we always build+send at least one batch per
-            // flush cycle, even when pending is empty, so that timer ticks produce heartbeat
-            // batches for watermark progress.
-            loop {
-                while pending_rows < max_pending_rows {
-                    match rx.try_recv() {
-                        Ok(indexed) => {
-                            pending_rows += receive_checkpoint::<H>(
-                                indexed,
-                                &mut pending,
-                                reader_lo_atomic,
-                                &metrics,
-                            );
-                        }
-                        Err(_) => break,
+            // Eagerly drain anything that arrived alongside the select! trigger.
+            while pending_rows < max_pending_rows {
+                match rx.try_recv() {
+                    Ok(indexed) => {
+                        pending_rows += receive_checkpoint::<H>(
+                            indexed,
+                            &mut pending,
+                            reader_lo_atomic,
+                            &metrics,
+                        );
                     }
+                    Err(_) => break,
                 }
+            }
 
+            // Only enter the flush loop if timer fired or enough rows accumulated.
+            if !force_flush && pending_rows < min_eager_rows {
+                continue;
+            }
+
+            // === FLUSHING: send batches until pending is drained ===
+            //
+            // Always executes at least once — on timer ticks this sends an empty
+            // heartbeat batch so watermarks make progress.
+            loop {
                 let guard = metrics
                     .collector_gather_latency
                     .with_label_values(&[H::NAME])
@@ -210,6 +214,21 @@ pub(super) fn collector<H: Handler + 'static>(
                         "Committer closed channel, stopping collector"
                     );
                     return Ok(());
+                }
+
+                // Top up from channel before deciding whether to continue.
+                while pending_rows < max_pending_rows {
+                    match rx.try_recv() {
+                        Ok(indexed) => {
+                            pending_rows += receive_checkpoint::<H>(
+                                indexed,
+                                &mut pending,
+                                reader_lo_atomic,
+                                &metrics,
+                            );
+                        }
+                        Err(_) => break,
+                    }
                 }
 
                 if pending.is_empty() {
