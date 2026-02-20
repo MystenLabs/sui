@@ -208,14 +208,12 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
 }
 
 /// A stream item for observer block streaming that includes both the block and highest commit index.
-#[allow(dead_code)]
 pub(crate) struct ObserverBlockStreamItem {
     pub(crate) block: Bytes,
     pub(crate) highest_commit_index: u64,
 }
 
 /// Observer block stream type.
-#[allow(dead_code)]
 pub(crate) type ObserverBlockStream =
     Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send + 'static>>;
 
