@@ -4,6 +4,7 @@
 use futures::StreamExt;
 use move_core_types::identifier::Identifier;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_keys::keystore::AccountKeystore;
 use sui_light_client::authenticated_events::AuthenticatedEventsClient;
 use sui_macros::sim_test;
@@ -148,10 +149,34 @@ async fn emit_events_batch(
     test_cluster.sign_and_execute_transaction(&tx_data).await;
 }
 
+async fn connect_with_retry<T, F, Fut>(connect_fn: F) -> T
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = Result<T, tonic::transport::Error>>,
+{
+    const MAX_RETRIES: u32 = 10;
+    const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+
+    for attempt in 0..MAX_RETRIES {
+        match tokio::time::timeout(CONNECT_TIMEOUT, connect_fn()).await {
+            Ok(Ok(client)) => return client,
+            Ok(Err(e)) if attempt + 1 < MAX_RETRIES => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Ok(Err(e)) => panic!("failed to connect after {MAX_RETRIES} attempts: {e}"),
+            Err(_) if attempt + 1 < MAX_RETRIES => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Err(_) => panic!("connection timed out after {MAX_RETRIES} attempts"),
+        }
+    }
+    unreachable!()
+}
+
 async fn get_genesis_committee(test_cluster: &TestCluster) -> Committee {
-    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut ledger_client =
+        connect_with_retry(|| LedgerServiceClient::connect(test_cluster.rpc_url().to_owned()))
+            .await;
 
     let response = ledger_client
         .get_epoch(GetEpochRequest::new(0).with_read_mask(FieldMask::from_paths(["committee"])))

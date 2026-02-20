@@ -100,6 +100,7 @@ impl CommitterLayer {
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
             watermark_interval_jitter_ms: 0,
+            max_rows_per_second: base.max_rows_per_second,
         }
     }
 }
@@ -108,6 +109,9 @@ impl CommitterLayer {
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub checkpoint_lag: Option<u64>,
+    pub fanout: Option<usize>,
+    pub min_eager_rows: Option<usize>,
+    pub max_batch_checkpoints: Option<usize>,
 }
 
 impl SequentialLayer {
@@ -119,6 +123,9 @@ impl SequentialLayer {
                 base.committer
             },
             checkpoint_lag: self.checkpoint_lag.unwrap_or(base.checkpoint_lag),
+            fanout: self.fanout.or(base.fanout),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
+            max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
         }
     }
 }

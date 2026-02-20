@@ -10,7 +10,10 @@ use crate::v2::move_package_service::system_package_expectations::validate_new_u
 
 #[sim_test]
 async fn test_get_function_validator_cap() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -28,7 +31,10 @@ async fn test_get_function_validator_cap() {
 
 #[sim_test]
 async fn test_get_function_not_found() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -45,7 +51,10 @@ async fn test_get_function_not_found() {
 
 #[sim_test]
 async fn test_get_function_invalid_hex() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -62,7 +71,10 @@ async fn test_get_function_invalid_hex() {
 
 #[sim_test]
 async fn test_get_function_missing_package_id() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -79,7 +91,10 @@ async fn test_get_function_missing_package_id() {
 
 #[sim_test]
 async fn test_get_function_missing_module_name() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -96,7 +111,10 @@ async fn test_get_function_missing_module_name() {
 
 #[sim_test]
 async fn test_get_function_missing_name() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();

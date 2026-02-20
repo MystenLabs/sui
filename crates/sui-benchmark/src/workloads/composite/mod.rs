@@ -5,12 +5,13 @@ mod operations;
 
 use derive_more::Add;
 use mysten_common::random::get_rng;
-use mysten_common::{assert_reachable, assert_sometimes};
+use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
-    ALL_OPERATIONS, AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw,
-    ObjectBalanceDeposit, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw, describe_flags,
+    ALIAS_ADD_FLAG, ALIAS_REMOVE_FLAG, ALIAS_TX_FLAG, ALL_OPERATIONS, AddressBalanceDeposit,
+    AddressBalanceOverdraw, AddressBalanceWithdraw, INVALID_ALIAS_TX_FLAG, ObjectBalanceDeposit,
+    ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead, SharedCounterIncrement,
+    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
+    TestCoinObjectWithdraw, describe_flags,
 };
 use rand::seq::SliceRandom;
 
@@ -33,14 +34,17 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::TypeTag;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
+use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
-use sui_types::transaction::{Argument, Command, ObjectArg, SharedObjectMutability, Transaction};
+use sui_types::transaction::{
+    Argument, CallArg, Command, ObjectArg, SharedObjectMutability, Transaction,
+};
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
+use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tracing::{debug, info, trace};
 
 use super::MultiGas;
@@ -262,6 +266,8 @@ pub struct CompositeWorkloadConfig {
     pub address_balance_amount: u64,
     pub address_balance_gas_probability: f32,
     pub conflicting_transaction_probability: f32,
+    pub alias_tx_probability: f32,
+    pub alias_txs_before_revoke: u32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -282,6 +288,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(AddressBalanceOverdraw::FLAG, 0.1);
         Self {
             probabilities,
+            alias_tx_probability: 0.3,
             ..Default::default()
         }
     }
@@ -324,6 +331,10 @@ impl CompositeWorkloadConfig {
             requirements.insert(InitRequirement::SeedAddressBalance);
         }
 
+        if self.alias_tx_probability > 0.0 {
+            requirements.insert(InitRequirement::EnableAddressAlias);
+        }
+
         requirements
     }
 }
@@ -337,6 +348,8 @@ impl Default for CompositeWorkloadConfig {
             address_balance_amount: 1000,
             address_balance_gas_probability: 0.5,
             conflicting_transaction_probability: 0.1,
+            alias_tx_probability: 0.0,
+            alias_txs_before_revoke: 3,
             metrics: None,
         }
     }
@@ -374,13 +387,74 @@ pub struct CompositePayload {
     fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
     pool: Arc<OperationPool>,
     gas: Mutex<MultiGas>,
-    // for each tx in the batch, which gas coin index did it use?
     current_batch_num_conflicting_transactions: usize,
-    current_batch_gas_map: Vec<usize>,
-    current_batch_op_sets: Vec<OperationSet>,
+    current_batch_txs: Vec<BatchTxInfo>,
     system_state_observer: Arc<SystemStateObserver>,
     metrics: Arc<Mutex<CompositionMetrics>>,
     nonce_counter: AtomicU32,
+    alias_state: Option<AliasState>,
+}
+
+/// Tracks the lifecycle of an alias revoke-and-re-add cycle for a single payload.
+#[derive(Debug, Clone)]
+enum AliasRevokeCycleState {
+    /// The alias needs to be (re-)added. This is the beginning of the cycle.
+    NeedAdd,
+    /// An add-alias tx has been sent; waiting for its result and checkpoint confirmation.
+    /// Phase 1 (`None`): tx sent, waiting for effects from `handle_batch_results`.
+    /// Phase 2 (`Some(digest)`): effects received, polling for checkpoint inclusion.
+    AddPending {
+        tx_digest: Option<TransactionDigest>,
+    },
+    /// Alias is active; alias-signed txs are being injected. Once `successful_alias_txs`
+    /// reaches the configured threshold, a remove-alias tx is sent.
+    Active { successful_alias_txs: u32 },
+    /// A remove-alias tx has been sent; waiting for its result and checkpoint confirmation.
+    /// Phase 1 (`None`): tx sent, waiting for effects from `handle_batch_results`.
+    /// Phase 2 (`Some(digest)`): effects received, polling for checkpoint inclusion.
+    RemovePending {
+        tx_digest: Option<TransactionDigest>,
+    },
+    /// Alias was successfully removed. Next batch will inject an invalid post-revocation tx.
+    Revoked,
+    /// An invalid post-revocation tx has been sent; waiting for its (expected) failure.
+    InvalidPostRevocationTxPending,
+}
+
+/// Per-payload alias setup data produced during init:
+/// (alias_address, alias_keypair, address_aliases_object_id, address_aliases_initial_shared_version).
+type AliasInitInfo = (SuiAddress, Arc<AccountKeyPair>, ObjectID, SequenceNumber);
+
+/// Per-payload alias state used at runtime to drive alias-signed transactions and
+/// the revoke/re-add cycle.
+#[derive(Debug)]
+struct AliasState {
+    alias_address: SuiAddress,
+    alias_keypair: Arc<AccountKeyPair>,
+    address_aliases_id: ObjectID,
+    address_aliases_initial_shared_version: SequenceNumber,
+    cycle_state: AliasRevokeCycleState,
+}
+
+#[derive(Clone, Copy)]
+enum BatchTxKind {
+    /// Standard composite PTB.
+    Normal,
+    /// Transaction signed by alias keypair.
+    AliasSigned,
+    /// Remove alias Move call.
+    AliasRemove,
+    /// Add alias Move call.
+    AliasAdd,
+    /// Alias-signed transfer after revocation (expected to fail).
+    InvalidPostRevocation,
+}
+
+#[derive(Clone, Copy)]
+struct BatchTxInfo {
+    gas_idx: usize,
+    op_set: OperationSet,
+    kind: BatchTxKind,
 }
 
 impl std::fmt::Debug for CompositePayload {
@@ -469,18 +543,14 @@ impl CompositePayload {
         mut tx_builder: TestTransactionBuilder,
         account_state: &AccountState,
         keypair: &AccountKeyPair,
-    ) -> Transaction {
+    ) -> (Transaction, OperationSet) {
         let ops = self.sample_operations();
 
-        let mut current_op_set = OperationSet::new();
+        let mut op_set = OperationSet::new();
         for op in &ops {
-            current_op_set = current_op_set.with(op.operation_flag());
+            op_set = op_set.with(op.operation_flag());
         }
-        self.metrics
-            .lock()
-            .unwrap()
-            .record_signed_and_sent(current_op_set);
-        self.current_batch_op_sets.push(current_op_set);
+        self.metrics.lock().unwrap().record_signed_and_sent(op_set);
 
         let op_names: Vec<&str> = ops.iter().map(|op| op.name()).collect();
 
@@ -498,7 +568,253 @@ impl CompositePayload {
             }
         }
 
-        tx_builder.build_and_sign(keypair)
+        (tx_builder.build_and_sign(keypair), op_set)
+    }
+
+    fn generate_alias_transaction(
+        &mut self,
+        sender: SuiAddress,
+        gas: ObjectRef,
+        gas_idx: usize,
+        rgp: u64,
+        keypair: &AccountKeyPair,
+    ) -> (Transaction, BatchTxInfo) {
+        let alias_state = self.alias_state.as_mut().unwrap();
+
+        let (tx, op_set, kind) = match &alias_state.cycle_state {
+            AliasRevokeCycleState::Active {
+                successful_alias_txs,
+            } if *successful_alias_txs >= self.config.alias_txs_before_revoke => {
+                let tx = TestTransactionBuilder::new(sender, gas, rgp)
+                    .move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        "address_alias",
+                        "remove",
+                        vec![
+                            CallArg::Object(ObjectArg::SharedObject {
+                                id: alias_state.address_aliases_id,
+                                initial_shared_version: alias_state
+                                    .address_aliases_initial_shared_version,
+                                mutability: SharedObjectMutability::Mutable,
+                            }),
+                            CallArg::Pure(bcs::to_bytes(&alias_state.alias_address).unwrap()),
+                        ],
+                    )
+                    .build_and_sign(keypair);
+                alias_state.cycle_state = AliasRevokeCycleState::RemovePending { tx_digest: None };
+                (
+                    tx,
+                    OperationSet::new().with(ALIAS_REMOVE_FLAG),
+                    BatchTxKind::AliasRemove,
+                )
+            }
+            AliasRevokeCycleState::Active { .. } => {
+                let data = TestTransactionBuilder::new(sender, gas, rgp)
+                    .transfer_sui(None, sender)
+                    .build();
+                let tx = Transaction::from_data_and_signer(
+                    data,
+                    vec![alias_state.alias_keypair.as_ref()],
+                );
+                (
+                    tx,
+                    OperationSet::new().with(ALIAS_TX_FLAG),
+                    BatchTxKind::AliasSigned,
+                )
+            }
+            AliasRevokeCycleState::Revoked => {
+                let data = TestTransactionBuilder::new(sender, gas, rgp)
+                    .transfer_sui(None, sender)
+                    .build();
+                let tx = Transaction::from_data_and_signer(
+                    data,
+                    vec![alias_state.alias_keypair.as_ref()],
+                );
+                alias_state.cycle_state = AliasRevokeCycleState::InvalidPostRevocationTxPending;
+                (
+                    tx,
+                    OperationSet::new().with(INVALID_ALIAS_TX_FLAG),
+                    BatchTxKind::InvalidPostRevocation,
+                )
+            }
+            AliasRevokeCycleState::NeedAdd => {
+                let tx = TestTransactionBuilder::new(sender, gas, rgp)
+                    .move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        "address_alias",
+                        "add",
+                        vec![
+                            CallArg::Object(ObjectArg::SharedObject {
+                                id: alias_state.address_aliases_id,
+                                initial_shared_version: alias_state
+                                    .address_aliases_initial_shared_version,
+                                mutability: SharedObjectMutability::Mutable,
+                            }),
+                            CallArg::Pure(bcs::to_bytes(&alias_state.alias_address).unwrap()),
+                        ],
+                    )
+                    .build_and_sign(keypair);
+                alias_state.cycle_state = AliasRevokeCycleState::AddPending { tx_digest: None };
+                (
+                    tx,
+                    OperationSet::new().with(ALIAS_ADD_FLAG),
+                    BatchTxKind::AliasAdd,
+                )
+            }
+            _ => unreachable!("should not generate alias tx in pending state"),
+        };
+
+        self.metrics.lock().unwrap().record_signed_and_sent(op_set);
+        (
+            tx,
+            BatchTxInfo {
+                gas_idx,
+                op_set,
+                kind,
+            },
+        )
+    }
+
+    /// Polls for pending alias checkpoint confirmations and returns true if
+    /// an alias tx should be generated this batch.
+    async fn advance_alias_state(&mut self) -> bool {
+        let Some(ref mut alias_state) = self.alias_state else {
+            return false;
+        };
+
+        match &alias_state.cycle_state {
+            AliasRevokeCycleState::AddPending {
+                tx_digest: Some(digest),
+            } => {
+                let checkpointed = self.fullnode_proxies[0]
+                    .is_transaction_checkpointed(digest)
+                    .await
+                    .unwrap_or(false);
+                if checkpointed {
+                    info!("Add alias tx {digest} checkpoint confirmed");
+                    alias_state.cycle_state = AliasRevokeCycleState::Active {
+                        successful_alias_txs: 0,
+                    };
+                }
+            }
+            AliasRevokeCycleState::RemovePending {
+                tx_digest: Some(digest),
+            } => {
+                let checkpointed = self.fullnode_proxies[0]
+                    .is_transaction_checkpointed(digest)
+                    .await
+                    .unwrap_or(false);
+                if checkpointed {
+                    info!("Remove alias tx {digest} checkpoint confirmed");
+                    alias_state.cycle_state = AliasRevokeCycleState::Revoked;
+                }
+            }
+            _ => {}
+        }
+
+        let mut rng = get_rng();
+        match &alias_state.cycle_state {
+            AliasRevokeCycleState::Active {
+                successful_alias_txs,
+            } if *successful_alias_txs >= self.config.alias_txs_before_revoke => true,
+            AliasRevokeCycleState::Active { .. } => {
+                rng.gen_bool(self.config.alias_tx_probability as f64)
+            }
+            AliasRevokeCycleState::Revoked | AliasRevokeCycleState::NeedAdd => true,
+            _ => false,
+        }
+    }
+
+    /// Updates alias cycle state based on a transaction result.
+    /// Returns true if this was an expected alias failure (should not count toward
+    /// the conflicting transaction failure assertion).
+    fn handle_alias_tx_result(
+        alias_state: &mut AliasState,
+        kind: BatchTxKind,
+        status: &BatchedTransactionStatus,
+        alias_txs_before_revoke: u32,
+        digest: TransactionDigest,
+    ) -> bool {
+        match (kind, status) {
+            (BatchTxKind::InvalidPostRevocation, BatchedTransactionStatus::Success { .. }) => {
+                debug_fatal!("Invalid post-revocation alias tx unexpectedly succeeded: {digest:?}");
+                alias_state.cycle_state = AliasRevokeCycleState::NeedAdd;
+                false
+            }
+            (
+                BatchTxKind::InvalidPostRevocation,
+                BatchedTransactionStatus::PermanentFailure { .. }
+                | BatchedTransactionStatus::UnknownRejection,
+            ) => {
+                info!("Invalid post-revocation alias tx correctly rejected: {digest:?}");
+                alias_state.cycle_state = AliasRevokeCycleState::NeedAdd;
+                true
+            }
+            (
+                BatchTxKind::InvalidPostRevocation,
+                BatchedTransactionStatus::RetriableFailure { .. },
+            ) => {
+                info!(
+                    "Invalid post-revocation alias tx had retriable failure, will retry: {digest:?}",
+                );
+                alias_state.cycle_state = AliasRevokeCycleState::Revoked;
+                false
+            }
+
+            (BatchTxKind::AliasRemove, BatchedTransactionStatus::Success { effects }) => {
+                if effects.is_ok() {
+                    info!("Remove alias tx succeeded, waiting for checkpoint: {digest:?}");
+                    alias_state.cycle_state = AliasRevokeCycleState::RemovePending {
+                        tx_digest: Some(digest),
+                    };
+                } else {
+                    info!("Remove alias tx aborted: {digest:?}");
+                    alias_state.cycle_state = AliasRevokeCycleState::Active {
+                        successful_alias_txs: alias_txs_before_revoke,
+                    };
+                }
+                false
+            }
+            (BatchTxKind::AliasRemove, _) => {
+                info!("Remove alias tx failed, retrying: {digest:?}");
+                alias_state.cycle_state = AliasRevokeCycleState::Active {
+                    successful_alias_txs: alias_txs_before_revoke,
+                };
+                false
+            }
+
+            (BatchTxKind::AliasAdd, BatchedTransactionStatus::Success { effects }) => {
+                if effects.is_ok() {
+                    info!("Add alias tx succeeded, waiting for checkpoint: {digest:?}");
+                    alias_state.cycle_state = AliasRevokeCycleState::AddPending {
+                        tx_digest: Some(digest),
+                    };
+                } else {
+                    info!("Add alias tx aborted: {digest:?}");
+                    alias_state.cycle_state = AliasRevokeCycleState::NeedAdd;
+                }
+                false
+            }
+            (BatchTxKind::AliasAdd, _) => {
+                info!("Add alias tx failed, retrying: {digest:?}");
+                alias_state.cycle_state = AliasRevokeCycleState::NeedAdd;
+                false
+            }
+
+            (BatchTxKind::AliasSigned, BatchedTransactionStatus::Success { effects }) => {
+                if effects.is_ok()
+                    && let AliasRevokeCycleState::Active {
+                        ref mut successful_alias_txs,
+                    } = alias_state.cycle_state
+                {
+                    *successful_alias_txs += 1;
+                }
+                false
+            }
+            (BatchTxKind::AliasSigned, _) => false,
+
+            (BatchTxKind::Normal, _) => unreachable!("Normal txs should not reach this function"),
+        }
     }
 }
 
@@ -517,7 +833,16 @@ impl Payload for CompositePayload {
     }
 
     async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
-        let batch_size = get_rng().gen_range(1..=MAX_BATCH_SIZE);
+        let alias_tx_needed = self.advance_alias_state().await;
+        let batch_size = {
+            let mut rng = get_rng();
+            let max_normal_batch = if alias_tx_needed {
+                MAX_BATCH_SIZE - 1
+            } else {
+                MAX_BATCH_SIZE
+            };
+            rng.gen_range(1..=max_normal_batch)
+        };
 
         let system_state = self.system_state_observer.state.borrow().clone();
         let rgp = system_state.reference_gas_price;
@@ -534,10 +859,9 @@ impl Payload for CompositePayload {
             (gas.0.clone(), gas.1, gas.2.clone())
         };
 
-        self.current_batch_gas_map.clear();
+        self.current_batch_txs.clear();
         self.current_batch_num_conflicting_transactions = 0;
-        self.current_batch_op_sets.clear();
-        let mut transactions = Vec::with_capacity(batch_size);
+        let mut transactions = Vec::with_capacity(batch_size + 1);
 
         let account_state = AccountState::new(sender, &self.fullnode_proxies).await;
 
@@ -561,10 +885,14 @@ impl Payload for CompositePayload {
                 used_gas.push(i);
                 TestTransactionBuilder::new(sender, *gas, rgp)
             };
-            // even if we didn't use gas, we still need to write an index for every tx
-            self.current_batch_gas_map.push(i);
 
-            transactions.push(self.generate_transaction(builder, &account_state, &keypair));
+            let (tx, op_set) = self.generate_transaction(builder, &account_state, &keypair);
+            self.current_batch_txs.push(BatchTxInfo {
+                gas_idx: i,
+                op_set,
+                kind: BatchTxKind::Normal,
+            });
+            transactions.push(tx);
         }
 
         self.current_batch_num_conflicting_transactions = if rng
@@ -574,16 +902,37 @@ impl Payload for CompositePayload {
             let num_conflicting_transactions = rng.gen_range(1..=used_gas.len());
             for gas_idx in used_gas.iter().take(num_conflicting_transactions) {
                 let gas = current_batch_gas[*gas_idx];
-                self.current_batch_gas_map.push(*gas_idx);
 
                 // use rgp + 1 to ensure we never make a duplicate transaction here
                 let builder = TestTransactionBuilder::new(sender, gas, rgp + 1);
-                transactions.push(self.generate_transaction(builder, &account_state, &keypair));
+                let (tx, op_set) = self.generate_transaction(builder, &account_state, &keypair);
+                self.current_batch_txs.push(BatchTxInfo {
+                    gas_idx: *gas_idx,
+                    op_set,
+                    kind: BatchTxKind::Normal,
+                });
+                transactions.push(tx);
             }
             num_conflicting_transactions
         } else {
             0
         };
+
+        if alias_tx_needed {
+            let alias_gas_idx = batch_size;
+            if alias_gas_idx < current_batch_gas.len() {
+                let gas = current_batch_gas[alias_gas_idx];
+                let (tx, info) = self.generate_alias_transaction(
+                    sender,
+                    gas,
+                    alias_gas_idx,
+                    rgp,
+                    keypair.as_ref(),
+                );
+                self.current_batch_txs.push(info);
+                transactions.push(tx);
+            }
+        }
 
         debug!(
             num_conflicting_transactions = self.current_batch_num_conflicting_transactions,
@@ -604,32 +953,46 @@ impl Payload for CompositePayload {
         let mut metrics = self.metrics.lock().unwrap();
 
         let mut permanent_failure_count = 0;
+        let mut expected_alias_failure_count = 0;
 
         let mut gas = self.gas.lock().unwrap();
         for (i, result) in results.results.iter().enumerate() {
-            let gas_idx = self.current_batch_gas_map[i];
+            let tx_info = self.current_batch_txs[i];
             trace!("result: {}", result.description());
             assert!(
-                gas_idx < gas.0.len(),
+                tx_info.gas_idx < gas.0.len(),
                 "result should correspond to a gas coin"
             );
-            let op_set = self.current_batch_op_sets[i];
+
+            if !matches!(tx_info.kind, BatchTxKind::Normal)
+                && let Some(ref mut alias_state) = self.alias_state
+                && Self::handle_alias_tx_result(
+                    alias_state,
+                    tx_info.kind,
+                    &result.status,
+                    self.config.alias_txs_before_revoke,
+                    result.digest,
+                )
+            {
+                expected_alias_failure_count += 1;
+            }
+
             match &result.status {
                 BatchedTransactionStatus::Success { effects } => {
                     if effects.is_cancelled() {
-                        metrics.record_cancellation(op_set);
+                        metrics.record_cancellation(tx_info.op_set);
                     } else if effects.is_insufficient_funds() {
-                        metrics.record_insufficient_funds(op_set);
+                        metrics.record_insufficient_funds(tx_info.op_set);
                     } else if effects.is_ok() {
-                        metrics.record_success(op_set);
+                        metrics.record_success(tx_info.op_set);
                     } else {
-                        metrics.record_abort(op_set);
+                        metrics.record_abort(tx_info.op_set);
                     }
-                    update_gas!(&mut gas.0[gas_idx], effects);
+                    update_gas!(&mut gas.0[tx_info.gas_idx], effects);
                 }
                 BatchedTransactionStatus::PermanentFailure { error } => {
                     permanent_failure_count += 1;
-                    metrics.record_permanent_failure(op_set);
+                    metrics.record_permanent_failure(tx_info.op_set);
                     tracing::debug!(
                         "Transaction {} ({}) rejected with error: {:?}",
                         i,
@@ -638,7 +1001,7 @@ impl Payload for CompositePayload {
                     );
                 }
                 BatchedTransactionStatus::RetriableFailure { error } => {
-                    metrics.record_retriable_failure(op_set);
+                    metrics.record_retriable_failure(tx_info.op_set);
                     tracing::debug!(
                         "Transaction {} ({}) had retriable failure: {:?}",
                         i,
@@ -647,7 +1010,7 @@ impl Payload for CompositePayload {
                     );
                 }
                 BatchedTransactionStatus::UnknownRejection => {
-                    metrics.record_unknown_rejection(op_set);
+                    metrics.record_unknown_rejection(tx_info.op_set);
                     tracing::debug!(
                         "Transaction {} ({}) had unknown rejection",
                         i,
@@ -657,10 +1020,11 @@ impl Payload for CompositePayload {
             }
         }
         assert_sometimes!(
-            permanent_failure_count >= self.current_batch_num_conflicting_transactions,
+            permanent_failure_count
+                >= self.current_batch_num_conflicting_transactions + expected_alias_failure_count,
             "failure count should sometimes be greater than or equal to the number of conflicting transactions"
         );
-        self.current_batch_op_sets.clear();
+        self.current_batch_txs.clear();
     }
 }
 
@@ -840,6 +1204,7 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             num_payloads: self.num_payloads,
             metrics: self.metrics.clone(),
             chain_identifier: None,
+            alias_infos: vec![],
         }))
     }
 }
@@ -857,6 +1222,7 @@ pub struct CompositeWorkload {
     num_payloads: u64,
     metrics: Arc<Mutex<CompositionMetrics>>,
     chain_identifier: Option<sui_types::digests::ChainIdentifier>,
+    alias_infos: Vec<Option<AliasInitInfo>>,
 }
 
 impl CompositeWorkload {
@@ -1182,6 +1548,74 @@ impl Workload<dyn Payload> for CompositeWorkload {
             }
         }
 
+        if init_requirements.contains(&InitRequirement::EnableAddressAlias) {
+            let alias_state_obj = execution_proxy
+                .get_object(SUI_ADDRESS_ALIAS_STATE_OBJECT_ID)
+                .await
+                .expect("Failed to get AddressAliasState object");
+            let Owner::Shared {
+                initial_shared_version: alias_state_isv,
+            } = alias_state_obj.owner()
+            else {
+                panic!("AddressAliasState must be shared");
+            };
+            let alias_state_isv = *alias_state_isv;
+            info!(
+                "AddressAliasState initial shared version: {:?}",
+                alias_state_isv
+            );
+
+            // For each payload, call address_alias::enable to create the AddressAliases
+            // object. The alias keypair is generated but not added yet. The cycle starts
+            // in NeedAdd state and the first add happens at runtime.
+            for (gas_coins, sender, keypair) in self.payload_gas.iter_mut() {
+                let gas = &mut gas_coins[0];
+
+                let (alias_address, alias_kp): (_, AccountKeyPair) = get_key_pair();
+                let alias_kp = Arc::new(alias_kp);
+
+                let enable_tx = TestTransactionBuilder::new(*sender, *gas, gas_price)
+                    .move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        "address_alias",
+                        "enable",
+                        vec![CallArg::Object(ObjectArg::SharedObject {
+                            id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+                            initial_shared_version: alias_state_isv,
+                            mutability: SharedObjectMutability::Mutable,
+                        })],
+                    )
+                    .build_and_sign(keypair.as_ref());
+
+                let (_, execution_result) =
+                    execution_proxy.execute_transaction_block(enable_tx).await;
+                let effects = execution_result.expect("Address alias enable should succeed");
+                update_gas!(gas, effects);
+
+                let (aliases_ref, aliases_isv) = effects
+                    .created()
+                    .iter()
+                    .find_map(|(obj_ref, owner)| match owner {
+                        Owner::ConsensusAddressOwner { start_version, .. } => {
+                            Some((*obj_ref, *start_version))
+                        }
+                        _ => None,
+                    })
+                    .expect("AddressAliases object should be created");
+
+                self.alias_infos
+                    .push(Some((alias_address, alias_kp, aliases_ref.0, aliases_isv)));
+                info!(
+                    "Enabled address alias for sender {sender:?}, alias {alias_address:?}, aliases_id {:?}",
+                    aliases_ref.0
+                );
+            }
+            info!(
+                "Initialized address aliases for {} payloads",
+                self.alias_infos.len()
+            );
+        }
+
         // split remaining gas coins into 4 equal parts
         {
             let mut futures = vec![];
@@ -1283,17 +1717,30 @@ impl Workload<dyn Payload> for CompositeWorkload {
         let mut payloads: Vec<Box<dyn Payload>> = vec![];
         for i in 0..self.num_payloads {
             let gas = self.payload_gas[i as usize].clone();
+            let alias_state = self
+                .alias_infos
+                .get(i as usize)
+                .and_then(|info| info.as_ref())
+                .map(
+                    |(alias_address, alias_keypair, aliases_id, aliases_isv)| AliasState {
+                        alias_address: *alias_address,
+                        alias_keypair: alias_keypair.clone(),
+                        address_aliases_id: *aliases_id,
+                        address_aliases_initial_shared_version: *aliases_isv,
+                        cycle_state: AliasRevokeCycleState::NeedAdd,
+                    },
+                );
             payloads.push(Box::new(CompositePayload {
                 config: config.clone(),
                 fullnode_proxies: fullnode_proxies.clone(),
                 pool: operation_pool.clone(),
                 gas: Mutex::new(gas),
-                current_batch_op_sets: vec![],
                 current_batch_num_conflicting_transactions: 0,
-                current_batch_gas_map: vec![],
+                current_batch_txs: vec![],
                 system_state_observer: system_state_observer.clone(),
                 metrics: self.metrics.clone(),
                 nonce_counter: AtomicU32::new(0),
+                alias_state,
             }));
         }
 

@@ -324,6 +324,7 @@ impl BigTableIndexer {
         let base = ConcurrentConfig {
             committer,
             pruner: None,
+            ..Default::default()
         };
 
         indexer

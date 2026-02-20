@@ -38,6 +38,9 @@ pub struct CommitterConfig {
 
     /// Maximum random jitter to add to the watermark interval, in milliseconds.
     pub watermark_interval_jitter_ms: u64,
+
+    /// Maximum rows per second the committer may write. `None` means unlimited.
+    pub max_rows_per_second: Option<u64>,
 }
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
@@ -154,6 +157,7 @@ impl Default for CommitterConfig {
             collect_interval_ms: 500,
             watermark_interval_ms: 500,
             watermark_interval_jitter_ms: 0,
+            max_rows_per_second: None,
         }
     }
 }

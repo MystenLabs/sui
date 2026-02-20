@@ -1,0 +1,9 @@
+[package]
+name = "ExtDepError"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+
+[addresses]
+ExtDepError = "0xCAFE"

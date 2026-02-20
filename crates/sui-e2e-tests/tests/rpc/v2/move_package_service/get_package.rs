@@ -11,7 +11,10 @@ use crate::v2::move_package_service::system_package_expectations::validate_syste
 
 #[sim_test]
 async fn test_get_package_system() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -27,7 +30,10 @@ async fn test_get_package_system() {
 
 #[sim_test]
 async fn test_get_package_not_found() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -42,7 +48,10 @@ async fn test_get_package_not_found() {
 
 #[sim_test]
 async fn test_get_package_invalid_hex() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
@@ -57,7 +66,10 @@ async fn test_get_package_invalid_hex() {
 
 #[sim_test]
 async fn test_get_package_missing_id() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
