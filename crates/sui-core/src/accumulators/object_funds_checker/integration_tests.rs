@@ -17,7 +17,7 @@ use sui_types::{
     effects::TransactionEffectsAPI,
     executable_transaction::VerifiedExecutableTransaction,
     execution::ExecutionOutput,
-    execution_status::{ExecutionFailureStatus, ExecutionStatus},
+    execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus},
     gas_coin::GAS,
     object::Object,
 };
@@ -274,10 +274,10 @@ async fn test_object_withdraw_multiple_withdraws() {
                 .await;
             assert!(matches!(
                 effects.status(),
-                ExecutionStatus::Failure {
+                ExecutionStatus::Failure(ExecutionFailure {
                     error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
                     ..
-                }
+                })
             ));
             effects
         };
@@ -330,10 +330,10 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
         .await;
     assert!(matches!(
         effects.status(),
-        ExecutionStatus::Failure {
+        ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
             ..
-        }
+        })
     ));
 
     let gas = env.oref(&env.gas_obj).await;
@@ -391,9 +391,9 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
         .await;
     assert!(matches!(
         effects.status(),
-        ExecutionStatus::Failure {
+        ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
             ..
-        }
+        })
     ));
 }

@@ -33,7 +33,9 @@ use sui_types::{
 
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
-use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{
+    CommandArgumentError, ExecutionFailure, ExecutionFailureStatus, ExecutionStatus,
+};
 use sui_types::move_package::UpgradeCap;
 
 #[tokio::test]
@@ -1128,7 +1130,7 @@ async fn test_entry_point_vector_error() {
     .unwrap();
     // should fail as we passed object of the wrong type
     assert!(
-        matches!(effects.status(), ExecutionStatus::Failure { .. }),
+        matches!(effects.status(), ExecutionStatus::Failure(ExecutionFailure { .. })),
         "{:?}",
         effects.status()
     );
@@ -1188,7 +1190,7 @@ async fn test_entry_point_vector_error() {
     .unwrap();
     // should fail as we passed object of the wrong type as the first element of the vector
     assert!(
-        matches!(effects.status(), ExecutionStatus::Failure { .. }),
+        matches!(effects.status(), ExecutionStatus::Failure(ExecutionFailure { .. })),
         "{:?}",
         effects.status()
     );
@@ -1276,13 +1278,13 @@ async fn test_entry_point_vector_error() {
     // should fail as we have the same object passed in vector and as a separate by-value argument
     assert_eq!(
         result.unwrap().status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::ArgumentWithoutValue,
             },
             command: Some(1)
-        }
+        })
     );
 
     // mint an owned object
@@ -1325,13 +1327,13 @@ async fn test_entry_point_vector_error() {
     // should fail as we have the same object passed in vector and as a separate by-reference argument
     assert_eq!(
         result.unwrap().status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::ArgumentWithoutValue,
             },
             command: Some(1)
-        }
+        })
     );
 }
 
@@ -1515,7 +1517,7 @@ async fn test_entry_point_vector_any_error() {
     .unwrap();
     // should fail as we passed object of the wrong type
     assert!(
-        matches!(effects.status(), ExecutionStatus::Failure { .. }),
+        matches!(effects.status(), ExecutionStatus::Failure(ExecutionFailure { .. })),
         "{:?}",
         effects.status()
     );
@@ -1575,7 +1577,7 @@ async fn test_entry_point_vector_any_error() {
     .unwrap();
     // should fail as we passed object of the wrong type as the first element of the vector
     assert!(
-        matches!(effects.status(), ExecutionStatus::Failure { .. }),
+        matches!(effects.status(), ExecutionStatus::Failure(ExecutionFailure { .. })),
         "{:?}",
         effects.status()
     );
@@ -1663,13 +1665,13 @@ async fn test_entry_point_vector_any_error() {
     // should fail as we have the same object passed in vector and as a separate by-value argument
     assert_eq!(
         result.unwrap().status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::ArgumentWithoutValue,
             },
             command: Some(1)
-        }
+        })
     );
 
     // mint an owned object
@@ -1711,13 +1713,13 @@ async fn test_entry_point_vector_any_error() {
     .await;
     assert_eq!(
         result.unwrap().status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::ArgumentWithoutValue,
             },
             command: Some(1)
-        }
+        })
     );
 }
 
@@ -2029,13 +2031,13 @@ async fn test_entry_point_string_error() {
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
-        }
+        })
     );
 
     // pass a invalid ascii string
@@ -2064,13 +2066,13 @@ async fn test_entry_point_string_error() {
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
-        }
+        })
     );
 
     // pass a invalid utf8 string
@@ -2099,13 +2101,13 @@ async fn test_entry_point_string_error() {
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
-        }
+        })
     );
 }
 
@@ -2154,13 +2156,13 @@ async fn test_entry_point_string_vec_error() {
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
-        }
+        })
     );
 }
 
@@ -2199,13 +2201,13 @@ async fn test_entry_point_string_option_error() {
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
-        }
+        })
     );
 
     // pass an utf8 string option with an invalid string
@@ -2229,13 +2231,13 @@ async fn test_entry_point_string_option_error() {
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
-        }
+        })
     );
 
     // pass a vector as an option
@@ -2257,13 +2259,13 @@ async fn test_entry_point_string_option_error() {
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
-        }
+        })
     );
 }
 
@@ -2565,13 +2567,13 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::command_argument_error(
                 CommandArgumentError::InvalidMakeMoveVecNonObjectArgument,
                 0
             ),
             command: Some(0)
-        }
+        })
     );
 
     // invalid BCS for any Move value
@@ -2594,13 +2596,13 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::command_argument_error(
                 CommandArgumentError::InvalidBCSBytes,
                 0
             ),
             command: Some(0)
-        }
+        })
     );
 
     // invalid bcs bytes at end
@@ -2625,13 +2627,13 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::command_argument_error(
                 CommandArgumentError::InvalidBCSBytes,
                 3,
             ),
             command: Some(0)
-        }
+        })
     );
 }
 

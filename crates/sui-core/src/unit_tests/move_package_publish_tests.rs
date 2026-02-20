@@ -23,7 +23,7 @@ use crate::authority::move_integration_tests::{
 use std::collections::HashSet;
 use sui_framework::BuiltInFramework;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 #[tokio::test]
@@ -132,10 +132,10 @@ async fn test_publish_empty_package() {
     let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
             command: Some(0)
-        }
+        })
     )
 }
 
@@ -165,10 +165,10 @@ async fn test_publish_duplicate_modules() {
     let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
             command: Some(0)
-        }
+        })
     )
 }
 
@@ -216,10 +216,10 @@ async fn test_publish_extraneous_bytes_modules() {
     let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
             command: Some(0)
-        }
+        })
     );
 
     // make the bytes invalid, in a different way
@@ -241,10 +241,10 @@ async fn test_publish_extraneous_bytes_modules() {
     let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
             command: Some(0)
-        }
+        })
     );
 
     // make the bytes invalid by adding metadata
@@ -275,10 +275,10 @@ async fn test_publish_extraneous_bytes_modules() {
     let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
             command: Some(0)
-        }
+        })
     )
 }
 
