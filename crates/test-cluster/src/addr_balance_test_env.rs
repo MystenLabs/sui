@@ -11,6 +11,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_protocol_config::{OverrideGuard, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
+    TypeTag,
     accumulator_metadata::get_accumulator_object_count,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
@@ -22,7 +23,6 @@ use sui_types::{
     gas_coin::GAS,
     storage::ChildObjectResolver,
     transaction::{CallArg, ObjectArg, TransactionData},
-    TypeTag,
 };
 
 // TODO: Some of this code may be useful for tests other than address balance tests,
@@ -550,12 +550,14 @@ pub fn verify_accumulator_exists(
             .expect("read cannot fail")
             .expect("accumulator should exist");
 
-    assert!(accumulator_object
-        .data
-        .try_as_move()
-        .unwrap()
-        .type_()
-        .is_efficient_representation());
+    assert!(
+        accumulator_object
+            .data
+            .try_as_move()
+            .unwrap()
+            .type_()
+            .is_efficient_representation()
+    );
 
     let accumulator_value =
         AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
