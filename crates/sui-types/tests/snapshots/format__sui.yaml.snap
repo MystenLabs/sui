@@ -526,6 +526,12 @@ ExecutionDigests:
         TYPENAME: TransactionDigest
     - effects:
         TYPENAME: TransactionEffectsDigest
+ExecutionFailure:
+  STRUCT:
+    - error:
+        TYPENAME: ExecutionFailureStatus
+    - command:
+        OPTION: U64
 ExecutionFailureStatus:
   ENUM:
     0:
@@ -672,11 +678,8 @@ ExecutionStatus:
       Success: UNIT
     1:
       Failure:
-        STRUCT:
-          - error:
-              TYPENAME: ExecutionFailureStatus
-          - command:
-              OPTION: U64
+        NEWTYPE:
+          TYPENAME: ExecutionFailure
 ExecutionTimeObservationKey:
   ENUM:
     0:
