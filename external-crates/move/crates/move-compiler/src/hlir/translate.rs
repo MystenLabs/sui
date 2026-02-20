@@ -12,7 +12,7 @@ use crate::{
         detect_dead_code::program as detect_dead_code_analysis,
         match_compilation,
     },
-    ice,
+    ice, ice_assert,
     naming::ast as N,
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, TargetKind,
@@ -2240,7 +2240,12 @@ fn make_assignments(
             None => {
                 // we can only get here if the rvalue was malformed and somewhere has an unresolved
                 // error
-                debug_assert!(context.env.has_errors());
+                ice_assert!(
+                    context,
+                    context.env.has_errors(),
+                    a.loc,
+                    "Unable to find a type for assignment lvalue from the rvalue"
+                );
                 error_ty = error_single_type(a.loc);
                 &error_ty
             }
