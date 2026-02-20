@@ -171,16 +171,21 @@ impl IngestionService {
     /// - If a subscriber is slow to accept checkpoints from the channel, it will provide
     ///   back-pressure as this channel has a fixed buffer size (configured when the ingestion
     ///   service is initialized).
-    /// - If the ingestion service is run with `regulated = true`, subscribers must also update the
-    ///   ingestion service with the latest checkpoint they have completely processed, and the
-    ///   ingestion service will use this to limit how far ahead it fetches checkpoints.
+    /// - If the ingestion service is run with `next_sequential_checkpoint` set, subscribers must
+    ///   also update the ingestion service with the latest checkpoint they have completely
+    ///   processed, and the ingestion service will use this to limit how far ahead it fetches
+    ///   checkpoints.
     /// - If a subscriber closes either of these channels, the ingestion service will interpret
     ///   that as a signal to shutdown as well.
     ///
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub async fn run<R>(self, checkpoints: R, regulated: bool) -> Result<Service>
+    pub async fn run<R>(
+        self,
+        checkpoints: R,
+        next_sequential_checkpoint: Option<u64>,
+    ) -> Result<Service>
     where
         R: std::ops::RangeBounds<u64> + Send + 'static,
     {
@@ -200,7 +205,7 @@ impl IngestionService {
 
         Ok(broadcaster(
             checkpoints,
-            regulated,
+            next_sequential_checkpoint,
             streaming_client,
             config,
             ingestion_client,
@@ -295,7 +300,7 @@ mod tests {
 
         let ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
-        let res = ingestion_service.run(0.., false).await;
+        let res = ingestion_service.run(0.., None).await;
         assert!(matches!(res, Err(Error::NoSubscribers)));
     }
 
@@ -314,7 +319,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(usize::MAX, rx).await;
-        let svc = ingestion_service.run(0.., false).await.unwrap();
+        let svc = ingestion_service.run(0.., None).await.unwrap();
 
         svc.shutdown().await.unwrap();
         subscriber.await.unwrap();
@@ -335,7 +340,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(1, rx).await;
-        let mut svc = ingestion_service.run(0.., false).await.unwrap();
+        let mut svc = ingestion_service.run(0.., None).await.unwrap();
 
         drop(subscriber);
         svc.join().await.unwrap();
@@ -362,7 +367,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(5, rx).await;
-        let _svc = ingestion_service.run(0.., false).await.unwrap();
+        let _svc = ingestion_service.run(0.., None).await.unwrap();
 
         let seqs = subscriber.await.unwrap();
         assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
@@ -388,7 +393,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(5, rx).await;
-        let _svc = ingestion_service.run(0.., false).await.unwrap();
+        let _svc = ingestion_service.run(0.., None).await.unwrap();
 
         let seqs = subscriber.await.unwrap();
         assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
@@ -419,7 +424,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(5, rx).await;
-        let _svc = ingestion_service.run(0.., false).await.unwrap();
+        let _svc = ingestion_service.run(0.., None).await.unwrap();
 
         // At this point, the service will have been able to pass 3 checkpoints to the non-lagging
         // subscriber, while the laggard's buffer fills up. Now the laggard will pull two

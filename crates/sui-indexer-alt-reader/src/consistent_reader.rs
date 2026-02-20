@@ -270,7 +270,8 @@ impl ConsistentReader {
     }
 
     /// Paginate live objects at `checkpoint`, with owner described by `kind` and `address`, and an
-    /// optional `object_type` filter.
+    /// optional, `object_type`. If `object_type` is prefaced with `!`, objects of the type prefix
+    /// will be excluded from the page of results.
     #[instrument(skip(self), level = "debug")]
     pub async fn list_owned_objects(
         &self,

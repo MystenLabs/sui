@@ -1,0 +1,2 @@
+module ExtDepError::M2 {
+}

@@ -21,6 +21,7 @@ pub struct CommitterLayer {
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
     pub watermark_interval_jitter_ms: Option<u64>,
+    pub max_rows_per_second: Option<u64>,
 }
 
 impl CommitterLayer {
@@ -34,6 +35,7 @@ impl CommitterLayer {
             watermark_interval_jitter_ms: self
                 .watermark_interval_jitter_ms
                 .unwrap_or(base.watermark_interval_jitter_ms),
+            max_rows_per_second: self.max_rows_per_second.or(base.max_rows_per_second),
         }
     }
 }
@@ -42,6 +44,12 @@ impl CommitterLayer {
 #[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
+    /// Maximum rows per BigTable batch for this pipeline.
+    pub max_rows: Option<usize>,
+    pub fanout: Option<usize>,
+    pub min_eager_rows: Option<usize>,
+    pub max_pending_rows: Option<usize>,
+    pub max_watermark_updates: Option<usize>,
 }
 
 impl ConcurrentLayer {
@@ -53,6 +61,10 @@ impl ConcurrentLayer {
                 base.committer
             },
             pruner: None,
+            fanout: self.fanout.or(base.fanout),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
+            max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
+            max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
         }
     }
 }
@@ -68,6 +80,10 @@ pub struct PipelineLayer {
     pub epoch_end: ConcurrentLayer,
     pub protocol_configs: ConcurrentLayer,
     pub epoch_legacy: ConcurrentLayer,
+    pub packages: ConcurrentLayer,
+    pub packages_by_id: ConcurrentLayer,
+    pub packages_by_checkpoint: ConcurrentLayer,
+    pub system_packages: ConcurrentLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be

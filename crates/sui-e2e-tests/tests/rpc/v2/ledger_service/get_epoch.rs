@@ -10,7 +10,10 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn get_epoch() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await

@@ -356,6 +356,9 @@ pub trait ValidatorProxy {
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>>;
 
     fn get_chain_identifier(&self) -> ChainIdentifier;
+
+    async fn is_transaction_checkpointed(&self, digest: &TransactionDigest)
+    -> anyhow::Result<bool>;
 }
 
 // TODO: Eventually remove this proxy because we shouldn't rely on validators to read objects.
@@ -364,6 +367,7 @@ pub struct LocalValidatorAggregatorProxy {
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
     chain_identifier: ChainIdentifier,
+    sui_client: Client,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -424,11 +428,22 @@ impl LocalValidatorAggregatorProxy {
             None,
             metrics.client_metrics.clone(),
         );
+
+        let http_url = if reconfig_fullnode_rpc_url.starts_with("http://")
+            || reconfig_fullnode_rpc_url.starts_with("https://")
+        {
+            reconfig_fullnode_rpc_url.to_string()
+        } else {
+            format!("http://{reconfig_fullnode_rpc_url}")
+        };
+        let sui_client = Client::new(&http_url).expect("Failed to create RPC client");
+
         Self {
             td,
             clients,
             committee,
             chain_identifier,
+            sui_client,
         }
     }
 
@@ -503,6 +518,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             clients: self.clients.clone(),
             committee: self.committee.clone(),
             chain_identifier: self.chain_identifier,
+            sui_client: self.sui_client.clone(),
         })
     }
 
@@ -524,6 +540,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
+    }
+
+    async fn is_transaction_checkpointed(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<bool, anyhow::Error> {
+        match self.sui_client.clone().get_transaction(digest).await {
+            Ok(executed_tx) => Ok(executed_tx.checkpoint.is_some()),
+            Err(_) => Ok(false),
+        }
     }
 }
 
@@ -952,6 +978,16 @@ impl ValidatorProxy for FullNodeProxy {
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
+    }
+
+    async fn is_transaction_checkpointed(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<bool, anyhow::Error> {
+        match self.sui_client.clone().get_transaction(digest).await {
+            Ok(executed_tx) => Ok(executed_tx.checkpoint.is_some()),
+            Err(_) => Ok(false),
+        }
     }
 }
 

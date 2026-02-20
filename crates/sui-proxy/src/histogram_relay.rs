@@ -159,27 +159,32 @@ impl HistogramRelay {
 
 fn extract_histograms(data: Vec<MetricFamily>) -> impl Iterator<Item = MetricFamily> {
     data.into_iter().filter_map(|mf| {
-        let metrics = mf.get_metric().iter().filter_map(|m| {
-            if !m.has_histogram() {
-                return None;
-            }
-            let mut v = Metric::default();
-            v.set_label(protobuf::RepeatedField::from_slice(m.get_label()));
-            v.set_histogram(m.get_histogram().to_owned());
-            v.set_timestamp_ms(m.get_timestamp_ms());
-            Some(v)
-        });
+        let metrics: Vec<Metric> = mf
+            .get_metric()
+            .iter()
+            .filter_map(|m| {
+                if m.histogram.is_none() {
+                    return None;
+                }
+                let mut v = Metric::default();
+                v.set_label(m.get_label().to_vec());
+                v.histogram = m.histogram.clone();
+                v.timestamp_ms = m.timestamp_ms;
+                Some(v)
+            })
+            .collect();
 
-        let only_histograms = protobuf::RepeatedField::from_iter(metrics);
-        if only_histograms.is_empty() {
+        if metrics.is_empty() {
             return None;
         }
 
-        let mut v = MetricFamily::default();
-        v.set_name(mf.get_name().to_owned());
-        v.set_help(mf.get_help().to_owned());
+        let mut v = MetricFamily {
+            name: Some(mf.name().to_owned()),
+            help: Some(mf.help().to_owned()),
+            ..Default::default()
+        };
         v.set_field_type(mf.get_field_type());
-        v.set_metric(only_histograms);
+        v.set_metric(metrics);
         Some(v)
     })
 }
@@ -187,7 +192,6 @@ fn extract_histograms(data: Vec<MetricFamily>) -> impl Iterator<Item = MetricFam
 #[cfg(test)]
 mod tests {
     use prometheus::proto;
-    use protobuf;
 
     use crate::{
         histogram_relay::extract_histograms,
@@ -210,13 +214,13 @@ mod tests {
                     "test_counter",
                     "i'm a help message",
                     Some(proto::MetricType::GAUGE),
-                    protobuf::RepeatedField::from(vec![create_metric_counter(
-                        protobuf::RepeatedField::from_vec(create_labels(vec![
+                    vec![create_metric_counter(
+                        create_labels(vec![
                             ("host", "local-test-validator"),
                             ("network", "unittest-network"),
-                        ])),
+                        ]),
                         create_counter(2046.0),
-                    )]),
+                    )],
                 )],
                 expected: vec![],
             },
@@ -225,25 +229,25 @@ mod tests {
                     "test_histogram",
                     "i'm a help message",
                     Some(proto::MetricType::HISTOGRAM),
-                    protobuf::RepeatedField::from(vec![create_metric_histogram(
-                        protobuf::RepeatedField::from_vec(create_labels(vec![
+                    vec![create_metric_histogram(
+                        create_labels(vec![
                             ("host", "local-test-validator"),
                             ("network", "unittest-network"),
-                        ])),
+                        ]),
                         create_histogram(),
-                    )]),
+                    )],
                 )],
                 expected: vec![create_metric_family(
                     "test_histogram",
                     "i'm a help message",
                     Some(proto::MetricType::HISTOGRAM),
-                    protobuf::RepeatedField::from(vec![create_metric_histogram(
-                        protobuf::RepeatedField::from_vec(create_labels(vec![
+                    vec![create_metric_histogram(
+                        create_labels(vec![
                             ("host", "local-test-validator"),
                             ("network", "unittest-network"),
-                        ])),
+                        ]),
                         create_histogram(),
-                    )]),
+                    )],
                 )],
             },
         ];

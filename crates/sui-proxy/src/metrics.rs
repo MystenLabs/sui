@@ -77,9 +77,9 @@ async fn metrics(
     if let Some(consumer_operations_submitted) = metric_families
         .iter()
         .filter_map(|v| {
-            if v.get_name() == "consumer_operations_submitted" {
+            if v.name() == "consumer_operations_submitted" {
                 // Expecting one metric, so return the first one, as it is the only one
-                v.get_metric().first().map(|m| m.get_counter().get_value())
+                v.get_metric().first().map(|m| m.counter.value())
             } else {
                 None
             }

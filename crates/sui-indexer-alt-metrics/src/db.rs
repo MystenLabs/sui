@@ -135,14 +135,14 @@ fn desc_with_labels(name: String, help: &str, labels: &[&str]) -> Desc {
 fn gauge(desc: &Desc, value: f64) -> MetricFamily {
     let mut g = Gauge::default();
     let mut m = Metric::default();
-    let mut mf = MetricFamily::new();
+    let mut mf = MetricFamily::default();
 
-    g.set_value(value);
+    g.value = Some(value);
     m.set_gauge(g);
 
-    mf.mut_metric().push(m);
-    mf.set_name(desc.fq_name.clone());
-    mf.set_help(desc.help.clone());
+    mf.metric.push(m);
+    mf.name = Some(desc.fq_name.clone());
+    mf.help = Some(desc.help.clone());
     mf.set_field_type(MetricType::GAUGE);
     mf
 }
@@ -150,37 +150,37 @@ fn gauge(desc: &Desc, value: f64) -> MetricFamily {
 fn counter(desc: &Desc, value: f64) -> MetricFamily {
     let mut c = Counter::default();
     let mut m = Metric::default();
-    let mut mf = MetricFamily::new();
+    let mut mf = MetricFamily::default();
 
     c.set_value(value);
     m.set_counter(c);
 
-    mf.mut_metric().push(m);
-    mf.set_name(desc.fq_name.clone());
-    mf.set_help(desc.help.clone());
+    mf.metric.push(m);
+    mf.name = Some(desc.fq_name.clone());
+    mf.help = Some(desc.help.clone());
     mf.set_field_type(MetricType::COUNTER);
     mf
 }
 
 fn counter_with_labels(desc: &Desc, values: &[(&str, &str, f64)]) -> MetricFamily {
-    let mut mf = MetricFamily::new();
+    let mut mf = MetricFamily::default();
 
     for (name, label, value) in values {
         let mut c = Counter::default();
         let mut l = LabelPair::default();
         let mut m = Metric::default();
 
-        c.set_value(*value);
-        l.set_name(name.to_string());
-        l.set_value(label.to_string());
+        c.value = Some(*value);
+        l.name = Some(name.to_string());
+        l.value = Some(label.to_string());
 
         m.set_counter(c);
-        m.mut_label().push(l);
-        mf.mut_metric().push(m);
+        m.label.push(l);
+        mf.metric.push(m);
     }
 
-    mf.set_name(desc.fq_name.clone());
-    mf.set_help(desc.help.clone());
+    mf.name = Some(desc.fq_name.clone());
+    mf.help = Some(desc.help.clone());
     mf.set_field_type(MetricType::COUNTER);
     mf
 }
@@ -188,15 +188,15 @@ fn counter_with_labels(desc: &Desc, values: &[(&str, &str, f64)]) -> MetricFamil
 fn summary(desc: &Desc, sum: f64, count: u64) -> MetricFamily {
     let mut s = Summary::default();
     let mut m = Metric::default();
-    let mut mf = MetricFamily::new();
+    let mut mf = MetricFamily::default();
 
-    s.set_sample_sum(sum);
-    s.set_sample_count(count);
+    s.sample_sum = Some(sum);
+    s.sample_count = Some(count);
     m.set_summary(s);
 
-    mf.mut_metric().push(m);
-    mf.set_name(desc.fq_name.clone());
-    mf.set_help(desc.help.clone());
+    mf.metric.push(m);
+    mf.name = Some(desc.fq_name.clone());
+    mf.help = Some(desc.help.clone());
     mf.set_field_type(MetricType::SUMMARY);
     mf
 }

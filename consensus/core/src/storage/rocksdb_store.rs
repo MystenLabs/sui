@@ -55,22 +55,18 @@ impl RocksDBStore {
 
     /// Creates a new instance of RocksDB storage.
     #[cfg(not(tidehunter))]
-    pub fn new(path: &str, use_fifo_compaction: bool) -> Self {
+    pub fn new(path: &str) -> Self {
         // Consensus data has high write throughput (all transactions) and is rarely read
         // (only during recovery and when helping peers catch up).
         let db_options = default_db_options().optimize_db_for_write_throughput(2);
         let mut metrics_conf = MetricConf::new("consensus");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
-        let cf_options = if use_fifo_compaction {
-            default_db_options().optimize_for_no_deletion()
-        } else {
-            default_db_options().optimize_for_write_throughput()
-        };
+        let cf_options = default_db_options().optimize_for_write_throughput();
         let column_family_options = DBMapTableConfigMap::new(BTreeMap::from([
             (
                 Self::BLOCKS_CF.to_string(),
-                cf_options
-                    .clone()
+                default_db_options()
+                    .optimize_for_write_throughput_no_deletion()
                     // Using larger block is ok since there is not much point reads on the cf.
                     .set_block_options(512, 128 << 10),
             ),
@@ -92,7 +88,7 @@ impl RocksDBStore {
     }
 
     #[cfg(tidehunter)]
-    pub fn new(path: &str, _use_fifo_compaction: bool) -> Self {
+    pub fn new(path: &str) -> Self {
         tracing::warn!("Consensus store using tidehunter");
         use typed_store::tidehunter_util::{
             KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_mutex_count,

@@ -32,7 +32,7 @@ use test_case::{
     fullnode_build_publish_transaction_test::FullNodeBuildPublishTransactionTest,
     fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
     native_transfer_test::NativeTransferTest, random_beacon_test::RandomBeaconTest,
-    shared_object_test::SharedCounterTest,
+    shared_object_test::SharedCounterTest, staking_test::StakingTest,
 };
 use tokio::time::{self, Duration};
 use tracing::{error, info};
@@ -317,6 +317,7 @@ impl ClusterTest {
             TestCase::new(FullNodeBuildPublishTransactionTest {}),
             TestCase::new(CoinIndexTest {}),
             TestCase::new(RandomBeaconTest {}),
+            TestCase::new(StakingTest {}),
         ];
 
         // TODO: improve the runner parallelism for efficiency

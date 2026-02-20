@@ -1189,6 +1189,25 @@ impl KeyToolCommand {
                     "https://www.sui.io",
                     &jwt_randomness,
                 )?;
+                let url_19 = get_oidc_url(
+                    OIDCProvider::AwsTenant(("eu-north-1".to_string(), "gammaprime".to_string())),
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "gammaprime-dev",
+                    "https://www.sui.io/",
+                    &jwt_randomness,
+                )?;
+                let url_20 = get_oidc_url(
+                    OIDCProvider::AwsTenant((
+                        "eu-north-1".to_string(),
+                        "test-gammaprime".to_string(),
+                    )),
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "test-gammaprime-dev",
+                    "https://www.sui.io/",
+                    &jwt_randomness,
+                )?;
                 // This is only for CLI testing. If frontend apps will be built, no need to add anything here.
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
@@ -1208,7 +1227,8 @@ impl KeyToolCommand {
                 println!("Visit URL (EveFrontier): {url_16}");
                 println!("Visit URL (TestEveFrontier): {url_17}");
                 println!("Visit URL (AWS - Decot): {url_18}");
-
+                println!("Visit URL (AWS - Gamma Prime): {url_19}");
+                println!("Visit URL (AWS - Test Gamma Prime): {url_20}");
                 println!(
                     "Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):"
                 );

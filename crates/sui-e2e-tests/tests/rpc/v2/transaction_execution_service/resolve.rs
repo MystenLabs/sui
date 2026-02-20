@@ -60,7 +60,10 @@ fn proto_to_response(
 
 #[sim_test]
 async fn resolve_transaction_simple_transfer() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
@@ -120,7 +123,10 @@ async fn resolve_transaction_simple_transfer() {
 
 #[sim_test]
 async fn resolve_transaction_transfer_with_sponsor() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
@@ -201,7 +207,10 @@ async fn resolve_transaction_transfer_with_sponsor() {
 
 #[sim_test]
 async fn resolve_transaction_borrowed_shared_object() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
@@ -252,7 +261,10 @@ async fn resolve_transaction_borrowed_shared_object() {
 
 #[sim_test]
 async fn resolve_transaction_mutable_shared_object() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
@@ -324,7 +336,10 @@ async fn resolve_transaction_mutable_shared_object() {
 
 #[sim_test]
 async fn resolve_transaction_insufficient_gas() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut alpha_client =
         TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
             .await
@@ -370,7 +385,10 @@ fn assert_contains(haystack: &str, needle: &str) {
 
 #[sim_test]
 async fn resolve_transaction_gas_budget_clamping() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
@@ -443,7 +461,10 @@ async fn resolve_transaction_gas_budget_clamping() {
 
 #[sim_test]
 async fn resolve_transaction_insufficient_gas_with_payment_objects() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut alpha_client =
         TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
             .await
@@ -585,7 +606,10 @@ async fn resolve_transaction_insufficient_gas_with_payment_objects() {
 async fn resolve_transaction_shared_object_with_generic_type_parameter() {
     use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let mut alpha_client =
@@ -683,7 +707,10 @@ async fn test_gas_selection_with_address_balance() {
         cfg
     });
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = sui_rpc::Client::new(test_cluster.rpc_url()).unwrap();
 

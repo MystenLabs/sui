@@ -308,7 +308,9 @@ function convertInlineCodeToSpan(md) {
         if (inner.includes("\n")) return match;
         // Don't convert empty <code></code>
         if (inner.trim() === "") return match;
-        return `<span class="code-inline">${inner}</span>`;
+        // Escape $ to prevent MDX from interpreting $name as a variable expression
+        const safeInner = inner.replace(/\$/g, "&#36;");
+        return `<span class="code-inline">${safeInner}</span>`;
       },
     );
   }
@@ -328,6 +330,11 @@ function insertLineBreaks(md) {
 
   // Matches lines that are block-level HTML or structural elements
   const isBlockLine = /^\s*(<\/?(h[1-6]|pre|code|ul|ol|li|table|tr|td|th|thead|tbody|dl|dt|dd|details|summary|div|hr|blockquote)\b|<!--|#{1,6}\s|---|\*\*\*|___|-\s+\[)/;
+
+  // Matches a line whose content is solely an inline span/code element
+  // (i.e. a line that rejoinOrphanedInlineElements will merge — don't <br/> before these)
+  const isInlineOnlyLine =
+    /^\s*(?:<span(?:\s+class="code-inline"|\s[^>]*)?>[^<\n]*<\/span>|<code>(?:[^<]|<[^>]*>)*?<\/code>|<a\s[^>]*>[^<\n]*<\/a>)\s*[.,;:!?)]*\s*$/;
 
   // Matches lines that are blank or only whitespace
   const isBlank = /^\s*$/;
@@ -362,12 +369,14 @@ function insertLineBreaks(md) {
 
     // If current line is non-blank prose and next line is also non-blank prose,
     // and the next line starts a new sentence (capital letter), append <br/>
+    // BUT skip if the next line is an inline-only element (rejoin will handle it)
     if (
       nextLine !== undefined &&
       !isBlank.test(line) &&
       !isBlank.test(nextLine) &&
       !isBlockLine.test(line) &&
       !isBlockLine.test(nextLine) &&
+      !isInlineOnlyLine.test(nextLine) &&
       /^\s*[A-Z]/.test(nextLine)
     ) {
       // Add period if the line doesn't already end with punctuation
@@ -377,7 +386,8 @@ function insertLineBreaks(md) {
       if (!/[.!?;:]$/.test(visibleEnd)) {
         lineText += ".";
       }
-      result[result.length - 1] = lineText + "<br/>";    }
+      result[result.length - 1] = lineText + "<br/>";
+    }
   }
 
   return result.join("\n");
@@ -398,9 +408,16 @@ function insertLineBreaks(md) {
  *   `from_bytes`
  *   when it is supplied too many or too few bytes.
  *
+ * or (after backtick conversion):
+ *   Loops applying
+ *   <span class="code-inline">f</span>
+ *   to each number from
+ *   <span class="code-inline">$start</span>
+ *   to
+ *
  * This function detects lines that contain ONLY an inline element
- * (backticked code, <code>...</code>, <span>...</span>, or nested
- * combinations like <code><a>...</a></code>) with optional trailing
+ * (backticked code, <code>...</code>, <span class="code-inline">...</span>,
+ * or nested combinations like <code><a>...</a></code>) with optional trailing
  * punctuation, and joins them to the surrounding prose lines.
  */
 function rejoinOrphanedInlineElements(md) {
@@ -411,13 +428,18 @@ function rejoinOrphanedInlineElements(md) {
 
   // Matches a line whose meaningful content is ONLY an inline element
   // with optional leading/trailing whitespace and punctuation.
-  // Covers: `backtick`, <code>..nested tags..</code>, <span ...>...</span>, <a ...>...</a>
-  // The <code> pattern allows nested open AND close tags (e.g. <a href="...">text</a>)
+  // Covers:
+  //   - `backtick`
+  //   - <code>..nested tags..</code>
+  //   - <span class="code-inline">...</span>  ← produced by backtick conversion
+  //   - <span ...>...</span> (other span variants)
+  //   - <a ...>...</a>
   const inlineOnlyLine =
-    /^\s*(?:`[^`]+`|<code>(?:[^<]|<[^>]*>)*?<\/code>|<span\s[^>]*>[^<]*<\/span>|<a\s[^>]*>[^<]*<\/a>)\s*[.,;:!?)]*\s*$/;
+    /^\s*(?:`[^`]+`|<code>(?:[^<]|<[^>]*>)*?<\/code>|<span(?:\s+class="code-inline"|\s[^>]*)?>[^<\n]*<\/span>|<a\s[^>]*>[^<\n]*<\/a>)\s*[.,;:!?)]*\s*$/;
 
-  // A line that looks like it ends mid-sentence (ends with a word char or comma)
-  const endsMidSentence = /[a-zA-Z,]\s*$/;
+  // A line that looks like it ends mid-sentence (ends with a word char, comma,
+  // or a closing inline tag — so the next orphaned span can attach)
+  const endsMidSentence = /(?:[a-zA-Z,]|<\/span>|<\/code>|<\/a>|`)\s*$/;
 
   // A line that looks like a sentence continuation (starts with punctuation only,
   // not lowercase letters — to avoid merging separate sentences)
@@ -835,9 +857,11 @@ const frameworkPlugin = (_context, _options) => {
 
           // FINAL STEP: Convert backticks to inline code AFTER all other processing
           // This prevents <code><a href="...">text</a></code> which Docusaurus converts to blocks
+          // Use a function replacer (not a string) so $ in the captured content is not
+          // misinterpreted as a replacement pattern reference.
           reMarkdown = reMarkdown.replace(
             /`([^`\n]+)`/g,
-            '<span class="code-inline">$1</span>',
+            (_m, inner) => `<span class="code-inline">${inner.replace(/\$/g, "&#36;")}</span>`,
           );
 
           // Convert inline <code>...</code> to <span class="code-inline">
@@ -847,6 +871,10 @@ const frameworkPlugin = (_context, _options) => {
           reMarkdown = convertInlineCodeToSpan(reMarkdown);
 
           // Run rejoin again after span conversion to catch any new orphans
+          // produced by the backtick → <span class="code-inline"> conversion.
+          // This handles cases like:
+          //   Loops applying `f` to each number from `$start` to `$stop` (inclusive)
+          // where cargo doc placed each backtick-wrapped term on its own line.
           reMarkdown = rejoinOrphanedInlineElements(reMarkdown);
 
           // Write to prefixed path

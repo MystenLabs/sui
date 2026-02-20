@@ -62,6 +62,9 @@ pub struct IngestionLayer {
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub checkpoint_lag: Option<u64>,
+    pub fanout: Option<usize>,
+    pub min_eager_rows: Option<usize>,
+    pub max_batch_checkpoints: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -70,6 +73,10 @@ pub struct SequentialLayer {
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub pruner: Option<PrunerLayer>,
+    pub fanout: Option<usize>,
+    pub min_eager_rows: Option<usize>,
+    pub max_pending_rows: Option<usize>,
+    pub max_watermark_updates: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -79,6 +86,7 @@ pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
+    pub max_rows_per_second: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -153,6 +161,7 @@ impl IndexerConfig {
                     collect_interval_ms: Some(50),
                     watermark_interval_ms: Some(50),
                     write_concurrency: Some(1),
+                    ..Default::default()
                 },
                 pruner: PrunerLayer {
                     interval_ms: Some(50),
@@ -198,6 +207,9 @@ impl SequentialLayer {
                 base.committer
             },
             checkpoint_lag: self.checkpoint_lag.unwrap_or(base.checkpoint_lag),
+            fanout: self.fanout.or(base.fanout),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
+            max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
         })
     }
 }
@@ -216,6 +228,10 @@ impl ConcurrentLayer {
                 (None, _) | (_, None) => None,
                 (Some(pruner), Some(base)) => Some(pruner.finish(base)?),
             },
+            fanout: self.fanout.or(base.fanout),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
+            max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
+            max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
         })
     }
 }
@@ -229,6 +245,7 @@ impl CommitterLayer {
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
             watermark_interval_jitter_ms: 0,
+            max_rows_per_second: self.max_rows_per_second.or(base.max_rows_per_second),
         })
     }
 }
@@ -315,6 +332,9 @@ impl Merge for SequentialLayer {
         Ok(SequentialLayer {
             committer: self.committer.merge(other.committer)?,
             checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
+            fanout: other.fanout.or(self.fanout),
+            min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
+            max_batch_checkpoints: other.max_batch_checkpoints.or(self.max_batch_checkpoints),
         })
     }
 }
@@ -324,6 +344,10 @@ impl Merge for ConcurrentLayer {
         Ok(ConcurrentLayer {
             committer: self.committer.merge(other.committer)?,
             pruner: self.pruner.merge(other.pruner)?,
+            fanout: other.fanout.or(self.fanout),
+            min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
+            max_pending_rows: other.max_pending_rows.or(self.max_pending_rows),
+            max_watermark_updates: other.max_watermark_updates.or(self.max_watermark_updates),
         })
     }
 }
@@ -334,6 +358,7 @@ impl Merge for CommitterLayer {
             write_concurrency: other.write_concurrency.or(self.write_concurrency),
             collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
             watermark_interval_ms: other.watermark_interval_ms.or(self.watermark_interval_ms),
+            max_rows_per_second: other.max_rows_per_second.or(self.max_rows_per_second),
         })
     }
 }
@@ -419,6 +444,9 @@ impl From<SequentialConfig> for SequentialLayer {
         Self {
             committer: Some(config.committer.into()),
             checkpoint_lag: Some(config.checkpoint_lag),
+            fanout: config.fanout,
+            min_eager_rows: config.min_eager_rows,
+            max_batch_checkpoints: config.max_batch_checkpoints,
         }
     }
 }
@@ -428,6 +456,10 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
         Self {
             committer: Some(config.committer.into()),
             pruner: config.pruner.map(Into::into),
+            fanout: config.fanout,
+            min_eager_rows: config.min_eager_rows,
+            max_pending_rows: config.max_pending_rows,
+            max_watermark_updates: config.max_watermark_updates,
         }
     }
 }
@@ -438,6 +470,7 @@ impl From<CommitterConfig> for CommitterLayer {
             write_concurrency: Some(config.write_concurrency),
             collect_interval_ms: Some(config.collect_interval_ms),
             watermark_interval_ms: Some(config.watermark_interval_ms),
+            max_rows_per_second: config.max_rows_per_second,
         }
     }
 }
@@ -477,14 +510,17 @@ mod tests {
                     write_concurrency: Some(10),
                     collect_interval_ms: Some(1000),
                     watermark_interval_ms: None,
+                    ..Default::default()
                 }),
                 checkpoint_lag: Some(100),
+                ..Default::default()
             }),
             ev_emit_mod: Some(ConcurrentLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(5),
                     collect_interval_ms: Some(500),
                     watermark_interval_ms: None,
+                    ..Default::default()
                 }),
                 ..Default::default()
             }),
@@ -497,8 +533,10 @@ mod tests {
                     write_concurrency: Some(5),
                     collect_interval_ms: None,
                     watermark_interval_ms: Some(500),
+                    ..Default::default()
                 }),
                 checkpoint_lag: Some(200),
+                ..Default::default()
             }),
             ev_emit_mod: None,
             ..Default::default()
@@ -515,16 +553,20 @@ mod tests {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
+                        ..
                     }),
                     checkpoint_lag: Some(200),
+                    ..
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
+                        ..
                     }),
                     pruner: None,
+                    ..
                 }),
                 ..
             },
@@ -538,16 +580,20 @@ mod tests {
                         write_concurrency: Some(10),
                         collect_interval_ms: Some(1000),
                         watermark_interval_ms: Some(500),
+                        ..
                     }),
                     checkpoint_lag: Some(100),
+                    ..
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
                         collect_interval_ms: Some(500),
                         watermark_interval_ms: None,
+                        ..
                     }),
                     pruner: None,
+                    ..
                 }),
                 ..
             },
@@ -603,6 +649,7 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
+            ..Default::default()
         };
 
         let base = ConcurrentConfig {
@@ -613,6 +660,7 @@ mod tests {
                 ..Default::default()
             },
             pruner: Some(PrunerConfig::default()),
+            ..Default::default()
         };
 
         assert_matches!(
@@ -625,6 +673,7 @@ mod tests {
                     ..
                 },
                 pruner: None,
+                ..
             },
         );
     }
@@ -634,6 +683,7 @@ mod tests {
         let layer = ConcurrentLayer {
             committer: None,
             pruner: None,
+            ..Default::default()
         };
 
         let base = ConcurrentConfig {
@@ -644,6 +694,7 @@ mod tests {
                 ..Default::default()
             },
             pruner: None,
+            ..Default::default()
         };
 
         assert_matches!(
@@ -656,6 +707,7 @@ mod tests {
                     ..
                 },
                 pruner: None,
+                ..
             },
         );
     }
@@ -668,6 +720,7 @@ mod tests {
                 interval_ms: Some(1000),
                 ..Default::default()
             }),
+            ..Default::default()
         };
 
         let base = ConcurrentConfig {
@@ -684,6 +737,7 @@ mod tests {
                 max_chunk_size: 400,
                 prune_concurrency: 1,
             }),
+            ..Default::default()
         };
 
         assert_matches!(
@@ -702,6 +756,7 @@ mod tests {
                     max_chunk_size: 400,
                     prune_concurrency: 1,
                 }),
+                ..
             },
         );
     }

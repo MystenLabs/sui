@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use std::sync::RwLock;
 
 use bytes::Bytes;
@@ -16,12 +15,14 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use crate::bigtable::client::PartialWriteError;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::bigtable::store::BigTableStore;
+use crate::config::ConcurrentLayer;
 
-/// BigTable's hard limit for mutations per batch.
-pub const BIGTABLE_MAX_MUTATIONS: usize = 100_000;
+/// BigTable's hard limit is 100k mutations per MutateRows request.
+/// We cap at half which is still very large.
+const MAX_MUTATIONS_PER_BATCH: usize = 50_000;
 
-const DEFAULT_MAX_MUTATIONS: usize = 10_000;
-static MAX_MUTATIONS: OnceLock<usize> = OnceLock::new();
+/// This is the batch size the official java client from Google uses.
+pub const DEFAULT_MAX_ROWS: usize = 100;
 
 /// Extension of `Processor` that specifies a BigTable table name.
 pub trait BigTableProcessor: Processor<Value = Entry> {
@@ -33,13 +34,19 @@ pub trait BigTableProcessor: Processor<Value = Entry> {
 
     /// Minimum rows before eager commit (default: 50).
     const MIN_EAGER_ROWS: usize = 50;
+
+    /// Maximum pending rows before back-pressure kicks in (default: 5000).
+    const MAX_PENDING_ROWS: usize = 5000;
 }
 
 /// Generic wrapper that implements `concurrent::Handler` for any `BigTableProcessor`.
 ///
 /// This adapter wraps a `BigTableProcessor` and provides the common batching and commit logic
 /// for writing entries to BigTable. Individual pipelines implement `BigTableProcessor`.
-pub struct BigTableHandler<P>(P);
+pub struct BigTableHandler<P> {
+    processor: P,
+    max_rows: usize,
+}
 
 /// Batch of BigTable entries.
 /// Uses RwLock for interior mutability so we can remove succeeded entries on partial write failures.
@@ -58,8 +65,11 @@ impl<P> BigTableHandler<P>
 where
     P: BigTableProcessor,
 {
-    pub fn new(processor: P) -> Self {
-        Self(processor)
+    pub fn new(processor: P, config: &ConcurrentLayer) -> Self {
+        Self {
+            processor,
+            max_rows: config.max_rows.unwrap_or(DEFAULT_MAX_ROWS),
+        }
     }
 }
 
@@ -73,7 +83,7 @@ where
     type Value = Entry;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
-        self.0.process(checkpoint).await
+        self.processor.process(checkpoint).await
     }
 }
 
@@ -86,6 +96,7 @@ where
     type Batch = BigTableBatch;
 
     const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
+    const MAX_PENDING_ROWS: usize = P::MAX_PENDING_ROWS;
 
     fn batch(
         &self,
@@ -98,7 +109,9 @@ where
             inner.total_mutations += entry.mutations.len();
             inner.entries.insert(entry.row_key.clone(), entry);
 
-            if inner.total_mutations == max_mutations() {
+            if inner.entries.len() >= self.max_rows
+                || inner.total_mutations >= MAX_MUTATIONS_PER_BATCH
+            {
                 return BatchStatus::Ready;
             }
         }
@@ -139,20 +152,6 @@ where
             }
         }
     }
-}
-
-/// Set the maximum mutations per batch. Must be called before creating any BigTableHandler.
-/// Panics if called more than once or if value >= BIGTABLE_MAX_MUTATIONS.
-pub fn set_max_mutations(value: usize) {
-    assert!(
-        value < BIGTABLE_MAX_MUTATIONS,
-        "max_mutations must be less than {BIGTABLE_MAX_MUTATIONS}"
-    );
-    MAX_MUTATIONS.set(value).expect("max_mutations already set");
-}
-
-fn max_mutations() -> usize {
-    *MAX_MUTATIONS.get_or_init(|| DEFAULT_MAX_MUTATIONS)
 }
 
 #[cfg(test)]
@@ -221,7 +220,7 @@ mod tests {
         let store = BigTableStore::new(client);
         let mut conn = store.connect().await.unwrap();
 
-        let handler = BigTableHandler::new(TestProcessor);
+        let handler = BigTableHandler::new(TestProcessor, &ConcurrentLayer::default());
         let mut batch = BigTableBatch::default();
         let entries: Vec<Entry> = (0..10)
             .map(|i| make_entry(format!("row{i}").as_bytes()))

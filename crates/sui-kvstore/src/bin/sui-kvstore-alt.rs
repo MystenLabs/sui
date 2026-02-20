@@ -10,26 +10,14 @@ use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
-use sui_kvstore::BIGTABLE_MAX_MUTATIONS;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
-use sui_kvstore::set_max_mutations;
 use sui_kvstore::set_write_legacy_data;
 use sui_protocol_config::Chain;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
-
-fn parse_max_mutations(s: &str) -> Result<usize, String> {
-    let value: usize = s.parse().map_err(|e| format!("invalid number: {e}"))?;
-    if value >= BIGTABLE_MAX_MUTATIONS {
-        return Err(format!(
-            "args.max_mutations must be less than {BIGTABLE_MAX_MUTATIONS}"
-        ));
-    }
-    Ok(value)
-}
 
 #[derive(Parser)]
 #[command(name = "sui-kvstore-alt")]
@@ -57,10 +45,6 @@ struct Args {
     /// Number of gRPC channels in the connection pool (default: 10)
     #[arg(long)]
     channel_pool_size: Option<usize>,
-
-    /// Maximum mutations per BigTable batch (must be < 100k)
-    #[arg(long, value_parser = parse_max_mutations)]
-    max_mutations: Option<usize>,
 
     /// Chain identifier for resolving protocol configs (mainnet, testnet, or unknown)
     #[arg(long)]
@@ -98,9 +82,6 @@ async fn main() -> Result<()> {
 
     let is_bounded = args.indexer_args.last_checkpoint.is_some();
     set_write_legacy_data(args.write_legacy_data);
-    if let Some(v) = args.max_mutations {
-        set_max_mutations(v);
-    }
 
     info!("Starting sui-kvstore-alt indexer");
     info!(instance_id = %args.instance_id);

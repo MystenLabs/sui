@@ -418,7 +418,7 @@ The `Handler` is where you implement your indexing business logic. The framework
 ```rust
 trait Processor {
     // Called by Processor workers
-    fn process(&self, checkpoint: &CheckpointData) -> Vec<Self::Value>;
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>>;
 }
 
 trait Handler { 
@@ -482,7 +482,7 @@ Database connection limits are also in place. The `Committer` blocks when all co
 
 `Watermark` feedback provides application-level coordination by reporting progress to the `Broadcaster` through `Watermark` updates. Further coordination is provided through bounded ingestion, where the `Broadcaster` only signals fetches within a bounded range ahead of the current watermark.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" /> 
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" fun="spawn_aborting" /> 
     
 Finally, memory protection ensures the entire system operates within predictable memory bounds.
 
@@ -516,27 +516,52 @@ The following sections detail the configuration settings you can implement for o
 
 #### Concurrent pipeline `Handler` constants
 
-`Handler` constants are the most direct way to tune pipeline behavior. These are implemented as associated constants in your `Handler` trait implementation.
+`Handler` constants are the most direct way to tune pipeline behavior. These are implemented as associated constants in your `Handler` trait implementation and serve as per-handler defaults.
 
 ```rust
 impl concurrent::Handler for MyHandler {
     type Store = Db;
-    
+
     // Number of concurrent processor workers (default: 10)
     const FANOUT: usize = 20;
-    
+
     // Minimum rows to trigger eager commit for committer (default: 50)
     const MIN_EAGER_ROWS: usize = 100;
-    
-    // Backpressure threshold on committer (default: 5000)
+
+    // Backpressure threshold on collector (default: 5000)
     const MAX_PENDING_ROWS: usize = 10000;
-    
+
     // Maximum watermarks per batch (default: 10,000)
     const MAX_WATERMARK_UPDATES: usize = 5000;
 }
 ```
 
-Tuning guidelines: 
+These constants can also be overridden at runtime through `ConcurrentConfig` and `SequentialConfig`, without recompiling. Config values take precedence over trait constants when present. For concurrent pipelines:
+
+```rust
+let config = ConcurrentConfig {
+    committer: committer_config,
+    pruner: Some(pruner_config),
+    fanout: Some(20),
+    min_eager_rows: Some(100),
+    max_pending_rows: Some(10000),
+    max_watermark_updates: Some(5000),
+};
+```
+
+For sequential pipelines:
+
+```rust
+let config = SequentialConfig {
+    committer: committer_config,
+    checkpoint_lag: 0,
+    fanout: Some(20),
+    min_eager_rows: Some(100),
+    max_batch_checkpoints: Some(500),
+};
+```
+
+Tuning guidelines:
 
 - **`FANOUT`:** Increase for CPU-intensive processing, decrease for memory-constrained environments.
 - **`MIN_EAGER_ROWS`:** Lower values reduce data commit latency (individual data appears in database sooner), higher values improve overall throughput (more efficient larger batches).
@@ -552,12 +577,18 @@ let config = ConcurrentConfig {
     committer: CommitterConfig {
         // Number of parallel database writers (default: 5)
         write_concurrency: 10,
-        
+
         // How often collector checks for batches in ms (default: 500)
         collect_interval_ms: 250,
-        
+
         // How often watermarks are updated in ms (default: 500)
         watermark_interval_ms: 1000,
+
+        // Maximum random jitter added to watermark interval in ms (default: 0)
+        watermark_interval_jitter_ms: 100,
+
+        // Cap write throughput in rows/sec per pipeline (default: None = unlimited)
+        max_rows_per_second: Some(5000),
     },
     pruner: Some(pruner_config),
 };
@@ -568,6 +599,7 @@ Tuning guidelines:
 - **`write_concurrency`:** Higher values result in faster throughput but more database connections; `ensure total_pipelines × write_concurrency < db_connection_pool_size`.
 - **`collect_interval_ms`:** Lower values reduce latency but increase CPU overhead.
 - **`watermark_interval_ms`:** Controls how often watermarks are updated. Higher values reduce database contention from frequent watermark writes but make the indexer slower to respond to pipeline progress.
+- **`max_rows_per_second`:** Caps the combined write rate across all `write_concurrency` workers for this pipeline. Useful during backfills to prevent the indexer from overwhelming the database. The limit uses a smooth (GCRA) rate limiter so writes are spread evenly rather than bursting. Set to `None` (the default) for unlimited throughput.
 
 #### `PrunerConfig` settings
 

@@ -865,9 +865,9 @@ async fn run_bench_worker(
                     metrics
                         .num_error
                         .with_label_values(&[
-                            &payload.to_string(),
+                            payload.to_string().as_str(),
                             "execution",
-                            &client_type.to_string(),
+                            client_type.to_string().as_str(),
                         ])
                         .inc();
                 }
@@ -930,9 +930,9 @@ async fn run_bench_worker(
                             metrics
                                 .num_error
                                 .with_label_values(&[
-                                    &payload.to_string(),
+                                    payload.to_string().as_str(),
                                     "rpc",
-                                    &client_type.to_string(),
+                                    client_type.to_string().as_str(),
                                 ])
                                 .inc();
                             NextOp::Retry(Box::new((transaction, payload)))
@@ -1368,7 +1368,7 @@ fn process_bundle_results(
     if any_success {
         metrics
             .num_success
-            .with_label_values(&[&payload.to_string(), "soft_bundle"])
+            .with_label_values(&[payload.to_string().as_str(), "soft_bundle"])
             .inc();
         NextOp::Response {
             latency,
@@ -1391,7 +1391,7 @@ fn process_bundle_results(
         metrics
             .num_error
             .with_label_values(&[
-                &payload.to_string(),
+                payload.to_string().as_str(),
                 "soft_bundle_all_failed",
                 "soft_bundle",
             ])
