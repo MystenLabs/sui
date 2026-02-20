@@ -5,8 +5,8 @@ use crate::{
     diag,
     diagnostics::warning_filters::WarningFilters,
     expansion::ast::{ModuleIdent, Value_},
-    ice,
-    naming::ast::BuiltinTypeName_,
+    ice, ice_assert,
+    naming::ast::{BuiltinTypeName_, TypeInner},
     parser::ast::{DatatypeName, VariantName},
     shared::{
         Identifier,
@@ -16,7 +16,7 @@ use crate::{
     },
     typing::{
         ast as T,
-        core::{Context, Subst, error_format},
+        core::{self, Context, Subst, error_format},
         visitor::TypingMutVisitorContext,
     },
 };
@@ -98,6 +98,18 @@ fn invalid_match(
     subject: &T::Exp,
     arms: &Spanned<Vec<T::MatchArm>>,
 ) -> bool {
+    // Divergent subjects are caught during typing in `translate.rs`. If we encounter one here,
+    // an error should already have been reported.
+    let subject_ty = core::unfold_type(&context.subst, &subject.ty);
+    match subject_ty.value.inner() {
+        TypeInner::Anything | TypeInner::Void => {
+            ice_assert!(context, context.env().has_errors(), subject.exp.loc,
+                "Divergent match subject reached match analysis without a prior error");
+            return true;
+        }
+        TypeInner::UnresolvedError => return true,
+        _ => {}
+    }
     let arms_loc = arms.loc;
     let (pattern_matrix, _arms) =
         PatternMatrix::from(context, loc, subject.ty.clone(), arms.value.clone());

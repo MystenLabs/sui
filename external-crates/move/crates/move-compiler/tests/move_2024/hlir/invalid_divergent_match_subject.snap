@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04025]: invalid control flow
+  ┌─ tests/move_2024/hlir/invalid_divergent_match_subject.move:7:16
+  │
+7 │         match (return 0) {
+  │                ^^^^^^^^ Cannot match on an expression that always diverges
+
+error[E04025]: invalid control flow
+   ┌─ tests/move_2024/hlir/invalid_divergent_match_subject.move:15:16
+   │
+15 │         match (loop {}) {
+   │                ^^^^^^^ Cannot match on an expression that always diverges
+
+error[E04025]: invalid control flow
+   ┌─ tests/move_2024/hlir/invalid_divergent_match_subject.move:23:16
+   │
+23 │         match ({ abort 0 }) {
+   │                ^^^^^^^^^^^ Cannot match on an expression that always diverges
+
+error[E04025]: invalid control flow
+   ┌─ tests/move_2024/hlir/invalid_divergent_match_subject.move:31:16
+   │
+31 │         match ({ return 0 }) {
+   │                ^^^^^^^^^^^^ Cannot match on an expression that always diverges
+
+error[E04025]: invalid control flow
+   ┌─ tests/move_2024/hlir/invalid_divergent_match_subject.move:39:16
+   │
+39 │         match (if (true) { abort 0 } else { return 1 }) {
+   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot match on an expression that always diverges
