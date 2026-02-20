@@ -418,7 +418,7 @@ The `Handler` is where you implement your indexing business logic. The framework
 ```rust
 trait Processor {
     // Called by Processor workers
-    fn process(&self, checkpoint: &CheckpointData) -> Vec<Self::Value>;
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>>;
 }
 
 trait Handler { 
