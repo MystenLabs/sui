@@ -297,23 +297,27 @@ const protocolInject = async function (source) {
           content.push(`<div class="${tableSectionTitle}">Methods</div>`);
 
           for (const method of service.methods) {
+            // Key cell: method signature (request → response), nowrap so it
+            // never breaks mid-type-name. Matches the cellKey/cellVal pattern
+            // used by fields so the grid columns align correctly.
             content.push(
-              `<div class="protoMethodSig">
-                <a href="#${createId(method.requestFullType)}">${
-                method.requestType
-              }</a>
-                <span class="protoArrow">→</span>
-                <span>${method.responseType}</span>
-              </div>`,
+              `<div class="${cellKey} protoMethodSig">` +
+              `<a href="#${createId(method.requestFullType)}">${method.requestType}</a>` +
+              `<span class="protoArrow">&#8594;</span>` +
+              `<span>${method.responseType}</span>` +
+              `</div>`,
             );
 
+            // Val cell: description (empty div keeps grid alignment if no desc)
+            content.push(`<div class="${cellVal}">`);
             if (hasText(method.description)) {
               content.push(
-                `<div class="protoMethodDesc">${handleCurlies(method.description)
+                `<div class="${valMuted}">${handleCurlies(method.description)
                   .replace(/\n\/?/g, " ")
                   .replace(/<(http.*)>/g, "$1")}</div>`,
               );
             }
+            content.push(`</div>`);
           }
 
           content.push(`</div>`);
