@@ -645,13 +645,13 @@ struct Counter {
 }
 
 /// Atomically counts the number of active subscriptions to the block broadcast stream.
-struct SubscriptionCounter {
+pub(crate) struct SubscriptionCounter {
     context: Arc<Context>,
     counter: parking_lot::Mutex<Counter>,
 }
 
 impl SubscriptionCounter {
-    fn new(context: Arc<Context>) -> Self {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         // Set the subscribed peers by default to 0
         for (_, authority) in context.committee.authorities() {
             context
@@ -742,7 +742,7 @@ type BroadcastedBlockStream = BroadcastStream<ExtendedBlock>;
 
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
-struct BroadcastStream<T> {
+pub(crate) struct BroadcastStream<T> {
     peer: PeerId,
     // Stores the receiver across poll_next() calls.
     inner: ReusableBoxFuture<
