@@ -7,7 +7,6 @@
     clippy::arithmetic_side_effects,
     clippy::cast_possible_truncation,
     clippy::indexing_slicing,
-    clippy::panic,
     clippy::unreachable
 )]
 
@@ -151,17 +150,17 @@ impl TagWithLayoutInfoOpt {
 }
 
 impl RuntimeLocation {
-    fn as_trace_location(&self) -> Location {
-        match self {
+    fn as_trace_location(&self) -> Option<Location> {
+        Some(match self {
             RuntimeLocation::Stack(_) => {
-                panic!("Cannot convert stack location to trace location")
+                return None;
             }
             RuntimeLocation::Local(fidx, lidx) => Location::Local(*fidx, *lidx),
             RuntimeLocation::Indexed(loc, idx) => {
-                Location::Indexed(Box::new(loc.as_trace_location()), *idx)
+                Location::Indexed(Box::new(loc.as_trace_location()?), *idx)
             }
             RuntimeLocation::Global(id) => Location::Global(*id),
-        }
+        })
     }
 
     fn as_runtime_location(loc: Location) -> Self {
@@ -179,7 +178,7 @@ impl LocalType {
     fn into_rooted_type(self) -> Option<StackType> {
         let ref_type = match self.ref_type {
             ReferenceKind::Value => None,
-            ReferenceKind::Empty { .. } => panic!("Empty reference type"),
+            ReferenceKind::Empty { .. } => return None,
             ReferenceKind::Filled { ref_type, location } => Some((ref_type, location)),
         };
         Some(StackType {
@@ -386,11 +385,11 @@ impl VMTracer<'_> {
         let value = self.root_location_snapshot(vtables, machine, &location)?;
         Some(match ref_info {
             Some(Mutability::Imm) => TraceValue::ImmRef {
-                location: location.as_trace_location(),
+                location: location.as_trace_location()?,
                 snapshot: Box::new(value),
             },
             Some(Mutability::Mut) => TraceValue::MutRef {
-                location: location.as_trace_location(),
+                location: location.as_trace_location()?,
                 snapshot: Box::new(value),
             },
             None => TraceValue::RuntimeValue { value },
@@ -567,7 +566,7 @@ impl VMTracer<'_> {
         &mut self,
         value: SerializableMoveValue,
         ref_type: &Mutability,
-    ) -> (TraceIndex, TraceValue) {
+    ) -> Option<(TraceIndex, TraceValue)> {
         // We treat any references coming out of a native as global reference.
         // This generally works fine as long as you don't have a native function returning a
         // mutable reference within a mutable reference passed-in.
@@ -577,20 +576,20 @@ impl VMTracer<'_> {
 
         self.trace.effect(EF::DataLoad(DataLoad {
             ref_type: ref_type.clone(),
-            location: location.as_trace_location(),
+            location: location.as_trace_location()?,
             snapshot: value.clone(),
         }));
         let trace_value = match ref_type {
             Mutability::Imm => TraceValue::ImmRef {
-                location: location.as_trace_location(),
+                location: location.as_trace_location()?,
                 snapshot: Box::new(value),
             },
             Mutability::Mut => TraceValue::MutRef {
-                location: location.as_trace_location(),
+                location: location.as_trace_location()?,
                 snapshot: Box::new(value),
             },
         };
-        (id, trace_value)
+        Some((id, trace_value))
     }
 
     /// Load data returned by a native function into the tracer state.
@@ -606,7 +605,7 @@ impl VMTracer<'_> {
         let Some(ref_type) = reftype else {
             return None;
         };
-        let (trace_index, trace_value) = self.emit_data_load(value, ref_type);
+        let (trace_index, trace_value) = self.emit_data_load(value, ref_type)?;
 
         self.loaded_data
             .insert(trace_index, GlobalValue::Value(trace_value));
@@ -659,7 +658,7 @@ impl VMTracer<'_> {
                 let move_value = into_annotated_move_value(value, &layout)?;
                 match ref_type {
                     Some(ref_type) => {
-                        let (id, trace_value) = self.emit_data_load(move_value, &ref_type);
+                        let (id, trace_value) = self.emit_data_load(move_value, &ref_type)?;
                         self.loaded_data
                             .insert(id, GlobalValue::Value(trace_value.clone()));
                         Some((trace_value, Some(id)))
@@ -750,7 +749,7 @@ impl VMTracer<'_> {
                 let move_value = into_annotated_move_value(value, &layout)?;
                 match ref_type {
                     Some(ref_type) => {
-                        let (id, trace_value) = self.emit_data_load(move_value, &ref_type);
+                        let (id, trace_value) = self.emit_data_load(move_value, &ref_type)?;
                         self.loaded_data
                             .insert(id, GlobalValue::Value(trace_value.clone()));
                         Some(trace_value)
@@ -1379,7 +1378,7 @@ impl VMTracer<'_> {
                 let root_value_after_write =
                     self.resolve_location(vtables, machine, &location)?.clone();
                 let effects = self.register_post_effects(vec![EF::Write(Write {
-                    location: location.as_trace_location(),
+                    location: location.as_trace_location()?,
                     root_value_after_write,
                 })]);
                 self.trace
@@ -1486,7 +1485,10 @@ impl VMTracer<'_> {
                     value: SerializableMoveValue::U64(i),
                 }) = &self.effects[0]
                 else {
-                    unreachable!();
+                    self.report_error(
+                        "Expected a u64 literal for the index in VecImmBorrow/VecMutBorrow",
+                    );
+                    return None;
                 };
                 let location =
                     RuntimeLocation::Indexed(Box::new(ref_ty.ref_type?.1.clone()), *i as usize);
@@ -1516,7 +1518,8 @@ impl VMTracer<'_> {
                 self.type_stack.pop()?;
                 self.type_stack.pop()?;
                 let EF::Pop(reference_val) = &self.effects[1] else {
-                    unreachable!();
+                    self.report_error("Expected a reference value for the vector in VecPushBack");
+                    return None;
                 };
                 let location = reference_val.location()?.clone();
                 let runtime_location = RuntimeLocation::as_runtime_location(location.clone());
@@ -1573,7 +1576,7 @@ impl VMTracer<'_> {
                 let location = v_ref.ref_type.as_ref()?.1.clone();
                 let snap = self.resolve_location(vtables, machine, &location)?;
                 let effects = self.register_post_effects(vec![EF::Write(Write {
-                    location: location.as_trace_location(),
+                    location: location.as_trace_location()?,
                     root_value_after_write: snap,
                 })]);
                 self.trace
@@ -1840,18 +1843,18 @@ impl FunctionTypeInfo {
         ty_args: &[Type],
     ) -> Option<FunctionTypeInfo> {
         // Split a `Type` into its inner type and reference type.
-        fn deref_ty(ty: Type) -> (Type, Option<Mutability>) {
-            match ty {
+        fn deref_ty(ty: Type) -> Option<(Type, Option<Mutability>)> {
+            Some(match ty {
                 Type::Reference(r) => (*r, Some(Mutability::Imm)),
                 Type::MutableReference(t) => (*t, Some(Mutability::Mut)),
-                Type::TyParam(_) => unreachable!("Type parameters should be fully substituted"),
+                Type::TyParam(_) => return None,
                 _ => (ty, None),
-            }
+            })
         }
 
         let subst_and_layout_type = |ty: &ArenaType| -> Option<TagWithLayoutInfoOpt> {
             let subst_ty = ty.subst(ty_args).ok()?;
-            let (ty, ref_type) = deref_ty(subst_ty);
+            let (ty, ref_type) = deref_ty(subst_ty)?;
             let tag = vtables.type_to_type_tag(&ty).ok()?;
             // NB: This may fail if the type represents a value greater than the max
             // value depth.
@@ -1876,7 +1879,7 @@ impl FunctionTypeInfo {
             .iter()
             .cloned()
             .map(|ty| {
-                let (ty, ref_type) = deref_ty(ty);
+                let (ty, ref_type) = deref_ty(ty)?;
                 assert!(ref_type.is_none());
                 vtables.type_to_type_tag(&ty).ok()
             })
