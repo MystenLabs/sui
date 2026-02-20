@@ -71,12 +71,6 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:24:16
-   │
-24 │         match (n.
-   │                ^^ Pattern '_' not covered
-
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:25:5
    │
