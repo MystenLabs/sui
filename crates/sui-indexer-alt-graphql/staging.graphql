@@ -3487,11 +3487,11 @@ type Query {
 	"""
 	The transactions that exist in the network, optionally filtered by multiple transaction filters.
 	
-	Supports combining filters (e.g. `affectedAddress` AND `function`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `afterCheckpoint`, `beforeCheckpoint`, or `atCheckpoint` to narrow it. Supports a longer retention than `Query.transactions`.
+	Supports combining filters (e.g. `affectedAddress` AND `function`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `checkpointBound` to narrow it. Supports a longer retention than `Query.transactions`.
 	
 	Note that this differs from `Query.transactions`, which supports a single filter with an optional sender filter, with no checkpoint range restriction and generally a shorter retention.
 	"""
-	scanTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	scanTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter!): TransactionConnection
 	"""
 	Configuration for this RPC service.
 	"""

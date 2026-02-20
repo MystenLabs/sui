@@ -234,7 +234,7 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
         node: impl Fn(T) -> Result<N, E>,
     ) -> Result<Connection<String, N>, E> {
         let edges: Vec<_> = results.into_iter().map(|r| (cursor(&r), r)).collect();
-        self.build_connection(edges, node)
+        self.connection(edges, node)
     }
 
     /// Validate cursors, detect has_previous_page/has_next_page, trim boundary elements,
@@ -242,7 +242,7 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
     ///
     /// `edges` should contain elements in order, including up to one record either side of the
     /// page (the `after` and `before` cursor elements) used for boundary detection.
-    fn build_connection<T, N: OutputType, E>(
+    fn connection<T, N: OutputType, E>(
         &self,
         edges: Vec<(C, T)>,
         node: impl Fn(T) -> Result<N, E>,
@@ -378,7 +378,7 @@ impl<C: Ord + Copy> Page<JsonCursor<C>> {
             v
         };
 
-        self.build_connection(edges, node)
+        self.connection(edges, node)
     }
 }
 

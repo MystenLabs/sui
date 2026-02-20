@@ -53,44 +53,57 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# advance-epoch
+// Generate 995 checkpoints together with the previous 5 checkpoints to create 1 complete block.
+//# create-checkpoint 995
 
-// Generate 10,501 checkpoints to create 10 complete blocks + 500 extra for incomplete block
-//# create-checkpoint 10501
 
 //# run Test::M1::create --sender A --args 100 @C
 
+// Generate one more checkpoint to put the previous txn in a separate, incomplete block.
 //# create-checkpoint
 
 //# run-graphql
 # Scan vs indexed cross-check, multi-filter combinations, empty-result edge cases,
 # no-filter scan, and checkpoint-bounded scan across bloom blocks.
 {
-  scanTransactionsA: scanTransactions(filter: { affectedAddress: "@{A}" }) { ...TX }
+  scanTransactionsA: scanTransactions(filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
   paginateTransactionsA: transactions(filter: { affectedAddress: "@{A}" }) { ...TX }
 
   transactionsAWithObj: scanTransactions(filter: {
     affectedAddress: "@{A}",
-    affectedObject: "@{obj_4_0}"
+    affectedObject: "@{obj_4_0}",
+    beforeCheckpoint: 1002
   }) { ...TX }
   transactionsBSentToA: scanTransactions(filter: {
     affectedAddress: "@{A}",
-    sentAddress: "@{B}"
+    sentAddress: "@{B}",
+    beforeCheckpoint: 1002
   }) { ...TX }
   scanFnAndObj: scanTransactions(filter: {
     function: "@{Test}",
-    affectedObject: "@{obj_4_0}"
+    affectedObject: "@{obj_4_0}",
+    beforeCheckpoint: 1002
   }) { ...TX }
   scanFnAndAddr: scanTransactions(filter: {
     function: "@{Test}",
-    affectedAddress: "@{C}"
+    affectedAddress: "@{C}",
+    beforeCheckpoint: 1002
   }) { ...TX }
   transactionsWithPackage: scanTransactions(filter: {
-    function: "@{Test}"
+    function: "@{Test}",
+    beforeCheckpoint: 1002
+  }) { ...TX }
+  atCheckpoint: scanTransactions(first: 5, filter: {
+    atCheckpoint: 5,
+  }) { ...TX }
+  scanAcrossBlocks: scanTransactions(filter: {
+    affectedAddress: "@{A}",
+    afterCheckpoint: 0, beforeCheckpoint: 1002
   }) { ...TX }
 
   emptyNonExistent: scanTransactions(filter: {
-    affectedAddress: "0x0000000000000000000000000000000000000000000000000000000000000001"
+    affectedAddress: "0x0000000000000000000000000000000000000000000000000000000000000001",
+    afterCheckpoint: 0, beforeCheckpoint: 1002
   }) { ...TX }
   emptyConflicting: scanTransactions(filter: {
     sentAddress: "@{A}",
@@ -99,18 +112,7 @@ module Test::M1 {
   }) { ...TX }
   emptyBeyondData: scanTransactions(filter: {
     affectedAddress: "@{A}",
-    afterCheckpoint: 50000
-  }) { ...TX }
-
-  noFilter: scanTransactions(first: 5, filter: {
-    afterCheckpoint: 0,
-    beforeCheckpoint: 6
-  }) { ...TX }
-
-  scanAcrossBlocks: scanTransactions(filter: {
-    affectedAddress: "@{A}",
-    afterCheckpoint: 0,
-    beforeCheckpoint: 10510
+    afterCheckpoint: 50000, beforeCheckpoint: 60000
   }) { ...TX }
 }
 
@@ -123,22 +125,29 @@ fragment TX on TransactionConnection {
 # Cursor pagination: cursor_0 is a checkpoint boundary (cp4,tx_seq=5),
 # cursor_1 is mid-checkpoint (cp5,tx_seq=7). Tests all first/last/after/before combos.
 {
-  first2: scanTransactions(first: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
-  last2: scanTransactions(last: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
+  first2: scanTransactions(first: 2, filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
+  last2: scanTransactions(last: 2, filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
 
-  firstAfter: scanTransactions(first: 10, after: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
-  lastBefore: scanTransactions(last: 10, before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
-  firstBefore: scanTransactions(first: 10, before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
-  lastAfter: scanTransactions(last: 10, after: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  firstAfter: scanTransactions(first: 10, after: "@{cursor_0}", filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
+  lastBefore: scanTransactions(last: 10, before: "@{cursor_1}", filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
+  firstBefore: scanTransactions(first: 10, before: "@{cursor_1}", filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
+  lastAfter: scanTransactions(last: 10, after: "@{cursor_0}", filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
 
-  windowFirst: scanTransactions(first: 10, after: "@{cursor_0}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
-  windowLast: scanTransactions(last: 10, after: "@{cursor_0}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  windowFirst: scanTransactions(first: 10, after: "@{cursor_0}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
+  windowLast: scanTransactions(last: 10, after: "@{cursor_0}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
 
-  nonexistentCursor: scanTransactions(last: 10, after: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
-  invalidOrder: scanTransactions(first: 10, after: "@{cursor_1}", before: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  nonexistentCursor: scanTransactions(last: 10, after: "@{cursor_2}", filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
+  invalidOrder: scanTransactions(first: 10, after: "@{cursor_1}", before: "@{cursor_0}", filter: { affectedAddress: "@{A}", beforeCheckpoint: 1002 }) { ...TX }
 }
 
 fragment TX on TransactionConnection {
   pageInfo { startCursor endCursor hasPreviousPage hasNextPage }
   edges { cursor node { digest effects { checkpoint { sequenceNumber } } } }
+}
+
+//# run-graphql
+{
+  noCheckpointBounds: scanTransactions(filter: {
+    affectedAddress: "@{A}"
+  }) { pageInfo { startCursor endCursor hasPreviousPage hasNextPage } }
 }

@@ -57,6 +57,7 @@ use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::ScanError;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::ScanFilterValidator;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
@@ -719,7 +720,7 @@ impl Query {
 
     /// The transactions that exist in the network, optionally filtered by multiple transaction filters.
     ///
-    /// Supports combining filters (e.g. `affectedAddress` AND `function`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `afterCheckpoint`, `beforeCheckpoint`, or `atCheckpoint` to narrow it. Supports a longer retention than `Query.transactions`.
+    /// Supports combining filters (e.g. `affectedAddress` AND `function`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `checkpointBound` to narrow it. Supports a longer retention than `Query.transactions`.
     ///
     /// Note that this differs from `Query.transactions`, which supports a single filter with an optional sender filter, with no checkpoint range restriction and generally a shorter retention.
     async fn scan_transactions(
@@ -729,7 +730,7 @@ impl Query {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-        filter: Option<TransactionFilter>,
+        #[graphql(validator(custom = "ScanFilterValidator"))] filter: TransactionFilter,
     ) -> Option<Result<Connection<String, Transaction>, RpcError<ScanError>>> {
         Some(
             async {
@@ -738,7 +739,6 @@ impl Query {
                 let limits = pagination.limits("Query", "scanTransactions");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
-                let filter = filter.unwrap_or_default();
                 Transaction::scan(ctx, scope, page, filter).await
             }
             .await,

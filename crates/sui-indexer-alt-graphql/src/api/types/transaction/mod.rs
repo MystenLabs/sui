@@ -346,10 +346,6 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         };
 
-        if page.after().map_or(0, |c| **c) > page.before().map_or(u64::MAX, |c| **c) {
-            return Ok(Connection::new(false, false));
-        }
-
         let scan_range = cp_bounds.end() - cp_bounds.start() + 1;
         if scan_range > limits.max_scan_limit {
             return Err(bad_user_input(ScanError::LimitExceeded {
