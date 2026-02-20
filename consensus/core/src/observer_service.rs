@@ -9,15 +9,17 @@ use consensus_types::block::BlockRef;
 use futures::{StreamExt as _, stream};
 use parking_lot::RwLock;
 use tokio::sync::broadcast;
-use tracing::warn;
 
 use crate::{
+    authority_service::{BroadcastStream, SubscriptionCounter},
     block::{BlockAPI as _, VerifiedBlock},
     commit::{CommitIndex, CommitRange, TrustedCommit},
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{NodeId, ObserverBlockStream, ObserverBlockStreamItem, ObserverNetworkService},
+    network::{
+        NodeId, ObserverBlockStream, ObserverBlockStreamItem, ObserverNetworkService, PeerId,
+    },
 };
 
 /// Serves observer requests from observer or validator peers. It is the server-side
@@ -26,6 +28,7 @@ pub(crate) struct ObserverService {
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
     rx_accepted_block_broadcast: broadcast::Receiver<(VerifiedBlock, CommitIndex)>,
+    subscription_counter: Arc<SubscriptionCounter>,
 }
 
 impl ObserverService {
@@ -34,10 +37,12 @@ impl ObserverService {
         dag_state: Arc<RwLock<DagState>>,
         rx_accepted_block_broadcast: broadcast::Receiver<(VerifiedBlock, CommitIndex)>,
     ) -> Self {
+        let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
             context,
             dag_state,
             rx_accepted_block_broadcast,
+            subscription_counter,
         }
     }
 }
@@ -46,7 +51,7 @@ impl ObserverService {
 impl ObserverNetworkService for ObserverService {
     async fn handle_stream_blocks(
         &self,
-        _peer: NodeId,
+        peer: NodeId,
         highest_round_per_authority: Vec<u64>,
     ) -> ConsensusResult<ObserverBlockStream> {
         if highest_round_per_authority.len() != self.context.committee.size() {
@@ -55,13 +60,6 @@ impl ObserverNetworkService for ObserverService {
                 self.context.committee.size(),
             ));
         }
-
-        // Subscribe to the live channel BEFORE reading the DagState snapshot. This eliminates
-        // a race where a block accepted between the snapshot read and resubscribe() would fall
-        // in neither stream. With this ordering, such a block is guaranteed to be delivered via
-        // the live channel. Blocks accepted in the narrow window between resubscribe() and the
-        // snapshot read may appear in both streams; they are deduplicated below.
-        let rx = self.rx_accepted_block_broadcast.resubscribe();
 
         // Collect all accepted blocks from DagState that the observer hasn't yet seen,
         // sorted by round for consistent ordering.
@@ -89,30 +87,14 @@ impl ObserverNetworkService for ObserverService {
                     }),
             );
 
-        // Subscribe to newly accepted blocks streamed in real time via the broadcast channel.
-        // The commit index is bundled with each block in the broadcast payload, eliminating any
-        // need to acquire the dag_state lock per block inside this hot path.
-        let live_stream = stream::unfold(rx, |mut rx| async move {
-            loop {
-                match rx.recv().await {
-                    Ok((block, commit_index)) => {
-                        return Some((
-                            ObserverBlockStreamItem {
-                                block: block.serialized().clone(),
-                                highest_commit_index: commit_index as u64,
-                            },
-                            rx,
-                        ));
-                    }
-                    Err(broadcast::error::RecvError::Lagged(n)) => {
-                        warn!(
-                            "Observer block stream lagged by {n} messages, some blocks may have been missed"
-                        );
-                        // Continue to the next available message.
-                    }
-                    Err(broadcast::error::RecvError::Closed) => return None,
-                }
-            }
+        let live_stream = BroadcastStream::<(VerifiedBlock, CommitIndex)>::new(
+            PeerId::Observer(peer),
+            self.rx_accepted_block_broadcast.resubscribe(),
+            self.subscription_counter.clone(),
+        )
+        .map(|(block, commit_index)| ObserverBlockStreamItem {
+            block: block.serialized().clone(),
+            highest_commit_index: commit_index as u64,
         });
 
         Ok(Box::pin(past_stream.chain(live_stream)))
