@@ -15,6 +15,22 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::intersect;
 
+/// An input filter selecting for either system or programmable transactions.
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub(crate) enum TransactionKindInput {
+    /// A system transaction can be one of several types of transactions.
+    /// See [unions/transaction-block-kind] for more details.
+    SystemTx = 0,
+    /// A user submitted transaction block.
+    ProgrammableTx = 1,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum Error {
+    #[error("Invalid filter, expected: {0}")]
+    InvalidFormat(&'static str),
+}
+
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct TransactionFilter {
     /// Filter to transactions that occurred strictly after the given checkpoint.
@@ -45,37 +61,8 @@ pub(crate) struct TransactionFilter {
     pub sent_address: Option<SuiAddress>,
 }
 
-/// An input filter selecting for either system or programmable transactions.
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-pub(crate) enum TransactionKindInput {
-    /// A system transaction can be one of several types of transactions.
-    /// See [unions/transaction-block-kind] for more details.
-    SystemTx = 0,
-    /// A user submitted transaction block.
-    ProgrammableTx = 1,
-}
 pub(crate) struct TransactionFilterValidator;
-impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
-    fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
-        let filters = filter.affected_address.is_some() as u8
-            + filter.affected_object.is_some() as u8
-            + filter.function.is_some() as u8
-            + filter.kind.is_some() as u8;
-        if filters > 1 {
-            return Err(InputValueError::custom(
-                "At most one of [affectedAddress, affectedObject, function, kind] can be specified",
-            ));
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
-    #[error("Invalid filter, expected: {0}")]
-    InvalidFormat(&'static str),
-}
+pub(crate) struct ScanFilterValidator;
 
 impl TransactionFilter {
     /// Try to create a filter whose results are the intersection of transaction blocks in `self`'s
@@ -146,9 +133,7 @@ impl TransactionFilter {
         .filter(|v| !should_skip_for_bloom(v))
         .collect()
     }
-}
 
-impl TransactionFilter {
     /// Checks if a transaction's contents matches the filter conditions.
     pub(crate) fn matches(&self, transaction: &TransactionContents) -> bool {
         let Ok(data) = transaction.data() else {
@@ -226,6 +211,35 @@ impl CheckpointBounds for TransactionFilter {
 
     fn before_checkpoint(&self) -> Option<UInt53> {
         self.before_checkpoint
+    }
+}
+
+impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
+    fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
+        let filters = filter.affected_address.is_some() as u8
+            + filter.affected_object.is_some() as u8
+            + filter.function.is_some() as u8
+            + filter.kind.is_some() as u8;
+        if filters > 1 {
+            return Err(InputValueError::custom(
+                "At most one of [affectedAddress, affectedObject, function, kind] can be specified",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+impl CustomValidator<TransactionFilter> for ScanFilterValidator {
+    fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
+        if !(filter.before_checkpoint.is_some() || filter.at_checkpoint.is_some()) {
+            return Err(InputValueError::custom(
+                "Scanning requires explicit checkpoint bounds. \
+                 Filter by afterCheckpoint and beforeCheckpoint, beforeCheckpoint or atCheckpoint.",
+            ));
+        }
+
+        Ok(())
     }
 }
 

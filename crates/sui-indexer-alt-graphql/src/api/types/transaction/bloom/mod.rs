@@ -133,7 +133,7 @@ async fn candidate_cps(
     // row once via index lookup, then check all bit probes against it.
     let matched_blocks = query!(
         r#"
-        SELECT
+        SELECT DISTINCT
             cp_bloom_blocks.cp_block_index,
             cp_bloom_blocks.cp_block_index * {BigInt} AS cp_lo,
             cp_bloom_blocks.cp_block_index * {BigInt} + {BigInt} - 1 AS cp_hi_inclusive

@@ -3,9 +3,9 @@
 
 use std::time::Duration;
 
+use insta::assert_json_snapshot;
 use prometheus::Registry;
 use reqwest::Client;
-use insta::assert_json_snapshot;
 use serde_json::json;
 use simulacrum::Simulacrum;
 use sui_indexer_alt_e2e_tests::FullCluster;
