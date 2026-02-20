@@ -1130,7 +1130,10 @@ async fn test_entry_point_vector_error() {
     .unwrap();
     // should fail as we passed object of the wrong type
     assert!(
-        matches!(effects.status(), ExecutionStatus::Failure(ExecutionFailure { .. })),
+        matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure { .. })
+        ),
         "{:?}",
         effects.status()
     );
@@ -1190,7 +1193,10 @@ async fn test_entry_point_vector_error() {
     .unwrap();
     // should fail as we passed object of the wrong type as the first element of the vector
     assert!(
-        matches!(effects.status(), ExecutionStatus::Failure(ExecutionFailure { .. })),
+        matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure { .. })
+        ),
         "{:?}",
         effects.status()
     );
@@ -1517,7 +1523,10 @@ async fn test_entry_point_vector_any_error() {
     .unwrap();
     // should fail as we passed object of the wrong type
     assert!(
-        matches!(effects.status(), ExecutionStatus::Failure(ExecutionFailure { .. })),
+        matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure { .. })
+        ),
         "{:?}",
         effects.status()
     );
@@ -1577,7 +1586,10 @@ async fn test_entry_point_vector_any_error() {
     .unwrap();
     // should fail as we passed object of the wrong type as the first element of the vector
     assert!(
-        matches!(effects.status(), ExecutionStatus::Failure(ExecutionFailure { .. })),
+        matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure { .. })
+        ),
         "{:?}",
         effects.status()
     );

@@ -3245,7 +3245,9 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
                 .execute_transaction_may_fail(transaction.clone())
                 .await?;
             debug!("Transaction executed: {:?}", transaction);
-            if let ExecutionStatus::Failure(ExecutionFailure { error, command }) = response.effects.status() {
+            if let ExecutionStatus::Failure(ExecutionFailure { error, command }) =
+                response.effects.status()
+            {
                 let description = if let Some(command) = command {
                     format!("{error:?} in command {command}")
                 } else {

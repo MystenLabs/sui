@@ -30,7 +30,9 @@ impl Processor for ErrorTransactionHandler {
             if !is_bridge_txn(tx) {
                 continue;
             }
-            if let ExecutionStatus::Failure(ExecutionFailure { error, command }) = tx.effects.status() {
+            if let ExecutionStatus::Failure(ExecutionFailure { error, command }) =
+                tx.effects.status()
+            {
                 results.push(SuiErrorTransactions {
                     txn_digest: tx.transaction.digest().inner().to_vec(),
                     timestamp_ms,
