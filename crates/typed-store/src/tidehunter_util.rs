@@ -81,6 +81,10 @@ fn thdb_config() -> Config {
     let max_maps = 4;
     #[cfg(not(debug_assertions))]
     let max_maps = 8; // 8Gb of mapped space for prod
+    #[cfg(debug_assertions)]
+    let commit_pool_size = 0;
+    #[cfg(not(debug_assertions))]
+    let commit_pool_size = 8; // Use thread pool to commit large batches
     Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
@@ -90,6 +94,7 @@ fn thdb_config() -> Config {
         unload_jitter_pct: 30,
         max_dirty_keys: 1024,
         max_maps,
+        commit_pool_size,
         ..Config::default()
     }
 }
