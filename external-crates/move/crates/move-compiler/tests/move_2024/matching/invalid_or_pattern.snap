@@ -5,6 +5,12 @@ info:
   edition: 2024.alpha
   lint: false
 ---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/invalid_or_pattern.move:9:12
+  │
+9 │     match (e) {
+  │            ^ Pattern 'E::Y' not covered
+
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/matching/invalid_or_pattern.move:10:22
    │
