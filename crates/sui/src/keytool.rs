@@ -1198,7 +1198,10 @@ impl KeyToolCommand {
                     &jwt_randomness,
                 )?;
                 let url_20 = get_oidc_url(
-                    OIDCProvider::AwsTenant(("eu-north-1".to_string(), "test-gammaprime".to_string())),
+                    OIDCProvider::AwsTenant((
+                        "eu-north-1".to_string(),
+                        "test-gammaprime".to_string(),
+                    )),
                     &eph_pk_bytes,
                     max_epoch,
                     "test-gammaprime-dev",
