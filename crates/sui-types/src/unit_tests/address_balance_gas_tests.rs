@@ -7,7 +7,9 @@ use crate::{
     digests::{ChainIdentifier, CheckpointDigest},
     error::UserInputError,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{GasData, TransactionDataV1, TransactionExpiration, TransactionKind},
+    transaction::{
+        CallArg, GasData, ObjectArg, TransactionDataV1, TransactionExpiration, TransactionKind,
+    },
 };
 use sui_protocol_config::ProtocolConfig;
 
@@ -23,6 +25,33 @@ fn create_test_transaction_data(
 ) -> TransactionDataV1 {
     let sender = SuiAddress::random_for_testing_only();
     let builder = ProgrammableTransactionBuilder::new();
+    let pt = builder.finish();
+
+    TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: gas_payment,
+            owner: sender,
+            price: 1000,
+            budget: 1000000,
+        },
+        expiration,
+    }
+}
+
+fn create_test_transaction_data_with_owned_inputs(
+    gas_payment: Vec<ObjectRef>,
+    expiration: TransactionExpiration,
+    owned_inputs: Vec<ObjectRef>,
+) -> TransactionDataV1 {
+    let sender = SuiAddress::random_for_testing_only();
+    let mut builder = ProgrammableTransactionBuilder::new();
+    for obj_ref in owned_inputs {
+        builder
+            .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)))
+            .unwrap();
+    }
     let pt = builder.finish();
 
     TransactionDataV1 {
@@ -465,5 +494,118 @@ fn test_regular_gas_payment_with_epoch_expiration() {
     assert!(
         result.is_ok(),
         "Regular gas payment with Epoch expiration should be allowed"
+    );
+}
+
+// Tests for relax_valid_during_for_owned_inputs feature
+
+#[test]
+fn test_address_balance_with_owned_inputs_allows_no_expiration() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+
+    let tx_data = create_test_transaction_data_with_owned_inputs(
+        vec![],
+        TransactionExpiration::None,
+        vec![random_object_ref()],
+    );
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(
+        result.is_ok(),
+        "Address balance gas with owned inputs should allow None expiration when flag enabled"
+    );
+}
+
+#[test]
+fn test_address_balance_with_owned_inputs_allows_epoch_expiration() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+
+    let tx_data = create_test_transaction_data_with_owned_inputs(
+        vec![],
+        TransactionExpiration::Epoch(5),
+        vec![random_object_ref()],
+    );
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(
+        result.is_ok(),
+        "Address balance gas with owned inputs should allow Epoch expiration when flag enabled"
+    );
+}
+
+#[test]
+fn test_address_balance_with_owned_inputs_allows_valid_during_expiration() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+
+    let tx_data = create_test_transaction_data_with_owned_inputs(
+        vec![],
+        TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: ChainIdentifier::from(CheckpointDigest::default()),
+            nonce: 123,
+        },
+        vec![random_object_ref()],
+    );
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(
+        result.is_ok(),
+        "Address balance gas with owned inputs should allow ValidDuring expiration"
+    );
+}
+
+#[test]
+fn test_address_balance_stateless_still_requires_valid_during() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+
+    // Stateless transaction (no owned inputs) should still require ValidDuring
+    let tx_data = create_test_transaction_data(vec![], TransactionExpiration::None);
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(result.is_err());
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::MissingGasPayment,
+        } => {}
+        _ => {
+            panic!("Expected MissingGasPayment error for stateless transaction without ValidDuring")
+        }
+    }
+
+    let tx_data = create_test_transaction_data(vec![], TransactionExpiration::Epoch(1));
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(result.is_err());
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::InvalidExpiration { .. },
+        } => {}
+        _ => panic!(
+            "Expected InvalidExpiration error for stateless transaction with Epoch expiration"
+        ),
+    }
+}
+
+#[test]
+fn test_address_balance_with_multiple_owned_inputs() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+
+    let tx_data = create_test_transaction_data_with_owned_inputs(
+        vec![],
+        TransactionExpiration::None,
+        vec![
+            random_object_ref(),
+            random_object_ref(),
+            random_object_ref(),
+        ],
+    );
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(
+        result.is_ok(),
+        "Address balance gas with multiple owned inputs should allow None expiration"
     );
 }
