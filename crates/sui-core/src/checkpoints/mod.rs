@@ -1993,7 +1993,7 @@ impl CheckpointBuilder {
                 let effects = self
                     .resolve_settlement_effects(
                         *settlement_key,
-                        tx_roots,
+                        &roots_effects,
                         checkpoint_roots.height,
                         checkpoint_seq,
                         tx_index_offset,
@@ -2022,7 +2022,7 @@ impl CheckpointBuilder {
     async fn resolve_settlement_effects(
         &self,
         settlement_key: TransactionKey,
-        tx_roots: &[TransactionKey],
+        checkpoint_effects: &[TransactionEffects],
         checkpoint_height: CheckpointHeight,
         checkpoint_seq: CheckpointSequenceNumber,
         tx_index_offset: u64,
@@ -2034,27 +2034,9 @@ impl CheckpointBuilder {
             .accumulator_root_obj_initial_shared_version()
             .expect("accumulator root object must exist");
 
-        let root_keys: Vec<_> = tx_roots
-            .iter()
-            .filter(|k| !matches!(k, TransactionKey::AccumulatorSettlement(..)))
-            .cloned()
-            .collect();
-        let root_digests = self
-            .epoch_store
-            .notify_read_tx_key_to_digest(&root_keys)
-            .await
-            .expect("Failed to read tx digests for settlement");
-        let root_effects = self
-            .effects_store
-            .notify_read_executed_effects(
-                "CheckpointBuilder::resolve_settlement_root_effects",
-                &root_digests,
-            )
-            .await;
-
         let builder = AccumulatorSettlementTxBuilder::new(
             None,
-            &root_effects,
+            checkpoint_effects,
             checkpoint_seq,
             tx_index_offset,
         );
