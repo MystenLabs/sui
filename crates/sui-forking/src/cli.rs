@@ -85,7 +85,8 @@ pub enum Commands {
         #[clap(long, default_value = DEFAULT_ADDRESS)]
         server_url: String,
         #[clap(long, default_value = "1")]
-        seconds: u64,
+        /// Duration in milliseconds to advance the local clock.
+        ms: u64,
     },
     /// Advance to next epoch
     AdvanceEpoch {

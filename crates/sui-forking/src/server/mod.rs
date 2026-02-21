@@ -7,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{Context as _, Result, anyhow};
@@ -107,7 +108,13 @@ async fn get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         .map(|c| c.epoch())
         .unwrap_or(0);
 
-    let status = ForkingStatus { checkpoint, epoch };
+    let clock_timestamp_ms = store.get_clock().timestamp_ms();
+
+    let status = ForkingStatus {
+        checkpoint,
+        epoch,
+        clock_timestamp_ms,
+    };
 
     Json(ApiResponse {
         success: true,
@@ -153,13 +160,13 @@ async fn advance_clock(
 ) -> impl IntoResponse {
     let mut sim = state.context.simulacrum.write().await;
 
-    let duration = std::time::Duration::from_secs(request.seconds);
+    let duration = Duration::from_millis(request.ms);
     sim.advance_clock(duration);
-    info!("Advanced clock by {} seconds", request.seconds);
+    info!("Advanced clock by {} ms", request.ms);
 
     Json(ApiResponse::<String> {
         success: true,
-        data: Some(format!("Clock advanced by {} seconds", request.seconds)),
+        data: Some(format!("Clock advanced by {} ms", request.ms)),
         error: None,
     })
 }

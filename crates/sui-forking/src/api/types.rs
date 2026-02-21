@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 /// Request payload for advancing simulated on-chain time.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AdvanceClockRequest {
-    /// Number of seconds to advance the local clock.
-    pub seconds: u64,
+    /// Number of ms to advance the local clock.
+    pub ms: u64,
 }
 
 /// Response payload for an executed transaction.
@@ -28,6 +28,8 @@ pub struct ForkingStatus {
     pub checkpoint: u64,
     /// Current local epoch.
     pub epoch: u64,
+    /// Current simulated on-chain time (seconds since Unix epoch).
+    pub clock_timestamp_ms: u64,
 }
 
 /// Generic envelope returned by control API endpoints.

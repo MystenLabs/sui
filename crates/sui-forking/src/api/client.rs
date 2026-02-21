@@ -72,13 +72,13 @@ impl ForkingClient {
         Ok(())
     }
 
-    /// Advance the local clock by `seconds`.
+    /// Advance the local clock by `ms`.
     ///
     /// # Errors
     ///
     /// Returns [`ClientError`] if the request fails or the server returns an error payload.
-    pub async fn advance_clock(&self, seconds: u64) -> Result<(), ClientError> {
-        let request = AdvanceClockRequest { seconds };
+    pub async fn advance_clock(&self, ms: u64) -> Result<(), ClientError> {
+        let request = AdvanceClockRequest { ms };
         let _: String = self.send_with_body("advance-clock", &request).await?;
         Ok(())
     }
@@ -224,6 +224,7 @@ mod tests {
             data: Some(ForkingStatus {
                 checkpoint: 7,
                 epoch: 3,
+                clock_timestamp_ms: 1_000_000,
             }),
             error: None,
         };

@@ -83,12 +83,9 @@ async fn main() -> Result<()> {
                 .advance_checkpoint()
                 .await?
         }
-        Commands::AdvanceClock {
-            server_url,
-            seconds,
-        } => {
+        Commands::AdvanceClock { server_url, ms } => {
             client_from_server_url(&server_url)?
-                .advance_clock(seconds)
+                .advance_clock(ms)
                 .await?
         }
         Commands::AdvanceEpoch { server_url } => {
@@ -98,6 +95,7 @@ async fn main() -> Result<()> {
             let status = client_from_server_url(&server_url)?.status().await?;
             println!("Checkpoint: {}", status.checkpoint);
             println!("Epoch: {}", status.epoch);
+            println!("Clock timestamp (ms): {}", status.clock_timestamp_ms);
         }
         Commands::Faucet {
             server_url,
