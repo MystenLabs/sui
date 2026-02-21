@@ -1539,7 +1539,7 @@ fn value_fields(
                         "field '{}' is unbound but there are no errors",
                         f,
                     );
-                    let decl_idx = decl_idx_opt.unwrap_or(field_len);
+                    let decl_idx = decl_idx_opt.unwrap_or(field_len + exp_idx);
                     (decl_idx, f, exp_idx, bt, tf)
                 })
                 .collect()
