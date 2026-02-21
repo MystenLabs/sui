@@ -6,11 +6,11 @@ Expect breaking changes until this is officially released and stable.
 
 # Sui Forking Tool
 
-A development tool that enables testing and developing against a local Sui network initialized with state from mainnet, testnet, or devnet at a specific checkpoint. Currently, only forking from the latest checkpoint is supported.
+A development tool that enables testing and developing against a local Sui network initialized with state from mainnet, testnet, or devnet at a specific checkpoint.
 
 ## Overview
 
-`sui-forking` allows developers to start a local network in lock-step mode and execute transactions against initial state derived from the live Sui network. This enables you to:
+`sui-forking` allows developers to start a local network in lock-step mode and execute transactions against some initial state derived from the live Sui network. This enables you to:
 
 - Depend on existing on-chain packages and data
 - Test contracts that interact with real deployed packages
@@ -25,7 +25,7 @@ That means that you have full control over the advancement of checkpoints, time,
 - Staking and related operations are not supported.
 - Single validator, single authority network.
 - Object fetching overhead: First access to objects requires network download.
-- Forking from a checkpoint older than 1 hour requires explicit object seeding (you need to know which objects you want to have pulled at startup)
+- Forking from a checkpoint older than 1 hour requires explicit object seeding (you need to know which owned objects you want to have pulled at startup)
 - If it forks at checkpoint X, you cannot depend on objects created after checkpoint X from the actual real network. You'll need to restart the network at that checkpoint or a later one.
 - Sequential execution: Transactions are executed one at a time, no parallelism.
 
@@ -83,19 +83,16 @@ This command:
 #### Options
 
 - `--checkpoint <number>`: The checkpoint to fork from (required)  - note that this is WIP
-- `--network <network>`: Network to fork from: `mainnet`, `testnet` (mainnet default if none provided). Local network is not currently supported.
+- `--network <network>`: Network to fork from: `mainnet`, `testnet`, `devnet`, or a custom one (`--network <CUSTOM-GRAPHQL-ENDPOINT> --fullnode-url <URL>`
 
 ### Old checkpoint seeding (`--accounts` vs `--objects`)
 
 When you provide `--checkpoint`, startup seeding supports two exclusive modes:
 
-- `--accounts`: discover owned objects through GraphQL at startup time.
-- `--objects`: provide explicit object IDs to prefetch.
+- `--accounts`: discover owned objects through GraphQL at startup time for checkpoints not older than 1h.
+- `--objects`: provide explicit object IDs to prefetch at startup time, required for checkpoints older than 1h.
 
 `--accounts` and `--objects` are mutually exclusive.
-
-`--accounts` is only allowed when the startup checkpoint is at most 1 hour old.
-For older checkpoints, provide explicit objects with `--objects`.
 
 Examples:
 
@@ -116,7 +113,7 @@ Once the forked network is running, you can use these commands:
 ### Faucet - request SUI tokens
 
 ```bash
-sui-forking faucet --address <address> --amount <amount>
+sui-forking faucet --address <address> --amount <amount> # Max is 10M SUI
 ```
 
 ### Advance Checkpoint
