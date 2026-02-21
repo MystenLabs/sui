@@ -8,7 +8,7 @@ use crate::{
     ice, ice_assert,
     naming::ast::{self as N, Type, Var},
     parser::ast::{BinOp_, ConstantName, Field, VariantName},
-    shared::{CompilationEnv, program_info::ProgramInfo, unique_map::UniqueMap},
+    shared::{CompilationEnv, Identifier, program_info::ProgramInfo, unique_map::UniqueMap},
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
 };
 use move_ir_types::location::*;
@@ -65,7 +65,7 @@ pub struct ArmResult {
 
 /// A shared match context trait for use with counterexample generation in Typing and match
 /// compilation in HLIR lowering.
-pub trait MatchContext<const AFTER_TYPING: bool> {
+pub trait MatchContext<const AFTER_TYPING: bool>: Sized {
     fn env(&self) -> &CompilationEnv;
     fn reporter(&self) -> &DiagnosticReporter<'_>;
     fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var;
@@ -94,7 +94,7 @@ pub trait MatchContext<const AFTER_TYPING: bool> {
             }
         }
 
-        let fields = order_fields_by_decl(decl_fields, arg_types.clone());
+        let fields = order_fields_by_decl(self, decl_fields, arg_types.clone());
         fields
             .into_iter()
             .map(|(_, field_name, field_type)| {
@@ -113,7 +113,7 @@ pub trait MatchContext<const AFTER_TYPING: bool> {
         pattern_loc: Loc,
         arg_types: Fields<N::Type>,
     ) -> Vec<(Field, N::Var, N::Type)> {
-        let fields = order_fields_by_decl(decl_fields, arg_types.clone());
+        let fields = order_fields_by_decl(self, decl_fields, arg_types.clone());
         fields
             .into_iter()
             .map(|(_, field_name, field_type)| {
@@ -302,7 +302,7 @@ impl PatternArm {
                     .program_info()
                     .enum_variant_fields(&mident, &enum_, &name)
                     .unwrap();
-                let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
+                let ordered_pats = order_fields_by_decl(context, decl_fields, field_pats);
                 for (_, _, pat) in ordered_pats.into_iter().rev() {
                     output.pats.push_front(pat);
                 }
@@ -363,7 +363,7 @@ impl PatternArm {
                     .program_info()
                     .struct_fields(&mident, &struct_)
                     .unwrap();
-                let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
+                let ordered_pats = order_fields_by_decl(context, decl_fields, field_pats);
                 for (_, _, pat) in ordered_pats.into_iter().rev() {
                     output.pats.push_front(pat);
                 }
@@ -946,15 +946,35 @@ fn combine_pattern_fields(
 }
 
 /// Helper function for creating an ordered list of fields Field information and Fields.
-pub fn order_fields_by_decl<T: std::fmt::Debug>(
+pub fn order_fields_by_decl<
+    const AFTER_TYPING: bool,
+    MC: MatchContext<AFTER_TYPING>,
+    T: std::fmt::Debug,
+>(
+    context: &MC,
     decl_fields: UniqueMap<Field, usize>,
     fields: Fields<T>,
 ) -> Vec<(usize, Field, T)> {
+    let field_len = decl_fields.len();
     let mut texp_fields: Vec<(usize, Field, T)> = fields
         .into_iter()
-        .map(|(f, (_exp_idx, t))| (*decl_fields.get(&f).unwrap(), f, t))
+        .map(|(f, (exp_idx, t))| {
+            // If the field is not a valid one, typing will produce an error.
+            // So keep the field in a consistent order, but after all of the
+            // valid fields.
+            let decl_idx_opt = decl_fields.get(&f).copied();
+            ice_assert!(
+                context.reporter(),
+                decl_idx_opt.is_some() || context.env().has_errors(),
+                f.loc(),
+                "field '{}' is unbound but there are no errors",
+                f,
+            );
+            let decl_idx = decl_idx_opt.unwrap_or(field_len + exp_idx);
+            (decl_idx, f, t)
+        })
         .collect();
-    texp_fields.sort_by(|(decl_idx1, _, _), (decl_idx2, _, _)| decl_idx1.cmp(decl_idx2));
+    texp_fields.sort_by_key(|(decl_idx, _, _)| *decl_idx);
     texp_fields
 }
 

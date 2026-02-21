@@ -157,7 +157,7 @@ fn build_match_tree(
         return MatchTree::Failure;
     }
 
-    if let Some(leaf) = matrix.wild_tree_opt(context.env, &mut context.reporter, &fringe) {
+    if let Some(leaf) = matrix.wild_tree_opt(context, &fringe) {
         debug_print!(context.debug.match_specialization, (msg "wild leaf"), ("matrix" => matrix));
         return MatchTree::Leaf(leaf);
     }
@@ -837,7 +837,7 @@ fn make_arm_variant_unpack_fields(
             .make_unpack_binders(decl_fields.clone(), pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
-    let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
+    let ordered_pats = order_fields_by_decl(context.hlir_context, decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
     assert!(fringe_exps.len() == ordered_pats.len());
@@ -893,7 +893,7 @@ fn make_arm_struct_unpack_fields(
             .make_unpack_binders(decl_fields.clone(), pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
-    let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
+    let ordered_pats = order_fields_by_decl(context.hlir_context, decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
     assert!(fringe_exps.len() == ordered_pats.len());

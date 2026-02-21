@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/mismatched_types.move:6:16
+  │
+6 │         match (n) {
+  │                ^ Pattern 'N { 0: true }' not covered
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/matching/mismatched_types.move:7:13
+  │
+5 │     fun f(n: N): bool {
+  │              - Expected: '0x42::m::N'
+6 │         match (n) {
+7 │             P(false) => false,
+  │             ^^^^^^^^
+  │             │
+  │             Invalid pattern
+  │             Given: '0x42::m::P'
