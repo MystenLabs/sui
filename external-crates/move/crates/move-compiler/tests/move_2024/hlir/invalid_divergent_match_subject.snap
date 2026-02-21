@@ -34,3 +34,17 @@ error[E04025]: invalid control flow
    │
 39 │         match (if (true) { abort 0 } else { return 1 }) {
    │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot match on an expression that always diverges
+
+error[E04025]: invalid control flow
+   ┌─ tests/move_2024/hlir/invalid_divergent_match_subject.move:47:16
+   │
+47 │         match ({ abort 0 }) {
+   │                ^^^^^^^^^^^ Cannot match on an expression that always diverges
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/hlir/invalid_divergent_match_subject.move:47:16
+   │
+47 │         match ({ abort 0 }) {
+   │                ^^^^^^^^^^^ Pattern '_0' not covered
+   │
+   = When '_0' is not 0

@@ -41,4 +41,11 @@ module 0x2::M {
             _ => 0u64,
         }
     }
+
+    // divergent block subject with incomplete arms -- should also produce counterexample
+    fun f_incomplete(): u64 {
+        match ({ abort 0 }) {
+            0u64 => 0u64,
+        }
+    }
 }
