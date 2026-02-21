@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# FORKING_TEST_MODE=start_only
+source "${TEST_SANDBOX_DIR}/common.sh"
+
+print_section "accounts-objects-conflict"
+
+account="0x0000000000000000000000000000000000000000000000000000000000000001"
+object_id="0x0000000000000000000000000000000000000000000000000000000000000002"
+
+stdout=""
+stderr=""
+if run_cmd stdout stderr "$SUI_FORKING_BIN" start --accounts "$account" --objects "$object_id"; then
+  echo "start command unexpectedly succeeded with mutually exclusive seed flags" >&2
+  exit 1
+fi
+
+require_contains "$stderr" "cannot be used with '--objects"
+echo "accounts_objects_conflict_rejected=true"
