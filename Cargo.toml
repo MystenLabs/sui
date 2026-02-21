@@ -119,7 +119,6 @@ members = [
   "crates/sui-faucet",
   "crates/sui-field-count",
   "crates/sui-field-count-derive",
-  "crates/sui-fork",
   "crates/sui-framework",
   "crates/sui-framework-snapshot",
   "crates/sui-framework-tests",
@@ -698,7 +697,6 @@ sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
 sui-field-count = { path = "crates/sui-field-count" }
 sui-field-count-derive = { path = "crates/sui-field-count-derive" }
-sui-fork = { path = "crates/sui-fork" }
 sui-futures = { path = "crates/sui-futures" }
 sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
