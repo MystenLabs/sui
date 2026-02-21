@@ -80,6 +80,14 @@ impl EpochState {
         round
     }
 
+    pub fn peek_next_consensus_round(&self) -> u64 {
+        self.next_consensus_round
+    }
+
+    pub fn set_next_consensus_round(&mut self, round: u64) {
+        self.next_consensus_round = round;
+    }
+
     pub fn committee(&self) -> &Committee {
         &self.committee
     }

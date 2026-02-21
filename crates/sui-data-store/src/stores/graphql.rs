@@ -338,6 +338,13 @@ impl DataStore {
         data
     }
 
+    /// Return the latest checkpoint sequence number that this GraphQL endpoint has indexed.
+    /// This is always ≤ the full-node's latest checkpoint, so seeding objects at this
+    /// checkpoint will never produce a "checkpoint in the future" error.
+    pub async fn latest_indexed_checkpoint(&self) -> Result<u64, Error> {
+        gql_queries::latest_checkpoint_query::query(self).await
+    }
+
     async fn objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let _span = debug_span!("gql_objects_query", num_keys = keys.len()).entered();
         debug!(op = "objects_query", phase = "start", "objects query");

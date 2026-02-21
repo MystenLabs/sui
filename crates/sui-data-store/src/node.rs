@@ -56,7 +56,7 @@ impl Node {
         match self {
             Node::Mainnet => MAINNET_GQL_URL,
             Node::Testnet => TESTNET_GQL_URL,
-            Node::Custom(_url) => todo!("custom gql url not implemented"),
+            Node::Custom(url) => url.as_str(),
         }
     }
 

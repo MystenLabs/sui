@@ -87,7 +87,7 @@ pub struct AdvanceEpochConfig {
     pub system_packages_snapshot: Option<u64>,
 }
 
-mod epoch_state;
+pub mod epoch_state;
 pub mod store;
 
 /// A `Simulacrum` of Sui.

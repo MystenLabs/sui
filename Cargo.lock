@@ -13803,6 +13803,7 @@ dependencies = [
  "sui-data-store",
  "sui-execution",
  "sui-faucet",
+ "sui-fork",
  "sui-futures",
  "sui-genesis-builder",
  "sui-indexer-alt",
@@ -14775,6 +14776,39 @@ version = "1.67.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "sui-fork"
+version = "1.67.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.21.7",
+ "bcs",
+ "clap",
+ "fastcrypto",
+ "hex",
+ "jsonrpsee",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "simulacrum",
+ "sui-bridge",
+ "sui-config",
+ "sui-data-store",
+ "sui-json",
+ "sui-json-rpc-types",
+ "sui-protocol-config",
+ "sui-transaction-builder",
+ "sui-transaction-checks",
+ "sui-types",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -341,3 +341,31 @@ pub(crate) mod chain_id_query {
         Ok(chain_id)
     }
 }
+
+/// Query for the latest checkpoint sequence number that GraphQL has indexed.
+/// Using the GraphQL endpoint (rather than JSON-RPC) avoids the "checkpoint in
+/// the future" error that occurs when the indexer lags behind the full-node.
+pub(crate) mod latest_checkpoint_query {
+    use super::*;
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Query {
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Checkpoint {
+        sequence_number: u64,
+    }
+
+    pub(crate) async fn query(data_store: &DataStore) -> Result<u64, Error> {
+        let query = Query::build(());
+        let response = data_store.run_query(&query).await?;
+        let seq = response
+            .data
+            .and_then(|d| d.checkpoint)
+            .ok_or_else(|| anyhow!("GraphQL returned no checkpoint data"))?
+            .sequence_number;
+        Ok(seq)
+    }
+}

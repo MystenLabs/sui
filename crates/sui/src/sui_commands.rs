@@ -422,6 +422,14 @@ pub enum SuiCommand {
         replay_config: SR2::ReplayConfigStable,
     },
 
+    /// Fork a remote Sui network locally for testing and development.
+    /// Run `sui fork start` to start the server, then use other subcommands as a client.
+    #[clap(name = "fork")]
+    Fork {
+        #[clap(subcommand)]
+        cmd: sui_fork::commands::SuiForkCommand,
+    },
+
     /// Generate shell completion scripts for CLI
     #[clap(name = "completion")]
     Completion {
@@ -822,6 +830,7 @@ impl SuiCommand {
 
                 Ok(())
             }
+            SuiCommand::Fork { cmd } => cmd.execute().await,
             SuiCommand::Completion { generator } => {
                 let mut app: Command = SuiCommand::command();
                 let name = app.get_name().to_string();
