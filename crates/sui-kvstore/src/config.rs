@@ -12,6 +12,10 @@ pub struct IndexerConfig {
     pub ingestion: IngestionConfig,
     pub committer: CommitterLayer,
     pub pipeline: PipelineLayer,
+    /// Number of gRPC channels in the Bigtable connection pool (default: 10).
+    /// A good rule of thumb is to target ~25 concurrent RPCs per channel, so
+    /// ceil(sum of write_concurrency across all pipelines / 25).
+    pub bigtable_connection_pool_size: Option<usize>,
 }
 
 #[DefaultConfig]
