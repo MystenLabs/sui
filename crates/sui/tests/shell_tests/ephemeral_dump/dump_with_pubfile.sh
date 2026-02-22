@@ -10,15 +10,29 @@
 # dependency's original-id from the ephemeral pubfile appears in the compiled
 # bytecode.
 
+unredact() {
+  sed 's|\\|<BS>|g' | sed 's|/|<S>|g'
+}
+
 # Generate the ephemeral pubfile (local source paths must be absolute)
-sed "s|<PWD>|$PWD|g" Pub.template.toml > Pub.localnet.toml
+dep_path=$(cd dep_pkg && pwd)
+main_path=$(cd main_pkg && pwd)
+cat Pub.template.toml \
+  | sed "s|<DEP-PATH>|$dep_path|g" \
+  | sed "s|<MAIN-PATH>|$main_path|g" \
+  > Pub.localnet.toml
+
+cat Pub.localnet.toml | unredact
 
 # Build with --dump using the ephemeral pubfile
-sui move --client.config config.yaml \
-  build -p main_pkg --dump --pubfile-path Pub.localnet.toml -e testnet --no-tree-shaking > output.json
+RUST_LOG=debug sui move --client.config config.yaml \
+  build -p main_pkg --dump --pubfile-path Pub.localnet.toml -e testnet --no-tree-shaking 2>&1 | unredact > output.json
 
-cat output.json | sed 's/.*"modules":\["\([^"]*\)".*/\1/' | base64 -d > main.mv
+cat output.json
+cat output.json | jq -r '.modules[0]' | base64 -d > main.mv
 sui move disassemble main.mv > main.move
+
+cat main.move
 
 echo
 echo "=== decompiled bytecode should have main module at address 0 ==="

@@ -132,6 +132,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         for (_, index) in &self.package_ids {
             let package = self.inner[*index].clone();
             let dep = package.dep_for_self().clone().into();
+            debug!("replacing dep: {dep:?}");
             let new_publish = if let Some(publish) = overrides.get(&dep) {
                 // take from ephemeral file
                 Some(publish.clone())
