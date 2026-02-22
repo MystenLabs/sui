@@ -10,7 +10,7 @@ use sui_core::accumulators::balances::{get_all_balances_for_owner, get_balance};
 use sui_core::authority::AuthorityState;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::execution_cache::ObjectCacheRead;
-use sui_core::jsonrpc_index::TotalBalance;
+use sui_core::jsonrpc_index::{CoinIndexKey2, CoinInfo, TotalBalance};
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
@@ -19,10 +19,13 @@ use sui_json_rpc_types::{
 use sui_storage::key_value_store::{
     KVStoreTransactionData, TransactionKeyValueStore, TransactionKeyValueStoreTrait,
 };
+use sui_types::accumulator_root::AccumulatorKey;
+use sui_types::balance::Balance;
 use sui_types::base_types::{
     MoveObjectType, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
 };
 use sui_types::bridge::Bridge;
+use sui_types::coin_reservation;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::dynamic_field::DynamicFieldInfo;
@@ -34,13 +37,14 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     VerifiedCheckpoint,
 };
-use sui_types::object::{Object, ObjectRead, PastObjectRead};
+use sui_types::object::{MoveObject, Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::storage::{BackingPackageStore, ObjectStore, WriteKind};
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
 use thiserror::Error;
 use tokio::task::JoinError;
+use tracing::error;
 
 use crate::ObjectProvider;
 #[cfg(test)]
@@ -246,7 +250,63 @@ impl StateRead for AuthorityState {
     }
 
     fn get_object_read(&self, object_id: &ObjectID) -> StateReadResult<ObjectRead> {
-        Ok(self.get_object_read(object_id)?)
+        let result = self.get_object_read(object_id)?;
+
+        // Backward compatibility: if the object doesn't exist, check if it's a masked
+        // coin reservation ID pointing to an address balance accumulator.
+        // Coin reservations use masked IDs (XORed with chain identifier) to prevent
+        // cross-chain replay. Unmasking reveals the actual accumulator object ID.
+        if let ObjectRead::NotExists(object_id) = result {
+            let chain_identifier = self.get_chain_identifier();
+            let unmasked_id = coin_reservation::mask_or_unmask_id(object_id, chain_identifier);
+
+            // If unmasking yields an existing accumulator object, synthesize a fake Coin
+            // object to return to the client.
+            if let ObjectRead::Exists(_, object, _) = self.get_object_read(&unmasked_id)? {
+                let accumulator_version = object.version();
+                let Some(move_object) = object.data.try_as_move() else {
+                    error!("Expected accumulator object: {}", object_id);
+                    return Ok(ObjectRead::NotExists(object_id));
+                };
+                let Some(currency_type) =
+                    move_object.type_().balance_accumulator_field_type_maybe()
+                else {
+                    error!("Expected accumulator object: {}", object_id);
+                    return Ok(ObjectRead::NotExists(object_id));
+                };
+
+                let balance_type = Balance::type_tag(currency_type.clone());
+
+                let (AccumulatorKey { owner }, value) = move_object.try_into()?;
+
+                let Some((object_ref, balance, previous_transaction)) =
+                    self.get_address_balance_coin_info(owner, balance_type)?
+                else {
+                    error!("Expected coin reservation object: {}", object_id);
+                    return Ok(ObjectRead::NotExists(object_id));
+                };
+
+                debug_assert_eq!(balance, value.as_u128().map(|v| v as u64).unwrap_or(0));
+
+                let coin = Object::new_move(
+                    MoveObject::new_coin(
+                        currency_type,
+                        accumulator_version,
+                        object_id,
+                        value.as_u128().map(|v| v as u64).unwrap_or(0),
+                    ),
+                    Owner::AddressOwner(owner),
+                    previous_transaction,
+                );
+
+                let layout = self.get_object_layout(&coin)?;
+                return Ok(ObjectRead::Exists(object_ref, coin, layout));
+            }
+
+            return Ok(ObjectRead::NotExists(object_id));
+        }
+
+        Ok(result)
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> StateReadResult<Option<Object>> {
@@ -421,8 +481,88 @@ impl StateRead for AuthorityState {
         limit: usize,
         one_coin_type_only: bool,
     ) -> StateReadResult<Vec<SuiCoin>> {
-        Ok(self
+        let indexes = self
+            .indexes
+            .as_ref()
+            .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
+
+        // Backward compatibility: synthesize fake Coin objects for address balances.
+        // These are merged with real coins below, sorted by (coin_type, inverted_balance, object_id).
+        //
+        // First, determine which currency types have address balances for this owner.
+        // If querying all coin types, filter to types >= cursor position (lexicographic).
+        // If querying a single coin type, use only that type.
+        let address_balance_currency_types: Vec<TypeTag> = if !one_coin_type_only {
+            indexes
+                .get_address_balance_coin_types_iter(owner)
+                .filter(|t| t.to_string() >= cursor.0)
+                .collect()
+        } else {
+            let type_tag = sui_types::parse_sui_type_tag(&cursor.0)
+                .map_err(|e| anyhow::anyhow!("Invalid coin type: {} - {}", cursor.0, e))?;
+            vec![type_tag]
+        };
+
+        let cursor_key =
+            CoinIndexKey2::new_from_cursor(owner, cursor.0.clone(), cursor.1, cursor.2);
+
+        // Build fake coins for each address balance, applying cursor-based filtering.
+        let mut address_balance_coins = vec![];
+        for currency_type in address_balance_currency_types {
+            let balance_type = Balance::type_tag(currency_type.clone());
+            if let Some((obj_ref, balance, previous_transaction)) =
+                self.get_address_balance_coin_info(owner, balance_type)?
+            {
+                let key = CoinIndexKey2::new(owner, currency_type.to_string(), balance, obj_ref.0);
+                // Skip coins at or before the cursor position. We must skip the cursor's
+                // object_id explicitly because the fake coin's key may compare equal to
+                // the cursor key (same balance), but we shouldn't return it again.
+                if key < cursor_key || key.object_id == cursor.2 {
+                    continue;
+                }
+                address_balance_coins.push((
+                    key,
+                    CoinInfo {
+                        version: obj_ref.1,
+                        digest: obj_ref.2,
+                        balance,
+                        previous_transaction,
+                    },
+                ));
+            }
+        }
+
+        address_balance_coins.sort();
+
+        // Merge address balance coins with real coins
+        let mut coin_iter = self
             .get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)?
+            .peekable();
+        let mut address_balance_coins_iter = address_balance_coins.into_iter().peekable();
+        let mut merged_coins = vec![];
+        while merged_coins.len() < limit {
+            match (address_balance_coins_iter.peek(), coin_iter.peek()) {
+                (Some(address_balance_coin), Some(coin)) => {
+                    if address_balance_coin.0 < coin.0 {
+                        merged_coins.push(address_balance_coins_iter.next().unwrap());
+                    } else {
+                        merged_coins.push(coin_iter.next().unwrap());
+                    }
+                }
+                (Some(_), None) => {
+                    merged_coins.push(address_balance_coins_iter.next().unwrap());
+                }
+                (None, Some(_)) => {
+                    merged_coins.push(coin_iter.next().unwrap());
+                }
+                (None, None) => {
+                    break;
+                }
+            }
+        }
+
+        let coins: Vec<_> = merged_coins
+            .into_iter()
             .map(|(key, coin)| SuiCoin {
                 coin_type: key.coin_type,
                 coin_object_id: key.object_id,
@@ -431,7 +571,9 @@ impl StateRead for AuthorityState {
                 balance: coin.balance,
                 previous_transaction: coin.previous_transaction,
             })
-            .collect())
+            .collect();
+
+        Ok(coins)
     }
 
     async fn get_executed_transaction_and_effects(

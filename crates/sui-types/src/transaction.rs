@@ -964,6 +964,10 @@ impl ProgrammableTransaction {
             .iter()
             .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
     }
+
+    pub fn uses_gas_coin(&self) -> bool {
+        self.commands.iter().any(|cmd| cmd.is_gas_coin_used())
+    }
 }
 
 /// A single command in a programmable transaction.
@@ -1346,6 +1350,17 @@ impl ProgrammableTransaction {
         }
 
         Ok(())
+    }
+
+    pub fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+        self.inputs.iter().filter_map(|arg| match arg {
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))
+                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) =>
+            {
+                Some(*obj_ref)
+            }
+            _ => None,
+        })
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
@@ -1759,17 +1774,7 @@ impl TransactionKind {
         let TransactionKind::ProgrammableTransaction(pt) = &self else {
             return Either::Left(iter::empty());
         };
-        Either::Right(pt.inputs.iter().filter_map(|input| {
-            if let CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)) = input {
-                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) {
-                    Some(*obj_ref)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }))
+        Either::Right(pt.coin_reservation_obj_refs())
     }
 
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
@@ -2635,6 +2640,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             inputs.extend(
                 self.gas()
                     .iter()
+                    .filter(|obj_ref| !ParsedDigest::is_coin_reservation_digest(&obj_ref.2))
                     .map(|obj_ref| InputObjectKind::ImmOrOwnedMoveObject(*obj_ref)),
             );
         }
@@ -2955,6 +2961,17 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
                 TransactionExpiration::ValidDuring { .. } => {}
             }
+
+            // Reject transactions that use Argument::GasCoin when gas payment is empty.
+            // There is no gas coin to reference in this case.
+            if let TransactionKind::ProgrammableTransaction(pt) = &self.kind
+                && pt.uses_gas_coin()
+            {
+                return Err(UserInputError::Unsupported(
+                    "Argument::GasCoin cannot be used when gas payment is empty".to_string(),
+                )
+                .into());
+            }
         } else {
             fp_ensure!(
                 !self.gas().is_empty(),
@@ -2980,16 +2997,16 @@ impl TransactionDataAPI for TransactionDataV1 {
             .into()
         );
 
-        for (_, _, gas_digest) in self.gas().iter().copied() {
-            fp_ensure!(
-                ParsedDigest::try_from(gas_digest).is_err(),
-                // This is not the most appropriate error, but we can't introduce a new one
-                // since the point here is to achieve backward compatibility.
-                UserInputError::GasObjectNotOwnedObject {
-                    owner: Owner::AddressOwner(self.sender)
+        // Check if any gas payment contains a coin reservation
+        if !config.enable_coin_reservation_obj_refs() {
+            for gas_ref in self.gas() {
+                if ParsedDigest::is_coin_reservation_digest(&gas_ref.2) {
+                    return Err(UserInputError::Unsupported(
+                        "coin reservation backward compatibility layer is not enabled".to_string(),
+                    )
+                    .into());
                 }
-                .into()
-            );
+            }
         }
 
         if !self.is_system_tx() {
@@ -3037,6 +3054,9 @@ impl TransactionDataAPI for TransactionDataV1 {
         self.gas_owner() != self.sender
     }
 
+    // Note: it is possible to pay gas from a coin reservation, which ultimately draws from
+    // the address balance. This function still returns false in that case. In other words,
+    // it indicates use of the first-class API for address balance gas payments, not the legacy API.
     fn is_gas_paid_from_address_balance(&self) -> bool {
         is_gas_paid_from_address_balance(&self.gas_data, &self.kind)
     }
@@ -3112,8 +3132,15 @@ impl TransactionDataV1 {
     }
 
     fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> {
-        // TODO(address-balances): add gas coin obj refs
-        self.kind.get_coin_reservation_obj_refs()
+        self.kind
+            .get_coin_reservation_obj_refs()
+            .chain(self.gas().iter().filter_map(|gas_ref| {
+                if ParsedDigest::is_coin_reservation_digest(&gas_ref.2) {
+                    Some(*gas_ref)
+                } else {
+                    None
+                }
+            }))
     }
 
     fn parsed_coin_reservations(
@@ -4372,7 +4399,7 @@ impl ObjectReadResult {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct InputObjects {
     objects: Vec<ObjectReadResult>,
 }

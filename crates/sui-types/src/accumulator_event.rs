@@ -47,7 +47,7 @@ impl AccumulatorEvent {
         }
     }
 
-    pub fn from_balance_change(
+    pub fn from_net_balance_change(
         address: SuiAddress,
         balance_type: TypeTag,
         net_change: i64,
@@ -63,10 +63,10 @@ impl AccumulatorEvent {
 
         let accumulator_address = AccumulatorAddress::new(address, balance_type);
 
-        let (operation, amount) = if net_change > 0 {
-            (AccumulatorOperation::Split, net_change as u64)
+        let (operation, amount) = if net_change < 0 {
+            (AccumulatorOperation::Split, net_change.unsigned_abs())
         } else {
-            (AccumulatorOperation::Merge, (-net_change) as u64)
+            (AccumulatorOperation::Merge, net_change.unsigned_abs())
         };
 
         let accumulator_write = AccumulatorWriteV1 {

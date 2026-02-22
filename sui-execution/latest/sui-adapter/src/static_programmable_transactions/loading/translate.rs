@@ -32,9 +32,7 @@ pub fn transaction<Mode: ExecutionMode>(
     // withdrawal_compatibility_inputs specified ==> the protocol config flag is set
     assert_invariant!(
         withdrawal_compatibility_inputs.is_none()
-            || env
-                .protocol_config
-                .convert_withdrawal_compatibility_ptb_arguments(),
+            || env.protocol_config.enable_coin_reservation_obj_refs(),
         "if withdrawal compatibility must be specified, then the flag is set in the protocol config"
     );
     let withdrawal_compatibility_inputs =

@@ -318,9 +318,10 @@ mod checked {
             &self,
             gas_objs: &[&ObjectReadResult],
             gas_budget: u64,
+            available_address_balance_gas: u64,
         ) -> UserInputResult {
             self.check_gas_objects(gas_objs)?;
-            self.check_gas_data(gas_objs, gas_budget)
+            self.check_gas_data(gas_objs, gas_budget, available_address_balance_gas)
         }
 
         // Check gas objects have an address owner.
@@ -349,6 +350,7 @@ mod checked {
             &self,
             gas_objs: &[&ObjectReadResult],
             gas_budget: u64,
+            available_address_balance_gas: u64,
         ) -> UserInputResult {
             // Gas budget is between min and max budget allowed
             if gas_budget > self.cost_table.max_gas_budget {
@@ -364,8 +366,8 @@ mod checked {
                 });
             }
 
-            // Gas balance (all gas coins together) is bigger or equal to budget
-            let mut gas_balance = 0u128;
+            // Gas balance (all gas coins + address balance together) is bigger or equal to budget
+            let mut gas_balance = available_address_balance_gas as u128;
             for gas_obj in gas_objs {
                 gas_balance += gas::get_gas_balance(gas_obj.as_object().ok_or(
                     UserInputError::InvalidGasObject {

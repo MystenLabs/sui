@@ -546,9 +546,12 @@ async fn test_address_balance_gas() {
         .build()
         .await;
 
-    let (sender, gas_package_id) = setup_address_balance_account(&mut test_env, 10_000_000).await;
+    let funding_amount = 100_000_000;
 
-    test_env.verify_accumulator_exists(sender, 10_000_000);
+    let (sender, gas_package_id) =
+        setup_address_balance_account(&mut test_env, funding_amount).await;
+
+    test_env.verify_accumulator_exists(sender, funding_amount);
     // Verify the accumulator object count after settlement.
     test_env.verify_accumulator_object_count(1);
 
@@ -604,9 +607,19 @@ async fn test_address_balance_gas() {
         gas_used
     );
 
-    let expected_balance = 10_000_000 - gas_used;
+    let expected_balance = funding_amount - gas_used;
 
     test_env.verify_accumulator_exists(sender, expected_balance);
+
+    // Test tx with no input objects.
+    let tx = test_env
+        .tx_builder_with_gas_objects(sender, vec![])
+        .with_address_balance_gas(test_env.chain_id, 0, 0)
+        .with_gas_budget(10_000_000)
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
 
     test_env.cluster.trigger_reconfiguration().await;
 }
@@ -689,8 +702,8 @@ async fn test_sponsored_address_balance_storage_rebates() {
         gas_used
     );
 
-    let sponsor_actual = test_env.get_sui_balance(sponsor);
-    let sender_actual = test_env.get_sui_balance(sender);
+    let sponsor_actual = test_env.get_sui_balance_ab(sponsor);
+    let sender_actual = test_env.get_sui_balance_ab(sender);
 
     assert!(
         sponsor_actual < 100_000_000,
@@ -757,8 +770,8 @@ async fn test_sponsored_address_balance_storage_rebates() {
         delete_gas_summary.storage_rebate
     );
 
-    let sponsor_final = test_env.get_sui_balance(sponsor);
-    let sender_final = test_env.get_sui_balance(sender);
+    let sponsor_final = test_env.get_sui_balance_ab(sponsor);
+    let sender_final = test_env.get_sui_balance_ab(sender);
 
     assert_eq!(
         sender_final, 100_000_000,
@@ -1767,7 +1780,7 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
 
     let successful_tx_gas = succeeded_gas;
 
-    let final_sponsor_balance = test_env.get_sui_balance(sponsor);
+    let final_sponsor_balance = test_env.get_sui_balance_ab(sponsor);
 
     let expected_final_sponsor_balance = sponsor_initial_balance - successful_tx_gas;
     assert_eq!(
@@ -1775,7 +1788,7 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
         "Sponsor balance should reflect only the successful transaction"
     );
 
-    let final_sender_balance = test_env.get_sui_balance(sender);
+    let final_sender_balance = test_env.get_sui_balance_ab(sender);
 
     assert_eq!(
         final_sender_balance, 100_000_000,
@@ -1885,7 +1898,7 @@ async fn test_insufficient_balance_charges_zero_gas() {
         .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
         .await;
 
-    let final_sender_balance = test_env.get_sui_balance(sender);
+    let final_sender_balance = test_env.get_sui_balance_ab(sender);
 
     let expected_final_balance = initial_balance - withdraw_amount - successful_tx_gas;
     assert_eq!(
@@ -1982,8 +1995,8 @@ async fn test_soft_bundle_different_gas_payers() {
         .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
         .await;
 
-    let actual_balance1 = test_env.get_sui_balance(sender1);
-    let actual_balance2 = test_env.get_sui_balance(sender2);
+    let actual_balance1 = test_env.get_sui_balance_ab(sender1);
+    let actual_balance2 = test_env.get_sui_balance_ab(sender2);
 
     assert_eq!(
         actual_balance1, expected_balance1,
@@ -2352,7 +2365,7 @@ async fn test_address_balance_large_rebate() {
         .map(|(obj_ref, _)| *obj_ref)
         .expect("Should have created an object");
 
-    let initial_balance = test_env.get_sui_balance(sender);
+    let initial_balance = test_env.get_sui_balance_ab(sender);
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let object_arg = builder
@@ -2401,7 +2414,7 @@ async fn test_address_balance_large_rebate() {
         net_gas
     );
 
-    let final_balance = test_env.get_sui_balance(sender);
+    let final_balance = test_env.get_sui_balance_ab(sender);
 
     let expected_balance = (initial_balance as i128 - net_gas) as u64;
     assert_eq!(
@@ -3200,4 +3213,55 @@ async fn test_funds_withdraw_scheduler_type_alternation() {
             idx, config.funds_withdraw_scheduler_type, expected_type
         );
     }
+}
+
+#[sim_test]
+async fn test_gas_coin_not_allowed_with_empty_gas_payment() {
+    // Test that Argument::GasCoin cannot be used when gas payment is empty.
+    // When using pure address balance gas (no coins in payment list), there is
+    // no gas coin to reference, so GasCoin args should be rejected at signing time.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+
+    // Build a transaction that uses Argument::GasCoin with empty gas payment.
+    // This should fail at signing time because there's no gas coin to reference.
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let amount = builder.pure(100u64).unwrap();
+    builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
+    let pt = builder.finish();
+
+    let tx = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: test_env.rgp,
+            budget: 10_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: test_env.chain_id,
+            nonce: 0,
+        },
+    });
+
+    // This should fail at signing/validation time
+    let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+    assert!(
+        err.to_string().contains("GasCoin cannot be used"),
+        "Expected Unsupported error about GasCoin, got: {}",
+        err
+    );
 }

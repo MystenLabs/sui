@@ -984,8 +984,7 @@ fn convert_withdrawal_to_coin(
     owner_input: u16,
 ) -> Result</* Result index */ u16, ExecutionError> {
     assert_invariant!(
-        env.protocol_config
-            .convert_withdrawal_compatibility_ptb_arguments(),
+        env.protocol_config.enable_coin_reservation_obj_refs(),
         "convert_withdrawal_to_coin called when conversion is disabled"
     );
     // Grab the owner `address`

@@ -142,6 +142,7 @@ pub fn execute_transaction_to_effects(
             txn_data.gas_data().clone(),
             gas_status,
             txn_data.kind().clone(),
+            None, // TODO: replay support for coin reservations
             txn_data.sender(),
             digest,
             trace_builder_opt,
