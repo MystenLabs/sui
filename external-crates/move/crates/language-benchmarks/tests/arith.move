@@ -2,6 +2,10 @@ module 0x1::bench {
     const COUNT: u64 = 10_000u64;
     const MAX_U64: u64 = 18446744073709551615;
 
+    fun check(check: bool, code: u64) {
+        if (check) () else abort code
+    }
+
     public fun bench_add() {
         let mut sum = 0;
         let mut i = 0;
