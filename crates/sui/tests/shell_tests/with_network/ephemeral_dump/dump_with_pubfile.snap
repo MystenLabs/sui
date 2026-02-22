@@ -5,6 +5,8 @@ source: crates/sui/tests/shell_tests.rs
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+# TODO DVX-2008: this should not be in with_network, but currently still tries to hit the RPC
+#
 # Test sui move build --dump with --pubfile-path for ephemeral publication
 #
 # This test verifies that when building with --dump and --pubfile-path, the
@@ -33,18 +35,39 @@ version = 1
 EOF
 
 # Build with --dump using the ephemeral pubfile
-sui move --client.config "$CONFIG" build -p main_pkg --dump --pubfile-path Pub.test.toml -e testnet --no-tree-shaking > output.json
+sui move --client.config "$CONFIG" \
+  build -p main_pkg --dump --pubfile-path Pub.test.toml -e testnet --no-tree-shaking > output.json
 
-# Extract the base64 module, decode to .mv file, and disassemble
-# The modules array contains base64-encoded bytecode
 cat output.json | sed 's/.*"modules":\["\([^"]*\)".*/\1/' | base64 -d > main.mv
-sui move disassemble main.mv 2>&1 | grep -q "cafe0001" && echo "PASS: ephemeral original-id cafe0001 found in disassembly"
+sui move disassemble main.mv > main.move
+
+echo
+echo "=== decompiled bytecode should have main module at address 0 ==="
+grep module main.move
+
+echo
+echo "=== decompiled bytecode should depend on cafe0001 (dep_pkg addr) ==="
+grep cafe0001 main.move
+
+echo
+echo "=== decompiled bytecode should not reference main_pkg addrs or original-ids ==="
+grep cafecafe main.move || echo "no cafecafe"
+grep beef main.mv || echo "no beef"
 
 ----- results -----
 success: true
 exit_code: 0
 ----- stdout -----
-PASS: ephemeral original-id cafe0001 found in disassembly
+
+=== decompiled bytecode should have main module at address 0 ===
+module 0.main {
+
+=== decompiled bytecode should depend on cafe0001 (dep_pkg addr) ===
+use 00000000000000000000000000000000000000000000000000000000cafe0001::dep;
+
+=== decompiled bytecode should not reference main_pkg addrs or original-ids ===
+no cafecafe
+no beef
 
 ----- stderr -----
 INCLUDING DEPENDENCY dep_pkg
