@@ -1,0 +1,15 @@
+build-env = "testnet"
+# TODO: this should be the ephemeral network, not testnet
+chain-id = "4c78adac"
+
+[[published]]
+source = { local = "<PWD>/dep_pkg" }
+published-at = "0x00000000000000000000000000000000000000000000000000000000CAFECAFE"
+original-id = "0x00000000000000000000000000000000000000000000000000000000CAFE0001"
+version = 1
+
+[[published]]
+source = { local = "<PWD>/main_pkg" }
+published-at = "0x00000000000000000000000000000000000000000000000000000000BEEFBEEF"
+original-id = "0x00000000000000000000000000000000000000000000000000000000BEEF0001"
+version = 1
