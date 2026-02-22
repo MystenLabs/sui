@@ -717,11 +717,6 @@ impl AuthorityStore {
         epoch_id: EpochId,
         tx_outputs: &[Arc<TransactionOutputs>],
     ) -> SuiResult<DBBatch> {
-        let mut written = Vec::with_capacity(tx_outputs.len());
-        for outputs in tx_outputs {
-            written.extend(outputs.written.values().cloned());
-        }
-
         let mut write_batch = self.perpetual_tables.transactions.batch();
         for outputs in tx_outputs {
             self.write_one_transaction_outputs(&mut write_batch, epoch_id, outputs)?;
