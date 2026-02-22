@@ -42,10 +42,6 @@ struct Args {
     #[arg(long)]
     bigtable_max_decoding_message_size: Option<usize>,
 
-    /// Number of gRPC channels in the connection pool (default: 10)
-    #[arg(long)]
-    channel_pool_size: Option<usize>,
-
     /// Chain identifier for resolving protocol configs (mainnet, testnet, or unknown)
     #[arg(long)]
     chain: Chain,
@@ -96,7 +92,7 @@ async fn main() -> Result<()> {
         "sui-kvstore-alt".to_string(),
         None,
         args.app_profile_id,
-        args.channel_pool_size,
+        config.bigtable_connection_pool_size,
     )
     .await?;
 
