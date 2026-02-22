@@ -108,7 +108,22 @@ jobs:
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
+      - name: Build sui binary
+        run: cargo build -p sui
+      - name: Start test cluster
+        run: |
+          mkdir -p /tmp/test-cluster
+          ./target/debug/sui genesis --working-dir /tmp/test-cluster \
+              --epoch-duration-ms 3600000 --committee-size 1
+          ./target/debug/sui start --network.config /tmp/test-cluster \
+              --with-faucet &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:9000 > /dev/null 2>&1 && break
+            sleep 1
+          done
       - name: cargo test
+        env:
+          SUI_TEST_CLUSTER_CONFIG_DIR: /tmp/test-cluster
         run: |
           cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
       # Ensure there are no uncommitted changes in the repo after running tests
@@ -252,11 +267,29 @@ jobs:
 
       - uses: taiki-e/install-action@nextest
 
-      - name: cargo test Sui CLI
+      - name: Build sui binary
+        shell: bash
+        run: cargo build -p sui
+
+      - name: Start test cluster
         shell: bash
         run: |
-          # We have temporarily disabled the network tests on windows, until we triage + fix the performance issues.
-          cargo nextest run -p sui --no-fail-fast --profile ci --filter-expr "not test(shell_tests::with_network)"
+          mkdir -p "${{ runner.temp }}/test-cluster"
+          ./target/debug/sui genesis --working-dir "${{ runner.temp }}/test-cluster" \
+              --epoch-duration-ms 3600000 --committee-size 1
+          ./target/debug/sui start --network.config "${{ runner.temp }}/test-cluster" \
+              --with-faucet &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:9000 > /dev/null 2>&1 && break
+            sleep 1
+          done
+
+      - name: cargo test Sui CLI
+        shell: bash
+        env:
+          SUI_TEST_CLUSTER_CONFIG_DIR: ${{ runner.temp }}/test-cluster
+        run: |
+          cargo nextest run -p sui --no-fail-fast --profile ci
 
   simtest:
     needs: [diff, rustfmt, clippy]
