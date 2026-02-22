@@ -40,6 +40,7 @@ use move_core_types::{
 use move_vm_config::runtime::VMConfig;
 
 use quick_cache::unsync::Cache as QCache;
+use tracing::instrument;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -152,12 +153,17 @@ pub struct DepthFormula {
 impl VMDispatchTables {
     /// Create a new RuntimeVTables instance.
     /// NOTE: This assumes linkage has already occured.
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn new(
         vm_config: Arc<VMConfig>,
         interner: Arc<IdentifierInterner>,
         link_context: LinkageContext,
         loaded_packages: BTreeMap<OriginalId, Arc<Package>>,
     ) -> VMResult<Self> {
+        tracing::trace!(
+            linkage_table = ?link_context.linkage_table,
+            "creating VM dispatch tables"
+        );
         let defining_id_origins = {
             let mut defining_id_map = BTreeMap::new();
             for (addr, pkg) in &loaded_packages {

@@ -7,6 +7,7 @@ use move_binary_format::{
 };
 use move_core_types::{resolver::SerializedPackage, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
+use tracing::instrument;
 
 use std::collections::BTreeMap;
 
@@ -15,7 +16,13 @@ use std::collections::BTreeMap;
 /// 2. Every module's address matches the package's original ID.
 /// 3. No duplicate module names exist.
 /// 4. The package is non-empty (has at least one module).
+#[instrument(level = "trace", skip_all)]
 pub(crate) fn package(vm_config: &VMConfig, pkg: SerializedPackage) -> VMResult<Package> {
+    tracing::trace!(
+        version_id = %pkg.version_id,
+        original_id = %pkg.original_id,
+        "deserializing package"
+    );
     let original_id = pkg.original_id;
 
     let mut modules = BTreeMap::new();

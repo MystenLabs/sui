@@ -14,6 +14,7 @@ use move_binary_format::{
 use move_bytecode_verifier::script_signature;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::runtime::VMConfig;
+use tracing::instrument;
 
 use std::collections::BTreeMap;
 
@@ -22,6 +23,7 @@ struct Context<'natives, 'config> {
     vm_config: &'config VMConfig,
 }
 
+#[instrument(level = "trace", skip_all)]
 pub(crate) fn package(
     natives: &NativeFunctions,
     vm_config: &VMConfig,
@@ -35,6 +37,12 @@ pub(crate) fn package(
         linkage_table,
         version,
     } = pkg;
+    tracing::trace!(
+        version_id = %version_id,
+        original_id = %original_id,
+        version = %version,
+        "verifying package"
+    );
     let context = Context { natives, vm_config };
     let mut modules = BTreeMap::new();
     for (module_id, d_module) in in_modules {
@@ -50,7 +58,9 @@ pub(crate) fn package(
     })
 }
 
+#[instrument(level = "trace", skip_all)]
 fn module(context: &Context, m: CompiledModule) -> VMResult<ast::Module> {
+    tracing::trace!(module_name = %m.self_id(), "verifying module");
     // bytecode verifier checks that can be performed with the module itself
     // TODO: Charge gas?
     move_bytecode_verifier::verify_module_with_config_unmetered(&context.vm_config.verifier, &m)?;
