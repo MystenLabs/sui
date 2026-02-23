@@ -17,6 +17,7 @@ use tracing::warn;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::IndexedCheckpoint;
+use crate::pipeline::PendingRowsGuard;
 use crate::pipeline::WARN_PENDING_WATERMARKS;
 use crate::pipeline::logging::WatermarkLogger;
 use crate::pipeline::sequential::Handler;
@@ -74,6 +75,7 @@ where
         let mut batch = H::Batch::default();
         let mut batch_rows = 0;
         let mut batch_checkpoints = 0;
+        let mut batch_guards: Vec<PendingRowsGuard> = Vec::new();
 
         // The task keeps track of the highest (inclusive) checkpoint it has added to the batch
         // through `next_checkpoint`, and whether that batch needs to be written out. By extension
@@ -153,6 +155,7 @@ where
                                 batch_checkpoints += 1;
                                 handler.batch(&mut batch, indexed.values.into_iter());
                                 watermark = Some(indexed.watermark);
+                                batch_guards.extend(indexed.guard);
                                 next_checkpoint += 1;
                             }
 
@@ -166,6 +169,7 @@ where
 
                                 let indexed = entry.remove();
                                 pending_rows -= indexed.len();
+                                drop(indexed);
                             }
                         }
                     }
@@ -326,6 +330,7 @@ where
                     // docs::/#send
 
                     let _ = std::mem::take(&mut batch);
+                    batch_guards.clear();
                     pending_rows -= batch_rows;
                     batch_checkpoints = 0;
                     batch_rows = 0;
@@ -406,6 +411,7 @@ mod tests {
     use crate::mocks::store::MockConnection;
     use crate::mocks::store::MockStore;
     use crate::pipeline::CommitterConfig;
+    use crate::pipeline::PendingRowsGuard;
     use crate::pipeline::Processor;
 
     use super::*;
@@ -509,6 +515,7 @@ mod tests {
             checkpoint,        // tx_hi
             checkpoint * 1000, // timestamp
             vec![checkpoint],  // values
+            PendingRowsGuard::mock(1),
         )
     }
 
