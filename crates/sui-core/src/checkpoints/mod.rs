@@ -1855,6 +1855,12 @@ impl CheckpointBuilder {
                 // added as dependencies, so that those transactions can be waited on using
                 // `consensus_messages_processed_notify()`. System transactions (such as
                 // settlements) are exempt from this already.
+                //
+                // However, we DO need to add them to `effects_in_current_checkpoint` so that
+                // `complete_checkpoint_effects` won't pull them in again as dependencies when
+                // processing later pending checkpoints in the same batch.
+                effects_in_current_checkpoint
+                    .extend(settlement_effects.iter().map(|e| *e.transaction_digest()));
                 sorted.extend(settlement_effects);
             }
 
