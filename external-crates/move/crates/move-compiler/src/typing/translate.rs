@@ -2617,6 +2617,12 @@ fn match_pattern_(
             let x_ty = context.get_local_type(&x);
             T::pat(x_ty, sp(loc, TP::Binder(mut_, x)))
         }
+        P::Literal(sp!(_, Value_::InferredString(_))) => {
+            let msg = "String literals are not currently supported in match patterns";
+            context.add_diag(diag!(TypeSafety::InvalidString, (loc, msg)));
+            let ty = context.error_type(loc);
+            T::pat(ty, sp(loc, TP::ErrorPat))
+        }
         P::Literal(v) => {
             let ty = match &v.value {
                 Value_::InferredNum(_) => core::make_num_tvar(context, loc),
