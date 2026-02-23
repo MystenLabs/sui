@@ -15,6 +15,11 @@
 //!       <tx_digest>              (BCS: TransactionFileData)
 //!     epoch/
 //!       <epoch_id>               (BCS: EpochFileData)
+//!     checkpoint/
+//!       <sequence>.binpb.zst     (zstd(proto::Checkpoint), full ingestion payload)
+//!       checkpoint_digest_index.csv
+//!       contents_digest_index.csv
+//!       latest                   (optional latest sequence marker)
 //!     objects/
 //!       <object_id>/
 //!         <version>              (BCS: sui_types::object::Object)
@@ -33,6 +38,8 @@
 //!   includes the original `TransactionData`, its `TransactionEffects`, and the execution
 //!   `checkpoint`.
 //! - Epoch files in `epoch/<epoch_id>` store `EpochFileData` as BCS, capturing epoch metadata.
+//! - Checkpoint files in `checkpoint/<sequence>.binpb.zst` store a zstd-compressed
+//!   `sui_rpc::proto::sui::rpc::v2::Checkpoint` in full-ingestion payload form.
 //! - Object files in `objects/<object_id>/<version>` store the `Object` at the corresponding
 //!   version as BCS.
 //!
@@ -56,25 +63,32 @@
 //! it learns the concrete versions.
 
 use crate::{
-    EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore,
-    StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter, VersionQuery,
-    node::Node,
+    CheckpointIndexStore, CheckpointIndexStoreWriter, CheckpointStore, CheckpointStoreWriter,
+    EpochData, EpochStore, EpochStoreWriter, FullCheckpointData, ObjectKey, ObjectStore,
+    ObjectStoreWriter, SetupStore, StoreSummary, TransactionInfo, TransactionStore,
+    TransactionStoreWriter, VersionQuery, node::Node,
 };
 use anyhow::{Context, Error, Result, anyhow};
+use prost::Message;
 use std::{
     collections::BTreeMap,
     fs,
+    io::Write,
     path::{Path, PathBuf},
     sync::{
         RwLock,
         atomic::{AtomicU64, Ordering},
     },
 };
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ObjectID, SuiAddress},
     committee::ProtocolVersion,
+    digests::{CheckpointContentsDigest, CheckpointDigest},
     effects::TransactionEffects,
-    object::Object,
+    messages_checkpoint::CheckpointSequenceNumber,
+    object::{Object, Owner},
     supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::TransactionData,
 };
@@ -85,6 +99,11 @@ pub const NODE_MAPPING_FILE: &str = "node_mapping.csv";
 pub const OBJECTS_DIR: &str = "objects";
 pub const TRANSACTION_DIR: &str = "transaction";
 pub const EPOCH_DIR: &str = "epoch";
+pub const CHECKPOINT_DIR: &str = "checkpoint";
+pub const CHECKPOINT_FILE_EXTENSION: &str = "binpb.zst";
+pub const CHECKPOINT_DIGEST_INDEX_FILE: &str = "checkpoint_digest_index.csv";
+pub const CHECKPOINT_CONTENTS_DIGEST_INDEX_FILE: &str = "contents_digest_index.csv";
+pub const CHECKPOINT_LATEST_FILE: &str = "latest";
 pub const ROOT_VERSIONS_FILE: &str = "root_versions";
 pub const CHECKPOINT_VERSIONS_FILE: &str = "checkpoint_versions";
 
@@ -119,6 +138,10 @@ struct FsStoreMetrics {
     proto_hit: AtomicU64,
     proto_miss: AtomicU64,
     proto_error: AtomicU64,
+    // checkpoints
+    checkpoint_hit: AtomicU64,
+    checkpoint_miss: AtomicU64,
+    checkpoint_error: AtomicU64,
     // objects by query kind
     obj_version_hit: AtomicU64,
     obj_version_miss: AtomicU64,
@@ -175,6 +198,16 @@ impl FileSystemStore {
         })
     }
 
+    pub fn new_with_path(node: Node, full_path: PathBuf) -> Result<Self, Error> {
+        Ok(Self {
+            node,
+            base_path: full_path,
+            metrics: FsStoreMetrics::default(),
+            root_versions_map: RwLock::new(BTreeMap::new()),
+            checkpoint_versions_map: RwLock::new(BTreeMap::new()),
+        })
+    }
+
     pub fn base_path() -> Result<PathBuf, Error> {
         let home_dir = std::env::var("SUI_DATA_STORE")
             .or_else(|_| std::env::var("SUI_CONFIG_DIR"))
@@ -219,6 +252,7 @@ impl FileSystemStore {
         let node_key = match &self.node {
             Node::Mainnet => "mainnet",
             Node::Testnet => "testnet",
+            Node::Devnet => "devnet",
             Node::Custom(url) => url,
         };
 
@@ -262,6 +296,30 @@ impl FileSystemStore {
         Ok(self.node_dir()?.join(OBJECTS_DIR))
     }
 
+    fn checkpoint_dir(&self) -> Result<PathBuf, Error> {
+        Ok(self.node_dir()?.join(CHECKPOINT_DIR))
+    }
+
+    fn checkpoint_file_path(&self, sequence: CheckpointSequenceNumber) -> Result<PathBuf, Error> {
+        Ok(self
+            .checkpoint_dir()?
+            .join(format!("{sequence}.{CHECKPOINT_FILE_EXTENSION}")))
+    }
+
+    fn checkpoint_latest_path(&self) -> Result<PathBuf, Error> {
+        Ok(self.checkpoint_dir()?.join(CHECKPOINT_LATEST_FILE))
+    }
+
+    fn checkpoint_digest_index_path(&self) -> Result<PathBuf, Error> {
+        Ok(self.checkpoint_dir()?.join(CHECKPOINT_DIGEST_INDEX_FILE))
+    }
+
+    fn checkpoint_contents_digest_index_path(&self) -> Result<PathBuf, Error> {
+        Ok(self
+            .checkpoint_dir()?
+            .join(CHECKPOINT_CONTENTS_DIGEST_INDEX_FILE))
+    }
+
     fn root_versions_path(&self, object_id: &ObjectID) -> Result<PathBuf, Error> {
         Ok(self
             .objects_dir()?
@@ -293,6 +351,189 @@ impl FileSystemStore {
         fs::write(path, bytes)
             .with_context(|| format!("Failed to write file: {}", path.display()))?;
         Ok(())
+    }
+
+    fn read_checkpoint_file(&self, path: &Path) -> Result<FullCheckpointData, Error> {
+        let bytes =
+            fs::read(path).with_context(|| format!("Failed to read file: {}", path.display()))?;
+        let decompressed = zstd::decode_all(&bytes[..])
+            .with_context(|| format!("Failed to decompress checkpoint file: {}", path.display()))?;
+        let proto_checkpoint = ProtoCheckpoint::decode(&decompressed[..]).with_context(|| {
+            format!(
+                "Failed to decode checkpoint protobuf file: {}",
+                path.display()
+            )
+        })?;
+        FullCheckpointData::try_from(&proto_checkpoint).with_context(|| {
+            format!(
+                "Failed to convert protobuf checkpoint to full checkpoint content: {}",
+                path.display()
+            )
+        })
+    }
+
+    fn write_checkpoint_file(
+        &self,
+        sequence: CheckpointSequenceNumber,
+        checkpoint: &FullCheckpointData,
+    ) -> Result<(), Error> {
+        let path = self.checkpoint_file_path(sequence)?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        }
+
+        let mask = FullCheckpointData::proto_field_mask();
+        let proto_checkpoint = ProtoCheckpoint::merge_from(checkpoint, &mask.into());
+        let encoded = proto_checkpoint.encode_to_vec();
+        let compressed = zstd::encode_all(&encoded[..], 3).with_context(|| {
+            format!(
+                "Failed to compress checkpoint protobuf file: {}",
+                path.display()
+            )
+        })?;
+        fs::write(&path, compressed)
+            .with_context(|| format!("Failed to write checkpoint file: {}", path.display()))?;
+        Ok(())
+    }
+
+    fn write_latest_checkpoint_marker(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<(), Error> {
+        let path = self.checkpoint_latest_path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        }
+        fs::write(&path, sequence.to_string()).with_context(|| {
+            format!(
+                "Failed to write latest checkpoint marker: {}",
+                path.display()
+            )
+        })
+    }
+
+    fn read_latest_checkpoint_marker(&self) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        let path = self.checkpoint_latest_path()?;
+        if !path.exists() {
+            return Ok(None);
+        }
+        let raw = fs::read_to_string(&path).with_context(|| {
+            format!(
+                "Failed to read latest checkpoint marker: {}",
+                path.display()
+            )
+        })?;
+        let sequence = raw
+            .trim()
+            .parse::<CheckpointSequenceNumber>()
+            .with_context(|| {
+                format!(
+                    "Failed to parse latest checkpoint marker sequence from {}",
+                    path.display()
+                )
+            })?;
+        Ok(Some(sequence))
+    }
+
+    fn scan_latest_checkpoint_sequence(&self) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        let dir = self.checkpoint_dir()?;
+        if !dir.exists() {
+            return Ok(None);
+        }
+
+        let suffix = format!(".{CHECKPOINT_FILE_EXTENSION}");
+        let mut latest: Option<CheckpointSequenceNumber> = None;
+        for entry in fs::read_dir(&dir)
+            .with_context(|| format!("Failed to read checkpoint dir: {}", dir.display()))?
+        {
+            let entry = entry.with_context(|| {
+                format!(
+                    "Failed to read entry from checkpoint dir: {}",
+                    dir.display()
+                )
+            })?;
+            let file_name = entry.file_name();
+            let Some(file_name) = file_name.to_str() else {
+                continue;
+            };
+            if !file_name.ends_with(&suffix) {
+                continue;
+            }
+            let Some(sequence_str) = file_name.strip_suffix(&suffix) else {
+                continue;
+            };
+            if let Ok(sequence) = sequence_str.parse::<CheckpointSequenceNumber>() {
+                latest = Some(latest.map_or(sequence, |curr| curr.max(sequence)));
+            }
+        }
+        Ok(latest)
+    }
+
+    fn append_digest_index(
+        &self,
+        index_path: &Path,
+        digest: &str,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<(), Error> {
+        if let Some(parent) = index_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        }
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(index_path)
+            .with_context(|| format!("Failed to open index file: {}", index_path.display()))?;
+        writeln!(file, "{digest},{sequence}")
+            .with_context(|| format!("Failed to write index file: {}", index_path.display()))?;
+        Ok(())
+    }
+
+    fn read_sequence_from_digest_index(
+        &self,
+        index_path: &Path,
+        target_digest: &str,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        if !index_path.exists() {
+            return Ok(None);
+        }
+
+        let file = fs::File::open(index_path)
+            .with_context(|| format!("Failed to open index file: {}", index_path.display()))?;
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .trim(csv::Trim::All)
+            .from_reader(file);
+
+        let mut result = None;
+        for record in rdr.records() {
+            let record = record.with_context(|| {
+                format!("Failed to read CSV record from: {}", index_path.display())
+            })?;
+            if record.len() != 2 {
+                return Err(anyhow!(
+                    "Invalid format in index file {}: expected 2 columns, got {}",
+                    index_path.display(),
+                    record.len()
+                ));
+            }
+            if record[0].trim() == target_digest {
+                let sequence = record[1]
+                    .trim()
+                    .parse::<CheckpointSequenceNumber>()
+                    .with_context(|| {
+                        format!(
+                            "Failed to parse checkpoint sequence '{}' in {}",
+                            &record[1],
+                            index_path.display()
+                        )
+                    })?;
+                result = Some(sequence);
+            }
+        }
+        Ok(result)
     }
 
     fn read_version_mapping(&self, path: &Path) -> Result<BTreeMap<u64, u64>, Error> {
@@ -426,6 +667,55 @@ impl FileSystemStore {
         Ok(())
     }
 
+    // TODO: this should not be pub, probably this should come from an indexer
+    pub fn get_objects_by_owner(&self, owner: SuiAddress) -> Result<Vec<Object>> {
+        let object_dir = self.objects_dir()?;
+        if !object_dir.exists() {
+            return Ok(vec![]);
+        }
+
+        let mut results = Vec::new();
+        for entry in fs::read_dir(&object_dir)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                let object_id_str = entry.file_name().to_string_lossy().to_string();
+                if let Ok(object_id) = ObjectID::from_hex_literal(&object_id_str)
+                    && let Some((object, _version)) = self.get_object_latest(&object_id)?
+                    && (matches!(object.owner(), Owner::AddressOwner(address) if *address == owner)
+                        || matches!(
+                            object.owner(),
+                            Owner::ConsensusAddressOwner {
+                                owner: address,
+                                ..
+                            } if *address == owner
+                        ))
+                {
+                    results.push(object);
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    // TODO: this should not be pub
+    pub fn get_object_latest(&self, object_id: &ObjectID) -> Result<Option<(Object, u64)>, Error> {
+        let object_dir = self.objects_dir()?.join(object_id.to_string());
+        if !object_dir.exists() {
+            return Ok(None);
+        }
+
+        let latest_version = fs::read_dir(&object_dir)?
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| entry.file_name().to_str()?.parse::<u64>().ok())
+            .max();
+
+        match latest_version {
+            Some(version) => self.get_object_by_version(object_id, version),
+            None => Ok(None),
+        }
+    }
+
     fn get_object_by_version(
         &self,
         object_id: &ObjectID,
@@ -549,6 +839,98 @@ impl EpochStore for FileSystemStore {
     }
 }
 
+impl CheckpointStore for FileSystemStore {
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointData>, Error> {
+        let file_path = self.checkpoint_file_path(sequence)?;
+        if !file_path.exists() {
+            self.metrics.checkpoint_miss.fetch_add(1, Ordering::Relaxed);
+            return Ok(None);
+        }
+
+        match self.read_checkpoint_file(&file_path) {
+            Ok(checkpoint) => {
+                self.metrics.checkpoint_hit.fetch_add(1, Ordering::Relaxed);
+                Ok(Some(checkpoint))
+            }
+            Err(e) => {
+                self.metrics
+                    .checkpoint_error
+                    .fetch_add(1, Ordering::Relaxed);
+                Err(e)
+            }
+        }
+    }
+
+    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+        if let Some(sequence) = self.read_latest_checkpoint_marker()?
+            && let Some(checkpoint) = self.get_checkpoint_by_sequence_number(sequence)?
+        {
+            return Ok(Some(checkpoint));
+        }
+
+        let Some(latest_sequence) = self.scan_latest_checkpoint_sequence()? else {
+            self.metrics.checkpoint_miss.fetch_add(1, Ordering::Relaxed);
+            return Ok(None);
+        };
+        let checkpoint = self.get_checkpoint_by_sequence_number(latest_sequence)?;
+        if checkpoint.is_some() {
+            self.write_latest_checkpoint_marker(latest_sequence)?;
+        }
+        Ok(checkpoint)
+    }
+}
+
+impl CheckpointStoreWriter for FileSystemStore {
+    fn write_checkpoint(&self, checkpoint: &FullCheckpointData) -> Result<(), Error> {
+        let sequence = checkpoint.summary.sequence_number;
+        self.write_checkpoint_file(sequence, checkpoint)?;
+        self.write_checkpoint_indexes(
+            sequence,
+            *checkpoint.summary.digest(),
+            *checkpoint.contents.digest(),
+        )?;
+        self.write_latest_checkpoint_marker(sequence)?;
+        Ok(())
+    }
+}
+
+impl CheckpointIndexStore for FileSystemStore {
+    fn get_sequence_by_checkpoint_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        let path = self.checkpoint_digest_index_path()?;
+        self.read_sequence_from_digest_index(&path, &digest.to_string())
+    }
+
+    fn get_sequence_by_contents_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        let path = self.checkpoint_contents_digest_index_path()?;
+        self.read_sequence_from_digest_index(&path, &digest.to_string())
+    }
+}
+
+impl CheckpointIndexStoreWriter for FileSystemStore {
+    fn write_checkpoint_indexes(
+        &self,
+        sequence: CheckpointSequenceNumber,
+        checkpoint_digest: CheckpointDigest,
+        contents_digest: CheckpointContentsDigest,
+    ) -> Result<(), Error> {
+        let checkpoint_index = self.checkpoint_digest_index_path()?;
+        self.append_digest_index(&checkpoint_index, &checkpoint_digest.to_string(), sequence)?;
+
+        let contents_index = self.checkpoint_contents_digest_index_path()?;
+        self.append_digest_index(&contents_index, &contents_digest.to_string(), sequence)?;
+        Ok(())
+    }
+}
+
 impl ObjectStore for FileSystemStore {
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let mut results = Vec::with_capacity(keys.len());
@@ -652,6 +1034,9 @@ impl StoreSummary for FileSystemStore {
         let proto_hit = m.proto_hit.load(Ordering::Relaxed);
         let proto_miss = m.proto_miss.load(Ordering::Relaxed);
         let proto_err = m.proto_error.load(Ordering::Relaxed);
+        let checkpoint_hit = m.checkpoint_hit.load(Ordering::Relaxed);
+        let checkpoint_miss = m.checkpoint_miss.load(Ordering::Relaxed);
+        let checkpoint_err = m.checkpoint_error.load(Ordering::Relaxed);
         let obj_v_hit = m.obj_version_hit.load(Ordering::Relaxed);
         let obj_v_miss = m.obj_version_miss.load(Ordering::Relaxed);
         let obj_v_err = m.obj_version_error.load(Ordering::Relaxed);
@@ -662,9 +1047,17 @@ impl StoreSummary for FileSystemStore {
         let obj_c_miss = m.obj_checkpoint_miss.load(Ordering::Relaxed);
         let obj_c_err = m.obj_checkpoint_error.load(Ordering::Relaxed);
 
-        let total_hit = txn_hit + epoch_hit + proto_hit + obj_v_hit + obj_r_hit + obj_c_hit;
-        let total_miss = txn_miss + epoch_miss + proto_miss + obj_v_miss + obj_r_miss + obj_c_miss;
-        let total_err = txn_err + epoch_err + proto_err + obj_v_err + obj_r_err + obj_c_err;
+        let total_hit =
+            txn_hit + epoch_hit + proto_hit + checkpoint_hit + obj_v_hit + obj_r_hit + obj_c_hit;
+        let total_miss = txn_miss
+            + epoch_miss
+            + proto_miss
+            + checkpoint_miss
+            + obj_v_miss
+            + obj_r_miss
+            + obj_c_miss;
+        let total_err =
+            txn_err + epoch_err + proto_err + checkpoint_err + obj_v_err + obj_r_err + obj_c_err;
         let obj_total_hit = obj_v_hit + obj_r_hit + obj_c_hit;
         let obj_total_miss = obj_v_miss + obj_r_miss + obj_c_miss;
         let obj_total_err = obj_v_err + obj_r_err + obj_c_err;
@@ -689,6 +1082,11 @@ impl StoreSummary for FileSystemStore {
             w,
             "  Protocol:    hit={} miss={} error={}",
             proto_hit, proto_miss, proto_err
+        )?;
+        writeln!(
+            w,
+            "  Checkpoint:  hit={} miss={} error={}",
+            checkpoint_hit, checkpoint_miss, checkpoint_err
         )?;
         writeln!(
             w,
@@ -767,6 +1165,7 @@ impl FileSystemStore {
         let node_key = match &self.node {
             Node::Mainnet => "mainnet",
             Node::Testnet => "testnet",
+            Node::Devnet => "devnet",
             Node::Custom(url) => url,
         };
 
