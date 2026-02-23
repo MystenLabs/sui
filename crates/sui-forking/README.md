@@ -156,18 +156,17 @@ Shows the current checkpoint, epoch, and number of transactions.
 sui-forking start --network testnet
 ```
 
-2. In another terminal, request SUI tokens from the faucet:
+2. In another terminal, switch your Sui client to point to the local forked network (starts by default at `http://localhost:9000`):
 
 ```
-sui client new-env --rpc-url http://127.0.0.1:3000 --alias fork
+sui client switch --env local (or add a new env)
 
-sui client switch --env fork
 ```
 
 3. Request tokens:
 
 ```bash
-sui-forking faucet --address <your-address> --amount 1000
+sui-forking faucet --address <your-address> --amount 5000000000 (5 SUI)
 ```
 
 4. Check balance
@@ -192,5 +191,5 @@ The local forked network server exposes a REST API for interaction. The server l
 
 ## Related Tools
 
-e `sui-replay-2`: A generic data store implementation for downloading and caching objects from the RPC.
+- `sui-replay-2`: A generic data store implementation for downloading and caching objects from the RPC.
 - `simulacrum`: Local network execution in lock-step mode
