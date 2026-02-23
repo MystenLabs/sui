@@ -16,7 +16,7 @@ module.exports = {
 		'^@/(.*)$',
 		'^~/(.*)$',
 		'',
-	'^[.]',
+		'^[.]',
 	],
 	overrides: [
 		{
@@ -26,13 +26,13 @@ module.exports = {
 			},
 		},
 		{
-			"files": "*.move",
-			"options": {
-				"parser": "move",
-				"tabWidth": 4,
-				"useModuleLabel": true,
-				"autoGroupImports": "module",
-			}
-		}
+			files: '*.move',
+			options: {
+				parser: 'move',
+				tabWidth: 4,
+				useModuleLabel: true,
+				autoGroupImports: 'module',
+			},
+		},
 	],
 };
