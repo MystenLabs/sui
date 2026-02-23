@@ -3,7 +3,7 @@
 	"publisher": "mysten",
 	"displayName": "Move Formatter",
 	"description": "Adds Move code formatting to VSCode using Prettier@v3",
-	"version": "0.3.4",
+	"version": "0.3.5",
 	"private": true,
 	"preview": true,
 	"icon": "img/move.png",
