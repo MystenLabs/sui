@@ -1,0 +1,72 @@
+[package]
+name = "sui-forking"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+axum-server.workspace = true
+base64.workspace = true
+bcs.workspace = true
+bytes.workspace = true
+clap.workspace = true
+const-str.workspace = true
+cynic.workspace = true
+fastcrypto.workspace = true
+futures.workspace = true
+http.workspace = true
+pin-project.workspace = true
+prometheus.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tower-http.workspace = true
+tower.workspace = true
+tonic.workspace = true
+tonic-reflection.workspace = true
+tonic-health.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+
+bin-version.workspace = true
+mysten-common.workspace = true
+mysten-network.workspace = true
+simulacrum.workspace = true
+
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-bytecode-utils.workspace = true
+
+sui-data-store.workspace = true
+sui-futures.workspace = true
+sui-swarm-config.workspace = true
+sui-types.workspace = true
+sui-rpc.workspace = true
+sui-rpc-api.workspace = true
+sui-sdk-types.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+
+[build-dependencies]
+cynic-codegen.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+move-command-line-common.workspace = true
+proptest.workspace = true
+tempfile.workspace = true
+test-cluster.workspace = true
+
+[[test]]
+name = "shell_tests"
+harness = false
+
+[lints]
+workspace = true
