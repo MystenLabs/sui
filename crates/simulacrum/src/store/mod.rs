@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use sui_config::genesis;
 use sui_types::base_types::ObjectRef;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::UserInputError;
 use sui_types::transaction::InputObjects;
 use sui_types::transaction::ObjectReadResult;
@@ -13,7 +14,7 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
     digests::{ObjectDigest, TransactionDigest},
-    effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
+    effects::{TransactionEffects, TransactionEvents},
     error::SuiResult,
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
