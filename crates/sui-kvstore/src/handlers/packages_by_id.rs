@@ -46,5 +46,4 @@ impl Processor for PackagesByIdPipeline {
 
 impl BigTableProcessor for PackagesByIdPipeline {
     const TABLE: &'static str = tables::packages_by_id::NAME;
-    const FANOUT: usize = 100;
 }
