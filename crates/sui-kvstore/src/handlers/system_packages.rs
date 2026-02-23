@@ -52,6 +52,5 @@ impl Processor for SystemPackagesPipeline {
 
 impl BigTableProcessor for SystemPackagesPipeline {
     const TABLE: &'static str = tables::system_packages::NAME;
-    const FANOUT: usize = 100;
     const MIN_EAGER_ROWS: usize = 1;
 }

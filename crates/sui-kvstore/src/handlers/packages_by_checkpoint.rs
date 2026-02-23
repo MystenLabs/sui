@@ -51,5 +51,4 @@ impl Processor for PackagesByCheckpointPipeline {
 
 impl BigTableProcessor for PackagesByCheckpointPipeline {
     const TABLE: &'static str = tables::packages_by_checkpoint::NAME;
-    const FANOUT: usize = 100;
 }

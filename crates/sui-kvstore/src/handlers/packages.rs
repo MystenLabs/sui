@@ -51,5 +51,4 @@ impl Processor for PackagesPipeline {
 
 impl BigTableProcessor for PackagesPipeline {
     const TABLE: &'static str = tables::packages::NAME;
-    const FANOUT: usize = 100;
 }

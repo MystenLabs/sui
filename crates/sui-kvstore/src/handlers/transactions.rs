@@ -54,6 +54,5 @@ impl Processor for TransactionsPipeline {
 
 impl BigTableProcessor for TransactionsPipeline {
     const TABLE: &'static str = tables::transactions::NAME;
-    const FANOUT: usize = 100;
     const MAX_PENDING_ROWS: usize = 100_000;
 }

@@ -36,5 +36,4 @@ impl Processor for CheckpointsByDigestPipeline {
 
 impl BigTableProcessor for CheckpointsByDigestPipeline {
     const TABLE: &'static str = tables::checkpoints_by_digest::NAME;
-    const FANOUT: usize = 100;
 }
