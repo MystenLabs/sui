@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 112;
+const MAX_PROTOCOL_VERSION: u64 = 113;
 
 // Record history of protocol version allocations here:
 //
@@ -1518,6 +1518,8 @@ pub struct ProtocolConfig {
     tx_context_gas_budget_cost_base: Option<u64>,
     tx_context_ids_created_cost_base: Option<u64>,
     tx_context_replace_cost_base: Option<u64>,
+    // SIP-70: Cost for structural_digest native function
+    tx_context_structural_digest_cost_base: Option<u64>,
 
     // Types
     // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -2913,6 +2915,7 @@ impl ProtocolConfig {
             tx_context_gas_budget_cost_base: None,
             tx_context_ids_created_cost_base: None,
             tx_context_replace_cost_base: None,
+            tx_context_structural_digest_cost_base: None,
 
             // `types` module
             // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -4590,6 +4593,10 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.address_aliases = true;
+                }
+                113 => {
+                    // SIP-70: PTB Structural Digest
+                    cfg.tx_context_structural_digest_cost_base = Some(30);
                 }
                 // Use this template when making changes:
                 //

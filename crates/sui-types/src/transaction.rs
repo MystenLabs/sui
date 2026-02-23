@@ -100,6 +100,10 @@ mod address_balance_gas_tests;
 #[path = "unit_tests/transaction_claims_tests.rs"]
 mod transaction_claims_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/structural_digest_tests.rs"]
+mod structural_digest_tests;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum CallArg {
     // contains no structs or objects
@@ -963,6 +967,151 @@ impl ProgrammableTransaction {
         self.inputs
             .iter()
             .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
+    }
+
+    /// Compute a deterministic structural digest of this PTB.
+    ///
+    /// The digest captures the logical structure of the transaction:
+    /// - Which commands call which targets, in what order
+    /// - How results flow between commands (provenance, not runtime identity)
+    /// - What values are passed (Pure bytes, shared object IDs, owned object refs)
+    /// - Type arguments for each call
+    ///
+    /// This enables DAOs/governance contracts to vote on a PTB template hash
+    /// and verify at execution time that the executor's PTB matches.
+    pub fn structural_digest(&self) -> Vec<u8> {
+        let mut outer_hasher = DefaultHash::default();
+
+        for command in &self.commands {
+            let cmd_hash = self.hash_command(command);
+            outer_hasher.update(&cmd_hash);
+        }
+
+        outer_hasher.finalize().digest.to_vec()
+    }
+
+    fn hash_command(&self, command: &Command) -> [u8; 32] {
+        let mut hasher = DefaultHash::default();
+        match command {
+            Command::MoveCall(call) => {
+                hasher.update(&[0x00]); // discriminator
+                hasher.update(call.package.as_ref());
+                hasher.update(call.module.as_bytes());
+                hasher.update(call.function.as_bytes());
+                for ty in &call.type_arguments {
+                    hasher.update(&bcs::to_bytes(ty).unwrap_or_default());
+                }
+                for arg in &call.arguments {
+                    self.hash_argument(&mut hasher, arg);
+                }
+            }
+            Command::TransferObjects(objects, recipient) => {
+                hasher.update(&[0x01]);
+                for obj in objects {
+                    self.hash_argument(&mut hasher, obj);
+                }
+                self.hash_argument(&mut hasher, recipient);
+            }
+            Command::SplitCoins(coin, amounts) => {
+                hasher.update(&[0x02]);
+                self.hash_argument(&mut hasher, coin);
+                for amt in amounts {
+                    self.hash_argument(&mut hasher, amt);
+                }
+            }
+            Command::MergeCoins(target, sources) => {
+                hasher.update(&[0x03]);
+                self.hash_argument(&mut hasher, target);
+                for src in sources {
+                    self.hash_argument(&mut hasher, src);
+                }
+            }
+            Command::Publish(modules, deps) => {
+                hasher.update(&[0x04]);
+                for module in modules {
+                    hasher.update(module);
+                }
+                for dep in deps {
+                    hasher.update(dep.as_ref());
+                }
+            }
+            Command::MakeMoveVec(type_tag, elements) => {
+                hasher.update(&[0x05]);
+                if let Some(tag) = type_tag {
+                    hasher.update(&bcs::to_bytes(tag).unwrap_or_default());
+                }
+                for elem in elements {
+                    self.hash_argument(&mut hasher, elem);
+                }
+            }
+            Command::Upgrade(modules, deps, package_id, ticket) => {
+                hasher.update(&[0x06]);
+                for module in modules {
+                    hasher.update(module);
+                }
+                for dep in deps {
+                    hasher.update(dep.as_ref());
+                }
+                hasher.update(package_id.as_ref());
+                self.hash_argument(&mut hasher, ticket);
+            }
+        }
+        hasher.finalize().digest
+    }
+
+    fn hash_argument(&self, hasher: &mut DefaultHash, arg: &Argument) {
+        match arg {
+            Argument::GasCoin => {
+                hasher.update(&[0x00]);
+            }
+            Argument::Input(idx) => {
+                // Look up the actual input and hash its normalized form
+                if let Some(call_arg) = self.inputs.get(*idx as usize) {
+                    self.hash_call_arg(hasher, call_arg);
+                } else {
+                    // Invalid input index — hash it as-is so the digest is still deterministic
+                    hasher.update(&[0x01]);
+                    hasher.update(&idx.to_le_bytes());
+                }
+            }
+            Argument::Result(cmd_idx) => {
+                hasher.update(&[0x05]);
+                hasher.update(&cmd_idx.to_le_bytes());
+            }
+            Argument::NestedResult(cmd_idx, result_idx) => {
+                hasher.update(&[0x06]);
+                hasher.update(&cmd_idx.to_le_bytes());
+                hasher.update(&result_idx.to_le_bytes());
+            }
+        }
+    }
+
+    fn hash_call_arg(&self, hasher: &mut DefaultHash, call_arg: &CallArg) {
+        match call_arg {
+            CallArg::Pure(bytes) => {
+                hasher.update(&[0x01]);
+                hasher.update(bytes);
+            }
+            CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
+                hasher.update(&[0x02]);
+                hasher.update(id.as_ref());
+            }
+            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, version, _))) => {
+                hasher.update(&[0x03]);
+                hasher.update(id.as_ref());
+                hasher.update(&version.value().to_le_bytes());
+            }
+            CallArg::Object(ObjectArg::Receiving((id, version, _))) => {
+                hasher.update(&[0x04]);
+                hasher.update(id.as_ref());
+                hasher.update(&version.value().to_le_bytes());
+            }
+            CallArg::FundsWithdrawal(_) => {
+                hasher.update(&[0x07]);
+                // Hash the BCS representation for determinism
+                hasher.update(&bcs::to_bytes(call_arg).unwrap_or_default());
+            }
+        }
     }
 }
 

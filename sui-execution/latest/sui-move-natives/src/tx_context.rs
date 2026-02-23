@@ -464,3 +464,38 @@ pub fn last_created_id(
         smallvec![Value::address(address)],
     ))
 }
+
+#[derive(Clone)]
+pub struct TxContextStructuralDigestCostParams {
+    pub tx_context_structural_digest_cost_base: InternalGas,
+}
+/***************************************************************************************************
+ * native fun native_structural_digest
+ * Implementation of the Move native function `fun native_structural_digest(): vector<u8>`
+ * Returns the normalized structural digest of the current PTB (SIP-70).
+ *   gas cost: tx_context_structural_digest_cost_base    | fixed size output
+ **************************************************************************************************/
+pub fn structural_digest(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.is_empty());
+
+    let tx_context_structural_digest_cost_params = get_extension!(context, NativesCostTable)?
+        .tx_context_structural_digest_cost_params
+        .clone();
+    native_charge_gas_early_exit!(
+        context,
+        tx_context_structural_digest_cost_params.tx_context_structural_digest_cost_base
+    );
+
+    let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
+    let digest = transaction_context.structural_digest();
+
+    Ok(NativeResult::ok(
+        context.gas_used(),
+        smallvec![Value::vector_u8(digest)],
+    ))
+}
