@@ -23,7 +23,7 @@ node src/utils/massagegraphql.js || { echo "❌ massagegraphql failed"; exit 1; 
 
 echo "✅ Pre-build generation complete"
 
-pnpm docusaurus build 2>&1 | while IFS= read -r line; do
+npm run docusaurus build 2>&1 | while IFS= read -r line; do
   echo "$line"
   echo "$line" >> "$LOG"
 done
