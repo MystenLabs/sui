@@ -21,6 +21,21 @@ A development tool that enables testing and developing against a local Sui netwo
 Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
 That means that you have full control over the advancement of checkpoints, time, and epochs to simulate different scenarios.
 
+## Forked Network vs Sui CLI Local Network
+
+The table below summarizes when to use each option:
+
+| Topic | Local forked network (`sui-forking`) | Sui CLI local network |
+| --- | --- | --- |
+| Initial state | Starts from real chain state (mainnet/testnet/devnet) at a chosen checkpoint | Starts from a fresh genesis state (or from an existing one on disk) |
+| Existing on-chain packages and objects | Available from the fork point (fetched/cached on demand) | Not available unless you deploy/create them locally |
+| External dependency at runtime | Needs network access to source chain for first-time object fetches | Fully local once started |
+| Execution model | Single validator, lock-step, sequential execution | Multi-validator local network flow |
+| Checkpoint/time/epoch control | Explicit control through `advance-checkpoint`, `advance-clock`, `advance-epoch` | Driven by normal local network progression |
+| Best for | Testing against real deployed packages and realistic chain state | Fast local development from clean state |
+| Startup cost | Higher (state bootstrap + potential object downloads) | Lower (local genesis and startup) |
+| Determinism/reproducibility | Deterministic from selected checkpoint + seeded objects | Deterministic from local genesis/configuration |
+
 ## Limitations
 - Staking and related operations are not supported.
 - Single validator, single authority network.
@@ -76,8 +91,8 @@ sui-forking start --network testnet
 ```
 
 This command:
-- Starts a local "server" on port 9001 (default) - this is used to interact with the forked network, e.g., advance-checkpoints, request gas, advance-clock, advance-epoch, etc. You can do so via the CLI commands with the `sui-forking` binary or via the REST API (see below).
-- Starts a local Sui network on port 9000 (default) - this is the gRPC endpoint you can connect the Sui client to interact with the network. 
+- Starts a local "forking server" on port 9001 (default) - this is used to interact with the forked network, e.g., advance-checkpoints, request gas, advance-clock, advance-epoch, etc. You can do so via the CLI commands with the `sui-forking` binary or via the REST API (see below).
+- Starts the RPC server on port 9000 (default) - this is the gRPC endpoint you can connect the Sui client to interact with the network. 
 - Allows you to execute transactions against this local state and fetches objects on-demand from the real network
 
 #### Options
@@ -180,14 +195,14 @@ sui client ptb --move-call 0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938d
 ```
 
 ## Server REST API
-The local forked network server exposes a REST API for interaction. The server listens on port 3001 by default.
+The local forked network server exposes a REST API for interaction. The server listens on port 9001 by default.
 ### Endpoints
 - `POST /advance-checkpoint`: Advance the checkpoint by 1
-- `POST /advance-clock [seconds]`: Advance the clock by seconds (default: 1s if omitted).
+- `POST /advance-clock [milliseconds]`: Advance the clock by milliseconds (default: 1s if omitted).
 - `POST /advance-epoch`: Advance the epoch by 1
 - `POST /faucet`: Request SUI tokens
   - Body: `{ "address": "<address>", "amount": <amount> }`
-- `GET /status`: Get current checkpoint, epoch, and transaction count
+- `GET /status`: Get current checkpoint, epoch, clock.
 
 ## Related Tools
 
