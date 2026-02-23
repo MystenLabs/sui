@@ -766,7 +766,7 @@ impl AuthorityEpochTables {
                     8 + 8,
                     mutexes,
                     sequence_key,
-                    KeySpaceConfig::default(),
+                    pending_checkpoint_signatures_config,
                 ),
             ),
             (
