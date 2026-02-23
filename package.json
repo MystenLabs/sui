@@ -41,6 +41,7 @@
 	"devDependencies": {
 		"@changesets/cli": "^2.29.4",
 		"@ianvs/prettier-plugin-sort-imports": "^4.4.1",
+		"@mysten/prettier-plugin-move": "^0.3.5",
 		"@manypkg/cli": "^0.21.4",
 		"@tanstack/eslint-plugin-query": "^5.74.7",
 		"@typescript-eslint/eslint-plugin": "^6.1.0",
