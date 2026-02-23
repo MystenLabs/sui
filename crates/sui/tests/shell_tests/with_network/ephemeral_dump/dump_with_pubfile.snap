@@ -38,7 +38,7 @@ EOF
 sui move --client.config "$CONFIG" \
   build -p main_pkg --dump --pubfile-path Pub.test.toml -e testnet --no-tree-shaking > output.json
 
-cat output.json | sed 's/.*"modules":\["\([^"]*\)".*/\1/' | base64 -d > main.mv
+sed -n 's/.*"modules"[[:space:]]*:[[:space:]]*\["\([^"]*\)".*/\1/p' output.json | head -n 1 | base64 -d > main.mv
 sui move disassemble main.mv > main.move
 
 echo

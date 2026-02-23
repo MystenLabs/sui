@@ -258,7 +258,7 @@ jobs:
       - name: cargo test Sui CLI
         shell: bash
         run: |
-          cargo nextest run -p sui --no-fail-fast --profile ci --cargo-quiet
+          cargo nextest run -p sui --no-fail-fast --profile ci --cargo-quiet -j 16
 
   simtest:
     needs: [diff, rustfmt, clippy]
