@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "112",
+              "maxSupportedProtocolVersion": "113",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1304,6 +1304,7 @@
                 "additional_consensus_digest_indirect_state": false,
                 "additional_multisig_checks": false,
                 "address_aliases": false,
+                "address_balance_gas_check_rgp_at_signing": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_private_accumulator_entrypoints": false,

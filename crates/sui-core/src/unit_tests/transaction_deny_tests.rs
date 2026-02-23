@@ -22,8 +22,10 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    CallArg, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData, VerifiedTransaction,
+    CallArg, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData, TransactionKind,
+    VerifiedTransaction,
 };
 use sui_types::utils::get_zklogin_user_address;
 use sui_types::utils::{
@@ -730,5 +732,41 @@ async fn test_package_denied_dynamic_check() {
         &state,
     )
     .await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_dev_inspect_disabled() {
+    use sui_types::crypto::get_authority_key_pair;
+
+    let fullnode_key_pair = get_authority_key_pair().1;
+    let fullnode = TestAuthorityBuilder::new()
+        .with_dev_inspect_disabled()
+        .with_keypair(&fullnode_key_pair)
+        .build()
+        .await;
+
+    let sender = SuiAddress::random_for_testing_only();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_sui(sender, None);
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+
+    // With skip_checks=true (default), should be denied
+    let result = fullnode
+        .dev_inspect_transaction_block(sender, kind.clone(), None, None, None, None, None, None)
+        .await;
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().as_inner(),
+        SuiErrorKind::UnsupportedFeatureError { .. }
+    ));
+
+    // With skip_checks=false, should pass our guard
+    let result = fullnode
+        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, Some(false))
+        .await;
     assert!(result.is_ok());
 }

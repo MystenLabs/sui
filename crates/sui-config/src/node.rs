@@ -154,6 +154,10 @@ pub struct NodeConfig {
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
 
+    /// Whether dev-inspect transaction execution is disabled on this node.
+    #[serde(default)]
+    pub dev_inspect_disabled: bool,
+
     #[serde(default)]
     pub certificate_deny_config: CertificateDenyConfig,
 
