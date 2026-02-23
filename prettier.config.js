@@ -16,7 +16,7 @@ module.exports = {
 		'^@/(.*)$',
 		'^~/(.*)$',
 		'',
-		'^[.]',
+	'^[.]',
 	],
 	overrides: [
 		{
@@ -25,5 +25,14 @@ module.exports = {
 				proseWrap: 'always',
 			},
 		},
+		{
+			"files": "*.move",
+			"options": {
+				"parser": "move",
+				"tabWidth": 4,
+				"useModuleLabel": true,
+				"autoGroupImports": "module",
+			}
+		}
 	],
 };
