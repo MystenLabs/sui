@@ -37,6 +37,7 @@ object_store.workspace = true
 serde_json.workspace = true
 zstd.workspace = true
 humantime.workspace = true
+num_cpus.workspace = true
 toml.workspace = true
 telemetry-subscribers.workspace = true
 

@@ -59,7 +59,7 @@ impl ConcurrentLayer {
                 base.committer
             },
             pruner: None,
-            fanout: self.fanout.or(base.fanout),
+            fanout: self.fanout.or(base.fanout).or(Some(num_cpus::get())),
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
