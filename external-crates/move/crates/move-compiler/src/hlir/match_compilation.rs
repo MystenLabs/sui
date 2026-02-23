@@ -216,7 +216,7 @@ fn compile_match_literal(
 
     for lit in lits {
         debug_print!(context.debug.match_specialization, ("lit specializing" => lit ; fmt));
-        let (mut new_binders, inner_matrix) = matrix.specialize_literal(&lit);
+        let (mut new_binders, inner_matrix) = matrix.specialize_literal(context, &lit);
         subject_binders.append(&mut new_binders);
         arms.insert(
             lit,
@@ -224,7 +224,7 @@ fn compile_match_literal(
         );
     }
 
-    let (mut new_binders, default) = matrix.specialize_default();
+    let (mut new_binders, default) = matrix.specialize_default(context);
     subject_binders.append(&mut new_binders);
     let default_result = Box::new(build_match_tree(context, fringe, default));
 
@@ -264,7 +264,7 @@ fn compile_match_struct(
         );
         (subject_binders, unpack)
     } else {
-        let (subject_binders, default_matrix) = matrix.specialize_default();
+        let (subject_binders, default_matrix) = matrix.specialize_default(context);
         let unpack =
             StructUnpack::Default(Box::new(build_match_tree(context, fringe, default_matrix)));
         (subject_binders, unpack)
@@ -332,7 +332,7 @@ fn compile_variant_switch(
         };
         (vec![], empty_pattern)
     } else {
-        matrix.specialize_default()
+        matrix.specialize_default(context)
     };
     subject_binders.append(&mut new_binders);
 

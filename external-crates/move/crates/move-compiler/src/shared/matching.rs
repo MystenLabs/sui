@@ -285,6 +285,22 @@ impl PatternArm {
         first_lit_recur(self.pats.front().unwrap().clone())
     }
 
+    fn pop_front_or_ice<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+        pats: &mut VecDeque<T::MatchPattern>,
+    ) -> Option<T::MatchPattern> {
+        pats.pop_front().or_else(|| {
+            if !context.env().has_errors() {
+                context.reporter().add_diag(ice!((
+                    self.arm.orig_pattern.pat.loc,
+                    "ICE empty pattern in match specialization"
+                )));
+            }
+            None
+        })
+    }
+
     fn specialize_variant<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
         &self,
         context: &MC,
@@ -292,7 +308,7 @@ impl PatternArm {
         arg_types: &Vec<&Type>,
     ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pats.pop_front().unwrap();
+        let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
         let loc = first_pattern.pat.loc;
         match first_pattern.pat.value {
             TP::Variant(mident, enum_, name, _, fields)
@@ -355,7 +371,7 @@ impl PatternArm {
         arg_types: &Vec<&Type>,
     ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pats.pop_front().unwrap();
+        let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
         let loc = first_pattern.pat.loc;
         match first_pattern.pat.value {
             TP::Struct(mident, struct_, _, fields)
@@ -409,9 +425,13 @@ impl PatternArm {
         }
     }
 
-    fn specialize_literal(&self, literal: &Value) -> Option<(Binders, PatternArm)> {
+    fn specialize_literal<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+        literal: &Value,
+    ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pats.pop_front().unwrap();
+        let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
         match first_pattern.pat.value {
             TP::Literal(v) if &v == literal => Some((vec![], output)),
             TP::Literal(_) => None,
@@ -423,7 +443,7 @@ impl PatternArm {
             TP::At(x, inner) => {
                 output.pats.push_front(*inner);
                 output
-                    .specialize_literal(literal)
+                    .specialize_literal(context, literal)
                     .map(|(mut binders, inner)| {
                         binders.push((Mutability::Imm, x));
                         (binders, inner)
@@ -433,9 +453,12 @@ impl PatternArm {
         }
     }
 
-    fn specialize_default(&self) -> Option<(Binders, PatternArm)> {
+    fn specialize_default<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pats.pop_front().unwrap();
+        let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
         match first_pattern.pat.value {
             TP::Literal(_) => None,
             TP::Variant(_, _, _, _, _) | TP::BorrowVariant(_, _, _, _, _, _) => None,
@@ -445,10 +468,12 @@ impl PatternArm {
             TP::Constant(_, _) | TP::Or(_, _) => unreachable!(),
             TP::At(x, inner) => {
                 output.pats.push_front(*inner);
-                output.specialize_default().map(|(mut binders, inner)| {
-                    binders.push((Mutability::Imm, x));
-                    (binders, inner)
-                })
+                output
+                    .specialize_default(context)
+                    .map(|(mut binders, inner)| {
+                        binders.push((Mutability::Imm, x));
+                        (binders, inner)
+                    })
             }
             TP::ErrorPat => None,
         }
@@ -613,12 +638,16 @@ impl PatternMatrix {
         (bindings, matrix)
     }
 
-    pub fn specialize_literal(&self, lit: &Value) -> (Binders, PatternMatrix) {
+    pub fn specialize_literal<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+        lit: &Value,
+    ) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
         let loc = self.loc;
         for entry in &self.patterns {
-            if let Some((mut new_bindings, arm)) = entry.specialize_literal(lit) {
+            if let Some((mut new_bindings, arm)) = entry.specialize_literal(context, lit) {
                 bindings.append(&mut new_bindings);
                 patterns.push(arm)
             }
@@ -628,12 +657,15 @@ impl PatternMatrix {
         (bindings, matrix)
     }
 
-    pub fn specialize_default(&self) -> (Binders, PatternMatrix) {
+    pub fn specialize_default<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
         let loc = self.loc;
         for entry in &self.patterns {
-            if let Some((mut new_bindings, arm)) = entry.specialize_default() {
+            if let Some((mut new_bindings, arm)) = entry.specialize_default(context) {
                 bindings.append(&mut new_bindings);
                 patterns.push(arm)
             }

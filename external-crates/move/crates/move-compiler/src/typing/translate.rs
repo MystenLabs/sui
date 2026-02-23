@@ -2372,15 +2372,20 @@ fn match_arm(
         .collect();
 
     let ploc = pattern.loc;
-    let pattern = match_pattern(context, pattern, ref_mut, &rhs_binders);
+    let mut pattern = match_pattern(context, pattern, ref_mut, &rhs_binders);
 
-    subtype(
+    if subtype_opt(
         context,
         ploc,
         || "Invalid pattern",
         &pattern.ty,
         subject_type,
-    );
+    )
+    .is_none()
+    {
+        pattern.ty = context.error_type(ploc);
+        pattern.pat.value = T::UnannotatedPat_::ErrorPat;
+    }
 
     let binder_map: BTreeMap<N::Var, Type> = binders.clone().into_iter().collect();
     for (pat_var, guard_var) in guard_binders.clone() {
@@ -2394,17 +2399,24 @@ fn match_arm(
         context.declare_local(Mutability::Imm, guard_var, ty);
     }
 
-    let guard = guard.map(|guard| exp(context, guard));
+    let mut guard = guard.map(|guard| exp(context, guard));
 
-    if let Some(guard) = &guard {
-        let gloc = guard.exp.loc;
-        subtype(
+    if let Some(ref guard_exp) = guard {
+        let gloc = guard_exp.exp.loc;
+        if subtype_opt(
             context,
             gloc,
             || "Invalid guard condition",
-            &guard.ty,
+            &guard_exp.ty,
             &Type_::bool(gloc),
-        );
+        )
+        .is_none()
+        {
+            guard = Some(Box::new(T::exp(
+                context.error_type(gloc),
+                sp(gloc, T::UnannotatedExp_::UnresolvedError),
+            )));
+        }
     }
 
     let rhs = exp(context, rhs);
@@ -2487,14 +2499,15 @@ fn match_pattern_(
                     match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 // This double-clone should not be necessary, but the borrow checker is unhappy.
                 let fty_ref = rtype!(tpat.pat.loc, fty.clone());
-                let pat_ty = subtype(
+                if let Some(pat_ty) = subtype_opt(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     &tpat.ty,
                     &fty_ref,
-                );
-                tpat.ty = pat_ty;
+                ) {
+                    tpat.ty = pat_ty;
+                }
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2542,14 +2555,15 @@ fn match_pattern_(
                     match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 // This double-clone should not be necessary, but the borrow checker is unhappy.
                 let fty_ref = rtype!(tpat.pat.loc, fty.clone());
-                let pat_ty = subtype(
+                if let Some(pat_ty) = subtype_opt(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     &tpat.ty,
                     &fty_ref,
-                );
-                tpat.ty = pat_ty;
+                ) {
+                    tpat.ty = pat_ty;
+                }
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2639,15 +2653,18 @@ fn match_pattern_(
         P::Or(lhs, rhs) => {
             let lpat = match_pattern_(context, *lhs, mut_ref, rhs_binders, wildcard_needs_drop);
             let rpat = match_pattern_(context, *rhs, mut_ref, rhs_binders, wildcard_needs_drop);
-            let ty = join(
+            if let Some(ty) = join_opt(
                 context,
                 loc,
-                || -> String { panic!("ICE unresolved error join, failed") },
+                || "Incompatible types in or-pattern",
                 &lpat.ty,
                 &rpat.ty,
-            );
-            let pat = sp(loc, TP::Or(Box::new(lpat), Box::new(rpat)));
-            T::pat(ty, pat)
+            ) {
+                let pat = sp(loc, TP::Or(Box::new(lpat), Box::new(rpat)));
+                T::pat(ty, pat)
+            } else {
+                T::pat(context.error_type(loc), sp(loc, TP::ErrorPat))
+            }
         }
 
         // At patterns are a bit of a mess for typing. The rules are as follows:

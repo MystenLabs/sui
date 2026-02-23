@@ -263,9 +263,12 @@ fn find_counterexample_impl(
         if literals.len() == 2 {
             // Saturated
             for lit in literals {
-                if let Some(counterexample) =
-                    counterexample_rec(context, matrix.specialize_literal(&lit).1, arity - 1, ndx)
-                {
+                if let Some(counterexample) = counterexample_rec(
+                    context,
+                    matrix.specialize_literal(context, &lit).1,
+                    arity - 1,
+                    ndx,
+                ) {
                     let lit_str = format!("{}", lit);
                     let result = [CounterExample::Literal(lit_str)]
                         .into_iter()
@@ -276,7 +279,7 @@ fn find_counterexample_impl(
             }
             None
         } else {
-            let (_, default) = matrix.specialize_default();
+            let (_, default) = matrix.specialize_default(context);
             if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                 if literals.is_empty() {
                     let result = [CounterExample::Wildcard]
@@ -314,7 +317,7 @@ fn find_counterexample_impl(
         // For all other non-literals, we don't consider a case where the constructors are
         // saturated.
         let literals = matrix.first_lits();
-        let (_, default) = matrix.specialize_default();
+        let (_, default) = matrix.specialize_default(context);
         if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
             if literals.is_empty() {
                 let result = [CounterExample::Wildcard]
@@ -408,7 +411,7 @@ fn find_counterexample_impl(
                     None
                 }
             } else {
-                let (_, default) = matrix.specialize_default();
+                let (_, default) = matrix.specialize_default(context);
                 // `_` is a reasonable counterexample since we never unpacked this struct
                 if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     // If we didn't match any head constructor, `_` is a reasonable
@@ -477,7 +480,7 @@ fn find_counterexample_impl(
                 }
                 None
             } else {
-                let (_, default) = matrix.specialize_default();
+                let (_, default) = matrix.specialize_default(context);
                 if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     if ctors.is_empty() {
                         // If we didn't match any head constructor, `_` is a reasonable
@@ -544,7 +547,7 @@ fn find_counterexample_impl(
                 counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
             } else {
                 // This can only be a binding or wildcard, so we act accordingly.
-                let (_, default) = matrix.specialize_default();
+                let (_, default) = matrix.specialize_default(context);
                 if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     let result = [CounterExample::Wildcard]
                         .into_iter()
