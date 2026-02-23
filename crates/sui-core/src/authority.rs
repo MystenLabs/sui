@@ -2372,6 +2372,14 @@ impl AuthorityState {
             .into());
         }
 
+        let dev_inspect = checks.disabled();
+        if dev_inspect && self.config.dev_inspect_disabled {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "simulate with checks disabled is not allowed on this node".to_string(),
+            }
+            .into());
+        }
+
         // Cheap validity checks for a transaction, including input size limits.
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
@@ -2416,7 +2424,15 @@ impl AuthorityState {
 
         let protocol_config = epoch_store.protocol_config();
 
-        let (gas_status, checked_input_objects) = if checks.enabled() {
+        let (gas_status, checked_input_objects) = if dev_inspect {
+            sui_transaction_checks::check_dev_inspect_input(
+                protocol_config,
+                &transaction,
+                input_objects,
+                receiving_objects,
+                epoch_store.reference_gas_price(),
+            )?
+        } else {
             sui_transaction_checks::check_transaction_input(
                 epoch_store.protocol_config(),
                 epoch_store.reference_gas_price(),
@@ -2425,14 +2441,6 @@ impl AuthorityState {
                 &receiving_objects,
                 &self.metrics.bytecode_verifier_metrics,
                 &self.config.verifier_signing_config,
-            )?
-        } else {
-            sui_transaction_checks::check_dev_inspect_input(
-                protocol_config,
-                &transaction,
-                input_objects,
-                receiving_objects,
-                epoch_store.reference_gas_price(),
             )?
         };
 
@@ -2475,7 +2483,7 @@ impl AuthorityState {
             kind,
             signer,
             transaction.digest(),
-            checks.disabled(),
+            dev_inspect,
         );
 
         let loaded_runtime_objects = tracking_store.into_read_objects();
@@ -2560,8 +2568,15 @@ impl AuthorityState {
             .into());
         }
 
-        let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
         let skip_checks = skip_checks.unwrap_or(true);
+        if skip_checks && self.config.dev_inspect_disabled {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "dev-inspect with skip_checks is not allowed on this node".to_string(),
+            }
+            .into());
+        }
+
+        let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
         let reference_gas_price = epoch_store.reference_gas_price();
         let protocol_config = epoch_store.protocol_config();
         let max_tx_gas = protocol_config.max_tx_gas();
@@ -2696,6 +2711,7 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
+
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
             protocol_config,

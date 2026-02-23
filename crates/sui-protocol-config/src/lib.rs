@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 112;
+const MAX_PROTOCOL_VERSION: u64 = 113;
 
 // Record history of protocol version allocations here:
 //
@@ -297,7 +297,7 @@ const MAX_PROTOCOL_VERSION: u64 = 112;
 //              Enable additional validation on zkLogin public identifier.
 // Version 111: Validator metadata
 // Version 112: Enable Ristretto255 in devnet.
-//              Enable address aliases on mainnet.
+// Version 113: Validate gas price >= RGP at signing for address balance gas payments.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -817,6 +817,10 @@ struct FeatureFlags {
     // Enable address balance gas payments
     #[serde(skip_serializing_if = "is_false")]
     enable_address_balance_gas_payments: bool,
+
+    // Validate gas price >= RGP at signing for address balance gas payments
+    #[serde(skip_serializing_if = "is_false")]
+    address_balance_gas_check_rgp_at_signing: bool,
 
     // Enable multi-epoch transaction expiration (max 1 epoch difference)
     #[serde(skip_serializing_if = "is_false")]
@@ -2146,6 +2150,10 @@ impl ProtocolConfig {
 
     pub fn enable_address_balance_gas_payments(&self) -> bool {
         self.feature_flags.enable_address_balance_gas_payments
+    }
+
+    pub fn address_balance_gas_check_rgp_at_signing(&self) -> bool {
+        self.feature_flags.address_balance_gas_check_rgp_at_signing
     }
 
     pub fn enable_multi_epoch_transaction_expiration(&self) -> bool {
@@ -4588,8 +4596,9 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_ristretto255_group_ops = true;
                     }
-
-                    cfg.feature_flags.address_aliases = true;
+                }
+                113 => {
+                    cfg.feature_flags.address_balance_gas_check_rgp_at_signing = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4912,6 +4921,7 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
         self.feature_flags.enable_address_balance_gas_payments = true;
+        self.feature_flags.address_balance_gas_check_rgp_at_signing = true;
     }
 
     pub fn disable_address_balance_gas_payments_for_testing(&mut self) {

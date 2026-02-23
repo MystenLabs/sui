@@ -1496,6 +1496,7 @@ impl AuthorityPerEpochStore {
             config: &self.protocol_config,
             epoch: self.epoch(),
             chain_identifier: self.get_chain_identifier(),
+            reference_gas_price: self.reference_gas_price(),
         }
     }
 

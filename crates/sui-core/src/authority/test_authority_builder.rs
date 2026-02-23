@@ -67,6 +67,7 @@ pub struct TestAuthorityBuilder<'a> {
     authority_overload_config: Option<AuthorityOverloadConfig>,
     cache_config: Option<ExecutionCacheConfig>,
     chain_override: Option<Chain>,
+    dev_inspect_disabled: bool,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -91,6 +92,11 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn with_transaction_deny_config(mut self, config: TransactionDenyConfig) -> Self {
         assert!(self.transaction_deny_config.replace(config).is_none());
+        self
+    }
+
+    pub fn with_dev_inspect_disabled(mut self) -> Self {
+        self.dev_inspect_disabled = true;
         self
     }
 
@@ -348,6 +354,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.certificate_deny_config = certificate_deny_config;
         config.authority_overload_config = authority_overload_config;
         config.authority_store_pruning_config = pruning_config;
+        config.dev_inspect_disabled = self.dev_inspect_disabled;
 
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
         let policy_config = config.policy_config.clone();
