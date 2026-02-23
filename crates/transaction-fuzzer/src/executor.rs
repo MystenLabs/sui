@@ -13,7 +13,7 @@ use sui_move_build::BuildConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
-use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::object::Object;
 use sui_types::transaction::{Transaction, TransactionData};
 use sui_types::utils::to_sender_signed_transaction;
@@ -39,10 +39,10 @@ fn build_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
 // which case we want to panic.
 pub fn assert_is_acceptable_result(result: &ExecutionResult) {
     if let Ok(
-        e @ ExecutionStatus::Failure {
+        e @ ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::InvariantViolation,
-            command: _,
-        },
+            ..
+        }),
     ) = result
     {
         panic!("Invariant violation: {e:#?}")

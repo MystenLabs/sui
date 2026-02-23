@@ -37,7 +37,7 @@ use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
 use sui_types::execution::SharedInput;
-use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_consensus::{
     AuthorityCapabilitiesV2, ConsensusDeterminedVersionAssignments,
@@ -768,13 +768,13 @@ async fn test_dev_inspect_return_values() {
     .unwrap();
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::UnusedValueWithoutDrop {
                 result_idx: 0,
                 secondary_idx: 0,
             },
             command: None,
-        }
+        })
     );
 
     // An unused value without drop is not an error in dev inspect
@@ -1858,7 +1858,7 @@ async fn test_package_size_limit() {
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let signed_effects = submit_and_execute(&authority, transaction).await.unwrap().1;
-    let ExecutionStatus::Failure { error, command: _ } = signed_effects.status() else {
+    let ExecutionStatus::Failure(ExecutionFailure { error, .. }) = signed_effects.status() else {
         panic!("expected transaction to fail")
     };
     assert!(matches!(
@@ -1902,7 +1902,7 @@ async fn test_publish_module_with_unpublishable_magic() {
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let signed_effects = submit_and_execute(&authority, transaction).await.unwrap().1;
-    let ExecutionStatus::Failure { error, command: _ } = signed_effects.status() else {
+    let ExecutionStatus::Failure(ExecutionFailure { error, .. }) = signed_effects.status() else {
         panic!("expected transaction to fail")
     };
     assert!(matches!(
@@ -2040,7 +2040,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
         .1
         .into_data();
 
-    let ExecutionStatus::Failure { error, command } = result.status() else {
+    let ExecutionStatus::Failure(ExecutionFailure { error, command }) = result.status() else {
         panic!("expected transaction to fail")
     };
     assert_eq!(command, &Some(0));
@@ -6562,7 +6562,7 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
 
     // Check that the transaction status shows failure
     assert!(effects.status().is_err());
-    if let ExecutionStatus::Failure { error, .. } = effects.status() {
+    if let ExecutionStatus::Failure(ExecutionFailure { error, .. }) = effects.status() {
         assert_eq!(error, &ExecutionFailureStatus::InsufficientFundsForWithdraw);
     } else {
         panic!("Expected execution status to be Failure");
