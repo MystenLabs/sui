@@ -110,7 +110,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test
         run: |
-          cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
+          cargo nextest run --profile ci --cargo-quiet -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -144,7 +144,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test with tidehunter
         run: |
-          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci -p sui-core --features typed-store/tidehunter
+          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core --features typed-store/tidehunter
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -178,7 +178,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test (sui-graphql staging)
         run: |
-          cargo nextest run --profile ci --features staging -E 'package(sui-indexer-alt-graphql)'
+          cargo nextest run --profile ci --cargo-quiet --features staging -E 'package(sui-indexer-alt-graphql)'
       # TODO: run stress against a local Sui network.
       # - name: benchmark (smoke)
       #   run: |
@@ -256,7 +256,7 @@ jobs:
         shell: bash
         run: |
           # We have temporarily disabled the network tests on windows, until we triage + fix the performance issues.
-          cargo nextest run -p sui --no-fail-fast --profile ci --filter-expr "not test(shell_tests::with_network)"
+          cargo nextest run -p sui --no-fail-fast --profile ci --cargo-quiet --filter-expr "not test(shell_tests::with_network)"
 
   simtest:
     needs: [diff, rustfmt, clippy]
@@ -279,7 +279,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
@@ -306,7 +306,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
@@ -326,7 +326,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
         run: |
-          cargo nextest run -p sui-framework-tests --test move_tests
+          cargo nextest run --profile ci --cargo-quiet -p sui-framework-tests --test move_tests
 
   # # Disabled
   # rosetta-validation:
