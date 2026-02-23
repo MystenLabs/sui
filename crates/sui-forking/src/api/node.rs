@@ -50,7 +50,7 @@ impl ForkingNode {
 
         let data_dir_for_task = data_dir.clone();
         let mut task = tokio::spawn(async move {
-            crate::server::start_server_with_signals(
+            crate::server::start_server(
                 startup_seeds,
                 fork_network,
                 checkpoint,
