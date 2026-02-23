@@ -63,6 +63,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -231,6 +232,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -399,6 +401,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -567,6 +570,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -735,6 +739,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -903,6 +908,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -1071,6 +1077,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []

@@ -150,6 +150,18 @@ impl SuiTxValidator {
                             .into());
                         }
                     }
+
+                    if let Some(aliases) = tx.aliases() {
+                        let num_sigs = tx.tx().tx_signatures().len();
+                        for (sig_idx, _) in aliases.iter() {
+                            if (*sig_idx as usize) >= num_sigs {
+                                return Err(SuiErrorKind::UnexpectedMessage(format!(
+                                    "UserTransactionV2 alias contains out-of-bounds signature index {sig_idx} (transaction has {num_sigs} signatures)",
+                                )).into());
+                            }
+                        }
+                    }
+
                     // TODO(fastpath): move deterministic verifications of user transactions here.
                 }
 
@@ -1078,5 +1090,58 @@ mod tests {
 
         // The executed transaction should NOT be rejected.
         assert!(rejected_transactions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_reject_invalid_alias_signature_index() {
+        let (sender, keypair) = deterministic_random_account_key();
+
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(1).unwrap())
+                .with_objects(vec![gas_object.clone(), owned_object.clone()])
+                .build();
+
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .build()
+            .await;
+
+        let transaction = test_user_transaction(
+            &state,
+            sender,
+            &keypair,
+            gas_object.clone(),
+            vec![owned_object.clone()],
+        )
+        .await;
+
+        // Extract the inner transaction and construct a PlainTransactionWithClaims
+        // with a bogus alias where sig_idx = 255 (far exceeding the 1 signature).
+        let inner_tx: Transaction = transaction.into_tx().into();
+        let bogus_aliases = nonempty::nonempty![(255u8, None)];
+        let tx_with_bogus_alias = PlainTransactionWithClaims::from_aliases(inner_tx, bogus_aliases);
+
+        let serialized_tx = bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
+            &state.name,
+            tx_with_bogus_alias,
+        ))
+        .unwrap();
+
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            state.epoch_store_for_testing().clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let res = validator.verify_batch(&[&serialized_tx]);
+        assert!(
+            res.is_err(),
+            "Should reject transaction with out-of-bounds alias signature index"
+        );
     }
 }
