@@ -5,7 +5,7 @@ use anyhow::{Ok, anyhow};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
 use prometheus::Registry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str;
 use std::sync::Arc;
@@ -17,16 +17,15 @@ use sui_core::authority::authority_store_pruner::{
     PrunerWatermarks,
 };
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::authority::authority_store_types::{StoreData, StoreObject};
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_core::jsonrpc_index::IndexStoreTables;
 use sui_core::rpc_index::RpcIndexStore;
-use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::base_types::EpochId;
 use tracing::info;
 use typed_store::rocks::{MetricConf, default_db_options};
 use typed_store::rocksdb::MultiThreaded;
-use typed_store::traits::{Map, TableSummary};
+use typed_store::traits::TableSummary;
 
 #[derive(EnumString, Clone, Parser, Debug, ValueEnum)]
 pub enum StoreName {
@@ -95,97 +94,73 @@ pub fn print_table_metadata(
     db_path: PathBuf,
     table_name: &str,
 ) -> anyhow::Result<()> {
-    let db = match store_name {
-        StoreName::Validator => {
-            let epoch_tables = AuthorityEpochTables::describe_tables();
-            if epoch_tables.contains_key(table_name) {
-                let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
-                AuthorityEpochTables::open_readonly(epoch, &db_path)
-                    .next_shared_object_versions_v2
-                    .db
-            } else {
-                AuthorityPerpetualTables::open_readonly(&db_path).objects.db
+    #[cfg(not(tidehunter))]
+    {
+        let db = match store_name {
+            StoreName::Validator => {
+                let epoch_tables = AuthorityEpochTables::describe_tables();
+                if epoch_tables.contains_key(table_name) {
+                    let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
+                    AuthorityEpochTables::open_readonly(epoch, &db_path)
+                        .next_shared_object_versions_v2
+                        .db
+                } else {
+                    AuthorityPerpetualTables::open_readonly(&db_path).objects.db
+                }
             }
-        }
-        StoreName::Index => {
-            IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
-                .event_by_move_module
-                .db
-        }
-        StoreName::Epoch => {
-            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+            StoreName::Index => {
+                IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                    .event_by_move_module
+                    .db
+            }
+            StoreName::Epoch => {
+                CommitteeStoreTables::get_read_only_handle(
+                    db_path,
+                    None,
+                    None,
+                    MetricConf::default(),
+                )
                 .committee_map
                 .db
-        }
-    };
-
-    let mut table = Table::new();
-    table
-        .set_content_arrangement(ContentArrangement::Dynamic)
-        .set_width(200)
-        .set_header(vec![
-            "name",
-            "level",
-            "num_entries",
-            "start_key",
-            "end_key",
-            "num_deletions",
-            "file_size",
-        ]);
-
-    for file in db.live_files()?.iter() {
-        if file.column_family_name != table_name {
-            continue;
-        }
-        let mut row = Row::new();
-        row.add_cell(Cell::new(&file.name));
-        row.add_cell(Cell::new(file.level));
-        row.add_cell(Cell::new(file.num_entries));
-        row.add_cell(Cell::new(hex::encode(
-            file.start_key.as_ref().unwrap_or(&"".as_bytes().to_vec()),
-        )));
-        row.add_cell(Cell::new(hex::encode(
-            file.end_key.as_ref().unwrap_or(&"".as_bytes().to_vec()),
-        )));
-        row.add_cell(Cell::new(file.num_deletions));
-        row.add_cell(Cell::new(file.size));
-        table.add_row(row);
-    }
-
-    eprintln!("{}", table);
-    Ok(())
-}
-
-pub fn duplicate_objects_summary(db_path: PathBuf) -> anyhow::Result<(usize, usize, usize, usize)> {
-    let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
-    let iter = perpetual_tables.objects.safe_iter();
-    let mut total_count = 0;
-    let mut duplicate_count = 0;
-    let mut total_bytes = 0;
-    let mut duplicated_bytes = 0;
-
-    let mut object_id: ObjectID = ObjectID::random();
-    let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
-
-    for item in iter {
-        let (key, value) = item?;
-        if let StoreObject::Value(store_object) = value.migrate().into_inner()
-            && let StoreData::Move(object) = store_object.data
-        {
-            if object_id != key.0 {
-                for (k, cnt) in data.iter() {
-                    total_bytes += k.len() * cnt;
-                    duplicated_bytes += k.len() * (cnt - 1);
-                    total_count += cnt;
-                    duplicate_count += cnt - 1;
-                }
-                object_id = key.0;
-                data.clear();
             }
-            *data.entry(object.contents().to_vec()).or_default() += 1;
+        };
+
+        let mut table = Table::new();
+        table
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_width(200)
+            .set_header(vec![
+                "name",
+                "level",
+                "num_entries",
+                "start_key",
+                "end_key",
+                "num_deletions",
+                "file_size",
+            ]);
+
+        for file in db.live_files()?.iter() {
+            if file.column_family_name != table_name {
+                continue;
+            }
+            let mut row = Row::new();
+            row.add_cell(Cell::new(&file.name));
+            row.add_cell(Cell::new(file.level));
+            row.add_cell(Cell::new(file.num_entries));
+            row.add_cell(Cell::new(hex::encode(
+                file.start_key.as_ref().unwrap_or(&"".as_bytes().to_vec()),
+            )));
+            row.add_cell(Cell::new(hex::encode(
+                file.end_key.as_ref().unwrap_or(&"".as_bytes().to_vec()),
+            )));
+            row.add_cell(Cell::new(file.num_deletions));
+            row.add_cell(Cell::new(file.size));
+            table.add_row(row);
         }
+
+        eprintln!("{}", table);
     }
-    Ok((total_count, duplicate_count, total_bytes, duplicated_bytes))
+    Ok(())
 }
 
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {

@@ -424,12 +424,47 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 }
 
                 pub fn get_read_only_handle (
-                    _: std::path::PathBuf,
-                    _: Option<std::path::PathBuf>,
-                    _: Option<typed_store::rocksdb::Options>,
-                    _: typed_store::rocks::MetricConf,
-                ) -> #secondary_db_map_struct_name #generics {
-                    unimplemented!("read only mode is not supported for TideHunter");
+                    path: std::path::PathBuf,
+                    metric_conf: typed_store::rocks::MetricConf,
+                    cf_configs: std::collections::BTreeMap<String, typed_store::tidehunter_util::ThConfig>,
+                ) -> Self {
+                    Self::open_tables_read_write(path, metric_conf, cf_configs)
+                }
+
+                pub fn table_summary(&self, table_name: &str) -> eyre::Result<typed_store::traits::TableSummary> {
+                    match table_name {
+                        #(
+                            stringify!(#field_names) => {
+                                self.#field_names.table_summary()
+                            }
+                        )*
+                        _ => eyre::bail!("No such table name: {}", table_name),
+                    }
+                }
+
+                fn cf_name_to_table_name(cf_name: &str) -> eyre::Result<&'static str> {
+                    Ok(match cf_name {
+                        #(
+                            stringify!(#cf_names) => stringify!(#field_names),
+                        )*
+                        _ => eyre::bail!("No such cf name: {}", cf_name),
+                    })
+                }
+
+                pub fn dump(&self, cf_name: &str, page_size: u16, page_number: usize) -> eyre::Result<std::collections::BTreeMap<String, String>> {
+                    let table_name = Self::cf_name_to_table_name(cf_name)?;
+                    Ok(match table_name {
+                        #(
+                            stringify!(#field_names) => {
+                                typed_store::traits::Map::safe_iter(&self.#field_names)
+                                    .skip((page_number * (page_size) as usize))
+                                    .take(page_size as usize)
+                                    .map(|result| result.map(|(k, v)| (format!("{:?}", k), format!("{:?}", v))))
+                                    .collect::<eyre::Result<std::collections::BTreeMap<_, _>, _>>()?
+                            }
+                        )*
+                        _ => eyre::bail!("No such table name: {}", table_name),
+                    })
                 }
             }
 
