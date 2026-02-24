@@ -327,7 +327,6 @@ impl ParentSync for InMemoryStore {
 #[derive(Debug)]
 pub struct KeyStore {
     validator_keys: BTreeMap<AuthorityName, AuthorityKeyPair>,
-    #[allow(unused)]
     account_keys: BTreeMap<SuiAddress, AccountKeyPair>,
 }
 
