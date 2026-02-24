@@ -3410,6 +3410,11 @@ pub struct CheckpointService {
 
 impl CheckpointService {
     /// Constructs a new CheckpointService in an un-started state.
+    // The signature channel is unbounded because notify_checkpoint_signature is called from a
+    // sync context (consensus_validator.rs implements a sync external trait) and cannot block.
+    // The channel is consumed by a single async aggregator task that drains it continuously, so
+    // unbounded growth is not a concern in practice.
+    #[allow(clippy::disallowed_methods)]
     pub fn build(
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
