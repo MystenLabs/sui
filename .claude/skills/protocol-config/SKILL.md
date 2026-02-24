@@ -100,11 +100,13 @@ cfg.some_constant = Some(new_value);
 ```rust
 cfg.new_constant = Some(new_value);
 ```
+Note: You must also add the field to the `ProtocolConfig` struct with type `Option<T>`. The `ProtocolConfigAccessors` derive macro automatically generates accessor methods (`new_constant()` and `new_constant_as_option()`).
 
 **Add a new feature flag:**
 ```rust
 cfg.feature_flags.new_feature = true;
 ```
+Note: You must also add the field to the `FeatureFlags` struct with type `bool`. The `ProtocolConfigFeatureFlagsGetters` derive macro automatically generates the getter method.
 
 ### 7. Using Chain for network-specific features
 
@@ -124,17 +126,19 @@ if chain != Chain::Mainnet {
 }
 ```
 
-**Enable on mainnet only:**
+**Enable everywhere (preferred for new features going to mainnet):**
+```rust
+cfg.feature_flags.stable_feature = true;
+```
+This is the preferred pattern when enabling a feature for mainnet. Use unconditional enabling rather than `chain == Chain::Mainnet`.
+
+**Enable on mainnet only (rare - excludes devnet/testnet):**
 ```rust
 if chain == Chain::Mainnet {
     cfg.feature_flags.some_mainnet_specific_thing = true;
 }
 ```
-
-**Enable everywhere (no chain check needed):**
-```rust
-cfg.feature_flags.stable_feature = true;
-```
+This pattern is rarely needed. It enables a feature ONLY on mainnet while keeping it disabled on devnet and testnet. Only use this for mainnet-specific behavior that should not exist on other networks.
 
 ### 8. Update snapshots
 
@@ -153,11 +157,12 @@ cargo insta test -p sui-protocol-config --accept
 
 ## Quick Reference
 
-| Network | Chain Value | Pattern |
-|---------|-------------|---------|
-| Devnet | `Chain::Unknown` | `chain != Chain::Mainnet && chain != Chain::Testnet` |
-| Testnet | `Chain::Testnet` | `chain != Chain::Mainnet` |
-| Mainnet | `Chain::Mainnet` | `chain == Chain::Mainnet` or no condition |
+| Target Networks | Pattern |
+|-----------------|---------|
+| Devnet only | `if chain != Chain::Mainnet && chain != Chain::Testnet` |
+| Devnet + Testnet | `if chain != Chain::Mainnet` |
+| All networks (including Mainnet) | No condition (preferred) |
+| Mainnet only (rare) | `if chain == Chain::Mainnet` |
 
 ## File Locations
 
