@@ -145,7 +145,7 @@ Advances the checkpoint of the local network by 1.
 sui-forking advance-clock
 ```
 
-Advances the clock of the local network by 1 second.
+Advances the clock of the local network by 1 millisecond.
 
 ### Advance Epoch
 
@@ -198,7 +198,7 @@ sui client ptb --move-call 0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938d
 The local forked network server exposes a REST API for interaction. The server listens on port 9001 by default.
 ### Endpoints
 - `POST /advance-checkpoint`: Advance the checkpoint by 1
-- `POST /advance-clock [milliseconds]`: Advance the clock by milliseconds (default: 1s if omitted).
+- `POST /advance-clock [milliseconds]`: Advance the clock by milliseconds (default: 1ms if omitted).
 - `POST /advance-epoch`: Advance the epoch by 1
 - `POST /faucet`: Request SUI tokens
   - Body: `{ "address": "<address>", "amount": <amount> }`
