@@ -88,7 +88,7 @@ use crate::{
         reconfiguration::ReconfigState,
     },
     execution_cache::ObjectCacheRead,
-    execution_scheduler::ExecutionScheduler,
+    execution_scheduler::{SchedulingSource, SettlementScheduler},
     post_consensus_tx_reorder::PostConsensusTxReorder,
     scoring_decision::update_low_scoring_authorities,
     traffic_controller::{TrafficController, policies::TrafficTally},
@@ -173,10 +173,14 @@ impl ConsensusHandlerInitializer {
         let new_epoch_start_state = self.epoch_store.epoch_start_state();
         let consensus_committee = new_epoch_start_state.get_consensus_committee();
 
+        let settlement_scheduler = SettlementScheduler::new(
+            self.state.execution_scheduler().as_ref().clone(),
+            self.state.get_transaction_cache_reader().clone(),
+        );
         ConsensusHandler::new(
             self.epoch_store.clone(),
             self.checkpoint_service.clone(),
-            self.state.execution_scheduler().clone(),
+            settlement_scheduler,
             self.consensus_adapter.clone(),
             self.state.get_object_cache_reader().clone(),
             self.low_scoring_authorities.clone(),
@@ -745,7 +749,7 @@ impl<C> ConsensusHandler<C> {
     pub(crate) fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
-        execution_scheduler: Arc<ExecutionScheduler>,
+        settlement_scheduler: SettlementScheduler,
         consensus_adapter: Arc<ConsensusAdapter>,
         cache_reader: Arc<dyn ObjectCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
@@ -781,7 +785,7 @@ impl<C> ConsensusHandler<C> {
             }
         }
         let execution_scheduler_sender =
-            ExecutionSchedulerSender::start(execution_scheduler, epoch_store.clone());
+            ExecutionSchedulerSender::start(settlement_scheduler, epoch_store.clone());
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
@@ -1274,9 +1278,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             stats_to_record.checkpoint_seq = queue.checkpoint_seq();
         }
 
-        state
-            .output
-            .record_consensus_commit_stats(stats_to_record.clone());
+        state.output.record_consensus_commit_stats(stats_to_record);
 
         self.record_deferral_deletion(&mut state);
 
@@ -3202,11 +3204,11 @@ pub(crate) struct ExecutionSchedulerSender {
 
 impl ExecutionSchedulerSender {
     fn start(
-        execution_scheduler: Arc<ExecutionScheduler>,
+        settlement_scheduler: SettlementScheduler,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> Self {
         let (sender, recv) = monitored_mpsc::unbounded_channel("execution_scheduler_sender");
-        spawn_monitored_task!(Self::run(recv, execution_scheduler, epoch_store));
+        spawn_monitored_task!(Self::run(recv, settlement_scheduler, epoch_store));
         Self { sender }
     }
 
@@ -3221,8 +3223,12 @@ impl ExecutionSchedulerSender {
     }
 
     async fn run(
-        mut recv: monitored_mpsc::UnboundedReceiver<(Vec<Schedulable>, AssignedTxAndVersions)>,
-        execution_scheduler: Arc<ExecutionScheduler>,
+        mut recv: monitored_mpsc::UnboundedReceiver<(
+            Vec<Schedulable>,
+            AssignedTxAndVersions,
+            SchedulingSource,
+        )>,
+        settlement_scheduler: SettlementScheduler,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
         while let Some((transactions, assigned_versions)) = recv.recv().await {
@@ -3240,7 +3246,7 @@ impl ExecutionSchedulerSender {
                     )
                 })
                 .collect();
-            execution_scheduler.enqueue(txns, &epoch_store);
+            settlement_scheduler.enqueue(txns, &epoch_store);
         }
     }
 }
@@ -3693,10 +3699,14 @@ mod tests {
         let backpressure_manager = BackpressureManager::new_for_tests();
         let consensus_adapter =
             make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
+        let settlement_scheduler = SettlementScheduler::new(
+            state.execution_scheduler().as_ref().clone(),
+            state.get_transaction_cache_reader().clone(),
+        );
         let mut consensus_handler = ConsensusHandler::new(
             epoch_store,
             Arc::new(CheckpointServiceNoop {}),
-            state.execution_scheduler().clone(),
+            settlement_scheduler,
             consensus_adapter,
             state.get_object_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
@@ -3955,10 +3965,14 @@ mod tests {
         let backpressure = BackpressureManager::new_for_tests();
         let consensus_adapter =
             make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
+        let settlement_scheduler = SettlementScheduler::new(
+            state.execution_scheduler().as_ref().clone(),
+            state.get_transaction_cache_reader().clone(),
+        );
         let mut handler = ConsensusHandler::new(
             epoch_store.clone(),
             Arc::new(CheckpointServiceNoop {}),
-            state.execution_scheduler().clone(),
+            settlement_scheduler,
             consensus_adapter,
             state.get_object_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
@@ -4077,10 +4091,14 @@ mod tests {
         let backpressure = BackpressureManager::new_for_tests();
         let consensus_adapter =
             make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
+        let settlement_scheduler = SettlementScheduler::new(
+            state.execution_scheduler().as_ref().clone(),
+            state.get_transaction_cache_reader().clone(),
+        );
         let mut handler = ConsensusHandler::new(
             epoch_store.clone(),
             Arc::new(CheckpointServiceNoop {}),
-            state.execution_scheduler().clone(),
+            settlement_scheduler,
             consensus_adapter,
             state.get_object_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
