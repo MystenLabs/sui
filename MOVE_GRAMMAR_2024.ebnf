@@ -1,0 +1,580 @@
+(*
+ * Move 2024 Language EBNF Grammar (with Spec)
+ * ===========================================
+ *
+ * This grammar covers Move 2024 edition (and later) INCLUDING spec blocks.
+ * For a version without spec, see MOVE_GRAMMAR_2024_NO_SPEC.ebnf
+ * For legacy Move, see MOVE_GRAMMAR_LEGACY.ebnf
+ *
+ * Derived from: external-crates/move/crates/move-compiler/src/parser/syntax.rs
+ * Verified against: external-crates/move/crates/move-compiler/tests/move_2024/parser/
+ *
+ * Key Move 2024 features (not in legacy):
+ *   - enum declarations and match expressions
+ *   - mut keyword for mutable bindings
+ *   - Positional struct/enum fields: struct S(u64, u64)
+ *   - Named blocks and labeled control flow: 'label: { ... }
+ *   - Lambda expressions with return types: |x| -> u64 { x + 1 }
+ *   - Required visibility on structs/enums (public only)
+ *   - Module labels: module foo; (instead of module foo { })
+ *   - use fun declarations
+ *   - Macro functions
+ *
+ * Reserved keywords in Move 2024 (from lexer.rs):
+ *   abort, acquires, as, break, const, continue, copy, else, enum, false,
+ *   for, friend, fun, if, let, loop, match, module, move, mut, native,
+ *   public, return, struct, true, type, use, while
+ *
+ * Additional keywords when spec is enabled (legacy behavior):
+ *   invariant, spec
+ *
+ * Contextual keywords (from keywords.rs - parsed contextually, not as tokens):
+ *   address, entry, has, macro, phantom, Self
+ *
+ * Notation:
+ *   [ optional ]    - Zero or one
+ *   { repeated }    - Zero or more
+ *   ( grouped )     - Grouping
+ *   |               - Alternation
+ *   Comma<X>        - Comma-separated list with optional trailing comma
+ *
+ * ============================================================================
+ * SEMANTIC RESTRICTIONS (not enforced by parser)
+ * ============================================================================
+ *
+ * The following restrictions are enforced during type checking, not parsing.
+ * Code that violates these rules will parse successfully but fail to compile.
+ *
+ * [SEM-1] Lambda expressions: Syntactically valid anywhere an Exp is expected,
+ *         but semantically restricted to direct arguments of macro functions.
+ *         Example: `let f = |x| x + 1` parses but fails with E04031.
+ *
+ * [SEM-2] Module labels: Only ONE module per file may use label syntax (;).
+ *         Additional modules in the same file must use braced form ({}).
+ *         Example: `module a; ... module b;` fails with E02004.
+ *
+ * [SEM-3] Use fun declarations: The function's first parameter must be the
+ *         receiver type (by value, &, or &mut). Constructor-style functions
+ *         (returning the type) cannot be used with `use fun`.
+ *         Example: `use fun new as T.create` where `fun new(): T` fails E02017.
+ *
+ * [SEM-4] Named block labels with break/continue: Named blocks ('label: {})
+ *         only support `return 'label`, not `break 'label` or `continue 'label`.
+ *         Loop labels ('label: loop/while) support break/continue.
+ *         Example: `'b: { break 'b }` fails with E03014.
+ *
+ * [SEM-5] Ability constraints: Types without `drop` cannot be ignored (via _)
+ *         or implicitly discarded. Types without `copy` cannot be used after move.
+ *         These must be explicitly consumed or have required abilities declared.
+ *
+ * [SEM-6] Type parameter constraints: When a generic type requires abilities
+ *         on its parameters (e.g., `Generic<T: copy>`), any type using it must
+ *         propagate those constraints to its own parameters.
+ *
+ * [SEM-7] Struct construction: Structs use `Name { field: value }` syntax.
+ *         `Name::method()` syntax is only valid for enum variant construction
+ *         or associated function calls via `use fun`.
+ *
+ *)
+
+(* ============================================================================
+ * LEXICAL ELEMENTS
+ * ============================================================================ *)
+
+Identifier = <letter_or_underscore> { <alphanumeric_or_underscore> } ;
+RestrictedIdentifier = "`" <identifier_text> "`" ;   (* Escape reserved words *)
+SyntaxIdentifier = "$" Identifier ;                   (* Macro parameters *)
+BlockLabel = "'" Identifier ;                         (* Named block labels *)
+
+(* ============================================================================
+ * LITERALS
+ * ============================================================================ *)
+
+Value =
+    "@" LeadingNameAccess
+  | "true" | "false"
+  | NumValue
+  | NumTypedValue
+  | ByteStringValue
+  | HexStringValue
+  | StringValue
+  ;
+
+NumValue = <decimal_number> | "0x" <hex_number> ;
+NumTypedValue = NumValue ("u8" | "u16" | "u32" | "u64" | "u128" | "u256") ;
+ByteStringValue = 'b"' { <char> } '"' ;
+HexStringValue = 'x"' { <hex_digit> } '"' ;
+StringValue = '"' { <char> } '"' ;
+
+(* ============================================================================
+ * TOP-LEVEL STRUCTURE
+ * ============================================================================ *)
+
+File = { Definition } ;
+
+Definition = ModuleDefinition | AddressBlock ;
+
+(* Address blocks are deprecated but still parsed *)
+AddressBlock = "address" LeadingNameAccess "{" { ModuleDefinition } "}" ;
+
+(*
+ * ModuleDefinition
+ * ----------------
+ * Test files: top_level_module.move, multi_module_invalid_*.move
+ *
+ * Module address is REQUIRED in Move 2024.
+ * Either via path (module 0x1::foo) or named address (module pkg::foo).
+ *
+ * See [SEM-2]: Only one module per file may use label syntax.
+ *)
+ModuleDefinition =
+    { Attributes }
+    [ DocComment ]
+    [ "extend" ]                       (* Module extension - requires #[mode(...)] *)
+    ( "module" | "spec" )
+    LeadingNameAccess "::" ModuleName  (* Address is required *)
+    ( "{" { ModuleMember } "}"         (* Braced form - required for multiple modules *)
+    | ";" { ModuleMember }             (* Label form - only if single module in file [SEM-2] *)
+    )
+  ;
+
+ModuleName = Identifier ;
+
+(* ============================================================================
+ * MODULE MEMBERS
+ * ============================================================================ *)
+
+ModuleMember =
+    UseDecl
+  | FriendDecl
+  | ConstantDecl
+  | StructDecl
+  | EnumDecl
+  | FunctionDecl
+  | SpecBlock
+  ;
+
+(* ============================================================================
+ * USE DECLARATIONS
+ * Test files: use_fun.move, use_fun_multi.move, nested_module_use.move
+ * ============================================================================ *)
+
+UseDecl =
+    { Attributes }
+    [ Visibility ]                     (* Only for use fun *)
+    "use" Use ";"
+  ;
+
+Use =
+    "fun" NameAccessChain "as" NameAccessChain "." Identifier  (* [SEM-3] *)
+  | LeadingNameAccess "::" UseModule
+  | LeadingNameAccess "::" "{" Comma<UseNestedModule> "}"
+  ;
+
+UseModule =
+    ModuleName [ UseAlias ]
+  | ModuleName "::" UseMember
+  | ModuleName "::" "{" Comma<UseMember> "}"
+  ;
+
+UseNestedModule = ModuleName UseModule ;
+UseMember = Identifier [ UseAlias ] ;
+UseAlias = "as" Identifier ;
+
+(* ============================================================================
+ * FRIEND DECLARATIONS (Deprecated in Move 2024)
+ * Use public(package) visibility instead.
+ * ============================================================================ *)
+
+FriendDecl = { Attributes } "friend" NameAccessChain ";" ;  (* Deprecated *)
+
+(* ============================================================================
+ * CONSTANT DECLARATIONS
+ * Test files: constant_values.move, constants_simple.move
+ * ============================================================================ *)
+
+ConstantDecl =
+    { Attributes }
+    [ DocComment ]
+    "const" ConstantName ":" Type "=" Exp ";"
+  ;
+
+ConstantName = Identifier ;
+
+(* ============================================================================
+ * STRUCT DECLARATIONS
+ * Test files: struct_public.move, positional_struct_fields_simple.move
+ *
+ * In Move 2024:
+ *   - "public" visibility is REQUIRED
+ *   - Only "public" is supported (not friend, not public(package))
+ *   - Positional fields are supported: struct S(T1, T2)
+ * ============================================================================ *)
+
+StructDecl =
+    { Attributes }
+    [ DocComment ]
+    "public"                           (* Required in Move 2024 *)
+    [ "native" ]
+    "struct" DatatypeName
+    [ TypeParameters ]
+    [ "has" AbilityList ]              (* Infix abilities *)
+    StructFields
+    [ "has" AbilityList ";" ]          (* Postfix abilities *)
+  ;
+
+StructFields =
+    "{" Comma<FieldAnnot> "}"          (* Named fields *)
+  | "(" Comma<PosField> ")"            (* Positional fields *)
+  | ";"                                (* Native struct *)
+  ;
+
+FieldAnnot = [ DocComment ] Field ":" Type ;
+PosField = [ DocComment ] Type ;
+Field = Identifier ;
+DatatypeName = Identifier ;
+
+(* ============================================================================
+ * ENUM DECLARATIONS (Move 2024+ only)
+ * Test files: enum.move
+ * Invalid: enum_invalid.move
+ *
+ * - "public" visibility is REQUIRED (only public enums allowed)
+ * - Variants can have named fields, positional fields, or no fields
+ * ============================================================================ *)
+
+EnumDecl =
+    { Attributes }
+    [ DocComment ]
+    "public"                           (* Required - only public enums *)
+    "enum" DatatypeName
+    [ TypeParameters ]
+    [ "has" AbilityList ]
+    "{" Comma<VariantDecl> "}"
+    [ "has" AbilityList ";" ]
+  ;
+
+VariantDecl =
+    [ DocComment ]
+    VariantName [ VariantFields ]
+  ;
+
+VariantName = Identifier ;
+
+VariantFields =
+    "{" Comma<FieldAnnot> "}"          (* Named fields *)
+  | "(" Comma<PosField> ")"            (* Positional fields *)
+  ;
+
+(* ============================================================================
+ * FUNCTION DECLARATIONS
+ * Test files: function_public_native.move, entry_function.move,
+ *             valid_fun_types.move, duplicate_macro_modifier.move
+ * ============================================================================ *)
+
+FunctionDecl =
+    { Attributes }
+    [ DocComment ]
+    { ModuleMemberModifier }
+    "fun" FunctionName
+    [ TypeParameters ]
+    "(" Comma<Parameter> ")"
+    [ ":" Type ]
+    FunctionBody
+  ;
+
+FunctionName = Identifier ;
+
+ModuleMemberModifier =
+    Visibility | "native" | "entry" | "macro"
+  ;
+
+Visibility =
+    "public"
+  | "public" "(" "friend" ")"          (* Deprecated - use public(package) *)
+  | "public" "(" "package" ")"
+  ;
+
+Parameter = [ "mut" ] Var ":" Type ;
+
+FunctionBody =
+    "{" Sequence "}"
+  | ";"                                (* Native or macro *)
+  ;
+
+Var = Identifier | SyntaxIdentifier ;
+
+(* ============================================================================
+ * TYPE PARAMETERS AND ABILITIES
+ * ============================================================================ *)
+
+TypeParameters = "<" Comma<TypeParameter> ">" ;
+
+TypeParameter = [ "phantom" ] Identifier [ ":" AbilityList ] ;
+
+AbilityList = Ability { "," Ability } ;
+
+Ability = "copy" | "drop" | "store" | "key" ;
+
+(* ============================================================================
+ * TYPES
+ * Test files: valid_fun_types.move, type_mut_space.move
+ * ============================================================================ *)
+
+Type =
+    NameAccessChain
+  | "&" Type
+  | "&" "mut" Type
+  | "(" Comma<Type> ")"                (* Unit or tuple *)
+  | "|" Comma<Type> "|" [ "->" Type ]  (* Function type *)
+  | "||" [ "->" Type ]                 (* Zero-arg function type *)
+  ;
+
+(* ============================================================================
+ * NAME ACCESS CHAINS
+ * Test files: path_usage.move, long_path.move
+ * ============================================================================ *)
+
+NameAccessChain =
+    [ "::" ] LeadingNameAccess [ TypeArgs ]  (* Optional :: for global qualification *)
+    { "::" Identifier [ TypeArgs ] }
+    [ "!" ]                            (* Macro invocation *)
+  ;
+
+LeadingNameAccess = Identifier | NumValue ;
+
+TypeArgs = "<" Comma<Type> ">" ;
+
+(* ============================================================================
+ * SEQUENCES AND BLOCKS
+ * ============================================================================ *)
+
+Sequence =
+    { UseDecl }
+    { SequenceItem ";" }
+    [ Exp ]
+  ;
+
+SequenceItem =
+    "let" BindList [ ":" Type ] [ "=" Exp ]
+  | Exp
+  ;
+
+(* ============================================================================
+ * EXPRESSIONS
+ * ============================================================================ *)
+
+Exp =
+    LambdaExp
+  | AssignExp
+  | BinOpExp
+  | QuantExp                           (* Spec only *)
+  ;
+
+(*
+ * Lambda Expressions
+ * Test files: lambda_expression_return_type.move, lambda_lvalue.move
+ *
+ * See [SEM-1]: Lambdas parse as expressions but are restricted to macro arguments.
+ *)
+LambdaExp =
+    LambdaBindList Exp
+  | LambdaBindList "->" Type "{" Sequence "}"
+  | "||" Exp
+  | "||" "->" Type "{" Sequence "}"
+  ;
+
+LambdaBindList = "|" Comma<LambdaBinding> "|" ;
+LambdaBinding = BindList [ ":" Type ] ;
+
+AssignExp = UnaryExp "=" Exp ;
+
+(*
+ * Binary Operators (precedence low to high)
+ * Test files: cast_valid.move, complex_as.move
+ *)
+BinOpExp = UnaryExp { BinOp UnaryExp } ;
+
+BinOp =
+    "==>" | "<==>"                     (* Spec only: implies, iff *)
+  | "||"                               (* Logical or *)
+  | "&&"                               (* Logical and *)
+  | "==" | "!=" | "<" | ">" | "<=" | ">="
+  | "as"                               (* Type cast *)
+  | ".."                               (* Range - spec only *)
+  | "|"                                (* Bitwise or *)
+  | "^"                                (* Bitwise xor *)
+  | "&"                                (* Bitwise and *)
+  | "<<" | ">>"                        (* Bit shifts *)
+  | "+" | "-"
+  | "*" | "/" | "%"
+  ;
+
+UnaryExp =
+    "!" UnaryExp
+  | "&" [ "mut" ] UnaryExp
+  | "*" UnaryExp
+  | "move" UnaryExp
+  | "copy" UnaryExp
+  | DotOrIndexChain
+  ;
+
+DotOrIndexChain = Term { DotOrIndexSuffix } ;
+
+DotOrIndexSuffix =
+    "." Identifier
+  | "." NumValue                       (* Positional field: x.0 *)
+  | "." Identifier [ "!" ] [ TypeArgs ] "(" Comma<Exp> ")"
+  | "[" Comma<Exp> "]"                 (* Spec only *)
+  ;
+
+Term =
+    Value
+  | NameExp
+  | "(" ")"
+  | "(" Exp ")"
+  | "(" Exp ":" Type ")"
+  | "(" Exp "," Comma<Exp> ")"
+  | "{" Sequence "}"
+  | "vector" [ TypeArgs ] "[" Comma<Exp> "]"
+  | ControlExp
+  | BlockLabel ":" Exp                 (* Labeled expression *)
+  ;
+
+(* See [SEM-7]: Struct construction uses {} syntax; Name::x() is for enums/use fun *)
+NameExp =
+    NameAccessChain
+  | NameAccessChain "(" Comma<Exp> ")"            (* Enum variant or function call *)
+  | NameAccessChain "!" "(" Comma<Exp> ")"        (* Macro invocation *)
+  | NameAccessChain "{" Comma<ExpField> "}"       (* Struct construction *)
+  ;
+
+ExpField = Field [ ":" Exp ] ;
+
+(*
+ * Control Flow
+ * Test files: named_blocks.move, labeled_control_exp_*.move
+ *)
+ControlExp =
+    IfExp | WhileExp | LoopExp | MatchExp
+  | BreakExp | ContinueExp | ReturnExp | AbortExp
+  ;
+
+IfExp = "if" "(" Exp ")" ExpOrBlock [ "else" ExpOrBlock ] ;
+WhileExp = "while" "(" Exp ")" ExpOrBlock ;
+LoopExp = "loop" ExpOrBlock ;
+
+(*
+ * Match Expression (Move 2024+ only)
+ * Test files: match.move, mut_match.move, pattern_ellipsis.move
+ *)
+MatchExp = "match" "(" Exp ")" "{" Comma<MatchArm> "}" ;
+
+MatchArm = MatchPattern [ "if" "(" Exp ")" ] "=>" ExpOrBlock ;
+
+(*
+ * MatchPattern
+ * AST: MatchPattern_ enum with Or, At, Name, PositionalConstructor,
+ *      FieldConstructor, Literal variants
+ *)
+MatchPattern = AtPattern { "|" AtPattern } ;
+
+AtPattern =
+    Identifier "@" ConstructorPattern
+  | ConstructorPattern
+  ;
+
+(* Corresponds to parse_ctor_pattern helper in syntax.rs *)
+ConstructorPattern =
+    "(" MatchPattern ")"
+  | [ "mut" ] NameAccessChain
+  | NameAccessChain "{" Comma<FieldPattern> "}"
+  | NameAccessChain "(" Comma<PositionalFieldPattern> ")"
+  | Value
+  ;
+
+FieldPattern =
+    ".."
+  | [ "mut" ] Field [ ":" MatchPattern ]
+  ;
+
+PositionalFieldPattern =
+    ".."
+  | MatchPattern
+  ;
+
+(* See [SEM-4]: break/continue only work with loop labels, not named blocks *)
+BreakExp = "break" [ BlockLabel ] [ Exp ] ;
+ContinueExp = "continue" [ BlockLabel ] ;
+ReturnExp = "return" [ BlockLabel ] [ Exp ] ;  (* Works with both loop and block labels *)
+AbortExp = "abort" [ Exp ] ;
+
+ExpOrBlock =
+    [ BlockLabel ":" ] "{" Sequence "}"
+  | Exp
+  ;
+
+(* ============================================================================
+ * BINDINGS
+ * ============================================================================ *)
+
+BindList =
+    Bind
+  | "(" Comma<Bind> ")"
+  ;
+
+Bind =
+    [ "mut" ] Var
+  | NameAccessChain "{" Comma<BindField> "}"
+  | NameAccessChain "(" Comma<BindOrEllipsis> ")"
+  ;
+
+BindField =
+    ".."
+  | [ "mut" ] Field [ ":" Bind ]
+  ;
+
+BindOrEllipsis = ".." | Bind ;
+
+(* ============================================================================
+ * QUANTIFIERS (Spec only)
+ * ============================================================================ *)
+
+QuantExp =
+    "forall" QuantBindList [ "where" Exp ] ":" Exp
+  | "exists" QuantBindList [ "where" Exp ] ":" Exp
+  | "choose" QuantBind "where" Exp
+  | "choose" "min" QuantBind "where" Exp
+  ;
+
+QuantBindList = QuantBind { "," QuantBind } ;
+QuantBind = Identifier ":" Type | Identifier "in" Exp ;
+
+(* ============================================================================
+ * ATTRIBUTES
+ * Test files: attribute_variants.move, attribute_placement.move
+ * ============================================================================ *)
+
+Attributes = "#" "[" Comma<Attribute> "]" ;
+
+Attribute =
+    Identifier
+  | Identifier "=" AttributeValue
+  | Identifier "(" Comma<Attribute> ")"
+  ;
+
+AttributeValue = Value | NameAccessChain ;
+
+(* ============================================================================
+ * SPECIFICATION BLOCKS
+ * ============================================================================ *)
+
+SpecBlock = "spec" [ Identifier ] "{" <spec_content> "}" ;
+
+(* ============================================================================
+ * HELPER
+ * ============================================================================ *)
+
+Comma<X> = [ X { "," X } [ "," ] ] ;
+
+DocComment = { "///" <text> } | "/**" <text> "*/" ;
