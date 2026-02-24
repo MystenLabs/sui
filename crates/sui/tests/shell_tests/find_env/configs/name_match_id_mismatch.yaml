@@ -2,9 +2,9 @@ keystore:
   File: ~
 envs:
   - alias: manifest_env
-    rpc: "bogus"
+    rpc: 'bogus'
     ws: ~
     basic_auth: ~
-    chain_id: "0000"
+    chain_id: '0000'
 active_env: manifest_env
-active_address: "0x0000000000000000000000000000000000000000000000000000000000000000"
+active_address: '0x0000000000000000000000000000000000000000000000000000000000000000'

@@ -4,5 +4,5 @@
 module b::b;
 
 public fun b() {
-  a::a::a();
+	a::a::a();
 }

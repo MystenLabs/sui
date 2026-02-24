@@ -5,27 +5,27 @@
 // in the sui crate)
 
 #[allow(lint(custom_state_change))]
-module linter::suppression_stats {
-    use sui::object::UID;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+module linter::suppression_stats;
 
-    #[allow(unused_field)]
-    public struct S1 has key, store {
-        id: UID
-    }
+use sui::object::UID;
+use sui::transfer;
+use sui::tx_context::{Self, TxContext};
 
-    #[allow(lint(self_transfer))]
-    public fun custom_transfer_bad(o: S1, ctx: &mut TxContext) {
-        transfer::transfer(o, tx_context::sender(ctx))
-    }
+#[allow(unused_field)]
+public struct S1 has key, store {
+	id: UID,
+}
 
-    #[allow(lint(share_owned))]
-    public fun custom_share_bad(o: S1) {
-        transfer::share_object(o)
-    }
+#[allow(lint(self_transfer))]
+public fun custom_transfer_bad(o: S1, ctx: &mut TxContext) {
+	transfer::transfer(o, tx_context::sender(ctx))
+}
 
-    public fun custom_freeze_bad(o: S1) {
-        transfer::freeze_object(o)
-    }
+#[allow(lint(share_owned))]
+public fun custom_share_bad(o: S1) {
+	transfer::share_object(o)
+}
+
+public fun custom_freeze_bad(o: S1) {
+	transfer::freeze_object(o)
 }
