@@ -180,9 +180,24 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             }
 
             if precommitted.len() > WARN_PENDING_WATERMARKS {
+                let blocker = precommitted.first_key_value().map(|(cp, part)| {
+                    if !part.is_complete() {
+                        format!(
+                            "checkpoint {} incomplete ({}/{} rows committed)",
+                            cp, part.batch_rows, part.total_rows,
+                        )
+                    } else {
+                        format!(
+                            "gap: next expected {} but first pending is {}",
+                            next_checkpoint, cp,
+                        )
+                    }
+                });
                 warn!(
                     pipeline = H::NAME,
                     pending = precommitted.len(),
+                    next_checkpoint,
+                    blocker = blocker.as_deref().unwrap_or("unknown"),
                     "Pipeline has a large number of pending commit watermarks",
                 );
             }
