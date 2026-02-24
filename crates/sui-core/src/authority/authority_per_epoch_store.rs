@@ -56,7 +56,7 @@ use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
 };
 use sui_types::messages_consensus::{
     AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, AuthorityIndex, ConsensusPosition,
@@ -520,11 +520,6 @@ pub struct AuthorityEpochTables {
     /// by checkpoint builder.
     transaction_key_to_digest: DBMap<TransactionKey, TransactionDigest>,
 
-    /// Stores pending signatures
-    /// The key in this table is checkpoint sequence number and an arbitrary integer
-    pub(crate) pending_checkpoint_signatures:
-        DBMap<(CheckpointSequenceNumber, u64), CheckpointSignatureMessage>,
-
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary_v2: DBMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
 
@@ -647,9 +642,6 @@ impl AuthorityEpochTables {
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(value_cache_size);
         let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);
-        let pending_checkpoint_signatures_config = KeySpaceConfig::new()
-            .with_unloaded_iterator(true)
-            .with_max_dirty_keys(4096);
         let builder_checkpoint_summary_v2_config = KeySpaceConfig::new()
             .disable_unload()
             .with_value_cache_size(default_value_cache_size());
@@ -758,15 +750,6 @@ impl AuthorityEpochTables {
                     mutexes,
                     uniform_key,
                     KeySpaceConfig::default(),
-                ),
-            ),
-            (
-                "pending_checkpoint_signatures".to_string(),
-                ThConfig::new_with_config(
-                    8 + 8,
-                    mutexes,
-                    sequence_key,
-                    pending_checkpoint_signatures_config,
                 ),
             ),
             (
@@ -3767,29 +3750,6 @@ impl AuthorityPerEpochStore {
                     .expect("db error")
             },
         ))
-    }
-
-    pub fn get_last_checkpoint_signature_index(&self) -> SuiResult<u64> {
-        Ok(self
-            .tables()?
-            .pending_checkpoint_signatures
-            .reversed_safe_iter_with_bounds(None, None)?
-            .next()
-            .transpose()?
-            .map(|((_, index), _)| index)
-            .unwrap_or_default())
-    }
-
-    pub fn insert_checkpoint_signature(
-        &self,
-        checkpoint_seq: CheckpointSequenceNumber,
-        index: u64,
-        info: &CheckpointSignatureMessage,
-    ) -> SuiResult<()> {
-        Ok(self
-            .tables()?
-            .pending_checkpoint_signatures
-            .insert(&(checkpoint_seq, index), info)?)
     }
 
     pub(crate) fn record_epoch_pending_certs_process_time_metric(&self) {

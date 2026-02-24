@@ -2865,7 +2865,6 @@ impl CheckpointAggregator {
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
         receiver: mpsc::UnboundedReceiver<CheckpointSignatureMessage>,
-        pending: BTreeMap<CheckpointSequenceNumber, Vec<CheckpointSignatureMessage>>,
         output: Box<dyn CertifiedCheckpointOutput>,
         state: Arc<AuthorityState>,
         metrics: Arc<CheckpointMetrics>,
@@ -2875,7 +2874,7 @@ impl CheckpointAggregator {
             epoch_store,
             notify,
             receiver,
-            pending,
+            pending: BTreeMap::new(),
             current: None,
             output,
             state,
@@ -3397,7 +3396,6 @@ impl CheckpointServiceState {
 pub struct CheckpointService {
     tables: Arc<CheckpointStore>,
     notify_builder: Arc<Notify>,
-    last_signature_index: Mutex<u64>,
     signature_sender: mpsc::UnboundedSender<CheckpointSignatureMessage>,
     // A notification for the current highest built sequence number.
     highest_currently_built_seq_tx: watch::Sender<CheckpointSequenceNumber>,
@@ -3450,39 +3448,11 @@ impl CheckpointService {
 
         let (signature_sender, signature_receiver) = mpsc::unbounded_channel();
 
-        // On startup, load pending checkpoint signatures from the DB for crash recovery. Signatures
-        // for already-certified checkpoints are skipped since the aggregator will never need them.
-        let initial_pending = {
-            let next_to_certify: CheckpointSequenceNumber = checkpoint_store
-                .tables
-                .certified_checkpoints
-                .reversed_safe_iter_with_bounds(None, None)
-                .expect("db error getting next_to_certify")
-                .next()
-                .transpose()
-                .expect("db error getting next_to_certify")
-                .map(|(seq, _)| seq + 1)
-                .unwrap_or_default();
-            let tables = epoch_store.tables().expect("epoch should not have ended");
-            let mut map: BTreeMap<CheckpointSequenceNumber, Vec<CheckpointSignatureMessage>> =
-                BTreeMap::new();
-            for item in tables
-                .pending_checkpoint_signatures
-                .safe_iter_with_bounds(Some((next_to_certify, 0)), None)
-            {
-                let ((seq, _index), msg) =
-                    item.expect("db error loading pending checkpoint signatures");
-                map.entry(seq).or_default().push(msg);
-            }
-            map
-        };
-
         let aggregator = CheckpointAggregator::new(
             checkpoint_store.clone(),
             epoch_store.clone(),
             notify_aggregator.clone(),
             signature_receiver,
-            initial_pending,
             certified_checkpoint_output,
             state.clone(),
             metrics.clone(),
@@ -3512,15 +3482,9 @@ impl CheckpointService {
             max_checkpoint_size_bytes,
         );
 
-        let last_signature_index = epoch_store
-            .get_last_checkpoint_signature_index()
-            .expect("should not cross end of epoch");
-        let last_signature_index = Mutex::new(last_signature_index);
-
         Arc::new(Self {
             tables: checkpoint_store,
             notify_builder,
-            last_signature_index,
             signature_sender,
             highest_currently_built_seq_tx,
             highest_previously_built_seq,
@@ -3671,7 +3635,7 @@ impl CheckpointService {
 impl CheckpointServiceNotify for CheckpointService {
     fn notify_checkpoint_signature(
         &self,
-        epoch_store: &AuthorityPerEpochStore,
+        _epoch_store: &AuthorityPerEpochStore,
         info: &CheckpointSignatureMessage,
     ) -> SuiResult {
         let sequence = info.summary.sequence_number;
@@ -3702,13 +3666,6 @@ impl CheckpointServiceNotify for CheckpointService {
             .last_received_checkpoint_signatures
             .with_label_values(&[&signer.to_string()])
             .set(sequence as i64);
-        // While it can be tempting to make last_signature_index into AtomicU64, this won't work
-        // We need to make sure we write to `pending_signatures` and trigger `notify_aggregator` without race conditions
-        let mut index = self.last_signature_index.lock();
-        *index += 1;
-        epoch_store.insert_checkpoint_signature(sequence, *index, info)?;
-
-        // backpressure? (in practice we probably won't have situation where consensus is faster than signature aggregation)
         self.signature_sender.send(info.clone()).ok();
         Ok(())
     }
