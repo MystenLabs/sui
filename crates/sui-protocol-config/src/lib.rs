@@ -4643,12 +4643,7 @@ impl ProtocolConfig {
             return;
         }
 
-        let should_apply = if cfg!(msim) {
-            true
-        } else {
-            mysten_common::in_antithesis()
-        };
-        if !should_apply {
+        if !mysten_common::in_test_configuration() {
             return;
         }
 
