@@ -3,6 +3,6 @@
 
 module examples::main;
 
-public entry fun main() {
+public fun main() {
 	nonexistent::nonexistent::nonexistent();
 }

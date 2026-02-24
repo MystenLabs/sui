@@ -24,5 +24,5 @@ public fun use_utf8_string(_: US) {}
 
 public fun delete_shared_object(shared: Shared) {
 	let Shared { id } = shared;
-	object::delete(id);
+	id.delete();
 }

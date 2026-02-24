@@ -3,4 +3,4 @@
 
 module invalid::invalid;
 
-public entry fun main() {}
+public fun main() {}
