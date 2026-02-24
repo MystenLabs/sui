@@ -287,7 +287,7 @@ impl StateRead for AuthorityState {
                         currency_type,
                         accumulator_version,
                         object_id,
-                        value.as_u128().map(|v| v as u64).unwrap_or(0),
+                        balance,
                     ),
                     Owner::AddressOwner(owner),
                     previous_transaction,
