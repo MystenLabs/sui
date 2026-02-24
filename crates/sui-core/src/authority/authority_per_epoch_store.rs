@@ -648,7 +648,6 @@ impl AuthorityEpochTables {
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(value_cache_size);
         let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);
         let pending_checkpoint_signatures_config = KeySpaceConfig::new()
-            //todo default with_unloaded_iterator?
             .with_unloaded_iterator(true)
             .with_max_dirty_keys(4096);
         let builder_checkpoint_summary_v2_config = KeySpaceConfig::new()
