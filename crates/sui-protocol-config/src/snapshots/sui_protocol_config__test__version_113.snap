@@ -153,6 +153,7 @@ feature_flags:
   split_checkpoints_in_consensus_handler: true
   consensus_always_accept_system_transactions: true
   validator_metadata_verify_v2: true
+  defer_unpaid_amplification: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

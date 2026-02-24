@@ -338,6 +338,17 @@ pub trait ValidatorProxy {
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>);
 
+    /// Submit a transaction to multiple validators to cause consensus amplification.
+    /// Used to test the unpaid amplification deferral logic.
+    /// Default implementation just calls execute_transaction_block.
+    async fn execute_transaction_block_with_amplification(
+        &self,
+        tx: Transaction,
+        _num_validators: usize,
+    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+        self.execute_transaction_block(tx).await
+    }
+
     fn clone_committee(&self) -> Arc<Committee>;
 
     fn get_current_epoch(&self) -> EpochId;
@@ -462,6 +473,39 @@ impl LocalValidatorAggregatorProxy {
             response.events.unwrap_or_default(),
         ))
     }
+
+    /// Submit a transaction to multiple validators to cause consensus amplification.
+    /// This is used to test the unpaid amplification deferral logic.
+    ///
+    /// `num_validators` specifies how many additional validators to submit to beyond
+    /// the normal submission path. For example, if `num_validators == 2`, the transaction
+    /// will be submitted to 2 validators directly, plus once via the normal driver path.
+    pub async fn submit_transaction_with_amplification(
+        &self,
+        tx: Transaction,
+        num_validators: usize,
+    ) -> anyhow::Result<ExecutionEffects> {
+        use sui_core::authority_client::AuthorityAPI;
+        use sui_types::messages_grpc::SubmitTxRequest;
+
+        // Submit to multiple validators in parallel
+        let validators: Vec<_> = self.clients.values().take(num_validators).collect();
+        let request = SubmitTxRequest::new_transaction(tx.clone());
+
+        let futures: Vec<_> = validators
+            .iter()
+            .map(|client| {
+                let req = request.clone();
+                async move { client.submit_transaction(req, None).await }
+            })
+            .collect();
+
+        // Fire off all submissions but don't wait for responses
+        let _ = futures::future::join_all(futures).await;
+
+        // Use the normal path to get the final result
+        self.submit_transaction_block(tx).await
+    }
 }
 
 #[async_trait]
@@ -501,6 +545,18 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         (
             ClientType::TransactionDriver,
             self.submit_transaction_block(tx).await,
+        )
+    }
+
+    async fn execute_transaction_block_with_amplification(
+        &self,
+        tx: Transaction,
+        num_validators: usize,
+    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+        (
+            ClientType::TransactionDriver,
+            self.submit_transaction_with_amplification(tx, num_validators)
+                .await,
         )
     }
 
