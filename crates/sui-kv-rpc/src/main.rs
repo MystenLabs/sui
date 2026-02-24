@@ -8,6 +8,7 @@ use clap::Parser;
 use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_kv_rpc::KvRpcServer;
 use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler, ServerVersion};
 use telemetry_subscribers::TelemetryConfig;
@@ -36,6 +37,9 @@ struct App {
     app_profile_id: Option<String>,
     #[clap(long = "checkpoint-bucket")]
     checkpoint_bucket: Option<String>,
+    /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000)
+    #[clap(long = "bigtable-channel-timeout-ms")]
+    bigtable_channel_timeout_ms: Option<u64>,
 }
 
 async fn health_check() -> &'static str {
@@ -58,11 +62,13 @@ async fn main() -> Result<()> {
     );
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
+    let channel_timeout = app.bigtable_channel_timeout_ms.map(Duration::from_millis);
     let server = KvRpcServer::new(
         app.instance_id,
         app.bigtable_project,
         app.app_profile_id,
         app.checkpoint_bucket,
+        channel_timeout,
         server_version,
         &registry,
     )

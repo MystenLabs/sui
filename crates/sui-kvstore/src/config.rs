@@ -16,6 +16,8 @@ pub struct IndexerConfig {
     /// A good rule of thumb is to target ~25 concurrent RPCs per channel, so
     /// ceil(sum of write_concurrency across all pipelines / 25).
     pub bigtable_connection_pool_size: Option<usize>,
+    /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000).
+    pub bigtable_channel_timeout_ms: Option<u64>,
 }
 
 #[DefaultConfig]
