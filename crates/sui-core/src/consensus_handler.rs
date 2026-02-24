@@ -42,8 +42,7 @@ use sui_types::{
         TrustedExecutableTransaction, VerifiedExecutableTransaction,
         VerifiedExecutableTransactionWithAliases,
     },
-    messages_checkpoint::CheckpointSignatureMessage,
-    messages_checkpoint::CheckpointTimestamp,
+    messages_checkpoint::{CheckpointSignatureMessage, CheckpointTimestamp},
     messages_consensus::{
         AuthorityCapabilitiesV2, AuthorityIndex, ConsensusDeterminedVersionAssignments,
         ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
@@ -540,10 +539,15 @@ struct QueuedCheckpointRoots {
     rejected_transactions_digest: Digest,
 }
 
+// Accumulates checkpoint roots from consensus and flushes them into PendingCheckpointV2s.
+// Roots are buffered in `pending_roots` until a flush is triggered (by max_tx overflow or
+// time interval). A flush always drains all buffered roots into a single PendingCheckpointV2,
+// so the queue only ever holds roots for one pending checkpoint at a time.
 pub(crate) struct CheckpointQueue {
     last_built_timestamp: CheckpointTimestamp,
     pending_roots: VecDeque<QueuedCheckpointRoots>,
     height: u64,
+    pending_tx_count: usize,
 }
 
 impl CheckpointQueue {
@@ -552,6 +556,7 @@ impl CheckpointQueue {
             last_built_timestamp,
             pending_roots: VecDeque::new(),
             height: checkpoint_height,
+            pending_tx_count: 0,
         }
     }
 
@@ -568,14 +573,40 @@ impl CheckpointQueue {
         self.height
     }
 
-    fn push_checkpoint_roots(
+    // Estimates the total number of effects this root will produce in the checkpoint.
+    // Settlement adds a barrier tx (always) plus settlement txns (only when there are
+    // user txns beyond the CCP that produce accumulator events, i.e. tx_count > 1).
+    fn checkpoint_roots_effects_count(roots: &CheckpointRoots) -> usize {
+        let tx_count = roots.tx_roots.len();
+        let settlement_effect_count = if roots.settlement_root.is_some() {
+            if tx_count > 1 { 2 } else { 1 }
+        } else {
+            0
+        };
+        tx_count + settlement_effect_count
+    }
+
+    fn push_roots(
         &mut self,
         roots_list: Vec<CheckpointRoots>,
         timestamp: CheckpointTimestamp,
         consensus_commit_ref: CommitRef,
         rejected_transactions_digest: Digest,
-    ) {
+        max_tx: usize,
+    ) -> Vec<PendingCheckpointV2> {
+        let mut flushed_checkpoints = Vec::new();
+
         for roots in roots_list {
+            let effects_count = Self::checkpoint_roots_effects_count(&roots);
+
+            if self.pending_tx_count > 0
+                && self.pending_tx_count + effects_count > max_tx
+                && let Some(checkpoint) = self.flush_forced()
+            {
+                flushed_checkpoints.push(checkpoint);
+            }
+
+            self.pending_tx_count += effects_count;
             self.pending_roots.push_back(QueuedCheckpointRoots {
                 roots,
                 timestamp,
@@ -583,131 +614,50 @@ impl CheckpointQueue {
                 rejected_transactions_digest,
             });
         }
+
+        flushed_checkpoints
     }
 
-    pub(crate) fn flush_checkpoint_roots(
+    pub(crate) fn flush(
         &mut self,
         protocol_config: &ProtocolConfig,
         current_timestamp: CheckpointTimestamp,
-    ) -> Vec<PendingCheckpointV2> {
-        self.flush_checkpoint_roots_impl(protocol_config, current_timestamp, false)
-    }
-
-    pub(crate) fn flush_all_checkpoint_roots(
-        &mut self,
-        protocol_config: &ProtocolConfig,
-        current_timestamp: CheckpointTimestamp,
-    ) -> Vec<PendingCheckpointV2> {
-        self.flush_checkpoint_roots_impl(protocol_config, current_timestamp, true)
-    }
-
-    fn should_build_checkpoint(
-        &self,
-        protocol_config: &ProtocolConfig,
-        current_timestamp: CheckpointTimestamp,
-        flush_all: bool,
-    ) -> bool {
-        if self.pending_roots.is_empty() {
-            return false;
-        }
-
-        if flush_all {
-            return true;
-        }
-
-        let min_checkpoint_interval_ms = protocol_config
-            .min_checkpoint_interval_ms_as_option()
-            .unwrap_or_default();
-        let max_transactions_per_checkpoint =
-            protocol_config.max_transactions_per_checkpoint() as usize;
-
-        if current_timestamp >= self.last_built_timestamp + min_checkpoint_interval_ms {
-            return true;
-        }
-
-        // If batching all pending roots would exceed constraints, build now so we can
-        // batch up to N-1 of them.
-        let total_pending_tx_count: usize = self
-            .pending_roots
-            .iter()
-            .map(|q| q.roots.tx_roots.len())
-            .sum();
-        if total_pending_tx_count >= max_transactions_per_checkpoint {
-            return true;
-        }
-
-        false
-    }
-
-    fn flush_checkpoint_roots_impl(
-        &mut self,
-        protocol_config: &ProtocolConfig,
-        current_timestamp: CheckpointTimestamp,
-        flush_all: bool,
-    ) -> Vec<PendingCheckpointV2> {
-        let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
-
-        // Collect all roots to flush
-        let mut to_flush = Vec::new();
-        while self.should_build_checkpoint(protocol_config, current_timestamp, flush_all) {
-            to_flush.push(self.pending_roots.pop_front().unwrap());
-        }
-
-        if to_flush.is_empty() {
-            return Vec::new();
-        }
-
-        // Group into checkpoints respecting max_transactions_per_checkpoint
-        let mut pending_checkpoints = Vec::new();
-        let mut current_roots = Vec::new();
-        let mut current_tx_count = 0;
-        let mut current_details: Option<&QueuedCheckpointRoots> = None;
-
-        for queued in &to_flush {
-            let next_tx_count = queued.roots.tx_roots.len();
-
-            if current_tx_count + next_tx_count > max_tx && !current_roots.is_empty() {
-                assert_reachable!(
-                    "checkpoint flush split due to batched roots exceeding transaction limit"
-                );
-                let details = current_details.unwrap();
-                pending_checkpoints.push(PendingCheckpointV2 {
-                    roots: std::mem::take(&mut current_roots),
-                    details: PendingCheckpointInfo {
-                        timestamp_ms: details.timestamp,
-                        last_of_epoch: false,
-                        checkpoint_height: details.roots.height,
-                        consensus_commit_ref: details.consensus_commit_ref,
-                        rejected_transactions_digest: details.rejected_transactions_digest,
-                    },
-                });
-                current_tx_count = 0;
+        force: bool,
+    ) -> Option<PendingCheckpointV2> {
+        if !force {
+            let min_checkpoint_interval_ms = protocol_config
+                .min_checkpoint_interval_ms_as_option()
+                .unwrap_or_default();
+            if current_timestamp < self.last_built_timestamp + min_checkpoint_interval_ms {
+                return None;
             }
+        }
+        self.flush_forced()
+    }
 
-            current_roots.push(queued.roots.clone());
-            current_tx_count += next_tx_count;
-            current_details = Some(queued);
+    fn flush_forced(&mut self) -> Option<PendingCheckpointV2> {
+        if self.pending_roots.is_empty() {
+            return None;
         }
 
-        // Flush final checkpoint
-        if let Some(details) = current_details {
-            pending_checkpoints.push(PendingCheckpointV2 {
-                roots: current_roots,
-                details: PendingCheckpointInfo {
-                    timestamp_ms: details.timestamp,
-                    last_of_epoch: false,
-                    checkpoint_height: details.roots.height,
-                    consensus_commit_ref: details.consensus_commit_ref,
-                    rejected_transactions_digest: details.rejected_transactions_digest,
-                },
-            });
-        }
+        let to_flush: Vec<_> = self.pending_roots.drain(..).collect();
+        let last_root = to_flush.last().unwrap();
 
-        if let Some(last) = pending_checkpoints.last() {
-            self.last_built_timestamp = last.details.timestamp_ms;
-        }
+        let checkpoint = PendingCheckpointV2 {
+            roots: to_flush.iter().map(|q| q.roots.clone()).collect(),
+            details: PendingCheckpointInfo {
+                timestamp_ms: last_root.timestamp,
+                last_of_epoch: false,
+                checkpoint_height: last_root.roots.height,
+                consensus_commit_ref: last_root.consensus_commit_ref,
+                rejected_transactions_digest: last_root.rejected_transactions_digest,
+            },
+        };
 
-        pending_checkpoints
+        self.last_built_timestamp = last_root.timestamp;
+        self.pending_tx_count = 0;
+
+        Some(checkpoint)
     }
 }
 
@@ -1816,33 +1766,40 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
 
         let checkpoint_roots_list = Self::to_checkpoint_roots(&chunked_schedulables);
-        checkpoint_queue.push_checkpoint_roots(
+        let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+
+        let mut pending_checkpoints = checkpoint_queue.push_roots(
             checkpoint_roots_list,
             commit_info.timestamp,
             commit_info.consensus_commit_ref,
             commit_info.rejected_transactions_digest,
+            max_tx,
         );
 
-        let mut pending_checkpoints = if final_round || should_write_random_checkpoint {
-            checkpoint_queue.flush_all_checkpoint_roots(protocol_config, commit_info.timestamp)
-        } else {
-            checkpoint_queue.flush_checkpoint_roots(protocol_config, commit_info.timestamp)
-        };
+        let force = final_round || should_write_random_checkpoint;
+        pending_checkpoints.extend(checkpoint_queue.flush(
+            protocol_config,
+            commit_info.timestamp,
+            force,
+        ));
 
         if should_write_random_checkpoint {
-            for randomness_roots in Self::to_checkpoint_roots(&chunked_randomness_schedulables) {
-                let checkpoint_height = randomness_roots.height;
-                pending_checkpoints.push(PendingCheckpointV2 {
-                    roots: vec![randomness_roots],
-                    details: PendingCheckpointInfo {
-                        timestamp_ms: commit_info.timestamp,
-                        last_of_epoch: false,
-                        checkpoint_height,
-                        consensus_commit_ref: commit_info.consensus_commit_ref,
-                        rejected_transactions_digest: commit_info.rejected_transactions_digest,
-                    },
-                });
-            }
+            let randomness_roots_list = Self::to_checkpoint_roots(&chunked_randomness_schedulables);
+
+            let randomness_checkpoints = checkpoint_queue.push_roots(
+                randomness_roots_list,
+                commit_info.timestamp,
+                commit_info.consensus_commit_ref,
+                commit_info.rejected_transactions_digest,
+                max_tx,
+            );
+            pending_checkpoints.extend(randomness_checkpoints);
+
+            pending_checkpoints.extend(checkpoint_queue.flush(
+                protocol_config,
+                commit_info.timestamp,
+                true,
+            ));
         }
 
         if final_round && let Some(last) = pending_checkpoints.last_mut() {
@@ -4099,63 +4056,81 @@ mod tests {
         #[test]
         fn test_flush_all_checkpoint_roots() {
             let mut queue = CheckpointQueue::new(0, 0);
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
             let roots1 = make_roots(5, 1);
             let roots2 = make_roots(3, 2);
 
-            queue.push_checkpoint_roots(
+            queue.push_roots(
                 vec![roots1, roots2],
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
+                max_tx,
             );
 
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let pending = queue.flush_all_checkpoint_roots(&protocol_config, 1000);
+            let pending = queue.flush(&protocol_config, 1000, true);
 
-            assert!(!pending.is_empty());
+            assert!(pending.is_some());
             assert!(queue.pending_roots.is_empty());
         }
 
         #[test]
         fn test_flush_respects_min_checkpoint_interval() {
             let mut queue = CheckpointQueue::new(1000, 0);
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
             let roots = make_roots(5, 1);
 
-            queue.push_checkpoint_roots(vec![roots], 1000, make_commit_ref(1), Digest::default());
+            queue.push_roots(
+                vec![roots],
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
 
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let min_interval = protocol_config
                 .min_checkpoint_interval_ms_as_option()
                 .unwrap_or(200);
 
             // Timestamp hasn't advanced enough - should not flush
-            let pending = queue.flush_checkpoint_roots(&protocol_config, 1000 + min_interval - 1);
-            assert!(pending.is_empty());
+            let pending = queue.flush(&protocol_config, 1000 + min_interval - 1, false);
+            assert!(pending.is_none());
             assert_eq!(queue.pending_roots.len(), 1);
 
             // Timestamp has advanced enough - should flush
-            let pending = queue.flush_checkpoint_roots(&protocol_config, 1000 + min_interval);
-            assert_eq!(pending.len(), 1);
+            let pending = queue.flush(&protocol_config, 1000 + min_interval, false);
+            assert!(pending.is_some());
             assert!(queue.pending_roots.is_empty());
         }
 
         #[test]
-        fn test_flush_when_would_exceed_max_transactions() {
-            // Start with last_built_timestamp = 1000 so time-based condition doesn't trigger
+        fn test_push_roots_flushes_when_exceeds_max() {
             let mut queue = CheckpointQueue::new(1000, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
 
-            // Add two roots that together would exceed max_transactions
             let roots1 = make_roots(max_tx / 2 + 1, 1);
             let roots2 = make_roots(max_tx / 2 + 1, 2);
 
-            queue.push_checkpoint_roots(vec![roots1], 1000, make_commit_ref(1), Digest::default());
-            queue.push_checkpoint_roots(vec![roots2], 1000, make_commit_ref(2), Digest::default());
+            queue.push_roots(
+                vec![roots1],
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
 
-            // Should flush the first one since batching would exceed max
-            let pending = queue.flush_checkpoint_roots(&protocol_config, 1000);
-            assert_eq!(pending.len(), 1);
+            let flushed = queue.push_roots(
+                vec![roots2],
+                1000,
+                make_commit_ref(2),
+                Digest::default(),
+                max_tx,
+            );
+
+            assert_eq!(flushed.len(), 1);
             assert_eq!(queue.pending_roots.len(), 1);
         }
 
@@ -4163,44 +4138,80 @@ mod tests {
         fn test_multiple_roots_merged_into_one_checkpoint() {
             let mut queue = CheckpointQueue::new(0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
 
-            // Add small roots that can be merged
             let roots1 = make_roots(10, 1);
             let roots2 = make_roots(10, 2);
             let roots3 = make_roots(10, 3);
 
-            queue.push_checkpoint_roots(vec![roots1], 1000, make_commit_ref(1), Digest::default());
-            queue.push_checkpoint_roots(vec![roots2], 1000, make_commit_ref(2), Digest::default());
-            queue.push_checkpoint_roots(vec![roots3], 1000, make_commit_ref(3), Digest::default());
+            queue.push_roots(
+                vec![roots1],
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
+            queue.push_roots(
+                vec![roots2],
+                1000,
+                make_commit_ref(2),
+                Digest::default(),
+                max_tx,
+            );
+            queue.push_roots(
+                vec![roots3],
+                1000,
+                make_commit_ref(3),
+                Digest::default(),
+                max_tx,
+            );
 
-            // Flush all - should merge into one checkpoint if under max
-            let pending = queue.flush_all_checkpoint_roots(&protocol_config, 1000);
+            let pending = queue.flush(&protocol_config, 1000, true).unwrap();
 
             // All roots should be in one checkpoint (30 txs < max_transactions_per_checkpoint)
-            assert_eq!(pending.len(), 1);
-            assert_eq!(pending[0].roots.len(), 3);
+            assert_eq!(pending.roots.len(), 3);
         }
 
         #[test]
-        fn test_large_roots_split_into_multiple_checkpoints() {
+        fn test_push_roots_handles_overflow_during_batch() {
             let mut queue = CheckpointQueue::new(0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
 
-            // Add roots that exceed max per checkpoint
             let roots1 = make_roots(max_tx / 2, 1);
             let roots2 = make_roots(max_tx / 2, 2);
             let roots3 = make_roots(max_tx / 2, 3);
 
-            queue.push_checkpoint_roots(vec![roots1], 1000, make_commit_ref(1), Digest::default());
-            queue.push_checkpoint_roots(vec![roots2], 1000, make_commit_ref(2), Digest::default());
-            queue.push_checkpoint_roots(vec![roots3], 1000, make_commit_ref(3), Digest::default());
+            let flushed1 = queue.push_roots(
+                vec![roots1],
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
+            assert!(flushed1.is_empty());
 
-            let pending = queue.flush_all_checkpoint_roots(&protocol_config, 1000);
+            let flushed2 = queue.push_roots(
+                vec![roots2],
+                1000,
+                make_commit_ref(2),
+                Digest::default(),
+                max_tx,
+            );
+            assert!(flushed2.is_empty());
 
-            // Should split into multiple checkpoints
-            assert!(pending.len() >= 2);
-            for p in &pending {
+            let flushed3 = queue.push_roots(
+                vec![roots3],
+                1000,
+                make_commit_ref(3),
+                Digest::default(),
+                max_tx,
+            );
+            assert_eq!(flushed3.len(), 1);
+
+            let pending = queue.flush(&protocol_config, 1000, true);
+
+            for p in pending.iter().chain(flushed3.iter()) {
                 let tx_count: usize = p.roots.iter().map(|r| r.tx_roots.len()).sum();
                 assert!(tx_count <= max_tx);
             }
@@ -4210,33 +4221,79 @@ mod tests {
         fn test_checkpoint_uses_last_roots_height() {
             let mut queue = CheckpointQueue::new(0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
 
             let roots1 = make_roots(10, 100);
             let roots2 = make_roots(10, 200);
 
-            queue.push_checkpoint_roots(vec![roots1], 1000, make_commit_ref(1), Digest::default());
-            queue.push_checkpoint_roots(vec![roots2], 1000, make_commit_ref(2), Digest::default());
+            queue.push_roots(
+                vec![roots1],
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
+            queue.push_roots(
+                vec![roots2],
+                1000,
+                make_commit_ref(2),
+                Digest::default(),
+                max_tx,
+            );
 
-            let pending = queue.flush_all_checkpoint_roots(&protocol_config, 1000);
+            let pending = queue.flush(&protocol_config, 1000, true).unwrap();
 
-            assert_eq!(pending.len(), 1);
             // Checkpoint height should be from the last root
-            assert_eq!(pending[0].details.checkpoint_height, 200);
+            assert_eq!(pending.details.checkpoint_height, 200);
         }
 
         #[test]
         fn test_last_built_timestamp_updated_on_flush() {
             let mut queue = CheckpointQueue::new(0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
 
             let roots = make_roots(10, 1);
-            queue.push_checkpoint_roots(vec![roots], 5000, make_commit_ref(1), Digest::default());
+            queue.push_roots(
+                vec![roots],
+                5000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
 
             assert_eq!(queue.last_built_timestamp, 0);
 
-            let _ = queue.flush_all_checkpoint_roots(&protocol_config, 5000);
+            let _ = queue.flush(&protocol_config, 5000, true);
 
             assert_eq!(queue.last_built_timestamp, 5000);
+        }
+
+        #[test]
+        fn test_single_batch_with_multiple_overflows() {
+            let mut queue = CheckpointQueue::new(0, 0);
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+
+            let roots1 = make_roots(max_tx / 2 + 1, 1);
+            let roots2 = make_roots(max_tx / 2 + 1, 2);
+            let roots3 = make_roots(max_tx / 2 + 1, 3);
+
+            let flushed = queue.push_roots(
+                vec![roots1, roots2, roots3],
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
+
+            assert_eq!(flushed.len(), 2);
+            assert_eq!(queue.pending_roots.len(), 1);
+
+            for p in &flushed {
+                let tx_count: usize = p.roots.iter().map(|r| r.tx_roots.len()).sum();
+                assert!(tx_count <= max_tx);
+            }
         }
     }
 }
