@@ -1,0 +1,9 @@
+{
+    "filter_paths": "lib",
+    "solc_remaps": [
+      "ds-test/=lib/ds-test/src/",
+      "forge-std/=lib/forge-std/src/",
+      "@chainlink/=lib/chainlink-brownie-contracts/"
+    ]
+  }
+  
