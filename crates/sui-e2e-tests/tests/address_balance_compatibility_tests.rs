@@ -390,11 +390,9 @@ async fn test_split_from_fake_coin() {
         .tx_builder(sender)
         .split_coin(coin_reservation, vec![100])
         .build();
-    dbg!(&tx);
 
     // Send tx, should succeed.
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
-    dbg!(&effects);
     assert!(effects.status().is_ok());
 
     // Assert that the sender received a new coin with balance 100.
