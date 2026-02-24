@@ -57,6 +57,12 @@ fn address_balance_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
         .unwrap_or(false)
 }
 
+fn address_alias_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
+    protocol_config
+        .map(|cfg| !cfg.address_aliases())
+        .unwrap_or(false)
+}
+
 macro_rules! update_gas {
     ($gas:expr, $effects:expr) => {{
         let new_gas_ref = $effects.gas_object().0;
@@ -320,7 +326,10 @@ impl CompositeWorkloadConfig {
         ops
     }
 
-    pub fn collect_init_requirements(&self) -> std::collections::HashSet<InitRequirement> {
+    pub fn collect_init_requirements(
+        &self,
+        protocol_config: Option<&ProtocolConfig>,
+    ) -> std::collections::HashSet<InitRequirement> {
         let mut requirements: std::collections::HashSet<InitRequirement> = ALL_OPERATIONS
             .iter()
             .filter(|desc| self.probability_for(desc) > 0.0)
@@ -331,7 +340,7 @@ impl CompositeWorkloadConfig {
             requirements.insert(InitRequirement::SeedAddressBalance);
         }
 
-        if self.alias_tx_probability > 0.0 {
+        if self.alias_tx_probability > 0.0 && !address_alias_disabled(protocol_config) {
             requirements.insert(InitRequirement::EnableAddressAlias);
         }
 
@@ -1325,7 +1334,10 @@ impl Workload<dyn Payload> for CompositeWorkload {
             self.randomness_initial_shared_version
         );
 
-        let init_requirements = self.config.collect_init_requirements();
+        let protocol_config = system_state_observer.state.borrow().protocol_config.clone();
+        let init_requirements = self
+            .config
+            .collect_init_requirements(protocol_config.as_ref());
         info!("Init requirements: {:?}", init_requirements);
 
         if init_requirements.contains(&InitRequirement::SeedAddressBalance) {

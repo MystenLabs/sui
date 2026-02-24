@@ -1552,15 +1552,18 @@ mod test {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
-        let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
+        let mut protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
             sui_protocol_config::ProtocolVersion::max(),
             test_cluster.get_chain_identifier().chain(),
         );
         let address_balance_enabled = protocol_config.enable_address_balance_gas_payments();
-        assert!(
-            protocol_config.address_aliases(),
-            "address aliases must be enabled for this test"
-        );
+
+        // TODO: switch to the assert below once address aliases is enabled on mainnet.
+        protocol_config.set_address_aliases_for_testing(true);
+        // assert!(
+        //     protocol_config.address_aliases(),
+        //     "address aliases must be enabled for this test"
+        // );
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
