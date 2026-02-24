@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
+use tracing::trace;
 use tracing::warn;
 
 use crate::metrics::CheckpointLagMetricReporter;
@@ -90,6 +91,16 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     should_write_db = true;
                 }
                 Some(parts) = rx.recv() => {
+                    for part in &parts {
+                        trace!(
+                            pipeline = H::NAME,
+                            checkpoint = part.checkpoint(),
+                            batch_rows = part.batch_rows,
+                            total_rows = part.total_rows,
+                            next_checkpoint,
+                            "Watermark received part",
+                        );
+                    }
                     for part in parts {
                         match precommitted.entry(part.checkpoint()) {
                             Entry::Vacant(entry) => {
@@ -117,15 +128,36 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                 // Some rows from the next watermark have not landed yet.
                 if !part.is_complete() {
+                    trace!(
+                        pipeline = H::NAME,
+                        checkpoint = part.checkpoint(),
+                        batch_rows = part.batch_rows,
+                        total_rows = part.total_rows,
+                        next_checkpoint,
+                        "Watermark advance blocked: incomplete",
+                    );
                     break;
                 }
 
                 match next_checkpoint.cmp(&part.watermark.checkpoint_hi_inclusive) {
                     // Next pending checkpoint is from the future.
-                    Ordering::Less => break,
+                    Ordering::Less => {
+                        trace!(
+                            pipeline = H::NAME,
+                            next_checkpoint,
+                            first_pending = part.watermark.checkpoint_hi_inclusive,
+                            "Watermark advance blocked: gap",
+                        );
+                        break;
+                    }
 
                     // This is the next checkpoint -- include it.
                     Ordering::Equal => {
+                        trace!(
+                            pipeline = H::NAME,
+                            checkpoint = part.watermark.checkpoint_hi_inclusive,
+                            "Watermark advance: consumed checkpoint",
+                        );
                         pending_watermark = Some(pending.remove().watermark);
                         next_checkpoint += 1;
                     }
@@ -135,6 +167,12 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     // must start at the lowest checkpoint across all pipelines, or because
                     // of a backfill, where the initial checkpoint has been overridden.
                     Ordering::Greater => {
+                        trace!(
+                            pipeline = H::NAME,
+                            next_checkpoint,
+                            stale_checkpoint = part.watermark.checkpoint_hi_inclusive,
+                            "Watermark advance: skipping stale checkpoint",
+                        );
                         // Track how many we see to make sure it doesn't grow without bound.
                         metrics
                             .total_watermarks_out_of_order

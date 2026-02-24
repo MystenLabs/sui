@@ -13,6 +13,7 @@ use tokio::time::MissedTickBehavior;
 use tokio::time::interval;
 use tracing::debug;
 use tracing::info;
+use tracing::trace;
 
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
@@ -130,6 +131,13 @@ pub(super) fn collector<H: Handler + 'static>(
                         recv_cps += 1;
                         recv_rows += indexed.len();
                         pending_rows += indexed.len();
+                        trace!(
+                            pipeline = H::NAME,
+                            checkpoint = indexed.checkpoint(),
+                            rows = indexed.len(),
+                            pending_rows,
+                            "Collector received checkpoint",
+                        );
                         pending.insert(indexed.checkpoint(), indexed.into());
 
                         if pending_rows >= max_pending_rows {
@@ -190,7 +198,15 @@ pub(super) fn collector<H: Handler + 'static>(
                     let taken = before - indexed.values.len();
 
                     batch_len += taken;
-                    watermark.push(indexed.watermark.take(taken));
+                    let wp = indexed.watermark.take(taken);
+                    trace!(
+                        pipeline = H::NAME,
+                        checkpoint = wp.checkpoint(),
+                        batch_rows = wp.batch_rows,
+                        total_rows = wp.total_rows,
+                        "Collector batching checkpoint watermark",
+                    );
+                    watermark.push(wp);
                     if indexed.is_empty() {
                         checkpoint_lag_reporter.report_lag(
                             indexed.watermark.checkpoint(),
@@ -224,6 +240,16 @@ pub(super) fn collector<H: Handler + 'static>(
 
                 pending_rows -= batch_len;
 
+                let wm_lo = watermark.first().map(|w| w.checkpoint());
+                let wm_hi = watermark.last().map(|w| w.checkpoint());
+                trace!(
+                    pipeline = H::NAME,
+                    batch_len,
+                    watermark_count = watermark.len(),
+                    ?wm_lo,
+                    ?wm_hi,
+                    "Collector sending batch to committer",
+                );
                 let batched_rows = BatchedRows {
                     batch,
                     batch_len,

@@ -16,6 +16,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
+use tracing::trace;
 use tracing::warn;
 
 use crate::metrics::CheckpointLagMetricReporter;
@@ -223,6 +224,15 @@ pub(super) fn committer<H: Handler + 'static>(
                         // not produce any permanent errors, but if it does, we need to shutdown
                         // the pipeline).
                         backoff::future::retry(backoff, commit).await?;
+                        for w in &watermark {
+                            trace!(
+                                pipeline = H::NAME,
+                                checkpoint = w.checkpoint(),
+                                batch_rows = w.batch_rows,
+                                total_rows = w.total_rows,
+                                "Committer forwarding watermark part",
+                            );
+                        }
                         if tx.send(watermark).await.is_err() {
                             info!(pipeline = H::NAME, "Watermark closed channel");
                             return Err(Break::<anyhow::Error>::Break);
