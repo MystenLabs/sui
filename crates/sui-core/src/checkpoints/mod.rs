@@ -3352,11 +3352,7 @@ async fn diagnose_split_brain(
 }
 
 pub trait CheckpointServiceNotify {
-    fn notify_checkpoint_signature(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        info: &CheckpointSignatureMessage,
-    ) -> SuiResult;
+    fn notify_checkpoint_signature(&self, info: &CheckpointSignatureMessage) -> SuiResult;
 
     fn notify_checkpoint(&self) -> SuiResult;
 }
@@ -3633,11 +3629,7 @@ impl CheckpointService {
 }
 
 impl CheckpointServiceNotify for CheckpointService {
-    fn notify_checkpoint_signature(
-        &self,
-        _epoch_store: &AuthorityPerEpochStore,
-        info: &CheckpointSignatureMessage,
-    ) -> SuiResult {
+    fn notify_checkpoint_signature(&self, info: &CheckpointSignatureMessage) -> SuiResult {
         let sequence = info.summary.sequence_number;
         let signer = info.summary.auth_sig().authority.concise();
 
@@ -3679,11 +3671,7 @@ impl CheckpointServiceNotify for CheckpointService {
 // test helper
 pub struct CheckpointServiceNoop {}
 impl CheckpointServiceNotify for CheckpointServiceNoop {
-    fn notify_checkpoint_signature(
-        &self,
-        _: &AuthorityPerEpochStore,
-        _: &CheckpointSignatureMessage,
-    ) -> SuiResult {
+    fn notify_checkpoint_signature(&self, _: &CheckpointSignatureMessage) -> SuiResult {
         Ok(())
     }
 
@@ -4113,16 +4101,10 @@ mod tests {
         let c2ss = SignedCheckpointSummary::new(c2s.epoch, c2s, state.secret.deref(), state.name);
 
         checkpoint_service
-            .notify_checkpoint_signature(
-                &epoch_store,
-                &CheckpointSignatureMessage { summary: c2ss },
-            )
+            .notify_checkpoint_signature(&CheckpointSignatureMessage { summary: c2ss })
             .unwrap();
         checkpoint_service
-            .notify_checkpoint_signature(
-                &epoch_store,
-                &CheckpointSignatureMessage { summary: c1ss },
-            )
+            .notify_checkpoint_signature(&CheckpointSignatureMessage { summary: c1ss })
             .unwrap();
 
         let c1sc = certified_result.recv().await.unwrap();
