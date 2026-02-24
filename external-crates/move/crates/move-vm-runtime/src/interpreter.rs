@@ -107,7 +107,7 @@ impl Interpreter {
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         loader: &Loader,
-        tracer: &mut Option<VMTracer<'_>>,
+        tracer: &mut Option<VMTracer<'_, '_>>,
     ) -> VMResult<Vec<Value>> {
         let mut interpreter = Interpreter {
             operand_stack: Stack::new(),
@@ -178,7 +178,7 @@ impl Interpreter {
         function: Arc<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
-        tracer: &mut Option<VMTracer<'_>>,
+        tracer: &mut Option<VMTracer<'_, '_>>,
     ) -> VMResult<Vec<Value>> {
         let mut locals = Locals::new(function.local_count());
         for (i, value) in args.into_iter().enumerate() {
@@ -866,7 +866,7 @@ impl Frame {
         resolver: &Resolver,
         interpreter: &mut Interpreter,
         gas_meter: &mut impl GasMeter,
-        tracer: &mut Option<VMTracer<'_>>,
+        tracer: &mut Option<VMTracer<'_, '_>>,
     ) -> VMResult<ExitCode> {
         self.execute_code_impl(resolver, interpreter, gas_meter, tracer)
             .map_err(|e| {
@@ -1431,7 +1431,7 @@ impl Frame {
         resolver: &Resolver,
         interpreter: &mut Interpreter,
         gas_meter: &mut impl GasMeter,
-        tracer: &mut Option<VMTracer<'_>>,
+        tracer: &mut Option<VMTracer<'_, '_>>,
     ) -> PartialVMResult<ExitCode> {
         let code = self.function.code();
         loop {
