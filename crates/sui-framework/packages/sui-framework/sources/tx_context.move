@@ -81,6 +81,16 @@ public fun gas_price(_self: &TxContext): u64 {
 }
 native fun native_gas_price(): u64;
 
+/// Return the normalized structural digest of the current PTB (SIP-70).
+/// Deterministic: same logical PTB structure -> same digest,
+/// even if coin object IDs differ due to splits/merges.
+/// Enables governance contracts to vote on a PTB template hash
+/// and verify at execution time that the executor's PTB matches.
+public fun structural_digest(_self: &TxContext): vector<u8> {
+    native_structural_digest()
+}
+native fun native_structural_digest(): vector<u8>;
+
 // ==== test-only functions ====
 #[test_only]
 /// Return the number of id's created by the current transaction.

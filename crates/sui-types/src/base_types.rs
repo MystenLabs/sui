@@ -1236,6 +1236,9 @@ pub struct TxContext {
     // whether the `TxContext` is native or not
     // (TODO: once we version execution we could drop this field)
     is_native: bool,
+    // Normalized structural digest of the PTB (SIP-70)
+    #[serde(default)]
+    structural_digest: Vec<u8>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -1294,6 +1297,7 @@ impl TxContext {
             gas_budget,
             sponsor: sponsor.map(|s| s.into()),
             is_native: protocol_config.move_native_context(),
+            structural_digest: Vec::new(),
         }
     }
 
@@ -1347,6 +1351,16 @@ impl TxContext {
         self.sponsor.map(SuiAddress::from)
     }
 
+    /// Returns the normalized structural digest of the PTB (SIP-70).
+    pub fn structural_digest(&self) -> &[u8] {
+        &self.structural_digest
+    }
+
+    /// Sets the structural digest. Called by the execution engine before PTB execution.
+    pub fn set_structural_digest(&mut self, digest: Vec<u8>) {
+        self.structural_digest = digest;
+    }
+
     pub fn rgp(&self) -> u64 {
         self.rgp
     }
@@ -1384,6 +1398,7 @@ impl TxContext {
                 gas_budget: 0,
                 sponsor: None,
                 is_native: true,
+                structural_digest: Vec::new(),
             };
             tx_context.into()
         } else {

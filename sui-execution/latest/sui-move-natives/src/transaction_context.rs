@@ -78,6 +78,11 @@ impl TransactionContext {
         self.tx_context.borrow_mut().fresh_id()
     }
 
+    /// Returns the normalized structural digest of the PTB (SIP-70).
+    pub fn structural_digest(&self) -> Vec<u8> {
+        self.tx_context.borrow().structural_digest().to_vec()
+    }
+
     //
     // Test only function
     //

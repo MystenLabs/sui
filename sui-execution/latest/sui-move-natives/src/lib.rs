@@ -36,6 +36,7 @@ use self::{
         TxContextFreshIdCostParams, TxContextGasBudgetCostParams, TxContextGasPriceCostParams,
         TxContextIdsCreatedCostParams, TxContextRGPCostParams, TxContextReplaceCostParams,
         TxContextSenderCostParams, TxContextSponsorCostParams,
+        TxContextStructuralDigestCostParams,
     },
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
@@ -139,6 +140,7 @@ pub struct NativesCostTable {
     pub tx_context_gas_budget_cost_params: TxContextGasBudgetCostParams,
     pub tx_context_ids_created_cost_params: TxContextIdsCreatedCostParams,
     pub tx_context_replace_cost_params: TxContextReplaceCostParams,
+    pub tx_context_structural_digest_cost_params: TxContextStructuralDigestCostParams,
 
     // Type
     pub type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams,
@@ -450,6 +452,12 @@ impl NativesCostTable {
                 } else {
                     DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
                 },
+            },
+            tx_context_structural_digest_cost_params: TxContextStructuralDigestCostParams {
+                tx_context_structural_digest_cost_base: protocol_config
+                    .tx_context_structural_digest_cost_base_as_option()
+                    .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
+                    .into(),
             },
             type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams {
                 types_is_one_time_witness_cost_base: protocol_config
@@ -1246,6 +1254,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(tx_context::ids_created),
         ),
         ("tx_context", "replace", make_native!(tx_context::replace)),
+        (
+            "tx_context",
+            "native_structural_digest",
+            make_native!(tx_context::structural_digest),
+        ),
         (
             "types",
             "is_one_time_witness",

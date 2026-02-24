@@ -699,6 +699,10 @@ mod checked {
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::ProgrammableTransaction(pt) => {
+                // SIP-70: Compute and store the structural digest before execution
+                let structural_digest = pt.structural_digest();
+                tx_ctx.borrow_mut().set_structural_digest(structural_digest);
+
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,
                     metrics,
