@@ -639,6 +639,29 @@ public macro fun with_shared_by_id<$T: key>(
     return_shared(obj);
 }
 
+/// Execute a transaction `$f` in a `Scenario` and return the transaction effects.
+///
+/// ```move
+/// let test = test_scenario::begin(@0);
+/// let effects = test.tx!(@a11ce, |test| {
+///    // ...
+/// });
+///
+/// assert_eq!(effects.shared().length(), 0);
+///
+/// test.end();
+/// ```
+public macro fun tx(
+    $scenario: &mut Scenario,
+    $sender: address,
+    $f: |&mut Scenario|,
+): TransactionEffects {
+    let test = $scenario;
+    test.next_tx($sender);
+    $f(test);
+    test.next_tx($sender)
+}
+
 // == natives ===
 
 /// Returns true if the object with `ID` id was an shared object in the global inventory
