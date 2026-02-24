@@ -219,8 +219,8 @@ impl IngestionService {
 impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
-            checkpoint_buffer_size: 5000,
-            ingest_concurrency: 200,
+            checkpoint_buffer_size: 50,
+            ingest_concurrency: 50,
             retry_interval_ms: 200,
             streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
