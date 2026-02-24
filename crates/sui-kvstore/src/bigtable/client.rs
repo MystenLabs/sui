@@ -59,6 +59,8 @@ use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
 use crate::tables;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
+// TODO: Add per-method timeouts (e.g. separate write vs read) via tonic::Request::set_timeout().
+const DEFAULT_CHANNEL_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Default number of gRPC channels in the pool. Each channel is an independent HTTP/2
 /// connection, allowing concurrent RPCs to spread across multiple TCP sockets instead
@@ -150,9 +152,7 @@ impl BigTableClient {
             .http2_keep_alive_interval(Duration::from_secs(60))
             .keep_alive_while_idle(true)
             .tls_config(tls_config)?;
-        if let Some(timeout) = timeout {
-            endpoint = endpoint.timeout(timeout);
-        }
+        endpoint = endpoint.timeout(timeout.unwrap_or(DEFAULT_CHANNEL_TIMEOUT));
         let project_id = match project_id {
             Some(p) => p,
             None => token_provider.project_id().await?.to_string(),

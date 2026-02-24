@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
@@ -83,11 +84,15 @@ async fn main() -> Result<()> {
     info!(instance_id = %args.instance_id);
     info!("Config: {:#?}", config);
 
+    let channel_timeout = config
+        .bigtable_channel_timeout_ms
+        .map(Duration::from_millis);
+
     let client = BigTableClient::new_remote(
         args.instance_id,
         args.bigtable_project,
         false,
-        None,
+        channel_timeout,
         args.bigtable_max_decoding_message_size,
         "sui-kvstore-alt".to_string(),
         None,
