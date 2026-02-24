@@ -5,17 +5,17 @@ use crate::SUI_DENY_LIST_OBJECT_ID;
 use crate::base_types::{SequenceNumber, SuiAddress};
 use crate::collection_types::{Bag, Table, VecSet};
 use crate::dynamic_field::get_dynamic_field_from_store;
-use crate::error::{UserInputError, UserInputResult};
+use crate::error::{SuiErrorKind, SuiResult, UserInputError, UserInputResult};
 use crate::id::{ID, UID};
 use crate::object::{Object, Owner};
 use crate::storage::ObjectStore;
 use crate::transaction::{CheckedInputObjects, ReceivingObjects};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use mysten_common::debug_fatal;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use tracing::debug;
-use tracing::error;
 
 pub const DENY_LIST_MODULE: &IdentStr = ident_str!("deny_list");
 pub const DENY_LIST_CREATE_FUNC: &IdentStr = ident_str!("create");
@@ -60,11 +60,11 @@ pub fn check_coin_deny_list_v1(
         input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
     coin_types.extend(funds_withdraw_types);
 
-    let Some(deny_list) = get_coin_deny_list(object_store) else {
-        // TODO: This is where we should fire an invariant violation metric.
-        if cfg!(debug_assertions) {
-            panic!("Failed to get the coin deny list");
-        } else {
+    let deny_list = match get_coin_deny_list(object_store) {
+        Ok(Some(deny_list)) => deny_list,
+        Ok(None) => return Ok(()),
+        Err(e) => {
+            debug_fatal!("Failed to get the coin deny list: {e}");
             return Ok(());
         }
     };
@@ -141,43 +141,38 @@ pub struct RegulatedCoinMetadata {
     pub deny_cap_object: ID,
 }
 
-pub fn get_deny_list_root_object(object_store: &dyn ObjectStore) -> Option<Object> {
-    // TODO: We should return error if this is not found.
-    match object_store.get_object(&SUI_DENY_LIST_OBJECT_ID) {
-        Some(obj) => Some(obj),
-        None => {
-            error!("Deny list object not found");
-            None
-        }
-    }
+pub fn get_deny_list_root_object(object_store: &dyn ObjectStore) -> SuiResult<Option<Object>> {
+    Ok(object_store.get_object(&SUI_DENY_LIST_OBJECT_ID))
 }
 
-pub fn get_coin_deny_list(object_store: &dyn ObjectStore) -> Option<PerTypeDenyList> {
-    get_deny_list_root_object(object_store).and_then(|obj| {
-        let deny_list: DenyList = obj
-            .to_rust()
-            .expect("DenyList object type must be consistent");
-        match get_dynamic_field_from_store(
-            object_store,
-            *deny_list.lists.id.object_id(),
-            &DENY_LIST_COIN_TYPE_INDEX,
-        ) {
-            Ok(deny_list) => Some(deny_list),
-            Err(err) => {
-                error!("Failed to get deny list inner state: {}", err);
-                None
-            }
-        }
-    })
+pub fn get_coin_deny_list(object_store: &dyn ObjectStore) -> SuiResult<Option<PerTypeDenyList>> {
+    let Some(obj) = get_deny_list_root_object(object_store)? else {
+        return Ok(None);
+    };
+    let deny_list: DenyList = obj.to_rust().ok_or_else(|| {
+        SuiErrorKind::SuiSystemStateReadError(
+            "DenyList object type must be consistent".to_owned(),
+        )
+    })?;
+    match get_dynamic_field_from_store(
+        object_store,
+        *deny_list.lists.id.object_id(),
+        &DENY_LIST_COIN_TYPE_INDEX,
+    ) {
+        Ok(deny_list) => Ok(Some(deny_list)),
+        Err(_) => Ok(None),
+    }
 }
 
 pub fn get_deny_list_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
-) -> Option<SequenceNumber> {
-    get_deny_list_root_object(object_store).map(|obj| match obj.owner {
-        Owner::Shared {
-            initial_shared_version,
-        } => initial_shared_version,
-        _ => unreachable!("Deny list object must be shared"),
-    })
+) -> SuiResult<Option<SequenceNumber>> {
+    Ok(object_store
+        .get_object(&SUI_DENY_LIST_OBJECT_ID)
+        .map(|obj| match obj.owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => initial_shared_version,
+            _ => unreachable!("Deny list object must be shared"),
+        }))
 }
