@@ -2999,9 +2999,7 @@ impl CheckpointAggregator {
                     );
 
                     self.store.insert_certified_checkpoint(&summary)?;
-                    self.metrics
-                        .last_certified_checkpoint
-                        .set(seq as i64);
+                    self.metrics.last_certified_checkpoint.set(seq as i64);
                     current.summary.report_checkpoint_age(
                         &self.metrics.last_certified_checkpoint_age,
                         &self.metrics.last_certified_checkpoint_age_ms,
@@ -3450,9 +3448,7 @@ impl CheckpointService {
         // On startup, load any pending checkpoint signatures persisted to DB. These may exist
         // if the node crashed before the aggregator could certify the checkpoint.
         let initial_pending = {
-            let tables = epoch_store
-                .tables()
-                .expect("epoch should not have ended");
+            let tables = epoch_store.tables().expect("epoch should not have ended");
             let mut map: BTreeMap<CheckpointSequenceNumber, Vec<CheckpointSignatureMessage>> =
                 BTreeMap::new();
             for item in tables.pending_checkpoint_signatures.safe_iter() {
@@ -3688,13 +3684,14 @@ impl CheckpointServiceNotify for CheckpointService {
             .last_received_checkpoint_signatures
             .with_label_values(&[&signer.to_string()])
             .set(sequence as i64);
-        // The mutex ensures the DB write and channel send are ordered: we must not send a
-        // signature to the aggregator before it has been persisted, so that on crash recovery
-        // the DB is the authoritative source that is loaded back into the channel on restart.
+        // While it can be tempting to make last_signature_index into AtomicU64, this won't work
+        // We need to make sure we write to `pending_signatures` and trigger `notify_aggregator` without race conditions
         let mut index = self.last_signature_index.lock();
         *index += 1;
         epoch_store.insert_checkpoint_signature(sequence, *index, info)?;
-        let _ = self.signature_sender.send(info.clone());
+
+        // backpressure? (in practice we probably won't have situation where consensus is faster than signature aggregation)
+        self.signature_sender.send(info.clone()).ok();
         Ok(())
     }
 
