@@ -544,8 +544,10 @@ impl CheckpointStore {
             .watermarks
             .get(&CheckpointWatermark::HighestSynced)?
         {
+            eprintln!("get_highest_synced_checkpoint: {:?}", highest_synced);
             highest_synced
         } else {
+            eprintln!("get_highest_synced_checkpoint: entry not found");
             return Ok(None);
         };
         self.get_checkpoint_by_digest(&highest_synced.1)
