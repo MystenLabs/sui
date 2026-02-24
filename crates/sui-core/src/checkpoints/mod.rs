@@ -3445,13 +3445,26 @@ impl CheckpointService {
 
         let (signature_sender, signature_receiver) = mpsc::unbounded_channel();
 
-        // On startup, load any pending checkpoint signatures persisted to DB. These may exist
-        // if the node crashed before the aggregator could certify the checkpoint.
+        // On startup, load pending checkpoint signatures from the DB for crash recovery. Signatures
+        // for already-certified checkpoints are skipped since the aggregator will never need them.
         let initial_pending = {
+            let next_to_certify: CheckpointSequenceNumber = checkpoint_store
+                .tables
+                .certified_checkpoints
+                .reversed_safe_iter_with_bounds(None, None)
+                .expect("db error getting next_to_certify")
+                .next()
+                .transpose()
+                .expect("db error getting next_to_certify")
+                .map(|(seq, _)| seq + 1)
+                .unwrap_or_default();
             let tables = epoch_store.tables().expect("epoch should not have ended");
             let mut map: BTreeMap<CheckpointSequenceNumber, Vec<CheckpointSignatureMessage>> =
                 BTreeMap::new();
-            for item in tables.pending_checkpoint_signatures.safe_iter() {
+            for item in tables
+                .pending_checkpoint_signatures
+                .safe_iter_with_bounds(Some((next_to_certify, 0)), None)
+            {
                 let ((seq, _index), msg) =
                     item.expect("db error loading pending checkpoint signatures");
                 map.entry(seq).or_default().push(msg);
