@@ -1367,7 +1367,7 @@ async fn test_rpc_get_coins_pagination_multi_type() {
 
     // Publish a custom coin and mint to address balance (creates fake custom coin)
     let custom_coin_balance = 5000u64;
-    let (_, _coin_type) = test_env
+    let (_, _) = test_env
         .publish_and_mint_trusted_coin(sender, custom_coin_balance)
         .await;
 
@@ -1462,7 +1462,7 @@ async fn test_rpc_get_coins_pagination_fake_coin_largest() {
 
     // Publish a custom coin and mint to address balance
     let custom_coin_balance = 7500u64;
-    let (_, _coin_type) = test_env
+    let (_, _) = test_env
         .publish_and_mint_trusted_coin(sender, custom_coin_balance)
         .await;
 
@@ -1506,7 +1506,7 @@ async fn test_rpc_get_coins_pagination_fake_coin_smallest() {
 
     // Publish a custom coin and mint to address balance
     let custom_coin_balance = 2500u64;
-    let (_, _coin_type) = test_env
+    let (_, _) = test_env
         .publish_and_mint_trusted_coin(sender, custom_coin_balance)
         .await;
 
@@ -1550,7 +1550,7 @@ async fn test_rpc_get_coins_pagination_fake_coin_middle() {
 
     // Publish a custom coin and mint to address balance
     let custom_coin_balance = 350u64;
-    let (_, _coin_type) = test_env
+    let (_, _) = test_env
         .publish_and_mint_trusted_coin(sender, custom_coin_balance)
         .await;
 
