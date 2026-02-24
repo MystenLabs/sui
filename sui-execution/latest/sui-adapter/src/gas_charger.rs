@@ -63,7 +63,7 @@ pub mod checked {
             address_balance_payer: SuiAddress,
             available_address_balance_gas: u64,
         },
-        // Because of the compatibility layer, the first coin in GasData::payment may be a
+        // Because of the compatibility layer, the first coin in GasData::payment may be
         // a coin reservation. If so, we smash all other coins into the address balance.
         SmashIntoAddressBalance {
             gas_coins: NonEmpty<ObjectRef>,
