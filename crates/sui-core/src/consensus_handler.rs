@@ -1977,7 +1977,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .occurrence_counts
                 .get(transaction.tx().digest())
                 .copied()
-                .unwrap_or(1);
+                .unwrap_or(0);
 
             let rgp = self.epoch_store.reference_gas_price();
             let gas_price = transaction.tx().transaction_data().gas_price();
@@ -2952,6 +2952,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         // Copy user transaction occurrence counts to state for unpaid amplification detection.
+        assert!(
+            state.occurrence_counts.is_empty(),
+            "occurrence_counts should be empty before populating"
+        );
         state.occurrence_counts.reserve(occurrence_counts.len());
         state.occurrence_counts.extend(
             occurrence_counts

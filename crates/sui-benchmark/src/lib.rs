@@ -476,6 +476,10 @@ impl LocalValidatorAggregatorProxy {
 
     /// Submit a transaction to multiple validators to cause consensus amplification.
     /// This is used to test the unpaid amplification deferral logic.
+    ///
+    /// `num_validators` specifies how many additional validators to submit to beyond
+    /// the normal submission path. For example, if `num_validators == 2`, the transaction
+    /// will be submitted to 2 validators directly, plus once via the normal driver path.
     pub async fn submit_transaction_with_amplification(
         &self,
         tx: Transaction,

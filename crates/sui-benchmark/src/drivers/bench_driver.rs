@@ -1134,12 +1134,15 @@ async fn run_bench_worker(
                         let committee = worker.execution_proxy.clone_committee();
 
                         // Occasionally submit to multiple validators to test unpaid amplification deferral.
-                        // With 5% probability, submit to 3 validators to trigger the deferral logic.
+                        // With 5% probability, submit to a random number of validators (3 to committee_size - 1)
+                        // to trigger the deferral logic. Randomizing increases chances of testing longer deferrals.
                         let use_amplification = rand::thread_rng().gen_bool(0.05);
+                        let committee_size = committee.num_members();
                         let proxy = worker.execution_proxy.clone_new();
                         let res = async move {
                             let (client_type, res) = if use_amplification {
-                                proxy.execute_transaction_block_with_amplification(tx.clone(), 3).await
+                                let num_validators = rand::thread_rng().gen_range(3..committee_size.max(4));
+                                proxy.execute_transaction_block_with_amplification(tx.clone(), num_validators).await
                             } else {
                                 proxy.execute_transaction_block(tx.clone()).await
                             };
