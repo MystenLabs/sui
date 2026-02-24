@@ -2929,6 +2929,9 @@ impl CheckpointAggregator {
         let mut result = vec![];
         'outer: loop {
             let next_to_certify = self.next_checkpoint_to_certify()?;
+            // Discard buffered signatures for checkpoints already certified
+            // (e.g. certified via StateSync before local aggregation completed).
+            self.pending.retain(|&seq, _| seq >= next_to_certify);
             let current = if let Some(current) = &mut self.current {
                 // It's possible that the checkpoint was already certified by
                 // the rest of the network and we've already received the
