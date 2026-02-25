@@ -403,10 +403,7 @@ impl PeerHeights {
     /// to be at least `checkpoint + 1`. This is used when all peers fail to serve a
     /// checkpoint's contents despite advertising availability, so that the archive
     /// fallback path naturally triggers via the existing watermark comparison.
-    pub fn bump_lowest_for_unservable_checkpoint(
-        &mut self,
-        checkpoint: CheckpointSequenceNumber,
-    ) {
+    pub fn bump_lowest_for_unservable_checkpoint(&mut self, checkpoint: CheckpointSequenceNumber) {
         let new_lowest = checkpoint + 1;
         for info in self.peers.values_mut() {
             if info.on_same_chain_as_us {
