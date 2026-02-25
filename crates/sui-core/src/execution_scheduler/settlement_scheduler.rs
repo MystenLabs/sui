@@ -15,7 +15,7 @@ use crate::{
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::{assert_reachable, fatal};
+use mysten_common::assert_reachable;
 use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -262,19 +262,10 @@ impl SettlementScheduler {
         tx_index_offset: u64,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> usize {
-        let digests = match epoch_store
+        let digests = epoch_store
             .notify_read_tx_key_to_digest(&batch_info.tx_keys)
             .await
-        {
-            Ok(digests) => digests,
-            Err(e) => {
-                fatal!(
-                    "Failed to read tx digests for settlement {:?}: {:?}",
-                    settlement_key,
-                    e
-                );
-            }
-        };
+            .expect("db error");
 
         let effects = self
             .transaction_cache_read

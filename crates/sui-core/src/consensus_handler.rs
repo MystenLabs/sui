@@ -777,11 +777,9 @@ impl CheckpointQueue {
     }
 
     pub(crate) fn checkpoint_seq(&self) -> CheckpointSequenceNumber {
-        debug_assert!(
-            self.current_checkpoint_seq > 0,
-            "checkpoint_seq called before any checkpoint was assigned"
-        );
-        self.current_checkpoint_seq - 1
+        self.current_checkpoint_seq
+            .checked_sub(1)
+            .expect("checkpoint_seq called before any checkpoint was assigned")
     }
 }
 

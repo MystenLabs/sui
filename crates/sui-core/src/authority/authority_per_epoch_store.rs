@@ -331,28 +331,6 @@ impl From<ExecutionIndicesWithStats> for ExecutionIndicesWithStatsV2 {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-pub struct ExecutionIndicesWithStatsV2 {
-    pub index: ExecutionIndices,
-    pub height: u64,
-    pub stats: ConsensusStats,
-    pub last_checkpoint_flush_timestamp: u64,
-    // Reserved for future use.
-    pub checkpoint_seq: u64,
-}
-
-impl From<ExecutionIndicesWithStats> for ExecutionIndicesWithStatsV2 {
-    fn from(v1: ExecutionIndicesWithStats) -> Self {
-        Self {
-            index: v1.index,
-            height: v1.height,
-            stats: v1.stats,
-            last_checkpoint_flush_timestamp: 0,
-            checkpoint_seq: 0,
-        }
-    }
-}
-
 type ExecutionModuleCache = SyncModuleCache<ResolverWrapper>;
 
 // Data related to VM and Move execution and type layout
@@ -447,8 +425,10 @@ pub struct AuthorityPerEpochStore {
     pub(crate) metrics: Arc<EpochMetrics>,
     epoch_start_configuration: Arc<EpochStartConfiguration>,
 
-    /// The last checkpoint sequence number from the previous epoch. Used to derive the
-    /// first checkpoint sequence number of this epoch for the consensus handler.
+    /// The last checkpoint sequence number from the previous epoch.
+    /// Used to derive the first checkpoint sequence number of this epoch for the
+    /// consensus handler.
+    /// In epoch 0, this is checkpoint_seq 0 - our first non-genesis checkpoint is seq=1.
     previous_epoch_last_checkpoint: CheckpointSequenceNumber,
 
     /// Execution state that has to restart at each epoch change
