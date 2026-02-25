@@ -91,6 +91,9 @@ Include the following command-line arguments to help focus processing. These val
 # Pipeline selection
 --pipeline "tx_counts"          # Run specific pipeline only
 --pipeline "events"             # Can specify multiple pipelines
+
+# Indexer-wide rate limiting
+--max-rows-per-second 5000     # Cap total writes across all pipelines
 ```
 
 **Use cases:**
@@ -98,6 +101,7 @@ Include the following command-line arguments to help focus processing. These val
 - **Checkpoint range:** Essential for backfills and historical data processing.
 - **Pipeline selection:** Useful for selective reprocessing or testing.
 - **Skip watermark:** Enables faster backfills when watermark consistency isn't required.
+- **Rate limiting:** Prevents aggregate write load from overwhelming the database when running many concurrent pipelines. Can be combined with per-pipeline `max_rows_per_second` in `CommitterConfig`.
 
 ### Pipeline-specific advanced tuning
 
@@ -108,7 +112,12 @@ For complex configuration scenarios requiring deep understanding of pipeline int
 
 #### Rate limiting writes
 
-During backfills the indexer can produce rows faster than the database can absorb them. Each concurrent pipeline supports an optional `max_rows_per_second` setting that caps write throughput across all parallel writers for that pipeline. The rate limiter uses a smooth (GCRA) algorithm so writes are spread evenly rather than bursting. See [`CommitterConfig` optimization](/concepts/data-access/pipeline-architecture.mdx#committerconfig-optimization) for details.
+During backfills the indexer can produce rows faster than the database can absorb them. Rate limiting is available at two levels:
+
+- **Indexer-wide:** The `--max-rows-per-second` CLI flag sets a global cap shared across all concurrent pipelines. Every pipeline's committer acquires tokens from this shared limiter before writing.
+- **Per-pipeline:** Each concurrent pipeline supports an optional `max_rows_per_second` setting in its `CommitterConfig` that caps write throughput for that pipeline alone.
+
+When both are configured, each committer acquires tokens from both limiters concurrently, so the effective rate for a given pipeline is bounded by whichever limit is reached first. Both limiters use a smooth (GCRA) algorithm so writes are spread evenly rather than bursting. See [`CommitterConfig` optimization](/concepts/data-access/pipeline-architecture.mdx#committerconfig-optimization) for details.
 
 ## Tokio runtime debugging
 

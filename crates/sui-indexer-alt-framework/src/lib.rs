@@ -69,6 +69,12 @@ pub struct IndexerArgs {
     #[arg(long, action = clap::ArgAction::Append)]
     pub pipeline: Vec<String>,
 
+    /// Global rate limit (rows per second) shared across all concurrent pipelines. When set,
+    /// every pipeline's committer acquires tokens from this limiter in addition to any
+    /// per-pipeline limit.
+    #[arg(long)]
+    pub max_rows_per_second: Option<u64>,
+
     /// Additional configurations for running a tasked indexer.
     #[clap(flatten)]
     pub task: TaskArgs,
@@ -160,6 +166,9 @@ pub struct Indexer<S: Store> {
     /// the regulator to prevent ingestion from running too far ahead of sequential pipelines.
     next_sequential_checkpoint: Option<u64>,
 
+    /// Optional global rate limiter shared across all concurrent pipelines.
+    rate_limiter: Option<Arc<concurrent::rate_limiter::RateLimiter>>,
+
     /// The service handles for every pipeline, used to manage lifetimes and graceful shutdown.
     pipelines: Vec<Service>,
 }
@@ -215,6 +224,7 @@ impl<S: Store> Indexer<S> {
             first_checkpoint,
             last_checkpoint,
             pipeline,
+            max_rows_per_second,
             task,
         } = indexer_args;
 
@@ -238,6 +248,7 @@ impl<S: Store> Indexer<S> {
             added_pipelines: BTreeSet::new(),
             first_ingestion_checkpoint: u64::MAX,
             next_sequential_checkpoint: None,
+            rate_limiter: max_rows_per_second.map(concurrent::rate_limiter::RateLimiter::new),
             pipelines: vec![],
         })
     }
@@ -300,6 +311,7 @@ impl<S: Store> Indexer<S> {
             handler,
             next_checkpoint,
             config,
+            self.rate_limiter.clone(),
             self.store.clone(),
             self.task.clone(),
             self.ingestion_service.subscribe().0,
@@ -1893,8 +1905,8 @@ mod tests {
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(0),
             last_checkpoint: Some(15),
-            pipeline: vec![],
             task: TaskArgs::tasked("task".to_string(), 10),
+            ..Default::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1983,8 +1995,8 @@ mod tests {
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(9),
             last_checkpoint: Some(25),
-            pipeline: vec![],
             task: TaskArgs::tasked("task".to_string(), 10),
+            ..Default::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -2093,8 +2105,8 @@ mod tests {
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(0),
             last_checkpoint: Some(500),
-            pipeline: vec![],
             task: TaskArgs::tasked("task".to_string(), 10 /* reader_interval_ms */),
+            ..Default::default()
         };
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {

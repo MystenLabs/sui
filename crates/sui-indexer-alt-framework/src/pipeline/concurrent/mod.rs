@@ -33,6 +33,7 @@ mod commit_watermark;
 mod committer;
 mod main_reader_lo;
 mod pruner;
+pub(crate) mod rate_limiter;
 mod reader_watermark;
 
 /// Status returned by `Handler::batch` to indicate whether the batch is ready to be committed.
@@ -227,6 +228,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     next_checkpoint: u64,
     config: ConcurrentConfig,
+    indexer_rate_limiter: Option<Arc<rate_limiter::RateLimiter>>,
     store: H::Store,
     task: Option<Task>,
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
@@ -283,9 +285,21 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         max_watermark_updates,
     );
 
+    let rate_limiter = {
+        let mut limiters = Vec::new();
+        if let Some(rps) = committer_config.max_rows_per_second {
+            limiters.push(rate_limiter::RateLimiter::new(rps));
+        }
+        if let Some(il) = indexer_rate_limiter {
+            limiters.push(il);
+        }
+        Arc::new(rate_limiter::CompositeRateLimiter::new(limiters))
+    };
+
     let s_committer = committer::<H>(
         handler.clone(),
         committer_config.clone(),
+        rate_limiter,
         committer_rx,
         committer_tx,
         store.clone(),
@@ -438,6 +452,7 @@ mod tests {
                 DataPipeline,
                 next_checkpoint,
                 config,
+                None,
                 store.clone(),
                 None,
                 checkpoint_rx,

@@ -599,7 +599,7 @@ Tuning guidelines:
 - **`write_concurrency`:** Higher values result in faster throughput but more database connections; `ensure total_pipelines × write_concurrency < db_connection_pool_size`.
 - **`collect_interval_ms`:** Lower values reduce latency but increase CPU overhead.
 - **`watermark_interval_ms`:** Controls how often watermarks are updated. Higher values reduce database contention from frequent watermark writes but make the indexer slower to respond to pipeline progress.
-- **`max_rows_per_second`:** Caps the combined write rate across all `write_concurrency` workers for this pipeline. Useful during backfills to prevent the indexer from overwhelming the database. The limit uses a smooth (GCRA) rate limiter so writes are spread evenly rather than bursting. Set to `None` (the default) for unlimited throughput.
+- **`max_rows_per_second`:** Caps the combined write rate across all `write_concurrency` workers for this pipeline. Useful during backfills to prevent the indexer from overwhelming the database. The limit uses a smooth (GCRA) rate limiter so writes are spread evenly rather than bursting. Set to `None` (the default) for unlimited throughput. For an indexer-wide cap across all pipelines, use the `--max-rows-per-second` CLI flag (see [Rate limiting writes](/concepts/data-access/indexer-runtime-perf.mdx#rate-limiting-writes)).
 
 #### `PrunerConfig` settings
 
