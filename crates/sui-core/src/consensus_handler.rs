@@ -554,16 +554,14 @@ struct Chunk<
 }
 
 impl<T: crate::authority::shared_object_version_manager::AsTx + Clone> Chunk<T> {
-    fn all_schedulables(&self) -> impl Iterator<Item = &Schedulable<T>> {
+    fn all_schedulables(&self) -> impl Iterator<Item = &Schedulable<T>> + Clone {
         self.schedulables.iter().chain(self.settlement.iter())
     }
 
-    fn all_schedulables_from(chunks: &[Self]) -> Vec<Schedulable<T>> {
+    fn all_schedulables_from<'a>(chunks: &'a[Self]) -> impl Iterator<Item = &'a Schedulable<T>> + Clone {
         chunks
             .iter()
             .flat_map(|c| c.all_schedulables())
-            .cloned()
-            .collect()
     }
 
     fn to_checkpoint_roots(&self) -> CheckpointRoots {
@@ -1872,8 +1870,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .epoch_store
             .process_consensus_transaction_shared_object_versions(
                 self.cache_reader.as_ref(),
-                schedulables_for_version_assignment.iter(),
-                randomness_schedulables_for_version_assignment.iter(),
+                schedulables_for_version_assignment,
+                randomness_schedulables_for_version_assignment,
                 cancelled_txns,
                 &mut state.output,
             )
