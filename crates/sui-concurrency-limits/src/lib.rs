@@ -14,11 +14,12 @@
 //!   from the ratio of long-term to short-term RTT and scales the limit proportionally. Effective
 //!   when the backing store degrades gradually under load (e.g. Bigtable write latency increasing).
 //!
-//! - **BDP** (`Bdp`): throughput-based. Measures bandwidth-delay product as
-//!   `max(delivery_rate) × min(rtt)` and sets `limit = ceil(BDP × gain)`. Unlike latency-based
-//!   algorithms that can't distinguish a saturated 1-node cluster from an idle 5-node cluster
-//!   returning identical latency, BDP detects saturation by observing whether more concurrency
-//!   produces more throughput.
+//! - **TrendAimd** (`TrendAimd`): RTT-trend-based AIMD. Compares a fast EWMA (α=0.4) and slow
+//!   EWMA (α=0.05) of RTT to detect congestion trends. When the fast average exceeds the slow
+//!   average plus a noise band (2× stddev), the limit decreases multiplicatively; otherwise it
+//!   increases additively by √limit. Starts in slow-start (doubling each epoch) and transitions
+//!   to steady state when RTT rises above baseline. Differentiates cluster sizes because the DB
+//!   saturates at different concurrency levels, causing backpressure at different points.
 //!
 //! # Differences from Netflix's reference implementation
 //!
@@ -83,7 +84,7 @@ enum Algorithm {
     Fixed { limit: usize },
     Aimd(Aimd),
     Gradient(Gradient),
-    Bdp(Bdp),
+    TrendAimd(TrendAimd),
 }
 
 impl Algorithm {
@@ -91,16 +92,16 @@ impl Algorithm {
     fn update(
         &self,
         inflight: usize,
-        delivered: usize,
+        _delivered: usize,
         outcome: Outcome,
         rtt: Duration,
-        now: Instant,
+        _now: Instant,
     ) -> usize {
         match self {
             Self::Fixed { limit } => *limit,
             Self::Aimd(a) => a.update(inflight, outcome, rtt),
             Self::Gradient(g) => g.update(inflight, outcome, rtt),
-            Self::Bdp(b) => b.update(delivered, outcome, rtt, now),
+            Self::TrendAimd(t) => t.update(outcome, rtt),
         }
     }
 }
@@ -257,26 +258,25 @@ impl Limiter {
         }
     }
 
-    pub fn bdp(config: BdpConfig) -> Self {
-        Self::builder_bdp(config).build()
+    pub fn trend_aimd(config: TrendAimdConfig) -> Self {
+        Self::builder_trend_aimd(config).build()
     }
 
-    /// Return a [`LimiterBuilder`] pre-configured with a BDP algorithm.
-    pub fn builder_bdp(config: BdpConfig) -> LimiterBuilder {
-        assert!(config.gain > 0.0, "gain must be positive");
+    /// Return a [`LimiterBuilder`] pre-configured with a TrendAimd algorithm.
+    pub fn builder_trend_aimd(config: TrendAimdConfig) -> LimiterBuilder {
         assert!(
-            config.backoff_ratio > 0.0 && config.backoff_ratio <= 1.0,
-            "backoff_ratio must be in (0.0, 1.0]"
+            config.decrease_ratio >= 0.5 && config.decrease_ratio < 1.0,
+            "decrease_ratio must be in [0.5, 1.0)"
         );
         assert!(
-            config.smoothing > 0.0 && config.smoothing <= 1.0,
-            "smoothing must be in (0.0, 1.0]"
+            config.noise_multiplier > 0.0,
+            "noise_multiplier must be positive"
         );
         let initial = config
             .initial_limit
             .clamp(config.min_limit, config.max_limit);
         LimiterBuilder {
-            algorithm: Algorithm::Bdp(Bdp::new(&config)),
+            algorithm: Algorithm::TrendAimd(TrendAimd::new(&config)),
             initial_limit: initial,
             clock: None,
             on_limit_change: None,
@@ -393,15 +393,15 @@ impl Drop for Token {
 /// Serializable concurrency limit configuration.
 ///
 /// Selects the algorithm used to manage concurrent writers or ingest workers.
-/// `Fixed` uses a static limit (the default); `Aimd`, `Gradient`, and `Bdp`
+/// `Fixed` uses a static limit (the default); `Aimd`, `Gradient`, and `TrendAimd`
 /// adjust the limit dynamically based on commit outcomes or latency.
 #[derive(Serialize, Debug, Clone)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "kebab-case")]
 pub enum ConcurrencyLimit {
     Fixed { limit: usize },
     Aimd(AimdConfig),
     Gradient(GradientConfig),
-    Bdp(BdpConfig),
+    TrendAimd(TrendAimdConfig),
 }
 
 impl<'de> Deserialize<'de> for ConcurrencyLimit {
@@ -410,12 +410,12 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
         D: serde::Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        #[serde(rename_all = "snake_case")]
+        #[serde(rename_all = "kebab-case")]
         enum Tagged {
             Fixed { limit: usize },
             Aimd(AimdConfig),
             Gradient(GradientConfig),
-            Bdp(BdpConfig),
+            TrendAimd(TrendAimdConfig),
         }
 
         #[derive(Deserialize)]
@@ -430,7 +430,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Helper::Tagged(Tagged::Fixed { limit }) => Ok(ConcurrencyLimit::Fixed { limit }),
             Helper::Tagged(Tagged::Aimd(c)) => Ok(ConcurrencyLimit::Aimd(c)),
             Helper::Tagged(Tagged::Gradient(c)) => Ok(ConcurrencyLimit::Gradient(c)),
-            Helper::Tagged(Tagged::Bdp(c)) => Ok(ConcurrencyLimit::Bdp(c)),
+            Helper::Tagged(Tagged::TrendAimd(c)) => Ok(ConcurrencyLimit::TrendAimd(c)),
         }
     }
 }
@@ -442,7 +442,7 @@ impl ConcurrencyLimit {
             Self::Fixed { limit } => Limiter::fixed(*limit),
             Self::Aimd(config) => Limiter::aimd(config.clone()),
             Self::Gradient(config) => Limiter::gradient(config.clone()),
-            Self::Bdp(config) => Limiter::bdp(config.clone()),
+            Self::TrendAimd(config) => Limiter::trend_aimd(config.clone()),
         }
     }
 
@@ -462,7 +462,7 @@ impl ConcurrencyLimit {
             Self::Gradient(config) => Limiter::builder_gradient(config.clone())
                 .on_limit_change(on_limit_change)
                 .build(),
-            Self::Bdp(config) => Limiter::builder_bdp(config.clone())
+            Self::TrendAimd(config) => Limiter::builder_trend_aimd(config.clone())
                 .on_limit_change(on_limit_change)
                 .build(),
         }
@@ -743,116 +743,176 @@ impl Gradient {
 }
 
 // ---------------------------------------------------------------------------
-// BDP algorithm — Bandwidth-Delay Product concurrency limiter
+// TrendAimd algorithm — RTT-trend-based Additive Increase / Multiplicative Decrease
 // ---------------------------------------------------------------------------
 
-/// Configuration for the BDP (Bandwidth-Delay Product) concurrency limit algorithm.
+/// Configuration for the TrendAimd concurrency limit algorithm.
 ///
-/// Uses EMA-smoothed delivery rate and RTT to estimate the bandwidth-delay product,
-/// then sets `limit = ceil(smoothed_rate * smoothed_rtt * gain)`. Smoothed averages
-/// capture sustained throughput rather than optimistic extremes, which is critical
-/// when a downstream buffer absorbs bursts.
+/// Compares fast and slow EWMAs of RTT to detect congestion trends. When the fast
+/// average exceeds the slow average by more than a noise band, the limit decreases
+/// multiplicatively; otherwise it increases additively by √limit. Starts in
+/// slow-start (doubling each epoch) and transitions to steady state when RTT growth
+/// is detected.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default, rename_all = "kebab-case")]
-pub struct BdpConfig {
+pub struct TrendAimdConfig {
     /// Starting concurrency limit.
     pub initial_limit: usize,
     /// Floor: the limit will never go below this value.
     pub min_limit: usize,
     /// Ceiling: the limit will never exceed this value.
     pub max_limit: usize,
-    /// EMA smoothing factor for RTT and delivery rate (0.0–1.0).
-    /// Higher values react faster to changes. Default 0.2.
-    pub smoothing: f64,
-    /// Multiplier applied to BDP when computing the limit.
-    pub gain: f64,
-    /// Multiplicative factor applied on `Outcome::Dropped` (e.g. 0.9 = 10% cut).
-    pub backoff_ratio: f64,
+    /// Multiplicative decrease factor applied on congestion or drop, in `[0.5, 1.0)`.
+    pub decrease_ratio: f64,
+    /// Multiplier on stddev to form the noise band. Decrease triggers when
+    /// `fast_ewma > slow_ewma + noise_multiplier * stddev`.
+    pub noise_multiplier: f64,
 }
 
-impl Default for BdpConfig {
+impl Default for TrendAimdConfig {
     fn default() -> Self {
         Self {
             initial_limit: 4,
             min_limit: 4,
-            max_limit: 1000,
-            smoothing: 0.2,
-            gain: 2.0,
-            backoff_ratio: 0.9,
+            max_limit: 5000,
+            decrease_ratio: 0.9,
+            noise_multiplier: 2.0,
         }
     }
 }
 
-struct BdpState {
-    estimated_limit: f64,
-    smoothed_rtt: f64,
-    smoothed_rate: f64,
-    samples: usize,
+/// Internal EWMA constants (not user-configurable).
+const ALPHA_FAST: f64 = 0.4;
+const ALPHA_SLOW: f64 = 0.05;
+const ALPHA_VAR: f64 = 0.1;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    SlowStart,
+    Steady,
 }
 
-struct Bdp {
-    state: Mutex<BdpState>,
-    smoothing: f64,
-    gain: f64,
-    backoff_ratio: f64,
+/// Minimum epoch size floor to avoid noisy decisions at very low limits.
+const MIN_EPOCH_SIZE: u64 = 20;
+
+struct TrendAimdState {
+    limit: f64,
+    phase: Phase,
+    ewma_rtt: f64,
+    ewma_var: f64,
+    ewma_rtt_slow: f64,
+    completions_in_epoch: u64,
+    epoch_size: u64,
+    rtt_at_last_double: f64,
+    no_growth_rounds: u32,
+}
+
+struct TrendAimd {
+    state: Mutex<TrendAimdState>,
+    decrease_ratio: f64,
+    noise_multiplier: f64,
     min_limit: usize,
     max_limit: usize,
 }
 
-impl Bdp {
-    fn new(config: &BdpConfig) -> Self {
+impl TrendAimd {
+    fn new(config: &TrendAimdConfig) -> Self {
         let initial = config
             .initial_limit
             .clamp(config.min_limit, config.max_limit);
+        let epoch_size = (initial as u64).clamp(MIN_EPOCH_SIZE, 500);
         Self {
-            state: Mutex::new(BdpState {
-                estimated_limit: initial as f64,
-                smoothed_rtt: 0.0,
-                smoothed_rate: 0.0,
-                samples: 0,
+            state: Mutex::new(TrendAimdState {
+                limit: initial as f64,
+                phase: Phase::SlowStart,
+                ewma_rtt: 0.0,
+                ewma_var: 0.0,
+                ewma_rtt_slow: 0.0,
+                completions_in_epoch: 0,
+                epoch_size,
+                rtt_at_last_double: 0.0,
+                no_growth_rounds: 0,
             }),
-            smoothing: config.smoothing,
-            gain: config.gain,
-            backoff_ratio: config.backoff_ratio,
+            decrease_ratio: config.decrease_ratio,
+            noise_multiplier: config.noise_multiplier,
             min_limit: config.min_limit,
             max_limit: config.max_limit,
         }
     }
 
-    fn update(&self, delivered: usize, outcome: Outcome, rtt: Duration, now: Instant) -> usize {
-        let _ = now;
+    fn update(&self, outcome: Outcome, rtt: Duration) -> usize {
         let rtt_secs = rtt.as_secs_f64();
         if rtt_secs == 0.0 {
-            return self.state.lock().unwrap().estimated_limit as usize;
+            return self.state.lock().unwrap().limit as usize;
         }
 
-        let mut state = self.state.lock().unwrap();
+        let mut s = self.state.lock().unwrap();
 
+        // Immediate backoff on drop, transition to Steady.
         if matches!(outcome, Outcome::Dropped) {
-            state.estimated_limit = (state.estimated_limit * self.backoff_ratio)
-                .clamp(self.min_limit as f64, self.max_limit as f64);
-            return state.estimated_limit as usize;
+            s.limit =
+                (s.limit * self.decrease_ratio).clamp(self.min_limit as f64, self.max_limit as f64);
+            s.phase = Phase::Steady;
+            s.epoch_size = (s.limit as u64).clamp(MIN_EPOCH_SIZE, 500);
+            s.completions_in_epoch = 0;
+            return s.limit as usize;
         }
 
-        let delivery_rate = delivered as f64 / rtt_secs;
-
-        // First sample seeds the EMA; subsequent samples blend.
-        if state.samples == 0 {
-            state.smoothed_rtt = rtt_secs;
-            state.smoothed_rate = delivery_rate;
+        // Update EWMAs per-sample for accurate signal tracking.
+        if s.ewma_rtt == 0.0 {
+            s.ewma_rtt = rtt_secs;
+            s.ewma_rtt_slow = rtt_secs;
+            s.rtt_at_last_double = rtt_secs;
         } else {
-            let alpha = self.smoothing;
-            state.smoothed_rtt = state.smoothed_rtt * (1.0 - alpha) + rtt_secs * alpha;
-            state.smoothed_rate = state.smoothed_rate * (1.0 - alpha) + delivery_rate * alpha;
+            s.ewma_rtt = s.ewma_rtt * (1.0 - ALPHA_FAST) + rtt_secs * ALPHA_FAST;
+            s.ewma_rtt_slow = s.ewma_rtt_slow * (1.0 - ALPHA_SLOW) + rtt_secs * ALPHA_SLOW;
         }
-        state.samples += 1;
+        let diff = rtt_secs - s.ewma_rtt;
+        s.ewma_var = s.ewma_var * (1.0 - ALPHA_VAR) + (diff * diff) * ALPHA_VAR;
 
-        let bdp = state.smoothed_rate * state.smoothed_rtt;
-        state.estimated_limit = (bdp * self.gain)
-            .ceil()
-            .clamp(self.min_limit as f64, self.max_limit as f64);
+        // Only make limit decisions at epoch boundaries.
+        s.completions_in_epoch += 1;
+        if s.completions_in_epoch < s.epoch_size {
+            return s.limit as usize;
+        }
+        s.completions_in_epoch = 0;
 
-        state.estimated_limit as usize
+        let stddev = s.ewma_var.sqrt();
+        let noise_band = self.noise_multiplier * stddev;
+
+        match s.phase {
+            Phase::SlowStart => {
+                // Exit slow-start when RTT has risen above baseline beyond the
+                // noise band, indicating the system is saturating. Uses the same
+                // variance-based threshold as steady state so sensitivity adapts
+                // to actual RTT variability (e.g. variable checkpoint sizes).
+                if s.rtt_at_last_double > 0.0 && s.ewma_rtt > s.rtt_at_last_double + noise_band {
+                    s.no_growth_rounds += 1;
+                } else {
+                    s.no_growth_rounds = 0;
+                }
+
+                if s.no_growth_rounds >= 2 {
+                    s.limit *= self.decrease_ratio;
+                    s.phase = Phase::Steady;
+                    s.no_growth_rounds = 0;
+                } else {
+                    s.rtt_at_last_double = s.ewma_rtt;
+                    s.limit *= 2.0;
+                }
+            }
+            Phase::Steady => {
+                if s.ewma_rtt > s.ewma_rtt_slow + noise_band {
+                    s.limit *= self.decrease_ratio;
+                } else {
+                    s.limit += s.limit.sqrt();
+                }
+            }
+        }
+
+        s.limit = s.limit.clamp(self.min_limit as f64, self.max_limit as f64);
+        s.epoch_size = (s.limit as u64).clamp(MIN_EPOCH_SIZE, 500);
+        s.limit as usize
     }
 }
 
@@ -1626,239 +1686,220 @@ mod tests {
         assert_eq!(serialized, serde_json::json!({"fixed": {"limit": 5}}),);
     }
 
-    // ======================== BDP algorithm tests ========================
+    // ======================== TrendAimd algorithm tests ========================
 
-    fn default_bdp_config() -> BdpConfig {
-        BdpConfig {
+    fn default_trend_aimd_config() -> TrendAimdConfig {
+        TrendAimdConfig {
             initial_limit: 4,
             min_limit: 4,
-            max_limit: 1000,
-            ..BdpConfig::default()
+            max_limit: 5000,
+            ..TrendAimdConfig::default()
         }
     }
 
     #[test]
-    fn bdp_converges_to_throughput() {
-        let alg = Bdp::new(&default_bdp_config());
-        let base = Instant::now();
+    fn trend_aimd_slow_start_ramps_up() {
+        let alg = TrendAimd::new(&default_trend_aimd_config());
         let rtt = Duration::from_millis(10);
 
-        // Simulate steady throughput: 100 completions per 10ms RTT → rate=10000,
-        // BDP=10000*0.01=100, limit=ceil(100*gain)=200 with default gain=2.0.
-        let mut limit = 4;
-        for i in 0..50 {
-            let t = base + rtt * (i + 1);
-            limit = alg.update(100, Outcome::Success, rtt, t);
+        // Feed many samples at a stable RTT. Slow-start doubles each epoch,
+        // so the limit should grow well past the initial value.
+        for _ in 0..2000 {
+            alg.update(Outcome::Success, rtt);
         }
 
-        assert_eq!(limit, 200, "Should converge to ceil(BDP*gain), got {limit}");
+        let limit = alg.state.lock().unwrap().limit as usize;
+        assert!(
+            limit > 16,
+            "Slow-start should ramp limit well past initial, got {limit}"
+        );
     }
 
     #[test]
-    fn bdp_backoff_on_drop() {
-        let config = BdpConfig {
+    fn trend_aimd_backs_off_on_rtt_rise() {
+        let alg = TrendAimd::new(&default_trend_aimd_config());
+
+        // Ramp up with low RTT to get through slow-start and into steady state.
+        for _ in 0..2000 {
+            alg.update(Outcome::Success, Duration::from_millis(10));
+        }
+
+        // Force transition to Steady state via a drop, then let the limit grow
+        // with continued low RTT so we have a stable baseline.
+        alg.update(Outcome::Dropped, Duration::from_millis(10));
+        for _ in 0..5000 {
+            alg.update(Outcome::Success, Duration::from_millis(10));
+        }
+        let limit_before = alg.state.lock().unwrap().limit as usize;
+        assert!(
+            limit_before > 100,
+            "Should have ramped up, got {limit_before}"
+        );
+
+        // Spike RTT. The fast EWMA reacts within a few epochs while the slow
+        // EWMA lags, triggering multiplicative decrease.
+        for _ in 0..3000 {
+            alg.update(Outcome::Success, Duration::from_millis(200));
+        }
+        let limit_after = alg.state.lock().unwrap().limit as usize;
+
+        assert!(
+            limit_after < limit_before,
+            "Limit should decrease on RTT spike (before={limit_before}, after={limit_after})"
+        );
+    }
+
+    #[test]
+    fn trend_aimd_dropped_immediate_decrease() {
+        let config = TrendAimdConfig {
             initial_limit: 100,
             min_limit: 4,
-            max_limit: 1000,
-            backoff_ratio: 0.5,
-            ..BdpConfig::default()
+            max_limit: 5000,
+            decrease_ratio: 0.5,
+            ..TrendAimdConfig::default()
         };
-        let alg = Bdp::new(&config);
-        let base = Instant::now();
-        let rtt = Duration::from_millis(10);
+        let alg = TrendAimd::new(&config);
 
-        // Establish a limit first.
-        for i in 0..10 {
-            alg.update(100, Outcome::Success, rtt, base + rtt * (i + 1));
+        let limit = alg.update(Outcome::Dropped, Duration::from_millis(10));
+        assert_eq!(limit, 50, "Drop should halve the limit immediately");
+    }
+
+    #[test]
+    fn trend_aimd_respects_bounds() {
+        // Test min bound: drops should not go below min_limit.
+        let config = TrendAimdConfig {
+            initial_limit: 5,
+            min_limit: 4,
+            max_limit: 20,
+            decrease_ratio: 0.5,
+            ..TrendAimdConfig::default()
+        };
+        let alg = TrendAimd::new(&config);
+        for _ in 0..10 {
+            alg.update(Outcome::Dropped, Duration::from_millis(10));
         }
-        let before = alg.state.lock().unwrap().estimated_limit;
+        let limit = alg.state.lock().unwrap().limit as usize;
+        assert!(limit >= 4, "Should not go below min_limit, got {limit}");
 
-        // A drop should cut the limit by backoff_ratio.
-        alg.update(100, Outcome::Dropped, rtt, base + rtt * 12);
-        let after = alg.state.lock().unwrap().estimated_limit;
-
-        let expected = (before * 0.5).clamp(4.0, 1000.0);
-        assert!(
-            (after - expected).abs() < 0.01,
-            "Drop should halve the limit: before={before}, after={after}, expected={expected}"
-        );
-    }
-
-    #[test]
-    fn bdp_zero_rtt_preserves_limit() {
-        let alg = Bdp::new(&default_bdp_config());
-        let limit = alg.update(10, Outcome::Success, Duration::ZERO, Instant::now());
-        assert_eq!(limit, 4, "Zero RTT should preserve initial limit");
-    }
-
-    #[test]
-    fn bdp_min_max_bounds() {
-        let config = BdpConfig {
+        // Test max bound: slow-start should not exceed max_limit.
+        let config = TrendAimdConfig {
             initial_limit: 4,
             min_limit: 4,
-            max_limit: 50,
-            ..BdpConfig::default()
+            max_limit: 20,
+            ..TrendAimdConfig::default()
         };
-        let alg = Bdp::new(&config);
-        let base = Instant::now();
-        let rtt = Duration::from_millis(10);
-
-        // Feed high throughput — limit should be clamped to max_limit.
-        for i in 0..20 {
-            alg.update(1000, Outcome::Success, rtt, base + rtt * (i + 1));
+        let alg = TrendAimd::new(&config);
+        for _ in 0..10000 {
+            alg.update(Outcome::Success, Duration::from_millis(10));
         }
-        let limit = alg.state.lock().unwrap().estimated_limit as usize;
-        assert!(limit <= 50, "Should not exceed max_limit=50, got {limit}");
+        let limit = alg.state.lock().unwrap().limit as usize;
+        assert!(limit <= 20, "Should not exceed max_limit=20, got {limit}");
     }
 
     #[test]
-    fn bdp_drop_skips_ema_updates() {
-        let alg = Bdp::new(&default_bdp_config());
-        let base = Instant::now();
-        let rtt = Duration::from_millis(10);
-
-        alg.update(100, Outcome::Success, rtt, base + rtt);
-        let samples_before = alg.state.lock().unwrap().samples;
-
-        // A drop should not update the EMA (fast-error RTTs would poison it).
-        alg.update(
-            100,
-            Outcome::Dropped,
-            Duration::from_millis(1),
-            base + rtt * 2,
-        );
-
-        let samples_after = alg.state.lock().unwrap().samples;
-        assert_eq!(samples_before, samples_after, "Drop should not update EMA");
-    }
-
-    #[test]
-    fn bdp_ema_tracks_changing_throughput() {
-        let config = BdpConfig {
-            smoothing: 0.5, // aggressive smoothing to converge fast in test
-            ..default_bdp_config()
-        };
-        let alg = Bdp::new(&config);
-        let base = Instant::now();
-        let rtt = Duration::from_millis(10);
-
-        // Feed high throughput.
-        for i in 0..20 {
-            alg.update(1000, Outcome::Success, rtt, base + rtt * (i + 1));
-        }
-        let limit_high = alg.state.lock().unwrap().estimated_limit as usize;
-
-        // Switch to low throughput — EMA should drag the limit down.
-        for i in 20..40 {
-            alg.update(10, Outcome::Success, rtt, base + rtt * (i + 1));
-        }
-        let limit_low = alg.state.lock().unwrap().estimated_limit as usize;
-
-        assert!(
-            limit_low < limit_high,
-            "EMA should track throughput decrease: high={limit_high}, low={limit_low}"
-        );
-    }
-
-    #[test]
-    fn bdp_via_limiter_with_clock() {
+    fn trend_aimd_via_limiter_with_clock() {
         let ticks = Arc::new(AtomicUsize::new(0));
         let base = Instant::now();
         let clock_ticks = ticks.clone();
-        let limiter = Limiter::builder_bdp(default_bdp_config())
+        let limiter = Limiter::builder_trend_aimd(default_trend_aimd_config())
             .clock(move || {
                 let step = clock_ticks.fetch_add(1, Ordering::SeqCst) as u64;
-                base + Duration::from_millis(step * 10)
+                // Each tick is 5ms, giving a stable 5ms RTT (acquire tick + record tick).
+                base + Duration::from_millis(step * 5)
             })
             .build();
         assert_eq!(limiter.current(), 4);
 
-        // Acquire many tokens first (each acquire consumes 1 clock tick), then
-        // complete them all. This way `delivered` is high for each completion
-        // (many completions happened between acquire and record_sample).
-        for _ in 0..3 {
-            let tokens: Vec<_> = (0..20).map(|_| limiter.acquire()).collect();
-            for token in tokens {
-                token.record_sample(Outcome::Success);
-            }
+        // Feed enough samples to get through slow-start epochs (epoch_size starts at 20).
+        for _ in 0..500 {
+            let token = limiter.acquire();
+            token.record_sample(Outcome::Success);
         }
 
         assert!(
             limiter.current() > 4,
-            "BDP limiter should increase from initial, got {}",
+            "TrendAimd limiter should increase from initial, got {}",
             limiter.current()
         );
     }
 
     #[test]
-    fn concurrency_limit_bdp_build() {
-        let config = ConcurrencyLimit::Bdp(BdpConfig {
+    fn trend_aimd_zero_rtt_preserves_limit() {
+        let alg = TrendAimd::new(&default_trend_aimd_config());
+        let limit = alg.update(Outcome::Success, Duration::ZERO);
+        assert_eq!(limit, 4, "Zero RTT should preserve initial limit");
+    }
+
+    #[test]
+    fn concurrency_limit_trend_aimd_build() {
+        let config = ConcurrencyLimit::TrendAimd(TrendAimdConfig {
             initial_limit: 4,
             min_limit: 4,
             max_limit: 500,
-            ..BdpConfig::default()
+            ..TrendAimdConfig::default()
         });
         let limiter = config.build();
         assert_eq!(limiter.current(), 4);
     }
 
     #[test]
-    fn concurrency_limit_toml_bdp_defaults() {
+    fn concurrency_limit_toml_trend_aimd_defaults() {
         let toml_str = r#"
-            [concurrency.bdp]
+            [concurrency.trend-aimd]
         "#;
         let parsed: Wrapper = toml::from_str(toml_str).unwrap();
         match parsed.concurrency {
-            ConcurrencyLimit::Bdp(config) => {
+            ConcurrencyLimit::TrendAimd(config) => {
                 assert_eq!(config.initial_limit, 4);
                 assert_eq!(config.min_limit, 4);
-                assert_eq!(config.max_limit, 1000);
-                assert!((config.gain - 2.0).abs() < f64::EPSILON);
-                assert!((config.smoothing - 0.2).abs() < f64::EPSILON);
-                assert!((config.backoff_ratio - 0.9).abs() < f64::EPSILON);
+                assert_eq!(config.max_limit, 5000);
+                assert!((config.decrease_ratio - 0.9).abs() < f64::EPSILON);
+                assert!((config.noise_multiplier - 2.0).abs() < f64::EPSILON);
             }
-            _ => panic!("Expected Bdp variant"),
+            _ => panic!("Expected TrendAimd variant"),
         }
     }
 
     #[test]
-    fn concurrency_limit_toml_bdp_with_overrides() {
+    fn concurrency_limit_toml_trend_aimd_with_overrides() {
         let toml_str = r#"
-            [concurrency.bdp]
+            [concurrency.trend-aimd]
+            initial-limit = 8
+            min-limit = 4
             max-limit = 500
-            min-limit = 8
-            gain = 2.0
-            backoff-ratio = 0.5
+            decrease-ratio = 0.85
+            noise-multiplier = 3.0
         "#;
         let parsed: Wrapper = toml::from_str(toml_str).unwrap();
         match parsed.concurrency {
-            ConcurrencyLimit::Bdp(config) => {
+            ConcurrencyLimit::TrendAimd(config) => {
+                assert_eq!(config.initial_limit, 8);
+                assert_eq!(config.min_limit, 4);
                 assert_eq!(config.max_limit, 500);
-                assert_eq!(config.min_limit, 8);
-                assert!((config.gain - 2.0).abs() < f64::EPSILON);
-                assert!((config.backoff_ratio - 0.5).abs() < f64::EPSILON);
+                assert!((config.decrease_ratio - 0.85).abs() < f64::EPSILON);
+                assert!((config.noise_multiplier - 3.0).abs() < f64::EPSILON);
             }
-            _ => panic!("Expected Bdp variant"),
+            _ => panic!("Expected TrendAimd variant"),
         }
     }
 
     #[test]
-    #[should_panic(expected = "gain must be positive")]
-    fn bdp_rejects_zero_gain() {
-        let config = BdpConfig {
-            gain: 0.0,
-            ..BdpConfig::default()
+    #[should_panic(expected = "decrease_ratio must be in [0.5, 1.0)")]
+    fn trend_aimd_rejects_invalid_decrease_ratio() {
+        let config = TrendAimdConfig {
+            decrease_ratio: 0.3,
+            ..TrendAimdConfig::default()
         };
-        let _ = Limiter::bdp(config);
+        let _ = Limiter::trend_aimd(config);
     }
 
     #[test]
-    #[should_panic(expected = "backoff_ratio must be in (0.0, 1.0]")]
-    fn bdp_rejects_invalid_backoff_ratio() {
-        let config = BdpConfig {
-            backoff_ratio: 0.0,
-            ..BdpConfig::default()
+    #[should_panic(expected = "noise_multiplier must be positive")]
+    fn trend_aimd_rejects_zero_noise_multiplier() {
+        let config = TrendAimdConfig {
+            noise_multiplier: 0.0,
+            ..TrendAimdConfig::default()
         };
-        let _ = Limiter::bdp(config);
+        let _ = Limiter::trend_aimd(config);
     }
 }
