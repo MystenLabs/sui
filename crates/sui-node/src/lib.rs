@@ -176,6 +176,7 @@ pub struct P2pComponents {
     discovery_handle: discovery::Handle,
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
+    endpoint_manager: EndpointManager,
 }
 
 #[cfg(msim)]
@@ -684,6 +685,7 @@ impl SuiNode {
             discovery_handle,
             state_sync_handle,
             randomness_handle,
+            endpoint_manager,
         } = Self::create_p2p_network(
             &config,
             state_sync_store.clone(),
@@ -691,8 +693,6 @@ impl SuiNode {
             randomness_tx,
             &prometheus_registry,
         )?;
-
-        let endpoint_manager = EndpointManager::new(discovery_handle.clone());
 
         // Inject configured peer address overrides.
         for peer in &config.p2p_config.peer_address_overrides {
@@ -1083,9 +1083,17 @@ impl SuiNode {
             .with_metrics(prometheus_registry)
             .build();
 
-        let (discovery, discovery_server) = discovery::Builder::new()
-            .config(config.p2p_config.clone())
-            .build();
+        let mut discovery_builder = discovery::Builder::new().config(config.p2p_config.clone());
+        if let Some(consensus_config) = &config.consensus_config {
+            let effective_addr = consensus_config
+                .external_address
+                .as_ref()
+                .or(consensus_config.listen_address.as_ref());
+            if let Some(addr) = effective_addr {
+                discovery_builder = discovery_builder.consensus_external_address(addr.clone());
+            }
+        }
+        let (discovery, discovery_server, endpoint_manager) = discovery_builder.build();
 
         let discovery_config = config.p2p_config.discovery.clone().unwrap_or_default();
         let known_peers: HashMap<PeerId, String> = discovery_config
@@ -1218,6 +1226,7 @@ impl SuiNode {
             discovery_handle,
             state_sync_handle,
             randomness_handle,
+            endpoint_manager,
         })
     }
 

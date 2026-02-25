@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::PathBuf, time::Duration};
-
+use mysten_network::Multiaddr;
 use serde::{Deserialize, Serialize};
+use std::{path::PathBuf, time::Duration};
 
 /// Operational configurations of a consensus authority.
 ///
@@ -99,6 +99,11 @@ pub struct Parameters {
     /// Internal consensus parameters.
     #[serde(default = "InternalParameters::default")]
     pub internal: InternalParameters,
+
+    /// Override for the address to listen on. When set, this is used instead of
+    /// deriving from the committee address.
+    #[serde(skip)]
+    pub listen_address_override: Option<Multiaddr>,
 }
 
 impl Parameters {
@@ -215,6 +220,7 @@ impl Default for Parameters {
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             tonic: TonicParameters::default(),
             internal: InternalParameters::default(),
+            listen_address_override: None,
         }
     }
 }

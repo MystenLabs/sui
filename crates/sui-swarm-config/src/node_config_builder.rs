@@ -179,6 +179,8 @@ impl ValidatorConfigBuilder {
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             parameters: Default::default(),
+            listen_address: None,
+            external_address: None,
         };
 
         let p2p_config = P2pConfig {

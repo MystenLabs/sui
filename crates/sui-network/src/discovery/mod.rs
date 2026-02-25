@@ -15,9 +15,9 @@ use std::{
     time::Duration,
 };
 
-use crate::endpoint_manager::{AddressSource, EndpointId};
+use crate::endpoint_manager::{AddressSource, EndpointId, EndpointManager};
 use sui_config::p2p::{AccessType, DiscoveryConfig, P2pConfig};
-use sui_types::crypto::{NetworkKeyPair, Signer, ToFromBytes, VerifyingKey};
+use sui_types::crypto::{NetworkKeyPair, NetworkPublicKey, Signer, ToFromBytes, VerifyingKey};
 use sui_types::digests::Digest;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::multiaddr::Multiaddr;
@@ -70,11 +70,23 @@ pub enum DiscoveryMessage {
 #[derive(Clone, Debug)]
 pub struct Handle {
     pub(super) _shutdown_handle: Arc<oneshot::Sender<()>>,
-    sender: mpsc::Sender<DiscoveryMessage>,
+    pub(super) sender: Sender,
 }
 
 impl Handle {
-    /// Updates the address for a single peer from a specific source.
+    pub fn sender(&self) -> Sender {
+        self.sender.clone()
+    }
+}
+
+/// A lightweight handle for sending messages to the discovery event loop
+/// without holding a shutdown reference.
+#[derive(Clone, Debug)]
+pub struct Sender {
+    pub(super) sender: mpsc::Sender<DiscoveryMessage>,
+}
+
+impl Sender {
     pub fn peer_address_change(
         &self,
         peer_id: PeerId,
@@ -239,6 +251,81 @@ impl Message for VersionedNodeInfo {
 pub type SignedVersionedNodeInfo = Envelope<VersionedNodeInfo, Ed25519Signature>;
 pub type VerifiedSignedVersionedNodeInfo = VerifiedEnvelope<VersionedNodeInfo, Ed25519Signature>;
 
+/// Verifies the signature and endpoint identity consistency of a
+/// `SignedVersionedNodeInfo`, returning a `VerifiedSignedVersionedNodeInfo`
+/// on success.
+///
+/// Checks:
+/// 1. The signature is valid for the P2P peer_id embedded in the node info.
+/// 2. Any non-P2P endpoint identities (e.g. `Consensus`) match the P2P
+///    peer_id, preventing a peer from advertising endpoints under another
+///    key.
+fn verify_versioned_node_info(
+    peer_info: &SignedVersionedNodeInfo,
+) -> Result<VerifiedSignedVersionedNodeInfo, &'static str> {
+    let peer_id = peer_info.peer_id().ok_or("missing P2P peer_id")?;
+
+    let public_key =
+        Ed25519PublicKey::from_bytes(&peer_id.0).map_err(|_| "invalid peer_id public key")?;
+
+    let msg = bcs::to_bytes(peer_info.data()).expect("BCS serialization should not fail");
+    public_key
+        .verify(&msg, peer_info.auth_sig())
+        .map_err(|_| "signature verification failed")?;
+
+    match peer_info.data() {
+        VersionedNodeInfo::V1(info) => {
+            if info.addresses.len() > MAX_ADDRESSES_PER_PEER {
+                return Err("too many addresses");
+            }
+            if !info
+                .addresses
+                .iter()
+                .all(|addr| addr.len() < MAX_ADDRESS_LENGTH && addr.to_anemo_address().is_ok())
+            {
+                return Err("invalid address");
+            }
+        }
+        VersionedNodeInfo::V2(info_v2) => {
+            // Each endpoint variant (P2p, Consensus) may appear at most once.
+            let mut seen_variants = Vec::new();
+            for endpoint_id in info_v2.addresses.keys() {
+                let variant = std::mem::discriminant(endpoint_id);
+                if seen_variants.contains(&variant) {
+                    return Err("duplicate endpoint variant");
+                }
+                seen_variants.push(variant);
+            }
+
+            for (endpoint_id, addrs) in &info_v2.addresses {
+                if addrs.len() > MAX_ADDRESSES_PER_PEER {
+                    return Err("too many addresses for endpoint");
+                }
+                if !addrs.iter().all(|addr| addr.len() < MAX_ADDRESS_LENGTH) {
+                    return Err("address too long");
+                }
+                if matches!(endpoint_id, EndpointId::P2p(_))
+                    && !addrs.iter().all(|addr| addr.to_anemo_address().is_ok())
+                {
+                    return Err("invalid P2P address");
+                }
+            }
+
+            let identities_valid = info_v2.addresses.keys().all(|eid| match eid {
+                EndpointId::P2p(_) => true,
+                EndpointId::Consensus(pubkey) => pubkey.as_bytes() == peer_id.0,
+            });
+            if !identities_valid {
+                return Err("non-P2P endpoint identity mismatch");
+            }
+        }
+    }
+
+    Ok(VerifiedSignedVersionedNodeInfo::new_from_verified(
+        peer_info.clone(),
+    ))
+}
+
 struct DiscoveryEventLoop {
     config: P2pConfig,
     discovery_config: Arc<DiscoveryConfig>,
@@ -253,6 +340,8 @@ struct DiscoveryEventLoop {
     state: Arc<RwLock<State>>,
     mailbox: mpsc::Receiver<DiscoveryMessage>,
     metrics: Metrics,
+    consensus_external_address: Option<Multiaddr>,
+    endpoint_manager: EndpointManager,
 }
 
 impl DiscoveryEventLoop {
@@ -320,6 +409,7 @@ impl DiscoveryEventLoop {
                     self.metrics.clone(),
                     vec![*peer_info],
                     self.configured_peers.clone(),
+                    &self.endpoint_manager,
                 );
             }
         }
@@ -350,9 +440,19 @@ impl DiscoveryEventLoop {
         }
         .sign(&self.keypair);
 
-        // TODO: Add support for including other address types to our V2 info.
         let mut addresses_map = BTreeMap::new();
         addresses_map.insert(EndpointId::P2p(peer_id), addresses);
+        if let Some(consensus_addr) = &self.consensus_external_address {
+            // Populates `Consensus` EndpointId from our P2P (anemo) `PeerId`.
+            // This is safe because both the P2P and consensus networks use the same
+            // ed25519 network keypair. Both originate from `NodeConfig::network_key_pair()`.
+            let network_pubkey =
+                NetworkPublicKey::from_bytes(&peer_id.0).expect("PeerId is a valid public key");
+            addresses_map.insert(
+                EndpointId::Consensus(network_pubkey),
+                vec![consensus_addr.clone()],
+            );
+        }
         let our_info_v2 = VersionedNodeInfo::V2(NodeInfoV2 {
             addresses: addresses_map,
             timestamp_ms,
@@ -471,6 +571,7 @@ impl DiscoveryEventLoop {
                         self.state.clone(),
                         self.metrics.clone(),
                         self.configured_peers.clone(),
+                        self.endpoint_manager.clone(),
                     ));
                 }
             }
@@ -498,6 +599,7 @@ impl DiscoveryEventLoop {
                 self.state.clone(),
                 self.metrics.clone(),
                 self.configured_peers.clone(),
+                self.endpoint_manager.clone(),
             ));
 
         // Cull old peers older than a day
@@ -707,6 +809,7 @@ async fn query_peer_for_their_known_peers(
     state: Arc<RwLock<State>>,
     metrics: Metrics,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    endpoint_manager: EndpointManager,
 ) {
     // Query V3 concurrently with V2 when enabled
     if discovery_config.use_get_known_peers_v3() {
@@ -747,7 +850,13 @@ async fn query_peer_for_their_known_peers(
                 );
             }
             if let Some(found_peers) = found_peers_v3 {
-                update_known_peers_versioned(state, metrics, found_peers, configured_peers);
+                update_known_peers_versioned(
+                    state,
+                    metrics,
+                    found_peers,
+                    configured_peers,
+                    &endpoint_manager,
+                );
             }
             return;
         }
@@ -765,6 +874,7 @@ async fn query_connected_peers_for_their_known_peers(
     state: Arc<RwLock<State>>,
     metrics: Metrics,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    endpoint_manager: EndpointManager,
 ) {
     use rand::seq::IteratorRandom;
 
@@ -860,7 +970,13 @@ async fn query_connected_peers_for_their_known_peers(
                 found_peers_v2,
                 configured_peers.clone(),
             );
-            update_known_peers_versioned(state, metrics, found_peers_v3, configured_peers);
+            update_known_peers_versioned(
+                state,
+                metrics,
+                found_peers_v3,
+                configured_peers,
+                &endpoint_manager,
+            );
             return;
         }
     }
@@ -964,6 +1080,7 @@ fn update_known_peers_versioned(
     metrics: Metrics,
     found_peers: Vec<SignedVersionedNodeInfo>,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    endpoint_manager: &EndpointManager,
 ) {
     use std::collections::hash_map::Entry;
 
@@ -976,7 +1093,6 @@ fn update_known_peers_versioned(
         .and_then(|info| info.peer_id());
     let known_peers_v2 = &mut state.write().unwrap().known_peers_v2;
 
-    // TODO: Integrate versioned peer address updates with EndpointManager.
     for peer_info in found_peers.into_iter().take(MAX_PEERS_TO_SEND + 1) {
         let timestamp_ms = peer_info.timestamp_ms();
 
@@ -1002,36 +1118,29 @@ fn update_known_peers_versioned(
             continue;
         }
 
-        let p2p_addresses = peer_info.p2p_addresses();
-        if p2p_addresses.len() > MAX_ADDRESSES_PER_PEER {
-            continue;
-        }
-
-        if !p2p_addresses
-            .iter()
-            .all(|addr| addr.len() < MAX_ADDRESS_LENGTH && addr.to_anemo_address().is_ok())
-        {
-            continue;
-        }
-
-        let Ok(public_key) = Ed25519PublicKey::from_bytes(&peer_id.0) else {
-            debug_fatal!(
-                "Failed to convert anemo PeerId {:?} to Ed25519PublicKey",
-                peer_id
-            );
-            continue;
+        let peer = match verify_versioned_node_info(&peer_info) {
+            Ok(verified) => verified,
+            Err(reason) => {
+                info!("Discovery rejecting VersionedNodeInfo for peer {peer_id:?}: {reason}");
+                continue;
+            }
         };
 
-        let msg = bcs::to_bytes(peer_info.data()).expect("BCS serialization should not fail");
-        if let Err(e) = public_key.verify(&msg, peer_info.auth_sig()) {
-            info!(
-                "Discovery failed to verify signature for VersionedNodeInfo for peer {:?}: {e:?}",
-                peer_id
-            );
-            continue;
+        // Forward non-P2P addresses from configured peers to EndpointManager.
+        if configured_peers.contains_key(&peer_id)
+            && let VersionedNodeInfo::V2(info_v2) = peer_info.data()
+        {
+            for (endpoint_id, addrs) in &info_v2.addresses {
+                if !matches!(endpoint_id, EndpointId::P2p(_)) && !addrs.is_empty() {
+                    let _ = endpoint_manager.update_endpoint(
+                        endpoint_id.clone(),
+                        AddressSource::Discovery,
+                        addrs.clone(),
+                    );
+                }
+            }
         }
 
-        let peer = VerifiedSignedVersionedNodeInfo::new_from_verified(peer_info);
         let peer_p2p_addresses = peer.p2p_addresses();
 
         match known_peers_v2.entry(peer_id) {

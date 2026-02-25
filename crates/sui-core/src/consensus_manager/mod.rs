@@ -219,6 +219,7 @@ impl ConsensusManager {
 
         let parameters = Parameters {
             db_path: self.get_store_path(epoch),
+            listen_address_override: consensus_config.listen_address.clone(),
             ..consensus_config.parameters.clone().unwrap_or_default()
         };
 

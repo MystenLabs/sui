@@ -963,6 +963,19 @@ pub struct ConsensusConfig {
     pub submit_delay_step_override_millis: Option<u64>,
 
     pub parameters: Option<ConsensusParameters>,
+
+    /// Override for the consensus network listen address.
+    /// When set, Mysticeti binds to this address instead of deriving from the committee.
+    /// Address override is advertised via the discovery protocol.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub listen_address: Option<Multiaddr>,
+
+    /// External consensus address that should be advertised via the discovery protocol,
+    /// if it is different from `listen_address` above.
+    ///
+    /// When neither this nor `listen_address` is set, peers use the on-chain committee address.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_address: Option<Multiaddr>,
 }
 
 impl ConsensusConfig {
