@@ -151,3 +151,17 @@ fragment TX on TransactionConnection {
     affectedAddress: "@{A}"
   }) { pageInfo { startCursor endCursor hasPreviousPage hasNextPage } }
 }
+
+//# run-graphql
+{
+  unboundedScan: scanTransactions(filter: {
+    afterCheckpoint: 0,
+  }) { pageInfo { startCursor endCursor hasPreviousPage hasNextPage } }
+}
+
+//# run-graphql
+{
+  scanLimit: scanTransactions(filter: {
+    beforeCheckpoint: 3000001,
+  }) { pageInfo { startCursor endCursor hasPreviousPage hasNextPage } }
+}

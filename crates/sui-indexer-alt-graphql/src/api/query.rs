@@ -55,7 +55,6 @@ use crate::api::types::protocol_configs::ProtocolConfigs;
 use crate::api::types::service_config::ServiceConfig;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
-use crate::api::types::transaction::ScanError;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::ScanFilterValidator;
 use crate::api::types::transaction::filter::TransactionFilter;
@@ -730,8 +729,8 @@ impl Query {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-        #[graphql(validator(custom = "ScanFilterValidator"))] filter: TransactionFilter,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError<ScanError>>> {
+        #[graphql(validator(custom = "ScanFilterValidator::new(ctx)"))] filter: TransactionFilter,
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;

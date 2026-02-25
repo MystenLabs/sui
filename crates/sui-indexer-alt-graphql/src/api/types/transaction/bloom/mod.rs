@@ -35,7 +35,6 @@ const OVERFETCH_MULTIPLIER: f64 = 1.2;
 pub(super) type TransactionsBySequenceNumbers =
     BTreeMap<u64, (TransactionDigest, TransactionContents)>;
 
-/// The map of transactions that might match the filter criteria in `cp_bounds` checkpoints keyed by tx_sequence_number.
 pub(crate) async fn transactions(
     ctx: &Context<'_>,
     filter: &TransactionFilter,
@@ -145,10 +144,10 @@ async fn candidate_cps(
             FROM block_byte_probes
             WHERE block_byte_probes.cp_block_index = cp_bloom_blocks.cp_block_index
                 AND block_byte_probes.bloom_block_index = cp_bloom_blocks.bloom_block_index
-                AND block_byte_probes.bit_mask <> get_byte(
+                AND (get_byte(
                     cp_bloom_blocks.bloom_filter,
                     block_byte_probes.byte_pos % length(cp_bloom_blocks.bloom_filter)
-                )
+                ) & block_byte_probes.bit_mask) <> block_byte_probes.bit_mask
         )
         ORDER BY
             cp_lo {}

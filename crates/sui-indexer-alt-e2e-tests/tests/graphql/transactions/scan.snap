@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 20 tasks
+processed 22 tasks
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
@@ -1071,7 +1071,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Failed to parse \"TransactionFilter\": Scanning requires explicit checkpoint bounds. Filter by afterCheckpoint and beforeCheckpoint, beforeCheckpoint or atCheckpoint.",
+      "message": "Failed to parse \"TransactionFilter\": Unbounded scan, add beforeCheckpoint or atCheckpoint filters (Scan limit: 3000000).",
       "locations": [
         {
           "line": 2,
@@ -1080,6 +1080,46 @@ Response: {
       ],
       "path": [
         "noCheckpointBounds"
+      ]
+    }
+  ]
+}
+
+task 20, lines 155-160:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": Unbounded scan, add beforeCheckpoint or atCheckpoint filters (Scan limit: 3000000).",
+      "locations": [
+        {
+          "line": 2,
+          "column": 43
+        }
+      ],
+      "path": [
+        "unboundedScan"
+      ]
+    }
+  ]
+}
+
+task 21, lines 162-167:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": Scan of 3000001 checkpoints exceeds maximum of 3000000. Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to reduce the range.",
+      "locations": [
+        {
+          "line": 2,
+          "column": 39
+        }
+      ],
+      "path": [
+        "scanLimit"
       ]
     }
   ]
