@@ -5,12 +5,6 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/matching/mismatched_types.move:6:16
-  │
-6 │         match (n) {
-  │                ^ Pattern 'N { 0: true }' not covered
-
 error[E04007]: incompatible types
   ┌─ tests/move_2024/matching/mismatched_types.move:7:13
   │
