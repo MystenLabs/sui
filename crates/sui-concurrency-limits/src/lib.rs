@@ -36,7 +36,6 @@
 
 pub mod stream;
 
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -268,6 +267,10 @@ impl Limiter {
         assert!(
             config.backoff_ratio > 0.0 && config.backoff_ratio <= 1.0,
             "backoff_ratio must be in (0.0, 1.0]"
+        );
+        assert!(
+            config.smoothing > 0.0 && config.smoothing <= 1.0,
+            "smoothing must be in (0.0, 1.0]"
         );
         let initial = config
             .initial_limit
@@ -745,8 +748,10 @@ impl Gradient {
 
 /// Configuration for the BDP (Bandwidth-Delay Product) concurrency limit algorithm.
 ///
-/// Measures system throughput by tracking `max(delivery_rate)` and `min(rtt)` in
-/// sliding time windows, then sets `limit = ceil(max_rate * min_rtt * gain)`.
+/// Uses EMA-smoothed delivery rate and RTT to estimate the bandwidth-delay product,
+/// then sets `limit = ceil(smoothed_rate * smoothed_rtt * gain)`. Smoothed averages
+/// capture sustained throughput rather than optimistic extremes, which is critical
+/// when a downstream buffer absorbs bursts.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct BdpConfig {
@@ -756,10 +761,9 @@ pub struct BdpConfig {
     pub min_limit: usize,
     /// Ceiling: the limit will never exceed this value.
     pub max_limit: usize,
-    /// Sliding window duration (ms) for min-RTT tracking.
-    pub rtt_window_ms: u64,
-    /// Sliding window duration (ms) for max delivery-rate tracking.
-    pub throughput_window_ms: u64,
+    /// EMA smoothing factor for RTT and delivery rate (0.0–1.0).
+    /// Higher values react faster to changes. Default 0.2.
+    pub smoothing: f64,
     /// Multiplier applied to BDP when computing the limit.
     pub gain: f64,
     /// Multiplicative factor applied on `Outcome::Dropped` (e.g. 0.9 = 10% cut).
@@ -772,9 +776,8 @@ impl Default for BdpConfig {
             initial_limit: 4,
             min_limit: 4,
             max_limit: 1000,
-            rtt_window_ms: 5000,
-            throughput_window_ms: 5000,
-            gain: 1.25,
+            smoothing: 0.2,
+            gain: 2.0,
             backoff_ratio: 0.9,
         }
     }
@@ -782,14 +785,14 @@ impl Default for BdpConfig {
 
 struct BdpState {
     estimated_limit: f64,
-    rtt_window: VecDeque<(Instant, f64)>,
-    delivery_rate_window: VecDeque<(Instant, f64)>,
+    smoothed_rtt: f64,
+    smoothed_rate: f64,
+    samples: usize,
 }
 
 struct Bdp {
     state: Mutex<BdpState>,
-    rtt_window: Duration,
-    throughput_window: Duration,
+    smoothing: f64,
     gain: f64,
     backoff_ratio: f64,
     min_limit: usize,
@@ -804,11 +807,11 @@ impl Bdp {
         Self {
             state: Mutex::new(BdpState {
                 estimated_limit: initial as f64,
-                rtt_window: VecDeque::new(),
-                delivery_rate_window: VecDeque::new(),
+                smoothed_rtt: 0.0,
+                smoothed_rate: 0.0,
+                samples: 0,
             }),
-            rtt_window: Duration::from_millis(config.rtt_window_ms),
-            throughput_window: Duration::from_millis(config.throughput_window_ms),
+            smoothing: config.smoothing,
             gain: config.gain,
             backoff_ratio: config.backoff_ratio,
             min_limit: config.min_limit,
@@ -817,6 +820,7 @@ impl Bdp {
     }
 
     fn update(&self, delivered: usize, outcome: Outcome, rtt: Duration, now: Instant) -> usize {
+        let _ = now;
         let rtt_secs = rtt.as_secs_f64();
         if rtt_secs == 0.0 {
             return self.state.lock().unwrap().estimated_limit as usize;
@@ -824,8 +828,6 @@ impl Bdp {
 
         let mut state = self.state.lock().unwrap();
 
-        // On drop, back off immediately and skip window updates to avoid
-        // poisoning the windows with fast-error RTTs.
         if matches!(outcome, Outcome::Dropped) {
             state.estimated_limit = (state.estimated_limit * self.backoff_ratio)
                 .clamp(self.min_limit as f64, self.max_limit as f64);
@@ -834,40 +836,18 @@ impl Bdp {
 
         let delivery_rate = delivered as f64 / rtt_secs;
 
-        // Push new samples and trim expired entries.
-        state.rtt_window.push_back((now, rtt_secs));
-        while state
-            .rtt_window
-            .front()
-            .is_some_and(|(t, _)| now.saturating_duration_since(*t) > self.rtt_window)
-        {
-            state.rtt_window.pop_front();
+        // First sample seeds the EMA; subsequent samples blend.
+        if state.samples == 0 {
+            state.smoothed_rtt = rtt_secs;
+            state.smoothed_rate = delivery_rate;
+        } else {
+            let alpha = self.smoothing;
+            state.smoothed_rtt = state.smoothed_rtt * (1.0 - alpha) + rtt_secs * alpha;
+            state.smoothed_rate = state.smoothed_rate * (1.0 - alpha) + delivery_rate * alpha;
         }
+        state.samples += 1;
 
-        state.delivery_rate_window.push_back((now, delivery_rate));
-        while state
-            .delivery_rate_window
-            .front()
-            .is_some_and(|(t, _)| now.saturating_duration_since(*t) > self.throughput_window)
-        {
-            state.delivery_rate_window.pop_front();
-        }
-
-        let min_rtt = state
-            .rtt_window
-            .iter()
-            .map(|(_, v)| *v)
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap_or(rtt_secs);
-
-        let max_rate = state
-            .delivery_rate_window
-            .iter()
-            .map(|(_, v)| *v)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap_or(delivery_rate);
-
-        let bdp = max_rate * min_rtt;
+        let bdp = state.smoothed_rate * state.smoothed_rtt;
         state.estimated_limit = (bdp * self.gain)
             .ceil()
             .clamp(self.min_limit as f64, self.max_limit as f64);
@@ -1664,14 +1644,14 @@ mod tests {
         let rtt = Duration::from_millis(10);
 
         // Simulate steady throughput: 100 completions per 10ms RTT → rate=10000,
-        // BDP=10000*0.01=100, limit=ceil(100*1.25)=125.
+        // BDP=10000*0.01=100, limit=ceil(100*gain)=200 with default gain=2.0.
         let mut limit = 4;
         for i in 0..50 {
             let t = base + rtt * (i + 1);
             limit = alg.update(100, Outcome::Success, rtt, t);
         }
 
-        assert_eq!(limit, 125, "Should converge to ceil(BDP*gain), got {limit}");
+        assert_eq!(limit, 200, "Should converge to ceil(BDP*gain), got {limit}");
     }
 
     #[test]
@@ -1732,61 +1712,51 @@ mod tests {
     }
 
     #[test]
-    fn bdp_drop_skips_window_updates() {
+    fn bdp_drop_skips_ema_updates() {
         let alg = Bdp::new(&default_bdp_config());
         let base = Instant::now();
         let rtt = Duration::from_millis(10);
 
-        // Establish some window entries.
         alg.update(100, Outcome::Success, rtt, base + rtt);
+        let samples_before = alg.state.lock().unwrap().samples;
 
-        let entries_before = {
-            let state = alg.state.lock().unwrap();
-            (state.rtt_window.len(), state.delivery_rate_window.len())
-        };
+        // A drop should not update the EMA (fast-error RTTs would poison it).
+        alg.update(
+            100,
+            Outcome::Dropped,
+            Duration::from_millis(1),
+            base + rtt * 2,
+        );
 
-        // A drop should not add to the windows (fast-error RTTs would poison them).
-        alg.update(100, Outcome::Dropped, Duration::from_millis(1), base + rtt * 2);
-
-        let entries_after = {
-            let state = alg.state.lock().unwrap();
-            (state.rtt_window.len(), state.delivery_rate_window.len())
-        };
-
-        assert_eq!(entries_before, entries_after, "Drop should not modify windows");
+        let samples_after = alg.state.lock().unwrap().samples;
+        assert_eq!(samples_before, samples_after, "Drop should not update EMA");
     }
 
     #[test]
-    fn bdp_window_expiry() {
+    fn bdp_ema_tracks_changing_throughput() {
         let config = BdpConfig {
-            rtt_window_ms: 100,
-            throughput_window_ms: 100,
+            smoothing: 0.5, // aggressive smoothing to converge fast in test
             ..default_bdp_config()
         };
         let alg = Bdp::new(&config);
         let base = Instant::now();
+        let rtt = Duration::from_millis(10);
 
-        // Insert a high-rate sample.
-        alg.update(
-            1000,
-            Outcome::Success,
-            Duration::from_millis(10),
-            base + Duration::from_millis(10),
-        );
+        // Feed high throughput.
+        for i in 0..20 {
+            alg.update(1000, Outcome::Success, rtt, base + rtt * (i + 1));
+        }
         let limit_high = alg.state.lock().unwrap().estimated_limit as usize;
 
-        // After the window expires, a lower-rate sample should dominate.
-        alg.update(
-            10,
-            Outcome::Success,
-            Duration::from_millis(10),
-            base + Duration::from_millis(200),
-        );
+        // Switch to low throughput — EMA should drag the limit down.
+        for i in 20..40 {
+            alg.update(10, Outcome::Success, rtt, base + rtt * (i + 1));
+        }
         let limit_low = alg.state.lock().unwrap().estimated_limit as usize;
 
         assert!(
             limit_low < limit_high,
-            "After window expiry, limit should drop: high={limit_high}, low={limit_low}"
+            "EMA should track throughput decrease: high={limit_high}, low={limit_low}"
         );
     }
 
@@ -1843,7 +1813,8 @@ mod tests {
                 assert_eq!(config.initial_limit, 4);
                 assert_eq!(config.min_limit, 4);
                 assert_eq!(config.max_limit, 1000);
-                assert!((config.gain - 1.25).abs() < f64::EPSILON);
+                assert!((config.gain - 2.0).abs() < f64::EPSILON);
+                assert!((config.smoothing - 0.2).abs() < f64::EPSILON);
                 assert!((config.backoff_ratio - 0.9).abs() < f64::EPSILON);
             }
             _ => panic!("Expected Bdp variant"),
