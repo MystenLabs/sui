@@ -221,7 +221,7 @@ impl TestEnv {
 
 async fn create_test_env() -> TestEnv {
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(1000)
+        .with_epoch_duration_ms(10000)
         .with_num_validators(5)
         .build()
         .await;
