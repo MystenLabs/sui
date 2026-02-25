@@ -260,17 +260,8 @@ def main():
     if args.cli_commit:
         cmd.extend(["-f", f"sui_cli_commit={args.cli_commit}"])
 
-    # Determine stress_commit: use explicit value, or default to the newest commit being tested
-    stress_commit = args.stress_commit
-    if not stress_commit:
-        if args.split_version:
-            assert alt_commit, "alt_commit must be set in split_version mode"
-            stress_commit = alt_commit
-        else:
-            stress_commit = commit
-
-    if stress_commit:
-        cmd.extend(["-f", f"stress_commit={stress_commit}"])
+    if args.stress_commit:
+        cmd.extend(["-f", f"stress_commit={args.stress_commit}"])
 
     if args.protocol_override:
         cmd.extend(["-f", f"protocol_config_override={args.protocol_override}"])
