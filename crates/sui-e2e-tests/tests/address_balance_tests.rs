@@ -3201,3 +3201,127 @@ async fn test_funds_withdraw_scheduler_type_alternation() {
         );
     }
 }
+
+#[sim_test]
+async fn test_simulate_address_funds_sufficient() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::address_fund(), vec![(500, dbg_addr(2))])
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false)
+        .await
+        .unwrap();
+    assert!(result.transaction.effects.status().is_ok());
+}
+
+#[sim_test]
+async fn test_simulate_address_funds_insufficient() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    test_env.fund_one_address_balance(sender, 100).await;
+
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::address_fund(), vec![(500, dbg_addr(2))])
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false)
+        .await;
+    assert!(result.is_err());
+}
+
+#[sim_test]
+async fn test_simulate_object_funds_sufficient() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(1000).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false)
+        .await
+        .unwrap();
+    assert!(result.transaction.effects.status().is_ok());
+}
+
+#[sim_test]
+async fn test_simulate_object_funds_insufficient() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(100).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false)
+        .await
+        .unwrap();
+    assert!(
+        result.transaction.effects.status().is_err(),
+        "Expected execution failure due to insufficient object funds"
+    );
+}

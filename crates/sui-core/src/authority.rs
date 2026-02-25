@@ -131,10 +131,10 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::GasCostSummary;
+use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
 };
@@ -2465,12 +2465,19 @@ impl AuthorityState {
         )
         .expect("Creating an executor should not fail here");
 
+        let declared_withdrawals =
+            transaction.process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier());
+        let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
+
+        self.execution_cache_trait_pointers
+            .account_funds_read
+            .check_amounts_available(&declared_withdrawals)?;
+
         let (kind, signer, gas_data) = transaction.execution_parts();
         let early_execution_error = get_early_execution_error(
             &transaction.digest(),
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
-            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
             &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
@@ -2480,25 +2487,74 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
+        // Clone inputs for potential retry if object funds check fails post-execution.
+        let cloned_input_objects = checked_input_objects.clone();
+        let cloned_gas = gas_data.clone();
+        let cloned_kind = kind.clone();
+        let tx_digest = transaction.digest();
+        let epoch_id = epoch_store.epoch_start_config().epoch_data().epoch_id();
+        let epoch_timestamp_ms = epoch_store
+            .epoch_start_config()
+            .epoch_data()
+            .epoch_start_timestamp();
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             &tracking_store,
             protocol_config,
             self.metrics.limits_metrics.clone(),
             false, // expensive_checks
             execution_params,
-            &epoch_store.epoch_start_config().epoch_data().epoch_id(),
-            epoch_store
-                .epoch_start_config()
-                .epoch_data()
-                .epoch_start_timestamp(),
+            &epoch_id,
+            epoch_timestamp_ms,
             checked_input_objects,
             gas_data,
             gas_status,
             kind,
             signer,
-            transaction.digest(),
+            tx_digest,
             dev_inspect,
         );
+
+        // Post-execution: check object funds (non-address withdrawals discovered during execution).
+        let (inner_temp_store, effects, execution_result) = if execution_result.is_ok() {
+            let has_insufficient_object_funds = inner_temp_store
+                .accumulator_running_max_withdraws
+                .iter()
+                .filter(|(id, _)| !address_funds.contains(id))
+                .any(|(id, max_withdraw)| {
+                    let (balance, _) = self.get_account_funds_read().get_latest_account_amount(id);
+                    balance < *max_withdraw
+                });
+
+            if has_insufficient_object_funds {
+                let retry_gas_status = SuiGasStatus::new(
+                    cloned_gas.budget,
+                    cloned_gas.price,
+                    epoch_store.reference_gas_price(),
+                    protocol_config,
+                )?;
+                let (store, _, effects, result) = executor.dev_inspect_transaction(
+                    &tracking_store,
+                    protocol_config,
+                    self.metrics.limits_metrics.clone(),
+                    false,
+                    ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
+                    &epoch_id,
+                    epoch_timestamp_ms,
+                    cloned_input_objects,
+                    cloned_gas,
+                    retry_gas_status,
+                    cloned_kind,
+                    signer,
+                    tx_digest,
+                    dev_inspect,
+                );
+                (store, effects, result)
+            } else {
+                (inner_temp_store, effects, execution_result)
+            }
+        } else {
+            (inner_temp_store, effects, execution_result)
+        };
 
         let loaded_runtime_objects = tracking_store.into_read_objects();
         let unchanged_loaded_runtime_objects =
