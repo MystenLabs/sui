@@ -12,7 +12,7 @@ pub(crate) mod execution_scheduler_impl;
 pub(crate) mod funds_withdraw_scheduler;
 mod overload_tracker;
 pub(crate) mod settlement_scheduler;
-pub(crate) use settlement_scheduler::SettlementScheduler;
+pub(crate) use settlement_scheduler::{SettlementBatchInfo, SettlementScheduler};
 
 // TODO: Cleanup this struct.
 #[derive(Clone, Debug)]

@@ -5887,7 +5887,7 @@ where
         (vec![], AssignedTxAndVersions::default())
     } else {
         // Remove and return the first batch of captured transactions
-        let (mut schedulables, assigned_versions) = captured.remove(0);
+        let (mut schedulables, assigned_versions, _, _) = captured.remove(0);
 
         // Filter out consensus commit prologue transactions if requested
         if filter_prologue {

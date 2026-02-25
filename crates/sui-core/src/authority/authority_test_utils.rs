@@ -424,7 +424,7 @@ where
             !captured.is_empty(),
             "Expected transactions to be scheduled"
         );
-        let (scheduled_txns, assigned_tx_and_versions) = captured.remove(0);
+        let (scheduled_txns, assigned_tx_and_versions, _, _) = captured.remove(0);
         (scheduled_txns, assigned_tx_and_versions)
     };
 

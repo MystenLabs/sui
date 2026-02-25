@@ -491,9 +491,6 @@ pub struct AuthorityPerEpochStore {
     /// Waiters for barrier transactions. Used by execution scheduler to wait for
     /// barrier transaction (keyed by the same AccumulatorSettlement key as settlements).
     barrier_registrations: Arc<Mutex<HashMap<TransactionKey, BarrierRegistration>>>,
-
-    /// Maps settlement key to batch transaction info for early settlement.
-    settlement_batch_info: Arc<Mutex<HashMap<TransactionKey, SettlementBatchInfo>>>,
 }
 enum SettlementRegistration {
     Ready(Vec<VerifiedExecutableTransaction>),
@@ -502,14 +499,6 @@ enum SettlementRegistration {
 enum BarrierRegistration {
     Ready(Box<VerifiedExecutableTransaction>),
     Waiting(oneshot::Sender<VerifiedExecutableTransaction>),
-}
-
-#[derive(Clone)]
-pub struct SettlementBatchInfo {
-    pub tx_keys: Vec<TransactionKey>,
-    pub checkpoint_height: u64,
-    pub tx_index_offset: u64,
-    pub checkpoint_seq: u64,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -1344,7 +1333,6 @@ impl AuthorityPerEpochStore {
             finalized_transactions_cache,
             settlement_registrations: Default::default(),
             barrier_registrations: Default::default(),
-            settlement_batch_info: Default::default(),
         });
 
         s.update_buffer_stake_metric();
@@ -2098,23 +2086,6 @@ impl AuthorityPerEpochStore {
         };
 
         rx.await.unwrap()
-    }
-
-    pub(crate) fn store_settlement_batch_info(
-        &self,
-        tx_key: TransactionKey,
-        batch_info: SettlementBatchInfo,
-    ) {
-        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
-        self.settlement_batch_info.lock().insert(tx_key, batch_info);
-    }
-
-    pub(crate) fn take_settlement_batch_info(
-        &self,
-        tx_key: &TransactionKey,
-    ) -> Option<SettlementBatchInfo> {
-        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
-        self.settlement_batch_info.lock().remove(tx_key)
     }
 
     pub fn insert_effects_digest_and_signature(

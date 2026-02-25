@@ -64,7 +64,7 @@ use crate::{
         AuthorityMetrics, AuthorityState, ExecutionEnv,
         authority_per_epoch_store::{
             AuthorityPerEpochStore, CancelConsensusCertificateReason, ConsensusStats,
-            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStatsV2, SettlementBatchInfo,
+            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStatsV2,
             consensus_quarantine::ConsensusCommitOutput,
         },
         backpressure::{BackpressureManager, BackpressureSubscriber},
@@ -88,7 +88,7 @@ use crate::{
         reconfiguration::ReconfigState,
     },
     execution_cache::ObjectCacheRead,
-    execution_scheduler::{SchedulingSource, SettlementScheduler},
+    execution_scheduler::{SchedulingSource, SettlementBatchInfo, SettlementScheduler},
     post_consensus_tx_reorder::PostConsensusTxReorder,
     scoring_decision::update_low_scoring_authorities,
     traffic_controller::{TrafficController, policies::TrafficTally},
@@ -545,24 +545,54 @@ struct QueuedCheckpointRoots {
     rejected_transactions_digest: Digest,
 }
 
-pub(crate) struct SettlementInfo {
-    pub checkpoint_seq: CheckpointSequenceNumber,
-    pub tx_index_offset: u64,
-    pub tx_keys: Vec<TransactionKey>,
-    pub checkpoint_height: CheckpointHeight,
-    pub settlement_key: TransactionKey,
+struct Chunk<
+    T: crate::authority::shared_object_version_manager::AsTx = VerifiedExecutableTransaction,
+> {
+    schedulables: Vec<Schedulable<T>>,
+    settlement: Option<Schedulable<T>>,
+    height: CheckpointHeight,
+}
+
+impl<T: crate::authority::shared_object_version_manager::AsTx + Clone> Chunk<T> {
+    fn all_schedulables(&self) -> impl Iterator<Item = &Schedulable<T>> {
+        self.schedulables.iter().chain(self.settlement.iter())
+    }
+
+    fn to_checkpoint_roots(&self) -> CheckpointRoots {
+        let tx_roots: Vec<_> = self.schedulables.iter().map(|s| s.key()).collect();
+        let settlement_root = self.settlement.as_ref().map(|s| s.key());
+        CheckpointRoots {
+            tx_roots,
+            settlement_root,
+            height: self.height,
+        }
+    }
+}
+
+impl From<Chunk<VerifiedExecutableTransactionWithAliases>> for Chunk {
+    fn from(chunk: Chunk<VerifiedExecutableTransactionWithAliases>) -> Self {
+        Chunk {
+            schedulables: chunk.schedulables.into_iter().map(|s| s.into()).collect(),
+            settlement: chunk.settlement.map(|s| s.into()),
+            height: chunk.height,
+        }
+    }
 }
 
 // Accumulates checkpoint roots from consensus and flushes them into PendingCheckpointV2s.
 // Roots are buffered in `pending_roots` until a flush is triggered (by max_tx overflow or
 // time interval). A flush always drains all buffered roots into a single PendingCheckpointV2,
 // so the queue only ever holds roots for one pending checkpoint at a time.
+//
+// Owns an ExecutionSchedulerSender so push_chunk can send schedulables and settlement info
+// for execution in one shot.
 pub(crate) struct CheckpointQueue {
     last_built_timestamp: CheckpointTimestamp,
     pending_roots: VecDeque<QueuedCheckpointRoots>,
     height: u64,
     pending_tx_count: usize,
     current_checkpoint_seq: CheckpointSequenceNumber,
+    execution_scheduler_sender: ExecutionSchedulerSender,
 }
 
 impl CheckpointQueue {
@@ -570,6 +600,7 @@ impl CheckpointQueue {
         last_built_timestamp: CheckpointTimestamp,
         checkpoint_height: u64,
         next_checkpoint_seq: CheckpointSequenceNumber,
+        execution_scheduler_sender: ExecutionSchedulerSender,
     ) -> Self {
         Self {
             last_built_timestamp,
@@ -577,6 +608,24 @@ impl CheckpointQueue {
             height: checkpoint_height,
             pending_tx_count: 0,
             current_checkpoint_seq: next_checkpoint_seq,
+            execution_scheduler_sender,
+        }
+    }
+
+    #[cfg(test)]
+    fn new_for_testing(
+        last_built_timestamp: CheckpointTimestamp,
+        checkpoint_height: u64,
+        next_checkpoint_seq: CheckpointSequenceNumber,
+    ) -> Self {
+        let (sender, _receiver) = monitored_mpsc::unbounded_channel("test_checkpoint_queue_sender");
+        Self {
+            last_built_timestamp,
+            pending_roots: VecDeque::new(),
+            height: checkpoint_height,
+            pending_tx_count: 0,
+            current_checkpoint_seq: next_checkpoint_seq,
+            execution_scheduler_sender: ExecutionSchedulerSender::new_for_testing(sender),
         }
     }
 
@@ -593,66 +642,67 @@ impl CheckpointQueue {
         self.height
     }
 
-    // Estimates the total number of effects this root will produce in the checkpoint.
-    // Settlement adds a barrier tx (always) plus settlement txns (only when there are
-    // user txns beyond the CCP that produce accumulator events, i.e. tx_count > 1).
-    fn checkpoint_roots_effects_count(roots: &CheckpointRoots) -> usize {
-        let tx_count = roots.tx_roots.len();
-        let settlement_effect_count = if roots.settlement_root.is_some() {
-            if tx_count > 1 { 2 } else { 1 }
-        } else {
-            0
-        };
-        tx_count + settlement_effect_count
-    }
-
-    fn push_roots(
+    fn push_chunk(
         &mut self,
-        roots_list: Vec<CheckpointRoots>,
+        chunk: Chunk,
+        assigned_versions: &AssignedTxAndVersions,
         timestamp: CheckpointTimestamp,
         consensus_commit_ref: CommitRef,
         rejected_transactions_digest: Digest,
         max_tx: usize,
-    ) -> (Vec<SettlementInfo>, Vec<PendingCheckpointV2>) {
-        let mut settlements = Vec::new();
+    ) -> Vec<PendingCheckpointV2> {
+        let user_tx_count = chunk.schedulables.len();
+
+        let settlement_info = chunk.settlement.as_ref().map(|s| {
+            let settlement_key = s.key();
+            let tx_keys: Vec<_> = chunk
+                .schedulables
+                .iter()
+                .map(|s| s.key())
+                .filter(|k| !matches!(k, TransactionKey::AccumulatorSettlement(..)))
+                .collect();
+            SettlementBatchInfo {
+                settlement_key,
+                tx_keys,
+                checkpoint_height: chunk.height,
+                tx_index_offset: self.pending_tx_count as u64,
+                checkpoint_seq: self.current_checkpoint_seq,
+                assigned_versions: assigned_versions
+                    .find(&settlement_key)
+                    .cloned()
+                    .unwrap_or_default(),
+            }
+        });
+
+        let roots = chunk.to_checkpoint_roots();
+
+        let schedulables: Vec<Schedulable> = chunk.schedulables;
+
+        self.execution_scheduler_sender.send(
+            schedulables,
+            assigned_versions.clone(),
+            SchedulingSource::NonFastPath,
+            settlement_info,
+        );
+
         let mut flushed_checkpoints = Vec::new();
 
-        for roots in roots_list {
-            let effects_count = Self::checkpoint_roots_effects_count(&roots);
-
-            if self.pending_tx_count > 0
-                && self.pending_tx_count + effects_count > max_tx
-                && let Some(checkpoint) = self.flush_forced()
-            {
-                flushed_checkpoints.push(checkpoint);
-            }
-
-            if let Some(settlement_key) = roots.settlement_root {
-                let tx_keys: Vec<_> = roots
-                    .tx_roots
-                    .iter()
-                    .filter(|k| !matches!(k, TransactionKey::AccumulatorSettlement(..)))
-                    .cloned()
-                    .collect();
-                settlements.push(SettlementInfo {
-                    checkpoint_seq: self.current_checkpoint_seq,
-                    tx_index_offset: self.pending_tx_count as u64,
-                    tx_keys,
-                    checkpoint_height: roots.height,
-                    settlement_key,
-                });
-            }
-
-            self.pending_tx_count += effects_count;
-            self.pending_roots.push_back(QueuedCheckpointRoots {
-                roots,
-                timestamp,
-                consensus_commit_ref,
-                rejected_transactions_digest,
-            });
+        if self.pending_tx_count > 0
+            && self.pending_tx_count + user_tx_count > max_tx
+            && let Some(checkpoint) = self.flush_forced()
+        {
+            flushed_checkpoints.push(checkpoint);
         }
 
-        (settlements, flushed_checkpoints)
+        self.pending_tx_count += user_tx_count;
+        self.pending_roots.push_back(QueuedCheckpointRoots {
+            roots,
+            timestamp,
+            consensus_commit_ref,
+            rejected_transactions_digest,
+        });
+
+        flushed_checkpoints
     }
 
     pub(crate) fn flush(
@@ -810,7 +860,7 @@ impl<C> ConsensusHandler<C> {
             processed_cache: LruCache::new(
                 NonZeroUsize::new(randomize_cache_capacity_in_tests(PROCESSED_CACHE_CAP)).unwrap(),
             ),
-            execution_scheduler_sender,
+            execution_scheduler_sender: execution_scheduler_sender.clone(),
             consensus_adapter,
             throughput_calculator,
             additional_consensus_state: AdditionalConsensusState::new(
@@ -823,6 +873,7 @@ impl<C> ConsensusHandler<C> {
                 last_built_timestamp,
                 checkpoint_height,
                 next_checkpoint_seq,
+                execution_scheduler_sender,
             )),
         }
     }
@@ -862,7 +913,7 @@ impl<C> ConsensusHandler<C> {
             processed_cache: LruCache::new(
                 NonZeroUsize::new(randomize_cache_capacity_in_tests(PROCESSED_CACHE_CAP)).unwrap(),
             ),
-            execution_scheduler_sender,
+            execution_scheduler_sender: execution_scheduler_sender.clone(),
             consensus_adapter,
             throughput_calculator,
             additional_consensus_state: AdditionalConsensusState::new(
@@ -875,6 +926,7 @@ impl<C> ConsensusHandler<C> {
                 last_built_timestamp,
                 checkpoint_height,
                 0,
+                execution_scheduler_sender,
             )),
         }
     }
@@ -1132,18 +1184,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let authenticator_state_update_transaction =
             self.create_authenticator_state_update(last_committed_round, &commit_info);
 
-        let (
-            lock,
-            final_round,
-            schedulables,
-            randomness_schedulables,
-            assigned_versions,
-            checkpoint_height,
-        ) = if !self
+        let split_checkpoints = self
             .epoch_store
             .protocol_config()
-            .split_checkpoints_in_consensus_handler()
-        {
+            .split_checkpoints_in_consensus_handler();
+
+        let (lock, final_round, num_schedulables, checkpoint_height) = if !split_checkpoints {
             let (schedulables, randomness_schedulables, assigned_versions) = self
                 .process_transactions(
                     &mut state,
@@ -1180,14 +1226,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 final_round,
             );
 
-            (
-                lock,
-                final_round,
-                schedulables,
-                randomness_schedulables,
+            let num_schedulables = schedulables.len();
+            let mut all_schedulables = schedulables;
+            all_schedulables.extend(randomness_schedulables);
+            self.execution_scheduler_sender.send(
+                all_schedulables,
                 assigned_versions,
-                checkpoint_height,
-            )
+                SchedulingSource::NonFastPath,
+                None,
+            );
+
+            (lock, final_round, num_schedulables, checkpoint_height)
         } else {
             let (
                 transactions_to_schedule,
@@ -1244,35 +1293,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 )
                 .collect();
 
-            let (checkpoint_height, schedulables, randomness_schedulables, assigned_versions) =
-                self.create_pending_checkpoints_v2(
-                    &mut state,
-                    &commit_info,
-                    schedulables,
-                    randomness_schedulables,
-                    &cancelled_txns,
-                    final_round,
-                );
-
-            (
-                lock,
-                final_round,
+            let num_schedulables = schedulables.len();
+            let checkpoint_height = self.create_pending_checkpoints_v2(
+                &mut state,
+                &commit_info,
                 schedulables,
                 randomness_schedulables,
-                assigned_versions,
-                checkpoint_height,
-            )
+                &cancelled_txns,
+                final_round,
+            );
+
+            (lock, final_round, num_schedulables, checkpoint_height)
         };
 
         let notifications = state.get_notifications();
 
         let mut stats_to_record = self.last_consensus_stats.clone();
         stats_to_record.height = checkpoint_height;
-        if self
-            .epoch_store
-            .protocol_config()
-            .split_checkpoints_in_consensus_handler()
-        {
+        if split_checkpoints {
             let queue = self.checkpoint_queue.lock().unwrap();
             stats_to_record.last_checkpoint_flush_timestamp = queue.last_built_timestamp();
             stats_to_record.checkpoint_seq = queue.checkpoint_seq();
@@ -1288,8 +1326,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .push_consensus_output(state.output, &self.epoch_store)
             .expect("push_consensus_output should not fail");
 
-        // Only after batch is written, notify checkpoint service to start building any new
-        // pending checkpoints.
         debug!(
             ?commit_info.round,
             "Notifying checkpoint service about new pending checkpoint(s)",
@@ -1312,7 +1348,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         // update the calculated throughput
         self.throughput_calculator
-            .add_transactions(timestamp, schedulables.len() as u64);
+            .add_transactions(timestamp, num_schedulables as u64);
 
         fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
             let key = [commit_sub_dag_index, epoch];
@@ -1321,12 +1357,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         });
 
-        fail_point!("crash"); // for tests that produce random crashes
-
-        let mut schedulables = schedulables;
-        schedulables.extend(randomness_schedulables);
-        self.execution_scheduler_sender
-            .send(schedulables, assigned_versions);
+        fail_point!("crash");
 
         self.send_end_of_publish_if_needed().await;
     }
@@ -1718,12 +1749,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         randomness_schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         final_round: bool,
-    ) -> (
-        CheckpointHeight,
-        Vec<Schedulable>,
-        Vec<Schedulable>,
-        AssignedTxAndVersions,
-    ) {
+    ) -> CheckpointHeight {
         let protocol_config = self.epoch_store.protocol_config();
         assert!(protocol_config.split_checkpoints_in_consensus_handler());
 
@@ -1740,19 +1766,22 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let build_chunks =
             |schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
              queue: &mut CheckpointQueue|
-             -> Vec<(
-                Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
-                CheckpointHeight,
-            )> {
+             -> Vec<Chunk<VerifiedExecutableTransactionWithAliases>> {
                 schedulables
                     .chunks(max_transactions_per_checkpoint)
                     .map(|chunk| {
                         let height = queue.next_height();
-                        let mut chunk_vec: Vec<_> = chunk.to_vec();
-                        if accumulators_enabled {
-                            chunk_vec.push(Schedulable::AccumulatorSettlement(epoch, height));
+                        let schedulables: Vec<_> = chunk.to_vec();
+                        let settlement = if accumulators_enabled {
+                            Some(Schedulable::AccumulatorSettlement(epoch, height))
+                        } else {
+                            None
+                        };
+                        Chunk {
+                            schedulables,
+                            settlement,
+                            height,
                         }
-                        (chunk_vec, height)
                     })
                     .collect()
             };
@@ -1776,13 +1805,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let schedulables_for_version_assignment: Vec<_> = chunked_schedulables
             .iter()
-            .flat_map(|(chunk, _)| chunk.iter())
+            .flat_map(|c| c.all_schedulables())
             .cloned()
             .collect();
         let randomness_schedulables_for_version_assignment: Vec<_> =
             chunked_randomness_schedulables
                 .iter()
-                .flat_map(|(chunk, _)| chunk.iter())
+                .flat_map(|c| c.all_schedulables())
                 .cloned()
                 .collect();
 
@@ -1804,7 +1833,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut assigned_versions = assigned_versions;
         if let Some(consensus_commit_prologue) = consensus_commit_prologue {
             assert!(matches!(
-                chunked_schedulables[0].0[0],
+                chunked_schedulables[0].schedulables[0],
                 Schedulable::ConsensusCommitPrologue(..)
             ));
             assert!(matches!(
@@ -1813,41 +1842,39 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ));
             assigned_versions.0[0].0 =
                 TransactionKey::Digest(*consensus_commit_prologue.tx().digest());
-            chunked_schedulables[0].0[0] = Schedulable::Transaction(consensus_commit_prologue);
+            chunked_schedulables[0].schedulables[0] =
+                Schedulable::Transaction(consensus_commit_prologue);
         }
 
         self.epoch_store.process_user_signatures(
             chunked_schedulables
                 .iter()
-                .flat_map(|(chunk, _)| chunk.iter())
+                .flat_map(|c| c.all_schedulables())
                 .chain(
                     chunked_randomness_schedulables
                         .iter()
-                        .flat_map(|(chunk, _)| chunk.iter()),
+                        .flat_map(|c| c.all_schedulables()),
                 ),
         );
 
-        let checkpoint_roots_list = Self::to_checkpoint_roots(&chunked_schedulables);
         let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
 
-        let (settlements, mut pending_checkpoints) = checkpoint_queue.push_roots(
-            checkpoint_roots_list,
-            commit_info.timestamp,
-            commit_info.consensus_commit_ref,
-            commit_info.rejected_transactions_digest,
-            max_tx,
-        );
+        let commit_height = chunked_randomness_schedulables
+            .last()
+            .or(chunked_schedulables.last())
+            .map(|c| c.height)
+            .expect("at least one checkpoint root must be created per commit");
 
-        for settlement in settlements {
-            self.epoch_store.store_settlement_batch_info(
-                settlement.settlement_key,
-                SettlementBatchInfo {
-                    tx_keys: settlement.tx_keys,
-                    checkpoint_height: settlement.checkpoint_height,
-                    tx_index_offset: settlement.tx_index_offset,
-                    checkpoint_seq: settlement.checkpoint_seq,
-                },
-            );
+        let mut pending_checkpoints = Vec::new();
+        for chunk in chunked_schedulables {
+            pending_checkpoints.extend(checkpoint_queue.push_chunk(
+                chunk.into(),
+                &assigned_versions,
+                commit_info.timestamp,
+                commit_info.consensus_commit_ref,
+                commit_info.rejected_transactions_digest,
+                max_tx,
+            ));
         }
 
         let force = final_round || should_write_random_checkpoint;
@@ -1858,27 +1885,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         ));
 
         if should_write_random_checkpoint {
-            let randomness_roots_list = Self::to_checkpoint_roots(&chunked_randomness_schedulables);
-
-            let (randomness_settlements, randomness_checkpoints) = checkpoint_queue.push_roots(
-                randomness_roots_list,
-                commit_info.timestamp,
-                commit_info.consensus_commit_ref,
-                commit_info.rejected_transactions_digest,
-                max_tx,
-            );
-            pending_checkpoints.extend(randomness_checkpoints);
-
-            for settlement in randomness_settlements {
-                self.epoch_store.store_settlement_batch_info(
-                    settlement.settlement_key,
-                    SettlementBatchInfo {
-                        tx_keys: settlement.tx_keys,
-                        checkpoint_height: settlement.checkpoint_height,
-                        tx_index_offset: settlement.tx_index_offset,
-                        checkpoint_seq: settlement.checkpoint_seq,
-                    },
-                );
+            for chunk in chunked_randomness_schedulables {
+                pending_checkpoints.extend(checkpoint_queue.push_chunk(
+                    chunk.into(),
+                    &assigned_versions,
+                    commit_info.timestamp,
+                    commit_info.consensus_commit_ref,
+                    commit_info.rejected_transactions_digest,
+                    max_tx,
+                ));
             }
 
             pending_checkpoints.extend(checkpoint_queue.flush(
@@ -1891,12 +1906,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         if final_round && let Some(last) = pending_checkpoints.last_mut() {
             last.details.last_of_epoch = true;
         }
-
-        let commit_height = chunked_randomness_schedulables
-            .last()
-            .or(chunked_schedulables.last())
-            .map(|(_, height)| *height)
-            .expect("at least one checkpoint root must be created per commit");
 
         let queue_drained = checkpoint_queue.is_empty();
         drop(checkpoint_queue);
@@ -1914,42 +1923,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         state.output.set_checkpoint_queue_drained(queue_drained);
 
-        // Strip alias version information
-        let flat_schedulables: Vec<Schedulable> = chunked_schedulables
-            .into_iter()
-            .flat_map(|(chunk, _)| chunk.into_iter().map(|s| s.into()))
-            .collect();
-        let flat_randomness_schedulables: Vec<Schedulable> = chunked_randomness_schedulables
-            .into_iter()
-            .flat_map(|(chunk, _)| chunk.into_iter().map(|s| s.into()))
-            .collect();
-
-        (
-            commit_height,
-            flat_schedulables,
-            flat_randomness_schedulables,
-            assigned_versions,
-        )
-    }
-
-    fn to_checkpoint_roots<T: crate::authority::shared_object_version_manager::AsTx>(
-        chunks: &[(Vec<Schedulable<T>>, CheckpointHeight)],
-    ) -> Vec<CheckpointRoots> {
-        chunks
-            .iter()
-            .map(|(schedulables, height)| {
-                let mut tx_roots: Vec<_> = schedulables.iter().map(|s| s.key()).collect();
-                let settlement_root = tx_roots
-                    .last()
-                    .is_some_and(|k| matches!(k, TransactionKey::AccumulatorSettlement(..)))
-                    .then(|| tx_roots.pop().unwrap());
-                CheckpointRoots {
-                    tx_roots,
-                    settlement_root,
-                    height: *height,
-                }
-            })
-            .collect()
+        commit_height
     }
 
     // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
@@ -3196,10 +3170,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
 /// Sends transactions to the execution scheduler in a separate task,
 /// to avoid blocking consensus handler.
+pub(crate) type SchedulerMessage = (
+    Vec<Schedulable>,
+    AssignedTxAndVersions,
+    SchedulingSource,
+    Option<SettlementBatchInfo>,
+);
+
 #[derive(Clone)]
 pub(crate) struct ExecutionSchedulerSender {
-    // Using unbounded channel to avoid blocking consensus commit and transaction handler.
-    sender: monitored_mpsc::UnboundedSender<(Vec<Schedulable>, AssignedTxAndVersions)>,
+    sender: monitored_mpsc::UnboundedSender<SchedulerMessage>,
 }
 
 impl ExecutionSchedulerSender {
@@ -3213,25 +3193,34 @@ impl ExecutionSchedulerSender {
     }
 
     pub(crate) fn new_for_testing(
-        sender: monitored_mpsc::UnboundedSender<(Vec<Schedulable>, AssignedTxAndVersions)>,
+        sender: monitored_mpsc::UnboundedSender<SchedulerMessage>,
     ) -> Self {
         Self { sender }
     }
 
-    fn send(&self, transactions: Vec<Schedulable>, assigned_versions: AssignedTxAndVersions) {
-        let _ = self.sender.send((transactions, assigned_versions));
+    fn send(
+        &self,
+        transactions: Vec<Schedulable>,
+        assigned_versions: AssignedTxAndVersions,
+        scheduling_source: SchedulingSource,
+        settlement: Option<SettlementBatchInfo>,
+    ) {
+        let _ = self.sender.send((
+            transactions,
+            assigned_versions,
+            scheduling_source,
+            settlement,
+        ));
     }
 
     async fn run(
-        mut recv: monitored_mpsc::UnboundedReceiver<(
-            Vec<Schedulable>,
-            AssignedTxAndVersions,
-            SchedulingSource,
-        )>,
+        mut recv: monitored_mpsc::UnboundedReceiver<SchedulerMessage>,
         settlement_scheduler: SettlementScheduler,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        while let Some((transactions, assigned_versions)) = recv.recv().await {
+        while let Some((transactions, assigned_versions, scheduling_source, settlement)) =
+            recv.recv().await
+        {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
             let assigned_versions = assigned_versions.into_map();
             let txns = transactions
@@ -3246,7 +3235,11 @@ impl ExecutionSchedulerSender {
                     )
                 })
                 .collect();
-            settlement_scheduler.enqueue(txns, &epoch_store);
+            if let Some(settlement) = settlement {
+                settlement_scheduler.enqueue_v2(txns, settlement, &epoch_store);
+            } else {
+                settlement_scheduler.enqueue(txns, &epoch_store);
+            }
         }
     }
 }
@@ -4186,18 +4179,17 @@ mod tests {
 
     mod checkpoint_queue_tests {
         use super::*;
-        use crate::checkpoints::CheckpointRoots;
+        use crate::authority::shared_object_version_manager::AssignedTxAndVersions;
         use consensus_core::CommitRef;
         use sui_protocol_config::ProtocolConfig;
         use sui_types::digests::Digest;
-        use sui_types::transaction::TransactionKey;
 
-        fn make_roots(tx_count: usize, height: u64) -> CheckpointRoots {
-            CheckpointRoots {
-                tx_roots: (0..tx_count)
-                    .map(|_| TransactionKey::Digest(TransactionDigest::random()))
+        fn make_chunk(tx_count: usize, height: u64) -> Chunk {
+            Chunk {
+                schedulables: (0..tx_count)
+                    .map(|i| Schedulable::ConsensusCommitPrologue(height, i as u64, 0))
                     .collect(),
-                settlement_root: None,
+                settlement: None,
                 height,
             }
         }
@@ -4209,16 +4201,28 @@ mod tests {
             }
         }
 
+        fn default_versions() -> AssignedTxAndVersions {
+            AssignedTxAndVersions::default()
+        }
+
         #[test]
         fn test_flush_all_checkpoint_roots() {
-            let mut queue = CheckpointQueue::new(0, 0, 0);
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
-            let roots1 = make_roots(5, 1);
-            let roots2 = make_roots(3, 2);
+            let versions = default_versions();
 
-            queue.push_roots(
-                vec![roots1, roots2],
+            queue.push_chunk(
+                make_chunk(5, 1),
+                &versions,
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
+            queue.push_chunk(
+                make_chunk(3, 2),
+                &versions,
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -4233,13 +4237,14 @@ mod tests {
 
         #[test]
         fn test_flush_respects_min_checkpoint_interval() {
-            let mut queue = CheckpointQueue::new(1000, 0, 0);
+            let mut queue = CheckpointQueue::new_for_testing(1000, 0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
-            let roots = make_roots(5, 1);
+            let versions = default_versions();
 
-            queue.push_roots(
-                vec![roots],
+            queue.push_chunk(
+                make_chunk(5, 1),
+                &versions,
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -4250,36 +4255,34 @@ mod tests {
                 .min_checkpoint_interval_ms_as_option()
                 .unwrap_or(200);
 
-            // Timestamp hasn't advanced enough - should not flush
             let pending = queue.flush(&protocol_config, 1000 + min_interval - 1, false);
             assert!(pending.is_none());
             assert_eq!(queue.pending_roots.len(), 1);
 
-            // Timestamp has advanced enough - should flush
             let pending = queue.flush(&protocol_config, 1000 + min_interval, false);
             assert!(pending.is_some());
             assert!(queue.pending_roots.is_empty());
         }
 
         #[test]
-        fn test_push_roots_flushes_when_exceeds_max() {
-            let mut queue = CheckpointQueue::new(1000, 0, 0);
+        fn test_push_chunk_flushes_when_exceeds_max() {
+            let mut queue = CheckpointQueue::new_for_testing(1000, 0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let versions = default_versions();
 
-            let roots1 = make_roots(max_tx / 2 + 1, 1);
-            let roots2 = make_roots(max_tx / 2 + 1, 2);
-
-            queue.push_roots(
-                vec![roots1],
+            queue.push_chunk(
+                make_chunk(max_tx / 2 + 1, 1),
+                &versions,
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
                 max_tx,
             );
 
-            let (_, flushed) = queue.push_roots(
-                vec![roots2],
+            let flushed = queue.push_chunk(
+                make_chunk(max_tx / 2 + 1, 2),
+                &versions,
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -4291,31 +4294,31 @@ mod tests {
         }
 
         #[test]
-        fn test_multiple_roots_merged_into_one_checkpoint() {
-            let mut queue = CheckpointQueue::new(0, 0, 0);
+        fn test_multiple_chunks_merged_into_one_checkpoint() {
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let versions = default_versions();
 
-            let roots1 = make_roots(10, 1);
-            let roots2 = make_roots(10, 2);
-            let roots3 = make_roots(10, 3);
-
-            queue.push_roots(
-                vec![roots1],
+            queue.push_chunk(
+                make_chunk(10, 1),
+                &versions,
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
                 max_tx,
             );
-            queue.push_roots(
-                vec![roots2],
+            queue.push_chunk(
+                make_chunk(10, 2),
+                &versions,
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
                 max_tx,
             );
-            queue.push_roots(
-                vec![roots3],
+            queue.push_chunk(
+                make_chunk(10, 3),
+                &versions,
                 1000,
                 make_commit_ref(3),
                 Digest::default(),
@@ -4324,22 +4327,19 @@ mod tests {
 
             let pending = queue.flush(&protocol_config, 1000, true).unwrap();
 
-            // All roots should be in one checkpoint (30 txs < max_transactions_per_checkpoint)
             assert_eq!(pending.roots.len(), 3);
         }
 
         #[test]
-        fn test_push_roots_handles_overflow_during_batch() {
-            let mut queue = CheckpointQueue::new(0, 0, 0);
+        fn test_push_chunk_handles_overflow() {
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let versions = default_versions();
 
-            let roots1 = make_roots(max_tx / 2, 1);
-            let roots2 = make_roots(max_tx / 2, 2);
-            let roots3 = make_roots(max_tx / 2, 3);
-
-            let (_, flushed1) = queue.push_roots(
-                vec![roots1],
+            let flushed1 = queue.push_chunk(
+                make_chunk(max_tx / 2, 1),
+                &versions,
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -4347,8 +4347,9 @@ mod tests {
             );
             assert!(flushed1.is_empty());
 
-            let (_, flushed2) = queue.push_roots(
-                vec![roots2],
+            let flushed2 = queue.push_chunk(
+                make_chunk(max_tx / 2, 2),
+                &versions,
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -4356,8 +4357,9 @@ mod tests {
             );
             assert!(flushed2.is_empty());
 
-            let (_, flushed3) = queue.push_roots(
-                vec![roots3],
+            let flushed3 = queue.push_chunk(
+                make_chunk(max_tx / 2, 3),
+                &versions,
                 1000,
                 make_commit_ref(3),
                 Digest::default(),
@@ -4374,23 +4376,23 @@ mod tests {
         }
 
         #[test]
-        fn test_checkpoint_uses_last_roots_height() {
-            let mut queue = CheckpointQueue::new(0, 0, 0);
+        fn test_checkpoint_uses_last_chunk_height() {
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let versions = default_versions();
 
-            let roots1 = make_roots(10, 100);
-            let roots2 = make_roots(10, 200);
-
-            queue.push_roots(
-                vec![roots1],
+            queue.push_chunk(
+                make_chunk(10, 100),
+                &versions,
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
                 max_tx,
             );
-            queue.push_roots(
-                vec![roots2],
+            queue.push_chunk(
+                make_chunk(10, 200),
+                &versions,
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -4399,19 +4401,19 @@ mod tests {
 
             let pending = queue.flush(&protocol_config, 1000, true).unwrap();
 
-            // Checkpoint height should be from the last root
             assert_eq!(pending.details.checkpoint_height, 200);
         }
 
         #[test]
         fn test_last_built_timestamp_updated_on_flush() {
-            let mut queue = CheckpointQueue::new(0, 0, 0);
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let versions = default_versions();
 
-            let roots = make_roots(10, 1);
-            queue.push_roots(
-                vec![roots],
+            queue.push_chunk(
+                make_chunk(10, 1),
+                &versions,
                 5000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -4426,58 +4428,59 @@ mod tests {
         }
 
         #[test]
-        fn test_settlement_info_returns_correct_checkpoint_seq_and_offset() {
-            let mut queue = CheckpointQueue::new(0, 0, 5);
+        fn test_settlement_info_sent_through_channel() {
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 5);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let versions = default_versions();
 
-            let roots1 = CheckpointRoots {
-                tx_roots: vec![
-                    TransactionKey::Digest(TransactionDigest::random()),
-                    TransactionKey::Digest(TransactionDigest::random()),
-                    TransactionKey::Digest(TransactionDigest::random()),
+            let chunk1 = Chunk {
+                schedulables: vec![
+                    Schedulable::ConsensusCommitPrologue(0, 1, 0),
+                    Schedulable::ConsensusCommitPrologue(0, 2, 0),
+                    Schedulable::ConsensusCommitPrologue(0, 3, 0),
                 ],
-                settlement_root: Some(TransactionKey::AccumulatorSettlement(1, 1)),
+                settlement: Some(Schedulable::AccumulatorSettlement(1, 1)),
                 height: 1,
             };
 
-            let roots2 = CheckpointRoots {
-                tx_roots: vec![
-                    TransactionKey::Digest(TransactionDigest::random()),
-                    TransactionKey::Digest(TransactionDigest::random()),
+            let chunk2 = Chunk {
+                schedulables: vec![
+                    Schedulable::ConsensusCommitPrologue(0, 4, 0),
+                    Schedulable::ConsensusCommitPrologue(0, 5, 0),
                 ],
-                settlement_root: Some(TransactionKey::AccumulatorSettlement(1, 2)),
+                settlement: Some(Schedulable::AccumulatorSettlement(1, 2)),
                 height: 2,
             };
 
-            let (settlements, _) = queue.push_roots(
-                vec![roots1, roots2],
+            queue.push_chunk(
+                chunk1,
+                &versions,
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
                 max_tx,
             );
-
-            assert_eq!(settlements.len(), 2);
-
-            assert_eq!(settlements[0].checkpoint_seq, 5);
-            assert_eq!(settlements[0].tx_index_offset, 0);
-            assert_eq!(settlements[0].tx_keys.len(), 3);
-
-            assert_eq!(settlements[1].checkpoint_seq, 5);
-            assert_eq!(settlements[1].tx_index_offset, 5);
-            assert_eq!(settlements[1].tx_keys.len(), 2);
+            queue.push_chunk(
+                chunk2,
+                &versions,
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
         }
 
         #[test]
         fn test_checkpoint_seq_increments_on_flush() {
-            let mut queue = CheckpointQueue::new(0, 0, 10);
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 10);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let versions = default_versions();
 
-            let roots = make_roots(5, 1);
-            queue.push_roots(
-                vec![roots],
+            queue.push_chunk(
+                make_chunk(5, 1),
+                &versions,
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -4491,27 +4494,46 @@ mod tests {
         }
 
         #[test]
-        fn test_single_batch_with_multiple_overflows() {
-            let mut queue = CheckpointQueue::new(0, 0, 0);
+        fn test_multiple_chunks_with_overflow() {
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let versions = default_versions();
 
-            let roots1 = make_roots(max_tx / 2 + 1, 1);
-            let roots2 = make_roots(max_tx / 2 + 1, 2);
-            let roots3 = make_roots(max_tx / 2 + 1, 3);
-
-            let (_, flushed) = queue.push_roots(
-                vec![roots1, roots2, roots3],
+            let flushed1 = queue.push_chunk(
+                make_chunk(max_tx / 2 + 1, 1),
+                &versions,
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
+            let flushed2 = queue.push_chunk(
+                make_chunk(max_tx / 2 + 1, 2),
+                &versions,
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+                max_tx,
+            );
+            let flushed3 = queue.push_chunk(
+                make_chunk(max_tx / 2 + 1, 3),
+                &versions,
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
                 max_tx,
             );
 
-            assert_eq!(flushed.len(), 2);
+            let all_flushed: Vec<_> = flushed1
+                .into_iter()
+                .chain(flushed2)
+                .chain(flushed3)
+                .collect();
+            assert_eq!(all_flushed.len(), 2);
             assert_eq!(queue.pending_roots.len(), 1);
 
-            for p in &flushed {
+            for p in &all_flushed {
                 let tx_count: usize = p.roots.iter().map(|r| r.tx_roots.len()).sum();
                 assert!(tx_count <= max_tx);
             }
