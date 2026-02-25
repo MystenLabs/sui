@@ -938,7 +938,7 @@ impl Operation for AddressBalanceOverdraw {
 pub struct AccumulatorBalanceRead;
 
 impl AccumulatorBalanceRead {
-    pub const FLAG: u32 = 1 << 12;
+    pub const FLAG: u32 = 1 << 16;
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
         name: "AccumulatorBalanceRead",
         flag: Self::FLAG,
