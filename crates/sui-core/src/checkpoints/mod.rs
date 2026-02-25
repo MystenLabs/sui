@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod causal_order;
+pub(crate) mod causal_order;
 pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
@@ -1932,8 +1932,12 @@ impl CheckpointBuilder {
                 )
                 .in_monitored_scope("CheckpointNotifyRead")
                 .await;
+            let consensus_commit_prologue =
+                self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
 
-            let mut roots_effects = root_effects;
+            let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+            let ccp_digest = consensus_commit_prologue.map(|(d, _)| d);
+            let mut sorted = CausalOrder::causal_sort_with_ccp(root_effects, ccp_digest);
 
             if let Some(settlement_key) = &checkpoint_roots.settlement_root {
                 let checkpoint_seq = pending
@@ -1944,24 +1948,21 @@ impl CheckpointBuilder {
                 let effects = self
                     .resolve_settlement_effects(
                         *settlement_key,
-                        tx_roots,
+                        &sorted,
                         checkpoint_roots.height,
                         checkpoint_seq,
                         tx_index_offset,
                     )
                     .await;
-                roots_effects.extend(effects);
+                sorted.extend(effects);
             }
 
             #[cfg(msim)]
             {
-                self.expensive_consensus_commit_prologue_invariants_check(
-                    &root_digests,
-                    &roots_effects,
-                );
+                self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
             }
 
-            all_effects.extend(roots_effects);
+            all_effects.extend(sorted);
         }
         Ok((all_effects, all_root_digests.into_iter().collect()))
     }
@@ -1973,7 +1974,7 @@ impl CheckpointBuilder {
     async fn resolve_settlement_effects(
         &self,
         settlement_key: TransactionKey,
-        tx_roots: &[TransactionKey],
+        sorted_root_effects: &[TransactionEffects],
         checkpoint_height: CheckpointHeight,
         checkpoint_seq: CheckpointSequenceNumber,
         tx_index_offset: u64,
@@ -1985,27 +1986,9 @@ impl CheckpointBuilder {
             .accumulator_root_obj_initial_shared_version()
             .expect("accumulator root object must exist");
 
-        let root_keys: Vec<_> = tx_roots
-            .iter()
-            .filter(|k| !matches!(k, TransactionKey::AccumulatorSettlement(..)))
-            .cloned()
-            .collect();
-        let root_digests = self
-            .epoch_store
-            .notify_read_tx_key_to_digest(&root_keys)
-            .await
-            .expect("Failed to read tx digests for settlement");
-        let root_effects = self
-            .effects_store
-            .notify_read_executed_effects(
-                "CheckpointBuilder::resolve_settlement_root_effects",
-                &root_digests,
-            )
-            .await;
-
         let builder = AccumulatorSettlementTxBuilder::new(
             None,
-            &root_effects,
+            sorted_root_effects,
             checkpoint_seq,
             tx_index_offset,
         );

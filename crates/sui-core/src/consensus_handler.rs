@@ -665,7 +665,6 @@ impl CheckpointQueue {
                 settlement_key,
                 tx_keys,
                 checkpoint_height: chunk.height,
-                tx_index_offset: self.pending_tx_count as u64,
                 checkpoint_seq: self.current_checkpoint_seq,
                 assigned_versions: assigned_versions
                     .find(&settlement_key)
@@ -4187,7 +4186,7 @@ mod tests {
         fn make_chunk(tx_count: usize, height: u64) -> Chunk {
             Chunk {
                 schedulables: (0..tx_count)
-                    .map(|i| Schedulable::ConsensusCommitPrologue(height, i as u64, 0))
+                    .map(|_| Schedulable::Transaction(user_txn(1000).into_tx()))
                     .collect(),
                 settlement: None,
                 height,

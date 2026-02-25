@@ -9,6 +9,7 @@ use crate::{
         epoch_start_configuration::EpochStartConfigTrait,
         shared_object_version_manager::{AssignedVersions, Schedulable},
     },
+    checkpoints::causal_order::CausalOrder,
     execution_cache::TransactionCacheRead,
     execution_scheduler::execution_scheduler_impl::{BarrierDependencyBuilder, ExecutionScheduler},
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
@@ -19,9 +20,10 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    effects::TransactionEffectsAPI,
+    base_types::TransactionDigest,
+    effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
-    transaction::{TransactionKey, VerifiedTransaction},
+    transaction::{TransactionDataAPI, TransactionKey, VerifiedTransaction},
 };
 use tracing::{debug, error};
 
@@ -30,7 +32,6 @@ pub struct SettlementBatchInfo {
     pub settlement_key: TransactionKey,
     pub tx_keys: Vec<TransactionKey>,
     pub checkpoint_height: u64,
-    pub tx_index_offset: u64,
     pub checkpoint_seq: u64,
     pub assigned_versions: AssignedVersions,
 }
@@ -198,18 +199,35 @@ impl SettlementScheduler {
         scheduler: SettlementScheduler,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
+        let mut current_checkpoint_seq: u64 = 0;
+        let mut running_tx_offset: u64 = 0;
+
         while let Some(item) = recv.recv().await {
+            if item.batch_info.checkpoint_seq != current_checkpoint_seq {
+                current_checkpoint_seq = item.batch_info.checkpoint_seq;
+                running_tx_offset = 0;
+            }
+
+            let tx_index_offset = running_tx_offset;
+            let batch_tx_count = item.batch_info.tx_keys.len() as u64;
+
             let result = epoch_store
                 .within_alive_epoch(scheduler.construct_and_execute_settlement(
                     item.settlement_key,
                     item.env,
                     item.batch_info,
+                    tx_index_offset,
                     &epoch_store,
                 ))
                 .await;
-            if result.is_err() {
-                debug!("Settlement queue task ended: epoch is no longer alive");
-                return;
+            match result {
+                Err(_) => {
+                    debug!("Settlement queue task ended: epoch is no longer alive");
+                    return;
+                }
+                Ok(settlement_tx_count) => {
+                    running_tx_offset += batch_tx_count + settlement_tx_count as u64;
+                }
             }
         }
         debug!("Settlement queue task ended: channel closed");
@@ -220,8 +238,9 @@ impl SettlementScheduler {
         settlement_key: TransactionKey,
         env: ExecutionEnv,
         batch_info: SettlementBatchInfo,
+        tx_index_offset: u64,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
+    ) -> usize {
         let digests = match epoch_store
             .notify_read_tx_key_to_digest(&batch_info.tx_keys)
             .await
@@ -229,7 +248,7 @@ impl SettlementScheduler {
             Ok(digests) => digests,
             Err(e) => {
                 error!("Failed to read tx digests for settlement: {:?}", e);
-                return;
+                return 0;
             }
         };
 
@@ -241,6 +260,10 @@ impl SettlementScheduler {
             )
             .await;
 
+        let ccp_digest = self.extract_consensus_commit_prologue_digest(&digests, &effects);
+
+        let sorted_effects = CausalOrder::causal_sort_with_ccp(effects, ccp_digest);
+
         let epoch = epoch_store.epoch();
         let accumulator_root_obj_initial_shared_version = epoch_store
             .epoch_start_config()
@@ -251,9 +274,9 @@ impl SettlementScheduler {
 
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.transaction_cache_read.as_ref()),
-            &effects,
+            &sorted_effects,
             checkpoint_seq,
-            batch_info.tx_index_offset,
+            tx_index_offset,
         );
 
         let funds_changes = builder.collect_funds_changes();
@@ -275,6 +298,7 @@ impl SettlementScheduler {
             })
             .collect();
 
+        let settlement_tx_count = settlement_txns.len() + 1; // +1 for barrier
         let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
 
         debug!(
@@ -361,5 +385,25 @@ impl SettlementScheduler {
             .settle_address_funds(funds_settlement);
 
         debug!(?settlement_key, "early settlement: completed");
+
+        settlement_tx_count
+    }
+
+    fn extract_consensus_commit_prologue_digest(
+        &self,
+        digests: &[TransactionDigest],
+        effects: &[TransactionEffects],
+    ) -> Option<TransactionDigest> {
+        let d = digests.first()?;
+        let tx = self
+            .transaction_cache_read
+            .get_transaction_block(d)
+            .expect("Transaction block must exist");
+        tx.transaction_data()
+            .is_consensus_commit_prologue()
+            .then(|| {
+                assert_eq!(tx.digest(), effects[0].transaction_digest());
+                *d
+            })
     }
 }

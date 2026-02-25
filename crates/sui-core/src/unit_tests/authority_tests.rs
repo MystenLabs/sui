@@ -4861,8 +4861,8 @@ async fn test_consensus_commit_prologue_generation() {
     );
 
     // Tests that new consensus commit prologue transaction is added to the batch, and it is the first transaction.
-    // 4 = 1 commit prologue + 2 user transactions + 1 settlement
-    assert_eq!(processed_consensus_transactions.len(), 4);
+    // 3 = 1 commit prologue + 2 user transactions (settlement is scheduled separately)
+    assert_eq!(processed_consensus_transactions.len(), 3);
     assert!(matches!(
         processed_consensus_transactions[0]
             .as_tx()
