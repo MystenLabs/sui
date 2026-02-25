@@ -8,6 +8,9 @@ on:
     - cron: '0 0 * * *' # every day at midnight UTC
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
