@@ -49,6 +49,7 @@ impl CompositeRateLimiter {
         Self { limiters }
     }
 
+    #[cfg(test)]
     pub(crate) fn noop() -> Self {
         Self {
             limiters: Vec::new(),
