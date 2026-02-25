@@ -1893,8 +1893,8 @@ mod tests {
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(0),
             last_checkpoint: Some(15),
-            pipeline: vec![],
             task: TaskArgs::tasked("task".to_string(), 10),
+            ..Default::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1983,8 +1983,8 @@ mod tests {
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(9),
             last_checkpoint: Some(25),
-            pipeline: vec![],
             task: TaskArgs::tasked("task".to_string(), 10),
+            ..Default::default()
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -2093,8 +2093,8 @@ mod tests {
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(0),
             last_checkpoint: Some(500),
-            pipeline: vec![],
             task: TaskArgs::tasked("task".to_string(), 10 /* reader_interval_ms */),
+            ..Default::default()
         };
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {

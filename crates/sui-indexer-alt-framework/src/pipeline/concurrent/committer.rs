@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
-use governor::Quota;
-use governor::RateLimiter;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
@@ -25,12 +22,6 @@ use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::BatchedRows;
 use crate::pipeline::concurrent::Handler;
 use crate::store::Store;
-
-/// A shared rate limiter with its burst size pre-computed for chunked acquisition.
-struct SharedRateLimiter {
-    limiter: governor::DefaultDirectRateLimiter,
-    burst: NonZeroU32,
-}
 
 /// If the committer needs to retry a commit, it will wait this long initially.
 const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
@@ -63,15 +54,6 @@ pub(super) fn committer<H: Handler + 'static>(
             &metrics.latest_partially_committed_checkpoint,
         );
 
-        let rate_limiter: Option<Arc<SharedRateLimiter>> = config.max_rows_per_second.map(|rps| {
-            let burst = NonZeroU32::new(rps as u32).expect("max_rows_per_second must be > 0");
-            let quota = Quota::per_second(burst);
-            Arc::new(SharedRateLimiter {
-                limiter: RateLimiter::direct(quota),
-                burst,
-            })
-        });
-
         match ReceiverStream::new(rx)
             .try_for_each_spawned(
                 config.write_concurrency,
@@ -86,7 +68,6 @@ pub(super) fn committer<H: Handler + 'static>(
                     let db = db.clone();
                     let metrics = metrics.clone();
                     let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
-                    let rate_limiter = rate_limiter.clone();
 
                     // Repeatedly try to get a connection to the DB and write the batch. Use an
                     // exponential backoff in case the failure is due to contention over the DB
@@ -201,24 +182,6 @@ pub(super) fn committer<H: Handler + 'static>(
                     };
 
                     async move {
-                        // Acquire rate-limiter tokens before connecting to the store, so we
-                        // don't hold a connection while waiting. Large batches exceeding burst
-                        // are acquired in chunks.
-                        if batch_len > 0
-                            && let Some(ref rl) = rate_limiter
-                        {
-                            let burst = rl.burst.get();
-                            let mut remaining = batch_len as u32;
-                            while remaining > 0 {
-                                let take = remaining.min(burst);
-                                rl.limiter
-                                    .until_n_ready(NonZeroU32::new(take).unwrap())
-                                    .await
-                                    .expect("take <= burst, so this cannot fail");
-                                remaining -= take;
-                            }
-                        }
-
                         // Double check that the commit actually went through, (this backoff should
                         // not produce any permanent errors, but if it does, we need to shutdown
                         // the pipeline).

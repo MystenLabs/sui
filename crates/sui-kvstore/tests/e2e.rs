@@ -30,6 +30,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
+use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::set_write_legacy_data;
@@ -335,6 +336,7 @@ impl TestHarness {
             client_args,
             ingestion_config.into(),
             CommitterConfig::default(),
+            IndexerConfig::default(),
             PipelineLayer::default(),
             Chain::Unknown,
             &registry,
