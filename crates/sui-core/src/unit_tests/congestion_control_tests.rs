@@ -326,7 +326,7 @@ async fn test_congestion_control_execution_cancellation() {
             !captured.is_empty(),
             "Expected transactions to be scheduled"
         );
-        let (scheduled_txns, _, _) = captured.remove(0);
+        let (scheduled_txns, _) = captured.remove(0);
         scheduled_txns
     };
 

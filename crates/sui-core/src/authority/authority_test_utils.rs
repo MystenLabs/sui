@@ -428,7 +428,7 @@ where
             !captured.is_empty(),
             "Expected transactions to be scheduled"
         );
-        let (paired, _, _) = captured.remove(0);
+        let (paired, _) = captured.remove(0);
         let (schedulables, versions): (Vec<_>, Vec<_>) = paired.into_iter().unzip();
         let assigned_versions = schedulables.iter().map(|s| s.key()).zip(versions).collect();
         (schedulables, assigned_versions)

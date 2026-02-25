@@ -5887,7 +5887,7 @@ where
         (vec![], HashMap::new())
     } else {
         // Remove and return the first batch of captured transactions
-        let (mut paired, _, _) = captured.remove(0);
+        let (mut paired, _) = captured.remove(0);
 
         // Filter out consensus commit prologue transactions if requested
         if filter_prologue {

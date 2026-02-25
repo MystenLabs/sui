@@ -88,7 +88,7 @@ use crate::{
         reconfiguration::ReconfigState,
     },
     execution_cache::ObjectCacheRead,
-    execution_scheduler::{SchedulingSource, SettlementBatchInfo, SettlementScheduler},
+    execution_scheduler::{SettlementBatchInfo, SettlementScheduler},
     post_consensus_tx_reorder::PostConsensusTxReorder,
     scoring_decision::update_low_scoring_authorities,
     traffic_controller::{TrafficController, policies::TrafficTally},
@@ -558,10 +558,8 @@ impl<T: crate::authority::shared_object_version_manager::AsTx + Clone> Chunk<T> 
         self.schedulables.iter().chain(self.settlement.iter())
     }
 
-    fn all_schedulables_from<'a>(chunks: &'a[Self]) -> impl Iterator<Item = &'a Schedulable<T>> + Clone {
-        chunks
-            .iter()
-            .flat_map(|c| c.all_schedulables())
+    fn all_schedulables_from(chunks: &[Self]) -> impl Iterator<Item = &Schedulable<T>> + Clone {
+        chunks.iter().flat_map(|c| c.all_schedulables())
     }
 
     fn to_checkpoint_roots(&self) -> CheckpointRoots {
@@ -725,11 +723,8 @@ impl CheckpointQueue {
             }
         });
 
-        self.execution_scheduler_sender.send(
-            schedulables,
-            SchedulingSource::NonFastPath,
-            settlement_info,
-        );
+        self.execution_scheduler_sender
+            .send(schedulables, settlement_info);
 
         self.pending_tx_count += user_tx_count;
         self.pending_roots.push_back(QueuedCheckpointRoots {
@@ -1291,8 +1286,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     (s, versions)
                 })
                 .collect();
-            self.execution_scheduler_sender
-                .send(paired, SchedulingSource::NonFastPath, None);
+            self.execution_scheduler_sender.send(paired, None);
 
             (lock, final_round, num_schedulables, checkpoint_height)
         } else {
@@ -3213,7 +3207,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 /// to avoid blocking consensus handler.
 pub(crate) type SchedulerMessage = (
     Vec<(Schedulable, AssignedVersions)>,
-    SchedulingSource,
     Option<SettlementBatchInfo>,
 );
 
@@ -3241,12 +3234,9 @@ impl ExecutionSchedulerSender {
     fn send(
         &self,
         transactions: Vec<(Schedulable, AssignedVersions)>,
-        scheduling_source: SchedulingSource,
         settlement: Option<SettlementBatchInfo>,
     ) {
-        let _ = self
-            .sender
-            .send((transactions, scheduling_source, settlement));
+        let _ = self.sender.send((transactions, settlement));
     }
 
     async fn run(
@@ -3254,18 +3244,11 @@ impl ExecutionSchedulerSender {
         settlement_scheduler: SettlementScheduler,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        while let Some((transactions, scheduling_source, settlement)) = recv.recv().await {
+        while let Some((transactions, settlement)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
             let txns = transactions
                 .into_iter()
-                .map(|(txn, versions)| {
-                    (
-                        txn,
-                        ExecutionEnv::new()
-                            .with_scheduling_source(scheduling_source)
-                            .with_assigned_versions(versions),
-                    )
-                })
+                .map(|(txn, versions)| (txn, ExecutionEnv::new().with_assigned_versions(versions)))
                 .collect();
             if let Some(settlement) = settlement {
                 settlement_scheduler.enqueue_v2(txns, settlement, &epoch_store);
@@ -4495,7 +4478,7 @@ mod tests {
 
             // Drain the first message from the channel.
             let msg1 = receiver.try_recv().unwrap();
-            let settlement1 = msg1.2.unwrap();
+            let settlement1 = msg1.1.unwrap();
             assert_eq!(settlement1.checkpoint_seq, initial_seq);
 
             // Push a second chunk that triggers a flush of chunk1's roots.
@@ -4519,7 +4502,7 @@ mod tests {
             // The second settlement must have checkpoint_seq = initial_seq + 1,
             // because the flush incremented current_checkpoint_seq.
             let msg2 = receiver.try_recv().unwrap();
-            let settlement2 = msg2.2.unwrap();
+            let settlement2 = msg2.1.unwrap();
             assert_eq!(settlement2.checkpoint_seq, initial_seq + 1);
 
             // Flush the remaining roots and verify the PendingCheckpointV2's seq

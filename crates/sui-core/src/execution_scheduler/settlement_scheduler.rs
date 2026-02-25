@@ -15,7 +15,7 @@ use crate::{
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::fatal;
+use mysten_common::{assert_reachable, fatal};
 use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -133,16 +133,28 @@ impl SettlementScheduler {
                 .map(|(key, env)| {
                     let epoch_store = epoch_store.clone();
                     async move {
-                        (
-                            key,
-                            epoch_store.wait_for_settlement_transactions(key).await,
-                            env,
-                        )
+                        let keys = [key];
+                        tokio::select! {
+                            txns = epoch_store.wait_for_settlement_transactions(key) => {
+                                assert_reachable!("settlement transactions received");
+                                (key, Some(txns), env)
+                            }
+                            result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
+                                let _ = result;
+                                debug!(?key, "Settlement already executed, skipping scheduler wait");
+                                assert_reachable!("settlement already executed");
+                                (key, None, env)
+                            }
+                        }
                     }
                 })
                 .collect();
 
             while let Some((settlement_key, txns, env)) = futures.next().await {
+                let Some(txns) = txns else {
+                    continue;
+                };
+
                 let mut barrier_deps = BarrierDependencyBuilder::new();
                 let txns = txns
                     .into_iter()
@@ -159,13 +171,21 @@ impl SettlementScheduler {
                 let epoch_store = epoch_store.clone();
                 let env = env.clone();
                 spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-                    let barrier_tx = epoch_store
-                        .wait_for_barrier_transaction(settlement_key)
-                        .await;
-                    let deps = barrier_deps
-                        .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
-                    let env = env.with_barrier_dependencies(deps);
-                    execution_scheduler.enqueue_transactions(vec![(barrier_tx, env)], &epoch_store);
+                    let keys = [settlement_key];
+                    tokio::select! {
+                        barrier_tx = epoch_store.wait_for_barrier_transaction(settlement_key) => {
+                            assert_reachable!("barrier transaction received");
+                            let deps = barrier_deps
+                                .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
+                            let env = env.with_barrier_dependencies(deps);
+                            execution_scheduler.enqueue_transactions(vec![(barrier_tx, env)], &epoch_store);
+                        }
+                        result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
+                            let _ = result;
+                            debug!(?settlement_key, "Barrier already executed, skipping scheduler wait");
+                            assert_reachable!("barrier already executed");
+                        }
+                    }
                 }));
             }
         }));
