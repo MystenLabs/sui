@@ -153,7 +153,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
                     Ok(None) => {
                         guard.stop_and_record();
-                        warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
+                        info!(pipeline = H::NAME, "No watermark for pipeline, skipping");
                         continue;
                     }
 
@@ -173,9 +173,9 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
             // Tracks the current highest `pruner_hi` not yet written to db. This is updated as
             // chunks complete.
-            let mut highest_pruned = watermark.pruner_hi;
+            let mut highest_pruned = watermark.pruner_hi.unwrap_or(0);
             // Tracks the `pruner_hi` that has been written to the db.
-            let mut highest_watermarked = watermark.pruner_hi;
+            let mut highest_watermarked = watermark.pruner_hi.unwrap_or(0);
 
             // (3) Collect all the new chunks that are ready to be pruned.
             // This will also advance the watermark.
@@ -538,9 +538,9 @@ mod tests {
             checkpoint_hi_inclusive: 3,
             tx_hi: 9,
             timestamp_ms_hi_inclusive: timestamp,
-            reader_lo: 3,
-            pruner_timestamp: timestamp,
-            pruner_hi: 0,
+            reader_lo: Some(3),
+            pruner_timestamp: Some(timestamp),
+            pruner_hi: Some(0),
         };
         let store = MockStore::new()
             .with_watermark(DataPipeline::NAME, watermark)
@@ -585,7 +585,7 @@ mod tests {
             // Check that the pruner_hi was updated past 1
             let watermark = store.watermark(DataPipeline::NAME).unwrap();
             assert!(
-                watermark.pruner_hi > 1,
+                watermark.pruner_hi.unwrap() > 1,
                 "Pruner watermark should be updated"
             );
         }
@@ -617,9 +617,9 @@ mod tests {
             checkpoint_hi_inclusive: 3,
             tx_hi: 9,
             timestamp_ms_hi_inclusive: timestamp,
-            reader_lo: 3,
-            pruner_timestamp: 0,
-            pruner_hi: 0,
+            reader_lo: Some(3),
+            pruner_timestamp: Some(0),
+            pruner_hi: Some(0),
         };
         let store = MockStore::new()
             .with_watermark(DataPipeline::NAME, watermark)
@@ -646,7 +646,7 @@ mod tests {
             // Check that the pruner_hi was updated past 1
             let watermark = store.watermark(DataPipeline::NAME).unwrap();
             assert!(
-                watermark.pruner_hi > 1,
+                watermark.pruner_hi.unwrap() > 1,
                 "Pruner watermark should be updated"
             );
         }
@@ -683,9 +683,9 @@ mod tests {
             checkpoint_hi_inclusive: 4,
             tx_hi: 8,
             timestamp_ms_hi_inclusive: timestamp,
-            reader_lo: 4,        // Allow pruning up to checkpoint 4 (exclusive)
-            pruner_timestamp: 0, // Past timestamp so delay doesn't block
-            pruner_hi: 1,
+            reader_lo: Some(4), // Allow pruning up to checkpoint 4 (exclusive)
+            pruner_timestamp: Some(0), // Past timestamp so delay doesn't block
+            pruner_hi: Some(1),
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
@@ -706,7 +706,8 @@ mod tests {
 
             // Verify watermark doesn't advance past the failed range [1,2)
             assert_eq!(
-                watermarks.pruner_hi, 1,
+                watermarks.pruner_hi,
+                Some(1),
                 "Pruner watermark should remain at 1 because range [1,2) failed"
             );
             assert!(data.contains_key(&1), "Checkpoint 1 should be preserved");
@@ -723,7 +724,8 @@ mod tests {
 
             // Verify watermark advances after all ranges complete successfully
             assert_eq!(
-                watermarks.pruner_hi, 4,
+                watermarks.pruner_hi,
+                Some(4),
                 "Pruner watermark should advance to 4 after all ranges complete"
             );
             assert!(!data.contains_key(&1), "Checkpoint 1 should be pruned");

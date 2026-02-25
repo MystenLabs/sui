@@ -15,7 +15,7 @@ pub struct StoredWatermark {
     pub checkpoint_hi_inclusive: i64,
     pub tx_hi: i64,
     pub timestamp_ms_hi_inclusive: i64,
-    pub reader_lo: i64,
-    pub pruner_timestamp: NaiveDateTime,
-    pub pruner_hi: i64,
+    pub reader_lo: Option<i64>,
+    pub pruner_timestamp: Option<NaiveDateTime>,
+    pub pruner_hi: Option<i64>,
 }

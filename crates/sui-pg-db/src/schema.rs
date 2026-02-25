@@ -9,8 +9,8 @@ diesel::table! {
         checkpoint_hi_inclusive -> Int8,
         tx_hi -> Int8,
         timestamp_ms_hi_inclusive -> Int8,
-        reader_lo -> Int8,
-        pruner_timestamp -> Timestamp,
-        pruner_hi -> Int8,
+        reader_lo -> Nullable<Int8>,
+        pruner_timestamp -> Nullable<Timestamp>,
+        pruner_hi -> Nullable<Int8>,
     }
 }

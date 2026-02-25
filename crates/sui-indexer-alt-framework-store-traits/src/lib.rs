@@ -13,14 +13,6 @@ use scoped_futures::ScopedBoxFuture;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// If no existing watermark record exists, initializes it with `default_next_checkpoint`.
-    /// Returns the committer watermark `checkpoint_hi_inclusive`.
-    async fn init_watermark(
-        &mut self,
-        pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>>;
-
     /// Given a `pipeline_task` representing either a pipeline name or a pipeline with an associated
     /// task (formatted as `{pipeline}{Store::DELIMITER}{task}`), return the committer watermark
     /// from the `Store`. The indexer fetches this value for each pipeline added to determine which
@@ -133,8 +125,8 @@ pub struct ReaderWatermark {
     /// Within the framework, this value is used to determine the new `reader_lo`.
     pub checkpoint_hi_inclusive: u64,
     /// Within the framework, this value is used to check whether to actually make an update
-    /// transaction to the database.
-    pub reader_lo: u64,
+    /// transaction to the database. `None` indicates the reader watermark has never been set.
+    pub reader_lo: Option<u64>,
 }
 
 /// A watermark that represents the bounds for the region that the pruner is allowed to prune, and
@@ -155,8 +147,8 @@ pub struct PrunerWatermark {
     pub reader_lo: u64,
 
     /// The pruner has already deleted up to this checkpoint (exclusive), so can continue from this
-    /// point.
-    pub pruner_hi: u64,
+    /// point. `None` indicates the pruner has never run.
+    pub pruner_hi: Option<u64>,
 }
 
 impl CommitterWatermark {
@@ -187,13 +179,16 @@ impl PrunerWatermark {
     /// to_exclusive) where `from` is inclusive and `to_exclusive` is exclusive. Advance the
     /// watermark as well.
     pub fn next_chunk(&mut self, size: u64) -> Option<(u64, u64)> {
-        if self.pruner_hi >= self.reader_lo {
+        if self
+            .pruner_hi
+            .is_some_and(|pruner_hi| pruner_hi >= self.reader_lo)
+        {
             return None;
         }
 
-        let from = self.pruner_hi;
+        let from = self.pruner_hi.unwrap_or(0);
         let to_exclusive = (from + size).min(self.reader_lo);
-        self.pruner_hi = to_exclusive;
+        self.pruner_hi = Some(to_exclusive);
         Some((from, to_exclusive))
     }
 }
@@ -229,7 +224,7 @@ mod tests {
         let watermark = PrunerWatermark {
             wait_for_ms: 5000, // 5 seconds
             reader_lo: 1000,
-            pruner_hi: 500,
+            pruner_hi: Some(500),
         };
 
         assert_eq!(watermark.wait_for(), Some(Duration::from_millis(5000)));
@@ -240,7 +235,7 @@ mod tests {
         let watermark = PrunerWatermark {
             wait_for_ms: 0,
             reader_lo: 1000,
-            pruner_hi: 500,
+            pruner_hi: Some(500),
         };
 
         assert_eq!(watermark.wait_for(), None);
@@ -251,7 +246,7 @@ mod tests {
         let watermark = PrunerWatermark {
             wait_for_ms: -5000,
             reader_lo: 1000,
-            pruner_hi: 500,
+            pruner_hi: Some(500),
         };
 
         assert_eq!(watermark.wait_for(), None);
@@ -262,7 +257,7 @@ mod tests {
         let mut watermark = PrunerWatermark {
             wait_for_ms: 0,
             reader_lo: 1000,
-            pruner_hi: 1000,
+            pruner_hi: Some(1000),
         };
 
         assert_eq!(watermark.next_chunk(100), None);
@@ -273,23 +268,23 @@ mod tests {
         let mut watermark = PrunerWatermark {
             wait_for_ms: 0,
             reader_lo: 1000,
-            pruner_hi: 100,
+            pruner_hi: Some(100),
         };
 
         assert_eq!(watermark.next_chunk(100), Some((100, 200)));
-        assert_eq!(watermark.pruner_hi, 200);
+        assert_eq!(watermark.pruner_hi, Some(200));
         assert_eq!(watermark.next_chunk(100), Some((200, 300)));
 
         // Reset and test oversized chunk
         let mut watermark = PrunerWatermark {
             wait_for_ms: 0,
             reader_lo: 1000,
-            pruner_hi: 500,
+            pruner_hi: Some(500),
         };
 
         // Chunk larger than remaining range
         assert_eq!(watermark.next_chunk(2000), Some((500, 1000)));
-        assert_eq!(watermark.pruner_hi, 1000);
+        assert_eq!(watermark.pruner_hi, Some(1000));
         assert_eq!(watermark.next_chunk(2000), None);
     }
 }

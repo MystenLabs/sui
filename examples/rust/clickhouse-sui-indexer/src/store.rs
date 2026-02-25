@@ -117,37 +117,6 @@ impl TransactionalStore for ClickHouseStore {
 
 #[async_trait]
 impl Connection for ClickHouseConnection {
-    async fn init_watermark(
-        &mut self,
-        pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
-        let existing = self.committer_watermark(pipeline_task).await?;
-
-        let Some(checkpoint_hi_inclusive) = default_next_checkpoint.checked_sub(1) else {
-            return Ok(existing.map(|w| w.checkpoint_hi_inclusive));
-        };
-
-        if let Some(existing) = existing {
-            return Ok(Some(existing.checkpoint_hi_inclusive));
-        }
-
-        let mut inserter = self.client.inserter("watermarks")?;
-        inserter.write(&WatermarkRow {
-            pipeline_task: pipeline_task.to_string(),
-            epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive,
-            tx_hi: 0,
-            timestamp_ms_hi_inclusive: 0,
-            reader_lo: default_next_checkpoint,
-            pruner_hi: default_next_checkpoint,
-            pruner_timestamp: 0,
-        })?;
-
-        inserter.end().await?;
-        Ok(Some(checkpoint_hi_inclusive))
-    }
-
     async fn committer_watermark(&mut self, pipeline: &str) -> Result<Option<CommitterWatermark>> {
         let mut cursor = self
             .client
@@ -186,9 +155,9 @@ impl Connection for ClickHouseConnection {
                  LIMIT 1",
             )
             .bind(pipeline)
-            .fetch::<(u64, u64)>()?;
+            .fetch::<(u64, Option<u64>)>()?;
 
-        let row: Option<(u64, u64)> = cursor.next().await?;
+        let row: Option<(u64, Option<u64>)> = cursor.next().await?;
         Ok(row.map(|(checkpoint_hi, reader_lo)| ReaderWatermark {
             checkpoint_hi_inclusive: checkpoint_hi,
             reader_lo,

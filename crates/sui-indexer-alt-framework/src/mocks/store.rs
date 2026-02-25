@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
@@ -28,9 +27,9 @@ pub struct MockWatermark {
     pub checkpoint_hi_inclusive: u64,
     pub tx_hi: u64,
     pub timestamp_ms_hi_inclusive: u64,
-    pub reader_lo: u64,
-    pub pruner_timestamp: u64,
-    pub pruner_hi: u64,
+    pub reader_lo: Option<u64>,
+    pub pruner_timestamp: Option<u64>,
+    pub pruner_hi: Option<u64>,
 }
 
 /// Configuration for simulating connection failures in tests
@@ -86,40 +85,6 @@ pub struct MockConnection<'c>(pub &'c MockStore);
 
 #[async_trait]
 impl Connection for MockConnection<'_> {
-    async fn init_watermark(
-        &mut self,
-        pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
-        let Some(checkpoint_hi_inclusive) = default_next_checkpoint.checked_sub(1) else {
-            // Do not create a watermark record with checkpoint_hi_inclusive = -1.
-            return Ok(self
-                .committer_watermark(pipeline_task)
-                .await?
-                .map(|w| w.checkpoint_hi_inclusive));
-        };
-
-        let &MockWatermark {
-            checkpoint_hi_inclusive,
-            ..
-        } = self
-            .0
-            .watermarks
-            .entry(pipeline_task.to_string())
-            .or_insert(MockWatermark {
-                epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive,
-                tx_hi: 0,
-                timestamp_ms_hi_inclusive: 0,
-                reader_lo: default_next_checkpoint,
-                pruner_timestamp: 0,
-                pruner_hi: default_next_checkpoint,
-            })
-            .deref();
-
-        Ok(Some(checkpoint_hi_inclusive))
-    }
-
     async fn committer_watermark(
         &mut self,
         pipeline_task: &str,
@@ -137,8 +102,7 @@ impl Connection for MockConnection<'_> {
         &mut self,
         pipeline: &'static str,
     ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
-        let watermark = self.0.watermarks.get(pipeline);
-        Ok(watermark.map(|w| ReaderWatermark {
+        Ok(self.0.watermarks.get(pipeline).map(|w| ReaderWatermark {
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
             reader_lo: w.reader_lo,
         }))
@@ -149,20 +113,22 @@ impl Connection for MockConnection<'_> {
         pipeline: &'static str,
         delay: Duration,
     ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
-        let watermark = self.0.watermarks.get(pipeline);
-        Ok(watermark.map(|w| {
-            let elapsed_ms = w.pruner_timestamp as i64
-                - SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as i64;
+        let pruner_watermark = if let Some(watermark) = self.0.watermarks.get(pipeline)
+            && let Some(pruner_timestamp) = watermark.pruner_timestamp
+            && let Some(reader_lo) = watermark.reader_lo
+        {
+            let elapsed_ms = pruner_timestamp as i64
+                - SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
             let wait_for_ms = delay.as_millis() as i64 + elapsed_ms;
-            PrunerWatermark {
-                pruner_hi: w.pruner_hi,
-                reader_lo: w.reader_lo,
+            Some(PrunerWatermark {
+                pruner_hi: watermark.pruner_hi,
+                reader_lo,
                 wait_for_ms,
-            }
-        }))
+            })
+        } else {
+            None
+        };
+        Ok(pruner_watermark)
     }
 
     async fn set_committer_watermark(
@@ -216,11 +182,13 @@ impl Connection for MockConnection<'_> {
         }
 
         let mut curr = self.0.watermarks.get_mut(pipeline).unwrap();
-        curr.reader_lo = reader_lo;
-        curr.pruner_timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        curr.reader_lo = Some(reader_lo);
+        curr.pruner_timestamp = Some(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+        );
         Ok(true)
     }
 
@@ -230,7 +198,7 @@ impl Connection for MockConnection<'_> {
         pruner_hi: u64,
     ) -> anyhow::Result<bool> {
         let mut curr = self.0.watermarks.get_mut(pipeline).unwrap();
-        curr.pruner_hi = pruner_hi;
+        curr.pruner_hi = Some(pruner_hi);
         Ok(true)
     }
 }

@@ -959,7 +959,7 @@ mod tests {
 
         // Verify that reader watermark was eventually updated despite failures
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.reader_lo, 3);
+        assert_eq!(watermark.reader_lo, Some(3));
     }
 
     #[tokio::test]

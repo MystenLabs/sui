@@ -53,7 +53,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                 Ok(Some(current)) => current,
 
                 Ok(None) => {
-                    warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
+                    info!(pipeline = H::NAME, "No watermark for pipeline, skipping");
                     continue;
                 }
 
@@ -67,10 +67,10 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
             let new_reader_lo =
                 (current.checkpoint_hi_inclusive as u64 + 1).saturating_sub(config.retention);
 
-            if new_reader_lo <= current.reader_lo as u64 {
+            if current.reader_lo.is_some_and(|r| new_reader_lo <= r) {
                 debug!(
                     pipeline = H::NAME,
-                    current = current.reader_lo,
+                    current = ?current.reader_lo,
                     new = new_reader_lo,
                     "No change to reader watermark",
                 );
@@ -198,9 +198,9 @@ mod tests {
             checkpoint_hi_inclusive: 10, // Current high watermark
             tx_hi: 100,
             timestamp_ms_hi_inclusive: 1000,
-            reader_lo: 0, // Initial reader_lo
-            pruner_timestamp: 0,
-            pruner_hi: 0,
+            reader_lo: None, // Initial reader_lo
+            pruner_timestamp: None,
+            pruner_hi: None,
         };
         let polling_interval_ms = 100;
         let connection_failure_attempts = 0;
@@ -219,7 +219,7 @@ mod tests {
         // new reader_lo = checkpoint_hi_inclusive (10) - retention (5) + 1 = 6
         {
             let watermarks = setup.store.watermark(DataPipeline::NAME).unwrap();
-            assert_eq!(watermarks.reader_lo, 6);
+            assert_eq!(watermarks.reader_lo.unwrap(), 6);
         }
     }
 
@@ -230,9 +230,9 @@ mod tests {
             checkpoint_hi_inclusive: 10, // Current high watermark
             tx_hi: 100,
             timestamp_ms_hi_inclusive: 1000,
-            reader_lo: 7, // Initial reader_lo
-            pruner_timestamp: 0,
-            pruner_hi: 0,
+            reader_lo: Some(7), // Initial reader_lo
+            pruner_timestamp: None,
+            pruner_hi: None,
         };
         let polling_interval_ms = 100;
         let connection_failure_attempts = 0;
@@ -253,7 +253,8 @@ mod tests {
         {
             let watermarks = setup.store.watermark(DataPipeline::NAME).unwrap();
             assert_eq!(
-                watermarks.reader_lo, 7,
+                watermarks.reader_lo.unwrap(),
+                7,
                 "Reader watermark should not be updated when new value is smaller"
             );
         }
@@ -266,9 +267,9 @@ mod tests {
             checkpoint_hi_inclusive: 10, // Current high watermark
             tx_hi: 100,
             timestamp_ms_hi_inclusive: 1000,
-            reader_lo: 0, // Initial reader_lo
-            pruner_timestamp: 0,
-            pruner_hi: 0,
+            reader_lo: None, // Initial reader_lo
+            pruner_timestamp: None,
+            pruner_hi: None,
         };
         let polling_interval_ms = 1_000; // Long interval for testing retry
         let connection_failure_attempts = 1;
@@ -290,7 +291,7 @@ mod tests {
         // Verify state before retry succeeds
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(
-            watermark.reader_lo, 0,
+            watermark.reader_lo, None,
             "Reader watermark should not be updated due to DB connection failure"
         );
 
@@ -306,7 +307,8 @@ mod tests {
         // Verify state after retry succeeds
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(
-            watermark.reader_lo, 6,
+            watermark.reader_lo,
+            Some(6),
             "Reader watermark should be updated after retry succeeds"
         );
     }
@@ -318,9 +320,9 @@ mod tests {
             checkpoint_hi_inclusive: 10, // Current high watermark
             tx_hi: 100,
             timestamp_ms_hi_inclusive: 1000,
-            reader_lo: 0, // Initial reader_lo
-            pruner_timestamp: 0,
-            pruner_hi: 0,
+            reader_lo: None, // Initial reader_lo
+            pruner_timestamp: None,
+            pruner_hi: None,
         };
         let polling_interval_ms = 1_000; // Long interval for testing retry
         let connection_failure_attempts = 0;
@@ -340,7 +342,7 @@ mod tests {
         {
             let watermarks = setup.store.watermark(DataPipeline::NAME).unwrap();
             assert_eq!(
-                watermarks.reader_lo, 0,
+                watermarks.reader_lo, None,
                 "Reader watermark should not be updated due to set_reader_watermark failure"
             );
         }
@@ -351,7 +353,7 @@ mod tests {
         // Verify state after retry succeeds
         {
             let watermarks = setup.store.watermark(DataPipeline::NAME).unwrap();
-            assert_eq!(watermarks.reader_lo, 6);
+            assert_eq!(watermarks.reader_lo, Some(6));
         }
     }
 }

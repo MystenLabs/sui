@@ -53,7 +53,7 @@ pub(super) fn track_main_reader_lo<H: Handler + 'static>(
                 // If the reader watermark is not present (either because the watermark entry does
                 // not exist, or the reaer watermark is not set), we assume that pruning is not
                 // enabled and checkpoints >= 0 are valid.
-                Ok(watermark) => watermark.map_or(0, |wm| wm.reader_lo),
+                Ok(watermark) => watermark.and_then(|wm| wm.reader_lo).unwrap_or(0),
                 Err(e) => {
                     warn!(pipeline = H::NAME, "Failed to get reader watermark: {e}");
                     continue;
