@@ -659,7 +659,9 @@ impl CheckpointQueue {
             let next_tx_count = queued.roots.tx_roots.len();
 
             if current_tx_count + next_tx_count > max_tx && !current_roots.is_empty() {
-                assert_reachable!("checkpoint split due to transaction limit");
+                assert_reachable!(
+                    "checkpoint flush split due to batched roots exceeding transaction limit"
+                );
                 let details = current_details.unwrap();
                 pending_checkpoints.push(PendingCheckpointV2 {
                     roots: std::mem::take(&mut current_roots),
@@ -1739,7 +1741,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .collect()
             };
 
+        let num_schedulables = schedulables.len();
         let chunked_schedulables = build_chunks(schedulables, &mut checkpoint_queue);
+        if chunked_schedulables.len() > 1 {
+            info!(
+                "Splitting transactions into {} checkpoint chunks (num_schedulables={}, max_tx={})",
+                chunked_schedulables.len(),
+                num_schedulables,
+                max_transactions_per_checkpoint
+            );
+            assert_reachable!("checkpoint split due to transaction limit");
+        }
         let chunked_randomness_schedulables = if should_write_random_checkpoint {
             build_chunks(randomness_schedulables, &mut checkpoint_queue)
         } else {
