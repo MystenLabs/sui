@@ -45,10 +45,7 @@ use crate::api::types::transaction_effects::EffectsContents;
 use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::transaction_kind::TransactionKind;
 use crate::api::types::user_signature::UserSignature;
-use crate::config::Limits;
 use crate::error::RpcError;
-use crate::error::bad_user_input;
-use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
@@ -59,15 +56,6 @@ pub(crate) mod filter;
 
 /// Cursor for transaction pagination
 pub(crate) type CTransaction = JsonCursor<u64>;
-
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum ScanError {
-    #[error(
-        "Scan range of {requested} checkpoints exceeds maximum of {max}. \
-         Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to narrow the range."
-    )]
-    LimitExceeded { requested: u64, max: u64 },
-}
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -322,15 +310,14 @@ impl Transaction {
         scope: Scope,
         page: Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<Connection<String, Transaction>, RpcError<ScanError>> {
-        let limits: &Limits = ctx.data()?;
+    ) -> Result<Connection<String, Transaction>, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
             field: Some("scanTransactions".to_string()),
             filters: Some(filter.active_filters()),
         };
-        let reader_lo = available_range_key.reader_lo(watermarks).map_err(upcast)?;
+        let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(Connection::new(false, false));
@@ -346,23 +333,13 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         };
 
-        let scan_range = cp_bounds.end() - cp_bounds.start() + 1;
-        if scan_range > limits.max_scan_limit {
-            return Err(bad_user_input(ScanError::LimitExceeded {
-                requested: scan_range,
-                max: limits.max_scan_limit,
-            }));
-        }
-
-        let transactions = bloom::transactions(ctx, &filter, &page, cp_bounds)
-            .await
-            .map_err(upcast)?;
+        let transactions = bloom::transactions(ctx, &filter, &page, cp_bounds).await?;
 
         page.paginate_filtered(
             &transactions,
             |(_, contents)| filter.matches(contents),
             |(digest, contents)| {
-                Ok::<_, RpcError<ScanError>>(Transaction {
+                Ok::<_, RpcError>(Transaction {
                     digest: *digest,
                     contents: TransactionContents {
                         scope: scope.clone(),

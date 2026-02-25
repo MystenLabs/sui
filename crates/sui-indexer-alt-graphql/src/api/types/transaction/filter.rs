@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::Context;
 use async_graphql::CustomValidator;
 use async_graphql::Enum;
 use async_graphql::InputObject;
@@ -13,6 +14,7 @@ use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::lookups::CheckpointBounds;
+use crate::config::Limits;
 use crate::intersect;
 
 /// An input filter selecting for either system or programmable transactions.
@@ -62,7 +64,18 @@ pub(crate) struct TransactionFilter {
 }
 
 pub(crate) struct TransactionFilterValidator;
-pub(crate) struct ScanFilterValidator;
+pub(crate) struct ScanFilterValidator {
+    max_scan_limit: u64,
+}
+
+impl ScanFilterValidator {
+    pub fn new(ctx: &Context<'_>) -> Self {
+        let max_scan_limit = ctx
+            .data::<Limits>()
+            .map_or(Limits::default().max_scan_limit, |l| l.max_scan_limit);
+        Self { max_scan_limit }
+    }
+}
 
 impl TransactionFilter {
     /// Try to create a filter whose results are the intersection of transaction blocks in `self`'s
@@ -232,11 +245,30 @@ impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
 
 impl CustomValidator<TransactionFilter> for ScanFilterValidator {
     fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
-        if !(filter.before_checkpoint.is_some() || filter.at_checkpoint.is_some()) {
-            return Err(InputValueError::custom(
-                "Scanning requires explicit checkpoint bounds. \
-                 Filter by afterCheckpoint and beforeCheckpoint, beforeCheckpoint or atCheckpoint.",
-            ));
+        let (cp_lo, cp_hi) = if let Some(at) = filter.at_checkpoint.map(u64::from) {
+            (at, at.saturating_add(1))
+        } else if let Some(before) = filter.before_checkpoint.map(u64::from) {
+            (
+                filter
+                    .after_checkpoint
+                    .map_or(0, |a| u64::from(a).saturating_add(1)),
+                before,
+            )
+        } else {
+            return Err(InputValueError::custom(format!(
+                "Unbounded scan, add beforeCheckpoint or atCheckpoint filters (Scan limit: {}).",
+                self.max_scan_limit,
+            )));
+        };
+
+        let cps_scanned = cp_hi.saturating_sub(cp_lo);
+        if cps_scanned > self.max_scan_limit {
+            return Err(InputValueError::custom(format!(
+                "Scan of {cps_scanned} checkpoints exceeds maximum of {}. \
+                Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters \
+                to reduce the range.",
+                self.max_scan_limit,
+            )));
         }
 
         Ok(())
