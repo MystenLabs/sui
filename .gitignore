@@ -1,3 +1,5 @@
+crates/sui-evil-compiler/
+
 # IDE and agents
 **/.history/
 **/.vscode/

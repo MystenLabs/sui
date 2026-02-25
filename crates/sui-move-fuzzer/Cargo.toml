@@ -1,0 +1,165 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "sui-move-fuzzer"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[features]
+default = ["e2e"]
+# The "e2e" feature gates sui-core and authority_harness for full E2E fuzzing.
+# Disable it for lightweight verifier-only targets that work with cargo fuzz:
+#   cargo +nightly fuzz run --fuzz-dir . verifier_crash -- --no-default-features
+# LLM-guided seed generation: calls Claude API to generate targeted seeds.
+# Usage: cargo run --features llm-guided --bin llm_seed_gen
+llm-guided = ["dep:reqwest"]
+
+e2e = [
+    "dep:sui-core",
+    "dep:sui-protocol-config",
+    "dep:sui-framework",
+    "dep:sui-swarm-config",
+    "dep:sui-genesis-builder",
+    "dep:shared-crypto",
+    "dep:tokio",
+    "dep:once_cell",
+    "dep:fastcrypto",
+]
+
+# Forked-execution mode: run modules against real Sui network state fetched lazily from RPC.
+# Enables oracle price object manipulation and full Sui native functions.
+# Usage: cargo run --features fork --bin fork_main -- --fork-rpc https://fullnode.mainnet.sui.io:443
+fork = [
+    "e2e",
+    "dep:sui-sdk",
+    "dep:sui-json-rpc-types",
+    "dep:prometheus",
+    "dep:bcs",
+]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTTP client for LLM API calls — gated by "llm-guided" feature
+reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
+
+# Move crates (always needed)
+move-binary-format = { path = "../../external-crates/move/crates/move-binary-format", features = ["fuzzing"] }
+move-core-types = { path = "../../external-crates/move/crates/move-core-types", features = ["fuzzing"] }
+move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
+move-bytecode-verifier-meter = { path = "../../external-crates/move/crates/move-bytecode-verifier-meter" }
+move-vm-config = { path = "../../external-crates/move/crates/move-vm-config" }
+
+# Sui execution layer (always needed for verifier)
+sui-execution = { path = "../../sui-execution" }
+sui-verifier = { package = "sui-verifier-latest", path = "../../sui-execution/latest/sui-verifier" }
+
+# Sui core (for TestAuthorityBuilder, authority_test_utils) — gated by "e2e" feature
+sui-core = { path = "../sui-core", optional = true }
+sui-types = { path = "../sui-types" }
+sui-protocol-config = { path = "../sui-protocol-config", optional = true }
+sui-framework = { path = "../sui-framework", optional = true }
+sui-swarm-config = { path = "../sui-swarm-config", optional = true }
+sui-genesis-builder = { path = "../sui-genesis-builder", optional = true }
+shared-crypto = { path = "../shared-crypto", optional = true }
+
+# Fork-mode RPC deps — gated by "fork" feature
+sui-sdk = { path = "../sui-sdk", optional = true }
+sui-json-rpc-types = { path = "../sui-json-rpc-types", optional = true }
+prometheus = { version = "0.13", optional = true }
+bcs = { version = "0.1", optional = true }
+
+# Runtime and utilities — gated by "e2e" feature
+tokio = { version = "1.49.0", features = ["full"], optional = true }
+once_cell = { version = "1", optional = true }
+rand = "0.8"
+tempfile = "3"
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "db643fd05a1b1c4cd52de3939766b53e12ce137e", optional = true }
+
+# Prevent this from interfering with workspaces
+#[workspace]
+#members = ["."]
+
+[[bin]]
+name = "e2e_publish_execute"
+path = "fuzz_targets/e2e_publish_execute.rs"
+test = false
+doc = false
+required-features = ["e2e"]
+
+[[bin]]
+name = "e2e_publish_crash"
+path = "fuzz_targets/e2e_publish_crash.rs"
+test = false
+doc = false
+required-features = ["e2e"]
+
+[[bin]]
+name = "ref_safety_diff"
+path = "fuzz_targets/ref_safety_diff.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "verifier_crash"
+path = "fuzz_targets/verifier_crash.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "deser_roundtrip"
+path = "fuzz_targets/deser_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "bounds_escape"
+path = "fuzz_targets/bounds_escape.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ref_safety_diff_gen"
+path = "fuzz_targets/ref_safety_diff_gen.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "verifier_soundness"
+path = "fuzz_targets/verifier_soundness.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "gen_corpus"
+path = "src/bin/gen_corpus.rs"
+
+[[bin]]
+name = "coverage_gaps"
+path = "src/bin/coverage_gaps.rs"
+
+[[bin]]
+name = "llm_seed_gen"
+path = "src/bin/llm_seed_gen.rs"
+required-features = ["llm-guided"]
+
+[[bin]]
+name = "fuzz_loop"
+path = "src/bin/fuzz_loop.rs"
+required-features = ["llm-guided"]
+
+[[bin]]
+name = "fork_main"
+path = "src/bin/fork_main.rs"
+required-features = ["fork"]

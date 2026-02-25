@@ -2,6 +2,8 @@
 resolver = "2"
 
 exclude = [
+  "crates/sui-evil-compiler",
+  "crates/sui-move-fuzzer",
   "examples/tic-tac-toe/cli",
   "examples/regulated-coin/rust-client",
   "examples/custom-indexer/rust",
