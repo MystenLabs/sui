@@ -1,0 +1,124 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Warm sccache for release builds
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # every day at midnight UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  RUST_BACKTRACE: short
+
+jobs:
+  warm-cache:
+    name: Warm sccache (${{ matrix.os }})
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        os:
+          [
+            ubuntu-ghcloud,
+            ubuntu-arm64,
+            windows-ghcloud,
+            macos-latest-large,
+            macos-latest-xlarge,
+          ]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    env:
+      SCCACHE_BUCKET: sui-releases
+      SCCACHE_REGION: us-east-1
+      SCCACHE_S3_KEY_PREFIX: sccache/${{ matrix.os }}
+      RUSTC_WRAPPER: sccache
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+        with:
+          ref: main
+
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Install postgres (Windows)
+        if: ${{ matrix.os == 'windows-ghcloud' }}
+        shell: bash
+        run: |
+          choco install postgresql12 --force --params '/Password:root'
+          echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
+          echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
+          echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
+          echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
+          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
+
+      - name: Install postgres (MacOS arm64)
+        if: ${{ matrix.os == 'macos-latest-xlarge' }}
+        shell: bash
+        env:
+          PQ_LIB_DIR: "$(brew --prefix libpq)/lib"
+          LIBRARY_PATH: "/opt/homebrew/lib:$LIBRARY_PATH"
+          PKG_CONFIG_PATH: "/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+          PATH: "/opt/homebrew/bin:$PATH"
+        run: |
+          brew install postgresql
+
+      - name: Install postgres (Ubuntu arm64)
+        if: ${{ matrix.os == 'ubuntu-arm64' }}
+        shell: bash
+        run: |
+          sudo apt update && sudo apt install -y libpq-dev
+
+      - name: Remove unused apps (MacOS arm64)
+        if: ${{ matrix.os == 'macos-latest-xlarge' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          # MacOS arm64 runner only has 14GB avaialble, which is too small for our builds, so removing unused softwared.
+          df -h /
+          sudo rm -rf /Applications/Xcode*.app
+          sudo rm -rf ~/Library/Developer/Xcode/DerivedData
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
+          sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
+          df -h /
+
+      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+
+      - name: Build release binaries
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          cargo build --release
+          cargo build --release --features tracing --bin sui
+          cargo build --profile=dev --bin sui --features tracing
+
+  report-failure:
+    name: Report Failure
+    runs-on: ubuntu-latest
+    if: failure()
+    needs: [warm-cache]
+    steps:
+      - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # pin@v4.1.1
+
+      - name: Dispatch to sui-operations for notification
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
+        with:
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          repository: MystenLabs/sui-operations
+          event-type: nightly-build-failure
+          client-payload: |-
+            {
+              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "run_id": "${{ github.run_id }}",
+              "workflow_name": "${{ github.workflow }}",
+              "workflow_conclusion": "${{ env.WORKFLOW_CONCLUSION }}"
+            }
