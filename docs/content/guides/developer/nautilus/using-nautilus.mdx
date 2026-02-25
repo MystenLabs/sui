@@ -478,6 +478,19 @@ You can view an [example enclave config object](https://testnet.suivision.xyz/ob
 
 You can find the frontend code for the Twitter example [in this repository](https://github.com/MystenLabs/nautilus-twitter/tree/main/frontend).
 
+## Development mode
+
+For non-production development, you can inject a private key instead of generating it inside the enclave and run the enclave in debug mode anywhere.
+
+1. Modify the code to [inject a deterministic private key](https://github.com/MystenLabs/nautilus/blob/main/src/nautilus-server/src/main.rs#L16) into the enclave. This allows you to run the server anywhere with the same private key without needing an AWS Nitro instance.
+2. Use `make run-debug` instead of `make run`. Debug mode produces all-zero PCR values. You can register the enclave on-chain with these all-zero PCRs once and reuse it for development without needing to update PCRs on-chain. 
+
+:::warning
+
+For development only. Never use in production as all-zero PCRs provide no attestation guarantees and injected keys compromise the TEE security model.
+
+:::
+
 ## Troubleshooting
 
 - **Traffic forwarder error:** Ensure all targeted domains are listed in the `allowed_endpoints.yaml`. Use the following command to test enclave connections to all domains.
