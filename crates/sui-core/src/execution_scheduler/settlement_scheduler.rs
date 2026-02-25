@@ -15,6 +15,7 @@ use crate::{
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
 use futures::stream::{FuturesUnordered, StreamExt};
+use mysten_common::fatal;
 use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -247,8 +248,11 @@ impl SettlementScheduler {
         {
             Ok(digests) => digests,
             Err(e) => {
-                error!("Failed to read tx digests for settlement: {:?}", e);
-                return 0;
+                fatal!(
+                    "Failed to read tx digests for settlement {:?}: {:?}",
+                    settlement_key,
+                    e
+                );
             }
         };
 

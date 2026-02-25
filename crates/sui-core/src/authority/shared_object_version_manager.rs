@@ -62,16 +62,12 @@ impl AssignedVersions {
     }
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct AssignedTxAndVersions(pub Vec<(TransactionKey, AssignedVersions)>);
 
 impl AssignedTxAndVersions {
     pub fn new(assigned_versions: Vec<(TransactionKey, AssignedVersions)>) -> Self {
         Self(assigned_versions)
-    }
-
-    pub fn find(&self, key: &TransactionKey) -> Option<&AssignedVersions> {
-        self.0.iter().find_map(|(k, v)| (k == key).then_some(v))
     }
 
     pub fn into_map(self) -> HashMap<TransactionKey, AssignedVersions> {

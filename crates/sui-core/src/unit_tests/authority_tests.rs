@@ -82,7 +82,9 @@ use crate::{
 use super::*;
 
 pub use crate::authority::authority_test_utils::*;
-use crate::authority::shared_object_version_manager::AssignedTxAndVersions;
+use crate::authority::shared_object_version_manager::AssignedVersions;
+use std::collections::HashMap;
+use sui_types::transaction::TransactionKey;
 
 fn handle_transaction_for_test(
     authority: &AuthorityState,
@@ -4850,8 +4852,6 @@ async fn test_consensus_commit_prologue_generation() {
     )
     .await;
 
-    let assigned_versions = assigned_versions.into_map();
-
     // Consensus commit prologue V2 should be turned on everywhere.
     assert!(
         authority_state
@@ -5848,7 +5848,7 @@ async fn process_transactions_through_consensus_handler_impl<C>(
     round: u64,
     captured_transactions: &CapturedTransactions,
     filter_prologue: bool,
-) -> (Vec<Schedulable>, AssignedTxAndVersions)
+) -> (Vec<Schedulable>, HashMap<TransactionKey, AssignedVersions>)
 where
     C: CheckpointServiceNotify + Send + Sync,
 {
@@ -5884,14 +5884,14 @@ where
     // Retrieve the captured transactions
     let mut captured = captured_transactions.lock();
     if captured.is_empty() {
-        (vec![], AssignedTxAndVersions::default())
+        (vec![], HashMap::new())
     } else {
         // Remove and return the first batch of captured transactions
-        let (mut schedulables, assigned_versions, _, _) = captured.remove(0);
+        let (mut paired, _, _) = captured.remove(0);
 
         // Filter out consensus commit prologue transactions if requested
         if filter_prologue {
-            schedulables.retain(|s| {
+            paired.retain(|(s, _)| {
                 if let Schedulable::Transaction(tx) = s {
                     !matches!(
                         tx.data().transaction_data().kind(),
@@ -5903,6 +5903,8 @@ where
             });
         }
 
+        let (schedulables, versions): (Vec<_>, Vec<_>) = paired.into_iter().unzip();
+        let assigned_versions = schedulables.iter().map(|s| s.key()).zip(versions).collect();
         (schedulables, assigned_versions)
     }
 }
@@ -5914,7 +5916,7 @@ async fn process_transactions_through_consensus_handler<C>(
     transactions: &[Transaction],
     round: u64,
     captured_transactions: &CapturedTransactions,
-) -> (Vec<Schedulable>, AssignedTxAndVersions)
+) -> (Vec<Schedulable>, HashMap<TransactionKey, AssignedVersions>)
 where
     C: CheckpointServiceNotify + Send + Sync,
 {
@@ -5936,7 +5938,7 @@ async fn process_transactions_through_consensus_handler_with_prologue<C>(
     transactions: &[Transaction],
     round: u64,
     captured_transactions: &CapturedTransactions,
-) -> (Vec<Schedulable>, AssignedTxAndVersions)
+) -> (Vec<Schedulable>, HashMap<TransactionKey, AssignedVersions>)
 where
     C: CheckpointServiceNotify + Send + Sync,
 {
@@ -6385,9 +6387,8 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         "All transactions should eventually be scheduled"
     );
 
-    let assigned_versions = final_assigned_versions
-        .expect("Should have processed at least one round")
-        .into_map();
+    let assigned_versions =
+        final_assigned_versions.expect("Should have processed at least one round");
 
     // Check cancelled transaction shared locks.
     let cancelled_txn_key = TransactionKey::Digest(*cancelled_txn.digest());

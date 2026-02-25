@@ -73,7 +73,7 @@ use crate::{
         epoch_start_configuration::EpochStartConfigTrait,
         execution_time_estimator::ExecutionTimeEstimator,
         shared_object_congestion_tracker::SharedObjectCongestionTracker,
-        shared_object_version_manager::{AssignedTxAndVersions, Schedulable},
+        shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions, Schedulable},
         transaction_deferral::{DeferralKey, DeferralReason, transaction_deferral_within_limit},
     },
     checkpoints::{
@@ -558,6 +558,14 @@ impl<T: crate::authority::shared_object_version_manager::AsTx + Clone> Chunk<T> 
         self.schedulables.iter().chain(self.settlement.iter())
     }
 
+    fn all_schedulables_from(chunks: &[Self]) -> Vec<Schedulable<T>> {
+        chunks
+            .iter()
+            .flat_map(|c| c.all_schedulables())
+            .cloned()
+            .collect()
+    }
+
     fn to_checkpoint_roots(&self) -> CheckpointRoots {
         let tx_roots: Vec<_> = self.schedulables.iter().map(|s| s.key()).collect();
         let settlement_root = self.settlement.as_ref().map(|s| s.key());
@@ -592,6 +600,8 @@ pub(crate) struct CheckpointQueue {
     height: u64,
     pending_tx_count: usize,
     current_checkpoint_seq: CheckpointSequenceNumber,
+    max_tx: usize,
+    min_checkpoint_interval_ms: u64,
     execution_scheduler_sender: ExecutionSchedulerSender,
 }
 
@@ -600,6 +610,8 @@ impl CheckpointQueue {
         last_built_timestamp: CheckpointTimestamp,
         checkpoint_height: u64,
         next_checkpoint_seq: CheckpointSequenceNumber,
+        max_tx: usize,
+        min_checkpoint_interval_ms: u64,
         execution_scheduler_sender: ExecutionSchedulerSender,
     ) -> Self {
         Self {
@@ -608,6 +620,8 @@ impl CheckpointQueue {
             height: checkpoint_height,
             pending_tx_count: 0,
             current_checkpoint_seq: next_checkpoint_seq,
+            max_tx,
+            min_checkpoint_interval_ms,
             execution_scheduler_sender,
         }
     }
@@ -617,6 +631,8 @@ impl CheckpointQueue {
         last_built_timestamp: CheckpointTimestamp,
         checkpoint_height: u64,
         next_checkpoint_seq: CheckpointSequenceNumber,
+        max_tx: usize,
+        min_checkpoint_interval_ms: u64,
     ) -> Self {
         let (sender, _receiver) = monitored_mpsc::unbounded_channel("test_checkpoint_queue_sender");
         Self {
@@ -625,6 +641,29 @@ impl CheckpointQueue {
             height: checkpoint_height,
             pending_tx_count: 0,
             current_checkpoint_seq: next_checkpoint_seq,
+            max_tx,
+            min_checkpoint_interval_ms,
+            execution_scheduler_sender: ExecutionSchedulerSender::new_for_testing(sender),
+        }
+    }
+
+    #[cfg(test)]
+    fn new_for_testing_with_sender(
+        last_built_timestamp: CheckpointTimestamp,
+        checkpoint_height: u64,
+        next_checkpoint_seq: CheckpointSequenceNumber,
+        max_tx: usize,
+        min_checkpoint_interval_ms: u64,
+        sender: monitored_mpsc::UnboundedSender<SchedulerMessage>,
+    ) -> Self {
+        Self {
+            last_built_timestamp,
+            pending_roots: VecDeque::new(),
+            height: checkpoint_height,
+            pending_tx_count: 0,
+            current_checkpoint_seq: next_checkpoint_seq,
+            max_tx,
+            min_checkpoint_interval_ms,
             execution_scheduler_sender: ExecutionSchedulerSender::new_for_testing(sender),
         }
     }
@@ -645,44 +684,24 @@ impl CheckpointQueue {
     fn push_chunk(
         &mut self,
         chunk: Chunk,
-        assigned_versions: &AssignedTxAndVersions,
+        assigned_versions: &HashMap<TransactionKey, AssignedVersions>,
         timestamp: CheckpointTimestamp,
         consensus_commit_ref: CommitRef,
         rejected_transactions_digest: Digest,
-        max_tx: usize,
     ) -> Vec<PendingCheckpointV2> {
+        let max_tx = self.max_tx;
         let user_tx_count = chunk.schedulables.len();
-
-        let settlement_info = chunk.settlement.as_ref().map(|s| {
-            let settlement_key = s.key();
-            let tx_keys: Vec<_> = chunk
-                .schedulables
-                .iter()
-                .map(|s| s.key())
-                .filter(|k| !matches!(k, TransactionKey::AccumulatorSettlement(..)))
-                .collect();
-            SettlementBatchInfo {
-                settlement_key,
-                tx_keys,
-                checkpoint_height: chunk.height,
-                checkpoint_seq: self.current_checkpoint_seq,
-                assigned_versions: assigned_versions
-                    .find(&settlement_key)
-                    .cloned()
-                    .unwrap_or_default(),
-            }
-        });
 
         let roots = chunk.to_checkpoint_roots();
 
-        let schedulables: Vec<Schedulable> = chunk.schedulables;
-
-        self.execution_scheduler_sender.send(
-            schedulables,
-            assigned_versions.clone(),
-            SchedulingSource::NonFastPath,
-            settlement_info,
-        );
+        let schedulables: Vec<_> = chunk
+            .schedulables
+            .into_iter()
+            .map(|s| {
+                let versions = assigned_versions.get(&s.key()).cloned().unwrap_or_default();
+                (s, versions)
+            })
+            .collect();
 
         let mut flushed_checkpoints = Vec::new();
 
@@ -692,6 +711,27 @@ impl CheckpointQueue {
         {
             flushed_checkpoints.push(checkpoint);
         }
+
+        let settlement_info = chunk.settlement.as_ref().map(|s| {
+            let settlement_key = s.key();
+            let tx_keys: Vec<_> = schedulables.iter().map(|(s, _)| s.key()).collect();
+            SettlementBatchInfo {
+                settlement_key,
+                tx_keys,
+                checkpoint_height: chunk.height,
+                checkpoint_seq: self.current_checkpoint_seq,
+                assigned_versions: assigned_versions
+                    .get(&settlement_key)
+                    .cloned()
+                    .unwrap_or_default(),
+            }
+        });
+
+        self.execution_scheduler_sender.send(
+            schedulables,
+            SchedulingSource::NonFastPath,
+            settlement_info,
+        );
 
         self.pending_tx_count += user_tx_count;
         self.pending_roots.push_back(QueuedCheckpointRoots {
@@ -706,17 +746,12 @@ impl CheckpointQueue {
 
     pub(crate) fn flush(
         &mut self,
-        protocol_config: &ProtocolConfig,
         current_timestamp: CheckpointTimestamp,
         force: bool,
     ) -> Option<PendingCheckpointV2> {
-        if !force {
-            let min_checkpoint_interval_ms = protocol_config
-                .min_checkpoint_interval_ms_as_option()
-                .unwrap_or_default();
-            if current_timestamp < self.last_built_timestamp + min_checkpoint_interval_ms {
-                return None;
-            }
+        if !force && current_timestamp < self.last_built_timestamp + self.min_checkpoint_interval_ms
+        {
+            return None;
         }
         self.flush_forced()
     }
@@ -749,6 +784,10 @@ impl CheckpointQueue {
     }
 
     pub(crate) fn checkpoint_seq(&self) -> CheckpointSequenceNumber {
+        debug_assert!(
+            self.current_checkpoint_seq > 0,
+            "checkpoint_seq called before any checkpoint was assigned"
+        );
         self.current_checkpoint_seq - 1
     }
 }
@@ -833,6 +872,13 @@ impl<C> ConsensusHandler<C> {
                 last_consensus_stats.checkpoint_seq = epoch_store.previous_epoch_last_checkpoint();
             }
         }
+        let max_tx = epoch_store
+            .protocol_config()
+            .max_transactions_per_checkpoint() as usize;
+        let min_checkpoint_interval_ms = epoch_store
+            .protocol_config()
+            .min_checkpoint_interval_ms_as_option()
+            .unwrap_or_default();
         let execution_scheduler_sender =
             ExecutionSchedulerSender::start(settlement_scheduler, epoch_store.clone());
         let commit_rate_estimate_window_size = epoch_store
@@ -872,6 +918,8 @@ impl<C> ConsensusHandler<C> {
                 last_built_timestamp,
                 checkpoint_height,
                 next_checkpoint_seq,
+                max_tx,
+                min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
         }
@@ -899,6 +947,13 @@ impl<C> ConsensusHandler<C> {
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
+        let max_tx = epoch_store
+            .protocol_config()
+            .max_transactions_per_checkpoint() as usize;
+        let min_checkpoint_interval_ms = epoch_store
+            .protocol_config()
+            .min_checkpoint_interval_ms_as_option()
+            .unwrap_or_default();
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         Self {
@@ -925,6 +980,8 @@ impl<C> ConsensusHandler<C> {
                 last_built_timestamp,
                 checkpoint_height,
                 0,
+                max_tx,
+                min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
         }
@@ -1228,12 +1285,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let num_schedulables = schedulables.len();
             let mut all_schedulables = schedulables;
             all_schedulables.extend(randomness_schedulables);
-            self.execution_scheduler_sender.send(
-                all_schedulables,
-                assigned_versions,
-                SchedulingSource::NonFastPath,
-                None,
-            );
+            let assigned_versions = assigned_versions.into_map();
+            let paired: Vec<_> = all_schedulables
+                .into_iter()
+                .map(|s| {
+                    let versions = assigned_versions.get(&s.key()).cloned().unwrap_or_default();
+                    (s, versions)
+                })
+                .collect();
+            self.execution_scheduler_sender
+                .send(paired, SchedulingSource::NonFastPath, None);
 
             (lock, final_round, num_schedulables, checkpoint_height)
         } else {
@@ -1802,17 +1863,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             vec![]
         };
 
-        let schedulables_for_version_assignment: Vec<_> = chunked_schedulables
-            .iter()
-            .flat_map(|c| c.all_schedulables())
-            .cloned()
-            .collect();
-        let randomness_schedulables_for_version_assignment: Vec<_> =
-            chunked_randomness_schedulables
-                .iter()
-                .flat_map(|c| c.all_schedulables())
-                .cloned()
-                .collect();
+        let schedulables_for_version_assignment =
+            Chunk::all_schedulables_from(&chunked_schedulables);
+        let randomness_schedulables_for_version_assignment =
+            Chunk::all_schedulables_from(&chunked_randomness_schedulables);
 
         let assigned_versions = self
             .epoch_store
@@ -1845,6 +1899,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 Schedulable::Transaction(consensus_commit_prologue);
         }
 
+        let assigned_versions = assigned_versions.into_map();
+
         self.epoch_store.process_user_signatures(
             chunked_schedulables
                 .iter()
@@ -1855,8 +1911,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .flat_map(|c| c.all_schedulables()),
                 ),
         );
-
-        let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
 
         let commit_height = chunked_randomness_schedulables
             .last()
@@ -1872,16 +1926,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 commit_info.timestamp,
                 commit_info.consensus_commit_ref,
                 commit_info.rejected_transactions_digest,
-                max_tx,
             ));
         }
 
         let force = final_round || should_write_random_checkpoint;
-        pending_checkpoints.extend(checkpoint_queue.flush(
-            protocol_config,
-            commit_info.timestamp,
-            force,
-        ));
+        pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, force));
 
         if should_write_random_checkpoint {
             for chunk in chunked_randomness_schedulables {
@@ -1891,15 +1940,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     commit_info.timestamp,
                     commit_info.consensus_commit_ref,
                     commit_info.rejected_transactions_digest,
-                    max_tx,
                 ));
             }
 
-            pending_checkpoints.extend(checkpoint_queue.flush(
-                protocol_config,
-                commit_info.timestamp,
-                true,
-            ));
+            pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, true));
         }
 
         if final_round && let Some(last) = pending_checkpoints.last_mut() {
@@ -3170,8 +3214,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 /// Sends transactions to the execution scheduler in a separate task,
 /// to avoid blocking consensus handler.
 pub(crate) type SchedulerMessage = (
-    Vec<Schedulable>,
-    AssignedTxAndVersions,
+    Vec<(Schedulable, AssignedVersions)>,
     SchedulingSource,
     Option<SettlementBatchInfo>,
 );
@@ -3199,17 +3242,13 @@ impl ExecutionSchedulerSender {
 
     fn send(
         &self,
-        transactions: Vec<Schedulable>,
-        assigned_versions: AssignedTxAndVersions,
+        transactions: Vec<(Schedulable, AssignedVersions)>,
         scheduling_source: SchedulingSource,
         settlement: Option<SettlementBatchInfo>,
     ) {
-        let _ = self.sender.send((
-            transactions,
-            assigned_versions,
-            scheduling_source,
-            settlement,
-        ));
+        let _ = self
+            .sender
+            .send((transactions, scheduling_source, settlement));
     }
 
     async fn run(
@@ -3217,20 +3256,16 @@ impl ExecutionSchedulerSender {
         settlement_scheduler: SettlementScheduler,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        while let Some((transactions, assigned_versions, scheduling_source, settlement)) =
-            recv.recv().await
-        {
+        while let Some((transactions, scheduling_source, settlement)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
-            let assigned_versions = assigned_versions.into_map();
             let txns = transactions
                 .into_iter()
-                .map(|txn| {
-                    let key = txn.key();
+                .map(|(txn, versions)| {
                     (
                         txn,
-                        ExecutionEnv::new().with_assigned_versions(
-                            assigned_versions.get(&key).cloned().unwrap_or_default(),
-                        ),
+                        ExecutionEnv::new()
+                            .with_scheduling_source(scheduling_source)
+                            .with_assigned_versions(versions),
                     )
                 })
                 .collect();
@@ -4178,9 +4213,7 @@ mod tests {
 
     mod checkpoint_queue_tests {
         use super::*;
-        use crate::authority::shared_object_version_manager::AssignedTxAndVersions;
         use consensus_core::CommitRef;
-        use sui_protocol_config::ProtocolConfig;
         use sui_types::digests::Digest;
 
         fn make_chunk(tx_count: usize, height: u64) -> Chunk {
@@ -4200,15 +4233,13 @@ mod tests {
             }
         }
 
-        fn default_versions() -> AssignedTxAndVersions {
-            AssignedTxAndVersions::default()
+        fn default_versions() -> HashMap<TransactionKey, AssignedVersions> {
+            HashMap::new()
         }
 
         #[test]
         fn test_flush_all_checkpoint_roots() {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, 1000, 0);
             let versions = default_versions();
 
             queue.push_chunk(
@@ -4217,7 +4248,6 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
             queue.push_chunk(
                 make_chunk(3, 2),
@@ -4225,10 +4255,9 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
 
-            let pending = queue.flush(&protocol_config, 1000, true);
+            let pending = queue.flush(1000, true);
 
             assert!(pending.is_some());
             assert!(queue.pending_roots.is_empty());
@@ -4236,9 +4265,8 @@ mod tests {
 
         #[test]
         fn test_flush_respects_min_checkpoint_interval() {
-            let mut queue = CheckpointQueue::new_for_testing(1000, 0, 0);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let min_interval = 200;
+            let mut queue = CheckpointQueue::new_for_testing(1000, 0, 0, 1000, min_interval);
             let versions = default_versions();
 
             queue.push_chunk(
@@ -4247,27 +4275,21 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
 
-            let min_interval = protocol_config
-                .min_checkpoint_interval_ms_as_option()
-                .unwrap_or(200);
-
-            let pending = queue.flush(&protocol_config, 1000 + min_interval - 1, false);
+            let pending = queue.flush(1000 + min_interval - 1, false);
             assert!(pending.is_none());
             assert_eq!(queue.pending_roots.len(), 1);
 
-            let pending = queue.flush(&protocol_config, 1000 + min_interval, false);
+            let pending = queue.flush(1000 + min_interval, false);
             assert!(pending.is_some());
             assert!(queue.pending_roots.is_empty());
         }
 
         #[test]
         fn test_push_chunk_flushes_when_exceeds_max() {
-            let mut queue = CheckpointQueue::new_for_testing(1000, 0, 0);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let max_tx = 10;
+            let mut queue = CheckpointQueue::new_for_testing(1000, 0, 0, max_tx, 0);
             let versions = default_versions();
 
             queue.push_chunk(
@@ -4276,7 +4298,6 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
 
             let flushed = queue.push_chunk(
@@ -4285,7 +4306,6 @@ mod tests {
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
-                max_tx,
             );
 
             assert_eq!(flushed.len(), 1);
@@ -4294,9 +4314,7 @@ mod tests {
 
         #[test]
         fn test_multiple_chunks_merged_into_one_checkpoint() {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, 1000, 200);
             let versions = default_versions();
 
             queue.push_chunk(
@@ -4305,7 +4323,6 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
             queue.push_chunk(
                 make_chunk(10, 2),
@@ -4313,7 +4330,6 @@ mod tests {
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
-                max_tx,
             );
             queue.push_chunk(
                 make_chunk(10, 3),
@@ -4321,19 +4337,17 @@ mod tests {
                 1000,
                 make_commit_ref(3),
                 Digest::default(),
-                max_tx,
             );
 
-            let pending = queue.flush(&protocol_config, 1000, true).unwrap();
+            let pending = queue.flush(1000, true).unwrap();
 
             assert_eq!(pending.roots.len(), 3);
         }
 
         #[test]
         fn test_push_chunk_handles_overflow() {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let max_tx = 10;
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, max_tx, 0);
             let versions = default_versions();
 
             let flushed1 = queue.push_chunk(
@@ -4342,7 +4356,6 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
             assert!(flushed1.is_empty());
 
@@ -4352,7 +4365,6 @@ mod tests {
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
-                max_tx,
             );
             assert!(flushed2.is_empty());
 
@@ -4362,11 +4374,10 @@ mod tests {
                 1000,
                 make_commit_ref(3),
                 Digest::default(),
-                max_tx,
             );
             assert_eq!(flushed3.len(), 1);
 
-            let pending = queue.flush(&protocol_config, 1000, true);
+            let pending = queue.flush(1000, true);
 
             for p in pending.iter().chain(flushed3.iter()) {
                 let tx_count: usize = p.roots.iter().map(|r| r.tx_roots.len()).sum();
@@ -4376,9 +4387,7 @@ mod tests {
 
         #[test]
         fn test_checkpoint_uses_last_chunk_height() {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, 1000, 0);
             let versions = default_versions();
 
             queue.push_chunk(
@@ -4387,7 +4396,6 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
             queue.push_chunk(
                 make_chunk(10, 200),
@@ -4395,19 +4403,16 @@ mod tests {
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
-                max_tx,
             );
 
-            let pending = queue.flush(&protocol_config, 1000, true).unwrap();
+            let pending = queue.flush(1000, true).unwrap();
 
             assert_eq!(pending.details.checkpoint_height, 200);
         }
 
         #[test]
         fn test_last_built_timestamp_updated_on_flush() {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, 1000, 0);
             let versions = default_versions();
 
             queue.push_chunk(
@@ -4416,21 +4421,18 @@ mod tests {
                 5000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
 
             assert_eq!(queue.last_built_timestamp, 0);
 
-            let _ = queue.flush(&protocol_config, 5000, true);
+            let _ = queue.flush(5000, true);
 
             assert_eq!(queue.last_built_timestamp, 5000);
         }
 
         #[test]
         fn test_settlement_info_sent_through_channel() {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 5);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 5, 1000, 0);
             let versions = default_versions();
 
             let chunk1 = Chunk {
@@ -4458,7 +4460,6 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
             queue.push_chunk(
                 chunk2,
@@ -4466,15 +4467,75 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
+            );
+        }
+
+        #[test]
+        fn test_settlement_checkpoint_seq_correct_after_flush() {
+            let max_tx = 10;
+            let initial_seq = 5;
+            let (sender, mut receiver) = monitored_mpsc::unbounded_channel("test_settlement_seq");
+            let mut queue =
+                CheckpointQueue::new_for_testing_with_sender(0, 0, initial_seq, max_tx, 0, sender);
+            let versions = default_versions();
+
+            // Push a chunk that partially fills the queue (no flush).
+            let chunk1 = Chunk {
+                schedulables: (0..max_tx / 2 + 1)
+                    .map(|_| Schedulable::Transaction(user_txn(1000).into_tx()))
+                    .collect(),
+                settlement: Some(Schedulable::AccumulatorSettlement(1, 1)),
+                height: 1,
+            };
+            queue.push_chunk(
+                chunk1,
+                &versions,
+                1000,
+                make_commit_ref(1),
+                Digest::default(),
+            );
+
+            // Drain the first message from the channel.
+            let msg1 = receiver.try_recv().unwrap();
+            let settlement1 = msg1.2.unwrap();
+            assert_eq!(settlement1.checkpoint_seq, initial_seq);
+
+            // Push a second chunk that triggers a flush of chunk1's roots.
+            let chunk2 = Chunk {
+                schedulables: (0..max_tx / 2 + 1)
+                    .map(|_| Schedulable::Transaction(user_txn(1000).into_tx()))
+                    .collect(),
+                settlement: Some(Schedulable::AccumulatorSettlement(1, 2)),
+                height: 2,
+            };
+            let flushed = queue.push_chunk(
+                chunk2,
+                &versions,
+                1000,
+                make_commit_ref(2),
+                Digest::default(),
+            );
+            assert_eq!(flushed.len(), 1);
+            assert_eq!(flushed[0].details.checkpoint_seq, Some(initial_seq));
+
+            // The second settlement must have checkpoint_seq = initial_seq + 1,
+            // because the flush incremented current_checkpoint_seq.
+            let msg2 = receiver.try_recv().unwrap();
+            let settlement2 = msg2.2.unwrap();
+            assert_eq!(settlement2.checkpoint_seq, initial_seq + 1);
+
+            // Flush the remaining roots and verify the PendingCheckpointV2's seq
+            // matches the settlement's seq.
+            let pending = queue.flush_forced().unwrap();
+            assert_eq!(
+                pending.details.checkpoint_seq,
+                Some(settlement2.checkpoint_seq)
             );
         }
 
         #[test]
         fn test_checkpoint_seq_increments_on_flush() {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 10);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 10, 1000, 0);
             let versions = default_versions();
 
             queue.push_chunk(
@@ -4483,10 +4544,9 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
 
-            let pending = queue.flush(&protocol_config, 1000, true).unwrap();
+            let pending = queue.flush(1000, true).unwrap();
 
             assert_eq!(pending.details.checkpoint_seq, Some(10));
             assert_eq!(queue.current_checkpoint_seq, 11);
@@ -4494,9 +4554,8 @@ mod tests {
 
         #[test]
         fn test_multiple_chunks_with_overflow() {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0);
-            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            let max_tx = protocol_config.max_transactions_per_checkpoint() as usize;
+            let max_tx = 10;
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, max_tx, 0);
             let versions = default_versions();
 
             let flushed1 = queue.push_chunk(
@@ -4505,7 +4564,6 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
             let flushed2 = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 2),
@@ -4513,7 +4571,6 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
             let flushed3 = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 3),
@@ -4521,7 +4578,6 @@ mod tests {
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
-                max_tx,
             );
 
             let all_flushed: Vec<_> = flushed1
