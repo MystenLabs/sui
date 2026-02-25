@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
+use fastcrypto::{encoding::Encoding, traits::ToFromBytes};
 use futures::{Stream, StreamExt as _, stream};
 use mysten_network::{
     Multiaddr,
@@ -28,8 +29,10 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
 use tracing::{debug, error, info, trace, warn};
 
 use super::{
-    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
+    BlockStream, ExtendedSerializedBlock, NetworkManager, ObserverNetworkService,
+    ValidatorNetworkClient, ValidatorNetworkService,
     metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
+    observer::{ObserverPeerInfo, ObserverServiceProxy},
     tonic_gen::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
@@ -41,25 +44,32 @@ use crate::{
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::{
-        tonic_gen::consensus_service_server::ConsensusServiceServer,
+        tonic_gen::{
+            consensus_service_server::ConsensusServiceServer,
+            observer_service_server::ObserverServiceServer,
+        },
         tonic_tls::certificate_server_name,
     },
 };
 
 // Maximum bytes size in a single fetch_blocks()response.
 // TODO: put max RPC response size in protocol config.
-const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+pub(crate) const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
 const DEFAULT_GRPC_SERVER_TIMEOUT: Duration = Duration::from_secs(300);
 
-// Implements Tonic RPC client for Consensus.
-pub(crate) struct TonicClient {
+// HTTP/2 connection and stream window sizes for both validator and observer servers.
+const HTTP2_INITIAL_CONNECTION_WINDOW_SIZE: u32 = 64 << 20; // 64 MB
+const HTTP2_INITIAL_STREAM_WINDOW_SIZE: u32 = 32 << 20; // 32 MB
+
+// Implements Tonic RPC client for validator consensus operations.
+pub(crate) struct TonicValidatorClient {
     context: Arc<Context>,
     network_keypair: NetworkKeyPair,
     channel_pool: Arc<ChannelPool>,
 }
 
-impl TonicClient {
+impl TonicValidatorClient {
     pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
         Self {
             context: context.clone(),
@@ -93,7 +103,7 @@ impl TonicClient {
 
 // TODO: make sure callsites do not send request to own index, and return error otherwise.
 #[async_trait]
-impl NetworkClient for TonicClient {
+impl ValidatorNetworkClient for TonicValidatorClient {
     async fn subscribe_blocks(
         &self,
         peer: AuthorityIndex,
@@ -494,19 +504,19 @@ impl ChannelPool {
 }
 
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
-struct TonicServiceProxy<S: NetworkService> {
+struct TonicServiceProxy<S: ValidatorNetworkService> {
     context: Arc<Context>,
     service: Arc<S>,
 }
 
-impl<S: NetworkService> TonicServiceProxy<S> {
+impl<S: ValidatorNetworkService> TonicServiceProxy<S> {
     fn new(context: Arc<Context>, service: Arc<S>) -> Self {
         Self { context, service }
     }
 }
 
 #[async_trait]
-impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
+impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
     async fn send_block(
         &self,
         request: Request<SendBlockRequest>,
@@ -724,62 +734,131 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
 
 /// Manages the lifecycle of Tonic network client and service. Typical usage during initialization:
 /// 1. Create a new `TonicManager`.
-/// 2. Take `TonicClient` from `TonicManager::client()`.
+/// 2. Take the validator client from `TonicManager::validator_client()`.
 /// 3. Create consensus components.
 /// 4. Create `TonicService` for consensus service handler.
 /// 5. Install `TonicService` to `TonicManager` with `TonicManager::install_service()`.
 pub(crate) struct TonicManager {
     context: Arc<Context>,
     network_keypair: NetworkKeyPair,
-    client: Arc<TonicClient>,
+    own_address: SocketAddr,
+    validator_client: Arc<TonicValidatorClient>,
     server: Option<ServerHandle>,
+    observer_server: Option<ServerHandle>,
 }
 
 impl TonicManager {
     pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
+        let validator_client = Arc::new(TonicValidatorClient::new(
+            context.clone(),
+            network_keypair.clone(),
+        ));
+
+        // Calculate own address
+        let authority = context.committee.authority(context.own_index);
+        let multiaddr = if authority.address.is_localhost_ip() {
+            authority.address.clone()
+        } else {
+            authority.address.with_zero_ip()
+        };
+        let own_address = to_socket_addr(&multiaddr).unwrap();
+
+        // Calculate TCP metrics for the current machine/OS
+        Self::calculate_tcp_metrics(&context, own_address);
+
         Self {
-            context: context.clone(),
-            network_keypair: network_keypair.clone(),
-            client: Arc::new(TonicClient::new(context, network_keypair)),
+            context,
+            network_keypair,
+            own_address,
+            validator_client,
             server: None,
+            observer_server: None,
         }
+    }
+
+    /// Calculate and record TCP buffer size metrics for the current machine/OS.
+    #[cfg(not(msim))]
+    fn calculate_tcp_metrics(context: &Arc<Context>, own_address: SocketAddr) {
+        let tcp_connection_metrics = &context.metrics.network_metrics.tcp_connection_metrics;
+
+        // Try creating an ephemeral port to test the highest allowed send and recv buffer sizes.
+        // Buffer sizes are not set explicitly on the socket used for real traffic,
+        // to allow the OS to set appropriate values.
+        let ephemeral_addr = SocketAddr::new(own_address.ip(), 0);
+        let ephemeral_socket = create_socket(&ephemeral_addr);
+        tcp_connection_metrics
+            .socket_send_buffer_size
+            .set(ephemeral_socket.send_buffer_size().unwrap_or(0) as i64);
+        tcp_connection_metrics
+            .socket_recv_buffer_size
+            .set(ephemeral_socket.recv_buffer_size().unwrap_or(0) as i64);
+
+        if let Err(e) = ephemeral_socket.set_send_buffer_size(32 << 20) {
+            info!("Failed to set send buffer size: {e:?}");
+        }
+        if let Err(e) = ephemeral_socket.set_recv_buffer_size(32 << 20) {
+            info!("Failed to set recv buffer size: {e:?}");
+        }
+        if ephemeral_socket.bind(ephemeral_addr).is_ok() {
+            tcp_connection_metrics
+                .socket_send_buffer_max_size
+                .set(ephemeral_socket.send_buffer_size().unwrap_or(0) as i64);
+            tcp_connection_metrics
+                .socket_recv_buffer_max_size
+                .set(ephemeral_socket.recv_buffer_size().unwrap_or(0) as i64);
+        }
+    }
+
+    #[cfg(msim)]
+    fn calculate_tcp_metrics(_context: &Arc<Context>, _own_address: SocketAddr) {
+        // Metrics calculation is not supported in msim
     }
 }
 
-impl<S: NetworkService> NetworkManager<S> for TonicManager {
-    type Client = TonicClient;
+impl NetworkManager for TonicManager {
+    type ValidatorClient = TonicValidatorClient;
 
     fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
         TonicManager::new(context, network_keypair)
     }
 
-    fn client(&self) -> Arc<Self::Client> {
-        self.client.clone()
+    fn validator_client(&self) -> Arc<Self::ValidatorClient> {
+        self.validator_client.clone()
     }
 
     fn update_peer_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>) {
-        self.client.update_peer_address(peer, address);
+        self.validator_client.update_peer_address(peer, address);
     }
 
-    async fn install_service(&mut self, service: Arc<S>) {
-        self.context
-            .metrics
-            .network_metrics
-            .network_type
-            .with_label_values(&["tonic"])
-            .set(1);
+    async fn start_validator_server<V>(&mut self, service: Arc<V>)
+    where
+        V: ValidatorNetworkService,
+    {
+        info!("Starting tonic validator server");
+        self.start_validator_server_impl(service).await;
+    }
 
-        info!("Starting tonic service");
+    async fn start_observer_server<O>(&mut self, service: Arc<O>)
+    where
+        O: ObserverNetworkService,
+    {
+        info!("Starting tonic observer server");
+        self.start_observer_server_impl(service).await;
+    }
 
-        let authority = self.context.committee.authority(self.context.own_index);
-        // By default, bind to the unspecified address to allow the actual address to be assigned.
-        // But bind to localhost if it is requested.
-        let own_address = if authority.address.is_localhost_ip() {
-            authority.address.clone()
-        } else {
-            authority.address.with_zero_ip()
-        };
-        let own_address = to_socket_addr(&own_address).unwrap();
+    async fn stop(&mut self) {
+        if let Some(server) = self.server.take() {
+            server.shutdown().await;
+        }
+
+        if let Some(observer_server) = self.observer_server.take() {
+            observer_server.shutdown().await;
+        }
+    }
+}
+
+impl TonicManager {
+    async fn start_validator_server_impl<V: ValidatorNetworkService>(&mut self, service: Arc<V>) {
         let service = TonicServiceProxy::new(self.context.clone(), service);
         let config = &self.context.parameters.tonic;
 
@@ -806,12 +885,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
             .layer_fn(|service| {
-                mysten_network::grpc_timeout::GrpcTimeout::new(
-                    service,
-                    // This should only bound the unary and initial response time,
-                    // not the duration of streaming responses.
-                    DEFAULT_GRPC_SERVER_TIMEOUT,
-                )
+                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
             });
 
         let consensus_service_server = ConsensusServiceServer::new(service)
@@ -836,45 +910,9 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             ),
         );
 
-        // Calculate some metrics around send/recv buffer sizes for the current machine/OS
-        #[cfg(not(msim))]
-        {
-            let tcp_connection_metrics =
-                &self.context.metrics.network_metrics.tcp_connection_metrics;
-
-            // Try creating an ephemeral port to test the highest allowed send and recv buffer sizes.
-            // Buffer sizes are not set explicitly on the socket used for real traffic,
-            // to allow the OS to set appropriate values.
-            {
-                let ephemeral_addr = SocketAddr::new(own_address.ip(), 0);
-                let ephemeral_socket = create_socket(&ephemeral_addr);
-                tcp_connection_metrics
-                    .socket_send_buffer_size
-                    .set(ephemeral_socket.send_buffer_size().unwrap_or(0) as i64);
-                tcp_connection_metrics
-                    .socket_recv_buffer_size
-                    .set(ephemeral_socket.recv_buffer_size().unwrap_or(0) as i64);
-
-                if let Err(e) = ephemeral_socket.set_send_buffer_size(32 << 20) {
-                    info!("Failed to set send buffer size: {e:?}");
-                }
-                if let Err(e) = ephemeral_socket.set_recv_buffer_size(32 << 20) {
-                    info!("Failed to set recv buffer size: {e:?}");
-                }
-                if ephemeral_socket.bind(ephemeral_addr).is_ok() {
-                    tcp_connection_metrics
-                        .socket_send_buffer_max_size
-                        .set(ephemeral_socket.send_buffer_size().unwrap_or(0) as i64);
-                    tcp_connection_metrics
-                        .socket_recv_buffer_max_size
-                        .set(ephemeral_socket.recv_buffer_size().unwrap_or(0) as i64);
-                };
-            }
-        }
-
         let http_config = sui_http::Config::default()
-            .initial_connection_window_size(64 << 20)
-            .initial_stream_window_size(32 << 20)
+            .initial_connection_window_size(HTTP2_INITIAL_CONNECTION_WINDOW_SIZE)
+            .initial_stream_window_size(HTTP2_INITIAL_STREAM_WINDOW_SIZE)
             .http2_keepalive_interval(Some(config.keepalive_interval))
             .http2_keepalive_timeout(Some(config.keepalive_interval))
             .accept_http1(false);
@@ -890,7 +928,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             match sui_http::Builder::new()
                 .config(http_config.clone())
                 .tls_config(tls_server_config.clone())
-                .serve(own_address, consensus_service.clone())
+                .serve(self.own_address, consensus_service.clone())
             {
                 Ok(server) => break server,
                 Err(err) => {
@@ -903,21 +941,106 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             }
         };
 
-        info!("Server started at: {own_address}");
+        info!("Server started at: {}", self.own_address);
         self.server = Some(server);
     }
 
-    async fn stop(&mut self) {
-        if let Some(server) = self.server.take() {
-            server.shutdown().await;
+    async fn start_observer_server_impl<O: ObserverNetworkService>(&mut self, service: Arc<O>) {
+        let config = &self.context.parameters.tonic;
+        let Some(observer_port) = config.observer_server_port else {
+            info!("Observer server not configured, skipping observer server start");
+            return;
+        };
+
+        // Parse observer allowlist from configuration
+        let observer_allowlist = parse_observer_allowlist(&config.observer_allowlist);
+
+        if observer_allowlist.is_empty() {
+            info!("Observer server allowlist disabled - all observers allowed");
+        } else {
+            info!(
+                "Observer server allowlist enabled with {} keys",
+                observer_allowlist.len()
+            );
         }
 
-        self.context
-            .metrics
-            .network_metrics
-            .network_type
-            .with_label_values(&["tonic"])
-            .set(0);
+        info!("Starting observer service on port {observer_port}");
+
+        // Use the pre-calculated own address and override with observer port
+        let observer_address = SocketAddr::new(self.own_address.ip(), observer_port);
+        let observer_service_proxy = ObserverServiceProxy::new(service);
+
+        let observer_service_server = ObserverServiceServer::new(observer_service_proxy)
+            .max_encoding_message_size(config.message_size_limit)
+            .max_decoding_message_size(config.message_size_limit)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
+
+        let layers = tower::ServiceBuilder::new()
+            .map_request(move |mut request: http::Request<_>| {
+                if let Some(peer_certificates) =
+                    request.extensions().get::<sui_http::PeerCertificates>()
+                {
+                    if let Some(observer_peer_info) =
+                        observer_peer_info_from_certs(peer_certificates, &observer_allowlist)
+                    {
+                        debug!("Inserting observer peer info: {:?}", observer_peer_info);
+                        request.extensions_mut().insert(observer_peer_info);
+                    }
+                } else {
+                    debug!("No peer certificates found for observer");
+                }
+                request
+            })
+            .layer(CallbackLayer::new(MetricsCallbackMaker::new(
+                self.context.metrics.network_metrics.inbound.clone(),
+                self.context.parameters.tonic.excessive_message_size,
+            )))
+            .layer(
+                TraceLayer::new_for_grpc()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
+            )
+            .layer_fn(|service| {
+                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
+            });
+
+        let observer_service = tonic::service::Routes::new(observer_service_server)
+            .into_axum_router()
+            .route_layer(layers);
+
+        let observer_tls_config = sui_tls::create_rustls_server_config(
+            self.network_keypair.clone().private_key().into_inner(),
+            certificate_server_name(&self.context),
+        );
+
+        let http_config = sui_http::Config::default()
+            .initial_connection_window_size(HTTP2_INITIAL_CONNECTION_WINDOW_SIZE)
+            .initial_stream_window_size(HTTP2_INITIAL_STREAM_WINDOW_SIZE)
+            .http2_keepalive_interval(Some(config.keepalive_interval))
+            .http2_keepalive_timeout(Some(config.keepalive_interval))
+            .accept_http1(false);
+
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let observer_server = loop {
+            match sui_http::Builder::new()
+                .config(http_config.clone())
+                .tls_config(observer_tls_config.clone())
+                .serve(observer_address, observer_service.clone())
+            {
+                Ok(server) => break server,
+                Err(err) => {
+                    warn!("Error starting observer server: {err:?}");
+                    if Instant::now() > deadline {
+                        panic!("Failed to start observer server within required deadline");
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        };
+
+        info!("Observer server started at: {observer_address}");
+        self.observer_server = Some(observer_server);
     }
 }
 
@@ -927,6 +1050,9 @@ impl Drop for TonicManager {
     fn drop(&mut self) {
         if let Some(server) = self.server.as_ref() {
             server.trigger_shutdown();
+        }
+        if let Some(observer_server) = self.observer_server.as_ref() {
+            observer_server.trigger_shutdown();
         }
     }
 }
@@ -959,6 +1085,84 @@ fn peer_info_from_certs(
         return None;
     };
     Some(PeerInfo { authority_index })
+}
+
+/// Extracts observer peer information from TLS certificates.
+/// Unlike validator peers, observers are not required to be in the committee.
+/// If allowlist is non-empty, only public keys in the allowlist are allowed.
+/// If allowlist is empty, all observers are allowed.
+fn observer_peer_info_from_certs(
+    peer_certificates: &sui_http::PeerCertificates,
+    allowlist: &[NetworkPublicKey],
+) -> Option<ObserverPeerInfo> {
+    let certs = peer_certificates.peer_certs();
+
+    if certs.len() != 1 {
+        trace!(
+            "Unexpected number of certificates from TLS stream: {}",
+            certs.len()
+        );
+        return None;
+    }
+    trace!("Received {} observer certificates", certs.len());
+    let public_key = sui_tls::public_key_from_certificate(&certs[0])
+        .map_err(|e| {
+            trace!("Failed to extract public key from observer certificate: {e:?}");
+            e
+        })
+        .ok()?;
+    let client_public_key = NetworkPublicKey::new(public_key);
+
+    // Check allowlist if non-empty
+    if !allowlist.is_empty() {
+        if !allowlist.contains(&client_public_key) {
+            warn!(
+                "Observer connection rejected: public key {:?} not in allowlist",
+                client_public_key
+            );
+            return None;
+        }
+        debug!(
+            "Observer connection accepted: public key {:?} is in allowlist",
+            client_public_key
+        );
+    }
+
+    Some(ObserverPeerInfo {
+        public_key: client_public_key,
+    })
+}
+
+/// Parses the observer allowlist from hex-encoded strings to NetworkPublicKey objects.
+/// Returns an empty Vec if the allowlist is empty (meaning all observers are allowed).
+/// Logs errors for any invalid keys and skips them.
+fn parse_observer_allowlist(allowlist_strings: &[String]) -> Vec<NetworkPublicKey> {
+    if allowlist_strings.is_empty() {
+        return Vec::new();
+    }
+
+    allowlist_strings
+        .iter()
+        .filter_map(|key_str| match fastcrypto::encoding::Hex::decode(key_str) {
+            Ok(bytes) => match fastcrypto::ed25519::Ed25519PublicKey::from_bytes(bytes.as_ref()) {
+                Ok(inner_key) => Some(NetworkPublicKey::new(inner_key)),
+                Err(e) => {
+                    error!(
+                        "Failed to parse observer public key from bytes '{}': {e:?}",
+                        key_str
+                    );
+                    None
+                }
+            },
+            Err(e) => {
+                error!(
+                    "Failed to decode hex observer public key '{}': {e:?}",
+                    key_str
+                );
+                None
+            }
+        })
+        .collect()
 }
 
 /// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into
@@ -1196,7 +1400,7 @@ pub(crate) struct GetLatestRoundsResponse {
     highest_accepted: Vec<u32>,
 }
 
-fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {
+pub(crate) fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {
     let mut chunks = vec![];
     let mut chunk = vec![];
     let mut chunk_size = 0;
@@ -1224,7 +1428,7 @@ mod tests {
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
 
-    fn create_test_context_and_client() -> (Arc<Context>, TonicClient) {
+    fn create_test_context_and_client() -> (Arc<Context>, TonicValidatorClient) {
         let (committee, mut keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let parameters = Parameters::default();
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -1241,7 +1445,7 @@ mod tests {
         ));
 
         let (network_keypair, _protocol_keypair) = keypairs.remove(0);
-        let client = TonicClient::new(context.clone(), network_keypair);
+        let client = TonicValidatorClient::new(context.clone(), network_keypair);
 
         (context, client)
     }

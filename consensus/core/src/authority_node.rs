@@ -127,7 +127,7 @@ pub enum NetworkType {
 
 pub(crate) struct AuthorityNode<N>
 where
-    N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
+    N: NetworkManager,
 {
     context: Arc<Context>,
     start_time: Instant,
@@ -139,13 +139,13 @@ where
     proposed_block_handler: JoinHandle<()>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    subscriber: Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>,
+    subscriber: Subscriber<N::ValidatorClient, AuthorityService<ChannelCoreThreadDispatcher>>,
     network_manager: N,
 }
 
 impl<N> AuthorityNode<N>
 where
-    N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
+    N: NetworkManager,
 {
     // See comments above ConsensusAuthority::start() for details on the input.
     pub(crate) async fn start(
@@ -216,7 +216,7 @@ where
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
         let mut network_manager = N::new(context.clone(), network_keypair);
-        let network_client = network_manager.client();
+        let validator_client = network_manager.validator_client();
 
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
@@ -308,7 +308,7 @@ where
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         let synchronizer = Synchronizer::start(
-            network_client.clone(),
+            validator_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
@@ -327,7 +327,7 @@ where
             block_verifier.clone(),
             transaction_certifier.clone(),
             round_tracker.clone(),
-            network_client.clone(),
+            validator_client.clone(),
             dag_state.clone(),
         )
         .start();
@@ -337,7 +337,7 @@ where
             core_dispatcher.clone(),
             round_tracker.clone(),
             dag_state.clone(),
-            network_client.clone(),
+            validator_client.clone(),
         )
         .start();
 
@@ -357,7 +357,7 @@ where
         let subscriber = {
             let s = Subscriber::new(
                 context.clone(),
-                network_client,
+                validator_client,
                 network_service.clone(),
                 dag_state,
             );
@@ -369,7 +369,12 @@ where
             s
         };
 
-        network_manager.install_service(network_service).await;
+        network_manager
+            .start_validator_server(network_service.clone())
+            .await;
+        if context.parameters.tonic.is_observer_server_enabled() {
+            network_manager.start_observer_server(network_service).await;
+        }
 
         info!(
             "Consensus authority started, took {:?}",
