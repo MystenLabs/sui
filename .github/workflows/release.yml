@@ -158,6 +158,14 @@ jobs:
           sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
           df -h /
 
+      - name: Setup sccache
+        if: ${{ env.s3_existing_archive == '' }}
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+        env:
+          SCCACHE_BUCKET: sui-releases
+          SCCACHE_REGION: us-west-2
+          SCCACHE_S3_KEY_PREFIX: sccache/${{ matrix.os }}
+
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_existing_archive == '' }}
         shell: bash
@@ -225,15 +233,6 @@ jobs:
           repository: MystenLabs/walrus
           token: ${{ secrets.WALRUS_REPO_DISPATCH }}
           event-type: update-walrus-sui-testnet-tag
-          client-payload: '{"new_tag": "${{ env.sui_tag }}"}'
-
-      - name: Dispatch Walrus Sites Sui testnet tag update
-        if: ${{ matrix.os == 'ubuntu-ghcloud' && contains(env.sui_tag, 'testnet') }}
-        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
-        with:
-          repository: MystenLabs/walrus-sites
-          token: ${{ secrets.WALRUS_REPO_DISPATCH }}
-          event-type: update-walrus-sites-sui-testnet-tag
           client-payload: '{"new_tag": "${{ env.sui_tag }}"}'
 
   update-homebrew-formula:
