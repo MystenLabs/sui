@@ -2317,7 +2317,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) {
         for checkpoint_signature_message in checkpoint_signature_messages {
             self.checkpoint_service
-                .notify_checkpoint_signature(&self.epoch_store, &checkpoint_signature_message)
+                .notify_checkpoint_signature(&checkpoint_signature_message)
                 .expect("db error");
         }
     }

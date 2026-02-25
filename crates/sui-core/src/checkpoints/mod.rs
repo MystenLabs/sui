@@ -84,7 +84,7 @@ use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::transaction::{
     TransactionDataAPI, TransactionKey, TransactionKind, VerifiedTransaction,
 };
-use tokio::{sync::Notify, time::timeout};
+use tokio::sync::Notify;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::DBMapUtils;
 use typed_store::Map;
@@ -1248,6 +1248,8 @@ pub struct CheckpointAggregator {
     store: Arc<CheckpointStore>,
     epoch_store: Arc<AuthorityPerEpochStore>,
     notify: Arc<Notify>,
+    receiver: mpsc::UnboundedReceiver<CheckpointSignatureMessage>,
+    pending: BTreeMap<CheckpointSequenceNumber, Vec<CheckpointSignatureMessage>>,
     current: Option<CheckpointSignatureAggregator>,
     output: Box<dyn CertifiedCheckpointOutput>,
     state: Arc<AuthorityState>,
@@ -1256,7 +1258,6 @@ pub struct CheckpointAggregator {
 
 // This holds information to aggregate signatures for one checkpoint
 pub struct CheckpointSignatureAggregator {
-    next_index: u64,
     summary: CheckpointSummary,
     digest: CheckpointDigest,
     /// Aggregates voting stake for each signed checkpoint proposal by authority
@@ -2784,16 +2785,18 @@ impl CheckpointAggregator {
         tables: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
+        receiver: mpsc::UnboundedReceiver<CheckpointSignatureMessage>,
         output: Box<dyn CertifiedCheckpointOutput>,
         state: Arc<AuthorityState>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Self {
-        let current = None;
         Self {
             store: tables,
             epoch_store,
             notify,
-            current,
+            receiver,
+            pending: BTreeMap::new(),
+            current: None,
             output,
             state,
             metrics,
@@ -2803,6 +2806,14 @@ impl CheckpointAggregator {
     async fn run(mut self) {
         info!("Starting CheckpointAggregator");
         loop {
+            // Drain all signatures that arrived since the last iteration into the pending buffer
+            while let Ok(sig) = self.receiver.try_recv() {
+                self.pending
+                    .entry(sig.summary.sequence_number)
+                    .or_default()
+                    .push(sig);
+            }
+
             if let Err(e) = self.run_and_notify().await {
                 error!(
                     "Error while aggregating checkpoint, will retry in 1s: {:?}",
@@ -2813,7 +2824,16 @@ impl CheckpointAggregator {
                 continue;
             }
 
-            let _ = timeout(Duration::from_secs(1), self.notify.notified()).await;
+            tokio::select! {
+                Some(sig) = self.receiver.recv() => {
+                    self.pending
+                        .entry(sig.summary.sequence_number)
+                        .or_default()
+                        .push(sig);
+                }
+                _ = self.notify.notified() => {}
+                _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+            }
         }
     }
 
@@ -2830,6 +2850,9 @@ impl CheckpointAggregator {
         let mut result = vec![];
         'outer: loop {
             let next_to_certify = self.next_checkpoint_to_certify()?;
+            // Discard buffered signatures for checkpoints already certified
+            // (e.g. certified via StateSync before local aggregation completed).
+            self.pending.retain(|&seq, _| seq >= next_to_certify);
             let current = if let Some(current) = &mut self.current {
                 // It's possible that the checkpoint was already certified by
                 // the rest of the network and we've already received the
@@ -2850,7 +2873,6 @@ impl CheckpointAggregator {
                     return Ok(result);
                 };
                 self.current = Some(CheckpointSignatureAggregator {
-                    next_index: 0,
                     digest: summary.digest(),
                     summary,
                     signatures_by_digest: MultiStakeAggregator::new(
@@ -2863,28 +2885,18 @@ impl CheckpointAggregator {
                 self.current.as_mut().unwrap()
             };
 
-            let epoch_tables = self
-                .epoch_store
-                .tables()
-                .expect("should not run past end of epoch");
-            let iter = epoch_tables
-                .pending_checkpoint_signatures
-                .safe_iter_with_bounds(
-                    Some((current.summary.sequence_number, current.next_index)),
-                    None,
-                );
-            for item in iter {
-                let ((seq, index), data) = item?;
-                if seq != current.summary.sequence_number {
-                    trace!(
-                        checkpoint_seq =? current.summary.sequence_number,
-                        "Not enough checkpoint signatures",
-                    );
-                    // No more signatures (yet) for this checkpoint
-                    return Ok(result);
-                }
+            let seq = current.summary.sequence_number;
+            let sigs = self.pending.remove(&seq).unwrap_or_default();
+            if sigs.is_empty() {
                 trace!(
-                    checkpoint_seq = current.summary.sequence_number,
+                    checkpoint_seq =? seq,
+                    "Not enough checkpoint signatures",
+                );
+                return Ok(result);
+            }
+            for data in sigs {
+                trace!(
+                    checkpoint_seq = seq,
                     "Processing signature for checkpoint (digest: {:?}) from {:?}",
                     current.summary.digest(),
                     data.summary.auth_sig().authority.concise()
@@ -2898,7 +2910,7 @@ impl CheckpointAggregator {
                     .inc();
                 if let Ok(auth_signature) = current.try_aggregate(data) {
                     debug!(
-                        checkpoint_seq = current.summary.sequence_number,
+                        checkpoint_seq = seq,
                         "Successfully aggregated signatures for checkpoint (digest: {:?})",
                         current.summary.digest(),
                     );
@@ -2910,9 +2922,7 @@ impl CheckpointAggregator {
                     );
 
                     self.store.insert_certified_checkpoint(&summary)?;
-                    self.metrics
-                        .last_certified_checkpoint
-                        .set(current.summary.sequence_number as i64);
+                    self.metrics.last_certified_checkpoint.set(seq as i64);
                     current.summary.report_checkpoint_age(
                         &self.metrics.last_certified_checkpoint_age,
                         &self.metrics.last_certified_checkpoint_age_ms,
@@ -2920,8 +2930,6 @@ impl CheckpointAggregator {
                     result.push(summary.into_inner());
                     self.current = None;
                     continue 'outer;
-                } else {
-                    current.next_index = index + 1;
                 }
             }
             break;
@@ -3268,11 +3276,7 @@ async fn diagnose_split_brain(
 }
 
 pub trait CheckpointServiceNotify {
-    fn notify_checkpoint_signature(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        info: &CheckpointSignatureMessage,
-    ) -> SuiResult;
+    fn notify_checkpoint_signature(&self, info: &CheckpointSignatureMessage) -> SuiResult;
 
     fn notify_checkpoint(&self) -> SuiResult;
 }
@@ -3312,8 +3316,7 @@ impl CheckpointServiceState {
 pub struct CheckpointService {
     tables: Arc<CheckpointStore>,
     notify_builder: Arc<Notify>,
-    notify_aggregator: Arc<Notify>,
-    last_signature_index: Mutex<u64>,
+    signature_sender: mpsc::UnboundedSender<CheckpointSignatureMessage>,
     // A notification for the current highest built sequence number.
     highest_currently_built_seq_tx: watch::Sender<CheckpointSequenceNumber>,
     // The highest sequence number that had already been built at the time CheckpointService
@@ -3325,6 +3328,11 @@ pub struct CheckpointService {
 
 impl CheckpointService {
     /// Constructs a new CheckpointService in an un-started state.
+    // The signature channel is unbounded because notify_checkpoint_signature is called from a
+    // sync context (consensus_validator.rs implements a sync external trait) and cannot block.
+    // The channel is consumed by a single async aggregator task that drains it continuously, so
+    // unbounded growth is not a concern in practice.
+    #[allow(clippy::disallowed_methods)]
     pub fn build(
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
@@ -3358,10 +3366,13 @@ impl CheckpointService {
 
         let (highest_currently_built_seq_tx, _) = watch::channel(highest_currently_built_seq);
 
+        let (signature_sender, signature_receiver) = mpsc::unbounded_channel();
+
         let aggregator = CheckpointAggregator::new(
             checkpoint_store.clone(),
             epoch_store.clone(),
             notify_aggregator.clone(),
+            signature_receiver,
             certified_checkpoint_output,
             state.clone(),
             metrics.clone(),
@@ -3391,16 +3402,10 @@ impl CheckpointService {
             max_checkpoint_size_bytes,
         );
 
-        let last_signature_index = epoch_store
-            .get_last_checkpoint_signature_index()
-            .expect("should not cross end of epoch");
-        let last_signature_index = Mutex::new(last_signature_index);
-
         Arc::new(Self {
             tables: checkpoint_store,
             notify_builder,
-            notify_aggregator,
-            last_signature_index,
+            signature_sender,
             highest_currently_built_seq_tx,
             highest_previously_built_seq,
             metrics,
@@ -3548,11 +3553,7 @@ impl CheckpointService {
 }
 
 impl CheckpointServiceNotify for CheckpointService {
-    fn notify_checkpoint_signature(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        info: &CheckpointSignatureMessage,
-    ) -> SuiResult {
+    fn notify_checkpoint_signature(&self, info: &CheckpointSignatureMessage) -> SuiResult {
         let sequence = info.summary.sequence_number;
         let signer = info.summary.auth_sig().authority.concise();
 
@@ -3581,12 +3582,7 @@ impl CheckpointServiceNotify for CheckpointService {
             .last_received_checkpoint_signatures
             .with_label_values(&[&signer.to_string()])
             .set(sequence as i64);
-        // While it can be tempting to make last_signature_index into AtomicU64, this won't work
-        // We need to make sure we write to `pending_signatures` and trigger `notify_aggregator` without race conditions
-        let mut index = self.last_signature_index.lock();
-        *index += 1;
-        epoch_store.insert_checkpoint_signature(sequence, *index, info)?;
-        self.notify_aggregator.notify_one();
+        self.signature_sender.send(info.clone()).ok();
         Ok(())
     }
 
@@ -3599,11 +3595,7 @@ impl CheckpointServiceNotify for CheckpointService {
 // test helper
 pub struct CheckpointServiceNoop {}
 impl CheckpointServiceNotify for CheckpointServiceNoop {
-    fn notify_checkpoint_signature(
-        &self,
-        _: &AuthorityPerEpochStore,
-        _: &CheckpointSignatureMessage,
-    ) -> SuiResult {
+    fn notify_checkpoint_signature(&self, _: &CheckpointSignatureMessage) -> SuiResult {
         Ok(())
     }
 
@@ -4033,16 +4025,10 @@ mod tests {
         let c2ss = SignedCheckpointSummary::new(c2s.epoch, c2s, state.secret.deref(), state.name);
 
         checkpoint_service
-            .notify_checkpoint_signature(
-                &epoch_store,
-                &CheckpointSignatureMessage { summary: c2ss },
-            )
+            .notify_checkpoint_signature(&CheckpointSignatureMessage { summary: c2ss })
             .unwrap();
         checkpoint_service
-            .notify_checkpoint_signature(
-                &epoch_store,
-                &CheckpointSignatureMessage { summary: c1ss },
-            )
+            .notify_checkpoint_signature(&CheckpointSignatureMessage { summary: c1ss })
             .unwrap();
 
         let c1sc = certified_result.recv().await.unwrap();

@@ -195,8 +195,7 @@ impl SuiTxValidator {
 
         // All checkpoint sigs have been verified, forward them to the checkpoint service
         for ckpt in ckpt_messages {
-            self.checkpoint_service
-                .notify_checkpoint_signature(epoch_store, ckpt)?;
+            self.checkpoint_service.notify_checkpoint_signature(ckpt)?;
         }
 
         self.metrics
