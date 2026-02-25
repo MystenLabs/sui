@@ -1441,6 +1441,13 @@ impl Frame {
                     &self.locals, self.pc, instruction, resolver, interpreter
                 );
 
+                #[cfg(feature = "coverage")]
+                crate::coverage::record_current_location(
+                    self.function.module_id().address(),
+                    self.function.index().0,
+                    self.pc,
+                );
+
                 fail_point!("move_vm::interpreter_loop", |_| {
                     Err(
                         PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(

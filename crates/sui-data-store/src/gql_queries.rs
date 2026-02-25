@@ -342,6 +342,102 @@ pub(crate) mod chain_id_query {
     }
 }
 
+pub(crate) mod owned_objects_query {
+    use super::*;
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "SuiAddress")]
+    pub(crate) struct SuiAddress(pub String);
+
+    #[derive(cynic::QueryVariables, Debug)]
+    pub(crate) struct OwnedObjectsVars {
+        pub address: SuiAddress,
+        pub after: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(graphql_type = "Query", variables = "OwnedObjectsVars")]
+    pub(crate) struct OwnedObjectsQuery {
+        #[arguments(address: $address)]
+        pub address: Option<AddressForOwnedObjects>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(graphql_type = "Address", variables = "OwnedObjectsVars")]
+    pub(crate) struct AddressForOwnedObjects {
+        #[arguments(after: $after)]
+        pub objects: Option<MoveObjectConnectionForOwned>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(graphql_type = "MoveObjectConnection")]
+    pub(crate) struct MoveObjectConnectionForOwned {
+        pub page_info: PageInfoForOwned,
+        pub nodes: Vec<MoveObjectNodeForOwned>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(graphql_type = "PageInfo")]
+    pub(crate) struct PageInfoForOwned {
+        pub has_next_page: bool,
+        pub end_cursor: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(graphql_type = "MoveObject")]
+    pub(crate) struct MoveObjectNodeForOwned {
+        pub address: SuiAddress,
+    }
+
+    pub(crate) async fn query(
+        owner: &str,
+        data_store: &DataStore,
+    ) -> Result<Vec<sui_types::base_types::ObjectID>, Error> {
+        use sui_types::base_types::ObjectID;
+
+        let mut ids = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        loop {
+            let vars = OwnedObjectsVars {
+                address: SuiAddress(owner.to_string()),
+                after: cursor,
+            };
+            let operation = OwnedObjectsQuery::build(vars);
+            let response = data_store.run_query(&operation).await?;
+
+            if let Some(errs) = &response.errors {
+                if !errs.is_empty() {
+                    return Err(anyhow!("GraphQL errors: {:?}", errs));
+                }
+            }
+
+            let addr_obj = match response.data.and_then(|d| d.address) {
+                Some(a) => a,
+                None => break,
+            };
+
+            let Some(conn) = addr_obj.objects else {
+                break;
+            };
+            for node in conn.nodes {
+                let id_str = node.address.0;
+                if let Ok(id) = id_str.parse::<ObjectID>() {
+                    ids.push(id);
+                }
+            }
+
+            if conn.page_info.has_next_page {
+                cursor = conn.page_info.end_cursor;
+            } else {
+                break;
+            }
+        }
+
+        Ok(ids)
+    }
+}
+
 /// Query for the latest checkpoint sequence number that GraphQL has indexed.
 /// Using the GraphQL endpoint (rather than JSON-RPC) avoids the "checkpoint in
 /// the future" error that occurs when the indexer lags behind the full-node.

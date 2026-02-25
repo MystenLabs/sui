@@ -36,6 +36,7 @@ move-compiler.workspace = true
 
 [features]
 default = []
+coverage = []
 fuzzing = ["move-vm-types/fuzzing"]
 failpoints = ["fail/failpoints"]
 testing = []

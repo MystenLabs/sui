@@ -10,6 +10,7 @@
 //! other blockchains can use it as well. The VM isn't there yet, but hopefully will be there
 //! soon.
 
+pub mod coverage;
 pub mod data_cache;
 mod interpreter;
 mod loader;

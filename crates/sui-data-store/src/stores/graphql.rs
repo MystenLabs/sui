@@ -27,7 +27,7 @@ use sui_types::{
     supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::TransactionData,
 };
-use tracing::{debug, debug_span};
+use tracing::{Instrument, debug, debug_span};
 
 type EpochId = u64;
 
@@ -343,6 +343,27 @@ impl DataStore {
     /// checkpoint will never produce a "checkpoint in the future" error.
     pub async fn latest_indexed_checkpoint(&self) -> Result<u64, Error> {
         gql_queries::latest_checkpoint_query::query(self).await
+    }
+
+    /// Return the IDs of all objects currently owned by `address`.
+    /// Paginates through all pages automatically.
+    pub async fn get_owned_object_ids(
+        &self,
+        address: &str,
+    ) -> Result<Vec<sui_types::base_types::ObjectID>, Error> {
+        let span = debug_span!("gql_owned_objects_query", address = %address);
+        let t0 = Instant::now();
+        let data = gql_queries::owned_objects_query::query(address, self)
+            .instrument(span)
+            .await;
+        let elapsed = t0.elapsed().as_millis();
+        debug!(
+            op = "owned_objects_query",
+            phase = "end",
+            elapsed_ms = elapsed,
+            "owned objects query"
+        );
+        data
     }
 
     async fn objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
