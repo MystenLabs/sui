@@ -245,7 +245,7 @@ impl CheckpointStoreTables {
         let watermarks_config = KeySpaceConfig::new()
             .with_value_cache_size(10)
             .disable_unload();
-        let lru_config = KeySpaceConfig::new().with_value_cache_size(default_value_cache_size());
+        let lru_config = KeySpaceConfig::new().with_value_cache_size(200);
         let configs = vec![
             (
                 "checkpoint_content",
