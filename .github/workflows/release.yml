@@ -42,6 +42,11 @@ jobs:
   release-build:
     name: Build & Publish Binaries
     timeout-minutes: 240
+    env:
+      SCCACHE_BUCKET: sui-releases
+      SCCACHE_REGION: us-east-1
+      SCCACHE_S3_KEY_PREFIX: sccache/${{ matrix.os }}
+      RUSTC_WRAPPER: sccache
     strategy:
       matrix:
         os:
@@ -161,10 +166,6 @@ jobs:
       - name: Setup sccache
         if: ${{ env.s3_existing_archive == '' }}
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
-        env:
-          SCCACHE_BUCKET: sui-releases
-          SCCACHE_REGION: us-west-2
-          SCCACHE_S3_KEY_PREFIX: sccache/${{ matrix.os }}
 
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_existing_archive == '' }}
