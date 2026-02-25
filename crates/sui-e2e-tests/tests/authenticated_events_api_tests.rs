@@ -749,7 +749,7 @@ async fn list_authenticated_events_end_to_end() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
         .with_rpc_config(rpc_config)
-        .with_epoch_duration_ms(5000)
+        .with_epoch_duration_ms(10000)
         .build()
         .await;
 
