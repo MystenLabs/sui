@@ -14347,6 +14347,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-concurrency-limits"
+version = "1.67.0"
+dependencies = [
+ "futures",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml 0.7.4",
+]
+
+[[package]]
 name = "sui-config"
 version = "0.0.0"
 dependencies = [

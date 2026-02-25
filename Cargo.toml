@@ -107,6 +107,7 @@ members = [
   "crates/sui-bridge-schema",
   "crates/sui-checkpoint-blob-indexer",
   "crates/sui-cluster-test",
+  "crates/sui-concurrency-limits",
   "crates/sui-config",
   "crates/sui-core",
   "crates/sui-cost",
