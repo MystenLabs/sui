@@ -352,6 +352,7 @@ mod tests {
     use crate::metrics::IndexerMetrics;
     use crate::mocks::store::MockConnection;
     use crate::mocks::store::MockStore;
+    use crate::mocks::store::MockWatermark;
     use crate::pipeline::Processor;
     use crate::types::full_checkpoint_content::Checkpoint;
     use crate::types::test_checkpoint_data_builder::TestCheckpointBuilder;
@@ -510,7 +511,16 @@ mod tests {
             }),
             ..Default::default()
         };
-        let store = MockStore::default();
+        // Pre-configure the watermark with pruner_hi = 0 to get deterministic pruning behavior.
+        // Without this, pruner_hi is initialized to the first committed checkpoint_hi_inclusive,
+        // which depends on timing and could skip pruning early checkpoints.
+        let store = MockStore::default().with_watermark(
+            DataPipeline::NAME,
+            MockWatermark {
+                pruner_hi: 0,
+                ..Default::default()
+            },
+        );
         let setup = TestSetup::new(config, store, 0).await;
 
         // Send initial checkpoints
@@ -873,8 +883,17 @@ mod tests {
             ..Default::default()
         };
 
-        // Configure prune failures for range [0, 2) - fail twice then succeed
-        let store = MockStore::default().with_prune_failures(0, 2, 1);
+        // Pre-configure the watermark with pruner_hi = 0 for deterministic pruning behavior.
+        // Configure prune failures for range [0, 2) - fail once then succeed
+        let store = MockStore::default()
+            .with_watermark(
+                DataPipeline::NAME,
+                MockWatermark {
+                    pruner_hi: 0,
+                    ..Default::default()
+                },
+            )
+            .with_prune_failures(0, 2, 1);
         let setup = TestSetup::new(config, store, 0).await;
 
         // Send enough checkpoints to trigger pruning

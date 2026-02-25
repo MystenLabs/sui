@@ -424,6 +424,15 @@ mod tests {
         // Verify watermark progression
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 3);
+
+        // pruner_hi must be initialized to checkpoint_hi_inclusive of the first write
+        // instead of 0. Otherwise, starting an indexer with --first-checkpoint > 0 causes the
+        // pruner to attempt to prune the checkpoints less than checkpoint_hi_inclusive that were
+        // never indexed.
+        assert_eq!(watermark.pruner_hi, 3);
+
+        // reader_lo cannot be below pruner_hi so it must be initialized to at least the same value.
+        assert_eq!(watermark.reader_lo, 3);
     }
 
     #[tokio::test]

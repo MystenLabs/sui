@@ -153,7 +153,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
                     Ok(None) => {
                         guard.stop_and_record();
-                        warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
+                        info!(pipeline = H::NAME, "No watermark for pipeline, skipping");
                         continue;
                     }
 
