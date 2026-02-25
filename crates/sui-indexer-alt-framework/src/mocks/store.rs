@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
@@ -86,40 +85,6 @@ pub struct MockConnection<'c>(pub &'c MockStore);
 
 #[async_trait]
 impl Connection for MockConnection<'_> {
-    async fn init_watermark(
-        &mut self,
-        pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
-        let Some(checkpoint_hi_inclusive) = default_next_checkpoint.checked_sub(1) else {
-            // Do not create a watermark record with checkpoint_hi_inclusive = -1.
-            return Ok(self
-                .committer_watermark(pipeline_task)
-                .await?
-                .map(|w| w.checkpoint_hi_inclusive));
-        };
-
-        let &MockWatermark {
-            checkpoint_hi_inclusive,
-            ..
-        } = self
-            .0
-            .watermarks
-            .entry(pipeline_task.to_string())
-            .or_insert(MockWatermark {
-                epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive,
-                tx_hi: 0,
-                timestamp_ms_hi_inclusive: 0,
-                reader_lo: default_next_checkpoint,
-                pruner_timestamp: 0,
-                pruner_hi: default_next_checkpoint,
-            })
-            .deref();
-
-        Ok(Some(checkpoint_hi_inclusive))
-    }
-
     async fn committer_watermark(
         &mut self,
         pipeline_task: &str,
@@ -182,11 +147,17 @@ impl Connection for MockConnection<'_> {
             self.0.commit_watermark_failures.failures - prev
         );
 
+        let checkpoint_hi = watermark.checkpoint_hi_inclusive;
         let mut wm = self
             .0
             .watermarks
             .entry(pipeline_task.to_string())
-            .or_default();
+            .or_insert_with(|| MockWatermark {
+                // Match PG behavior: initialize pruner_hi to checkpoint_hi_inclusive so the
+                // pruner does not attempt to prune checkpoints before the first committed data.
+                pruner_hi: checkpoint_hi,
+                ..Default::default()
+            });
 
         wm.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
         wm.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;

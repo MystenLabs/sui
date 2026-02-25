@@ -625,34 +625,6 @@ impl TransactionalStore for AnalyticsStore {
 
 #[async_trait]
 impl Connection for AnalyticsConnection<'_> {
-    /// Initialize watermark.
-    ///
-    /// In live mode: Watermarks are derived from file names, so just delegates to `committer_watermark`.
-    /// In migration mode: If no watermark exists and `default_next_checkpoint > 0`, initializes
-    /// the watermark to `default_next_checkpoint - 1` so migration starts from the configured
-    /// `first_checkpoint`.
-    async fn init_watermark(
-        &mut self,
-        pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
-        match &self.store.mode {
-            StoreMode::Live(_) => {
-                // Live mode: derive from file names
-                Ok(self
-                    .committer_watermark(pipeline_task)
-                    .await?
-                    .map(|w| w.checkpoint_hi_inclusive))
-            }
-            StoreMode::Migration(store) => {
-                let output_prefix = self.pipeline_config(pipeline_task).output_prefix();
-                store
-                    .init_watermark(output_prefix, default_next_checkpoint)
-                    .await
-            }
-        }
-    }
-
     /// Determine the watermark.
     ///
     /// In live mode: scans file names in the object store.

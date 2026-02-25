@@ -153,6 +153,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
                     Ok(None) => {
                         guard.stop_and_record();
+                        // This is expected before the initial checkpoint is indexed.
                         warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
                         continue;
                     }
