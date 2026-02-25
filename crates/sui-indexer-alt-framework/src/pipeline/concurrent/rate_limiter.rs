@@ -49,6 +49,12 @@ impl CompositeRateLimiter {
         Self { limiters }
     }
 
+    pub(crate) fn noop() -> Self {
+        Self {
+            limiters: Vec::new(),
+        }
+    }
+
     /// Acquire `count` tokens from every underlying limiter concurrently.
     pub(crate) async fn acquire(&self, count: usize) {
         futures::future::join_all(self.limiters.iter().map(|l| l.acquire(count))).await;

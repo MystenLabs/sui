@@ -347,7 +347,7 @@ mod tests {
         let committer = committer(
             handler,
             config,
-            None,
+            Arc::new(CompositeRateLimiter::noop()),
             batch_rx,
             watermark_tx,
             store_clone,
