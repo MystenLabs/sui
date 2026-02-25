@@ -387,6 +387,25 @@ impl ConcurrencyLimit {
             Self::Gradient(config) => Limiter::gradient(config.clone()),
         }
     }
+
+    /// Build a [`Limiter`] from this configuration, registering `on_limit_change` as a callback
+    /// invoked whenever the adaptive algorithm adjusts the limit. For fixed limiters, the callback
+    /// is never invoked (the limit is constant), but the caller can read the initial limit via
+    /// [`Limiter::current`].
+    pub fn build_with_on_limit_change(
+        &self,
+        on_limit_change: impl Fn(usize) + Send + Sync + 'static,
+    ) -> Limiter {
+        match self {
+            Self::Fixed { limit } => Limiter::fixed(*limit),
+            Self::Aimd(config) => Limiter::builder_aimd(config.clone())
+                .on_limit_change(on_limit_change)
+                .build(),
+            Self::Gradient(config) => Limiter::builder_gradient(config.clone())
+                .on_limit_change(on_limit_change)
+                .build(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

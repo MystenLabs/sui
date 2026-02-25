@@ -14,6 +14,7 @@ name = "sui-checkpoint-blob-indexer"
 path = "src/main.rs"
 
 [dependencies]
+sui-concurrency-limits.workspace = true
 sui-config.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true

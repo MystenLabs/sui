@@ -10,9 +10,11 @@ use anyhow::Context;
 use anyhow::anyhow;
 use futures::Stream;
 use futures::future::try_join_all;
+use sui_concurrency_limits::Limiter;
+use sui_concurrency_limits::stream::ConcurrencyLimitedStreamExt;
+use sui_concurrency_limits::stream::Error as ClError;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
-use sui_futures::stream::TrySpawnStreamExt;
 use sui_futures::task::TaskGuard;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
@@ -82,6 +84,14 @@ where
 
         let subscribers = Arc::new(subscribers);
 
+        let limiter = {
+            let m = metrics.clone();
+            config
+                .ingest_concurrency
+                .build_with_on_limit_change(move |l| m.ingestion_concurrency_limit.set(l as i64))
+        };
+        metrics.ingestion_concurrency_limit.set(limiter.current() as i64);
+
         // Track subscriber watermarks
         let mut subscribers_hi = HashMap::<&'static str, u64>::new();
 
@@ -123,7 +133,7 @@ where
                 checkpoint_hi,
                 ingestion_end,
                 config.retry_interval(),
-                config.ingest_concurrency,
+                limiter.clone(),
                 ingest_hi_rx.cloned(),
                 client.clone(),
                 subscribers.clone(),
@@ -216,7 +226,7 @@ fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
     retry_interval: Duration,
-    ingest_concurrency: usize,
+    limiter: Limiter,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     client: IngestionClient,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
@@ -225,7 +235,7 @@ fn ingest_and_broadcast_range(
         // Backpressure is enforced at the stream level: checkpoints are only yielded when
         // ingest_hi allows, preventing spawned tasks from piling up while blocked.
         backpressured_checkpoint_stream(start, end, ingest_hi_rx)
-            .try_for_each_spawned(ingest_concurrency, |cp| {
+            .try_for_each_spawned(limiter, |cp| {
                 let client = client.clone();
                 let subscribers = subscribers.clone();
 
@@ -240,11 +250,15 @@ fn ingest_and_broadcast_range(
                     } else {
                         // An error is returned meaning some subscriber channel has closed, which
                         // we consider a shutdown signal for ingestion.
-                        Err(Break::Break)
+                        Err(ClError::Break)
                     }
                 }
             })
             .await
+            .map_err(|e| match e {
+                ClError::Break => Break::Break,
+                ClError::Err(e) | ClError::Dropped(e) => Break::Err(e),
+            })
     }))
 }
 
@@ -436,6 +450,8 @@ mod tests {
     use tokio::time::error::Elapsed;
     use tokio::time::timeout;
 
+    use sui_concurrency_limits::ConcurrencyLimit;
+
     use super::*;
     use crate::ingestion::IngestionConfig;
     use crate::ingestion::ingestion_client::FetchData;
@@ -467,7 +483,7 @@ mod tests {
     fn test_config() -> IngestionConfig {
         IngestionConfig {
             checkpoint_buffer_size: 5,
-            ingest_concurrency: 2,
+            ingest_concurrency: ConcurrencyLimit::Fixed { limit: 2 },
             retry_interval_ms: 100,
             streaming_backoff_initial_batch_size: 2,
             streaming_backoff_max_batch_size: 16,

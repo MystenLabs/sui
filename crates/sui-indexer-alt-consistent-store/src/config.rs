@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_concurrency_limits::ConcurrencyLimit;
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::{self as framework};
@@ -38,7 +39,7 @@ pub struct ServiceConfig {
 #[serde(deny_unknown_fields)]
 pub struct IngestionConfig {
     pub checkpoint_buffer_size: usize,
-    pub ingest_concurrency: usize,
+    pub ingest_concurrency: ConcurrencyLimit,
     pub retry_interval_ms: u64,
     pub streaming_backoff_initial_batch_size: usize,
     pub streaming_backoff_max_batch_size: usize,
@@ -105,7 +106,7 @@ impl ServiceConfig {
         let mut for_test = Self::example();
 
         for_test.ingestion.retry_interval_ms = 10;
-        for_test.ingestion.ingest_concurrency = 1;
+        for_test.ingestion.ingest_concurrency = ConcurrencyLimit::Fixed { limit: 1 };
 
         for_test.committer.collect_interval_ms = Some(50);
         for_test.committer.watermark_interval_ms = Some(50);

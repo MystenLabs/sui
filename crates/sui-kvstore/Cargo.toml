@@ -24,6 +24,7 @@ prost-types.workspace = true
 rustls.workspace = true
 serde.workspace = true
 toml.workspace = true
+sui-concurrency-limits.workspace = true
 sui-default-config.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true

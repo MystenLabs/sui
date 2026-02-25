@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_concurrency_limits::ConcurrencyLimit;
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
@@ -105,7 +106,7 @@ pub struct PipelineLayer {
 #[serde(deny_unknown_fields)]
 pub struct IngestionConfig {
     pub checkpoint_buffer_size: usize,
-    pub ingest_concurrency: usize,
+    pub ingest_concurrency: ConcurrencyLimit,
     pub retry_interval_ms: u64,
     pub streaming_backoff_initial_batch_size: usize,
     pub streaming_backoff_max_batch_size: usize,

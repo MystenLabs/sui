@@ -12,6 +12,7 @@ use std::time::Duration;
 use prometheus::Registry;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_concurrency_limits::ConcurrencyLimit;
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
 
@@ -54,7 +55,7 @@ pub struct IngestionConfig {
     pub checkpoint_buffer_size: usize,
 
     /// Maximum number of checkpoints to attempt to fetch concurrently.
-    pub ingest_concurrency: usize,
+    pub ingest_concurrency: ConcurrencyLimit,
 
     /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
     pub retry_interval_ms: u64,
@@ -220,7 +221,7 @@ impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
             checkpoint_buffer_size: 50,
-            ingest_concurrency: 50,
+            ingest_concurrency: ConcurrencyLimit::Fixed { limit: 50 },
             retry_interval_ms: 200,
             streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
@@ -262,7 +263,9 @@ mod tests {
             },
             IngestionConfig {
                 checkpoint_buffer_size,
-                ingest_concurrency,
+                ingest_concurrency: ConcurrencyLimit::Fixed {
+                    limit: ingest_concurrency,
+                },
                 ..Default::default()
             },
             None,
