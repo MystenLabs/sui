@@ -53,7 +53,8 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                 Ok(Some(current)) => current,
 
                 Ok(None) => {
-                    warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
+                    // This is expected before the initial checkpoint is indexed.
+                    info!(pipeline = H::NAME, "No watermark for pipeline, skipping");
                     continue;
                 }
 

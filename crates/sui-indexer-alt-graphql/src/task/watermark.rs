@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::anyhow;
-use anyhow::bail;
 use anyhow::ensure;
 use chrono::DateTime;
 use chrono::Utc;
@@ -27,6 +26,8 @@ use sui_sql_macro::query;
 use tokio::sync::RwLock;
 use tokio::time;
 use tracing::debug;
+use tracing::info;
+use tracing::log;
 use tracing::warn;
 
 use crate::config::WatermarkConfig;
@@ -473,10 +474,10 @@ async fn watermarks_from_pg(
         remaining_pipelines.remove(&row.pipeline);
     }
 
-    ensure!(
-        remaining_pipelines.is_empty(),
-        "Missing watermarks for {remaining_pipelines:?}",
-    );
+    if !remaining_pipelines.is_empty() {
+        // This is expected before the initial checkpoint is indexed.
+        log::info!("Missing watermarks for {remaining_pipelines:?}")
+    }
 
     Ok(rows)
 }
@@ -504,7 +505,11 @@ async fn watermark_from_consistent(
             tx_lo: 0,
         })),
 
-        Ok(_) => bail!("Missing data in consistent watermark"),
+        Ok(resp) => {
+            // This is expected before the initial checkpoint is indexed.
+            info!("Missing data in consistent watermark: {resp:?}");
+            Ok(None)
+        }
         Err(consistent_reader::Error::NotConfigured) => Ok(None),
         Err(e) => Err(anyhow!(e).context("Failed to get consistent store watermarks")),
     }
