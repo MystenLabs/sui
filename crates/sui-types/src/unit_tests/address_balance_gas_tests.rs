@@ -38,6 +38,36 @@ fn create_test_transaction_data(
     }
 }
 
+fn create_address_balance_tx(
+    price: u64,
+    budget: u64,
+    owner: Option<SuiAddress>,
+) -> TransactionDataV1 {
+    let sender = SuiAddress::random_for_testing_only();
+    let gas_owner = owner.unwrap_or(sender);
+    let builder = ProgrammableTransactionBuilder::new();
+    let pt = builder.finish();
+
+    TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: gas_owner,
+            price,
+            budget,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: ChainIdentifier::from(CheckpointDigest::default()),
+            nonce: 123,
+        },
+    }
+}
+
 #[test]
 fn test_address_balance_payment_requires_accumulators_enabled() {
     let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -466,4 +496,117 @@ fn test_regular_gas_payment_with_epoch_expiration() {
         result.is_ok(),
         "Regular gas payment with Epoch expiration should be allowed"
     );
+}
+
+#[test]
+fn test_address_balance_budget_zero_rejected() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+    let tx_data = create_address_balance_tx(1000, 0, None);
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(result.is_err());
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::GasBudgetTooLow { gas_budget: 0, .. },
+        } => {}
+        e => panic!("Expected GasBudgetTooLow, got: {:?}", e),
+    }
+}
+
+#[test]
+fn test_address_balance_gas_price_zero_rejected() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+    let tx_data = create_address_balance_tx(0, 1_000_000, None);
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(result.is_err());
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error:
+                UserInputError::GasPriceUnderRGP {
+                    gas_price: 0,
+                    reference_gas_price: 1000,
+                },
+        } => {}
+        e => panic!("Expected GasPriceUnderRGP, got: {:?}", e),
+    }
+}
+
+#[test]
+fn test_address_balance_gas_price_below_rgp_rejected() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+    let tx_data = create_address_balance_tx(1, 1_000_000, None);
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(result.is_err());
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error:
+                UserInputError::GasPriceUnderRGP {
+                    gas_price: 1,
+                    reference_gas_price: 1000,
+                },
+        } => {}
+        e => panic!("Expected GasPriceUnderRGP, got: {:?}", e),
+    }
+}
+
+#[test]
+fn test_address_balance_sponsored_budget_zero_rejected() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+    let sponsor = SuiAddress::random_for_testing_only();
+    let tx_data = create_address_balance_tx(1000, 0, Some(sponsor));
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(result.is_err());
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::GasBudgetTooLow { gas_budget: 0, .. },
+        } => {}
+        e => panic!("Expected GasBudgetTooLow, got: {:?}", e),
+    }
+}
+
+#[test]
+fn test_address_balance_max_epoch_edge_case() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+    let sender = SuiAddress::random_for_testing_only();
+    let builder = ProgrammableTransactionBuilder::new();
+    let pt = builder.finish();
+
+    let tx_data = TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: 1000,
+            budget: 1_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(u64::MAX),
+            max_epoch: Some(u64::MAX),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: ChainIdentifier::from(CheckpointDigest::default()),
+            nonce: 123,
+        },
+    };
+
+    let context_at_max = TxValidityCheckContext {
+        config: &config,
+        epoch: u64::MAX,
+        chain_identifier: ChainIdentifier::default(),
+        reference_gas_price: 1000,
+    };
+    let result = tx_data.validity_check(&context_at_max);
+    assert!(result.is_ok(), "Should not panic with u64::MAX epoch");
+
+    let context_at_zero = TxValidityCheckContext::from_cfg_for_testing(&config);
+    let result = tx_data.validity_check(&context_at_zero);
+    assert!(result.is_err());
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::TransactionExpired => {}
+        e => panic!("Expected TransactionExpired, got: {:?}", e),
+    }
 }
