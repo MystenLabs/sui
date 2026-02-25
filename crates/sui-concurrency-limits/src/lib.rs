@@ -14,9 +14,11 @@
 //!   from the ratio of long-term to short-term RTT and scales the limit proportionally. Effective
 //!   when the backing store degrades gradually under load (e.g. Bigtable write latency increasing).
 //!
-//! - **BBR** (`Bbr`, adapted from TCP BBR v1): bandwidth-delay product based. Tracks maximum
-//!   delivery rate and minimum RTT in sliding windows, then sets `limit = BtlBw * min_rtt`.
-//!   Converges correctly regardless of whether latency changes are gradual or sudden.
+//! - **BDP** (`Bdp`): throughput-based. Measures bandwidth-delay product as
+//!   `max(delivery_rate) × min(rtt)` and sets `limit = ceil(BDP × gain)`. Unlike latency-based
+//!   algorithms that can't distinguish a saturated 1-node cluster from an idle 5-node cluster
+//!   returning identical latency, BDP detects saturation by observing whether more concurrency
+//!   produces more throughput.
 //!
 //! # Differences from Netflix's reference implementation
 //!
@@ -34,6 +36,7 @@
 
 pub mod stream;
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -81,17 +84,24 @@ enum Algorithm {
     Fixed { limit: usize },
     Aimd(Aimd),
     Gradient(Gradient),
-    Bbr(Bbr),
+    Bdp(Bdp),
 }
 
 impl Algorithm {
     /// Returns the new limit value. Caller writes to the shared gauge.
-    fn update(&self, inflight: usize, outcome: Outcome, rtt: Duration, now: Instant) -> usize {
+    fn update(
+        &self,
+        inflight: usize,
+        delivered: usize,
+        outcome: Outcome,
+        rtt: Duration,
+        now: Instant,
+    ) -> usize {
         match self {
             Self::Fixed { limit } => *limit,
             Self::Aimd(a) => a.update(inflight, outcome, rtt),
             Self::Gradient(g) => g.update(inflight, outcome, rtt),
-            Self::Bbr(b) => b.update(inflight, outcome, rtt, now),
+            Self::Bdp(b) => b.update(delivered, outcome, rtt, now),
         }
     }
 }
@@ -105,6 +115,9 @@ struct LimiterInner {
     algorithm: Algorithm,
     gauge: AtomicUsize,
     inflight: AtomicUsize,
+    /// Cumulative count of completed requests (incremented in record_sample).
+    /// Used to compute per-token delivery counts for BDP throughput measurement.
+    total_completed: AtomicUsize,
     peak_inflight: AtomicUsize,
     peak_limit: AtomicUsize,
     clock: Option<Arc<dyn Fn() -> Instant + Send + Sync>>,
@@ -148,6 +161,7 @@ impl LimiterBuilder {
             algorithm: self.algorithm,
             gauge: AtomicUsize::new(self.initial_limit),
             inflight: AtomicUsize::new(0),
+            total_completed: AtomicUsize::new(0),
             peak_inflight: AtomicUsize::new(0),
             peak_limit: AtomicUsize::new(self.initial_limit),
             clock: self.clock,
@@ -244,17 +258,22 @@ impl Limiter {
         }
     }
 
-    pub fn bbr(config: BbrConfig) -> Self {
-        Self::builder_bbr(config).build()
+    pub fn bdp(config: BdpConfig) -> Self {
+        Self::builder_bdp(config).build()
     }
 
-    /// Return a [`LimiterBuilder`] pre-configured with a BBR algorithm.
-    pub fn builder_bbr(config: BbrConfig) -> LimiterBuilder {
+    /// Return a [`LimiterBuilder`] pre-configured with a BDP algorithm.
+    pub fn builder_bdp(config: BdpConfig) -> LimiterBuilder {
+        assert!(config.gain > 0.0, "gain must be positive");
+        assert!(
+            config.backoff_ratio > 0.0 && config.backoff_ratio <= 1.0,
+            "backoff_ratio must be in (0.0, 1.0]"
+        );
         let initial = config
             .initial_limit
             .clamp(config.min_limit, config.max_limit);
         LimiterBuilder {
-            algorithm: Algorithm::Bbr(Bbr::new(&config)),
+            algorithm: Algorithm::Bdp(Bdp::new(&config)),
             initial_limit: initial,
             clock: None,
             on_limit_change: None,
@@ -269,6 +288,7 @@ impl Limiter {
     pub fn acquire(&self) -> Token {
         let inflight = self.0.inflight.fetch_add(1, Ordering::Relaxed) + 1;
         self.0.peak_inflight.fetch_max(inflight, Ordering::Relaxed);
+        let completed_at_acquire = self.0.total_completed.load(Ordering::Relaxed);
         let start = match &self.0.clock {
             Some(f) => f(),
             None => Instant::now(),
@@ -276,6 +296,7 @@ impl Limiter {
         Token {
             inner: Some(self.0.clone()),
             inflight,
+            completed_at_acquire,
             start,
         }
     }
@@ -314,6 +335,8 @@ pub struct Token {
     inner: Option<Arc<LimiterInner>>,
     /// Inflight count captured at acquire time (includes this token).
     inflight: usize,
+    /// Snapshot of `total_completed` at acquire time for delivery count calculation.
+    completed_at_acquire: usize,
     /// Timestamp captured at acquire time for automatic RTT measurement.
     start: Instant,
 }
@@ -324,6 +347,8 @@ impl Token {
     /// Returns the current concurrency limit.
     pub fn record_sample(mut self, outcome: Outcome) -> usize {
         let inner = self.inner.take().expect("record_sample called twice");
+        // Always count this completion for BDP delivery rate tracking.
+        let completed_now = inner.total_completed.fetch_add(1, Ordering::Relaxed) + 1;
         if matches!(outcome, Outcome::Ignore) {
             inner.inflight.fetch_sub(1, Ordering::Relaxed);
             return inner.gauge.load(Ordering::Acquire);
@@ -334,8 +359,11 @@ impl Token {
             None => Instant::now(),
         };
         let rtt = now.saturating_duration_since(self.start);
+        let delivered = completed_now - self.completed_at_acquire;
         inner.inflight.fetch_sub(1, Ordering::Relaxed);
-        let result = inner.algorithm.update(self.inflight, outcome, rtt, now);
+        let result = inner
+            .algorithm
+            .update(self.inflight, delivered, outcome, rtt, now);
         inner.gauge.store(result, Ordering::Release);
         inner.peak_limit.fetch_max(result, Ordering::Relaxed);
         if result != prev
@@ -362,7 +390,7 @@ impl Drop for Token {
 /// Serializable concurrency limit configuration.
 ///
 /// Selects the algorithm used to manage concurrent writers or ingest workers.
-/// `Fixed` uses a static limit (the default); `Aimd`, `Gradient`, and `Bbr`
+/// `Fixed` uses a static limit (the default); `Aimd`, `Gradient`, and `Bdp`
 /// adjust the limit dynamically based on commit outcomes or latency.
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -370,7 +398,7 @@ pub enum ConcurrencyLimit {
     Fixed { limit: usize },
     Aimd(AimdConfig),
     Gradient(GradientConfig),
-    Bbr(BbrConfig),
+    Bdp(BdpConfig),
 }
 
 impl<'de> Deserialize<'de> for ConcurrencyLimit {
@@ -384,7 +412,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Fixed { limit: usize },
             Aimd(AimdConfig),
             Gradient(GradientConfig),
-            Bbr(BbrConfig),
+            Bdp(BdpConfig),
         }
 
         #[derive(Deserialize)]
@@ -399,7 +427,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Helper::Tagged(Tagged::Fixed { limit }) => Ok(ConcurrencyLimit::Fixed { limit }),
             Helper::Tagged(Tagged::Aimd(c)) => Ok(ConcurrencyLimit::Aimd(c)),
             Helper::Tagged(Tagged::Gradient(c)) => Ok(ConcurrencyLimit::Gradient(c)),
-            Helper::Tagged(Tagged::Bbr(c)) => Ok(ConcurrencyLimit::Bbr(c)),
+            Helper::Tagged(Tagged::Bdp(c)) => Ok(ConcurrencyLimit::Bdp(c)),
         }
     }
 }
@@ -411,7 +439,7 @@ impl ConcurrencyLimit {
             Self::Fixed { limit } => Limiter::fixed(*limit),
             Self::Aimd(config) => Limiter::aimd(config.clone()),
             Self::Gradient(config) => Limiter::gradient(config.clone()),
-            Self::Bbr(config) => Limiter::bbr(config.clone()),
+            Self::Bdp(config) => Limiter::bdp(config.clone()),
         }
     }
 
@@ -431,7 +459,7 @@ impl ConcurrencyLimit {
             Self::Gradient(config) => Limiter::builder_gradient(config.clone())
                 .on_limit_change(on_limit_change)
                 .build(),
-            Self::Bbr(config) => Limiter::builder_bbr(config.clone())
+            Self::Bdp(config) => Limiter::builder_bdp(config.clone())
                 .on_limit_change(on_limit_change)
                 .build(),
         }
@@ -712,314 +740,139 @@ impl Gradient {
 }
 
 // ---------------------------------------------------------------------------
-// BBR algorithm — Bottleneck Bandwidth and RTT concurrency limiter
+// BDP algorithm — Bandwidth-Delay Product concurrency limiter
 // ---------------------------------------------------------------------------
 
-/// Configuration for the BBR concurrency limit algorithm.
+/// Configuration for the BDP (Bandwidth-Delay Product) concurrency limit algorithm.
 ///
-/// Adapted from TCP BBR v1, models the pipe's capacity by tracking maximum
-/// delivery rate (BtlBw) and minimum RTT in sliding windows, then sets
-/// `limit = BtlBw * min_rtt` (the bandwidth-delay product).
+/// Measures system throughput by tracking `max(delivery_rate)` and `min(rtt)` in
+/// sliding time windows, then sets `limit = ceil(max_rate * min_rtt * gain)`.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default, rename_all = "kebab-case")]
-pub struct BbrConfig {
+pub struct BdpConfig {
     /// Starting concurrency limit.
     pub initial_limit: usize,
     /// Floor: the limit will never go below this value.
     pub min_limit: usize,
     /// Ceiling: the limit will never exceed this value.
     pub max_limit: usize,
+    /// Sliding window duration (ms) for min-RTT tracking.
+    pub rtt_window_ms: u64,
+    /// Sliding window duration (ms) for max delivery-rate tracking.
+    pub throughput_window_ms: u64,
+    /// Multiplier applied to BDP when computing the limit.
+    pub gain: f64,
+    /// Multiplicative factor applied on `Outcome::Dropped` (e.g. 0.9 = 10% cut).
+    pub backoff_ratio: f64,
 }
 
-impl Default for BbrConfig {
+impl Default for BdpConfig {
     fn default() -> Self {
         Self {
             initial_limit: 4,
             min_limit: 4,
             max_limit: 1000,
+            rtt_window_ms: 5000,
+            throughput_window_ms: 5000,
+            gain: 1.25,
+            backoff_ratio: 0.9,
         }
     }
 }
 
-// BBR constants (matching TCP BBR v1).
-const BBR_HIGH_GAIN: f64 = 2.0 / std::f64::consts::LN_2; // ~2.885
-const BBR_PACING_GAINS: [f64; 8] = [1.25, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
-const BBR_FULL_BW_THRESH: f64 = 1.25;
-const BBR_FULL_BW_COUNT: usize = 3;
-const BBR_MIN_RTT_WINDOW: Duration = Duration::from_secs(10);
-const BBR_PROBE_RTT_DURATION: Duration = Duration::from_millis(200);
-const BBR_BW_WINDOW_FACTOR: u32 = 10;
-
-/// 3-subwindow sliding maximum, matching Linux kernel's `win_minmax.h`.
-///
-/// Tracks the running maximum over a time-based window using three ordered
-/// entries: best, 2nd-best, 3rd-best. Expired entries are promoted/evicted.
-struct WindowedMax {
-    entries: [(f64, Option<Instant>); 3],
-}
-
-impl WindowedMax {
-    fn new() -> Self {
-        Self {
-            entries: [(0.0, None); 3],
-        }
-    }
-
-    fn get(&self) -> f64 {
-        self.entries[0].0
-    }
-
-    fn reset(&mut self, now: Instant, value: f64) {
-        self.entries = [(value, Some(now)); 3];
-    }
-
-    fn update(&mut self, now: Instant, value: f64, window: Duration) -> f64 {
-        if value >= self.entries[0].0
-            || self.entries[2]
-                .1
-                .is_none_or(|t| now.saturating_duration_since(t) > window)
-        {
-            self.reset(now, value);
-            return self.entries[0].0;
-        }
-
-        if value >= self.entries[1].0 {
-            self.entries[2] = (value, Some(now));
-            self.entries[1] = (value, Some(now));
-        } else if value >= self.entries[2].0 {
-            self.entries[2] = (value, Some(now));
-        }
-
-        self.subwin_update(now, value, window)
-    }
-
-    fn subwin_update(&mut self, now: Instant, value: f64, window: Duration) -> f64 {
-        let dt = self.entries[0]
-            .1
-            .map_or(Duration::MAX, |t| now.saturating_duration_since(t));
-
-        if dt > window {
-            self.entries[0] = self.entries[1];
-            self.entries[1] = self.entries[2];
-            self.entries[2] = (value, Some(now));
-            if self.entries[0]
-                .1
-                .is_none_or(|t| now.saturating_duration_since(t) > window)
-            {
-                self.entries[0] = self.entries[1];
-                self.entries[1] = self.entries[2];
-            }
-        } else if self.entries[1].1 == self.entries[0].1 && dt > window / 4 {
-            self.entries[2] = (value, Some(now));
-            self.entries[1] = (value, Some(now));
-        } else if self.entries[2].1 == self.entries[1].1 && dt > window / 2 {
-            self.entries[2] = (value, Some(now));
-        }
-
-        self.entries[0].0
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BbrMode {
-    Startup,
-    Drain,
-    ProbeBw,
-    ProbeRtt,
-}
-
-struct BbrState {
-    mode: BbrMode,
+struct BdpState {
     estimated_limit: f64,
-    btl_bw: WindowedMax,
-    min_rtt: Duration,
-    min_rtt_stamp: Option<Instant>,
-    round_start: Option<Instant>,
-    round_count: u64,
-    full_bw: f64,
-    full_bw_count: usize,
-    cycle_index: usize,
-    cycle_stamp: Option<Instant>,
-    probe_rtt_done_stamp: Option<Instant>,
+    rtt_window: VecDeque<(Instant, f64)>,
+    delivery_rate_window: VecDeque<(Instant, f64)>,
 }
 
-/// BBR concurrency limit algorithm.
-///
-/// Adapted from TCP BBR v1. Tracks maximum delivery rate (`BtlBw`) and minimum
-/// RTT in sliding windows, then sets `limit = gain * BtlBw * min_rtt` (the
-/// bandwidth-delay product scaled by the current mode's gain).
-///
-/// State machine: `STARTUP → DRAIN → PROBE_BW ↔ PROBE_RTT`
-struct Bbr {
-    state: Mutex<BbrState>,
+struct Bdp {
+    state: Mutex<BdpState>,
+    rtt_window: Duration,
+    throughput_window: Duration,
+    gain: f64,
+    backoff_ratio: f64,
     min_limit: usize,
     max_limit: usize,
 }
 
-impl Bbr {
-    fn new(config: &BbrConfig) -> Self {
+impl Bdp {
+    fn new(config: &BdpConfig) -> Self {
         let initial = config
             .initial_limit
             .clamp(config.min_limit, config.max_limit);
         Self {
-            state: Mutex::new(BbrState {
-                mode: BbrMode::Startup,
+            state: Mutex::new(BdpState {
                 estimated_limit: initial as f64,
-                btl_bw: WindowedMax::new(),
-                min_rtt: Duration::from_secs(1),
-                min_rtt_stamp: None,
-                round_start: None,
-                round_count: 0,
-                full_bw: 0.0,
-                full_bw_count: 0,
-                cycle_index: 0,
-                cycle_stamp: None,
-                probe_rtt_done_stamp: None,
+                rtt_window: VecDeque::new(),
+                delivery_rate_window: VecDeque::new(),
             }),
+            rtt_window: Duration::from_millis(config.rtt_window_ms),
+            throughput_window: Duration::from_millis(config.throughput_window_ms),
+            gain: config.gain,
+            backoff_ratio: config.backoff_ratio,
             min_limit: config.min_limit,
             max_limit: config.max_limit,
         }
     }
 
-    fn update(&self, inflight: usize, _outcome: Outcome, rtt: Duration, now: Instant) -> usize {
-        if rtt.is_zero() {
-            return (self.state.lock().unwrap().estimated_limit as usize)
-                .clamp(self.min_limit, self.max_limit);
+    fn update(&self, delivered: usize, outcome: Outcome, rtt: Duration, now: Instant) -> usize {
+        let rtt_secs = rtt.as_secs_f64();
+        if rtt_secs == 0.0 {
+            return self.state.lock().unwrap().estimated_limit as usize;
         }
 
         let mut state = self.state.lock().unwrap();
-        let delivery_rate = inflight as f64 / rtt.as_secs_f64();
 
-        // Track rounds (time-based: new round every min_rtt of wall-clock time).
-        let new_round = match state.round_start {
-            None => {
-                state.round_start = Some(now);
-                true
-            }
-            Some(start) if now.saturating_duration_since(start) >= state.min_rtt => {
-                state.round_start = Some(now);
-                state.round_count += 1;
-                true
-            }
-            _ => false,
-        };
-
-        // Update BtlBw (windowed max with app-limited filtering).
-        let bw_window = state.min_rtt.saturating_mul(BBR_BW_WINDOW_FACTOR);
-        let is_app_limited =
-            state.mode == BbrMode::ProbeRtt || (inflight as f64) < state.estimated_limit;
-        if !is_app_limited || delivery_rate >= state.btl_bw.get() {
-            state.btl_bw.update(now, delivery_rate, bw_window);
+        // On drop, back off immediately and skip window updates to avoid
+        // poisoning the windows with fast-error RTTs.
+        if matches!(outcome, Outcome::Dropped) {
+            state.estimated_limit = (state.estimated_limit * self.backoff_ratio)
+                .clamp(self.min_limit as f64, self.max_limit as f64);
+            return state.estimated_limit as usize;
         }
 
-        // Check min_rtt expiry BEFORE updating, so the state machine sees the
-        // pre-update state (matching TCP BBR's bbr_update_min_rtt ordering).
-        let min_rtt_expired = state
-            .min_rtt_stamp
-            .is_some_and(|t| now.saturating_duration_since(t) > BBR_MIN_RTT_WINDOW);
+        let delivery_rate = delivered as f64 / rtt_secs;
 
-        // Update min_rtt (windowed min with 10-second expiry).
-        if rtt <= state.min_rtt || state.min_rtt_stamp.is_none() {
-            state.min_rtt = rtt;
-            state.min_rtt_stamp = Some(now);
+        // Push new samples and trim expired entries.
+        state.rtt_window.push_back((now, rtt_secs));
+        while state
+            .rtt_window
+            .front()
+            .is_some_and(|(t, _)| now.saturating_duration_since(*t) > self.rtt_window)
+        {
+            state.rtt_window.pop_front();
         }
 
-        // When the filter expires outside PROBE_BW, accept the current RTT to
-        // handle baseline RTT shifts (matching TCP BBR's filter refresh logic).
-        if min_rtt_expired && state.mode != BbrMode::ProbeBw {
-            state.min_rtt = rtt;
-            state.min_rtt_stamp = Some(now);
+        state.delivery_rate_window.push_back((now, delivery_rate));
+        while state
+            .delivery_rate_window
+            .front()
+            .is_some_and(|(t, _)| now.saturating_duration_since(*t) > self.throughput_window)
+        {
+            state.delivery_rate_window.pop_front();
         }
 
-        // Compute BDP.
-        let btl_bw = state.btl_bw.get();
-        let bdp = btl_bw * state.min_rtt.as_secs_f64();
+        let min_rtt = state
+            .rtt_window
+            .iter()
+            .map(|(_, v)| *v)
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(rtt_secs);
 
-        // State machine transitions.
-        match state.mode {
-            BbrMode::Startup => {
-                state.estimated_limit = BBR_HIGH_GAIN * bdp;
-                if new_round {
-                    if btl_bw >= state.full_bw * BBR_FULL_BW_THRESH {
-                        state.full_bw = btl_bw;
-                        state.full_bw_count = 0;
-                    } else {
-                        state.full_bw_count += 1;
-                    }
-                    if state.full_bw_count >= BBR_FULL_BW_COUNT {
-                        state.mode = BbrMode::Drain;
-                    }
-                }
-            }
-            BbrMode::Drain => {
-                state.estimated_limit = bdp;
-                if (inflight as f64) <= bdp {
-                    state.mode = BbrMode::ProbeBw;
-                    state.cycle_index = 2 + (state.round_count as usize % 6);
-                    state.cycle_stamp = Some(now);
-                }
-            }
-            BbrMode::ProbeBw => {
-                if min_rtt_expired {
-                    state.mode = BbrMode::ProbeRtt;
-                    state.probe_rtt_done_stamp = None;
-                    state.estimated_limit = self.min_limit as f64;
-                } else {
-                    let gain = BBR_PACING_GAINS[state.cycle_index];
-                    let elapsed = state
-                        .cycle_stamp
-                        .map(|t| now.saturating_duration_since(t))
-                        .unwrap_or(Duration::ZERO);
+        let max_rate = state
+            .delivery_rate_window
+            .iter()
+            .map(|(_, v)| *v)
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(delivery_rate);
 
-                    let advance = if gain > 1.0 {
-                        elapsed >= state.min_rtt && (inflight as f64) >= gain * bdp
-                    } else if gain < 1.0 {
-                        elapsed >= state.min_rtt || (inflight as f64) <= bdp
-                    } else {
-                        elapsed >= state.min_rtt
-                    };
+        let bdp = max_rate * min_rtt;
+        state.estimated_limit = (bdp * self.gain)
+            .ceil()
+            .clamp(self.min_limit as f64, self.max_limit as f64);
 
-                    if advance {
-                        state.cycle_index = (state.cycle_index + 1) % 8;
-                        state.cycle_stamp = Some(now);
-                    }
-
-                    state.estimated_limit = BBR_PACING_GAINS[state.cycle_index] * bdp;
-                }
-            }
-            BbrMode::ProbeRtt => {
-                state.estimated_limit = self.min_limit as f64;
-
-                if state.probe_rtt_done_stamp.is_none()
-                    && (inflight as f64) <= self.min_limit as f64
-                {
-                    state.probe_rtt_done_stamp = Some(now);
-                }
-
-                if let Some(start) = state.probe_rtt_done_stamp {
-                    if now.saturating_duration_since(start) >= BBR_PROBE_RTT_DURATION {
-                        state.min_rtt_stamp = Some(now);
-                        if state.full_bw_count >= BBR_FULL_BW_COUNT {
-                            state.mode = BbrMode::ProbeBw;
-                            state.cycle_index = 2 + (state.round_count as usize % 6);
-                            state.cycle_stamp = Some(now);
-                            state.estimated_limit =
-                                BBR_PACING_GAINS[state.cycle_index] * bdp;
-                        } else {
-                            state.mode = BbrMode::Startup;
-                            state.estimated_limit = BBR_HIGH_GAIN * bdp;
-                        }
-                    }
-                }
-            }
-        }
-
-        (state.estimated_limit as usize).clamp(self.min_limit, self.max_limit)
-    }
-
-    #[cfg(test)]
-    fn mode(&self) -> BbrMode {
-        self.state.lock().unwrap().mode
+        state.estimated_limit as usize
     }
 }
 
@@ -1793,244 +1646,156 @@ mod tests {
         assert_eq!(serialized, serde_json::json!({"fixed": {"limit": 5}}),);
     }
 
-    // ======================== WindowedMax tests ========================
+    // ======================== BDP algorithm tests ========================
 
-    #[test]
-    fn windowed_max_tracks_maximum() {
-        let mut wm = WindowedMax::new();
-        let base = Instant::now();
-        let window = Duration::from_secs(1);
-
-        assert_eq!(wm.get(), 0.0);
-
-        wm.update(base, 10.0, window);
-        assert_eq!(wm.get(), 10.0);
-
-        wm.update(base + Duration::from_millis(100), 5.0, window);
-        assert_eq!(wm.get(), 10.0);
-
-        wm.update(base + Duration::from_millis(200), 15.0, window);
-        assert_eq!(wm.get(), 15.0);
-    }
-
-    #[test]
-    fn windowed_max_expires_old_entries() {
-        let mut wm = WindowedMax::new();
-        let base = Instant::now();
-        let window = Duration::from_secs(1);
-
-        wm.update(base, 100.0, window);
-        assert_eq!(wm.get(), 100.0);
-
-        // After the window expires, a lower value becomes the new max.
-        wm.update(base + Duration::from_millis(1500), 3.0, window);
-        assert_eq!(wm.get(), 3.0);
-    }
-
-    #[test]
-    fn windowed_max_subwindow_promotion() {
-        let mut wm = WindowedMax::new();
-        let base = Instant::now();
-        let window = Duration::from_secs(4);
-
-        // Insert high value at the start.
-        wm.update(base, 100.0, window);
-        assert_eq!(wm.get(), 100.0);
-
-        // Insert a lower value in the second quarter (dt > window/4).
-        wm.update(base + Duration::from_millis(1500), 50.0, window);
-        assert_eq!(wm.get(), 100.0);
-
-        // Insert a lower value in the second half (dt > window/2).
-        wm.update(base + Duration::from_millis(2500), 30.0, window);
-        assert_eq!(wm.get(), 100.0);
-
-        // After the window expires, the best should be promoted from subwindows.
-        wm.update(base + Duration::from_millis(4500), 10.0, window);
-        // The old 100.0 entry is expired; 50.0 may also be expired; the result
-        // depends on subwindow promotion.
-        assert!(wm.get() <= 50.0);
-    }
-
-    // ======================== BBR algorithm tests ========================
-
-    fn default_bbr_config() -> BbrConfig {
-        BbrConfig {
+    fn default_bdp_config() -> BdpConfig {
+        BdpConfig {
             initial_limit: 4,
             min_limit: 4,
             max_limit: 1000,
+            ..BdpConfig::default()
         }
     }
 
-    fn bbr(config: BbrConfig) -> Bbr {
-        Bbr::new(&config)
-    }
-
     #[test]
-    fn bbr_startup_ramp() {
-        let alg = bbr(default_bbr_config());
+    fn bdp_converges_to_throughput() {
+        let alg = Bdp::new(&default_bdp_config());
         let base = Instant::now();
         let rtt = Duration::from_millis(10);
 
-        // First sample: inflight=4, delivery_rate=400, BDP=4, limit=2.885*4≈11
-        let limit = alg.update(4, Outcome::Success, rtt, base);
-        assert!(limit > 4, "STARTUP should ramp up from initial limit, got {limit}");
-
-        // Second round: use the new limit as inflight
-        let limit2 = alg.update(limit, Outcome::Success, rtt, base + rtt);
-        assert!(
-            limit2 > limit,
-            "STARTUP should continue ramping: {limit} -> {limit2}"
-        );
-
-        // Continue for several rounds — exponential growth.
-        let mut prev = limit2;
-        for i in 2..6 {
+        // Simulate steady throughput: 100 completions per 10ms RTT → rate=10000,
+        // BDP=10000*0.01=100, limit=ceil(100*1.25)=125.
+        let mut limit = 4;
+        for i in 0..50 {
             let t = base + rtt * (i + 1);
-            let next = alg.update(prev, Outcome::Success, rtt, t);
-            assert!(next >= prev, "STARTUP limit should not decrease");
-            prev = next;
+            limit = alg.update(100, Outcome::Success, rtt, t);
         }
-        assert!(prev > 100, "Should reach high limit quickly, got {prev}");
+
+        assert_eq!(limit, 125, "Should converge to ceil(BDP*gain), got {limit}");
     }
 
     #[test]
-    fn bbr_exits_startup_when_bw_plateaus() {
-        let alg = bbr(default_bbr_config());
+    fn bdp_backoff_on_drop() {
+        let config = BdpConfig {
+            initial_limit: 100,
+            min_limit: 4,
+            max_limit: 1000,
+            backoff_ratio: 0.5,
+            ..BdpConfig::default()
+        };
+        let alg = Bdp::new(&config);
         let base = Instant::now();
         let rtt = Duration::from_millis(10);
 
-        // Feed samples where inflight stays constant (simulating a bottleneck).
-        // delivery_rate won't grow, so STARTUP should detect a full pipe.
-        let mut t = base;
-        for _ in 0..20 {
-            t += rtt;
-            alg.update(100, Outcome::Success, rtt, t);
+        // Establish a limit first.
+        for i in 0..10 {
+            alg.update(100, Outcome::Success, rtt, base + rtt * (i + 1));
         }
+        let before = alg.state.lock().unwrap().estimated_limit;
 
-        assert_ne!(
-            alg.mode(),
-            BbrMode::Startup,
-            "Should have exited STARTUP after BW plateaus"
-        );
-    }
+        // A drop should cut the limit by backoff_ratio.
+        alg.update(100, Outcome::Dropped, rtt, base + rtt * 12);
+        let after = alg.state.lock().unwrap().estimated_limit;
 
-    #[test]
-    fn bbr_steady_state_bdp_convergence() {
-        let config = BbrConfig {
-            initial_limit: 4,
-            min_limit: 4,
-            max_limit: 500,
-        };
-        let alg = bbr(config);
-        let base = Instant::now();
-        let base_rtt = Duration::from_millis(10);
-        let capacity = 100usize;
-
-        // Simulate a pipe with capacity 100: RTT increases linearly when
-        // inflight > capacity (queueing delay). This makes delivery_rate
-        // saturate at capacity/base_rtt = 10000, giving BDP = 100.
-        let mut limit = 4;
-        let mut t = base;
-        for _ in 0..500 {
-            t += base_rtt;
-            let inflight = limit.min(500);
-            let rtt = if inflight <= capacity {
-                base_rtt
-            } else {
-                base_rtt.mul_f64(inflight as f64 / capacity as f64)
-            };
-            limit = alg.update(inflight, Outcome::Success, rtt, t);
-        }
-
-        // delivery_rate saturates at 10000. BDP = 10000 * 0.01 = 100.
-        // In PROBE_BW, limit oscillates around BDP with gains [1.25, 0.75, 1.0×6].
+        let expected = (before * 0.5).clamp(4.0, 1000.0);
         assert!(
-            limit >= 70 && limit <= 150,
-            "Limit should converge near BDP=100, got {limit}"
+            (after - expected).abs() < 0.01,
+            "Drop should halve the limit: before={before}, after={after}, expected={expected}"
         );
     }
 
     #[test]
-    fn bbr_probe_rtt_triggered_and_recovers() {
-        let config = BbrConfig {
-            initial_limit: 4,
-            min_limit: 4,
-            max_limit: 500,
-        };
-        let alg = bbr(config);
-        let base = Instant::now();
-        let rtt = Duration::from_millis(10);
-
-        // Ramp through STARTUP into PROBE_BW.
-        let mut limit = 4;
-        let mut t = base;
-        for _ in 0..50 {
-            t += rtt;
-            limit = alg.update(limit.min(200), Outcome::Success, rtt, t);
-        }
-        assert!(limit > 4);
-        assert_ne!(alg.mode(), BbrMode::Startup);
-
-        // Jump time forward by 11 seconds to expire the min_rtt filter.
-        // Use a slightly higher RTT so rtt > min_rtt and the stamp doesn't refresh
-        // before the state machine checks expiry.
-        t += Duration::from_secs(11);
-        limit = alg.update(limit.min(200), Outcome::Success, rtt, t);
-
-        // Should have entered PROBE_RTT.
-        assert_eq!(
-            alg.mode(),
-            BbrMode::ProbeRtt,
-            "Should enter PROBE_RTT after min_rtt expires"
-        );
-        assert_eq!(limit, 4, "Should drop to min_limit in PROBE_RTT, got {limit}");
-
-        // Feed samples at low inflight for 200ms+ to exit PROBE_RTT.
-        for _ in 0..25 {
-            t += Duration::from_millis(10);
-            limit = alg.update(4, Outcome::Success, rtt, t);
-        }
-
-        // Should have exited PROBE_RTT.
-        assert_ne!(alg.mode(), BbrMode::ProbeRtt, "Should have exited PROBE_RTT");
-        assert!(limit > 4, "Limit should recover after PROBE_RTT, got {limit}");
+    fn bdp_zero_rtt_preserves_limit() {
+        let alg = Bdp::new(&default_bdp_config());
+        let limit = alg.update(10, Outcome::Success, Duration::ZERO, Instant::now());
+        assert_eq!(limit, 4, "Zero RTT should preserve initial limit");
     }
 
     #[test]
-    fn bbr_zero_rtt_preserves_limit() {
-        let alg = bbr(default_bbr_config());
-        let limit = alg.update(4, Outcome::Success, Duration::ZERO, Instant::now());
-        assert_eq!(limit, 4, "Zero RTT should preserve current limit");
-    }
-
-    #[test]
-    fn bbr_min_max_bounds() {
-        let config = BbrConfig {
+    fn bdp_min_max_bounds() {
+        let config = BdpConfig {
             initial_limit: 4,
             min_limit: 4,
             max_limit: 50,
+            ..BdpConfig::default()
         };
-        let alg = bbr(config);
+        let alg = Bdp::new(&config);
         let base = Instant::now();
         let rtt = Duration::from_millis(10);
 
-        // Ramp aggressively — limit should be clamped to max_limit.
-        let mut limit = 4;
-        let mut t = base;
-        for _ in 0..20 {
-            t += rtt;
-            limit = alg.update(limit, Outcome::Success, rtt, t);
+        // Feed high throughput — limit should be clamped to max_limit.
+        for i in 0..20 {
+            alg.update(1000, Outcome::Success, rtt, base + rtt * (i + 1));
         }
+        let limit = alg.state.lock().unwrap().estimated_limit as usize;
         assert!(limit <= 50, "Should not exceed max_limit=50, got {limit}");
     }
 
     #[test]
-    fn bbr_via_limiter_with_clock() {
+    fn bdp_drop_skips_window_updates() {
+        let alg = Bdp::new(&default_bdp_config());
+        let base = Instant::now();
+        let rtt = Duration::from_millis(10);
+
+        // Establish some window entries.
+        alg.update(100, Outcome::Success, rtt, base + rtt);
+
+        let entries_before = {
+            let state = alg.state.lock().unwrap();
+            (state.rtt_window.len(), state.delivery_rate_window.len())
+        };
+
+        // A drop should not add to the windows (fast-error RTTs would poison them).
+        alg.update(100, Outcome::Dropped, Duration::from_millis(1), base + rtt * 2);
+
+        let entries_after = {
+            let state = alg.state.lock().unwrap();
+            (state.rtt_window.len(), state.delivery_rate_window.len())
+        };
+
+        assert_eq!(entries_before, entries_after, "Drop should not modify windows");
+    }
+
+    #[test]
+    fn bdp_window_expiry() {
+        let config = BdpConfig {
+            rtt_window_ms: 100,
+            throughput_window_ms: 100,
+            ..default_bdp_config()
+        };
+        let alg = Bdp::new(&config);
+        let base = Instant::now();
+
+        // Insert a high-rate sample.
+        alg.update(
+            1000,
+            Outcome::Success,
+            Duration::from_millis(10),
+            base + Duration::from_millis(10),
+        );
+        let limit_high = alg.state.lock().unwrap().estimated_limit as usize;
+
+        // After the window expires, a lower-rate sample should dominate.
+        alg.update(
+            10,
+            Outcome::Success,
+            Duration::from_millis(10),
+            base + Duration::from_millis(200),
+        );
+        let limit_low = alg.state.lock().unwrap().estimated_limit as usize;
+
+        assert!(
+            limit_low < limit_high,
+            "After window expiry, limit should drop: high={limit_high}, low={limit_low}"
+        );
+    }
+
+    #[test]
+    fn bdp_via_limiter_with_clock() {
         let ticks = Arc::new(AtomicUsize::new(0));
         let base = Instant::now();
         let clock_ticks = ticks.clone();
-        let limiter = Limiter::builder_bbr(default_bbr_config())
+        let limiter = Limiter::builder_bdp(default_bdp_config())
             .clock(move || {
                 let step = clock_ticks.fetch_add(1, Ordering::SeqCst) as u64;
                 base + Duration::from_millis(step * 10)
@@ -2038,63 +1803,91 @@ mod tests {
             .build();
         assert_eq!(limiter.current(), 4);
 
-        // Acquire 4 tokens (all initial slots) then record them.
-        // Each acquire+record_sample pair consumes 2 clock ticks (20ms RTT).
-        // With inflight=4 and rtt=20ms: delivery_rate=200, BDP=200*0.02=4,
-        // STARTUP gain: 2.885*4 ≈ 11.
-        let tokens: Vec<_> = (0..4).map(|_| limiter.acquire()).collect();
-        for token in tokens {
-            token.record_sample(Outcome::Success);
+        // Acquire many tokens first (each acquire consumes 1 clock tick), then
+        // complete them all. This way `delivered` is high for each completion
+        // (many completions happened between acquire and record_sample).
+        for _ in 0..3 {
+            let tokens: Vec<_> = (0..20).map(|_| limiter.acquire()).collect();
+            for token in tokens {
+                token.record_sample(Outcome::Success);
+            }
         }
 
         assert!(
             limiter.current() > 4,
-            "BBR should ramp up in STARTUP, got {}",
+            "BDP limiter should increase from initial, got {}",
             limiter.current()
         );
     }
 
     #[test]
-    fn concurrency_limit_bbr_build() {
-        let config = ConcurrencyLimit::Bbr(BbrConfig {
+    fn concurrency_limit_bdp_build() {
+        let config = ConcurrencyLimit::Bdp(BdpConfig {
             initial_limit: 4,
             min_limit: 4,
             max_limit: 500,
+            ..BdpConfig::default()
         });
         let limiter = config.build();
         assert_eq!(limiter.current(), 4);
     }
 
     #[test]
-    fn concurrency_limit_toml_bbr_defaults() {
+    fn concurrency_limit_toml_bdp_defaults() {
         let toml_str = r#"
-            [concurrency.bbr]
+            [concurrency.bdp]
         "#;
         let parsed: Wrapper = toml::from_str(toml_str).unwrap();
         match parsed.concurrency {
-            ConcurrencyLimit::Bbr(config) => {
+            ConcurrencyLimit::Bdp(config) => {
                 assert_eq!(config.initial_limit, 4);
                 assert_eq!(config.min_limit, 4);
                 assert_eq!(config.max_limit, 1000);
+                assert!((config.gain - 1.25).abs() < f64::EPSILON);
+                assert!((config.backoff_ratio - 0.9).abs() < f64::EPSILON);
             }
-            _ => panic!("Expected Bbr variant"),
+            _ => panic!("Expected Bdp variant"),
         }
     }
 
     #[test]
-    fn concurrency_limit_toml_bbr_with_limits() {
+    fn concurrency_limit_toml_bdp_with_overrides() {
         let toml_str = r#"
-            [concurrency.bbr]
+            [concurrency.bdp]
             max-limit = 500
             min-limit = 8
+            gain = 2.0
+            backoff-ratio = 0.5
         "#;
         let parsed: Wrapper = toml::from_str(toml_str).unwrap();
         match parsed.concurrency {
-            ConcurrencyLimit::Bbr(config) => {
+            ConcurrencyLimit::Bdp(config) => {
                 assert_eq!(config.max_limit, 500);
                 assert_eq!(config.min_limit, 8);
+                assert!((config.gain - 2.0).abs() < f64::EPSILON);
+                assert!((config.backoff_ratio - 0.5).abs() < f64::EPSILON);
             }
-            _ => panic!("Expected Bbr variant"),
+            _ => panic!("Expected Bdp variant"),
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "gain must be positive")]
+    fn bdp_rejects_zero_gain() {
+        let config = BdpConfig {
+            gain: 0.0,
+            ..BdpConfig::default()
+        };
+        let _ = Limiter::bdp(config);
+    }
+
+    #[test]
+    #[should_panic(expected = "backoff_ratio must be in (0.0, 1.0]")]
+    fn bdp_rejects_invalid_backoff_ratio() {
+        let config = BdpConfig {
+            backoff_ratio: 0.0,
+            ..BdpConfig::default()
+        };
+        let _ = Limiter::bdp(config);
     }
 }
