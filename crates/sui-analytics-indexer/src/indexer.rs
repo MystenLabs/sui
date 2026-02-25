@@ -80,7 +80,6 @@ pub async fn build_analytics_indexer(
         first_checkpoint: adjusted_first_checkpoint,
         last_checkpoint: adjusted_last_checkpoint,
         pipeline: indexer_args.pipeline,
-        max_rows_per_second: indexer_args.max_rows_per_second,
         task: indexer_args.task,
     };
 

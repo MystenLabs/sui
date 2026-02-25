@@ -86,7 +86,6 @@ pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
-    pub max_rows_per_second: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -245,7 +244,6 @@ impl CommitterLayer {
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
             watermark_interval_jitter_ms: 0,
-            max_rows_per_second: self.max_rows_per_second.or(base.max_rows_per_second),
         })
     }
 }
@@ -358,7 +356,6 @@ impl Merge for CommitterLayer {
             write_concurrency: other.write_concurrency.or(self.write_concurrency),
             collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
             watermark_interval_ms: other.watermark_interval_ms.or(self.watermark_interval_ms),
-            max_rows_per_second: other.max_rows_per_second.or(self.max_rows_per_second),
         })
     }
 }
@@ -470,7 +467,6 @@ impl From<CommitterConfig> for CommitterLayer {
             write_concurrency: Some(config.write_concurrency),
             collect_interval_ms: Some(config.collect_interval_ms),
             watermark_interval_ms: Some(config.watermark_interval_ms),
-            max_rows_per_second: config.max_rows_per_second,
         }
     }
 }

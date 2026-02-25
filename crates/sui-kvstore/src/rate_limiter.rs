@@ -14,7 +14,7 @@ pub(crate) struct RateLimiter {
 }
 
 /// A composed rate limiter that acquires tokens from one or more underlying limiters.
-/// Used to enforce both per-pipeline and indexer-wide rate limits with a single `acquire` call.
+/// Used to enforce both per-pipeline and global rate limits with a single `acquire` call.
 pub(crate) struct CompositeRateLimiter {
     limiters: Vec<Arc<RateLimiter>>,
 }

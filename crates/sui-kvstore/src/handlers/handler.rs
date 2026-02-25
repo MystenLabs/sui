@@ -16,6 +16,7 @@ use crate::bigtable::client::PartialWriteError;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::bigtable::store::BigTableStore;
 use crate::config::ConcurrentLayer;
+use crate::rate_limiter::CompositeRateLimiter;
 
 /// BigTable's hard limit is 100k mutations per MutateRows request.
 /// We cap at half which is still very large.
@@ -46,6 +47,7 @@ pub trait BigTableProcessor: Processor<Value = Entry> {
 pub struct BigTableHandler<P> {
     processor: P,
     max_rows: usize,
+    rate_limiter: Arc<CompositeRateLimiter>,
 }
 
 /// Batch of BigTable entries.
@@ -65,10 +67,15 @@ impl<P> BigTableHandler<P>
 where
     P: BigTableProcessor,
 {
-    pub fn new(processor: P, config: &ConcurrentLayer) -> Self {
+    pub(crate) fn new(
+        processor: P,
+        config: &ConcurrentLayer,
+        rate_limiter: Arc<CompositeRateLimiter>,
+    ) -> Self {
         Self {
             processor,
             max_rows: config.max_rows.unwrap_or(DEFAULT_MAX_ROWS),
+            rate_limiter,
         }
     }
 }
@@ -131,9 +138,9 @@ where
             }
             inner.entries.values().cloned().collect()
         };
-        // Used only for metrics. On partial failure we return Err so the count
-        // is not reported, but it would overcount if that ever changed.
         let count = entries_to_write.len();
+
+        self.rate_limiter.acquire(count).await;
 
         match conn
             .client()
@@ -220,7 +227,11 @@ mod tests {
         let store = BigTableStore::new(client);
         let mut conn = store.connect().await.unwrap();
 
-        let handler = BigTableHandler::new(TestProcessor, &ConcurrentLayer::default());
+        let handler = BigTableHandler::new(
+            TestProcessor,
+            &ConcurrentLayer::default(),
+            Arc::new(CompositeRateLimiter::noop()),
+        );
         let mut batch = BigTableBatch::default();
         let entries: Vec<Entry> = (0..10)
             .map(|i| make_entry(format!("row{i}").as_bytes()))
