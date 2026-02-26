@@ -84,6 +84,11 @@ pub trait Connection: Send {
         pipeline: &'static str,
         pruner_hi: u64,
     ) -> anyhow::Result<bool>;
+
+    /// Delete the watermark entry for the given `pipeline`, effectively resetting the pipeline so
+    /// it will re-process from genesis (or the configured `first_checkpoint`) on next startup.
+    /// Returns true if a watermark was actually deleted.
+    async fn reset_watermark(&mut self, pipeline: &str) -> anyhow::Result<bool>;
 }
 
 /// A storage-agnostic interface that provides database connections for both watermark management
