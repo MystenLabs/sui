@@ -7,7 +7,7 @@ not stored within the <code><a href="../sui/table.md#sui_table_Table">Table</a><
 <code><a href="../sui/table.md#sui_table_Table">Table</a></code> struct acts only as a handle into the object system to retrieve those keys and values.
 Note that this means that <code><a href="../sui/table.md#sui_table_Table">Table</a></code> values with exactly the same key-value mapping will not be
 equal, with <code>==</code>, at runtime. For example
-```
+```move
 let table1 = table::new<u64, bool>();
 let table2 = table::new<u64, bool>();
 table::add(&mut table1, 0, false);
