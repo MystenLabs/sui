@@ -1,7 +1,7 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-name: Warm sccache for release builds
+name: Warm sccache
 
 on:
   schedule:
@@ -21,7 +21,7 @@ env:
 jobs:
   warm-cache:
     name: Warm sccache (${{ matrix.os }})
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       matrix:
         os:
@@ -35,9 +35,9 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     env:
-      SCCACHE_BUCKET: sui-releases
-      SCCACHE_REGION: us-east-1
-      SCCACHE_S3_KEY_PREFIX: sccache/${{ matrix.os }}
+      SCCACHE_BUCKET: mystenlabs-sccache
+      SCCACHE_REGION: us-west-2
+      SCCACHE_S3_KEY_PREFIX: ${{ matrix.os }}
       RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
@@ -93,6 +93,7 @@ jobs:
 
       - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
 
+      # All platforms: release builds (matches release.yml)
       - name: Build release binaries
         shell: bash
         run: |
@@ -101,11 +102,117 @@ jobs:
           cargo build --release --features tracing --bin sui
           cargo build --profile=dev --bin sui --features tracing
 
+      # Windows: all-features build (matches rust.yml windows-build job)
+      - name: Build with all features (Windows)
+        if: ${{ matrix.os == 'windows-ghcloud' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          cargo build --all-features
+
+      # ubuntu-ghcloud only: matches rust.yml test/clippy/simtest jobs
+      - name: Build debug targets
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          cargo build --all-targets
+
+      - name: Run clippy
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          rustup component add clippy
+          cargo xclippy -D warnings
+
+      - name: Build with tidehunter feature
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          cargo build -p sui-core --features typed-store/tidehunter
+
+      - name: Build with staging feature
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          cargo build -p sui-indexer-alt-graphql --features staging
+
+      - name: Build docs
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          cargo doc --workspace --no-deps
+
+      - uses: taiki-e/install-action@nextest
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+      - uses: taiki-e/install-action@protoc
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+
+      - name: Build simtest targets
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          scripts/simtest/cargo-simtest simtest build
+
+  cache-summary:
+    name: Cache Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [warm-cache]
+    steps:
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Generate cache report
+        run: |
+          echo "## sccache S3 Cache Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Objects | Size | Job Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|---|" >> $GITHUB_STEP_SUMMARY
+
+          for os in ubuntu-ghcloud ubuntu-arm64 windows-ghcloud macos-latest-large macos-latest-xlarge; do
+            stats=$(aws s3 ls "s3://mystenlabs-sccache/${os}/" --summarize --recursive 2>&1 | tail -2)
+            objects=$(echo "$stats" | grep 'Total Objects' | awk '{print $3}')
+            bytes=$(echo "$stats" | grep 'Total Size' | awk '{print $3}')
+
+            if [ -n "$bytes" ] && [ "$bytes" -gt 0 ] 2>/dev/null; then
+              size=$(echo "$bytes" | awk '{
+                if ($1 >= 1073741824) printf "%.1f GB", $1/1073741824
+                else if ($1 >= 1048576) printf "%.1f MB", $1/1048576
+                else printf "%.1f KB", $1/1024
+              }')
+            else
+              size="0 B"
+            fi
+
+            # Map job result from needs context
+            result="${{ needs.warm-cache.result }}"
+            case "$result" in
+              success) status="✅" ;;
+              failure) status="❌" ;;
+              cancelled) status="⚠️" ;;
+              *) status="—" ;;
+            esac
+
+            echo "| ${os} | ${objects} | ${size} | ${status} |" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "*Generated at $(date -u '+%Y-%m-%d %H:%M:%S UTC')*" >> $GITHUB_STEP_SUMMARY
+
   report-failure:
     name: Report Failure
     runs-on: ubuntu-latest
     if: failure()
-    needs: [warm-cache]
+    needs: [warm-cache, cache-summary]
     steps:
       - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # pin@v4.1.1
 
