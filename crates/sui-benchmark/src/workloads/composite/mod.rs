@@ -8,10 +8,10 @@ use mysten_common::random::get_rng;
 use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
     ALIAS_ADD_FLAG, ALIAS_REMOVE_FLAG, ALIAS_TX_FLAG, ALL_OPERATIONS, AddressBalanceDeposit,
-    AddressBalanceOverdraw, AddressBalanceWithdraw, INVALID_ALIAS_TX_FLAG, ObjectBalanceDeposit,
-    ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead, SharedCounterIncrement,
-    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
-    TestCoinObjectWithdraw, describe_flags,
+    AddressBalanceOverdraw, AddressBalanceWithdraw, AuthenticatedEventEmit, INVALID_ALIAS_TX_FLAG,
+    ObjectBalanceDeposit, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
+    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
+    TestCoinMint, TestCoinObjectWithdraw, describe_flags,
 };
 use rand::seq::SliceRandom;
 
@@ -60,6 +60,12 @@ fn address_balance_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
 fn address_alias_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
     protocol_config
         .map(|cfg| !cfg.address_aliases())
+        .unwrap_or(false)
+}
+
+fn authenticated_events_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
+    protocol_config
+        .map(|cfg| !cfg.enable_authenticated_event_streams())
         .unwrap_or(false)
 }
 
@@ -292,6 +298,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(TestCoinAddressWithdraw::FLAG, 0.1);
         probabilities.insert(TestCoinObjectWithdraw::FLAG, 0.1);
         probabilities.insert(AddressBalanceOverdraw::FLAG, 0.1);
+        probabilities.insert(AuthenticatedEventEmit::FLAG, 0.1);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -528,6 +535,7 @@ impl CompositePayload {
             .protocol_config
             .clone();
         let filter_address_balance = address_balance_disabled(protocol_config.as_ref());
+        let filter_authenticated_events = authenticated_events_disabled(protocol_config.as_ref());
 
         loop {
             let mut ops = self.config.sample_operations();
@@ -540,6 +548,9 @@ impl CompositePayload {
                         )
                     })
                 });
+            }
+            if filter_authenticated_events {
+                ops.retain(|op| op.operation_flag() != AuthenticatedEventEmit::FLAG);
             }
             if !ops.is_empty() {
                 return ops;

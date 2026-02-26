@@ -50,6 +50,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     TestCoinAddressWithdraw::DESCRIPTOR,
     TestCoinObjectWithdraw::DESCRIPTOR,
     AddressBalanceOverdraw::DESCRIPTOR,
+    AuthenticatedEventEmit::DESCRIPTOR,
 ];
 
 pub fn describe_flags(flags: u32) -> String {
@@ -925,6 +926,52 @@ impl Operation for AddressBalanceOverdraw {
             Identifier::new("send_funds").unwrap(),
             vec![GAS::type_tag()],
             vec![balance, recipient],
+        );
+    }
+}
+
+pub struct AuthenticatedEventEmit;
+
+impl AuthenticatedEventEmit {
+    pub const FLAG: u32 = 1 << 16;
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: "AuthenticatedEventEmit",
+        flag: Self::FLAG,
+        factory: || Box::new(AuthenticatedEventEmit),
+    };
+}
+
+impl Operation for AuthenticatedEventEmit {
+    fn name(&self) -> &'static str {
+        "authenticated_event_emit"
+    }
+
+    fn operation_flag(&self) -> u32 {
+        Self::FLAG
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let mut rng = get_rng();
+        let count: u64 = rng.gen_range(1..=5);
+
+        let start_arg = builder.pure(count).unwrap();
+        let count_arg = builder.pure(count).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("auth_event").unwrap(),
+            Identifier::new("emit_multiple").unwrap(),
+            vec![],
+            vec![start_arg, count_arg],
         );
     }
 }

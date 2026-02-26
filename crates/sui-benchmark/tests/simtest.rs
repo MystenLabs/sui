@@ -1594,7 +1594,8 @@ mod test {
         .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
         .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
         .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
-        .with_probability(AddressBalanceOverdraw::FLAG, 0.3);
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.3)
+        .with_probability(AuthenticatedEventEmit::FLAG, 0.1);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1644,6 +1645,20 @@ mod test {
         assert!(
             alias_remove_stats.success_count > 0,
             "expected at least one alias remove"
+        );
+
+        let auth_event_success_count: u64 = metrics
+            .iter_stats()
+            .filter(|(op_set, _)| op_set.contains(AuthenticatedEventEmit::FLAG))
+            .map(|(_, stats)| stats.success_count)
+            .sum();
+        info!(
+            "authenticated event success count: {}",
+            auth_event_success_count
+        );
+        assert!(
+            auth_event_success_count > 0,
+            "expected at least one authenticated event emit"
         );
     }
 
