@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::marker::Unpin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::Context;
@@ -234,10 +235,12 @@ fn ingest_and_broadcast_range(
     TaskGuard::new(tokio::spawn(async move {
         // Backpressure is enforced at the stream level: checkpoints are only yielded when
         // ingest_hi allows, preventing spawned tasks from piling up while blocked.
+        let congested = Arc::new(AtomicBool::new(false));
         backpressured_checkpoint_stream(start, end, ingest_hi_rx)
             .try_for_each_spawned(limiter, |cp| {
                 let client = client.clone();
                 let subscribers = subscribers.clone();
+                let congested = congested.clone();
 
                 async move {
                     // Fetch the checkpoint or stop if cancelled.
@@ -245,10 +248,21 @@ fn ingest_and_broadcast_range(
 
                     match send_checkpoint(checkpoint, &subscribers).await {
                         Ok(true) => {
-                            debug!(checkpoint = cp, "Broadcasted checkpoint (backpressure)");
-                            Err(ClError::Dropped(Error::Backpressure))
+                            // Debounce: only the first task to see congestion
+                            // signals Dropped. Others just continue.
+                            if congested
+                                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+                                .is_ok()
+                            {
+                                debug!(checkpoint = cp, "Broadcasted checkpoint (backpressure)");
+                                Err(ClError::Dropped(Error::Backpressure))
+                            } else {
+                                debug!(checkpoint = cp, "Broadcasted checkpoint");
+                                Ok(())
+                            }
                         }
                         Ok(false) => {
+                            congested.store(false, Ordering::Release);
                             debug!(checkpoint = cp, "Broadcasted checkpoint");
                             Ok(())
                         }
