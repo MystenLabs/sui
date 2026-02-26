@@ -5,19 +5,29 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04003]: built-in operation not supported
+warning[W04039]: unable to determine principal type for literal
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:20
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                    ^     ---- Found: 'u64'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
-  │                    │      
-  │                    Invalid argument to '-'
+  │                    ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04039]: unable to determine principal type for literal
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:48
+error[E04007]: incompatible types
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:23
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                                                ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │                    -  ^^ ---- Found: 'u64'. It is not compatible with the other type.
+  │                    │  │   
+  │                    │  Incompatible arguments to '=='
+  │                    Found: '_'. It is not compatible with the other type.
+
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:38
   │
-  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
+  │                                      ^^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

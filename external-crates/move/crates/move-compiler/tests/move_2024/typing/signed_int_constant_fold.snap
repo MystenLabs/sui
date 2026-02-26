@@ -1,0 +1,159 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04012]: invalid type for constant
+  ┌─ tests/move_2024/typing/signed_int_constant_fold.move:6:16
+  │
+6 │     const ADD: i64 = 10i64 + 20i64;
+  │                ^^^
+  │                │
+  │                Unpermitted constant type
+  │                Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+  ┌─ tests/move_2024/typing/signed_int_constant_fold.move:7:16
+  │
+7 │     const SUB: i64 = 50i64 - 30i64;
+  │                ^^^
+  │                │
+  │                Unpermitted constant type
+  │                Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+  ┌─ tests/move_2024/typing/signed_int_constant_fold.move:8:16
+  │
+8 │     const MUL: i32 = 6i32 * 7i32;
+  │                ^^^
+  │                │
+  │                Unpermitted constant type
+  │                Found: 'i32'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+  ┌─ tests/move_2024/typing/signed_int_constant_fold.move:9:16
+  │
+9 │     const DIV: i16 = 100i16 / 10i16;
+  │                ^^^
+  │                │
+  │                Unpermitted constant type
+  │                Found: 'i16'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:10:16
+   │
+10 │     const MOD: i8 = 10i8 % 3i8;
+   │                ^^
+   │                │
+   │                Unpermitted constant type
+   │                Found: 'i8'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:13:16
+   │
+13 │     const NEG: i64 = -(42i64);
+   │                ^^^
+   │                │
+   │                Unpermitted constant type
+   │                Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:14:23
+   │
+14 │     const DOUBLE_NEG: i64 = -(-(42i64));
+   │                       ^^^
+   │                       │
+   │                       Unpermitted constant type
+   │                       Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:15:21
+   │
+15 │     const NEG_ZERO: i64 = -(0i64);
+   │                     ^^^
+   │                     │
+   │                     Unpermitted constant type
+   │                     Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:18:19
+   │
+18 │     const NESTED: i64 = (10i64 + 20i64) * 3i64;
+   │                   ^^^
+   │                   │
+   │                   Unpermitted constant type
+   │                   Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:19:20
+   │
+19 │     const NESTED2: i32 = -(5i32 + 10i32);
+   │                    ^^^
+   │                    │
+   │                    Unpermitted constant type
+   │                    Found: 'i32'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:28:17
+   │
+28 │     const BAND: i64 = 0x0Fi64 & 0x03i64;
+   │                 ^^^
+   │                 │
+   │                 Unpermitted constant type
+   │                 Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:29:16
+   │
+29 │     const BOR: i64 = 0x0Fi64 | 0x30i64;
+   │                ^^^
+   │                │
+   │                Unpermitted constant type
+   │                Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:30:17
+   │
+30 │     const BXOR: i64 = 0x0Fi64 ^ 0x03i64;
+   │                 ^^^
+   │                 │
+   │                 Unpermitted constant type
+   │                 Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:33:16
+   │
+33 │     const SHL: i64 = 1i64 << 8u8;
+   │                ^^^
+   │                │
+   │                Unpermitted constant type
+   │                Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:34:16
+   │
+34 │     const SHR: i64 = 256i64 >> 4u8;
+   │                ^^^
+   │                │
+   │                Unpermitted constant type
+   │                Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:37:20
+   │
+37 │     const CAST_UP: i64 = (1i8 as i64);
+   │                    ^^^
+   │                    │
+   │                    Unpermitted constant type
+   │                    Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/signed_int_constant_fold.move:38:22
+   │
+38 │     const CAST_DOWN: i8 = (42i64 as i8);
+   │                      ^^
+   │                      │
+   │                      Unpermitted constant type
+   │                      Found: 'i8'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'

@@ -262,7 +262,7 @@ fn fold_unary_op(loc: Loc, sp!(_, op_): &UnaryOp, v: Value_) -> Option<Unannotat
         (U::Neg, V::I32(u)) => V::I32((u as i32).wrapping_neg() as u32),
         (U::Neg, V::I64(u)) => V::I64((u as i64).wrapping_neg() as u64),
         (U::Neg, V::I128(u)) => V::I128((u as i128).wrapping_neg() as u128),
-        (op_, v) => panic!("ICE unknown unary op. combo while folding: {} {:?}", op_, v),
+        (_, _) => return None,
     };
     Some(evalue_(loc, folded))
 }
@@ -286,12 +286,24 @@ fn fold_binary_op(
         (B::Add, V::U128(u1), V::U128(u2)) => V::U128(u1.checked_add(u2)?),
         (B::Add, V::U256(u1), V::U256(u2)) => V::U256(u1.checked_add(u2)?),
 
+        (B::Add, V::I8(u1), V::I8(u2)) => V::I8(((u1 as i8).checked_add(u2 as i8)?) as u8),
+        (B::Add, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_add(u2 as i16)?) as u16),
+        (B::Add, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_add(u2 as i32)?) as u32),
+        (B::Add, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_add(u2 as i64)?) as u64),
+        (B::Add, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_add(u2 as i128)?) as u128),
+
         (B::Sub, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_sub(u2)?),
         (B::Sub, V::U16(u1), V::U16(u2)) => V::U16(u1.checked_sub(u2)?),
         (B::Sub, V::U32(u1), V::U32(u2)) => V::U32(u1.checked_sub(u2)?),
         (B::Sub, V::U64(u1), V::U64(u2)) => V::U64(u1.checked_sub(u2)?),
         (B::Sub, V::U128(u1), V::U128(u2)) => V::U128(u1.checked_sub(u2)?),
         (B::Sub, V::U256(u1), V::U256(u2)) => V::U256(u1.checked_sub(u2)?),
+
+        (B::Sub, V::I8(u1), V::I8(u2)) => V::I8(((u1 as i8).checked_sub(u2 as i8)?) as u8),
+        (B::Sub, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_sub(u2 as i16)?) as u16),
+        (B::Sub, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_sub(u2 as i32)?) as u32),
+        (B::Sub, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_sub(u2 as i64)?) as u64),
+        (B::Sub, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_sub(u2 as i128)?) as u128),
 
         (B::Mul, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_mul(u2)?),
         (B::Mul, V::U16(u1), V::U16(u2)) => V::U16(u1.checked_mul(u2)?),
@@ -300,6 +312,12 @@ fn fold_binary_op(
         (B::Mul, V::U128(u1), V::U128(u2)) => V::U128(u1.checked_mul(u2)?),
         (B::Mul, V::U256(u1), V::U256(u2)) => V::U256(u1.checked_mul(u2)?),
 
+        (B::Mul, V::I8(u1), V::I8(u2)) => V::I8(((u1 as i8).checked_mul(u2 as i8)?) as u8),
+        (B::Mul, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_mul(u2 as i16)?) as u16),
+        (B::Mul, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_mul(u2 as i32)?) as u32),
+        (B::Mul, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_mul(u2 as i64)?) as u64),
+        (B::Mul, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_mul(u2 as i128)?) as u128),
+
         (B::Mod, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_rem(u2)?),
         (B::Mod, V::U16(u1), V::U16(u2)) => V::U16(u1.checked_rem(u2)?),
         (B::Mod, V::U32(u1), V::U32(u2)) => V::U32(u1.checked_rem(u2)?),
@@ -307,12 +325,24 @@ fn fold_binary_op(
         (B::Mod, V::U128(u1), V::U128(u2)) => V::U128(u1.checked_rem(u2)?),
         (B::Mod, V::U256(u1), V::U256(u2)) => V::U256(u1.checked_rem(u2)?),
 
+        (B::Mod, V::I8(u1), V::I8(u2)) => V::I8(((u1 as i8).checked_rem(u2 as i8)?) as u8),
+        (B::Mod, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_rem(u2 as i16)?) as u16),
+        (B::Mod, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_rem(u2 as i32)?) as u32),
+        (B::Mod, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_rem(u2 as i64)?) as u64),
+        (B::Mod, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_rem(u2 as i128)?) as u128),
+
         (B::Div, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_div(u2)?),
         (B::Div, V::U16(u1), V::U16(u2)) => V::U16(u1.checked_div(u2)?),
         (B::Div, V::U32(u1), V::U32(u2)) => V::U32(u1.checked_div(u2)?),
         (B::Div, V::U64(u1), V::U64(u2)) => V::U64(u1.checked_div(u2)?),
         (B::Div, V::U128(u1), V::U128(u2)) => V::U128(u1.checked_div(u2)?),
         (B::Div, V::U256(u1), V::U256(u2)) => V::U256(u1.checked_div(u2)?),
+
+        (B::Div, V::I8(u1), V::I8(u2)) => V::I8(((u1 as i8).checked_div(u2 as i8)?) as u8),
+        (B::Div, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_div(u2 as i16)?) as u16),
+        (B::Div, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_div(u2 as i32)?) as u32),
+        (B::Div, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_div(u2 as i64)?) as u64),
+        (B::Div, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_div(u2 as i128)?) as u128),
 
         (B::Shl, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_shl(u2 as u32)?),
         (B::Shl, V::U16(u1), V::U8(u2)) => V::U16(u1.checked_shl(u2 as u32)?),
@@ -327,6 +357,18 @@ fn fold_binary_op(
         (B::Shr, V::U64(u1), V::U8(u2)) => V::U64(u1.checked_shr(u2 as u32)?),
         (B::Shr, V::U128(u1), V::U8(u2)) => V::U128(u1.checked_shr(u2 as u32)?),
         (B::Shr, V::U256(u1), V::U8(u2)) => V::U256(u1.checked_shr(u2 as u32)?),
+
+        (B::Shl, V::I8(u1), V::U8(u2)) => V::I8(u1.checked_shl(u2 as u32)?),
+        (B::Shl, V::I16(u1), V::U8(u2)) => V::I16(u1.checked_shl(u2 as u32)?),
+        (B::Shl, V::I32(u1), V::U8(u2)) => V::I32(u1.checked_shl(u2 as u32)?),
+        (B::Shl, V::I64(u1), V::U8(u2)) => V::I64(u1.checked_shl(u2 as u32)?),
+        (B::Shl, V::I128(u1), V::U8(u2)) => V::I128(u1.checked_shl(u2 as u32)?),
+
+        (B::Shr, V::I8(u1), V::U8(u2)) => V::I8(u1.checked_shr(u2 as u32)?),
+        (B::Shr, V::I16(u1), V::U8(u2)) => V::I16(u1.checked_shr(u2 as u32)?),
+        (B::Shr, V::I32(u1), V::U8(u2)) => V::I32(u1.checked_shr(u2 as u32)?),
+        (B::Shr, V::I64(u1), V::U8(u2)) => V::I64(u1.checked_shr(u2 as u32)?),
+        (B::Shr, V::I128(u1), V::U8(u2)) => V::I128(u1.checked_shr(u2 as u32)?),
 
         //************************************
         // Pure arith
@@ -352,6 +394,24 @@ fn fold_binary_op(
         (B::Xor, V::U128(u1), V::U128(u2)) => V::U128(u1 ^ u2),
         (B::Xor, V::U256(u1), V::U256(u2)) => V::U256(u1 ^ u2),
 
+        (B::BitOr, V::I8(u1), V::I8(u2)) => V::I8(u1 | u2),
+        (B::BitOr, V::I16(u1), V::I16(u2)) => V::I16(u1 | u2),
+        (B::BitOr, V::I32(u1), V::I32(u2)) => V::I32(u1 | u2),
+        (B::BitOr, V::I64(u1), V::I64(u2)) => V::I64(u1 | u2),
+        (B::BitOr, V::I128(u1), V::I128(u2)) => V::I128(u1 | u2),
+
+        (B::BitAnd, V::I8(u1), V::I8(u2)) => V::I8(u1 & u2),
+        (B::BitAnd, V::I16(u1), V::I16(u2)) => V::I16(u1 & u2),
+        (B::BitAnd, V::I32(u1), V::I32(u2)) => V::I32(u1 & u2),
+        (B::BitAnd, V::I64(u1), V::I64(u2)) => V::I64(u1 & u2),
+        (B::BitAnd, V::I128(u1), V::I128(u2)) => V::I128(u1 & u2),
+
+        (B::Xor, V::I8(u1), V::I8(u2)) => V::I8(u1 ^ u2),
+        (B::Xor, V::I16(u1), V::I16(u2)) => V::I16(u1 ^ u2),
+        (B::Xor, V::I32(u1), V::I32(u2)) => V::I32(u1 ^ u2),
+        (B::Xor, V::I64(u1), V::I64(u2)) => V::I64(u1 ^ u2),
+        (B::Xor, V::I128(u1), V::I128(u2)) => V::I128(u1 ^ u2),
+
         //************************************
         // Logical
         //************************************
@@ -368,12 +428,24 @@ fn fold_binary_op(
         (B::Lt, V::U128(u1), V::U128(u2)) => V::Bool(u1 < u2),
         (B::Lt, V::U256(u1), V::U256(u2)) => V::Bool(u1 < u2),
 
+        (B::Lt, V::I8(u1), V::I8(u2)) => V::Bool((u1 as i8) < (u2 as i8)),
+        (B::Lt, V::I16(u1), V::I16(u2)) => V::Bool((u1 as i16) < (u2 as i16)),
+        (B::Lt, V::I32(u1), V::I32(u2)) => V::Bool((u1 as i32) < (u2 as i32)),
+        (B::Lt, V::I64(u1), V::I64(u2)) => V::Bool((u1 as i64) < (u2 as i64)),
+        (B::Lt, V::I128(u1), V::I128(u2)) => V::Bool((u1 as i128) < (u2 as i128)),
+
         (B::Gt, V::U8(u1), V::U8(u2)) => V::Bool(u1 > u2),
         (B::Gt, V::U16(u1), V::U16(u2)) => V::Bool(u1 > u2),
         (B::Gt, V::U32(u1), V::U32(u2)) => V::Bool(u1 > u2),
         (B::Gt, V::U64(u1), V::U64(u2)) => V::Bool(u1 > u2),
         (B::Gt, V::U128(u1), V::U128(u2)) => V::Bool(u1 > u2),
         (B::Gt, V::U256(u1), V::U256(u2)) => V::Bool(u1 > u2),
+
+        (B::Gt, V::I8(u1), V::I8(u2)) => V::Bool((u1 as i8) > (u2 as i8)),
+        (B::Gt, V::I16(u1), V::I16(u2)) => V::Bool((u1 as i16) > (u2 as i16)),
+        (B::Gt, V::I32(u1), V::I32(u2)) => V::Bool((u1 as i32) > (u2 as i32)),
+        (B::Gt, V::I64(u1), V::I64(u2)) => V::Bool((u1 as i64) > (u2 as i64)),
+        (B::Gt, V::I128(u1), V::I128(u2)) => V::Bool((u1 as i128) > (u2 as i128)),
 
         (B::Le, V::U8(u1), V::U8(u2)) => V::Bool(u1 <= u2),
         (B::Le, V::U16(u1), V::U16(u2)) => V::Bool(u1 <= u2),
@@ -382,6 +454,12 @@ fn fold_binary_op(
         (B::Le, V::U128(u1), V::U128(u2)) => V::Bool(u1 <= u2),
         (B::Le, V::U256(u1), V::U256(u2)) => V::Bool(u1 <= u2),
 
+        (B::Le, V::I8(u1), V::I8(u2)) => V::Bool((u1 as i8) <= (u2 as i8)),
+        (B::Le, V::I16(u1), V::I16(u2)) => V::Bool((u1 as i16) <= (u2 as i16)),
+        (B::Le, V::I32(u1), V::I32(u2)) => V::Bool((u1 as i32) <= (u2 as i32)),
+        (B::Le, V::I64(u1), V::I64(u2)) => V::Bool((u1 as i64) <= (u2 as i64)),
+        (B::Le, V::I128(u1), V::I128(u2)) => V::Bool((u1 as i128) <= (u2 as i128)),
+
         (B::Ge, V::U8(u1), V::U8(u2)) => V::Bool(u1 >= u2),
         (B::Ge, V::U16(u1), V::U16(u2)) => V::Bool(u1 >= u2),
         (B::Ge, V::U32(u1), V::U32(u2)) => V::Bool(u1 >= u2),
@@ -389,13 +467,16 @@ fn fold_binary_op(
         (B::Ge, V::U128(u1), V::U128(u2)) => V::Bool(u1 >= u2),
         (B::Ge, V::U256(u1), V::U256(u2)) => V::Bool(u1 >= u2),
 
+        (B::Ge, V::I8(u1), V::I8(u2)) => V::Bool((u1 as i8) >= (u2 as i8)),
+        (B::Ge, V::I16(u1), V::I16(u2)) => V::Bool((u1 as i16) >= (u2 as i16)),
+        (B::Ge, V::I32(u1), V::I32(u2)) => V::Bool((u1 as i32) >= (u2 as i32)),
+        (B::Ge, V::I64(u1), V::I64(u2)) => V::Bool((u1 as i64) >= (u2 as i64)),
+        (B::Ge, V::I128(u1), V::I128(u2)) => V::Bool((u1 as i128) >= (u2 as i128)),
+
         (B::Eq, v1, v2) => V::Bool(v1 == v2),
         (B::Neq, v1, v2) => V::Bool(v1 != v2),
 
-        (op_, v1, v2) => panic!(
-            "ICE unknown binary op. combo while folding: {:?} {} {:?}",
-            v1, op_, v2
-        ),
+        (_, _, _) => return None,
     };
     Some(evalue_(loc, v))
 }

@@ -1,0 +1,314 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:8:19
+  │
+8 │         let _y = (x as i8);
+  │                   ^^^^^^^ Signed integer casts are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:8:24
+  │
+8 │         let _y = (x as i8);
+  │                        ^^ Signed integers are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:13:19
+   │
+13 │         let _y = (x as i16);
+   │                   ^^^^^^^^ Signed integer casts are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:13:24
+   │
+13 │         let _y = (x as i16);
+   │                        ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:18:19
+   │
+18 │         let _y = (x as i32);
+   │                   ^^^^^^^^ Signed integer casts are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:18:24
+   │
+18 │         let _y = (x as i32);
+   │                        ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:23:19
+   │
+23 │         let _y = (x as i64);
+   │                   ^^^^^^^^ Signed integer casts are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:23:24
+   │
+23 │         let _y = (x as i64);
+   │                        ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:28:19
+   │
+28 │         let _y = (x as i128);
+   │                   ^^^^^^^^^ Signed integer casts are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:28:24
+   │
+28 │         let _y = (x as i128);
+   │                        ^^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:33:16
+   │
+33 │         let x: i8 = 1i8;
+   │                ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:33:21
+   │
+33 │         let x: i8 = 1i8;
+   │                     ^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:38:16
+   │
+38 │         let x: i16 = 1i16;
+   │                ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:38:22
+   │
+38 │         let x: i16 = 1i16;
+   │                      ^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:43:16
+   │
+43 │         let x: i32 = 1i32;
+   │                ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:43:22
+   │
+43 │         let x: i32 = 1i32;
+   │                      ^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:48:16
+   │
+48 │         let x: i64 = 1i64;
+   │                ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:48:22
+   │
+48 │         let x: i64 = 1i64;
+   │                      ^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:53:16
+   │
+53 │         let x: i128 = 1i128;
+   │                ^^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:53:23
+   │
+53 │         let x: i128 = 1i128;
+   │                       ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:59:16
+   │
+59 │         let x: i8 = 1i8;
+   │                ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:59:21
+   │
+59 │         let x: i8 = 1i8;
+   │                     ^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:64:16
+   │
+64 │         let x: i128 = 1i128;
+   │                ^^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:64:23
+   │
+64 │         let x: i128 = 1i128;
+   │                       ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:71:19
+   │
+71 │         let _y = (x as i64);
+   │                   ^^^^^^^^ Signed integer casts are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:71:24
+   │
+71 │         let _y = (x as i64);
+   │                        ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:76:19
+   │
+76 │         let _y = (x as i8);
+   │                   ^^^^^^^ Signed integer casts are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_cast_cross_signedness.move:76:24
+   │
+76 │         let _y = (x as i8);
+   │                        ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues

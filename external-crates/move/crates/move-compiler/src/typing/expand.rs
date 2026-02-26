@@ -390,7 +390,19 @@ fn inferred_numerical_value(
             "Expected a literal of type '{}', but the value is too large.",
             bt
         );
-        let fix_bt = if value > u128_max {
+        let fix_bt = if bt.is_signed_numeric() {
+            if value > i64_max {
+                BT::I128
+            } else if value > i32_max {
+                BT::I64
+            } else if value > i16_max {
+                BT::I32
+            } else if value > i8_max {
+                BT::I16
+            } else {
+                BT::I8
+            }
+        } else if value > u128_max {
             BT::U256
         } else if value > u64_max {
             BT::U128

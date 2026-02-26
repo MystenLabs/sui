@@ -1990,7 +1990,8 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 }
                 Neg => {
                     let rloc = er.exp.loc;
-                    context.add_signed_numeric_constraint(rloc, "-", er.ty.clone());
+                    let signed_ty = core::make_signed_num_tvar(context, rloc);
+                    subtype(context, rloc, msg, &er.ty, &signed_ty);
                     er.ty.clone()
                 }
             };

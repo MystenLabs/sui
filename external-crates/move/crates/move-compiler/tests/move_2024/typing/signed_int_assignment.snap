@@ -1,0 +1,52 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/signed_int_assignment.move:7:17
+  │
+7 │         let _x: u64 = 1i64;
+  │                 ^^^   ---- Given: 'i64'
+  │                 │      
+  │                 Invalid type annotation
+  │                 Expected: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/signed_int_assignment.move:11:17
+   │
+11 │         let _x: i64 = 1u64;
+   │                 ^^^   ---- Given: 'u64'
+   │                 │      
+   │                 Invalid type annotation
+   │                 Expected: 'i64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/signed_int_assignment.move:16:17
+   │
+16 │         let _x: i64 = 1i8;
+   │                 ^^^   --- Given: 'i8'
+   │                 │      
+   │                 Invalid type annotation
+   │                 Expected: 'i64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/signed_int_assignment.move:20:17
+   │
+20 │         let _x: i8 = 1i64;
+   │                 ^^   ---- Given: 'i64'
+   │                 │     
+   │                 Invalid type annotation
+   │                 Expected: 'i8'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/signed_int_assignment.move:26:9
+   │
+25 │         let mut x: i32 = 1i32;
+   │                    --- Expected: 'i32'
+26 │         x = 2u32;
+   │         ^   ---- Given: 'u32'
+   │         │    
+   │         Invalid assignment to variable 'x'
