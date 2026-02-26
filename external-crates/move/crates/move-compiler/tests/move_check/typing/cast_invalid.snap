@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
 info:
   flavor: core
   edition: legacy
@@ -12,7 +13,7 @@ error[E04003]: built-in operation not supported
   │          ^^^^^
   │          │
   │          Invalid argument to 'as'
-  │          Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │          Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
   ┌─ tests/move_check/typing/cast_invalid.move:7:10
@@ -21,7 +22,7 @@ error[E04003]: built-in operation not supported
   │          ^^^^
   │          │
   │          Invalid argument to 'as'
-  │          Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │          Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
   ┌─ tests/move_check/typing/cast_invalid.move:9:10
@@ -30,7 +31,7 @@ error[E04003]: built-in operation not supported
   │          ^^
   │          │
   │          Invalid argument to 'as'
-  │          Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │          Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:10:10
@@ -39,13 +40,13 @@ error[E04003]: built-in operation not supported
    │          ^^^^^^^^^^^^
    │          │
    │          Invalid argument to 'as'
-   │          Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:12:10
    │
 12 │         (0u64 as bool);
-   │          ^^^^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^^^^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │          │        
    │          Invalid argument to 'as'
 
@@ -53,7 +54,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:13:10
    │
 13 │         (0u64 as address);
-   │          ^^^^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^^^^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │          │        
    │          Invalid argument to 'as'
 
@@ -61,7 +62,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:14:16
    │
 14 │         R{} = (0u64 as R);
-   │                ^^^^    - Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                ^^^^    - Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │                │        
    │                Invalid argument to 'as'
 
@@ -69,7 +70,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:15:10
    │
 15 │         (0u64 as Cup<u8>);
-   │          ^^^^    ------- Found: '0x8675309::M::Cup<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^^^^    ------- Found: '0x8675309::M::Cup<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │          │        
    │          Invalid argument to 'as'
 
@@ -77,7 +78,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:16:10
    │
 16 │         (0u64 as ());
-   │          ^^^^    -- Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^^^^    -- Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │          │        
    │          Invalid argument to 'as'
 
@@ -85,7 +86,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:17:10
    │
 17 │         (0u64 as (u64, u8));
-   │          ^^^^    --------- Found: '(u64, u8)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^^^^    --------- Found: '(u64, u8)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │          │        
    │          Invalid argument to 'as'
 
@@ -96,7 +97,7 @@ error[E04003]: built-in operation not supported
    │          ^^^^^^^
    │          │
    │          Invalid argument to 'as'
-   │          Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:23:9
@@ -113,7 +114,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^
    │         │
    │         Invalid argument to 'as'
-   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:24:9
@@ -130,7 +131,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^
    │         │
    │         Invalid argument to 'as'
-   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:26:9
@@ -147,7 +148,7 @@ error[E04003]: built-in operation not supported
    │         ^^
    │         │
    │         Invalid argument to 'as'
-   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:27:9
@@ -164,7 +165,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^^^^^^^
    │         │
    │         Invalid argument to 'as'
-   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/cast_invalid.move:29:9
@@ -178,7 +179,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:29:9
    │
 29 │         0u64 as bool;
-   │         ^^^^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         ^^^^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │         │        
    │         Invalid argument to 'as'
 
@@ -194,7 +195,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:30:9
    │
 30 │         0u64 as address;
-   │         ^^^^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         ^^^^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │         │        
    │         Invalid argument to 'as'
 
@@ -210,7 +211,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:31:15
    │
 31 │         R{} = 0u64 as R;
-   │               ^^^^    - Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │               ^^^^    - Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │               │        
    │               Invalid argument to 'as'
 
@@ -226,7 +227,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:32:9
    │
 32 │         0u64 as Cup<u8>;
-   │         ^^^^    ------- Found: '0x8675309::M::Cup<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         ^^^^    ------- Found: '0x8675309::M::Cup<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │         │        
    │         Invalid argument to 'as'
 
@@ -242,7 +243,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:33:9
    │
 33 │         0u64 as ();
-   │         ^^^^    -- Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         ^^^^    -- Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │         │        
    │         Invalid argument to 'as'
 
@@ -258,7 +259,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:34:9
    │
 34 │         0u64 as (u64, u8);
-   │         ^^^^    --------- Found: '(u64, u8)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         ^^^^    --------- Found: '(u64, u8)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │         │        
    │         Invalid argument to 'as'
 
@@ -277,4 +278,4 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^^
    │         │
    │         Invalid argument to 'as'
-   │         Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'

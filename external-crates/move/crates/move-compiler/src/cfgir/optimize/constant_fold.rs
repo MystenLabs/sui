@@ -143,8 +143,13 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 Some(v) => v,
                 None => return changed,
             };
-            *e_ = fold_unary_op(e.exp.loc, op, v);
-            true
+            match fold_unary_op(e.exp.loc, op, v) {
+                Some(folded) => {
+                    *e_ = folded;
+                    true
+                }
+                None => changed,
+            }
         }
 
         e_ @ E::BinopExp(_, _, _) => {
@@ -236,9 +241,8 @@ fn is_valid_const_type_name(sp!(_, tn_): &TypeName) -> bool {
 fn is_valid_const_builtin_type(sp!(_, bt_): &BuiltinTypeName) -> bool {
     use BuiltinTypeName_ as N;
     match bt_ {
-        N::Address | N::U8 | N::U16 | N::U32 | N::U64 | N::U128 | N::U256 | N::Vector | N::Bool => {
-            true
-        }
+        N::Address | N::U8 | N::U16 | N::U32 | N::U64 | N::U128 | N::U256 | N::I8 | N::I16
+        | N::I32 | N::I64 | N::I128 | N::Vector | N::Bool => true,
         N::Signer => false,
     }
 }
@@ -247,14 +251,20 @@ fn is_valid_const_builtin_type(sp!(_, bt_): &BuiltinTypeName) -> bool {
 // Folding
 //**************************************************************************************************
 
-fn fold_unary_op(loc: Loc, sp!(_, op_): &UnaryOp, v: Value_) -> UnannotatedExp_ {
+fn fold_unary_op(loc: Loc, sp!(_, op_): &UnaryOp, v: Value_) -> Option<UnannotatedExp_> {
     use UnaryOp_ as U;
     use Value_ as V;
     let folded = match (op_, v) {
         (U::Not, V::Bool(b)) => V::Bool(!b),
+        // Negate signed integer values, wrapping on overflow
+        (U::Neg, V::I8(u)) => V::I8((u as i8).wrapping_neg() as u8),
+        (U::Neg, V::I16(u)) => V::I16((u as i16).wrapping_neg() as u16),
+        (U::Neg, V::I32(u)) => V::I32((u as i32).wrapping_neg() as u32),
+        (U::Neg, V::I64(u)) => V::I64((u as i64).wrapping_neg() as u64),
+        (U::Neg, V::I128(u)) => V::I128((u as i128).wrapping_neg() as u128),
         (op_, v) => panic!("ICE unknown unary op. combo while folding: {} {:?}", op_, v),
     };
-    evalue_(loc, folded)
+    Some(evalue_(loc, folded))
 }
 
 fn fold_binary_op(
@@ -435,6 +445,48 @@ fn fold_cast(loc: Loc, sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<Unann
         (BT::U256, V::U64(u)) => V::U256(u.into()),
         (BT::U256, V::U128(u)) => V::U256(u.into()),
         (BT::U256, V::U256(u)) => V::U256(u),
+        // Signed-to-signed casts
+        (BT::I8, V::I8(u)) => V::I8(u),
+        (BT::I8, V::I16(u)) => V::I8(u8::try_from(u).ok()?),
+        (BT::I8, V::I32(u)) => V::I8(u8::try_from(u).ok()?),
+        (BT::I8, V::I64(u)) => V::I8(u8::try_from(u).ok()?),
+        (BT::I8, V::I128(u)) => V::I8(u8::try_from(u).ok()?),
+
+        (BT::I16, V::I8(u)) => V::I16(u as u16),
+        (BT::I16, V::I16(u)) => V::I16(u),
+        (BT::I16, V::I32(u)) => V::I16(u16::try_from(u).ok()?),
+        (BT::I16, V::I64(u)) => V::I16(u16::try_from(u).ok()?),
+        (BT::I16, V::I128(u)) => V::I16(u16::try_from(u).ok()?),
+
+        (BT::I32, V::I8(u)) => V::I32(u as u32),
+        (BT::I32, V::I16(u)) => V::I32(u as u32),
+        (BT::I32, V::I32(u)) => V::I32(u),
+        (BT::I32, V::I64(u)) => V::I32(u32::try_from(u).ok()?),
+        (BT::I32, V::I128(u)) => V::I32(u32::try_from(u).ok()?),
+
+        (BT::I64, V::I8(u)) => V::I64(u as u64),
+        (BT::I64, V::I16(u)) => V::I64(u as u64),
+        (BT::I64, V::I32(u)) => V::I64(u as u64),
+        (BT::I64, V::I64(u)) => V::I64(u),
+        (BT::I64, V::I128(u)) => V::I64(u64::try_from(u).ok()?),
+
+        (BT::I128, V::I8(u)) => V::I128(u as u128),
+        (BT::I128, V::I16(u)) => V::I128(u as u128),
+        (BT::I128, V::I32(u)) => V::I128(u as u128),
+        (BT::I128, V::I64(u)) => V::I128(u as u128),
+        (BT::I128, V::I128(u)) => V::I128(u),
+
+        // Cross signed/unsigned casts: don't fold, let bytecode handle
+        (BT::I8, _)
+        | (BT::I16, _)
+        | (BT::I32, _)
+        | (BT::I64, _)
+        | (BT::I128, _)
+        | (_, V::I8(_))
+        | (_, V::I16(_))
+        | (_, V::I32(_))
+        | (_, V::I64(_))
+        | (_, V::I128(_)) => return None,
         (_, v) => panic!("ICE unexpected cast while folding: {:?} as {:?}", v, bt_),
     };
     Some(evalue_(loc, cast))

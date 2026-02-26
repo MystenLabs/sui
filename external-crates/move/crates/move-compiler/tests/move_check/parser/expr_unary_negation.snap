@@ -5,38 +5,19 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04016]: too few arguments
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:5
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:20
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │     ^^^^^^^^^^^^^^^^^
-  │     │      │
-  │     │      Found 0 argument(s) here
-  │     Invalid call of 'assert'. The call expected 2 argument(s) but got 0
+  │                    ^     ---- Found: 'u64'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
+  │                    │      
+  │                    Invalid argument to '-'
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:19
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:48
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                   ^
-  │                   │
-  │                   Unexpected '-'
-  │                   Expected an expression term
-
-error[E04007]: incompatible types
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:23
+  │                                                ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
   │
-5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │     ----------------- ^^ ---- Found: 'u64'. It is not compatible with the other type.
-  │     │                 │   
-  │     │                 Incompatible arguments to '=='
-  │     Found: '()'. It is not compatible with the other type.
-
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:30
-  │
-5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                              ^
-  │                              │
-  │                              Unexpected ')'
-  │                              Expected ';'
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -79,9 +79,16 @@ fn is_zero(exp: &H::Exp) -> Option<Loc> {
         return None;
     };
     match value_ {
-        Value_::U8(0) | Value_::U16(0) | Value_::U32(0) | Value_::U64(0) | Value_::U128(0) => {
-            Some(*loc)
-        }
+        Value_::U8(0)
+        | Value_::U16(0)
+        | Value_::U32(0)
+        | Value_::U64(0)
+        | Value_::U128(0)
+        | Value_::I8(0)
+        | Value_::I16(0)
+        | Value_::I32(0)
+        | Value_::I64(0)
+        | Value_::I128(0) => Some(*loc),
         Value_::U256(u) if u == &U256::zero() => Some(*loc),
         Value_::U8(_)
         | Value_::U16(_)
@@ -89,6 +96,11 @@ fn is_zero(exp: &H::Exp) -> Option<Loc> {
         | Value_::U64(_)
         | Value_::U128(_)
         | Value_::U256(_)
+        | Value_::I8(_)
+        | Value_::I16(_)
+        | Value_::I32(_)
+        | Value_::I64(_)
+        | Value_::I128(_)
         | Value_::Address(_)
         | Value_::Bool(_)
         | Value_::Vector(_, _) => None,
@@ -100,9 +112,16 @@ fn is_one(exp: &H::Exp) -> Option<Loc> {
         return None;
     };
     match value_ {
-        Value_::U8(1) | Value_::U16(1) | Value_::U32(1) | Value_::U64(1) | Value_::U128(1) => {
-            Some(*loc)
-        }
+        Value_::U8(1)
+        | Value_::U16(1)
+        | Value_::U32(1)
+        | Value_::U64(1)
+        | Value_::U128(1)
+        | Value_::I8(1)
+        | Value_::I16(1)
+        | Value_::I32(1)
+        | Value_::I64(1)
+        | Value_::I128(1) => Some(*loc),
         Value_::U256(u) if u == &U256::one() => Some(*loc),
         Value_::U8(_)
         | Value_::U16(_)
@@ -110,6 +129,11 @@ fn is_one(exp: &H::Exp) -> Option<Loc> {
         | Value_::U64(_)
         | Value_::U128(_)
         | Value_::U256(_)
+        | Value_::I8(_)
+        | Value_::I16(_)
+        | Value_::I32(_)
+        | Value_::I64(_)
+        | Value_::I128(_)
         | Value_::Address(_)
         | Value_::Bool(_)
         | Value_::Vector(_, _) => None,

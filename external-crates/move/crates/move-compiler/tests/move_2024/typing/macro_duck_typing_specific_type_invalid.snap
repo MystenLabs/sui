@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
 info:
   flavor: core
   edition: 2024.alpha
@@ -36,7 +37,7 @@ error[E04003]: built-in operation not supported
    │          ^^ Invalid argument to 'as'
    ·
 19 │         is_num!(X());
-   │                 --- Found: 'a::m::X'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                 --- Found: 'a::m::X'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/typing/macro_duck_typing_specific_type_invalid.move:13:10
@@ -45,7 +46,7 @@ error[E04003]: built-in operation not supported
    │          ^^ Invalid argument to 'as'
    ·
 20 │         is_num!(@0);
-   │                 -- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                 -- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/typing/macro_duck_typing_specific_type_invalid.move:13:10
@@ -54,4 +55,4 @@ error[E04003]: built-in operation not supported
    │          ^^ Invalid argument to 'as'
    ·
 21 │         is_num!(vector[0u64]);
-   │                 ------------ Found: 'vector<u64>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                 ------------ Found: 'vector<u64>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'

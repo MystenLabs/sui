@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
 info:
   flavor: core
   edition: 2024.alpha
@@ -9,7 +10,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:33:21
    │
 32 │            NBase { mut t } => {
-   │                        - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                        - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 33 │                 t = t + 1u64;
    │                     ^ Invalid argument to '+'
 
@@ -27,7 +28,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:33:25
    │
 32 │            NBase { mut t } => {
-   │                        - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                        - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 33 │                 t = t + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
@@ -35,7 +36,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:42:21
    │
 41 │            NBase { t: mut x } => {
-   │                           - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                           - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 42 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
@@ -53,7 +54,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:42:25
    │
 41 │            NBase { t: mut x } => {
-   │                           - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                           - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 42 │                 x = x + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
@@ -61,7 +62,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:51:20
    │
 50 │            PBase(mut x) => {
-   │                      - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                      - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 51 │                x = x + 1u64;
    │                    ^ Invalid argument to '+'
 
@@ -79,7 +80,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:51:24
    │
 50 │            PBase(mut x) => {
-   │                      - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                      - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 51 │                x = x + 1u64;
    │                        ^^^^ Invalid argument to '+'
 
@@ -87,7 +88,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:60:21
    │
 59 │            NPoly { t : NBase { mut t } } => {
-   │                                    - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                                    - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 60 │                 t = t + 1u64;
    │                     ^ Invalid argument to '+'
 
@@ -105,7 +106,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:60:25
    │
 59 │            NPoly { t : NBase { mut t } } => {
-   │                                    - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                                    - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 60 │                 t = t + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
@@ -113,7 +114,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:69:21
    │
 68 │            NPoly { t : NBase { t: mut x } } => {
-   │                                       - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                                       - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 69 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
@@ -131,7 +132,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:69:25
    │
 68 │            NPoly { t : NBase { t: mut x } } => {
-   │                                       - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                                       - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 69 │                 x = x + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
@@ -139,7 +140,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:78:21
    │
 77 │            NPoly { t : PBase(mut x) } => {
-   │                                  - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                                  - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 78 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
@@ -157,7 +158,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:78:25
    │
 77 │            NPoly { t : PBase(mut x) } => {
-   │                                  - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                                  - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 78 │                 x = x + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
@@ -165,7 +166,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:87:21
    │
 86 │            PPoly(NBase { t: mut x }) => {
-   │                                 - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                                 - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 87 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
@@ -183,7 +184,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:87:25
    │
 86 │            PPoly(NBase { t: mut x }) => {
-   │                                 - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                                 - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 87 │                 x = x + 1u64;
    │                         ^^^^ Invalid argument to '+'
 
@@ -191,7 +192,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:96:21
    │
 95 │            PPoly(PBase(mut x)) => {
-   │                            - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                            - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 96 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
@@ -209,6 +210,6 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:96:25
    │
 95 │            PPoly(PBase(mut x)) => {
-   │                            - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                            - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 96 │                 x = x + 1u64;
    │                         ^^^^ Invalid argument to '+'
