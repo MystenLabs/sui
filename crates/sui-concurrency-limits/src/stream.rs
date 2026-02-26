@@ -80,10 +80,9 @@ impl<S: Stream + Sized + 'static> ConcurrencyLimitedStreamExt for S {
                     Some(Some(item)) => {
                         active += 1;
                         let fut = f(item);
-                        let limiter = limiter.clone();
+                        let token = limiter.acquire();
 
                         join_set.spawn(async move {
-                            let token = limiter.acquire();
                             match fut.await {
                                 Ok(()) => {
                                     token.record_sample(Outcome::Success);
@@ -138,10 +137,9 @@ impl<S: Stream + Sized + 'static> ConcurrencyLimitedStreamExt for S {
                     if let Some(item) = next {
                         active += 1;
                         let fut = f(item);
-                        let limiter = limiter.clone();
+                        let token = limiter.acquire();
 
                         join_set.spawn(async move {
-                            let token = limiter.acquire();
                             match fut.await {
                                 Ok(()) => {
                                     token.record_sample(Outcome::Success);
