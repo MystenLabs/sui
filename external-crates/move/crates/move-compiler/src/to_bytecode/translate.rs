@@ -1222,7 +1222,9 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     let [ty]: [IR::Type; 1] = types(context, e.ty)
                         .try_into()
                         .expect("ICE value type should have one element");
-                    B::LdConst(ty, move_value_from_value_(v_))
+                    let mv = move_value_from_value_(v_)
+                        .expect("ICE address/vector should convert to MoveValue");
+                    B::LdConst(ty, mv)
                 }
             };
             code.push(sp(loc, ld_value));

@@ -78,46 +78,28 @@ use std::num::ParseIntError;
 
 // Signed integer parsing: parse a non-negative literal value that must fit in the
 // non-negative range of the signed type. Negation is handled as a separate unary operator.
-pub fn parse_i8(s: &str) -> Result<(u8, NumberFormat), ParseIntError> {
-    let (val, fmt) = parse_u8(s)?;
-    if val > i8::MAX as u8 {
-        // Force a parse error by attempting an impossible parse
-        u8::from_str_radix("256", 10)?;
-    }
-    Ok((val, fmt))
+// `ParseIntError` has no public constructor, so we produce one via a known-failing parse.
+fn signed_overflow_parse_error() -> ParseIntError {
+    u8::from_str_radix("256", 10).unwrap_err()
 }
 
-pub fn parse_i16(s: &str) -> Result<(u16, NumberFormat), ParseIntError> {
-    let (val, fmt) = parse_u16(s)?;
-    if val > i16::MAX as u16 {
-        u16::from_str_radix("65536", 10)?;
-    }
-    Ok((val, fmt))
+macro_rules! define_parse_signed_int {
+    ($fname:ident, $parse_unsigned:ident, $unsigned:ty, $signed:ty) => {
+        pub fn $fname(s: &str) -> Result<($unsigned, NumberFormat), ParseIntError> {
+            let (val, fmt) = $parse_unsigned(s)?;
+            if val > <$signed>::MAX as $unsigned {
+                return Err(signed_overflow_parse_error());
+            }
+            Ok((val, fmt))
+        }
+    };
 }
 
-pub fn parse_i32(s: &str) -> Result<(u32, NumberFormat), ParseIntError> {
-    let (val, fmt) = parse_u32(s)?;
-    if val > i32::MAX as u32 {
-        u32::from_str_radix("4294967296", 10)?;
-    }
-    Ok((val, fmt))
-}
-
-pub fn parse_i64(s: &str) -> Result<(u64, NumberFormat), ParseIntError> {
-    let (val, fmt) = parse_u64(s)?;
-    if val > i64::MAX as u64 {
-        u64::from_str_radix("18446744073709551616", 10)?;
-    }
-    Ok((val, fmt))
-}
-
-pub fn parse_i128(s: &str) -> Result<(u128, NumberFormat), ParseIntError> {
-    let (val, fmt) = parse_u128(s)?;
-    if val > i128::MAX as u128 {
-        u128::from_str_radix("340282366920938463463374607431768211456", 10)?;
-    }
-    Ok((val, fmt))
-}
+define_parse_signed_int!(parse_i8, parse_u8, u8, i8);
+define_parse_signed_int!(parse_i16, parse_u16, u16, i16);
+define_parse_signed_int!(parse_i32, parse_u32, u32, i32);
+define_parse_signed_int!(parse_i64, parse_u64, u64, i64);
+define_parse_signed_int!(parse_i128, parse_u128, u128, i128);
 
 //**************************************************************************************************
 // Address

@@ -477,7 +477,7 @@ fn constant(
             constant_values
                 .add(name, value.clone())
                 .expect("ICE constant name collision");
-            Some(move_value_from_value(value))
+            move_value_from_value(value)
         }
         _ => None,
     };
@@ -600,14 +600,14 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
     }
 }
 
-pub(crate) fn move_value_from_value(sp!(_, v_): Value) -> MoveValue {
+pub(crate) fn move_value_from_value(sp!(_, v_): Value) -> Option<MoveValue> {
     move_value_from_value_(v_)
 }
 
-pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
+pub(crate) fn move_value_from_value_(v_: Value_) -> Option<MoveValue> {
     use MoveValue as MV;
     use Value_ as V;
-    match v_ {
+    Some(match v_ {
         V::Address(a) => MV::Address(MoveAddress::new(a.into_bytes())),
         V::U8(u) => MV::U8(u),
         V::U16(u) => MV::U16(u),
@@ -615,14 +615,13 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
         V::U64(u) => MV::U64(u),
         V::U128(u) => MV::U128(u),
         V::U256(u) => MV::U256(u),
-        V::I8(u) => MV::U8(u),
-        V::I16(u) => MV::U16(u),
-        V::I32(u) => MV::U32(u),
-        V::I64(u) => MV::U64(u),
-        V::I128(u) => MV::U128(u),
         V::Bool(b) => MV::Bool(b),
-        V::Vector(_, vs) => MV::Vector(vs.into_iter().map(move_value_from_value).collect()),
-    }
+        V::Vector(_, vs) => {
+            let mvs: Option<Vec<_>> = vs.into_iter().map(move_value_from_value).collect();
+            MV::Vector(mvs?)
+        }
+        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) => return None,
+    })
 }
 
 //**************************************************************************************************
