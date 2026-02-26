@@ -151,15 +151,15 @@ Events are batched and settled at checkpoint boundaries through the **accumulato
 
 ### Merkle Mountain Range (MMR)
 
-An MMR represents a forest of perfect binary trees (“mountains”). If n leaves have been appended, the MMR structure corresponds to the binary decomposition of n. For example, if `n=13 (1101)`, the MMR consists of three trees of sizes `2^3 = 8`, `2^2 = 4` and `2^0=1`. See the diagram below for an expanded MMR that shows all the internal leaves.
+An MMR is a forest of perfect binary trees ("mountains"). After `n` leaves are appended, mountain sizes correspond to the set bits in the binary representation of `n`. For example, when `n = 13 (1101 in binary)`, the mountains have sizes `2^3 = 8`, `2^2 = 4`, and `2^0 = 1`. The diagram below shows an expanded MMR (internal nodes and leaves).
 
-The MMR state maintained in `EventStreamHead` consists of a vector of digests. Appending n leaves causes the MMR state to contain at most `log_2(n)` elements. In other words, the on-chain state only stores the roots of the perfect binary trees.
+The MMR state in `EventStreamHead` is stored as a compact vector of digests indexed by tree height (not the full expanded tree). This keeps on-chain state `O(log n)` in the number of appended leaves.
 
-The features of a MMR are:
+Key properties of an MMR:
 
-- Compact `O(log n)` digest 
-- Append-only: New entries can be added to the MMR using the digest alone
-- `O(log n)` sized inclusion proofs. Note that generating these requires maintaining the expanded MMR and is not yet supported in our RPC services.
+- Compact on-chain accumulator state: `O(log n)` digests.
+- Append-only updates: new leaves can be incorporated using only the current accumulator state (without the expanded MMR).
+- Inclusion proofs are `O(log n)` in size. Event-level MMR inclusion proofs are not yet exposed by current RPC services (this is separate from OCS inclusion proofs exposed by the ProofService). These inclusion proofs can lead to many interesting applications, e.g., move data storage off-chain, efficient cross-chain reads, prove inclusion in ZK, etc.
 
 
 #### Expanded MMR with 13 leaves
