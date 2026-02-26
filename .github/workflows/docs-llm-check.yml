@@ -1,9 +1,9 @@
 name: Run LLM Ingestion Checks for Docs
 
 on:
-  push:
+  pull_request:
     branches:
-      - llms-compliance
+      - main
 
 jobs:
   check-docs:
