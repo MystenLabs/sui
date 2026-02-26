@@ -1441,10 +1441,7 @@ fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): 
                 context
                     .env
                     .diagnostic_reporter_at_top_level()
-                    .add_diag(ice!((
-                        loc,
-                        "Unary negation is not supported in bytecode",
-                    )));
+                    .add_diag(ice!((loc, "Unary negation is not supported in bytecode",)));
                 B::Not
             }
         },
