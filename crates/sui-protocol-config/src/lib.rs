@@ -4626,6 +4626,12 @@ impl ProtocolConfig {
                 114 => {
                     cfg.feature_flags.randomize_checkpoint_tx_limit_in_tests = true;
                     cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                        cfg.feature_flags.enable_authenticated_event_streams = true;
+                        cfg.feature_flags
+                            .include_checkpoint_artifacts_digest_in_summary = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
