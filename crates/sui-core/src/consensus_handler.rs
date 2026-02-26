@@ -63,7 +63,7 @@ use crate::{
         AuthorityMetrics, AuthorityState, ExecutionEnv,
         authority_per_epoch_store::{
             AuthorityPerEpochStore, CancelConsensusCertificateReason, ConsensusStats,
-            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStats,
+            ConsensusStatsAPI, ExecutionIndices, ExecutionIndicesWithStatsV2,
             consensus_quarantine::ConsensusCommitOutput,
         },
         backpressure::{BackpressureManager, BackpressureSubscriber},
@@ -555,6 +555,14 @@ impl CheckpointQueue {
         }
     }
 
+    pub(crate) fn last_built_timestamp(&self) -> CheckpointTimestamp {
+        self.last_built_timestamp
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.pending_roots.is_empty()
+    }
+
     fn next_height(&mut self) -> u64 {
         self.height += 1;
         self.height
@@ -710,7 +718,7 @@ pub struct ConsensusHandler<C> {
     /// Holds the indices, hash and stats after the last consensus commit
     /// It is used for avoiding replaying already processed transactions,
     /// checking chain consistency, and accumulating per-epoch consensus output stats.
-    last_consensus_stats: ExecutionIndicesWithStats,
+    last_consensus_stats: ExecutionIndicesWithStatsV2,
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
     cache_reader: Arc<dyn ObjectCacheRead>,
@@ -782,13 +790,7 @@ impl<C> ConsensusHandler<C> {
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
-        let last_built_summary = epoch_store
-            .last_built_checkpoint_builder_summary()
-            .expect("Should be able to read last built checkpoint");
-        let last_built_timestamp = last_built_summary
-            .as_ref()
-            .map(|s| s.summary.timestamp_ms)
-            .unwrap_or(0);
+        let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         Self {
             epoch_store,
@@ -834,18 +836,12 @@ impl<C> ConsensusHandler<C> {
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_subscriber: BackpressureSubscriber,
         traffic_controller: Option<Arc<TrafficController>>,
-        last_consensus_stats: ExecutionIndicesWithStats,
+        last_consensus_stats: ExecutionIndicesWithStatsV2,
     ) -> Self {
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
-        let last_built_summary = epoch_store
-            .last_built_checkpoint_builder_summary()
-            .expect("Should be able to read last built checkpoint");
-        let last_built_timestamp = last_built_summary
-            .as_ref()
-            .map(|s| s.summary.timestamp_ms)
-            .unwrap_or(0);
+        let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         Self {
             epoch_store,
@@ -1263,6 +1259,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let mut stats_to_record = self.last_consensus_stats.clone();
         stats_to_record.height = checkpoint_height;
+        if self
+            .epoch_store
+            .protocol_config()
+            .split_checkpoints_in_consensus_handler()
+        {
+            stats_to_record.last_checkpoint_flush_timestamp =
+                self.checkpoint_queue.lock().unwrap().last_built_timestamp();
+        }
 
         state.output.record_consensus_commit_stats(stats_to_record);
 
@@ -1851,6 +1855,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .map(|(_, height)| *height)
             .expect("at least one checkpoint root must be created per commit");
 
+        let queue_drained = checkpoint_queue.is_empty();
         drop(checkpoint_queue);
 
         for pending_checkpoint in pending_checkpoints {
@@ -1863,6 +1868,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .write_pending_checkpoint_v2(&mut state.output, &pending_checkpoint)
                 .expect("failed to write pending checkpoint");
         }
+
+        state.output.set_checkpoint_queue_drained(queue_drained);
 
         // Strip alias version information
         let flat_schedulables: Vec<Schedulable> = chunked_schedulables
