@@ -3368,3 +3368,35 @@ async fn test_address_balance_gas_pay_all_sui() {
 
     test_env.verify_accumulator_exists(sender, 10_000_000);
 }
+
+/// Simulating a transaction with overflowing funds withdrawals must return an error.
+#[sim_test]
+async fn test_simulate_overflowing_funds_withdrawal_returns_error() {
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, gas_objects) = test_env.get_sender_and_all_gas(0);
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+        u64::MAX,
+        GAS::type_tag(),
+    ))
+    .unwrap();
+    ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_sender(1, GAS::type_tag()))
+        .unwrap();
+    let tx = TransactionData::new_programmable(sender, vec![gas_objects[0]], ptb.finish(), 1000, 1);
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false)
+        .await;
+    assert!(result.is_err());
+}
