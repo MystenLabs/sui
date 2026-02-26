@@ -74,7 +74,6 @@ pub enum Constraint {
         constraints: AbilitySet,
     },
     NumericConstraint(Loc, &'static str, Type),
-    SignedNumericConstraint(Loc, &'static str, Type),
     BitsConstraint(Loc, &'static str, Type),
     OrderedConstraint(Loc, &'static str, Type),
     BaseTypeConstraint(Loc, String, Type),
@@ -1096,11 +1095,6 @@ impl<'env, 'outer> Context<'env, 'outer> {
     pub fn add_numeric_constraint(&mut self, loc: Loc, op: &'static str, t: Type) {
         self.constraints
             .push(Constraint::NumericConstraint(loc, op, t))
-    }
-
-    pub fn add_signed_numeric_constraint(&mut self, loc: Loc, op: &'static str, t: Type) {
-        self.constraints
-            .push(Constraint::SignedNumericConstraint(loc, op, t))
     }
 
     pub fn add_bits_constraint(&mut self, loc: Loc, op: &'static str, t: Type) {
@@ -2473,9 +2467,6 @@ pub fn solve_constraints(context: &mut Context) {
             Constraint::NumericConstraint(loc, op, t) => {
                 solve_builtin_type_constraint(context, BT::numeric(), loc, op, &t)
             }
-            Constraint::SignedNumericConstraint(loc, op, t) => {
-                solve_builtin_type_constraint(context, BT::signed_numeric(), loc, op, &t)
-            }
             Constraint::BitsConstraint(loc, op, t) => {
                 solve_builtin_type_constraint(context, BT::bits(), loc, op, &t)
             }
@@ -3542,15 +3533,8 @@ pub fn join_var_constraints(
         (None, Some(C::Num(_))) => Ok(rhs),
 
         // Num + SignedNum => SignedNum (signed is more restrictive)
-        (Some(C::Num(_)), Some(C::SignedNum(_)))
-        | (Some(C::SignedNum(_)), Some(C::Num(_))) => {
-            // Pick the SignedNum side
-            match (&lhs, &rhs) {
-                (Some(C::SignedNum(_)), _) => Ok(lhs),
-                (_, Some(C::SignedNum(_))) => Ok(rhs),
-                _ => unreachable!(),
-            }
-        }
+        (Some(C::Num(_)), rhs @ Some(C::SignedNum(_))) => Ok(rhs.clone()),
+        (lhs @ Some(C::SignedNum(_)), Some(C::Num(_))) => Ok(lhs.clone()),
 
         // signed num constraints propagate
         (Some(C::SignedNum(_)), Some(C::SignedNum(_))) => Ok(rhs),
