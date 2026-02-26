@@ -1,7 +1,9 @@
 name: Run LLM Ingestion Checks for Docs
 
 on:
-  deployment_status:
+  push:
+    branches:
+      - llms-compliance
 
 jobs:
   check-docs:
