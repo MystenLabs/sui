@@ -644,8 +644,9 @@ impl BaseType_ {
         use BuiltinTypeName_::*;
 
         let kind = match b_ {
-            U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | Bool
-            | Address => AbilitySet::primitives(loc),
+            U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | Bool | Address => {
+                AbilitySet::primitives(loc)
+            }
             Signer => AbilitySet::signer(loc),
             Vector => {
                 let declared_abilities = AbilitySet::collection(loc);

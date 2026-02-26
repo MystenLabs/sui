@@ -934,10 +934,7 @@ fn get_number_maybe_with_suffix(text: &str, num_text_len: usize) -> (Tok, usize)
         || rest.starts_with("i32")
     {
         (Tok::NumTypedValue, num_text_len + 3)
-    } else if rest.starts_with("u128")
-        || rest.starts_with("u256")
-        || rest.starts_with("i128")
-    {
+    } else if rest.starts_with("u128") || rest.starts_with("u256") || rest.starts_with("i128") {
         (Tok::NumTypedValue, num_text_len + 4)
     } else {
         // No typed suffix
