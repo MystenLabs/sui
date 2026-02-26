@@ -14352,6 +14352,7 @@ name = "sui-concurrency-limits"
 version = "1.67.0"
 dependencies = [
  "futures",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tokio",

@@ -4,7 +4,7 @@
 //! Dynamic concurrency limiters based on Netflix's
 //! [concurrency-limits](https://github.com/Netflix/concurrency-limits) library.
 //!
-//! Three algorithms are provided:
+//! Four algorithms are provided:
 //!
 //! - **AIMD** (`Aimd`): loss-based. Additive increase on success, multiplicative decrease on
 //!   drop. Simple and effective when the backing store signals overload via errors/throttling
@@ -20,6 +20,12 @@
 //!   multiplicatively; otherwise it increases additively by √limit. Differentiates cluster sizes
 //!   because the DB saturates at different concurrency levels, causing backpressure at different
 //!   points.
+//!
+//! - **Vegas** (`Vegas`): TCP Vegas-inspired. Estimates queue size from the ratio of baseline RTT
+//!   to observed RTT: `queue = limit * (1 - rtt_noload / rtt)`. Increases aggressively when
+//!   queue is below a threshold, increases moderately when below alpha, and decreases when above
+//!   beta. Periodically probes for a new baseline RTT. Alpha, beta, and thresholds scale with
+//!   log10(limit).
 //!
 //! # Differences from Netflix's reference implementation
 //!
@@ -85,6 +91,7 @@ enum Algorithm {
     Aimd(Aimd),
     Gradient(Gradient),
     TrendAimd(TrendAimd),
+    Vegas(Vegas),
 }
 
 impl Algorithm {
@@ -101,7 +108,8 @@ impl Algorithm {
             Self::Fixed { limit } => *limit,
             Self::Aimd(a) => a.update(inflight, outcome, rtt),
             Self::Gradient(g) => g.update(inflight, outcome, rtt),
-            Self::TrendAimd(t) => t.update(outcome, rtt),
+            Self::TrendAimd(t) => t.update(inflight, outcome, rtt),
+            Self::Vegas(v) => v.update(inflight, outcome, rtt),
         }
     }
 }
@@ -258,6 +266,31 @@ impl Limiter {
         }
     }
 
+    pub fn vegas(config: VegasConfig) -> Self {
+        Self::builder_vegas(config).build()
+    }
+
+    /// Return a [`LimiterBuilder`] pre-configured with a Vegas algorithm.
+    pub fn builder_vegas(config: VegasConfig) -> LimiterBuilder {
+        assert!(
+            config.smoothing > 0.0 && config.smoothing <= 1.0,
+            "smoothing must be in (0.0, 1.0]"
+        );
+        assert!(
+            config.probe_multiplier > 0,
+            "probe_multiplier must be > 0"
+        );
+        let initial = config
+            .initial_limit
+            .clamp(config.min_limit, config.max_limit);
+        LimiterBuilder {
+            algorithm: Algorithm::Vegas(Vegas::new(&config)),
+            initial_limit: initial,
+            clock: None,
+            on_limit_change: None,
+        }
+    }
+
     pub fn trend_aimd(config: TrendAimdConfig) -> Self {
         Self::builder_trend_aimd(config).build()
     }
@@ -402,6 +435,7 @@ pub enum ConcurrencyLimit {
     Aimd(AimdConfig),
     Gradient(GradientConfig),
     TrendAimd(TrendAimdConfig),
+    Vegas(VegasConfig),
 }
 
 impl<'de> Deserialize<'de> for ConcurrencyLimit {
@@ -416,6 +450,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Aimd(AimdConfig),
             Gradient(GradientConfig),
             TrendAimd(TrendAimdConfig),
+            Vegas(VegasConfig),
         }
 
         #[derive(Deserialize)]
@@ -431,6 +466,7 @@ impl<'de> Deserialize<'de> for ConcurrencyLimit {
             Helper::Tagged(Tagged::Aimd(c)) => Ok(ConcurrencyLimit::Aimd(c)),
             Helper::Tagged(Tagged::Gradient(c)) => Ok(ConcurrencyLimit::Gradient(c)),
             Helper::Tagged(Tagged::TrendAimd(c)) => Ok(ConcurrencyLimit::TrendAimd(c)),
+            Helper::Tagged(Tagged::Vegas(c)) => Ok(ConcurrencyLimit::Vegas(c)),
         }
     }
 }
@@ -443,6 +479,7 @@ impl ConcurrencyLimit {
             Self::Aimd(config) => Limiter::aimd(config.clone()),
             Self::Gradient(config) => Limiter::gradient(config.clone()),
             Self::TrendAimd(config) => Limiter::trend_aimd(config.clone()),
+            Self::Vegas(config) => Limiter::vegas(config.clone()),
         }
     }
 
@@ -463,6 +500,9 @@ impl ConcurrencyLimit {
                 .on_limit_change(on_limit_change)
                 .build(),
             Self::TrendAimd(config) => Limiter::builder_trend_aimd(config.clone())
+                .on_limit_change(on_limit_change)
+                .build(),
+            Self::Vegas(config) => Limiter::builder_vegas(config.clone())
                 .on_limit_change(on_limit_change)
                 .build(),
         }
@@ -748,9 +788,11 @@ impl Gradient {
 
 /// Configuration for the TrendAimd concurrency limit algorithm.
 ///
-/// Compares fast and slow EWMAs of RTT to detect congestion trends. When the fast
-/// average exceeds the slow average by more than a proportional tolerance, the limit
-/// decreases multiplicatively; otherwise it increases additively by √limit.
+/// AIMD with a decaying-minimum RTT baseline. Tracks a fast EWMA of RTT and compares
+/// it against the minimum observed RTT (which drifts up slowly via decay). When the
+/// EWMA exceeds `min_rtt * (1 + tolerance)`, the limit decreases multiplicatively;
+/// otherwise it increases additively by √limit. The minimum baseline cannot be dragged
+/// up by gradually rising RTT the way a slow EWMA can, preventing unbounded limit growth.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct TrendAimdConfig {
@@ -763,7 +805,7 @@ pub struct TrendAimdConfig {
     /// Multiplicative decrease factor applied on congestion or drop, in `[0.5, 1.0)`.
     pub decrease_ratio: f64,
     /// Proportional tolerance for congestion detection. Decrease triggers when
-    /// `fast_ewma > slow_ewma * (1.0 + tolerance)`. Default 0.05 (5%).
+    /// `ewma_rtt > min_rtt * (1.0 + tolerance)`. Default 0.05 (5%).
     pub tolerance: f64,
 }
 
@@ -779,13 +821,14 @@ impl Default for TrendAimdConfig {
     }
 }
 
-/// Internal EWMA constants (not user-configurable).
+/// EWMA smoothing factor for the fast RTT tracker.
 const ALPHA_FAST: f64 = 0.4;
-/// With per-sample updates and epoch_size up to 500, the slow EWMA must be small enough
-/// to retain meaningful memory across epochs: (1 - 0.001)^500 ≈ 0.61, giving a half-life
-/// of ~1.4 epochs. This ensures the slow EWMA actually lags behind the fast EWMA when
-/// RTT shifts, providing the signal for congestion detection.
-const ALPHA_SLOW: f64 = 0.001;
+
+/// Per-sample decay applied to min_rtt: `min_rtt *= 1 + MIN_RTT_DECAY` each sample.
+/// At 500 samples/epoch: (1.0001)^500 ≈ 1.051, so the floor drifts up ~5% per epoch
+/// if no new minimum is observed. This prevents the baseline from being permanently
+/// stuck at an anomalously low value.
+const MIN_RTT_DECAY: f64 = 0.0001;
 
 /// Minimum epoch size floor to avoid noisy decisions at very low limits.
 const MIN_EPOCH_SIZE: u64 = 20;
@@ -793,7 +836,7 @@ const MIN_EPOCH_SIZE: u64 = 20;
 struct TrendAimdState {
     limit: f64,
     ewma_rtt: f64,
-    ewma_rtt_slow: f64,
+    min_rtt: f64,
     completions_in_epoch: u64,
     epoch_size: u64,
 }
@@ -816,7 +859,7 @@ impl TrendAimd {
             state: Mutex::new(TrendAimdState {
                 limit: initial as f64,
                 ewma_rtt: 0.0,
-                ewma_rtt_slow: 0.0,
+                min_rtt: 0.0,
                 completions_in_epoch: 0,
                 epoch_size,
             }),
@@ -827,7 +870,7 @@ impl TrendAimd {
         }
     }
 
-    fn update(&self, outcome: Outcome, rtt: Duration) -> usize {
+    fn update(&self, _inflight: usize, outcome: Outcome, rtt: Duration) -> usize {
         let rtt_secs = rtt.as_secs_f64();
         if rtt_secs == 0.0 {
             return self.state.lock().unwrap().limit as usize;
@@ -844,13 +887,16 @@ impl TrendAimd {
             return s.limit as usize;
         }
 
-        // Update EWMAs per-sample for accurate signal tracking.
+        // Update fast EWMA per-sample.
         if s.ewma_rtt == 0.0 {
             s.ewma_rtt = rtt_secs;
-            s.ewma_rtt_slow = rtt_secs;
+            s.min_rtt = rtt_secs;
         } else {
             s.ewma_rtt = s.ewma_rtt * (1.0 - ALPHA_FAST) + rtt_secs * ALPHA_FAST;
-            s.ewma_rtt_slow = s.ewma_rtt_slow * (1.0 - ALPHA_SLOW) + rtt_secs * ALPHA_SLOW;
+            // Decay the minimum upward, then take the min with the new sample.
+            // The decay prevents the baseline from being permanently stuck at an
+            // anomalously low value, while the min() anchors it to real observations.
+            s.min_rtt = (s.min_rtt * (1.0 + MIN_RTT_DECAY)).min(rtt_secs);
         }
 
         // Only make limit decisions at epoch boundaries.
@@ -860,9 +906,9 @@ impl TrendAimd {
         }
         s.completions_in_epoch = 0;
 
-        let threshold = s.ewma_rtt_slow * (1.0 + self.tolerance);
+        let threshold = s.min_rtt * (1.0 + self.tolerance);
         if s.ewma_rtt > threshold {
-            // Congestion: fast EWMA exceeds slow EWMA beyond tolerance.
+            // Congestion: EWMA exceeds decaying-minimum baseline beyond tolerance.
             s.limit *= self.decrease_ratio;
         } else {
             // No congestion: additive increase.
@@ -872,6 +918,194 @@ impl TrendAimd {
         s.limit = s.limit.clamp(self.min_limit as f64, self.max_limit as f64);
         s.epoch_size = (s.limit as u64).clamp(MIN_EPOCH_SIZE, 500);
         s.limit as usize
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Vegas algorithm — TCP Vegas-inspired concurrency limiter
+// ---------------------------------------------------------------------------
+
+/// Configuration for the Vegas concurrency limit algorithm.
+///
+/// Based on TCP Vegas where the limit increases by alpha if the estimated queue usage is small
+/// (< alpha) and decreases by alpha if the queue usage is large (> beta).
+///
+/// Queue size is calculated as: `queue_use = limit * (1 - rtt_noload / rtt_actual)`
+///
+/// Uses log10-scaled alpha/beta thresholds: `alpha = alpha_factor * log10(limit)`,
+/// `beta = beta_factor * log10(limit)`. Periodically probes for a new baseline RTT
+/// every `probe_multiplier * limit` samples (with jitter).
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct VegasConfig {
+    /// Starting concurrency limit.
+    pub initial_limit: usize,
+    /// Floor: the limit will never go below this value.
+    pub min_limit: usize,
+    /// Ceiling: the limit will never exceed this value.
+    pub max_limit: usize,
+    /// Exponential smoothing factor in `(0.0, 1.0]` for blending old and new limit estimates.
+    /// 1.0 means no smoothing (use new value directly).
+    pub smoothing: f64,
+    /// Multiplier for alpha threshold: `alpha = alpha_factor * log10(limit)`.
+    /// Alpha is the lower bound of acceptable queue size.
+    pub alpha_factor: usize,
+    /// Multiplier for beta threshold: `beta = beta_factor * log10(limit)`.
+    /// Beta is the upper bound of acceptable queue size.
+    pub beta_factor: usize,
+    /// The limiter probes for a new baseline RTT every `probe_multiplier * limit` samples.
+    pub probe_multiplier: usize,
+}
+
+impl Default for VegasConfig {
+    fn default() -> Self {
+        Self {
+            initial_limit: 20,
+            min_limit: 1,
+            max_limit: 1000,
+            smoothing: 1.0,
+            alpha_factor: 3,
+            beta_factor: 6,
+            probe_multiplier: 30,
+        }
+    }
+}
+
+/// log10 of n, truncated to integer, with minimum of 1. Matches Netflix's `Log10RootIntFunction`.
+fn log10_int(n: usize) -> usize {
+    if n <= 1 {
+        return 1;
+    }
+    ((n as f64).log10() as usize).max(1)
+}
+
+struct VegasState {
+    estimated_limit: f64,
+    /// Minimum observed RTT in nanoseconds; 0 means uninitialized.
+    rtt_noload: u128,
+    probe_count: usize,
+    probe_jitter: f64,
+}
+
+impl VegasState {
+    fn reset_probe_jitter(&mut self) {
+        self.probe_jitter = rand::random::<f64>() * 0.5 + 0.5; // [0.5, 1.0)
+    }
+
+    fn should_probe(&self, probe_multiplier: usize, estimated_limit: f64) -> bool {
+        self.probe_jitter * probe_multiplier as f64 * estimated_limit <= self.probe_count as f64
+    }
+}
+
+struct Vegas {
+    state: Mutex<VegasState>,
+    min_limit: usize,
+    max_limit: usize,
+    smoothing: f64,
+    alpha_factor: usize,
+    beta_factor: usize,
+    probe_multiplier: usize,
+}
+
+impl Vegas {
+    fn new(config: &VegasConfig) -> Self {
+        let initial = config
+            .initial_limit
+            .clamp(config.min_limit, config.max_limit);
+        let mut state = VegasState {
+            estimated_limit: initial as f64,
+            rtt_noload: 0,
+            probe_count: 0,
+            probe_jitter: 0.0,
+        };
+        state.reset_probe_jitter();
+        Self {
+            state: Mutex::new(state),
+            min_limit: config.min_limit,
+            max_limit: config.max_limit,
+            smoothing: config.smoothing,
+            alpha_factor: config.alpha_factor,
+            beta_factor: config.beta_factor,
+            probe_multiplier: config.probe_multiplier,
+        }
+    }
+
+    fn update(&self, inflight: usize, outcome: Outcome, rtt: Duration) -> usize {
+        let rtt_nanos = rtt.as_nanos();
+        if rtt_nanos == 0 {
+            return self.state.lock().unwrap().estimated_limit as usize;
+        }
+
+        let mut s = self.state.lock().unwrap();
+
+        s.probe_count += 1;
+        if s.should_probe(self.probe_multiplier, s.estimated_limit) {
+            s.reset_probe_jitter();
+            s.probe_count = 0;
+            s.rtt_noload = rtt_nanos;
+            return s.estimated_limit as usize;
+        }
+
+        if s.rtt_noload == 0 || rtt_nanos < s.rtt_noload {
+            s.rtt_noload = rtt_nanos;
+            return s.estimated_limit as usize;
+        }
+
+        let rtt_noload = s.rtt_noload;
+        self.update_estimated_limit(
+            &mut s,
+            rtt_nanos,
+            rtt_noload,
+            inflight,
+            matches!(outcome, Outcome::Dropped),
+        )
+    }
+
+    fn update_estimated_limit(
+        &self,
+        s: &mut VegasState,
+        rtt: u128,
+        rtt_noload: u128,
+        inflight: usize,
+        did_drop: bool,
+    ) -> usize {
+        let estimated_limit = s.estimated_limit;
+        let queue_size =
+            (estimated_limit * (1.0 - rtt_noload as f64 / rtt as f64)).ceil() as i64;
+
+        let new_limit = if did_drop {
+            estimated_limit - log10_int(estimated_limit as usize) as f64
+        } else if inflight * 2 < estimated_limit as usize {
+            return estimated_limit as usize;
+        } else {
+            let alpha = (self.alpha_factor * log10_int(estimated_limit as usize)) as i64;
+            let beta = (self.beta_factor * log10_int(estimated_limit as usize)) as i64;
+            let threshold = log10_int(estimated_limit as usize) as i64;
+
+            if queue_size <= threshold {
+                // Aggressive increase when no queuing.
+                estimated_limit + beta as f64
+            } else if queue_size < alpha {
+                // Moderate increase.
+                estimated_limit + log10_int(estimated_limit as usize) as f64
+            } else if queue_size > beta {
+                // Detecting latency, decrease.
+                estimated_limit - log10_int(estimated_limit as usize) as f64
+            } else {
+                // Within the sweet spot, no change.
+                return estimated_limit as usize;
+            }
+        };
+
+        let new_limit = new_limit.max(1.0).min(self.max_limit as f64);
+        let new_limit = (1.0 - self.smoothing) * estimated_limit + self.smoothing * new_limit;
+        s.estimated_limit = new_limit.max(self.min_limit as f64);
+        s.estimated_limit as usize
+    }
+
+    #[cfg(test)]
+    fn current(&self) -> usize {
+        self.state.lock().unwrap().estimated_limit as usize
     }
 }
 
@@ -1661,9 +1895,10 @@ mod tests {
         let alg = TrendAimd::new(&default_trend_aimd_config());
         let rtt = Duration::from_millis(10);
 
-        // Additive increase (+√limit) each epoch at stable RTT.
+        // With stable RTT, min_rtt stays at 10ms (each sample resets it) and
+        // ewma_rtt converges to 10ms. Threshold = 10.5ms > 10ms → additive increase.
         for _ in 0..5000 {
-            alg.update(Outcome::Success, rtt);
+            alg.update(0, Outcome::Success, rtt);
         }
 
         let limit = alg.state.lock().unwrap().limit as usize;
@@ -1677,9 +1912,9 @@ mod tests {
     fn trend_aimd_backs_off_on_rtt_rise() {
         let alg = TrendAimd::new(&default_trend_aimd_config());
 
-        // Ramp up with low RTT to establish a baseline.
+        // Ramp up with low RTT to establish a baseline min_rtt ≈ 10ms.
         for _ in 0..5000 {
-            alg.update(Outcome::Success, Duration::from_millis(10));
+            alg.update(0, Outcome::Success, Duration::from_millis(10));
         }
         let limit_before = alg.state.lock().unwrap().limit as usize;
         assert!(
@@ -1687,10 +1922,10 @@ mod tests {
             "Should have ramped up, got {limit_before}"
         );
 
-        // Spike RTT. The fast EWMA reacts within a few epochs while the slow
-        // EWMA lags, triggering multiplicative decrease.
+        // Spike RTT. min_rtt stays near 10ms (200ms > decayed min), but EWMA jumps
+        // to ~200ms, far exceeding the 10.5ms threshold → decrease triggers.
         for _ in 0..3000 {
-            alg.update(Outcome::Success, Duration::from_millis(200));
+            alg.update(0, Outcome::Success, Duration::from_millis(200));
         }
         let limit_after = alg.state.lock().unwrap().limit as usize;
 
@@ -1711,7 +1946,7 @@ mod tests {
         };
         let alg = TrendAimd::new(&config);
 
-        let limit = alg.update(Outcome::Dropped, Duration::from_millis(10));
+        let limit = alg.update(0, Outcome::Dropped, Duration::from_millis(10));
         assert_eq!(limit, 50, "Drop should halve the limit immediately");
     }
 
@@ -1727,7 +1962,7 @@ mod tests {
         };
         let alg = TrendAimd::new(&config);
         for _ in 0..10 {
-            alg.update(Outcome::Dropped, Duration::from_millis(10));
+            alg.update(0, Outcome::Dropped, Duration::from_millis(10));
         }
         let limit = alg.state.lock().unwrap().limit as usize;
         assert!(limit >= 4, "Should not go below min_limit, got {limit}");
@@ -1741,7 +1976,7 @@ mod tests {
         };
         let alg = TrendAimd::new(&config);
         for _ in 0..10000 {
-            alg.update(Outcome::Success, Duration::from_millis(10));
+            alg.update(0, Outcome::Success, Duration::from_millis(10));
         }
         let limit = alg.state.lock().unwrap().limit as usize;
         assert!(limit <= 20, "Should not exceed max_limit=20, got {limit}");
@@ -1761,7 +1996,6 @@ mod tests {
             .build();
         assert_eq!(limiter.current(), 4);
 
-        // Feed enough samples for additive increase (epoch_size starts at 20).
         for _ in 0..500 {
             let token = limiter.acquire();
             token.record_sample(Outcome::Success);
@@ -1777,7 +2011,7 @@ mod tests {
     #[test]
     fn trend_aimd_zero_rtt_preserves_limit() {
         let alg = TrendAimd::new(&default_trend_aimd_config());
-        let limit = alg.update(Outcome::Success, Duration::ZERO);
+        let limit = alg.update(0, Outcome::Success, Duration::ZERO);
         assert_eq!(limit, 4, "Zero RTT should preserve initial limit");
     }
 
@@ -1852,5 +2086,281 @@ mod tests {
             ..TrendAimdConfig::default()
         };
         let _ = Limiter::trend_aimd(config);
+    }
+
+    // ======================== Vegas algorithm tests ========================
+
+    fn default_vegas_config() -> VegasConfig {
+        VegasConfig {
+            initial_limit: 10,
+            min_limit: 1,
+            max_limit: 20,
+            smoothing: 1.0,
+            alpha_factor: 3,
+            beta_factor: 6,
+            probe_multiplier: 30,
+        }
+    }
+
+    #[test]
+    fn vegas_large_limit_increase() {
+        let config = VegasConfig {
+            initial_limit: 10000,
+            min_limit: 1,
+            max_limit: 20000,
+            smoothing: 1.0,
+            probe_multiplier: 1000,
+            ..VegasConfig::default()
+        };
+        let alg = Vegas::new(&config);
+        alg.update(5000, Outcome::Success, Duration::from_secs(10));
+        assert_eq!(alg.current(), 10000);
+        alg.update(6000, Outcome::Success, Duration::from_secs(10));
+        assert_eq!(alg.current(), 10024);
+    }
+
+    #[test]
+    fn vegas_increase_limit() {
+        let alg = Vegas::new(&default_vegas_config());
+        // First sample sets rtt_noload.
+        alg.update(10, Outcome::Success, Duration::from_millis(10));
+        assert_eq!(alg.current(), 10);
+        // Same RTT, queue_size ≈ 0, so aggressive increase by beta = 6*log10(10) = 6.
+        alg.update(11, Outcome::Success, Duration::from_millis(10));
+        assert_eq!(alg.current(), 16);
+    }
+
+    #[test]
+    fn vegas_decrease_limit() {
+        let alg = Vegas::new(&default_vegas_config());
+        // First sample sets rtt_noload.
+        alg.update(10, Outcome::Success, Duration::from_millis(10));
+        assert_eq!(alg.current(), 10);
+        // RTT 5x baseline → queue_size = 10 * (1 - 10/50) = 8 > beta(6), so decrease.
+        alg.update(11, Outcome::Success, Duration::from_millis(50));
+        assert_eq!(alg.current(), 9);
+    }
+
+    #[test]
+    fn vegas_no_change_if_within_thresholds() {
+        let alg = Vegas::new(&default_vegas_config());
+        alg.update(10, Outcome::Success, Duration::from_millis(10));
+        assert_eq!(alg.current(), 10);
+        // RTT slightly above baseline → queue_size between alpha and beta.
+        // queue_size = 10 * (1 - 10/14) ≈ 2.86, ceil = 3; alpha=3, beta=6 → 3 < queue < 6
+        // (actually queue == alpha, so this falls in the sweet spot)
+        alg.update(14, Outcome::Success, Duration::from_millis(14));
+        assert_eq!(alg.current(), 10);
+    }
+
+    #[test]
+    fn vegas_decrease_with_smoothing() {
+        let config = VegasConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 200,
+            smoothing: 0.5,
+            probe_multiplier: 1000,
+            ..VegasConfig::default()
+        };
+        let alg = Vegas::new(&config);
+
+        // Pick up first min-rtt.
+        alg.update(100, Outcome::Success, Duration::from_millis(10));
+        assert_eq!(alg.current(), 100);
+
+        // Trigger decrease: RTT 2x → queue_size = 100*(1-10/20) = 50, beta=6*2=12, 50>12.
+        // decrease = 100 - log10(100) = 100 - 2 = 98, smoothed = 0.5*100 + 0.5*98 = 99
+        alg.update(100, Outcome::Success, Duration::from_millis(20));
+        assert_eq!(alg.current(), 99);
+
+        // Second decrease: 99 - 1 = 98, smoothed = 0.5*99 + 0.5*98 = 98.5 → 98
+        alg.update(100, Outcome::Success, Duration::from_millis(20));
+        assert_eq!(alg.current(), 98);
+    }
+
+    #[test]
+    fn vegas_decrease_without_smoothing() {
+        let config = VegasConfig {
+            initial_limit: 100,
+            min_limit: 1,
+            max_limit: 200,
+            smoothing: 1.0,
+            probe_multiplier: 1000,
+            ..VegasConfig::default()
+        };
+        let alg = Vegas::new(&config);
+
+        alg.update(100, Outcome::Success, Duration::from_millis(10));
+        assert_eq!(alg.current(), 100);
+
+        // decrease = 100 - log10(100) = 100 - 2 = 98
+        alg.update(100, Outcome::Success, Duration::from_millis(20));
+        assert_eq!(alg.current(), 98);
+
+        // decrease = 98 - log10(98) = 98 - 1 = 97
+        alg.update(100, Outcome::Success, Duration::from_millis(20));
+        assert_eq!(alg.current(), 97);
+    }
+
+    #[test]
+    fn vegas_drop_decreases() {
+        let alg = Vegas::new(&default_vegas_config());
+        alg.update(10, Outcome::Success, Duration::from_millis(10));
+        assert_eq!(alg.current(), 10);
+
+        // Drop always decreases by log10(limit).
+        alg.update(10, Outcome::Dropped, Duration::from_millis(10));
+        assert_eq!(alg.current(), 9);
+    }
+
+    #[test]
+    fn vegas_no_increase_when_underutilized() {
+        let alg = Vegas::new(&default_vegas_config());
+        alg.update(10, Outcome::Success, Duration::from_millis(10));
+        assert_eq!(alg.current(), 10);
+
+        // inflight=2, limit=10: 2*2=4 < 10, so no change.
+        alg.update(2, Outcome::Success, Duration::from_millis(10));
+        assert_eq!(alg.current(), 10);
+    }
+
+    #[test]
+    fn vegas_respects_bounds() {
+        let config = VegasConfig {
+            initial_limit: 2,
+            min_limit: 2,
+            max_limit: 5,
+            smoothing: 1.0,
+            ..VegasConfig::default()
+        };
+        let alg = Vegas::new(&config);
+
+        // Drops should not go below min_limit.
+        alg.update(2, Outcome::Success, Duration::from_millis(10));
+        for _ in 0..10 {
+            alg.update(2, Outcome::Dropped, Duration::from_millis(10));
+        }
+        assert!(alg.current() >= 2);
+    }
+
+    #[test]
+    fn vegas_zero_rtt_preserves_limit() {
+        let alg = Vegas::new(&default_vegas_config());
+        let limit = alg.update(10, Outcome::Success, Duration::ZERO);
+        assert_eq!(limit, 10);
+    }
+
+    #[test]
+    fn vegas_via_limiter() {
+        let config = VegasConfig {
+            initial_limit: 10,
+            min_limit: 1,
+            max_limit: 100,
+            probe_multiplier: 1000,
+            ..VegasConfig::default()
+        };
+        let limiter = Limiter::vegas(config);
+        assert_eq!(limiter.current(), 10);
+
+        // Hold tokens to keep inflight high.
+        let _hold: Vec<_> = (0..9).map(|_| limiter.acquire()).collect();
+        let token = limiter.acquire();
+        std::thread::sleep(Duration::from_micros(1));
+        token.record_sample(Outcome::Success);
+
+        // First sample sets rtt_noload, limit unchanged.
+        assert_eq!(limiter.current(), 10);
+    }
+
+    #[test]
+    fn concurrency_limit_vegas_build() {
+        let config = ConcurrencyLimit::Vegas(VegasConfig {
+            initial_limit: 20,
+            max_limit: 500,
+            ..VegasConfig::default()
+        });
+        let limiter = config.build();
+        assert_eq!(limiter.current(), 20);
+    }
+
+    #[test]
+    fn concurrency_limit_toml_vegas_defaults() {
+        let toml_str = r#"
+            [concurrency.vegas]
+        "#;
+        let parsed: Wrapper = toml::from_str(toml_str).unwrap();
+        match parsed.concurrency {
+            ConcurrencyLimit::Vegas(config) => {
+                assert_eq!(config.initial_limit, 20);
+                assert_eq!(config.min_limit, 1);
+                assert_eq!(config.max_limit, 1000);
+                assert!((config.smoothing - 1.0).abs() < f64::EPSILON);
+                assert_eq!(config.alpha_factor, 3);
+                assert_eq!(config.beta_factor, 6);
+                assert_eq!(config.probe_multiplier, 30);
+            }
+            _ => panic!("Expected Vegas variant"),
+        }
+    }
+
+    #[test]
+    fn concurrency_limit_toml_vegas_with_overrides() {
+        let toml_str = r#"
+            [concurrency.vegas]
+            initial-limit = 50
+            min-limit = 10
+            max-limit = 500
+            smoothing = 0.8
+            alpha-factor = 4
+            beta-factor = 8
+            probe-multiplier = 20
+        "#;
+        let parsed: Wrapper = toml::from_str(toml_str).unwrap();
+        match parsed.concurrency {
+            ConcurrencyLimit::Vegas(config) => {
+                assert_eq!(config.initial_limit, 50);
+                assert_eq!(config.min_limit, 10);
+                assert_eq!(config.max_limit, 500);
+                assert!((config.smoothing - 0.8).abs() < f64::EPSILON);
+                assert_eq!(config.alpha_factor, 4);
+                assert_eq!(config.beta_factor, 8);
+                assert_eq!(config.probe_multiplier, 20);
+            }
+            _ => panic!("Expected Vegas variant"),
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "smoothing must be in (0.0, 1.0]")]
+    fn vegas_rejects_zero_smoothing() {
+        let config = VegasConfig {
+            smoothing: 0.0,
+            ..VegasConfig::default()
+        };
+        let _ = Limiter::vegas(config);
+    }
+
+    #[test]
+    #[should_panic(expected = "probe_multiplier must be > 0")]
+    fn vegas_rejects_zero_probe_multiplier() {
+        let config = VegasConfig {
+            probe_multiplier: 0,
+            ..VegasConfig::default()
+        };
+        let _ = Limiter::vegas(config);
+    }
+
+    #[test]
+    fn log10_int_values() {
+        assert_eq!(log10_int(0), 1);
+        assert_eq!(log10_int(1), 1);
+        assert_eq!(log10_int(9), 1);
+        assert_eq!(log10_int(10), 1);
+        assert_eq!(log10_int(99), 1);
+        assert_eq!(log10_int(100), 2);
+        assert_eq!(log10_int(999), 2);
+        assert_eq!(log10_int(1000), 3);
+        assert_eq!(log10_int(10000), 4);
     }
 }
