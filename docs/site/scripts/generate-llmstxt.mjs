@@ -1,10 +1,5 @@
-#!/usr/bin/env node
-// generate-llms-txt.mjs
-// Usage: node generate-llms-txt.mjs <markdown-dir> [options]
-//
-// Examples:
-//   node generate-llms-txt.mjs site/build/markdown/ --output ./static/llms.txt
-//   node generate-llms-txt.mjs site/build/markdown/ --base-url https://docs.example.com --output ./static/llms.txt
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 import fs from "fs";
 import path from "path";
