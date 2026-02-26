@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
 info:
   flavor: core
   edition: 2024.alpha
@@ -20,7 +21,7 @@ error[E04003]: built-in operation not supported
    │                 ^^^^^^^^
    │                 │
    │                 Invalid argument to '>'
-   │                 Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                 Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E03009]: unbound variable
    ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:16:22
@@ -43,4 +44,4 @@ error[E04003]: built-in operation not supported
 16 │         let _ = Foo <u64>(0u64);
    │                 --------  ^^^^ Invalid argument to '>'
    │                 │          
-   │                 Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                 Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'

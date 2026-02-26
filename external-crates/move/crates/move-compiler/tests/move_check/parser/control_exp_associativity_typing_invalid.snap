@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
 info:
   flavor: core
   edition: legacy
@@ -24,7 +25,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^^^^^^^^^^^^^^
    │         │
    │         Invalid argument to '+'
-   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/control_exp_associativity_typing_invalid.move:15:29
@@ -41,7 +42,7 @@ error[E04003]: built-in operation not supported
 15 │         if (cond) { foo() } + 1u64;
    │         -------------------   ^^^^ Invalid argument to '+'
    │         │                      
-   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/control_exp_associativity_typing_invalid.move:19:22
@@ -62,7 +63,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^^^^^^^^^^^^^^^^^
    │         │
    │         Invalid argument to '+'
-   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/control_exp_associativity_typing_invalid.move:22:32
@@ -79,7 +80,7 @@ error[E04003]: built-in operation not supported
 22 │         while (cond) { foo() } + 2u64;
    │         ----------------------   ^^^^ Invalid argument to '+'
    │         │                         
-   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/control_exp_associativity_typing_invalid.move:26:14

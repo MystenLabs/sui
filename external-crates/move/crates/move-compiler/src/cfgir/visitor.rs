@@ -315,6 +315,11 @@ pub trait CFGIRVisitorContext {
             | V::U64(_)
             | V::U128(_)
             | V::U256(_)
+            | V::I8(_)
+            | V::I16(_)
+            | V::I32(_)
+            | V::I64(_)
+            | V::I128(_)
             | V::Bool(_) => (),
             V::Vector(_, vs) => {
                 for v in vs {

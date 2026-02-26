@@ -382,6 +382,11 @@ fn convert_builtin_type_to_typetag(s_type: &HA::SingleType_) -> Option<TypeTag> 
                         TypeTag::Vector(Box::new(tts.remove(0)))
                     }
                     NA::BuiltinTypeName_::Signer => TypeTag::Signer,
+                    NA::BuiltinTypeName_::I8
+                    | NA::BuiltinTypeName_::I16
+                    | NA::BuiltinTypeName_::I32
+                    | NA::BuiltinTypeName_::I64
+                    | NA::BuiltinTypeName_::I128 => return None,
                 };
                 Some(tag)
             }

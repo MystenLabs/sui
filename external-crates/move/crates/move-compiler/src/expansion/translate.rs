@@ -3706,6 +3706,19 @@ pub(super) fn value_result(
         PV::Num(s) if s.ends_with("u256") => {
             parse_num!(parse_u256(&s[..s.len() - 4]), EV::U256, "'u256'")
         }
+        PV::Num(s) if s.ends_with("i8") => parse_num!(parse_i8(&s[..s.len() - 2]), EV::I8, "'i8'"),
+        PV::Num(s) if s.ends_with("i16") => {
+            parse_num!(parse_i16(&s[..s.len() - 3]), EV::I16, "'i16'")
+        }
+        PV::Num(s) if s.ends_with("i32") => {
+            parse_num!(parse_i32(&s[..s.len() - 3]), EV::I32, "'i32'")
+        }
+        PV::Num(s) if s.ends_with("i64") => {
+            parse_num!(parse_i64(&s[..s.len() - 3]), EV::I64, "'i64'")
+        }
+        PV::Num(s) if s.ends_with("i128") => {
+            parse_num!(parse_i128(&s[..s.len() - 4]), EV::I128, "'i128'")
+        }
         PV::Num(s) => parse_num!(
             parse_u256(&s),
             EV::InferredNum,

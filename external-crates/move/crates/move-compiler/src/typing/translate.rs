@@ -1988,6 +1988,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                     subtype(context, rloc, msg, &er.ty, &Type_::bool(rloc));
                     Type_::bool(eloc)
                 }
+                Neg => {
+                    let rloc = er.exp.loc;
+                    context.add_signed_numeric_constraint(rloc, "-", er.ty.clone());
+                    er.ty.clone()
+                }
             };
             (ty, TE::UnaryExp(uop, er))
         }

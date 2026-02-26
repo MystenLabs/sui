@@ -615,6 +615,11 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
         V::U64(u) => MV::U64(u),
         V::U128(u) => MV::U128(u),
         V::U256(u) => MV::U256(u),
+        V::I8(u) => MV::U8(u),
+        V::I16(u) => MV::U16(u),
+        V::I32(u) => MV::U32(u),
+        V::I64(u) => MV::U64(u),
+        V::I128(u) => MV::U128(u),
         V::Bool(b) => MV::Bool(b),
         V::Vector(_, vs) => MV::Vector(vs.into_iter().map(move_value_from_value).collect()),
     }
