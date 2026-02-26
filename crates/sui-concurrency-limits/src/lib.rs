@@ -15,12 +15,11 @@
 //!   when the backing store degrades gradually under load (e.g. Bigtable write latency increasing).
 //!
 //! - **TrendAimd** (`TrendAimd`): RTT-trend-based AIMD. Compares a fast EWMA (α=0.4) and slow
-//!   EWMA (α=0.05) of RTT to detect congestion trends. When the fast average exceeds the slow
+//!   EWMA (α=0.001) of RTT to detect congestion trends. When the fast average exceeds the slow
 //!   average by more than a proportional tolerance (default 5%), the limit decreases
-//!   multiplicatively; otherwise it increases additively by √limit. Starts in slow-start
-//!   (doubling each epoch) and transitions to steady state when RTT rises above baseline.
-//!   Differentiates cluster sizes because the DB saturates at different concurrency levels,
-//!   causing backpressure at different points.
+//!   multiplicatively; otherwise it increases additively by √limit. Differentiates cluster sizes
+//!   because the DB saturates at different concurrency levels, causing backpressure at different
+//!   points.
 //!
 //! # Differences from Netflix's reference implementation
 //!
@@ -751,9 +750,7 @@ impl Gradient {
 ///
 /// Compares fast and slow EWMAs of RTT to detect congestion trends. When the fast
 /// average exceeds the slow average by more than a proportional tolerance, the limit
-/// decreases multiplicatively; otherwise it increases additively by √limit. Starts in
-/// slow-start (doubling each epoch) and transitions to steady state when RTT growth
-/// is detected.
+/// decreases multiplicatively; otherwise it increases additively by √limit.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct TrendAimdConfig {
@@ -790,24 +787,15 @@ const ALPHA_FAST: f64 = 0.4;
 /// RTT shifts, providing the signal for congestion detection.
 const ALPHA_SLOW: f64 = 0.001;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Phase {
-    SlowStart,
-    Steady,
-}
-
 /// Minimum epoch size floor to avoid noisy decisions at very low limits.
 const MIN_EPOCH_SIZE: u64 = 20;
 
 struct TrendAimdState {
     limit: f64,
-    phase: Phase,
     ewma_rtt: f64,
     ewma_rtt_slow: f64,
     completions_in_epoch: u64,
     epoch_size: u64,
-    rtt_at_last_double: f64,
-    no_growth_rounds: u32,
 }
 
 struct TrendAimd {
@@ -827,13 +815,10 @@ impl TrendAimd {
         Self {
             state: Mutex::new(TrendAimdState {
                 limit: initial as f64,
-                phase: Phase::SlowStart,
                 ewma_rtt: 0.0,
                 ewma_rtt_slow: 0.0,
                 completions_in_epoch: 0,
                 epoch_size,
-                rtt_at_last_double: 0.0,
-                no_growth_rounds: 0,
             }),
             decrease_ratio: config.decrease_ratio,
             tolerance: config.tolerance,
@@ -850,11 +835,10 @@ impl TrendAimd {
 
         let mut s = self.state.lock().unwrap();
 
-        // Immediate backoff on drop, transition to Steady.
+        // Immediate backoff on drop.
         if matches!(outcome, Outcome::Dropped) {
             s.limit =
                 (s.limit * self.decrease_ratio).clamp(self.min_limit as f64, self.max_limit as f64);
-            s.phase = Phase::Steady;
             s.epoch_size = (s.limit as u64).clamp(MIN_EPOCH_SIZE, 500);
             s.completions_in_epoch = 0;
             return s.limit as usize;
@@ -864,7 +848,6 @@ impl TrendAimd {
         if s.ewma_rtt == 0.0 {
             s.ewma_rtt = rtt_secs;
             s.ewma_rtt_slow = rtt_secs;
-            s.rtt_at_last_double = rtt_secs;
         } else {
             s.ewma_rtt = s.ewma_rtt * (1.0 - ALPHA_FAST) + rtt_secs * ALPHA_FAST;
             s.ewma_rtt_slow = s.ewma_rtt_slow * (1.0 - ALPHA_SLOW) + rtt_secs * ALPHA_SLOW;
@@ -877,38 +860,13 @@ impl TrendAimd {
         }
         s.completions_in_epoch = 0;
 
-        match s.phase {
-            Phase::SlowStart => {
-                // Exit slow-start when fast EWMA has risen above the baseline by
-                // more than the proportional tolerance, indicating saturation.
-                let threshold = s.rtt_at_last_double * (1.0 + self.tolerance);
-                if s.rtt_at_last_double > 0.0 && s.ewma_rtt > threshold {
-                    s.no_growth_rounds += 1;
-                } else {
-                    s.no_growth_rounds = 0;
-                }
-
-                if s.no_growth_rounds >= 2 {
-                    s.limit *= self.decrease_ratio;
-                    s.phase = Phase::Steady;
-                    s.no_growth_rounds = 0;
-                } else {
-                    s.rtt_at_last_double = s.ewma_rtt;
-                    s.limit *= 2.0;
-                }
-            }
-            Phase::Steady => {
-                // Congestion when fast EWMA exceeds slow EWMA by more than the
-                // proportional tolerance. Unlike a variance-based noise band, this
-                // threshold doesn't widen when RTT is rising (which would suppress
-                // the congestion signal exactly when it matters most).
-                let threshold = s.ewma_rtt_slow * (1.0 + self.tolerance);
-                if s.ewma_rtt > threshold {
-                    s.limit *= self.decrease_ratio;
-                } else {
-                    s.limit += s.limit.sqrt();
-                }
-            }
+        let threshold = s.ewma_rtt_slow * (1.0 + self.tolerance);
+        if s.ewma_rtt > threshold {
+            // Congestion: fast EWMA exceeds slow EWMA beyond tolerance.
+            s.limit *= self.decrease_ratio;
+        } else {
+            // No congestion: additive increase.
+            s.limit += s.limit.sqrt();
         }
 
         s.limit = s.limit.clamp(self.min_limit as f64, self.max_limit as f64);
@@ -1699,20 +1657,19 @@ mod tests {
     }
 
     #[test]
-    fn trend_aimd_slow_start_ramps_up() {
+    fn trend_aimd_ramps_up_on_stable_rtt() {
         let alg = TrendAimd::new(&default_trend_aimd_config());
         let rtt = Duration::from_millis(10);
 
-        // Feed many samples at a stable RTT. Slow-start doubles each epoch,
-        // so the limit should grow well past the initial value.
-        for _ in 0..2000 {
+        // Additive increase (+√limit) each epoch at stable RTT.
+        for _ in 0..5000 {
             alg.update(Outcome::Success, rtt);
         }
 
         let limit = alg.state.lock().unwrap().limit as usize;
         assert!(
-            limit > 16,
-            "Slow-start should ramp limit well past initial, got {limit}"
+            limit > 50,
+            "Should ramp up well past initial with stable RTT, got {limit}"
         );
     }
 
@@ -1720,14 +1677,7 @@ mod tests {
     fn trend_aimd_backs_off_on_rtt_rise() {
         let alg = TrendAimd::new(&default_trend_aimd_config());
 
-        // Ramp up with low RTT to get through slow-start and into steady state.
-        for _ in 0..2000 {
-            alg.update(Outcome::Success, Duration::from_millis(10));
-        }
-
-        // Force transition to Steady state via a drop, then let the limit grow
-        // with continued low RTT so we have a stable baseline.
-        alg.update(Outcome::Dropped, Duration::from_millis(10));
+        // Ramp up with low RTT to establish a baseline.
         for _ in 0..5000 {
             alg.update(Outcome::Success, Duration::from_millis(10));
         }
@@ -1782,7 +1732,7 @@ mod tests {
         let limit = alg.state.lock().unwrap().limit as usize;
         assert!(limit >= 4, "Should not go below min_limit, got {limit}");
 
-        // Test max bound: slow-start should not exceed max_limit.
+        // Test max bound: growth should not exceed max_limit.
         let config = TrendAimdConfig {
             initial_limit: 4,
             min_limit: 4,
@@ -1811,7 +1761,7 @@ mod tests {
             .build();
         assert_eq!(limiter.current(), 4);
 
-        // Feed enough samples to get through slow-start epochs (epoch_size starts at 20).
+        // Feed enough samples for additive increase (epoch_size starts at 20).
         for _ in 0..500 {
             let token = limiter.acquire();
             token.record_sample(Outcome::Success);
