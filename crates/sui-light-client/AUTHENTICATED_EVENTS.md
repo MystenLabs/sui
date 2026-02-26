@@ -187,6 +187,7 @@ Key properties of an MMR:
              L12
 ```
 
+Note that leaves (`Lx`) correspond to the per-consensus-commit merkle tree digests, which in turn contain `AuthenticatedEvent` as its leaves.
 
 ## API Reference
 
