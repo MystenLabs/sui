@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::marker::Unpin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::Context;
@@ -235,44 +235,48 @@ fn ingest_and_broadcast_range(
     TaskGuard::new(tokio::spawn(async move {
         // Backpressure is enforced at the stream level: checkpoints are only yielded when
         // ingest_hi allows, preventing spawned tasks from piling up while blocked.
-        let congested = Arc::new(AtomicBool::new(false));
+        let epoch = Arc::new(AtomicU64::new(0));
         backpressured_checkpoint_stream(start, end, ingest_hi_rx)
             .try_for_each_spawned(limiter, |cp| {
                 let client = client.clone();
                 let subscribers = subscribers.clone();
-                let congested = congested.clone();
+                let epoch = epoch.clone();
+                let my_epoch = epoch.load(Ordering::Acquire);
 
                 async move {
-                    // Fetch the checkpoint or stop if cancelled.
                     let checkpoint = client.wait_for(cp, retry_interval).await?;
 
-                    match send_checkpoint(checkpoint, &subscribers).await {
-                        Ok(true) => {
-                            // Debounce: only the first task to see congestion
-                            // signals Dropped. Others just continue. Reset
-                            // immediately so the next congested task can fire.
-                            if congested
-                                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
-                                .is_ok()
-                            {
-                                congested.store(false, Ordering::Release);
-                                debug!(checkpoint = cp, "Broadcasted checkpoint (backpressure)");
-                                Err(ClError::Dropped(Error::Backpressure))
-                            } else {
-                                debug!(checkpoint = cp, "Broadcasted checkpoint");
-                                Ok(())
-                            }
-                        }
-                        Ok(false) => {
-                            congested.store(false, Ordering::Release);
-                            debug!(checkpoint = cp, "Broadcasted checkpoint");
-                            Ok(())
-                        }
-                        Err(_) => {
-                            // A subscriber channel closed — shutdown signal.
-                            Err(ClError::Break)
+                    if send_checkpoint(checkpoint, &subscribers).await.is_err() {
+                        return Err(ClError::Break);
+                    }
+
+                    // Max fill fraction across all subscriber channels.
+                    let fill = subscribers
+                        .iter()
+                        .map(|s| 1.0 - (s.capacity() as f64 / s.max_capacity() as f64))
+                        .fold(0.0f64, f64::max);
+
+                    if fill >= 0.85 {
+                        // Epoch CAS: exactly one drop per congestion event.
+                        if epoch
+                            .compare_exchange(
+                                my_epoch,
+                                my_epoch + 1,
+                                Ordering::AcqRel,
+                                Ordering::Relaxed,
+                            )
+                            .is_ok()
+                        {
+                            debug!(
+                                checkpoint = cp,
+                                fill, "Broadcasted checkpoint (backpressure)"
+                            );
+                            return Err(ClError::Dropped(Error::Backpressure));
                         }
                     }
+
+                    debug!(checkpoint = cp, "Broadcasted checkpoint");
+                    Ok(())
                 }
             })
             .await
@@ -446,17 +450,13 @@ async fn stream_and_broadcast_range(
     lo
 }
 
-/// Send a checkpoint to all subscribers, probing for backpressure.
-/// Returns `Ok(true)` if any subscriber channel was full (backpressure),
-/// `Ok(false)` if all channels had capacity, or `Err` if any channel is closed.
 async fn send_checkpoint(
     checkpoint: Arc<Checkpoint>,
     subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
-) -> Result<bool, mpsc::error::SendError<Arc<Checkpoint>>> {
-    let backpressure = subscribers.iter().any(|s| s.capacity() == 0);
+) -> Result<(), mpsc::error::SendError<Arc<Checkpoint>>> {
     let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
     try_join_all(futures).await?;
-    Ok(backpressure)
+    Ok(())
 }
 
 // A noop streaming task that just returns the provided checkpoint_hi, used to simplify
