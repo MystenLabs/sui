@@ -12,6 +12,7 @@ use diesel::sql_types::Integer;
 use diesel::sql_types::SmallInt;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents;
+use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_schema::blooms::blocked::BlockedBloomProbe;
 use sui_indexer_alt_schema::blooms::bloom::BloomProbe;
@@ -24,10 +25,15 @@ use sui_sql_macro::query;
 use sui_types::base_types::ExecutionDigests;
 use sui_types::digests::TransactionDigest;
 
+use crate::api::types::event::CEvent;
+use crate::api::types::event::Event;
+use crate::api::types::event::EventCursor;
+use crate::api::types::event::filter::EventFilter;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::error::RpcError;
 use crate::pagination::Page;
+use crate::scope::Scope;
 
 /// Multiplier to page limit to adjust for bloom filter false positives.
 const OVERFETCH_MULTIPLIER: f64 = 1.2;
@@ -94,16 +100,94 @@ pub(crate) async fn transactions(
         .collect()
 }
 
+pub(super) type EventsBySequenceNumbers = BTreeMap<EventCursor, Event>;
+
+/// The map of events that might match the filter criteria in `cp_bounds` checkpoints keyed by EventCursor.
+pub(crate) async fn events(
+    ctx: &Context<'_>,
+    scope: &Scope,
+    filter: &EventFilter,
+    page: &Page<CEvent>,
+    cp_bounds: RangeInclusive<u64>,
+) -> Result<EventsBySequenceNumbers, RpcError> {
+    let kv_loader: &KvLoader = ctx.data()?;
+
+    let (cp_lo, cp_hi) = (*cp_bounds.start(), *cp_bounds.end());
+    let filter_values = filter.bloom_probe_values();
+    let candidate_cps = if filter_values.is_empty() {
+        let limit = page.limit_with_overhead();
+        if page.is_from_front() {
+            (cp_lo..=cp_hi).take(limit).collect()
+        } else {
+            (cp_lo..=cp_hi).rev().take(limit).collect()
+        }
+    } else {
+        candidate_cps(ctx, &filter_values, cp_lo, cp_hi, page).await?
+    };
+
+    if candidate_cps.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+
+    let checkpoints = kv_loader
+        .load_many_checkpoints(candidate_cps.to_vec())
+        .await
+        .context("Failed to load checkpoint transactions")?;
+    let sequenced_tx_digests: Vec<_> = checkpoints
+        .into_values()
+        .flat_map(|(summary, content, _)| {
+            content
+                .enumerate_transactions(&summary)
+                .map(|(tx_seq, &ExecutionDigests { transaction, .. })| (tx_seq, transaction))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    let digests: Vec<_> = sequenced_tx_digests
+        .iter()
+        .map(|(_, digest)| *digest)
+        .collect();
+    let events_by_digest: std::collections::HashMap<_, TransactionEventsContents> = kv_loader
+        .load_many_transaction_events(digests)
+        .await
+        .context("Failed to load transaction events")?;
+
+    let mut result = BTreeMap::new();
+    for (tx_sequence_number, transaction_digest) in sequenced_tx_digests {
+        let contents = events_by_digest
+            .get(&transaction_digest)
+            .with_context(|| format!("Missing events for transaction {transaction_digest}"))?;
+        let timestamp_ms = contents.timestamp_ms();
+        for (idx, native) in contents.events()?.into_iter().enumerate() {
+            let sequence_number = idx as u64;
+            result.insert(
+                EventCursor {
+                    tx_sequence_number,
+                    ev_sequence_number: sequence_number,
+                },
+                Event {
+                    scope: scope.clone(),
+                    native,
+                    transaction_digest,
+                    sequence_number,
+                    timestamp_ms,
+                },
+            );
+        }
+    }
+    Ok(result)
+}
+
 /// The checkpoints that might contain the filter criteria.
 ///
 /// Does a coarse filter over checkpoints ranges using cp_bloom_blocks,
 /// then a finer filter over those ranges for checkpoint matches using cp_blooms.
-async fn candidate_cps(
+async fn candidate_cps<C>(
     ctx: &Context<'_>,
     filter_values: &[[u8; 32]],
     cp_lo: u64,
     cp_hi_inclusive: u64,
-    page: &Page<CTransaction>,
+    page: &Page<C>,
 ) -> Result<Vec<u64>, RpcError> {
     let pg_reader: &PgReader = ctx.data()?;
     let mut conn = pg_reader

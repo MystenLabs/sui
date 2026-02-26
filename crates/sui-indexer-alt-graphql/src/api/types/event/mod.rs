@@ -24,6 +24,7 @@ use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::lookups::TxBoundsCursor;
@@ -31,8 +32,13 @@ use crate::api::types::move_module::MoveModule;
 use crate::api::types::move_package::MovePackage;
 use crate::api::types::move_type::MoveType;
 use crate::api::types::move_value::MoveValue;
+use crate::api::types::transaction::ScanError;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::bloom;
+use crate::config::Limits;
 use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
@@ -186,6 +192,57 @@ impl Event {
         .await?;
 
         page.paginate_results(events, |(c, _)| JsonCursor::new(*c), |(_, e)| Ok(e))
+    }
+
+    /// Scan a bounded checkpoint range for events matching the filter. Uses bloom filters to
+    /// find candidate checkpoints that may contain matching events, then fetches and returns
+    /// events that match the filter.
+    pub(crate) async fn scan(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CEvent>,
+        filter: EventFilter,
+    ) -> Result<Connection<String, Event>, RpcError<ScanError>> {
+        let limits: &Limits = ctx.data()?;
+        let watermarks: &Arc<Watermarks> = ctx.data()?;
+        let available_range_key = AvailableRangeKey {
+            type_: "Query".to_string(),
+            field: Some("eventsScan".to_string()),
+            filters: Some(filter.active_filters()),
+        };
+        let reader_lo = available_range_key.reader_lo(watermarks).map_err(upcast)?;
+
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint.map(u64::from),
+            filter.at_checkpoint.map(u64::from),
+            filter.before_checkpoint.map(u64::from),
+            reader_lo,
+            checkpoint_viewed_at,
+        ) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        let scan_range = cp_bounds.end() - cp_bounds.start() + 1;
+        if scan_range > limits.max_scan_limit {
+            return Err(bad_user_input(ScanError::LimitExceeded {
+                requested: scan_range,
+                max: limits.max_scan_limit,
+            }));
+        }
+
+        let events = bloom::events(ctx, &scope, &filter, &page, cp_bounds)
+            .await
+            .map_err(upcast)?;
+
+        page.paginate_filtered(
+            &events,
+            |event| filter.matches(&event.native),
+            |event| Ok::<_, RpcError<ScanError>>(event.clone()),
+        )
     }
 }
 
