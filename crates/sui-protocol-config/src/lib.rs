@@ -823,6 +823,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     address_balance_gas_check_rgp_at_signing: bool,
 
+    #[serde(skip_serializing_if = "is_false")]
+    address_balance_gas_reject_gas_coin_arg: bool,
+
     // Enable multi-epoch transaction expiration (max 1 epoch difference)
     #[serde(skip_serializing_if = "is_false")]
     enable_multi_epoch_transaction_expiration: bool,
@@ -2163,6 +2166,10 @@ impl ProtocolConfig {
 
     pub fn address_balance_gas_check_rgp_at_signing(&self) -> bool {
         self.feature_flags.address_balance_gas_check_rgp_at_signing
+    }
+
+    pub fn address_balance_gas_reject_gas_coin_arg(&self) -> bool {
+        self.feature_flags.address_balance_gas_reject_gas_coin_arg
     }
 
     pub fn enable_multi_epoch_transaction_expiration(&self) -> bool {
@@ -4618,6 +4625,7 @@ impl ProtocolConfig {
                 }
                 114 => {
                     cfg.feature_flags.randomize_checkpoint_tx_limit_in_tests = true;
+                    cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4951,6 +4959,7 @@ impl ProtocolConfig {
         self.feature_flags.allow_private_accumulator_entrypoints = true;
         self.feature_flags.enable_address_balance_gas_payments = true;
         self.feature_flags.address_balance_gas_check_rgp_at_signing = true;
+        self.feature_flags.address_balance_gas_reject_gas_coin_arg = true;
     }
 
     pub fn disable_address_balance_gas_payments_for_testing(&mut self) {

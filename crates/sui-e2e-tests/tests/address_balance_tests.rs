@@ -3325,3 +3325,46 @@ async fn test_simulate_object_funds_insufficient() {
         "Expected execution failure due to insufficient object funds"
     );
 }
+
+#[sim_test]
+async fn test_address_balance_gas_pay_all_sui() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _gas_package_id) = setup_address_balance_account(&mut test_env, 10_000_000).await;
+
+    test_env.verify_accumulator_exists(sender, 10_000_000);
+
+    let recipient = SuiAddress::random_for_testing_only();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.pay_all_sui(recipient);
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+
+    let tx = create_address_balance_transaction(
+        tx_kind,
+        sender,
+        10_000_000,
+        test_env.rgp,
+        test_env.chain_id,
+    );
+
+    let signed_tx = test_env.cluster.sign_transaction(&tx).await;
+    let err = test_env
+        .cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Argument::GasCoin is not supported with address balance gas payments"),
+    );
+
+    test_env.verify_accumulator_exists(sender, 10_000_000);
+}

@@ -2940,6 +2940,19 @@ impl TransactionDataAPI for TransactionDataV1 {
             && config.enable_address_balance_gas_payments()
             && self.is_gas_paid_from_address_balance()
         {
+            if config.address_balance_gas_reject_gas_coin_arg()
+                && let TransactionKind::ProgrammableTransaction(pt) = &self.kind
+            {
+                fp_ensure!(
+                    !pt.commands.iter().any(|cmd| cmd.is_gas_coin_used()),
+                    UserInputError::Unsupported(
+                        "Argument::GasCoin is not supported with address balance gas payments"
+                            .to_string(),
+                    )
+                    .into()
+                );
+            }
+
             if config.address_balance_gas_check_rgp_at_signing() {
                 fp_ensure!(
                     self.gas_data.price >= context.reference_gas_price,
