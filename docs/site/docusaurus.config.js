@@ -141,6 +141,7 @@ const config = {
         },
       };
     },
+    path.resolve(__dirname, `./src/shared/plugins/descriptions`),
     path.resolve(__dirname, `./src/plugins/framework`),
     path.resolve(__dirname, `./src/plugins/protocol`),
   ],
