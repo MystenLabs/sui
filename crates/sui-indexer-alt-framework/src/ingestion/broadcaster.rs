@@ -16,7 +16,6 @@ use sui_concurrency_limits::stream::Error as ClError;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::task::TaskGuard;
-use rand::Rng;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tokio_stream::StreamExt;
@@ -431,21 +430,14 @@ async fn stream_and_broadcast_range(
     lo
 }
 
-/// Send a checkpoint to all subscribers, probing for backpressure using RED
-/// (Random Early Detection). Drop probability scales linearly from 0 at 50%
-/// channel fullness to 1.0 at 100% fullness, avoiding drop stampedes.
-/// Returns `Ok(true)` if backpressure was signaled, `Ok(false)` otherwise,
-/// or `Err` if any channel is closed.
+/// Send a checkpoint to all subscribers, probing for backpressure.
+/// Returns `Ok(true)` if any subscriber channel was full (backpressure),
+/// `Ok(false)` if all channels had capacity, or `Err` if any channel is closed.
 async fn send_checkpoint(
     checkpoint: Arc<Checkpoint>,
     subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
 ) -> Result<bool, mpsc::error::SendError<Arc<Checkpoint>>> {
-    let backpressure = subscribers.iter().any(|s| {
-        let cap = s.capacity();
-        let max = s.max_capacity();
-        let fullness = 1.0 - (cap as f64 / max as f64);
-        fullness > 0.5 && rand::thread_rng().gen_range(0.0..1.0) < (fullness - 0.5) * 2.0
-    });
+    let backpressure = subscribers.iter().any(|s| s.capacity() == 0);
     let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
     try_join_all(futures).await?;
     Ok(backpressure)
