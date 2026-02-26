@@ -67,6 +67,7 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -151,6 +152,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
+use sui_types::signature::GenericSignature;
 use sui_types::storage::{
     BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
 };
@@ -982,6 +984,39 @@ impl AuthorityState {
         self.checkpoint_store.get_epoch_state_commitments(epoch)
     }
 
+    /// Runs deny list checks and processes funds withdrawals. Called before loading input
+    /// objects, since these checks don't depend on object state.
+    fn pre_object_load_checks(
+        &self,
+        tx_data: &TransactionData,
+        tx_signatures: &[GenericSignature],
+        input_object_kinds: &[InputObjectKind],
+        receiving_objects_refs: &[ObjectRef],
+    ) -> SuiResult<BTreeMap<AccumulatorObjId, u64>> {
+        // Note: the deny checks may do redundant package loads but:
+        // - they only load packages when there is an active package deny map
+        // - the loads are cached anyway
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            tx_data,
+            tx_signatures,
+            input_object_kinds,
+            receiving_objects_refs,
+            &self.config.transaction_deny_config,
+            self.get_backing_package_store().as_ref(),
+        )?;
+
+        let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+        )?;
+
+        self.execution_cache_trait_pointers
+            .account_funds_read
+            .check_amounts_available(&declared_withdrawals)?;
+
+        Ok(declared_withdrawals)
+    }
+
     fn handle_transaction_deny_checks(
         &self,
         transaction: &VerifiedTransaction,
@@ -993,26 +1028,12 @@ impl AuthorityState {
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
-        // Note: the deny checks may do redundant package loads but:
-        // - they only load packages when there is an active package deny map
-        // - the loads are cached anyway
-        sui_transaction_checks::deny::check_transaction_for_signing(
+        self.pre_object_load_checks(
             tx_data,
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
-            &self.config.transaction_deny_config,
-            self.get_backing_package_store().as_ref(),
         )?;
-
-        let withdraws = tx_data.process_funds_withdrawals_for_signing(
-            self.chain_identifier,
-            self.coin_reservation_resolver.as_ref(),
-        )?;
-
-        self.execution_cache_trait_pointers
-            .account_funds_read
-            .check_amounts_available(&withdraws)?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             Some(tx_digest),
@@ -2401,14 +2422,32 @@ impl AuthorityState {
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
 
-        sui_transaction_checks::deny::check_transaction_for_signing(
+        // Create and inject mock gas coin before pre_object_load_checks so that
+        // funds withdrawal processing sees non-empty payment and doesn't incorrectly
+        // create an address balance withdrawal for gas.
+        let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() {
+            let obj = Object::new_move(
+                MoveObject::new_gas_coin(
+                    OBJECT_START_VERSION,
+                    ObjectID::MAX,
+                    DEV_INSPECT_GAS_COIN_VALUE,
+                ),
+                Owner::AddressOwner(transaction.gas_data().owner),
+                TransactionDigest::genesis_marker(),
+            );
+            transaction.gas_data_mut().payment = vec![obj.compute_object_reference()];
+            Some(obj)
+        } else {
+            None
+        };
+
+        let declared_withdrawals = self.pre_object_load_checks(
             &transaction,
             &[],
             &input_object_kinds,
             &receiving_object_refs,
-            &self.config.transaction_deny_config,
-            self.get_backing_package_store().as_ref(),
         )?;
+        let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
         let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             // We don't want to cache this transaction since it's a simulation.
@@ -2418,24 +2457,12 @@ impl AuthorityState {
             epoch_store.epoch(),
         )?;
 
-        // mock a gas object if one was not provided
-        let mock_gas_id = if allow_mock_gas_coin && transaction.gas().is_empty() {
-            let mock_gas_object = Object::new_move(
-                MoveObject::new_gas_coin(
-                    OBJECT_START_VERSION,
-                    ObjectID::MAX,
-                    DEV_INSPECT_GAS_COIN_VALUE,
-                ),
-                Owner::AddressOwner(transaction.gas_data().owner),
-                TransactionDigest::genesis_marker(),
-            );
-            let mock_gas_object_ref = mock_gas_object.compute_object_reference();
-            transaction.gas_data_mut().payment = vec![mock_gas_object_ref];
-            input_objects.push(ObjectReadResult::new_from_gas_object(&mock_gas_object));
-            Some(mock_gas_object.id())
-        } else {
-            None
-        };
+        // Add mock gas to input objects after loading (it doesn't exist in the store).
+        let mock_gas_id = mock_gas_object.map(|obj| {
+            let id = obj.id();
+            input_objects.push(ObjectReadResult::new_from_gas_object(&obj));
+            id
+        });
 
         let protocol_config = epoch_store.protocol_config();
 
@@ -2465,14 +2492,6 @@ impl AuthorityState {
             true, // silent
         )
         .expect("Creating an executor should not fail here");
-
-        let declared_withdrawals =
-            transaction.process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier());
-        let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
-
-        self.execution_cache_trait_pointers
-            .account_funds_read
-            .check_amounts_available(&declared_withdrawals)?;
 
         let (kind, signer, gas_data) = transaction.execution_parts();
         let early_execution_error = get_early_execution_error(
