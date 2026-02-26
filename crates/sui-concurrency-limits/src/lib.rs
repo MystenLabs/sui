@@ -16,10 +16,11 @@
 //!
 //! - **TrendAimd** (`TrendAimd`): RTT-trend-based AIMD. Compares a fast EWMA (α=0.4) and slow
 //!   EWMA (α=0.05) of RTT to detect congestion trends. When the fast average exceeds the slow
-//!   average plus a noise band (2× stddev), the limit decreases multiplicatively; otherwise it
-//!   increases additively by √limit. Starts in slow-start (doubling each epoch) and transitions
-//!   to steady state when RTT rises above baseline. Differentiates cluster sizes because the DB
-//!   saturates at different concurrency levels, causing backpressure at different points.
+//!   average by more than a proportional tolerance (default 5%), the limit decreases
+//!   multiplicatively; otherwise it increases additively by √limit. Starts in slow-start
+//!   (doubling each epoch) and transitions to steady state when RTT rises above baseline.
+//!   Differentiates cluster sizes because the DB saturates at different concurrency levels,
+//!   causing backpressure at different points.
 //!
 //! # Differences from Netflix's reference implementation
 //!
@@ -269,8 +270,8 @@ impl Limiter {
             "decrease_ratio must be in [0.5, 1.0)"
         );
         assert!(
-            config.noise_multiplier > 0.0,
-            "noise_multiplier must be positive"
+            config.tolerance > 0.0 && config.tolerance < 1.0,
+            "tolerance must be in (0.0, 1.0)"
         );
         let initial = config
             .initial_limit
@@ -749,8 +750,8 @@ impl Gradient {
 /// Configuration for the TrendAimd concurrency limit algorithm.
 ///
 /// Compares fast and slow EWMAs of RTT to detect congestion trends. When the fast
-/// average exceeds the slow average by more than a noise band, the limit decreases
-/// multiplicatively; otherwise it increases additively by √limit. Starts in
+/// average exceeds the slow average by more than a proportional tolerance, the limit
+/// decreases multiplicatively; otherwise it increases additively by √limit. Starts in
 /// slow-start (doubling each epoch) and transitions to steady state when RTT growth
 /// is detected.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -764,9 +765,9 @@ pub struct TrendAimdConfig {
     pub max_limit: usize,
     /// Multiplicative decrease factor applied on congestion or drop, in `[0.5, 1.0)`.
     pub decrease_ratio: f64,
-    /// Multiplier on stddev to form the noise band. Decrease triggers when
-    /// `fast_ewma > slow_ewma + noise_multiplier * stddev`.
-    pub noise_multiplier: f64,
+    /// Proportional tolerance for congestion detection. Decrease triggers when
+    /// `fast_ewma > slow_ewma * (1.0 + tolerance)`. Default 0.05 (5%).
+    pub tolerance: f64,
 }
 
 impl Default for TrendAimdConfig {
@@ -776,15 +777,18 @@ impl Default for TrendAimdConfig {
             min_limit: 4,
             max_limit: 5000,
             decrease_ratio: 0.9,
-            noise_multiplier: 2.0,
+            tolerance: 0.05,
         }
     }
 }
 
 /// Internal EWMA constants (not user-configurable).
 const ALPHA_FAST: f64 = 0.4;
-const ALPHA_SLOW: f64 = 0.05;
-const ALPHA_VAR: f64 = 0.1;
+/// With per-sample updates and epoch_size up to 500, the slow EWMA must be small enough
+/// to retain meaningful memory across epochs: (1 - 0.001)^500 ≈ 0.61, giving a half-life
+/// of ~1.4 epochs. This ensures the slow EWMA actually lags behind the fast EWMA when
+/// RTT shifts, providing the signal for congestion detection.
+const ALPHA_SLOW: f64 = 0.001;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
@@ -799,7 +803,6 @@ struct TrendAimdState {
     limit: f64,
     phase: Phase,
     ewma_rtt: f64,
-    ewma_var: f64,
     ewma_rtt_slow: f64,
     completions_in_epoch: u64,
     epoch_size: u64,
@@ -810,7 +813,7 @@ struct TrendAimdState {
 struct TrendAimd {
     state: Mutex<TrendAimdState>,
     decrease_ratio: f64,
-    noise_multiplier: f64,
+    tolerance: f64,
     min_limit: usize,
     max_limit: usize,
 }
@@ -826,7 +829,6 @@ impl TrendAimd {
                 limit: initial as f64,
                 phase: Phase::SlowStart,
                 ewma_rtt: 0.0,
-                ewma_var: 0.0,
                 ewma_rtt_slow: 0.0,
                 completions_in_epoch: 0,
                 epoch_size,
@@ -834,7 +836,7 @@ impl TrendAimd {
                 no_growth_rounds: 0,
             }),
             decrease_ratio: config.decrease_ratio,
-            noise_multiplier: config.noise_multiplier,
+            tolerance: config.tolerance,
             min_limit: config.min_limit,
             max_limit: config.max_limit,
         }
@@ -867,8 +869,6 @@ impl TrendAimd {
             s.ewma_rtt = s.ewma_rtt * (1.0 - ALPHA_FAST) + rtt_secs * ALPHA_FAST;
             s.ewma_rtt_slow = s.ewma_rtt_slow * (1.0 - ALPHA_SLOW) + rtt_secs * ALPHA_SLOW;
         }
-        let diff = rtt_secs - s.ewma_rtt;
-        s.ewma_var = s.ewma_var * (1.0 - ALPHA_VAR) + (diff * diff) * ALPHA_VAR;
 
         // Only make limit decisions at epoch boundaries.
         s.completions_in_epoch += 1;
@@ -877,16 +877,12 @@ impl TrendAimd {
         }
         s.completions_in_epoch = 0;
 
-        let stddev = s.ewma_var.sqrt();
-        let noise_band = self.noise_multiplier * stddev;
-
         match s.phase {
             Phase::SlowStart => {
-                // Exit slow-start when RTT has risen above baseline beyond the
-                // noise band, indicating the system is saturating. Uses the same
-                // variance-based threshold as steady state so sensitivity adapts
-                // to actual RTT variability (e.g. variable checkpoint sizes).
-                if s.rtt_at_last_double > 0.0 && s.ewma_rtt > s.rtt_at_last_double + noise_band {
+                // Exit slow-start when fast EWMA has risen above the baseline by
+                // more than the proportional tolerance, indicating saturation.
+                let threshold = s.rtt_at_last_double * (1.0 + self.tolerance);
+                if s.rtt_at_last_double > 0.0 && s.ewma_rtt > threshold {
                     s.no_growth_rounds += 1;
                 } else {
                     s.no_growth_rounds = 0;
@@ -902,7 +898,12 @@ impl TrendAimd {
                 }
             }
             Phase::Steady => {
-                if s.ewma_rtt > s.ewma_rtt_slow + noise_band {
+                // Congestion when fast EWMA exceeds slow EWMA by more than the
+                // proportional tolerance. Unlike a variance-based noise band, this
+                // threshold doesn't widen when RTT is rising (which would suppress
+                // the congestion signal exactly when it matters most).
+                let threshold = s.ewma_rtt_slow * (1.0 + self.tolerance);
+                if s.ewma_rtt > threshold {
                     s.limit *= self.decrease_ratio;
                 } else {
                     s.limit += s.limit.sqrt();
@@ -1854,7 +1855,7 @@ mod tests {
                 assert_eq!(config.min_limit, 4);
                 assert_eq!(config.max_limit, 5000);
                 assert!((config.decrease_ratio - 0.9).abs() < f64::EPSILON);
-                assert!((config.noise_multiplier - 2.0).abs() < f64::EPSILON);
+                assert!((config.tolerance - 0.05).abs() < f64::EPSILON);
             }
             _ => panic!("Expected TrendAimd variant"),
         }
@@ -1868,7 +1869,7 @@ mod tests {
             min-limit = 4
             max-limit = 500
             decrease-ratio = 0.85
-            noise-multiplier = 3.0
+            tolerance = 0.1
         "#;
         let parsed: Wrapper = toml::from_str(toml_str).unwrap();
         match parsed.concurrency {
@@ -1877,7 +1878,7 @@ mod tests {
                 assert_eq!(config.min_limit, 4);
                 assert_eq!(config.max_limit, 500);
                 assert!((config.decrease_ratio - 0.85).abs() < f64::EPSILON);
-                assert!((config.noise_multiplier - 3.0).abs() < f64::EPSILON);
+                assert!((config.tolerance - 0.1).abs() < f64::EPSILON);
             }
             _ => panic!("Expected TrendAimd variant"),
         }
@@ -1894,10 +1895,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "noise_multiplier must be positive")]
-    fn trend_aimd_rejects_zero_noise_multiplier() {
+    #[should_panic(expected = "tolerance must be in (0.0, 1.0)")]
+    fn trend_aimd_rejects_zero_tolerance() {
         let config = TrendAimdConfig {
-            noise_multiplier: 0.0,
+            tolerance: 0.0,
             ..TrendAimdConfig::default()
         };
         let _ = Limiter::trend_aimd(config);
