@@ -122,9 +122,10 @@ function parseMarkdown(filePath, content) {
 
 function fileToUrlPath(filePath, rootDir) {
   let rel = path.relative(rootDir, filePath).replace(/\\/g, "/");
-  rel = rel.replace(/\.mdx$/, ".md");
-  if (rel === "index.md" || rel.endsWith("/index.md")) {
-    rel = rel.replace(/\/?index\.md$/, "") || "/";
+  // Strip .md and .mdx extensions — afdocs will append .md itself
+  rel = rel.replace(/\.mdx?$/, "");
+  if (rel === "index" || rel.endsWith("/index")) {
+    rel = rel.replace(/\/?index$/, "") || "/";
   }
   return rel || "/";
 }
