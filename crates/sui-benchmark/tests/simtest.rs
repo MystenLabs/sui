@@ -101,7 +101,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(2, 5_000, 1).await;
+        let test_cluster = build_test_cluster(2, 10_000, 1).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
@@ -187,7 +187,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_conflicting_transfers() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 5000, 1).await;
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
         let mut simulated_load_config = SimulatedLoadConfig::default();
         // Use LocalValidatorAggregatorProxy for soft bundle support
         simulated_load_config.remote_env = false;
@@ -254,7 +254,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 5_000, 1).await;
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
@@ -266,7 +266,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_small_committee_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(1, 5_000, 0).await;
+        let test_cluster = build_test_cluster(1, 10_000, 0).await;
         test_simulated_load(test_cluster, 120).await;
     }
 
@@ -724,7 +724,7 @@ mod test {
     // simtest has low timeout tolerance and it is not designed to test performance.
     #[sim_test(config = "test_config_low_latency()")]
     async fn test_simulated_load_large_consensus_commit_prologue_size() {
-        let test_cluster = build_test_cluster(4, 5_000, 1).await;
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
 
         let mut additional_cancelled_txns = Vec::new();
         let num_txns = thread_rng().gen_range(500..2000);
@@ -757,7 +757,7 @@ mod test {
     #[cfg(not(tidehunter))]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_pruning() {
-        let epoch_duration_ms = 5000;
+        let epoch_duration_ms = 10_000;
         let test_cluster = build_test_cluster(4, epoch_duration_ms, 0).await;
         test_simulated_load(test_cluster.clone(), 30).await;
 
@@ -1355,7 +1355,7 @@ mod test {
     async fn test_fork_recovery_transaction_effects_simulation() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-        let test_cluster = build_test_cluster(4, 5000, 4).await;
+        let test_cluster = build_test_cluster(4, 10_000, 4).await;
 
         let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
             Arc::new(Mutex::new(BTreeMap::new()));

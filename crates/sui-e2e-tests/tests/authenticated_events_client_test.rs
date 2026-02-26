@@ -234,7 +234,7 @@ async fn test_client_cross_epoch_stream() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
         .with_rpc_config(rpc_config)
-        .with_epoch_duration_ms(1000)
+        .with_epoch_duration_ms(10000)
         .build()
         .await;
 
@@ -487,7 +487,7 @@ async fn test_client_pruned_checkpoint_error() {
 
     let test_cluster = TestClusterBuilder::new()
         .with_rpc_config(rpc_config)
-        .with_epoch_duration_ms(5000)
+        .with_epoch_duration_ms(10000)
         .build()
         .await;
 
