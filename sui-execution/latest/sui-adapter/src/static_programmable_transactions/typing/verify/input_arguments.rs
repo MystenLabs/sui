@@ -71,6 +71,7 @@ impl Context {
 ///    on mutable objects. And that the gas coin is only taken by value in transfer objects
 pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction {
+        gas_coin: _,
         bytes,
         objects: _,
         withdrawals: _,

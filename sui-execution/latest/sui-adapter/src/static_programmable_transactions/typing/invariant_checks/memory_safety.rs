@@ -292,6 +292,7 @@ impl Location {
 impl Context {
     fn new(txn: &T::Transaction) -> anyhow::Result<Self> {
         let T::Transaction {
+            gas_coin: _,
             bytes: _,
             objects,
             withdrawals,
@@ -546,6 +547,7 @@ pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
 fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
     let mut context = Context::new(txn)?;
     let T::Transaction {
+        gas_coin: _,
         bytes: _,
         objects: _,
         withdrawals: _,
