@@ -1642,6 +1642,18 @@ mod test {
                 "expected at least one alias remove"
             );
         }
+
+        let accum_read_stats = metrics
+            .get_stats(OperationSet::new().with(AccumulatorBalanceRead::FLAG))
+            .expect("expected accumulator balance read stats");
+        info!(
+            "accumulator balance read metrics: success={}",
+            accum_read_stats.success_count
+        );
+        assert!(
+            accum_read_stats.success_count > 0,
+            "expected at least one accumulator balance read"
+        );
     }
 
     #[sim_test(config = "test_config()")]
