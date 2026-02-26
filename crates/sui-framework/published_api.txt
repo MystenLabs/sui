@@ -1888,6 +1888,21 @@ expire_jwks
 get_active_jwks
 	fun
 	0x2::authenticator_state
+get_jwk_by_kid
+	public fun
+	0x2::authenticator_state
+jwk_n
+	public fun
+	0x2::authenticator_state
+jwk_e
+	public fun
+	0x2::authenticator_state
+jwk_alg
+	public fun
+	0x2::authenticator_state
+jwk_kty
+	public fun
+	0x2::authenticator_state
 is_feature_enabled
 	public(package) fun
 	0x2::protocol_config
@@ -2935,6 +2950,57 @@ create_internal
 add_internal
 	fun
 	0x2::display
+GcpAttestationDocument
+	public struct
+	0x2::gcp_attestation
+verify_gcp_attestation
+	entry fun
+	0x2::gcp_attestation
+iss
+	public fun
+	0x2::gcp_attestation
+sub
+	public fun
+	0x2::gcp_attestation
+aud
+	public fun
+	0x2::gcp_attestation
+exp
+	public fun
+	0x2::gcp_attestation
+iat
+	public fun
+	0x2::gcp_attestation
+eat_nonce
+	public fun
+	0x2::gcp_attestation
+secboot
+	public fun
+	0x2::gcp_attestation
+hwmodel
+	public fun
+	0x2::gcp_attestation
+swname
+	public fun
+	0x2::gcp_attestation
+dbgstat
+	public fun
+	0x2::gcp_attestation
+swversion
+	public fun
+	0x2::gcp_attestation
+image_digest
+	public fun
+	0x2::gcp_attestation
+image_reference
+	public fun
+	0x2::gcp_attestation
+restart_policy
+	public fun
+	0x2::gcp_attestation
+verify_gcp_attestation_internal
+	fun
+	0x2::gcp_attestation
 Curve
 	public struct
 	0x2::groth16

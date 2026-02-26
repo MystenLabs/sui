@@ -33,7 +33,6 @@ public struct AuthenticatorStateInner has store {
     active_jwks: vector<ActiveJwk>,
 }
 
-#[allow(unused_field)]
 /// Must match the JWK struct in fastcrypto-zkp
 public struct JWK has copy, drop, store {
     kty: String,
@@ -42,14 +41,12 @@ public struct JWK has copy, drop, store {
     alg: String,
 }
 
-#[allow(unused_field)]
 /// Must match the JwkId struct in fastcrypto-zkp
 public struct JwkId has copy, drop, store {
     iss: String,
     kid: String,
 }
 
-#[allow(unused_field)]
 public struct ActiveJwk has copy, drop, store {
     jwk_id: JwkId,
     jwk: JWK,
@@ -353,6 +350,36 @@ fun expire_jwks(
 fun get_active_jwks(self: &AuthenticatorState, ctx: &TxContext): vector<ActiveJwk> {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
     self.load_inner().active_jwks
+}
+
+/// Look up a JWK by issuer and key ID. Returns `none` if not found.
+public fun get_jwk_by_kid(self: &AuthenticatorState, iss: String, kid: String): Option<JWK> {
+    let inner = self.load_inner();
+    let mut i = 0;
+    while (i < inner.active_jwks.length()) {
+        let active = &inner.active_jwks[i];
+        if (&active.jwk_id.iss == &iss && &active.jwk_id.kid == &kid) {
+            return option::some(active.jwk)
+        };
+        i = i + 1;
+    };
+    option::none()
+}
+
+public fun jwk_n(jwk: &JWK): &String {
+    &jwk.n
+}
+
+public fun jwk_e(jwk: &JWK): &String {
+    &jwk.e
+}
+
+public fun jwk_alg(jwk: &JWK): &String {
+    &jwk.alg
+}
+
+public fun jwk_kty(jwk: &JWK): &String {
+    &jwk.kty
 }
 
 #[test_only]

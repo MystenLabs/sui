@@ -46,6 +46,7 @@ use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use crate::{crypto::group_ops, transfer::PartyTransferInternalCostParams};
 use better_any::{Tid, TidAble};
+use crypto::gcp_attestation::{self as gcp_attestation_mod, GcpAttestationCostParams};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -197,6 +198,9 @@ pub struct NativesCostTable {
 
     // nitro attestation
     pub nitro_attestation_cost_params: NitroAttestationCostParams,
+
+    // gcp attestation
+    pub gcp_attestation_cost_params: GcpAttestationCostParams,
 }
 
 impl NativeExtensionMarker<'_> for NativesCostTable {}
@@ -804,6 +808,14 @@ impl NativesCostTable {
                     .nitro_attestation_verify_cost_per_cert_as_option()
                     .map(Into::into),
             },
+            gcp_attestation_cost_params: GcpAttestationCostParams {
+                verify_base_cost: protocol_config
+                    .gcp_attestation_verify_base_cost_as_option()
+                    .map(Into::into),
+                verify_cost_per_byte: protocol_config
+                    .gcp_attestation_verify_cost_per_byte_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -1305,6 +1317,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "nitro_attestation",
             "load_nitro_attestation_internal",
             make_native!(nitro_attestation::load_nitro_attestation_internal),
+        ),
+        (
+            "gcp_attestation",
+            "verify_gcp_attestation_internal",
+            make_native!(gcp_attestation_mod::verify_gcp_attestation_internal),
         ),
     ];
     let sui_framework_natives_iter =

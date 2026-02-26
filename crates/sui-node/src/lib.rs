@@ -450,6 +450,82 @@ impl SuiNode {
         }
     }
 
+    fn start_gcp_jwk_updater(
+        config: &NodeConfig,
+        metrics: Arc<SuiNodeMetrics>,
+        authority: AuthorityName,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+    ) {
+        let fetch_interval = Duration::from_secs(config.jwk_fetch_interval_seconds);
+
+        jwk_log!(?fetch_interval, "Starting GCP JWK updater task");
+
+        let epoch = epoch_store.epoch();
+        spawn_monitored_task!(
+            epoch_store.clone().within_alive_epoch(
+                async move {
+                    let mut seen = HashSet::new();
+                    loop {
+                        jwk_log!("fetching GCP JWKs");
+                        metrics.jwk_requests.with_label_values(&["gcp"]).inc();
+                        match Self::fetch_gcp_jwks(authority).await {
+                            Err(e) => {
+                                metrics.jwk_request_errors.with_label_values(&["gcp"]).inc();
+                                warn!("Error when fetching GCP JWKs: {:?}", e);
+                                tokio::time::sleep(Duration::from_secs(30)).await;
+                                continue;
+                            }
+                            Ok(mut keys) => {
+                                metrics
+                                    .total_jwks
+                                    .with_label_values(&["gcp"])
+                                    .inc_by(keys.len() as u64);
+
+                                keys.retain(|(id, jwk)| {
+                                    if !check_total_jwk_size(id, jwk) {
+                                        warn!("GCP JWK {:?} is too large, skipping", id);
+                                        metrics.invalid_jwks.with_label_values(&["gcp"]).inc();
+                                        return false;
+                                    }
+                                    !epoch_store.jwk_active_in_current_epoch(id, jwk)
+                                        && seen.insert((id.clone(), jwk.clone()))
+                                });
+
+                                metrics
+                                    .unique_jwks
+                                    .with_label_values(&["gcp"])
+                                    .inc_by(keys.len() as u64);
+
+                                if keys.len() > MAX_JWK_KEYS_PER_FETCH {
+                                    warn!(
+                                        "GCP sent too many JWKs, only the first {} will be used",
+                                        MAX_JWK_KEYS_PER_FETCH
+                                    );
+                                    keys.truncate(MAX_JWK_KEYS_PER_FETCH);
+                                }
+
+                                for (id, jwk) in keys.into_iter() {
+                                    jwk_log!("Submitting GCP JWK to consensus: {:?}", id);
+                                    let txn =
+                                        ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
+                                    consensus_adapter
+                                        .submit(txn, None, &epoch_store, None, None)
+                                        .tap_err(|e| {
+                                            warn!("Error submitting GCP JWK to consensus: {:?}", e)
+                                        })
+                                        .ok();
+                                }
+                            }
+                        }
+                        tokio::time::sleep(fetch_interval).await;
+                    }
+                }
+                .instrument(error_span!("gcp_jwk_updater_task", epoch)),
+            )
+        );
+    }
+
     pub async fn start_async(
         config: NodeConfig,
         registry_service: RegistryService,
@@ -1464,11 +1540,21 @@ impl SuiNode {
         if epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(
                 config,
-                sui_node_metrics,
+                sui_node_metrics.clone(),
                 state.name,
                 epoch_store.clone(),
                 consensus_adapter.clone(),
             );
+
+            if epoch_store.protocol_config().enable_gcp_attestation() {
+                Self::start_gcp_jwk_updater(
+                    config,
+                    sui_node_metrics,
+                    state.name,
+                    epoch_store.clone(),
+                    consensus_adapter.clone(),
+                );
+            }
         }
 
         Ok(ValidatorComponents {
@@ -2274,6 +2360,24 @@ impl SuiNode {
             .await
             .map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
+
+    async fn fetch_gcp_jwks(_authority: AuthorityName) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use sui_types::error::SuiErrorKind;
+        const GCP_JWKS_URL: &str = "https://www.googleapis.com/service_accounts/v1/metadata/jwk/signer@confidentialspace-sign.iam.gserviceaccount.com";
+        const GCP_ISS: &str = "https://confidentialcomputing.googleapis.com";
+
+        let client = reqwest::Client::new();
+        let resp = client
+            .get(GCP_JWKS_URL)
+            .send()
+            .await
+            .map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+        parse_gcp_jwks(&body, GCP_ISS).map_err(|_| SuiErrorKind::JWKRetrievalError.into())
+    }
 }
 
 #[cfg(msim)]
@@ -2296,6 +2400,54 @@ impl SuiNode {
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         get_jwk_injector()(authority, provider)
     }
+
+    #[allow(unused_variables)]
+    async fn fetch_gcp_jwks(_authority: AuthorityName) -> SuiResult<Vec<(JwkId, JWK)>> {
+        // GCP JWK fetching is not simulated; return empty set.
+        Ok(vec![])
+    }
+}
+
+/// Parse a GCP JWKS JSON response into `(JwkId, JWK)` pairs.
+/// Only RSA keys with alg=RS256 are accepted.
+fn parse_gcp_jwks(body: &str, iss: &str) -> Result<Vec<(JwkId, JWK)>, serde_json::Error> {
+    let v: serde_json::Value = serde_json::from_str(body)?;
+    let keys = match v.get("keys").and_then(|k| k.as_array()) {
+        Some(arr) => arr.clone(),
+        None => return Ok(vec![]),
+    };
+    let mut result = Vec::new();
+    for key in &keys {
+        let kty = key.get("kty").and_then(|v| v.as_str()).unwrap_or("");
+        let alg = key.get("alg").and_then(|v| v.as_str()).unwrap_or("");
+        if kty != "RSA" || alg != "RS256" {
+            continue;
+        }
+        let kid = match key.get("kid").and_then(|v| v.as_str()) {
+            Some(k) => k.to_string(),
+            None => continue,
+        };
+        let n = match key.get("n").and_then(|v| v.as_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        let e = match key.get("e").and_then(|v| v.as_str()) {
+            Some(e) => e.to_string(),
+            None => continue,
+        };
+        let id = JwkId {
+            iss: iss.to_string(),
+            kid,
+        };
+        let jwk = JWK {
+            kty: kty.to_string(),
+            e,
+            n,
+            alg: alg.to_string(),
+        };
+        result.push((id, jwk));
+    }
+    Ok(result)
 }
 
 enum SpawnOnce {
