@@ -76,3 +76,6 @@ passkey-authenticator.workspace = true
 coset.workspace = true
 url.workspace = true
 p256.workspace = true
+base64.workspace = true
+rsa = { version = "0.9", default-features = false, features = ["std"] }
+sha2 = { version = "0.10", default-features = false }

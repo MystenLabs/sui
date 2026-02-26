@@ -14623,6 +14623,7 @@ version = "1.68.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.21.7",
  "bcs",
  "clap",
  "coset",
@@ -14646,8 +14647,10 @@ dependencies = [
  "prost-types 0.14.1",
  "rand 0.8.5",
  "reqwest",
+ "rsa 0.9.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "shared-crypto",
  "sui-config",
  "sui-core",
