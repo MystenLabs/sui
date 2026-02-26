@@ -997,7 +997,7 @@ impl Operation for AccumulatorBalanceRead {
 pub struct ObjectBalanceOverdraw;
 
 impl ObjectBalanceOverdraw {
-    pub const FLAG: u32 = 1 << 12;
+    pub const FLAG: u32 = 1 << 16;
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
         name: "ObjectBalanceOverdraw",
         flag: Self::FLAG,
