@@ -572,12 +572,15 @@ impl PatternMatrix {
             }
             let mut result = vec![arm];
             for pat in self.patterns[1..].iter_mut() {
-                if let Some(arm) = pat.all_wild_arm(context, fringe) {
-                    let has_guard = arm.guard.is_some();
-                    result.push(arm);
-                    if !has_guard {
-                        return Some(result);
-                    }
+                // If we find a non-wildcard arm, we have only seen guarded wildcards and should
+                // specialize against the fringe instead.
+                let Some(arm) = pat.all_wild_arm(context, fringe) else {
+                    return None;
+                };
+                let has_guard = arm.guard.is_some();
+                result.push(arm);
+                if !has_guard {
+                    return Some(result);
                 }
             }
             None
