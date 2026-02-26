@@ -898,15 +898,13 @@ impl TrendAimd {
                 }
             }
             Phase::Steady => {
+                // Congestion when fast EWMA exceeds slow EWMA by more than the
+                // proportional tolerance. Unlike a variance-based noise band, this
+                // threshold doesn't widen when RTT is rising (which would suppress
+                // the congestion signal exactly when it matters most).
                 let threshold = s.ewma_rtt_slow * (1.0 + self.tolerance);
                 if s.ewma_rtt > threshold {
-                    // Proportional decrease: the further above threshold, the
-                    // harder we cut. Mild congestion gets gentle correction
-                    // (~decrease_ratio), severe congestion cuts up to ×0.5.
-                    let excess = s.ewma_rtt - threshold;
-                    let severity = (excess / s.ewma_rtt_slow).min(1.0);
-                    let ratio = self.decrease_ratio - severity * (self.decrease_ratio - 0.5);
-                    s.limit *= ratio;
+                    s.limit *= self.decrease_ratio;
                 } else {
                     s.limit += s.limit.sqrt();
                 }
