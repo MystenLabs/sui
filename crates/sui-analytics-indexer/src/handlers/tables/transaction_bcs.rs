@@ -31,7 +31,6 @@ impl Row for TransactionBCSRow {
 #[async_trait]
 impl Processor for TransactionBCSProcessor {
     const NAME: &'static str = Pipeline::TransactionBCS.name();
-    const FANOUT: usize = 16;
     type Value = TransactionBCSRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

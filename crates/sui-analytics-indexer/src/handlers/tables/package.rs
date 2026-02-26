@@ -28,7 +28,6 @@ impl Row for MovePackageRow {
 #[async_trait]
 impl Processor for PackageProcessor {
     const NAME: &'static str = Pipeline::MovePackage.name();
-    const FANOUT: usize = 16;
     type Value = MovePackageRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

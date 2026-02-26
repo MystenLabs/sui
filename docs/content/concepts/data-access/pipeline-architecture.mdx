@@ -218,7 +218,7 @@ The sequential pipeline consists of only two main components, making it signific
 
 ![Sequential pipeline diagram](./images/sequential.png)
 
-The `Broadcaster` and `Processor` components use identical backpressure mechanisms, `FANOUT` parallel processing, and `processor()` implementations to the concurrent pipeline. The `Processor` component is described in detail in the [Common pipeline components](#processor) section.
+The `Broadcaster` and `Processor` components use identical backpressure mechanisms, adaptive parallel processing, and `processor()` implementations to the concurrent pipeline. The `Processor` component is described in detail in the [Common pipeline components](#processor) section.
 
 The key difference is the dramatically simplified pipeline core with just a single `Committer` component that handles ordering, batching, and database commits. Concurrent pipelines, in contrast, have five separate components in addition to the `Processor`: `Collector`, `Committer`, `CommitterWatermark`, `ReaderWatermark`, and `Pruner`.
 
@@ -257,7 +257,7 @@ Sequential pipelines use two layers of backpressure to prevent memory overflow a
 Sequential pipelines use channel-based flow control with a simpler topology due to fewer components:
 
 - **Broadcaster → Processor:** `checkpoint_buffer_size` slots.
-- **Processor → Committer:** `FANOUT + PIPELINE_BUFFER` slots.
+- **Processor → Committer:** `processor_channel_size` slots (defaults to `num_cpus / 2`).
 
 When any channel fills, senders automatically block, creating upstream pressure that cascades back through the pipeline. This mechanism works identically to concurrent pipelines but with fewer channel hops. See [concurrent pipeline backpressure](#concurrent-backpressure) for detailed mechanics of how channel-based blocking propagates.
 
@@ -294,23 +294,42 @@ Only sequential pipelines need this type of regulation, as concurrent pipelines 
 Sequential pipelines have a more basic configuration but do require critical tuning parameters:
 
 ```rust
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
+
 let config = SequentialConfig {
     committer: CommitterConfig {
         // Not applicable to sequential pipelines
         write_concurrency: 1,
-        
+
         // Batch collection frequency in ms (default: 500)
         collect_interval_ms: 1000,
     },
-    
+
     // Checkpoints to lag behind live data (default: 0)
     checkpoint_lag: 100,
+
+    // Adaptive concurrency (default). Starts at 1 and scales up to num_cpus.
+    fanout: None,
+    // Or use fixed concurrency:
+    // fanout: Some(ConcurrencyConfig::Fixed { value: 20 }),
+    // Or customize adaptive bounds:
+    // fanout: Some(ConcurrencyConfig::Adaptive {
+    //     initial: 5,
+    //     min: 1,
+    //     max: 32,
+    // }),
+
+    min_eager_rows: None,
+    max_batch_checkpoints: None,
+    processor_channel_size: None, // defaults to num_cpus / 2
 };
 ```
 
 - `collect_interval_ms`: Higher values allow more checkpoints per batch, improving efficiency.
 - `checkpoint_lag`: Essential for live indexing to avoid processing incomplete data.
 - `write_concurrency`: Not applicable to sequential pipelines (always single-threaded writes).
+- `fanout`: By default, processor concurrency is adaptive: it starts at 1 and scales up to the number of CPUs based on downstream channel pressure. The controller monitors the fill fraction of the processor-to-committer channel and adjusts concurrency using a dead band between 60% and 85% fill. You can override this with fixed concurrency (`ConcurrencyConfig::Fixed`) or customize the adaptive bounds (`ConcurrencyConfig::Adaptive`). The default max of `num_cpus` assumes your processor is CPU-bound. If your processor performs IO (for example, fetching data from an external service), you may want a higher max. The adaptive controller also exposes a `dead_band` parameter to override the fill-fraction thresholds, but the defaults should work well for most workloads.
+- `processor_channel_size`: Controls the size of the channel between the processor and the committer. Defaults to `num_cpus / 2`. This channel is also the signal that drives the adaptive concurrency controller.
 
 ## Concurrent pipeline architecture {#concurrent-pipeline-architecture}
 
@@ -458,9 +477,9 @@ Each channel has a fixed buffer size that automatically blocks when full:
 
 **`Broadcaster` to `Processor`**: `checkpoint_buffer_size` slots → `Broadcaster` blocks, upstream pressure.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="checkpoint_buffer_size" />   
-    
-**`Processor` to `Collector`**: `FANOUT + PIPELINE_BUFFER` slots → All workers block on `send()`.
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="checkpoint_buffer_size" />
+
+**`Processor` to `Collector`**: `processor_channel_size` slots (defaults to `num_cpus / 2`) → All workers block on `send()`.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="processor_tx" />
     
@@ -522,9 +541,6 @@ The following sections detail the configuration settings you can implement for o
 impl concurrent::Handler for MyHandler {
     type Store = Db;
 
-    // Number of concurrent processor workers (default: 10)
-    const FANOUT: usize = 20;
-
     // Minimum rows to trigger eager commit for committer (default: 50)
     const MIN_EAGER_ROWS: usize = 100;
 
@@ -536,34 +552,35 @@ impl concurrent::Handler for MyHandler {
 }
 ```
 
-These constants can also be overridden at runtime through `ConcurrentConfig` and `SequentialConfig`, without recompiling. Config values take precedence over trait constants when present. For concurrent pipelines:
+These constants can also be overridden at runtime through `ConcurrentConfig`, without recompiling. Config values take precedence over trait constants when present.
 
 ```rust
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
+
 let config = ConcurrentConfig {
     committer: committer_config,
     pruner: Some(pruner_config),
-    fanout: Some(20),
+    // Adaptive concurrency (default). Starts at 1 and scales up to num_cpus.
+    fanout: None,
+    // Or use fixed concurrency:
+    // fanout: Some(ConcurrencyConfig::Fixed { value: 20 }),
+    // Or customize adaptive bounds:
+    // fanout: Some(ConcurrencyConfig::Adaptive {
+    //     initial: 5,
+    //     min: 1,
+    //     max: 32,
+    // }),
     min_eager_rows: Some(100),
     max_pending_rows: Some(10000),
     max_watermark_updates: Some(5000),
-};
-```
-
-For sequential pipelines:
-
-```rust
-let config = SequentialConfig {
-    committer: committer_config,
-    checkpoint_lag: 0,
-    fanout: Some(20),
-    min_eager_rows: Some(100),
-    max_batch_checkpoints: Some(500),
+    processor_channel_size: None, // defaults to num_cpus / 2
 };
 ```
 
 Tuning guidelines:
 
-- **`FANOUT`:** Increase for CPU-intensive processing, decrease for memory-constrained environments.
+- **`fanout`:** By default, processor concurrency is adaptive: it starts at 1 and scales up to the number of CPUs based on downstream channel pressure. The controller monitors the fill fraction of the processor-to-collector channel and adjusts concurrency using a dead band between 60% and 85% fill. You can override this with fixed concurrency (`ConcurrencyConfig::Fixed`) or customize the adaptive bounds (`ConcurrencyConfig::Adaptive`). The default max of `num_cpus` assumes your processor is CPU-bound. If your processor performs IO (for example, fetching data from an external service), you may want a higher max. The adaptive controller also exposes a `dead_band` parameter to override the fill-fraction thresholds, but the defaults should work well for most workloads.
+- **`processor_channel_size`:** Controls the size of the channel between the processor and the collector. Defaults to `num_cpus / 2`. This channel is also the signal that drives the adaptive concurrency controller.
 - **`MIN_EAGER_ROWS`:** Lower values reduce data commit latency (individual data appears in database sooner), higher values improve overall throughput (more efficient larger batches).
 - **`MAX_PENDING_ROWS`:** Controls how much data can accumulate when the committer falls behind. Higher values provide more buffer space but use more memory during bottlenecks.
 - **`MAX_WATERMARK_UPDATES`:** Lower for sparse pipelines (rare events), keep default for dense pipelines.
@@ -588,6 +605,7 @@ let config = ConcurrentConfig {
         watermark_interval_jitter_ms: 100,
     },
     pruner: Some(pruner_config),
+    ..Default::default()
 };
 ```
 

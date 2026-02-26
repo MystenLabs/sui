@@ -10,9 +10,9 @@ use sui_futures::service::Service;
 use tokio::sync::mpsc;
 use tracing::info;
 
+use crate::config::ConcurrencyConfig;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
-use crate::pipeline::PIPELINE_BUFFER;
 use crate::pipeline::Processor;
 use crate::pipeline::processor::processor;
 use crate::pipeline::sequential::committer::committer;
@@ -85,14 +85,17 @@ pub struct SequentialConfig {
     /// How many checkpoints to hold back writes for.
     pub checkpoint_lag: u64,
 
-    /// Override for `Processor::FANOUT` (processor concurrency).
-    pub fanout: Option<usize>,
+    /// Processor concurrency. Defaults to adaptive scaling up to the number of CPUs.
+    pub fanout: Option<ConcurrencyConfig>,
 
     /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
     pub min_eager_rows: Option<usize>,
 
     /// Override for `Handler::MAX_BATCH_CHECKPOINTS` (checkpoints per write batch).
     pub max_batch_checkpoints: Option<usize>,
+
+    /// Size of the channel between the processor and committer.
+    pub processor_channel_size: Option<usize>,
 }
 
 /// Start a new sequential (in-order) indexing pipeline, served by the handler, `H`. Starting
@@ -134,13 +137,22 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         "Starting pipeline with config: {config:#?}",
     );
 
-    let fanout = config.fanout.unwrap_or(H::FANOUT);
+    let concurrency = config
+        .fanout
+        .clone()
+        .unwrap_or(ConcurrencyConfig::Adaptive {
+            initial: 1,
+            min: 1,
+            max: num_cpus::get(),
+            dead_band: None,
+        });
     let min_eager_rows = config.min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
     let max_batch_checkpoints = config
         .max_batch_checkpoints
         .unwrap_or(H::MAX_BATCH_CHECKPOINTS);
 
-    let (processor_tx, committer_rx) = mpsc::channel(fanout + PIPELINE_BUFFER);
+    let processor_channel_size = config.processor_channel_size.unwrap_or(num_cpus::get() / 2);
+    let (processor_tx, committer_rx) = mpsc::channel(processor_channel_size);
 
     let handler = Arc::new(handler);
 
@@ -149,7 +161,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
-        fanout,
+        concurrency,
     );
 
     let s_committer = committer::<H>(

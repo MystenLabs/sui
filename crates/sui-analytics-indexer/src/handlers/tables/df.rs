@@ -133,7 +133,6 @@ impl DynamicFieldProcessor {
 #[async_trait]
 impl Processor for DynamicFieldProcessor {
     const NAME: &'static str = Pipeline::DynamicField.name();
-    const FANOUT: usize = 16;
     type Value = DynamicFieldRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

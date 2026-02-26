@@ -23,12 +23,22 @@ The indexing framework provides multiple levels of configuration to optimize per
 Control how checkpoint data is fetched and distributed:
 
 ```rust
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
+
 let ingestion_config = IngestionConfig {
     // Buffer size across all downstream workers (default: 5000)
     checkpoint_buffer_size: 10000,
 
-    // Concurrent checkpoint fetches (default: 200)
-    ingest_concurrency: 500,
+    // Concurrency for checkpoint fetches.
+    // Adaptive by default: starts at 1 and scales up to 500 based on
+    // downstream channel pressure.
+    ingest_concurrency: ConcurrencyConfig::Adaptive {
+        initial: 1,
+        min: 1,
+        max: 500,
+    },
+    // Or use fixed concurrency:
+    // ingest_concurrency: ConcurrencyConfig::Fixed { value: 200 },
 
     // Retry interval for missing checkpoints in ms (default: 200)
     retry_interval_ms: 100,
@@ -51,7 +61,7 @@ let ingestion_config = IngestionConfig {
 **Tuning guidelines:**
 
 - `checkpoint_buffer_size`: Increase for high-throughput scenarios, decrease to reduce memory usage.
-- `ingest_concurrency`: Higher values improve ingestion speed but increase network/storage load.
+- `ingest_concurrency`: Controls how many checkpoint fetches run concurrently. By default this is adaptive: it starts at 1 and scales up to 500 based on how full the downstream broadcast channel is. The controller uses a dead band (60%–85% fill) to avoid oscillation, increasing concurrency when the channel is draining fast and decreasing when it backs up. You can override with `ConcurrencyConfig::Fixed` for a static limit or customize the adaptive bounds. The adaptive controller also exposes a `dead_band` parameter to override the fill-fraction thresholds, but the defaults should work well for most workloads.
 - `retry_interval_ms`: Lower values reduce latency for live data, higher values reduce unnecessary retries.
 - `streaming_backoff_initial_batch_size`: Number of checkpoints to process via polling after the initial streaming failure. Lower values restore streaming faster, higher values reduce connection attempts.
 - `streaming_backoff_max_batch_size`: Maximum checkpoints to process via polling after repeated failures. The batch size increases exponentially from the initial size up to this maximum. Higher values reduce connection attempts during prolonged outages.

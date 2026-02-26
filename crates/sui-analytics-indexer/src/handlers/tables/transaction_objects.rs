@@ -32,7 +32,6 @@ impl Row for TransactionObjectRow {
 #[async_trait]
 impl Processor for TransactionObjectsProcessor {
     const NAME: &'static str = Pipeline::TransactionObjects.name();
-    const FANOUT: usize = 16;
     type Value = TransactionObjectRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

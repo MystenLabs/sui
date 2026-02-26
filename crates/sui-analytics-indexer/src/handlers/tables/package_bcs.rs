@@ -30,7 +30,6 @@ impl Row for PackageBCSRow {
 #[async_trait]
 impl Processor for PackageBCSProcessor {
     const NAME: &'static str = Pipeline::MovePackageBCS.name();
-    const FANOUT: usize = 16;
     type Value = PackageBCSRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

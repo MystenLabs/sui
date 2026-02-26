@@ -216,7 +216,6 @@ impl Row for ObjectRow {
 #[async_trait]
 impl Processor for ObjectProcessor {
     const NAME: &'static str = Pipeline::Object.name();
-    const FANOUT: usize = 16;
     type Value = ObjectRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

@@ -3,12 +3,12 @@
 
 use std::time::Duration;
 
+pub use crate::config::ConcurrencyConfig;
+use crate::store::CommitterWatermark;
 pub use processor::Processor;
 use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::store::CommitterWatermark;
 
 pub mod concurrent;
 mod logging;

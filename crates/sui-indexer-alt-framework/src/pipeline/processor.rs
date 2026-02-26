@@ -17,6 +17,7 @@ use tracing::info;
 
 use async_trait::async_trait;
 
+use crate::config::ConcurrencyConfig;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::IndexedCheckpoint;
@@ -28,15 +29,11 @@ const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Implementors of this trait are responsible for transforming checkpoint into rows for their
-/// table. The `FANOUT` associated value controls how many concurrent workers will be used to
-/// process checkpoint information.
+/// table.
 #[async_trait]
 pub trait Processor: Send + Sync + 'static {
     /// Used to identify the pipeline in logs and metrics.
     const NAME: &'static str;
-
-    /// How much concurrency to use when processing checkpoint data.
-    const FANOUT: usize = 10;
 
     /// The type of value being inserted by the handler.
     type Value: Send + Sync + 'static;
@@ -58,7 +55,7 @@ pub trait Processor: Send + Sync + 'static {
 
 /// The processor task is responsible for taking checkpoint data and breaking it down into rows
 /// ready to commit. It spins up a supervisor that waits on the `rx` channel for checkpoints, and
-/// distributes them among `H::FANOUT` workers.
+/// distributes them among workers whose concurrency is governed by `concurrency`.
 ///
 /// Each worker processes a checkpoint into rows and sends them on to the committer using the `tx`
 /// channel.
@@ -67,7 +64,7 @@ pub(super) fn processor<P: Processor>(
     rx: mpsc::Receiver<Arc<Checkpoint>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
-    fanout: usize,
+    concurrency: ConcurrencyConfig,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = P::NAME, "Starting processor");
@@ -77,80 +74,90 @@ pub(super) fn processor<P: Processor>(
             &metrics.latest_processed_checkpoint,
         );
 
+        let report_metrics = metrics.clone();
         match ReceiverStream::new(rx)
-            .try_for_each_spawned(fanout, |checkpoint| {
-                let tx = tx.clone();
-                let metrics = metrics.clone();
-                let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
-                let processor = processor.clone();
+            .try_for_each_send_spawned(
+                concurrency.into(),
+                |checkpoint| {
+                    let metrics = metrics.clone();
+                    let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
+                    let processor = processor.clone();
 
-                async move {
-                    metrics
-                        .total_handler_checkpoints_received
+                    async move {
+                        metrics
+                            .total_handler_checkpoints_received
+                            .with_label_values(&[P::NAME])
+                            .inc();
+
+                        let guard = metrics
+                            .handler_checkpoint_latency
+                            .with_label_values(&[P::NAME])
+                            .start_timer();
+
+                        // Retry processing with exponential backoff
+                        let backoff = ExponentialBackoff {
+                            initial_interval: INITIAL_RETRY_INTERVAL,
+                            current_interval: INITIAL_RETRY_INTERVAL,
+                            max_interval: MAX_RETRY_INTERVAL,
+                            max_elapsed_time: None,
+                            ..Default::default()
+                        };
+
+                        let values = backoff::future::retry(backoff, || async {
+                            processor
+                                .process(&checkpoint)
+                                .await
+                                .map_err(backoff::Error::transient)
+                        })
+                        .await?;
+
+                        let elapsed = guard.stop_and_record();
+
+                        let epoch = checkpoint.summary.epoch;
+                        let cp_sequence_number = checkpoint.summary.sequence_number;
+                        let tx_hi = checkpoint.summary.network_total_transactions;
+                        let timestamp_ms = checkpoint.summary.timestamp_ms;
+
+                        debug!(
+                            pipeline = P::NAME,
+                            checkpoint = cp_sequence_number,
+                            elapsed_ms = elapsed * 1000.0,
+                            "Processed checkpoint",
+                        );
+
+                        checkpoint_lag_reporter.report_lag(cp_sequence_number, timestamp_ms);
+
+                        metrics
+                            .total_handler_checkpoints_processed
+                            .with_label_values(&[P::NAME])
+                            .inc();
+
+                        metrics
+                            .total_handler_rows_created
+                            .with_label_values(&[P::NAME])
+                            .inc_by(values.len() as u64);
+
+                        Ok(IndexedCheckpoint::new(
+                            epoch,
+                            cp_sequence_number,
+                            tx_hi,
+                            timestamp_ms,
+                            values,
+                        ))
+                    }
+                },
+                tx,
+                move |stats| {
+                    report_metrics
+                        .processor_concurrency_limit
                         .with_label_values(&[P::NAME])
-                        .inc();
-
-                    let guard = metrics
-                        .handler_checkpoint_latency
+                        .set(stats.limit as i64);
+                    report_metrics
+                        .processor_concurrency_inflight
                         .with_label_values(&[P::NAME])
-                        .start_timer();
-
-                    // Retry processing with exponential backoff - treat all errors as transient
-                    let backoff = ExponentialBackoff {
-                        initial_interval: INITIAL_RETRY_INTERVAL,
-                        current_interval: INITIAL_RETRY_INTERVAL,
-                        max_interval: MAX_RETRY_INTERVAL,
-                        max_elapsed_time: None, // Retry indefinitely
-                        ..Default::default()
-                    };
-
-                    let values = backoff::future::retry(backoff, || async {
-                        processor
-                            .process(&checkpoint)
-                            .await
-                            .map_err(backoff::Error::transient)
-                    })
-                    .await?;
-
-                    let elapsed = guard.stop_and_record();
-
-                    let epoch = checkpoint.summary.epoch;
-                    let cp_sequence_number = checkpoint.summary.sequence_number;
-                    let tx_hi = checkpoint.summary.network_total_transactions;
-                    let timestamp_ms = checkpoint.summary.timestamp_ms;
-
-                    debug!(
-                        pipeline = P::NAME,
-                        checkpoint = cp_sequence_number,
-                        elapsed_ms = elapsed * 1000.0,
-                        "Processed checkpoint",
-                    );
-
-                    checkpoint_lag_reporter.report_lag(cp_sequence_number, timestamp_ms);
-
-                    metrics
-                        .total_handler_checkpoints_processed
-                        .with_label_values(&[P::NAME])
-                        .inc();
-
-                    metrics
-                        .total_handler_rows_created
-                        .with_label_values(&[P::NAME])
-                        .inc_by(values.len() as u64);
-
-                    tx.send(IndexedCheckpoint::new(
-                        epoch,
-                        cp_sequence_number,
-                        tx_hi,
-                        timestamp_ms,
-                        values,
-                    ))
-                    .await
-                    .map_err(|_| Break::Break)?;
-
-                    Ok(())
-                }
-            })
+                        .set(stats.inflight as i64);
+                },
+            )
             .await
         {
             Ok(()) => {
@@ -241,7 +248,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
-            DataPipeline::FANOUT,
+            ConcurrencyConfig::Fixed { value: 10 },
         );
 
         // Send both checkpoints
@@ -301,7 +308,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
-            DataPipeline::FANOUT,
+            ConcurrencyConfig::Fixed { value: 10 },
         );
 
         // Send first checkpoint.
@@ -375,7 +382,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
-            DataPipeline::FANOUT,
+            ConcurrencyConfig::Fixed { value: 10 },
         );
 
         // Send and verify first checkpoint (should succeed immediately)
@@ -409,7 +416,6 @@ mod tests {
         #[async_trait]
         impl Processor for SlowProcessor {
             const NAME: &'static str = "slow";
-            const FANOUT: usize = 3; // Small fanout for testing
             type Value = StoredData;
 
             async fn process(
@@ -441,7 +447,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
-            SlowProcessor::FANOUT,
+            ConcurrencyConfig::Fixed { value: 3 },
         );
 
         // Send all checkpoints and measure time
@@ -458,7 +464,7 @@ mod tests {
         }
 
         // Verify concurrency: total time should be less than sequential processing
-        // With FANOUT=3, 5 checkpoints should take ~1000ms (500ms * 2 (batches)) instead of 2500ms (500ms * 5).
+        // With concurrency=3, 5 checkpoints should take ~1000ms (500ms * 2 (batches)) instead of 2500ms (500ms * 5).
         // Adding small 200ms for some processing overhead.
         let elapsed = start.elapsed();
         assert!(elapsed < std::time::Duration::from_millis(1200));
