@@ -316,7 +316,6 @@ pub struct ExecutionIndicesWithStatsV2 {
     pub height: u64,
     pub stats: ConsensusStats,
     pub last_checkpoint_flush_timestamp: u64,
-    // Reserved for future use.
     pub checkpoint_seq: u64,
 }
 
@@ -425,6 +424,12 @@ pub struct AuthorityPerEpochStore {
     epoch_close_time: RwLock<Option<Instant>>,
     pub(crate) metrics: Arc<EpochMetrics>,
     epoch_start_configuration: Arc<EpochStartConfiguration>,
+
+    /// The last checkpoint sequence number from the previous epoch.
+    /// Used to derive the first checkpoint sequence number of this epoch for the
+    /// consensus handler.
+    /// In epoch 0, this is checkpoint_seq 0 - our first non-genesis checkpoint is seq=1.
+    previous_epoch_last_checkpoint: CheckpointSequenceNumber,
 
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
@@ -1080,6 +1085,7 @@ impl AuthorityPerEpochStore {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
+        previous_epoch_last_checkpoint: CheckpointSequenceNumber,
         submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
@@ -1285,6 +1291,7 @@ impl AuthorityPerEpochStore {
             epoch_close_time: Default::default(),
             metrics,
             epoch_start_configuration,
+            previous_epoch_last_checkpoint,
             execution_component,
             chain,
             jwk_aggregator,
@@ -1439,6 +1446,10 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration.epoch_start_state()
     }
 
+    pub fn previous_epoch_last_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.previous_epoch_last_checkpoint
+    }
+
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain.0
     }
@@ -1455,7 +1466,7 @@ impl AuthorityPerEpochStore {
         backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
-        previous_epoch_last_checkpoint: CheckpointSequenceNumber,
+        epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Arc<Self>> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
@@ -1473,7 +1484,10 @@ impl AuthorityPerEpochStore {
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
             self.chain,
-            previous_epoch_last_checkpoint,
+            // At epoch boundary, highest_executed_checkpoint == epoch_last_checkpoint because
+            // all checkpoints must be executed before epoch transition.
+            epoch_last_checkpoint,
+            epoch_last_checkpoint,
             self.submitted_transaction_cache.metrics(),
         )
     }
@@ -1483,7 +1497,7 @@ impl AuthorityPerEpochStore {
         backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
-        previous_epoch_last_checkpoint: CheckpointSequenceNumber,
+        epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> Arc<Self> {
         let next_epoch = self.epoch() + 1;
         let next_committee = Committee::new(
@@ -1498,7 +1512,7 @@ impl AuthorityPerEpochStore {
             backing_package_store,
             object_store,
             expensive_safety_check_config,
-            previous_epoch_last_checkpoint,
+            epoch_last_checkpoint,
         )
         .expect("failed to create new authority per epoch store")
     }

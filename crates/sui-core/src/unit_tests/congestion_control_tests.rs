@@ -320,22 +320,22 @@ async fn test_congestion_control_execution_cancellation() {
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // Get the captured transactions
-    let (scheduled_txns, assigned_tx_and_versions) = {
+    let scheduled_txns = {
         let mut captured = captured_transactions.lock();
         assert!(
             !captured.is_empty(),
             "Expected transactions to be scheduled"
         );
-        let (scheduled_txns, assigned_tx_and_versions) = captured.remove(0);
-        (scheduled_txns, assigned_tx_and_versions)
+        let (scheduled_txns, _) = captured.remove(0);
+        scheduled_txns
     };
 
     // Both prologue and the cancelled transaction should be scheduled
     // The cancelled transaction will abort during execution
     assert_eq!(
         scheduled_txns.len(),
-        3,
-        "Expected prologue + cancelled transaction + settlement"
+        2,
+        "Expected prologue + cancelled transaction"
     );
 
     // Now execute the cancelled transaction to get the effects
@@ -347,11 +347,11 @@ async fn test_congestion_control_execution_cancellation() {
 
     // Find the assigned versions for our specific transaction
     let tx_key = executable.key();
-    let assigned_versions = assigned_tx_and_versions
-        .into_map()
-        .get(&tx_key)
-        .expect("Transaction should have assigned versions")
-        .clone();
+    let assigned_versions = scheduled_txns
+        .iter()
+        .find(|(s, _)| s.key() == tx_key)
+        .map(|(_, v)| v.clone())
+        .expect("Transaction should have assigned versions");
 
     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     let (effects, execution_error) = authority_state

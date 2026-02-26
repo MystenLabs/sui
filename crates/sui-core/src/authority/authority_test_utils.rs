@@ -13,7 +13,11 @@ use super::test_authority_builder::TestAuthorityBuilder;
 use super::*;
 
 #[cfg(test)]
-use super::shared_object_version_manager::{AssignedTxAndVersions, Schedulable};
+use super::shared_object_version_manager::Schedulable;
+#[cfg(test)]
+use std::collections::HashMap;
+#[cfg(test)]
+use sui_types::transaction::TransactionKey;
 
 // =============================================================================
 // MFP (Mysticeti Fast Path) Test Helpers
@@ -386,7 +390,7 @@ pub async fn submit_batch_to_consensus<C>(
     transactions: &[Transaction],
     consensus_handler: &mut crate::consensus_handler::ConsensusHandler<C>,
     captured_transactions: &crate::consensus_test_utils::CapturedTransactions,
-) -> (Vec<Schedulable>, AssignedTxAndVersions)
+) -> (Vec<Schedulable>, HashMap<TransactionKey, AssignedVersions>)
 where
     C: crate::checkpoints::CheckpointServiceNotify + Send + Sync + 'static,
 {
@@ -424,8 +428,10 @@ where
             !captured.is_empty(),
             "Expected transactions to be scheduled"
         );
-        let (scheduled_txns, assigned_tx_and_versions) = captured.remove(0);
-        (scheduled_txns, assigned_tx_and_versions)
+        let (paired, _) = captured.remove(0);
+        let (schedulables, versions): (Vec<_>, Vec<_>) = paired.into_iter().unzip();
+        let assigned_versions = schedulables.iter().map(|s| s.key()).zip(versions).collect();
+        (schedulables, assigned_versions)
     };
 
     (scheduled_txns, assigned_tx_and_versions)

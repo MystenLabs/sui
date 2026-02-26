@@ -417,85 +417,6 @@ impl ExecutionScheduler {
         }));
     }
 
-    fn schedule_settlement_transactions(
-        &self,
-        settlement_txns: Vec<(TransactionKey, ExecutionEnv)>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        if !settlement_txns.is_empty() {
-            let scheduler = self.clone();
-            let epoch_store = epoch_store.clone();
-
-            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-                let mut futures: FuturesUnordered<_> = settlement_txns
-                    .into_iter()
-                    .map(|(key, env)| {
-                        let epoch_store = epoch_store.clone();
-                        async move {
-                            // Race settlement notification from checkpoint builder against
-                            // the barrier tx being executed (e.g. by checkpoint executor).
-                            // commit_certificate fires an in-memory notify for barrier txs
-                            // which resolves notify_read_tx_key_to_digest.
-                            let keys = [key];
-                            tokio::select! {
-                                txns = epoch_store.wait_for_settlement_transactions(key) => {
-                                    assert_reachable!("settlement transactions received");
-                                    (key, Some(txns), env)
-                                }
-                                result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
-                                    let _ = result;
-                                    debug!(?key, "Settlement already executed, skipping scheduler wait");
-                                    assert_reachable!("settlement already executed");
-                                    (key, None, env)
-                                }
-                            }
-                        }
-                    })
-                    .collect();
-
-                while let Some((settlement_key, txns, env)) = futures.next().await {
-                    let Some(txns) = txns else {
-                        continue;
-                    };
-
-                    let mut barrier_deps = BarrierDependencyBuilder::new();
-                    let txns = txns
-                        .into_iter()
-                        .map(|tx| {
-                            let deps = barrier_deps.process_tx(*tx.digest(), tx.transaction_data());
-                            let env = env.clone().with_barrier_dependencies(deps);
-                            (tx, env)
-                        })
-                        .collect::<Vec<_>>();
-
-                    scheduler.enqueue_transactions(txns, &epoch_store);
-
-                    // Spawn a new task to wait for the barrier transaction.
-                    let scheduler = scheduler.clone();
-                    let epoch_store = epoch_store.clone();
-                    let env = env.clone();
-                    spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-                        let keys = [settlement_key];
-                        tokio::select! {
-                            barrier_tx = epoch_store.wait_for_barrier_transaction(settlement_key) => {
-                                assert_reachable!("barrier transaction received");
-                                let deps = barrier_deps
-                                    .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
-                                let env = env.with_barrier_dependencies(deps);
-                                scheduler.enqueue_transactions(vec![(barrier_tx, env)], &epoch_store);
-                            }
-                            result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
-                                let _ = result;
-                                debug!(?settlement_key, "Barrier already executed, skipping scheduler wait");
-                                assert_reachable!("barrier already executed");
-                            }
-                        }
-                    }));
-                }
-            }));
-        }
-    }
-
     fn schedule_tx_keys(
         &self,
         tx_with_keys: Vec<(TransactionKey, ExecutionEnv)>,
@@ -566,7 +487,6 @@ impl ExecutionScheduler {
         let mut ordinary_txns = Vec::with_capacity(certs.len());
         let mut tx_with_keys = Vec::new();
         let mut tx_with_withdraws = Vec::new();
-        let mut settlement_txns = Vec::new();
 
         for (schedulable, env) in certs {
             match schedulable {
@@ -581,7 +501,7 @@ impl ExecutionScheduler {
                     tx_with_keys.push((s.key(), env));
                 }
                 Schedulable::AccumulatorSettlement(_, _) => {
-                    settlement_txns.push((schedulable.key(), env));
+                    unreachable!("handled by SettlementScheduler");
                 }
                 Schedulable::ConsensusCommitPrologue(_, _, _) => {
                     // we only use Schedulable::ConsensusCommitPrologue as a temporary placeholder
@@ -595,7 +515,6 @@ impl ExecutionScheduler {
         self.enqueue_transactions(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
         self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
-        self.schedule_settlement_transactions(settlement_txns, epoch_store);
     }
 
     pub fn enqueue_transactions(

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod causal_order;
+pub(crate) mod causal_order;
 pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
@@ -113,6 +113,9 @@ pub struct PendingCheckpointInfo {
     // Consensus commit ref and rejected transactions digest which corresponds to this checkpoint.
     pub consensus_commit_ref: CommitRef,
     pub rejected_transactions_digest: Digest,
+    // Pre-assigned checkpoint sequence number from consensus handler.
+    // Only set when split_checkpoints_in_consensus_handler is enabled.
+    pub checkpoint_seq: Option<CheckpointSequenceNumber>,
 }
 
 #[derive(Clone, Debug)]
@@ -1887,7 +1890,6 @@ impl CheckpointBuilder {
     ) -> SuiResult<(Vec<TransactionEffects>, HashSet<TransactionDigest>)> {
         let _scope = monitored_scope("CheckpointBuilder::resolve_checkpoint_transactions");
 
-        let mut effects_in_current_checkpoint = BTreeSet::new();
         debug!(
             checkpoint_commit_height = pending.details.checkpoint_height,
             "Resolving checkpoint transactions for pending checkpoint.",
@@ -1906,14 +1908,6 @@ impl CheckpointBuilder {
 
         let mut all_effects: Vec<TransactionEffects> = Vec::new();
         let mut all_root_digests: Vec<TransactionDigest> = Vec::new();
-
-        let last_checkpoint =
-            Self::load_last_built_checkpoint_summary(&self.epoch_store, &self.store)?;
-        let next_checkpoint_seq = last_checkpoint
-            .as_ref()
-            .map(|(seq, _)| *seq)
-            .unwrap_or_default()
-            + 1;
 
         for checkpoint_roots in &pending.roots {
             let tx_roots = &checkpoint_roots.tx_roots;
@@ -1938,67 +1932,29 @@ impl CheckpointBuilder {
                 )
                 .in_monitored_scope("CheckpointNotifyRead")
                 .await;
-
-            let consensus_commit_prologue = {
-                let ccp = self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
-
-                if let Some((ccp_digest, ccp_effects)) = &ccp {
-                    let unsorted_ccp = self.complete_checkpoint_effects(
-                        vec![ccp_effects.clone()],
-                        &mut effects_in_current_checkpoint,
-                    )?;
-
-                    if unsorted_ccp.is_empty() {
-                        // Each CheckpointRoots normally begins with a CCP, unless
-                        // the commit was split across multiple checkpoints; in which case
-                        // the CCP was included in a previous commit.
-                        None
-                    } else if unsorted_ccp.len() != 1 {
-                        fatal!(
-                            "Expected 1 consensus commit prologue, got {:?}",
-                            unsorted_ccp
-                                .iter()
-                                .map(|e| e.transaction_digest())
-                                .collect::<Vec<_>>()
-                        );
-                    } else {
-                        assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
-                        ccp.clone()
-                    }
-                } else {
-                    None
-                }
-            };
-
-            let unsorted =
-                self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
+            let consensus_commit_prologue =
+                self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
 
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
-            let tx_index_offset = all_effects.len() as u64;
-            let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+            let ccp_digest = consensus_commit_prologue.map(|(d, _)| d);
+            let mut sorted = CausalOrder::causal_sort_with_ccp(root_effects, ccp_digest);
 
-            if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
-                if cfg!(debug_assertions) {
-                    for tx in unsorted.iter() {
-                        assert!(tx.transaction_digest() != &ccp_digest);
-                    }
-                }
-                sorted.push(ccp_effects);
-            }
-            sorted.extend(CausalOrder::causal_sort(unsorted));
-
-            if checkpoint_roots.settlement_root.is_some() {
-                let (tx_key, settlement_effects) = self
-                    .construct_and_execute_settlement_transactions(
+            if let Some(settlement_key) = &checkpoint_roots.settlement_root {
+                let checkpoint_seq = pending
+                    .details
+                    .checkpoint_seq
+                    .expect("checkpoint_seq must be set");
+                let tx_index_offset = all_effects.len() as u64;
+                let effects = self
+                    .resolve_settlement_effects(
+                        *settlement_key,
                         &sorted,
                         checkpoint_roots.height,
-                        next_checkpoint_seq,
+                        checkpoint_seq,
                         tx_index_offset,
                     )
                     .await;
-                debug!(?tx_key, "executed settlement transactions");
-
-                sorted.extend(settlement_effects);
+                sorted.extend(effects);
             }
 
             #[cfg(msim)]
@@ -2009,6 +1965,82 @@ impl CheckpointBuilder {
             all_effects.extend(sorted);
         }
         Ok((all_effects, all_root_digests.into_iter().collect()))
+    }
+
+    /// Constructs settlement transactions to compute their digests, then reads effects
+    /// directly from the cache. If execution is ahead of the checkpoint builder, the
+    /// effects are already cached and this returns instantly. Otherwise it waits for
+    /// the execution scheduler's queue worker to execute them.
+    async fn resolve_settlement_effects(
+        &self,
+        settlement_key: TransactionKey,
+        sorted_root_effects: &[TransactionEffects],
+        checkpoint_height: CheckpointHeight,
+        checkpoint_seq: CheckpointSequenceNumber,
+        tx_index_offset: u64,
+    ) -> Vec<TransactionEffects> {
+        let epoch = self.epoch_store.epoch();
+        let accumulator_root_obj_initial_shared_version = self
+            .epoch_store
+            .epoch_start_config()
+            .accumulator_root_obj_initial_shared_version()
+            .expect("accumulator root object must exist");
+
+        let builder = AccumulatorSettlementTxBuilder::new(
+            None,
+            sorted_root_effects,
+            checkpoint_seq,
+            tx_index_offset,
+        );
+
+        let settlement_digests: Vec<_> = builder
+            .build_tx(
+                self.epoch_store.protocol_config(),
+                epoch,
+                accumulator_root_obj_initial_shared_version,
+                checkpoint_height,
+                checkpoint_seq,
+            )
+            .into_iter()
+            .map(|tx| *VerifiedTransaction::new_system_transaction(tx).digest())
+            .collect();
+
+        debug!(
+            ?settlement_digests,
+            ?settlement_key,
+            "fallback: reading settlement effects from cache"
+        );
+
+        let settlement_effects = wait_for_effects_with_retry(
+            self.effects_store.as_ref(),
+            "CheckpointBuilder::fallback_settlement_effects",
+            &settlement_digests,
+            settlement_key,
+        )
+        .await;
+
+        let barrier_digest = *VerifiedTransaction::new_system_transaction(
+            accumulators::build_accumulator_barrier_tx(
+                epoch,
+                accumulator_root_obj_initial_shared_version,
+                checkpoint_height,
+                &settlement_effects,
+            ),
+        )
+        .digest();
+
+        let barrier_effects = wait_for_effects_with_retry(
+            self.effects_store.as_ref(),
+            "CheckpointBuilder::fallback_barrier_effects",
+            &[barrier_digest],
+            settlement_key,
+        )
+        .await;
+
+        settlement_effects
+            .into_iter()
+            .chain(barrier_effects)
+            .collect()
     }
 
     // Extracts the consensus commit prologue digest and effects from the root transactions.
@@ -2374,10 +2406,14 @@ impl CheckpointBuilder {
             }
             let last_checkpoint_of_epoch = details.last_of_epoch && index == chunks_count - 1;
 
-            let sequence_number = last_checkpoint
-                .as_ref()
-                .map(|(_, c)| c.sequence_number + 1)
-                .unwrap_or_default();
+            let sequence_number = if let Some(preassigned_seq) = details.checkpoint_seq {
+                preassigned_seq
+            } else {
+                last_checkpoint
+                    .as_ref()
+                    .map(|(_, c)| c.sequence_number + 1)
+                    .unwrap_or_default()
+            };
             let mut timestamp_ms = details.timestamp_ms;
             if let Some((_, last_checkpoint)) = &last_checkpoint
                 && last_checkpoint.timestamp_ms > timestamp_ms
@@ -4158,6 +4194,7 @@ mod tests {
                 checkpoint_height: i,
                 consensus_commit_ref: CommitRef::default(),
                 rejected_transactions_digest: Digest::default(),
+                checkpoint_seq: None,
             },
         }
     }
