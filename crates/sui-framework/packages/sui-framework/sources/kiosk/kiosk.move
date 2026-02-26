@@ -312,6 +312,16 @@ public fun lock<T: key + store>(
     self.lock_internal(item)
 }
 
+/// Place an item into a Kiosk without checking ownership.
+public fun place_external<T: key + store>(self: &mut Kiosk, item: T) {
+    self.place_internal(item)
+}
+
+/// Lock an item into a Kiosk without checking ownership. Requires
+public fun lock_external<T: key + store>(self: &mut Kiosk, _policy: &TransferPolicy<T>, item: T) {
+    self.lock_internal(item)
+}
+
 /// Take any object from the Kiosk.
 /// Performs an authorization check to make sure only owner can do that.
 public fun take<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): T {
