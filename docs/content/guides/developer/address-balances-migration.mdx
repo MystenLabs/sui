@@ -64,17 +64,27 @@ const [coin] = tx.splitCoins(selected[0].coinObjectId, [requiredAmount]);
 
 With address balances, declare the amount needed and the protocol handles the rest.
 
-[TypeScript SDK - CoinWithBalance](https://sdk.mystenlabs.com/sui/transaction-building/intents#coinwithbalance):
+[TypeScript SDK - CoinWithBalance](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
 
 ```typescript
+import { coinWithBalance } from '@mysten/sui/transactions';
+
 // After: Address balance funding
 const tx = new Transaction();
 
-// CoinWithBalance handles everything automatically
-const coin = tx.add(coinWithBalance({ type: '0x2::sui::SUI', balance: requiredAmount }));
+// coinWithBalance handles everything automatically
+const coin = coinWithBalance({ balance: requiredAmount });
+
+tx.transferObjects([coin], recipient);
 ```
 
-The SDK's `CoinWithBalance` intent automatically selects address balance funds or coins as needed. No object queries, no coin selection, no concurrency management.
+The SDK's `coinWithBalance` intent automatically selects address balance funds or coins as needed. No object queries, no coin selection, no concurrency management.
+
+Options:
+- `balance` (required): Amount in base units (MIST for SUI)
+- `type` (optional): Coin type, defaults to `0x2::sui::SUI`
+- `useGasCoin` (optional): Whether to split from gas coin for SUI (default `true`). Set to `false` for sponsored transactions.
+- `forceAddressBalance` (optional): Force address balance withdrawals, enabling fully offline building (default `false`).
 
 For manual PTB construction, add a `FundsWithdrawalArg` to declare the withdrawal.
 
@@ -137,56 +147,35 @@ public fun withdrawal_split<T: store>(withdrawal: &mut Withdrawal<T>, sub_limit:
 public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: Withdrawal<T>)
 ```
 
-### TypeScript SDK
+### TypeScript SDK: Manual Withdrawals
 
-For manual PTB construction with address balance withdrawals, use `Inputs.FundsWithdrawal`.
+For explicit control over address balance withdrawals, use `tx.withdrawal()`.
 
-[TypeScript SDK - Inputs](https://github.com/MystenLabs/ts-sdks/blob/main/packages/sui/src/transactions/Inputs.ts):
+[TypeScript SDK - Transaction Reference](https://sui-typescript-docs.vercel.app/sui/transactions/reference#address-balance-withdrawals):
 
 ```typescript
-import { Transaction, Inputs } from '@mysten/sui/transactions';
-
-const coinType = '0x2::sui::SUI';
-const amount = 1_000_000_000n; // 1 SUI in MIST
+import { Transaction } from '@mysten/sui/transactions';
 
 const tx = new Transaction();
 
-// Create a FundsWithdrawal input to withdraw from sender's address balance
-const withdrawal = tx.addInput(
-    'withdrawal',
-    Inputs.FundsWithdrawal({
-        reservation: {
-            $kind: 'MaxAmountU64',
-            MaxAmountU64: String(amount),
-        },
-        typeArg: {
-            $kind: 'Balance',
-            Balance: coinType,
-        },
-        withdrawFrom: {
-            $kind: 'Sender',
-            Sender: true,
-        },
-    }),
-);
+// Withdraw SUI from address balance
+const withdrawal = tx.withdrawal({ amount: 1_000_000_000 }); // 1 SUI in MIST
 
-// Redeem the withdrawal to a Coin<T>
-const coin = tx.moveCall({
-    target: '0x2::coin::redeem_funds',
-    typeArguments: [coinType],
-    arguments: [withdrawal],
+// Withdraw a custom coin type
+const customWithdrawal = tx.withdrawal({
+    amount: 1_000_000,
+    type: '0xPackageId::module::CoinType'
 });
 
-// Use the coin (e.g., transfer to recipient)
-tx.transferObjects([coin], recipient);
+// Use the withdrawal (e.g., transfer to recipient)
+tx.transferObjects([withdrawal], recipient);
 ```
 
-The `FundsWithdrawal` input takes three fields:
-- `reservation`: Specifies the maximum amount to withdraw. Use `{ $kind: 'MaxAmountU64', MaxAmountU64: string }`.
-- `typeArg`: The balance type. Use `{ $kind: 'Balance', Balance: coinType }` where `coinType` is like `'0x2::sui::SUI'`.
-- `withdrawFrom`: The source of funds. Use `{ $kind: 'Sender', Sender: true }` for the transaction sender.
+Parameters:
+- `amount` (required): Amount to withdraw in base units (number, bigint, or string)
+- `type` (optional): Coin type, defaults to SUI
 
-Note: Explicit `FundsWithdrawal` inputs currently only support withdrawing from the sender's address balance. Sponsor withdrawals (`withdrawFrom: Sponsor`) are supported for gas payments (empty `gas_data.payment`) but not yet for explicit PTB withdrawal inputs.
+Note: `tx.withdrawal()` creates a direct withdrawal from the sender's address balance. For portable code that works across different gas payment methods, prefer `coinWithBalance` instead.
 
 ## Sending Funds
 
@@ -222,18 +211,22 @@ Each transfer creates a new object for the recipient, contributing to object pro
 
 With address balances, funds merge automatically into the recipient's canonical balance.
 
-[TypeScript SDK - Transaction.moveCall](https://sdk.mystenlabs.com/sui/transaction-building/basics#movecall):
+[TypeScript SDK - coinWithBalance](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
 
 ```typescript
-// After: Send to address balance
+import { coinWithBalance } from '@mysten/sui/transactions';
+
+// After: Send to address balance using coinWithBalance (portable across gas payment methods)
 const tx = new Transaction();
-const [coin] = tx.splitCoins(tx.gas, [amount]);
+const coin = coinWithBalance({ balance: amount });
 tx.moveCall({
     target: '0x2::coin::send_funds',
     typeArguments: ['0x2::sui::SUI'],
     arguments: [coin, tx.pure.address(recipient)],
 });
 ```
+
+Note: Using `coinWithBalance` instead of `tx.splitCoins(tx.gas, ...)` makes the code portable across gas payment methods. When gas is paid from address balances, `tx.gas` is not available.
 
 [Source: sui-framework/sources/coin.move - send_funds](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
 
@@ -667,13 +660,15 @@ sui client ptb \
     --move-call 0x2::coin::send_funds '<0x2::sui::SUI>' @<coin1> @<your_address>
 ```
 
-Or using `CoinWithBalance` in TypeScript:
+Or using `coinWithBalance` in TypeScript:
 
-[TypeScript SDK - CoinWithBalance](https://sdk.mystenlabs.com/sui/transaction-building/intents#coinwithbalance):
+[TypeScript SDK - CoinWithBalance](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
 
 ```typescript
+import { coinWithBalance } from '@mysten/sui/transactions';
+
 const tx = new Transaction();
-const coin = tx.add(coinWithBalance({ type: '0x2::sui::SUI', balance: totalAmount }));
+const coin = coinWithBalance({ balance: totalAmount });
 tx.moveCall({
     target: '0x2::coin::send_funds',
     typeArguments: ['0x2::sui::SUI'],
