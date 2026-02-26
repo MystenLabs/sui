@@ -241,8 +241,20 @@ fn is_valid_const_type_name(sp!(_, tn_): &TypeName) -> bool {
 fn is_valid_const_builtin_type(sp!(_, bt_): &BuiltinTypeName) -> bool {
     use BuiltinTypeName_ as N;
     match bt_ {
-        N::Address | N::U8 | N::U16 | N::U32 | N::U64 | N::U128 | N::U256 | N::I8 | N::I16
-        | N::I32 | N::I64 | N::I128 | N::Vector | N::Bool => true,
+        N::Address
+        | N::U8
+        | N::U16
+        | N::U32
+        | N::U64
+        | N::U128
+        | N::U256
+        | N::I8
+        | N::I16
+        | N::I32
+        | N::I64
+        | N::I128
+        | N::Vector
+        | N::Bool => true,
         N::Signer => false,
     }
 }
@@ -290,7 +302,9 @@ fn fold_binary_op(
         (B::Add, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_add(u2 as i16)?) as u16),
         (B::Add, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_add(u2 as i32)?) as u32),
         (B::Add, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_add(u2 as i64)?) as u64),
-        (B::Add, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_add(u2 as i128)?) as u128),
+        (B::Add, V::I128(u1), V::I128(u2)) => {
+            V::I128(((u1 as i128).checked_add(u2 as i128)?) as u128)
+        }
 
         (B::Sub, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_sub(u2)?),
         (B::Sub, V::U16(u1), V::U16(u2)) => V::U16(u1.checked_sub(u2)?),
@@ -303,7 +317,9 @@ fn fold_binary_op(
         (B::Sub, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_sub(u2 as i16)?) as u16),
         (B::Sub, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_sub(u2 as i32)?) as u32),
         (B::Sub, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_sub(u2 as i64)?) as u64),
-        (B::Sub, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_sub(u2 as i128)?) as u128),
+        (B::Sub, V::I128(u1), V::I128(u2)) => {
+            V::I128(((u1 as i128).checked_sub(u2 as i128)?) as u128)
+        }
 
         (B::Mul, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_mul(u2)?),
         (B::Mul, V::U16(u1), V::U16(u2)) => V::U16(u1.checked_mul(u2)?),
@@ -316,7 +332,9 @@ fn fold_binary_op(
         (B::Mul, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_mul(u2 as i16)?) as u16),
         (B::Mul, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_mul(u2 as i32)?) as u32),
         (B::Mul, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_mul(u2 as i64)?) as u64),
-        (B::Mul, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_mul(u2 as i128)?) as u128),
+        (B::Mul, V::I128(u1), V::I128(u2)) => {
+            V::I128(((u1 as i128).checked_mul(u2 as i128)?) as u128)
+        }
 
         (B::Mod, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_rem(u2)?),
         (B::Mod, V::U16(u1), V::U16(u2)) => V::U16(u1.checked_rem(u2)?),
@@ -329,7 +347,9 @@ fn fold_binary_op(
         (B::Mod, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_rem(u2 as i16)?) as u16),
         (B::Mod, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_rem(u2 as i32)?) as u32),
         (B::Mod, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_rem(u2 as i64)?) as u64),
-        (B::Mod, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_rem(u2 as i128)?) as u128),
+        (B::Mod, V::I128(u1), V::I128(u2)) => {
+            V::I128(((u1 as i128).checked_rem(u2 as i128)?) as u128)
+        }
 
         (B::Div, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_div(u2)?),
         (B::Div, V::U16(u1), V::U16(u2)) => V::U16(u1.checked_div(u2)?),
@@ -342,7 +362,9 @@ fn fold_binary_op(
         (B::Div, V::I16(u1), V::I16(u2)) => V::I16(((u1 as i16).checked_div(u2 as i16)?) as u16),
         (B::Div, V::I32(u1), V::I32(u2)) => V::I32(((u1 as i32).checked_div(u2 as i32)?) as u32),
         (B::Div, V::I64(u1), V::I64(u2)) => V::I64(((u1 as i64).checked_div(u2 as i64)?) as u64),
-        (B::Div, V::I128(u1), V::I128(u2)) => V::I128(((u1 as i128).checked_div(u2 as i128)?) as u128),
+        (B::Div, V::I128(u1), V::I128(u2)) => {
+            V::I128(((u1 as i128).checked_div(u2 as i128)?) as u128)
+        }
 
         (B::Shl, V::U8(u1), V::U8(u2)) => V::U8(u1.checked_shl(u2 as u32)?),
         (B::Shl, V::U16(u1), V::U8(u2)) => V::U16(u1.checked_shl(u2 as u32)?),

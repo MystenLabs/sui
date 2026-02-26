@@ -7,13 +7,14 @@ use crate::{
     PreCompiledProgramInfo,
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
-    diag, ice,
+    diag,
     diagnostics::{DiagnosticReporter, Diagnostics, warning_filters::WarningFiltersScope},
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::{
         ast::{self as H, Value_, Var, Visibility},
         translate::{single_type as hlir_single_type, translate_var, type_},
     },
+    ice,
     naming::{
         ast::{self as N, BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
@@ -1423,10 +1424,7 @@ fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): 
                 context
                     .env
                     .diagnostic_reporter_at_top_level()
-                    .add_diag(ice!((
-                        loc,
-                        "Unary negation is not supported in bytecode",
-                    )));
+                    .add_diag(ice!((loc, "Unary negation is not supported in bytecode",)));
                 B::Not
             }
         },

@@ -902,10 +902,19 @@ impl Type_ {
     pub fn builtin_(b: BuiltinTypeName, ty_args: Vec<Type>) -> Type_ {
         use BuiltinTypeName_ as B;
         let abilities = match &b.value {
-            B::Address | B::U8 | B::U16 | B::U32 | B::U64 | B::U128 | B::U256 | B::I8
-            | B::I16 | B::I32 | B::I64 | B::I128 | B::Bool => {
-                Some(AbilitySet::primitives(b.loc))
-            }
+            B::Address
+            | B::U8
+            | B::U16
+            | B::U32
+            | B::U64
+            | B::U128
+            | B::U256
+            | B::I8
+            | B::I16
+            | B::I32
+            | B::I64
+            | B::I128
+            | B::Bool => Some(AbilitySet::primitives(b.loc)),
             B::Signer => Some(AbilitySet::signer(b.loc)),
             B::Vector => None,
         };

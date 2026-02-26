@@ -80,7 +80,7 @@ use std::num::ParseIntError;
 // non-negative range of the signed type. Negation is handled as a separate unary operator.
 // `ParseIntError` has no public constructor, so we produce one via a known-failing parse.
 fn signed_overflow_parse_error() -> ParseIntError {
-    u8::from_str_radix("256", 10).unwrap_err()
+    "256".parse::<u8>().unwrap_err()
 }
 
 macro_rules! define_parse_signed_int {
