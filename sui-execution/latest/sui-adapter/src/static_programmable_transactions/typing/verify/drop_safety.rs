@@ -229,7 +229,7 @@ mod verify {
     }
 
     impl Context {
-        fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
+        fn new(env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
             let objects = ast.objects.iter().map(|_| Some(Value)).collect::<Vec<_>>();
             let withdrawals = ast
                 .withdrawals
@@ -242,9 +242,16 @@ mod verify {
                 .iter()
                 .map(|_| Some(Value))
                 .collect::<Vec<_>>();
+            let gas_coin = if ast.gas_coin.is_none()
+                && env.protocol_config.gasless_transaction_drop_safety()
+            {
+                None
+            } else {
+                Some(Value)
+            };
             Ok(Self {
                 tx_context: Some(Value),
-                gas_coin: Some(Value),
+                gas_coin,
                 objects,
                 withdrawals,
                 pure,
@@ -272,10 +279,10 @@ mod verify {
     /// Checks the following
     /// - All unused result values have `drop`
     pub fn transaction<Mode: ExecutionMode>(
-        _env: &Env,
+        env: &Env,
         ast: &T::Transaction,
     ) -> Result<(), ExecutionError> {
-        let mut context = Context::new(ast)?;
+        let mut context = Context::new(env, ast)?;
         let commands = &ast.commands;
         for c in commands {
             let result =

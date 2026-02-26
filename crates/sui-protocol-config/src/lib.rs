@@ -1006,6 +1006,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
+
+    // If true, mark the gas coin as uninitialized in drop safety when there is no gas coin.
+    #[serde(skip_serializing_if = "is_false")]
+    gasless_transaction_drop_safety: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2630,6 +2634,10 @@ impl ProtocolConfig {
 
     pub fn defer_unpaid_amplification(&self) -> bool {
         self.feature_flags.defer_unpaid_amplification
+    }
+
+    pub fn gasless_transaction_drop_safety(&self) -> bool {
+        self.feature_flags.gasless_transaction_drop_safety
     }
 }
 
