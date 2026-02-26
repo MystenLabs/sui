@@ -1,0 +1,56 @@
+name: Run LLM Ingestion Checks for Docs
+
+on:
+  deployment_status:
+
+jobs:
+  check-docs:
+    if: github.event.deployment_status.state == 'success' && contains(github.event.deployment_status.environment_url, 'vercel.app')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run afdocs check
+        id: afdocs
+        run: |
+          OUTPUT=$(npx --yes afdocs check ${{ github.event.deployment_status.environment_url }} 2>&1) || true
+          echo "result<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Find associated PR
+        id: find-pr
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: context.payload.deployment.ref,
+            });
+            return prs.data.length > 0 ? prs.data[0].number : '';
+
+      - name: Comment on PR
+        if: steps.find-pr.outputs.result != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = process.env.URL;
+            const output = process.env.OUTPUT;
+            github.rest.issues.createComment({
+              issue_number: parseInt(process.env.PR_NUMBER),
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: [
+                '## 📋 afdocs check results',
+                `**URL:** ${url}`,
+                '```',
+                output,
+                '```',
+              ].join('\n')
+            });
+        env:
+          URL: ${{ github.event.deployment_status.environment_url }}
+          OUTPUT: ${{ steps.afdocs.outputs.result }}
+          PR_NUMBER: ${{ steps.find-pr.outputs.result }}

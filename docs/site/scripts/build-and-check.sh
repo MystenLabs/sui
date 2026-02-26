@@ -30,6 +30,8 @@ done
 
 node scripts/copy-markdown-files.js || { echo "❌ copy-markdown-files failed"; exit 1; }
 
+node scripts/generate-llmstxt.mjs build/markdown/ --output static/llms.txt || { echo "❌ generate-llmstxt failed"; exit 1; }
+
 BUILD_EXIT=${PIPESTATUS[0]}
 
 ERRORS=$(grep -iE '\[ERROR\]|fatal|Can'\''t resolve|MDX compilation failed|Missing file for ImportContent|Missing or invalid snippet' "$LOG" || true)

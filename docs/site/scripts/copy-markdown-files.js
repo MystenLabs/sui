@@ -9,11 +9,22 @@ const contentDir = path.join(__dirname, '../../content');
 const outputDir = path.join(__dirname, '../build/markdown');
 
 /**
- * Strips frontmatter and cleans MDX/JSX components from markdown
+ * Strips frontmatter and writes a metadata sidecar for llms.txt
  */
-function stripFrontmatter(content) {
-  const { content: markdownContent } = matter(content);
-  return cleanMdxComponents(markdownContent);
+function stripFrontmatter(content, outputPath) {
+  const { content: markdownContent, data } = matter(content);
+  const cleaned = cleanMdxComponents(markdownContent);
+
+  // Write metadata sidecar for llms.txt
+  const meta = {};
+  if (data.title) meta.title = data.title;
+  if (data.description) meta.description = data.description;
+  if (Object.keys(meta).length) {
+    const metaPath = outputPath.replace(/\.md$/, '.meta.json');
+    fs.writeFileSync(metaPath, JSON.stringify(meta), 'utf8');
+  }
+
+  return cleaned;
 }
 
 /**
@@ -58,12 +69,9 @@ function copyMarkdownFiles(dir, baseDir = dir) {
     const stat = fs.statSync(filePath);
 
     if (stat.isDirectory()) {
-      // Recursively process subdirectories
       copyMarkdownFiles(filePath, baseDir);
     } else if (file.endsWith('.md') || file.endsWith('.mdx')) {
-      // Read and process markdown/mdx files
       const content = fs.readFileSync(filePath, 'utf8');
-      const cleanContent = stripFrontmatter(content);
 
       // Preserve directory structure
       const relativePath = path.relative(baseDir, filePath);
@@ -72,6 +80,9 @@ function copyMarkdownFiles(dir, baseDir = dir) {
 
       // Create directory structure if it doesn't exist
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+      // Strip frontmatter, write sidecar, write cleaned content
+      const cleanContent = stripFrontmatter(content, outputPath);
       fs.writeFileSync(outputPath, cleanContent, 'utf8');
     }
   });
