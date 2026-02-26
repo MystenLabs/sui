@@ -105,7 +105,7 @@ pub struct PipelineLayer {
 #[serde(deny_unknown_fields)]
 pub struct IngestionConfig {
     pub checkpoint_buffer_size: usize,
-    pub ingest_concurrency: usize,
+    pub ingest_concurrency: framework::ingestion::IngestConcurrencyConfig,
     pub retry_interval_ms: u64,
     pub streaming_backoff_initial_batch_size: usize,
     pub streaming_backoff_max_batch_size: usize,

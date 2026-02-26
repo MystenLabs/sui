@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
+use sui_indexer_alt_framework::ingestion::IngestConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
@@ -48,7 +49,7 @@ pub struct IndexerConfig {
 #[serde(deny_unknown_fields)]
 pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
-    pub ingest_concurrency: Option<usize>,
+    pub ingest_concurrency: Option<IngestConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
     pub streaming_backoff_initial_batch_size: Option<usize>,
     pub streaming_backoff_max_batch_size: Option<usize>,
@@ -153,7 +154,7 @@ impl IndexerConfig {
             .merge(IndexerConfig {
                 ingestion: IngestionLayer {
                     retry_interval_ms: Some(10),
-                    ingest_concurrency: Some(1),
+                    ingest_concurrency: Some(IngestConcurrencyConfig::Fixed(1)),
                     ..Default::default()
                 },
                 committer: CommitterLayer {

@@ -74,6 +74,9 @@ pub struct IngestionMetrics {
     pub ingested_checkpoint_timestamp_lag: Histogram,
 
     pub ingested_checkpoint_latency: Histogram,
+
+    pub ingestion_concurrency_limit: IntGauge,
+    pub ingestion_concurrency_inflight: IntGauge,
 }
 
 #[derive(Clone)]
@@ -271,6 +274,18 @@ impl IngestionMetrics {
                 name("ingested_checkpoint_latency"),
                 "Time taken to fetch a checkpoint from the remote store, including retries",
                 INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            ingestion_concurrency_limit: register_int_gauge_with_registry!(
+                name("ingestion_concurrency_limit"),
+                "Current adaptive concurrency limit for checkpoint ingestion",
+                registry,
+            )
+            .unwrap(),
+            ingestion_concurrency_inflight: register_int_gauge_with_registry!(
+                name("ingestion_concurrency_inflight"),
+                "Current number of in-flight checkpoint ingestion tasks",
                 registry,
             )
             .unwrap(),

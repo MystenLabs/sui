@@ -8,19 +8,21 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::anyhow;
+use futures::FutureExt;
 use futures::Stream;
 use futures::future::try_join_all;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
-use sui_futures::stream::TrySpawnStreamExt;
 use sui_futures::task::TaskGuard;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
+use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::ingestion::IngestConcurrencyConfig;
 use crate::ingestion::IngestionConfig;
 use crate::ingestion::error::Error;
 use crate::ingestion::ingestion_client::IngestionClient;
@@ -123,10 +125,11 @@ where
                 checkpoint_hi,
                 ingestion_end,
                 config.retry_interval(),
-                config.ingest_concurrency,
+                config.ingest_concurrency.clone(),
                 ingest_hi_rx.cloned(),
                 client.clone(),
                 subscribers.clone(),
+                metrics.clone(),
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -209,43 +212,189 @@ fn backpressured_checkpoint_stream(
     })
 }
 
-/// Fetch and broadcasts checkpoints from a range [start..end) to subscribers. This task is
-/// ingest_hi-aware via the backpressured stream that gates checkpoint yielding based on
-/// the current ingest_hi, resuming when ingest_hi advances.
+/// Fetch and broadcasts checkpoints from a range [start..end) to subscribers. Manages its own
+/// concurrency using a JoinSet and permit counter. When adaptive concurrency is enabled, the
+/// concurrency limit (gauge) adjusts based on subscriber channel fill fraction after each
+/// completion:
+///
+/// - fill >= 0.85: proportional decrease (severity scales with congestion)
+/// - fill < 0.6 and under pressure: sqrt-scaled increase
+/// - fill in [0.6, 0.85): dead zone, hold steady
+///
+/// An epoch counter prevents cascading reductions: each task captures the epoch at spawn time,
+/// and a decrease is only applied when the completing task's epoch matches the current one (the
+/// epoch is bumped on every decrease). This way a single congestion event produces at most one
+/// reduction regardless of how many tasks from that epoch complete in quick succession.
+///
+/// Fill is measured at decision time in the join_next handler (not inside the spawned task after
+/// send) so that the reading reflects the actual channel state when the concurrency decision is
+/// made.
+///
+/// For fixed concurrency, the gauge never changes.
 fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
     retry_interval: Duration,
-    ingest_concurrency: usize,
+    concurrency: IngestConcurrencyConfig,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     client: IngestionClient,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    metrics: Arc<IngestionMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
-        // Backpressure is enforced at the stream level: checkpoints are only yielded when
-        // ingest_hi allows, preventing spawned tasks from piling up while blocked.
-        backpressured_checkpoint_stream(start, end, ingest_hi_rx)
-            .try_for_each_spawned(ingest_concurrency, |cp| {
-                let client = client.clone();
-                let subscribers = subscribers.clone();
+        let mut gauge = concurrency.initial();
+        let is_adaptive = concurrency.is_adaptive();
+        let fill_high = concurrency.fill_high();
+        let fill_low = concurrency.fill_low();
 
-                async move {
-                    // Fetch the checkpoint or stop if cancelled.
-                    let checkpoint = client.wait_for(cp, retry_interval).await?;
+        // Epoch counter to gate decreases: bumped on every reduction so that stale completions
+        // from a previous congestion window don't trigger additional cascading reductions.
+        let mut epoch: u64 = 0;
 
-                    // Send checkpoint to all subscribers.
-                    if send_checkpoint(checkpoint, &subscribers).await.is_ok() {
-                        debug!(checkpoint = cp, "Broadcasted checkpoint");
-                        Ok(())
-                    } else {
-                        // An error is returned meaning some subscriber channel has closed, which
-                        // we consider a shutdown signal for ingestion.
-                        Err(Break::Break)
+        // Tracks whether the concurrency limit was actually reached since the last increase.
+        // Only increase when the limit was the bottleneck to prevent runaway growth when
+        // utilization is low.
+        let mut was_saturated = false;
+
+        let mut tasks: JoinSet<Result<u64, Break<Error>>> = JoinSet::new();
+
+        metrics.ingestion_concurrency_limit.set(gauge as i64);
+
+        let stream = backpressured_checkpoint_stream(start, end, ingest_hi_rx);
+        tokio::pin!(stream);
+        let mut stream_done = false;
+
+        loop {
+            if tasks.is_empty() && stream_done {
+                return Ok(());
+            }
+
+            // Eagerly spawning up to gauge before waiting seems to improve throughput
+            // for backfills of chain history with many very small checkpoints.
+            while tasks.len() < gauge && !stream_done {
+                match stream.next().now_or_never() {
+                    Some(Some(cp)) => {
+                        spawn_ingest(cp, &client, &subscribers, epoch, retry_interval, &mut tasks);
+                    }
+                    Some(None) => {
+                        stream_done = true;
+                    }
+                    None => break,
+                }
+            }
+
+            if tasks.len() >= gauge {
+                was_saturated = true;
+            }
+
+            metrics.ingestion_concurrency_limit.set(gauge as i64);
+            metrics
+                .ingestion_concurrency_inflight
+                .set(tasks.len() as i64);
+
+            // Wait for one event: a completion or a stream item becoming ready.
+            tokio::select! {
+                biased;
+
+                Some(join_result) = tasks.join_next(), if !tasks.is_empty() => {
+                    let spawn_epoch = join_result.expect("Ingestion task panicked")?;
+
+                    if is_adaptive {
+                        adjust_gauge(
+                            spawn_epoch, &subscribers, &concurrency,
+                            fill_high, fill_low,
+                            &mut gauge, &mut epoch, &mut was_saturated,
+                        );
                     }
                 }
-            })
-            .await
+
+                item = stream.next(), if tasks.len() < gauge && !stream_done => {
+                    match item {
+                        Some(cp) => {
+                            spawn_ingest(
+                                cp, &client, &subscribers, epoch,
+                                retry_interval, &mut tasks,
+                            );
+                        }
+                        None => {
+                            stream_done = true;
+                        }
+                    }
+                }
+            }
+
+            // Drain all other ready completions before re-spawning.
+            while let Some(join_result) = tasks.try_join_next() {
+                let spawn_epoch = join_result.expect("Ingestion task panicked")?;
+
+                if is_adaptive {
+                    adjust_gauge(
+                        spawn_epoch,
+                        &subscribers,
+                        &concurrency,
+                        fill_high,
+                        fill_low,
+                        &mut gauge,
+                        &mut epoch,
+                        &mut was_saturated,
+                    );
+                }
+            }
+        }
     }))
+}
+
+/// Adjust the concurrency gauge based on subscriber channel fill fraction.
+fn adjust_gauge(
+    spawn_epoch: u64,
+    subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
+    concurrency: &IngestConcurrencyConfig,
+    fill_high: f64,
+    fill_low: f64,
+    gauge: &mut usize,
+    epoch: &mut u64,
+    was_saturated: &mut bool,
+) {
+    let fill = subscribers
+        .iter()
+        .map(|s| 1.0 - (s.capacity() as f64 / s.max_capacity() as f64))
+        .fold(0.0f64, f64::max);
+
+    if fill >= fill_high && spawn_epoch == *epoch {
+        *gauge = ((*gauge as f64) * (1.0 - fill / 2.0)).ceil() as usize;
+        *gauge = (*gauge).clamp(concurrency.min(), concurrency.max());
+        *epoch += 1;
+        *was_saturated = false;
+        debug!(gauge, fill, epoch, "Concurrency decreased");
+    } else if fill < fill_low && *was_saturated {
+        let increment = ((*gauge as f64).sqrt().ceil() as usize).max(1);
+        *gauge = (*gauge + increment).min(concurrency.max());
+        *was_saturated = false;
+    }
+}
+
+/// Spawn a checkpoint ingest + broadcast task.
+fn spawn_ingest(
+    cp: u64,
+    client: &IngestionClient,
+    subscribers: &Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    epoch: u64,
+    retry_interval: Duration,
+    tasks: &mut JoinSet<Result<u64, Break<Error>>>,
+) {
+    let client = client.clone();
+    let subscribers = subscribers.clone();
+
+    tasks.spawn(async move {
+        let checkpoint = client.wait_for(cp, retry_interval).await?;
+
+        if send_checkpoint(checkpoint, &subscribers).await.is_err() {
+            return Err(Break::Break);
+        }
+
+        debug!(checkpoint = cp, "Broadcasted checkpoint");
+        Ok(epoch)
+    });
 }
 
 /// Sets up either a noop or real streaming task based on network state and proximity to
@@ -467,7 +616,7 @@ mod tests {
     fn test_config() -> IngestionConfig {
         IngestionConfig {
             checkpoint_buffer_size: 5,
-            ingest_concurrency: 2,
+            ingest_concurrency: IngestConcurrencyConfig::Fixed(2),
             retry_interval_ms: 100,
             streaming_backoff_initial_batch_size: 2,
             streaming_backoff_max_batch_size: 16,
