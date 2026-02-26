@@ -10,7 +10,10 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
 };
-use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+use sui_types::{
+    Identifier, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
+};
 
 use super::AccountState;
 
@@ -50,6 +53,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     TestCoinAddressWithdraw::DESCRIPTOR,
     TestCoinObjectWithdraw::DESCRIPTOR,
     AddressBalanceOverdraw::DESCRIPTOR,
+    AccumulatorBalanceRead::DESCRIPTOR,
 ];
 
 pub fn describe_flags(flags: u32) -> String {
@@ -72,6 +76,7 @@ pub enum ResourceRequest {
     AddressBalance,
     ObjectBalance,
     TestCoinCap,
+    AccumulatorRoot,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -82,6 +87,7 @@ pub struct OperationConstraints {
 pub struct OperationResources {
     pub counter: Option<(ObjectID, SequenceNumber)>,
     pub randomness: Option<SequenceNumber>,
+    pub accumulator_root: Option<SequenceNumber>,
     pub package_id: ObjectID,
     pub address_balance_amount: u64,
     pub balance_pool: Option<(ObjectID, SequenceNumber)>,
@@ -925,6 +931,64 @@ impl Operation for AddressBalanceOverdraw {
             Identifier::new("send_funds").unwrap(),
             vec![GAS::type_tag()],
             vec![balance, recipient],
+        );
+    }
+}
+
+pub struct AccumulatorBalanceRead;
+
+impl AccumulatorBalanceRead {
+    pub const FLAG: u32 = 1 << 16;
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: "AccumulatorBalanceRead",
+        flag: Self::FLAG,
+        factory: || Box::new(AccumulatorBalanceRead),
+    };
+}
+
+impl Operation for AccumulatorBalanceRead {
+    fn name(&self) -> &'static str {
+        "accumulator_balance_read"
+    }
+
+    fn operation_flag(&self) -> u32 {
+        Self::FLAG
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::AccumulatorRoot]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::SeedAddressBalance]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let initial_shared_version = resources
+            .accumulator_root
+            .expect("AccumulatorRoot not resolved");
+
+        let root_arg = builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Immutable,
+            })
+            .unwrap();
+
+        let addr_arg = builder.pure(account_state.sender).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("accumulator_read").unwrap(),
+            Identifier::new("read_settled_balance").unwrap(),
+            vec![],
+            vec![root_arg, addr_arg],
         );
     }
 }
