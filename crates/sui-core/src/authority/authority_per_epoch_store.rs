@@ -635,10 +635,10 @@ impl AuthorityEpochTables {
             KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,
             default_mutex_count, default_value_cache_size,
         };
-        let mutexes = default_mutex_count() * 2;
+        let mutexes = default_mutex_count();
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
-        let value_cache_size = default_value_cache_size() * 2;
+        let value_cache_size = default_value_cache_size();
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(value_cache_size);
         let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);

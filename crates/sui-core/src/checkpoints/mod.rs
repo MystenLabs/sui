@@ -224,7 +224,7 @@ impl CheckpointStoreTables {
             Decision, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,
             default_mutex_count, default_value_cache_size,
         };
-        let mutexes = default_mutex_count() * 4;
+        let mutexes = default_mutex_count();
         let u64_sequence_key = KeyType::from_prefix_bits(6 * 8);
         let override_dirty_keys_config = KeySpaceConfig::new()
             .with_max_dirty_keys(64_000)
@@ -245,7 +245,7 @@ impl CheckpointStoreTables {
         let watermarks_config = KeySpaceConfig::new()
             .with_value_cache_size(10)
             .disable_unload();
-        let lru_config = KeySpaceConfig::new().with_value_cache_size(200);
+        let lru_config = KeySpaceConfig::new().with_value_cache_size(100);
         let configs = vec![
             (
                 "checkpoint_content",
