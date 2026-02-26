@@ -150,10 +150,14 @@ async fn test_empty_gas_data() {
         },
         |_| {},
         |err| {
+            // When gas payment is empty, the transaction tries to use address balance gas.
+            // Since the relax_valid_during_for_owned_inputs flag is enabled and these
+            // transactions have owned inputs, they pass the expiration check but fail
+            // because there's insufficient balance for the withdrawal.
             assert_matches!(
                 err,
                 SuiErrorKind::UserInputError {
-                    error: UserInputError::MissingGasPayment
+                    error: UserInputError::InvalidWithdrawReservation { .. }
                 }
             );
         },
