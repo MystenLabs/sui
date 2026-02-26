@@ -107,6 +107,7 @@ async fn main() -> Result<()> {
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
+    let indexer_config = config.clone();
     let committer = config.committer.finish(CommitterConfig::default());
     let bigtable_indexer = BigTableIndexer::new(
         store,
@@ -114,6 +115,7 @@ async fn main() -> Result<()> {
         args.client_args,
         config.ingestion,
         committer,
+        indexer_config,
         config.pipeline,
         args.chain,
         &registry,

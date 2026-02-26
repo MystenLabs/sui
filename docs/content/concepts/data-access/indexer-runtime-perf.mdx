@@ -106,10 +106,6 @@ For complex configuration scenarios requiring deep understanding of pipeline int
 - [Sequential pipeline architecture](/concepts/data-access/pipeline-architecture.mdx#sequential-pipeline-architecture)
 - [Concurrent pipeline architecture](/concepts/data-access/pipeline-architecture.mdx#concurrent-pipeline-architecture)
 
-#### Rate limiting writes
-
-During backfills the indexer can produce rows faster than the database can absorb them. Each concurrent pipeline supports an optional `max_rows_per_second` setting that caps write throughput across all parallel writers for that pipeline. The rate limiter uses a smooth (GCRA) algorithm so writes are spread evenly rather than bursting. See [`CommitterConfig` optimization](/concepts/data-access/pipeline-architecture.mdx#committerconfig-optimization) for details.
-
 ## Tokio runtime debugging
 
 For performance-sensitive pipelines or when troubleshooting async runtime issues, the `sui-indexer-alt-framework` integrates with `tokio-console`, a powerful debugger for async Rust applications. This tool provides real-time insights into task execution, helping identify performance bottlenecks, stuck tasks, and memory issues.

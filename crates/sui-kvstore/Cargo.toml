@@ -13,6 +13,8 @@ async-trait.workspace = true
 base64.workspace = true
 bcs.workspace = true
 clap.workspace = true
+futures.workspace = true
+governor.workspace = true
 http.workspace = true
 num_cpus.workspace = true
 gcp_auth.workspace = true
@@ -35,7 +37,6 @@ tonic-prost.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-futures.workspace = true
 sui-indexer-alt-framework = { workspace = true, features = ["cluster"] }
 sui-keys.workspace = true
 sui-rpc.workspace = true

@@ -12,6 +12,11 @@ pub struct IndexerConfig {
     pub ingestion: IngestionConfig,
     pub committer: CommitterLayer,
     pub pipeline: PipelineLayer,
+    /// Global rate limit (rows per second) shared across all pipelines.
+    pub total_max_rows_per_second: Option<u64>,
+    /// Default per-pipeline rate limit (rows per second).
+    /// Individual pipelines can override via their `ConcurrentLayer`.
+    pub max_rows_per_second: Option<u64>,
     /// Number of gRPC channels in the Bigtable connection pool (default: 10).
     /// A good rule of thumb is to target ~25 concurrent RPCs per channel, so
     /// ceil(sum of write_concurrency across all pipelines / 25).
@@ -27,7 +32,6 @@ pub struct CommitterLayer {
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
     pub watermark_interval_jitter_ms: Option<u64>,
-    pub max_rows_per_second: Option<u64>,
 }
 
 impl CommitterLayer {
@@ -41,7 +45,6 @@ impl CommitterLayer {
             watermark_interval_jitter_ms: self
                 .watermark_interval_jitter_ms
                 .unwrap_or(base.watermark_interval_jitter_ms),
-            max_rows_per_second: self.max_rows_per_second.or(base.max_rows_per_second),
         }
     }
 }
@@ -52,6 +55,9 @@ pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     /// Maximum rows per BigTable batch for this pipeline.
     pub max_rows: Option<usize>,
+    /// Per-pipeline rate limit (rows per second). Overrides the default
+    /// `IndexerConfig::max_rows_per_second` when set.
+    pub max_rows_per_second: Option<u64>,
     pub fanout: Option<usize>,
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,

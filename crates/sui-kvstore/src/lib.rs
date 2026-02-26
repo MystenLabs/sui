@@ -4,8 +4,10 @@
 mod bigtable;
 pub mod config;
 mod handlers;
+mod rate_limiter;
 pub mod tables;
 
+use std::sync::Arc;
 use std::sync::OnceLock;
 
 use anyhow::Result;
@@ -18,6 +20,9 @@ use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+
+use crate::rate_limiter::CompositeRateLimiter;
+use crate::rate_limiter::RateLimiter;
 use sui_protocol_config::Chain;
 use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
@@ -307,6 +312,7 @@ impl BigTableIndexer {
         client_args: ClientArgs,
         ingestion_config: IngestionConfig,
         committer: CommitterConfig,
+        config: IndexerConfig,
         pipeline: PipelineLayer,
         chain: Chain,
         registry: &Registry,
@@ -321,6 +327,24 @@ impl BigTableIndexer {
         )
         .await?;
 
+        let global = config.total_max_rows_per_second.map(RateLimiter::new);
+        let base_rps = config.max_rows_per_second;
+
+        fn build_rate_limiter(
+            layer: &ConcurrentLayer,
+            base_rps: Option<u64>,
+            global: &Option<Arc<RateLimiter>>,
+        ) -> Arc<CompositeRateLimiter> {
+            let mut limiters = Vec::new();
+            if let Some(rps) = layer.max_rows_per_second.or(base_rps) {
+                limiters.push(RateLimiter::new(rps));
+            }
+            if let Some(g) = global {
+                limiters.push(g.clone());
+            }
+            Arc::new(CompositeRateLimiter::new(limiters))
+        }
+
         let base = ConcurrentConfig {
             committer,
             pruner: None,
@@ -329,55 +353,91 @@ impl BigTableIndexer {
 
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(CheckpointsPipeline, &pipeline.checkpoints),
+                BigTableHandler::new(
+                    CheckpointsPipeline,
+                    &pipeline.checkpoints,
+                    build_rate_limiter(&pipeline.checkpoints, base_rps, &global),
+                ),
                 pipeline.checkpoints.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(CheckpointsByDigestPipeline, &pipeline.checkpoints_by_digest),
+                BigTableHandler::new(
+                    CheckpointsByDigestPipeline,
+                    &pipeline.checkpoints_by_digest,
+                    build_rate_limiter(&pipeline.checkpoints_by_digest, base_rps, &global),
+                ),
                 pipeline.checkpoints_by_digest.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(TransactionsPipeline, &pipeline.transactions),
+                BigTableHandler::new(
+                    TransactionsPipeline,
+                    &pipeline.transactions,
+                    build_rate_limiter(&pipeline.transactions, base_rps, &global),
+                ),
                 pipeline.transactions.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(ObjectsPipeline, &pipeline.objects),
+                BigTableHandler::new(
+                    ObjectsPipeline,
+                    &pipeline.objects,
+                    build_rate_limiter(&pipeline.objects, base_rps, &global),
+                ),
                 pipeline.objects.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(EpochStartPipeline, &pipeline.epoch_start),
+                BigTableHandler::new(
+                    EpochStartPipeline,
+                    &pipeline.epoch_start,
+                    build_rate_limiter(&pipeline.epoch_start, base_rps, &global),
+                ),
                 pipeline.epoch_start.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(EpochEndPipeline, &pipeline.epoch_end),
+                BigTableHandler::new(
+                    EpochEndPipeline,
+                    &pipeline.epoch_end,
+                    build_rate_limiter(&pipeline.epoch_end, base_rps, &global),
+                ),
                 pipeline.epoch_end.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(ProtocolConfigsPipeline(chain), &pipeline.protocol_configs),
+                BigTableHandler::new(
+                    ProtocolConfigsPipeline(chain),
+                    &pipeline.protocol_configs,
+                    build_rate_limiter(&pipeline.protocol_configs, base_rps, &global),
+                ),
                 pipeline.protocol_configs.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(PackagesPipeline, &pipeline.packages),
+                BigTableHandler::new(
+                    PackagesPipeline,
+                    &pipeline.packages,
+                    build_rate_limiter(&pipeline.packages, base_rps, &global),
+                ),
                 pipeline.packages.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(PackagesByIdPipeline, &pipeline.packages_by_id),
+                BigTableHandler::new(
+                    PackagesByIdPipeline,
+                    &pipeline.packages_by_id,
+                    build_rate_limiter(&pipeline.packages_by_id, base_rps, &global),
+                ),
                 pipeline.packages_by_id.finish(base.clone()),
             )
             .await?;
@@ -386,13 +446,18 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     PackagesByCheckpointPipeline,
                     &pipeline.packages_by_checkpoint,
+                    build_rate_limiter(&pipeline.packages_by_checkpoint, base_rps, &global),
                 ),
                 pipeline.packages_by_checkpoint.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(SystemPackagesPipeline, &pipeline.system_packages),
+                BigTableHandler::new(
+                    SystemPackagesPipeline,
+                    &pipeline.system_packages,
+                    build_rate_limiter(&pipeline.system_packages, base_rps, &global),
+                ),
                 pipeline.system_packages.finish(base.clone()),
             )
             .await?;
