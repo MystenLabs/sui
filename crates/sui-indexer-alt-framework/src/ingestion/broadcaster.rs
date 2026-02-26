@@ -243,14 +243,19 @@ fn ingest_and_broadcast_range(
                     // Fetch the checkpoint or stop if cancelled.
                     let checkpoint = client.wait_for(cp, retry_interval).await?;
 
-                    // Send checkpoint to all subscribers.
-                    if send_checkpoint(checkpoint, &subscribers).await.is_ok() {
-                        debug!(checkpoint = cp, "Broadcasted checkpoint");
-                        Ok(())
-                    } else {
-                        // An error is returned meaning some subscriber channel has closed, which
-                        // we consider a shutdown signal for ingestion.
-                        Err(ClError::Break)
+                    match send_checkpoint(checkpoint, &subscribers).await {
+                        Ok(true) => {
+                            debug!(checkpoint = cp, "Broadcasted checkpoint (backpressure)");
+                            Err(ClError::Dropped(Error::Backpressure))
+                        }
+                        Ok(false) => {
+                            debug!(checkpoint = cp, "Broadcasted checkpoint");
+                            Ok(())
+                        }
+                        Err(_) => {
+                            // A subscriber channel closed — shutdown signal.
+                            Err(ClError::Break)
+                        }
                     }
                 }
             })
@@ -425,14 +430,17 @@ async fn stream_and_broadcast_range(
     lo
 }
 
-/// Send a checkpoint to all subscribers.
-/// Returns an error if any subscriber's channel is closed.
+/// Send a checkpoint to all subscribers, probing for backpressure.
+/// Returns `Ok(true)` if any subscriber channel was full (backpressure),
+/// `Ok(false)` if all channels had capacity, or `Err` if any channel is closed.
 async fn send_checkpoint(
     checkpoint: Arc<Checkpoint>,
     subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
-) -> Result<Vec<()>, mpsc::error::SendError<Arc<Checkpoint>>> {
+) -> Result<bool, mpsc::error::SendError<Arc<Checkpoint>>> {
+    let backpressure = subscribers.iter().any(|s| s.capacity() == 0);
     let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
-    try_join_all(futures).await
+    try_join_all(futures).await?;
+    Ok(backpressure)
 }
 
 // A noop streaming task that just returns the provided checkpoint_hi, used to simplify

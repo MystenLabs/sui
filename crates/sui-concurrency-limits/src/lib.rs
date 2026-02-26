@@ -65,7 +65,7 @@ mod option_duration_secs {
 }
 
 fn default_aimd_timeout() -> Option<Duration> {
-    Some(Duration::from_secs(5))
+    None
 }
 
 /// Outcome of a concurrency-limited operation.
@@ -74,6 +74,7 @@ fn default_aimd_timeout() -> Option<Duration> {
 /// - `Success`: completed normally, algorithm may increase the limit.
 /// - `Dropped`: failed or timed out, algorithm decreases the limit.
 /// - `Ignore`: ambiguous result, algorithm makes no adjustment.
+#[derive(Clone, Copy)]
 pub enum Outcome {
     Success,
     Dropped,
@@ -118,6 +119,14 @@ impl Algorithm {
 // Limiter
 // ---------------------------------------------------------------------------
 
+/// Data passed to the [`LimiterBuilder::on_sample`] callback.
+pub struct SampleInfo {
+    pub rtt: Duration,
+    pub outcome: Outcome,
+    pub inflight: usize,
+    pub limit: usize,
+}
+
 /// Shared state between [`Limiter`] and [`Token`].
 struct LimiterInner {
     algorithm: Algorithm,
@@ -130,6 +139,7 @@ struct LimiterInner {
     peak_limit: AtomicUsize,
     clock: Option<Arc<dyn Fn() -> Instant + Send + Sync>>,
     on_limit_change: Option<Arc<dyn Fn(usize) + Send + Sync>>,
+    on_sample: Option<Arc<dyn Fn(SampleInfo) + Send + Sync>>,
 }
 
 /// Cloneable handle wrapping a dynamic concurrency limit algorithm.
@@ -145,6 +155,7 @@ pub struct LimiterBuilder {
     initial_limit: usize,
     clock: Option<Arc<dyn Fn() -> Instant + Send + Sync>>,
     on_limit_change: Option<Arc<dyn Fn(usize) + Send + Sync>>,
+    on_sample: Option<Arc<dyn Fn(SampleInfo) + Send + Sync>>,
 }
 
 impl LimiterBuilder {
@@ -163,6 +174,16 @@ impl LimiterBuilder {
         self
     }
 
+    /// Attach a callback invoked on every [`Token::record_sample`] call.
+    ///
+    /// Receives the measured RTT, outcome, inflight count, and resulting limit.
+    /// Useful for exporting per-request latency as a metric or for external
+    /// timeout-based drop logic.
+    pub fn on_sample(mut self, f: impl Fn(SampleInfo) + Send + Sync + 'static) -> Self {
+        self.on_sample = Some(Arc::new(f));
+        self
+    }
+
     /// Build the [`Limiter`].
     pub fn build(self) -> Limiter {
         Limiter(Arc::new(LimiterInner {
@@ -174,6 +195,7 @@ impl LimiterBuilder {
             peak_limit: AtomicUsize::new(self.initial_limit),
             clock: self.clock,
             on_limit_change: self.on_limit_change,
+            on_sample: self.on_sample,
         }))
     }
 }
@@ -185,6 +207,7 @@ impl Limiter {
             initial_limit: limit,
             clock: None,
             on_limit_change: None,
+            on_sample: None,
         }
         .build()
     }
@@ -211,6 +234,7 @@ impl Limiter {
             initial_limit: initial,
             clock: None,
             on_limit_change: None,
+            on_sample: None,
         }
     }
 
@@ -229,6 +253,7 @@ impl Limiter {
             initial_limit: initial,
             clock: None,
             on_limit_change: None,
+            on_sample: None,
         }
     }
 
@@ -263,6 +288,7 @@ impl Limiter {
             initial_limit: initial,
             clock: None,
             on_limit_change: None,
+            on_sample: None,
         }
     }
 
@@ -276,10 +302,7 @@ impl Limiter {
             config.smoothing > 0.0 && config.smoothing <= 1.0,
             "smoothing must be in (0.0, 1.0]"
         );
-        assert!(
-            config.probe_multiplier > 0,
-            "probe_multiplier must be > 0"
-        );
+        assert!(config.probe_multiplier > 0, "probe_multiplier must be > 0");
         let initial = config
             .initial_limit
             .clamp(config.min_limit, config.max_limit);
@@ -288,6 +311,7 @@ impl Limiter {
             initial_limit: initial,
             clock: None,
             on_limit_change: None,
+            on_sample: None,
         }
     }
 
@@ -313,6 +337,7 @@ impl Limiter {
             initial_limit: initial,
             clock: None,
             on_limit_change: None,
+            on_sample: None,
         }
     }
 
@@ -406,6 +431,14 @@ impl Token {
             && let Some(ref cb) = inner.on_limit_change
         {
             cb(result);
+        }
+        if let Some(ref cb) = inner.on_sample {
+            cb(SampleInfo {
+                rtt,
+                outcome,
+                inflight: self.inflight,
+                limit: result,
+            });
         }
         result
     }
@@ -1070,8 +1103,7 @@ impl Vegas {
         did_drop: bool,
     ) -> usize {
         let estimated_limit = s.estimated_limit;
-        let queue_size =
-            (estimated_limit * (1.0 - rtt_noload as f64 / rtt as f64)).ceil() as i64;
+        let queue_size = (estimated_limit * (1.0 - rtt_noload as f64 / rtt as f64)).ceil() as i64;
 
         let new_limit = if did_drop {
             estimated_limit - log10_int(estimated_limit as usize) as f64
@@ -1832,7 +1864,7 @@ mod tests {
         "#;
         let parsed: Wrapper = toml::from_str(toml_str).unwrap();
         if let ConcurrencyLimit::Aimd(config) = parsed.concurrency {
-            assert_eq!(config.timeout, Some(Duration::from_secs(5)));
+            assert_eq!(config.timeout, None);
         } else {
             panic!("Expected Aimd variant");
         }

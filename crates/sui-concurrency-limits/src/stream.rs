@@ -114,6 +114,10 @@ impl<S: Stream + Sized + 'static> ConcurrencyLimitedStreamExt for S {
                 Some(res) = join_set.join_next() => {
                     active -= 1;
                     match res {
+                        // Dropped: limiter already recorded the drop (via token),
+                        // but the task completed — keep going with reduced limit.
+                        Ok(Err(Error::Dropped(_))) => {}
+
                         Ok(Err(e)) if error.is_none() => {
                             error = Some(e);
                             draining = true;
@@ -277,13 +281,15 @@ mod tests {
         });
         let initial = limiter.current();
 
+        // Dropped is non-fatal: the stream completes successfully but the
+        // limiter records the drop and reduces the concurrency limit.
         let result = stream::iter(0..1)
             .try_for_each_spawned(limiter.clone(), |_: usize| async move {
                 Err(Error::Dropped("timeout"))
             })
             .await;
 
-        assert!(matches!(result, Err(Error::Dropped("timeout"))));
+        assert!(result.is_ok());
         assert!(
             limiter.current() < initial,
             "Dropped should reduce AIMD limit"

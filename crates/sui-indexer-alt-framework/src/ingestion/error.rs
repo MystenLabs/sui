@@ -20,6 +20,9 @@ pub enum Error {
     #[error("No subscribers for ingestion service")]
     NoSubscribers,
 
+    #[error("Subscriber channel full (backpressure)")]
+    Backpressure,
+
     #[error(transparent)]
     RpcClientError(#[from] tonic::Status),
 
