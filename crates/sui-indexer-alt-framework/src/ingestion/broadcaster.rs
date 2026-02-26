@@ -249,11 +249,13 @@ fn ingest_and_broadcast_range(
                     match send_checkpoint(checkpoint, &subscribers).await {
                         Ok(true) => {
                             // Debounce: only the first task to see congestion
-                            // signals Dropped. Others just continue.
+                            // signals Dropped. Others just continue. Reset
+                            // immediately so the next congested task can fire.
                             if congested
                                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
                                 .is_ok()
                             {
+                                congested.store(false, Ordering::Release);
                                 debug!(checkpoint = cp, "Broadcasted checkpoint (backpressure)");
                                 Err(ClError::Dropped(Error::Backpressure))
                             } else {
