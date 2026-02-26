@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/signed_int_in_conditions.move:7:13
+  │
+7 │         if (1i64) { };
+  │             ^^^^
+  │             │
+  │             Invalid if condition
+  │             Expected: 'bool'
+  │             Given: 'i64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/signed_int_in_conditions.move:12:16
+   │
+12 │         while (1i32) { };
+   │                ^^^^
+   │                │
+   │                Invalid while condition
+   │                Expected: 'bool'
+   │                Given: 'i32'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/signed_int_in_conditions.move:17:9
+   │
+17 │         assert!(1i8);
+   │         ^^^^^^^^^^^^
+   │         │       │
+   │         │       Given: 'i8'
+   │         Invalid call of 'assert'. Invalid argument for parameter '0'
+   │         Expected: 'bool'

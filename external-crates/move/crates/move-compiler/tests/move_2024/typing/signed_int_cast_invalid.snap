@@ -1,0 +1,46 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_2024/typing/signed_int_cast_invalid.move:8:19
+  │
+8 │         let _y = (x as bool);
+  │                   ^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
+  │                   │     
+  │                   Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/typing/signed_int_cast_invalid.move:14:19
+   │
+13 │         let x = true;
+   │                 ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
+14 │         let _y = (x as i8);
+   │                   ^ Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/typing/signed_int_cast_invalid.move:20:19
+   │
+20 │         let _y = (x as address);
+   │                   ^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
+   │                   │     
+   │                   Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/typing/signed_int_cast_invalid.move:26:19
+   │
+25 │         let x = @0x42;
+   │                 ----- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
+26 │         let _y = (x as i64);
+   │                   ^ Invalid argument to 'as'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/typing/signed_int_cast_invalid.move:32:19
+   │
+32 │         let _y = (x as vector<u8>);
+   │                   ^    ---------- Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
+   │                   │     
+   │                   Invalid argument to 'as'

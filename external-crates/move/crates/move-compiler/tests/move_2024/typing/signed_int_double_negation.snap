@@ -1,0 +1,314 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/typing/signed_int_double_negation.move:6:16
+  │
+6 │         let x: i64 = 5i64;
+  │                ^^^ Signed integers are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/typing/signed_int_double_negation.move:7:17
+  │
+7 │         let _a: i64 = -(-x);
+  │                 ^^^ Signed integers are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/typing/signed_int_double_negation.move:7:23
+  │
+7 │         let _a: i64 = -(-x);
+  │                       ^^^^^ Signed integer values are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:11:16
+   │
+11 │         let x: i64 = 1i64;
+   │                ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:12:17
+   │
+12 │         let _a: i64 = -(-(-x));
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:12:23
+   │
+12 │         let _a: i64 = -(-(-x));
+   │                       ^^^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:16:17
+   │
+16 │         let _a: i64 = -(-(3i64));
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:16:23
+   │
+16 │         let _a: i64 = -(-(3i64));
+   │                       ^^^^^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:20:16
+   │
+20 │         let x: i8 = 1i8;
+   │                ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:21:17
+   │
+21 │         let _a: i8 = -(-x);
+   │                 ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:21:22
+   │
+21 │         let _a: i8 = -(-x);
+   │                      ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:25:16
+   │
+25 │         let x: i128 = 1i128;
+   │                ^^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:26:17
+   │
+26 │         let _a: i128 = -(-x);
+   │                 ^^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:26:24
+   │
+26 │         let _a: i128 = -(-x);
+   │                        ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:30:16
+   │
+30 │         let a: i32 = 10i32;
+   │                ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:30:22
+   │
+30 │         let a: i32 = 10i32;
+   │                      ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:31:16
+   │
+31 │         let b: i32 = 3i32;
+   │                ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:31:22
+   │
+31 │         let b: i32 = 3i32;
+   │                      ^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:32:17
+   │
+32 │         let _c: i32 = -(a + b);
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:32:23
+   │
+32 │         let _c: i32 = -(a + b);
+   │                       ^ Unary negation is not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:33:17
+   │
+33 │         let _d: i32 = -(a * b);
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:33:23
+   │
+33 │         let _d: i32 = -(a * b);
+   │                       ^ Unary negation is not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:34:17
+   │
+34 │         let _e: i32 = -(a - b);
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:34:23
+   │
+34 │         let _e: i32 = -(a - b);
+   │                       ^ Unary negation is not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:35:17
+   │
+35 │         let _f: i32 = -(a / b);
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:35:23
+   │
+35 │         let _f: i32 = -(a / b);
+   │                       ^ Unary negation is not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:36:17
+   │
+36 │         let _g: i32 = -(a % b);
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_double_negation.move:36:23
+   │
+36 │         let _g: i32 = -(a % b);
+   │                       ^ Unary negation is not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues

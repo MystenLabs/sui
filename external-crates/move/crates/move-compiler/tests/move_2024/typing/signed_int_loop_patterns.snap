@@ -1,0 +1,149 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:7:20
+  │
+7 │         let mut i: i32 = 10i32;
+  │                    ^^^ Signed integers are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:7:26
+  │
+7 │         let mut i: i32 = 10i32;
+  │                          ^^^^^ Signed integer values are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:8:20
+  │
+8 │         while (i > 0i32) {
+  │                    ^^^^ Signed integer values are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:9:21
+  │
+9 │             i = i - 1i32;
+  │                     ^^^^ Signed integer values are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:15:20
+   │
+15 │         let mut x: i64 = 100i64;
+   │                    ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:15:26
+   │
+15 │         let mut x: i64 = 100i64;
+   │                          ^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:16:20
+   │
+16 │         while (x > 0i64) {
+   │                    ^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:17:22
+   │
+17 │             x = x + (-10i64);
+   │                      ^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:22:30
+   │
+22 │     fun break_with_signed(): i64 {
+   │                              ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:23:20
+   │
+23 │         let mut i: i64 = 0i64;
+   │                    ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:23:26
+   │
+23 │         let mut i: i64 = 0i64;
+   │                          ^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:25:21
+   │
+25 │             if (i > 10i64) break i;
+   │                     ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/typing/signed_int_loop_patterns.move:26:21
+   │
+26 │             i = i + 1i64;
+   │                     ^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
