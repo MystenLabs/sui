@@ -2500,6 +2500,11 @@ pub fn solve_constraints(context: &mut Context) {
                 // Already resolved above.
             }
             VarConstraint::Num(loc) => {
+                // If this var was merged with a SignedNum var, skip — handled below
+                let last_var = forward_tvar(&subst, var);
+                if subst.is_signed_num_var(&last_var) {
+                    continue;
+                }
                 let tvar = sp(loc, TI::Var(var).into());
                 let unfolded_ty_ = unfold_type(&subst, &tvar).value;
                 let ti = unfolded_ty_.inner();
