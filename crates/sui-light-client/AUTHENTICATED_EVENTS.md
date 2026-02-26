@@ -149,6 +149,45 @@ Events are batched and settled at checkpoint boundaries through the **accumulato
    - Appends each consensus commit's merkle root to the stream's MMR
    - Updates the `EventStreamHead` object for that `stream_id` with the new MMR state and event count
 
+### Merkle Mountain Range (MMR)
+
+An MMR represents a forest of perfect binary trees (“mountains”). If n leaves have been appended, the MMR structure corresponds to the binary decomposition of n. For example, if `n=13 (1101)`, the MMR consists of three trees of sizes `2^3 = 8`, `2^2 = 4` and `2^0=1`. See the diagram below for an expanded MMR that shows all the internal leaves.
+
+The MMR state maintained in `EventStreamHead` consists of a vector of digests. Appending n leaves causes the MMR state to contain at most `log_2(n)` elements. In other words, the on-chain state only stores the roots of the perfect binary trees.
+
+The features of a MMR are:
+
+- Compact `O(log n)` digest 
+- Append-only: New entries can be added to the MMR using the digest alone
+- `O(log n)` sized inclusion proofs. Note that generating these requires maintaining the expanded MMR and is not yet supported in our RPC services.
+
+
+#### Expanded MMR with 13 leaves
+
+```
+                           Tree 0 (size 8)
+                              H0
+                     ┌────────┴────────┐
+                    H1                 H2
+               ┌─────┴─────┐     ┌─────┴─────┐
+              H3          H4     H5          H6
+            ┌──┴──┐     ┌──┴──┐ ┌──┴──┐     ┌──┴──┐
+           L0    L1    L2    L3 L4    L5    L6    L7
+
+
+                 Tree 1 (size 4)
+                     H7
+               ┌─────┴─────┐
+              H8          H9
+            ┌──┴──┐     ┌──┴──┐
+           L8    L9   L10   L11
+
+
+          Tree 2 (size 1)
+             L12
+```
+
+
 ## API Reference
 
 ### EventService
