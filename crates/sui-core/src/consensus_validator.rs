@@ -10,6 +10,7 @@ use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
 use itertools::Itertools;
+use mysten_common::assert_reachable;
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
 use prometheus::{
@@ -333,6 +334,7 @@ impl SuiTxValidator {
             .handle_vote_transaction(epoch_store, inner_tx.clone())?;
 
         if !claimed_immutable_ids.is_empty() {
+            assert_reachable!("transaction has immutable input object claims");
             let owned_object_refs: HashSet<ObjectRef> = inner_tx
                 .data()
                 .transaction_data()
