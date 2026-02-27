@@ -1,0 +1,62 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-12:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 300000000000000u64,
+    },
+}
+
+task 2, lines 13-15:
+//# programmable --sender A --address-balance-gas
+// View gas coin after -- balance should be unchanged
+Error: Error checking transaction input objects: Wrong number of parameters for the transaction
+
+task 3, lines 16-19:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 300000000000000u64,
+    },
+}
+
+task 4, lines 20-21:
+//# programmable --sender A --inputs @0x0 --address-balance-gas
+//> TransferObjects([Gas], Input(0))
+Error: Error checking transaction input objects: Wrong number of parameters for the transaction
+
+task 5, line 23:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 300000000000000u64,
+    },
+}
