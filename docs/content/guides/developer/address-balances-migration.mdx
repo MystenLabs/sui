@@ -50,6 +50,8 @@ tx.transferObjects([coin], recipient);
 
 With `forceAddressBalance: true`, the SDK skips all coin object lookups and uses a `FundsWithdrawal` input directly. This enables fully offline transaction building with no network client required, and eliminates concurrency issues when building multiple transactions in parallel.
 
+If your funds are mixed between coins and address balances, omit `forceAddressBalance: true` and the SDK will use both address balances and coins as necessary. The address balance will be prioritized first, coins will only be used if necessary.
+
 `coinWithBalance` options:
 - `balance` (required): Amount in base units (MIST for SUI).
 - `type` (optional): Coin type, defaults to `0x2::sui::SUI`.
@@ -92,7 +94,8 @@ Parameters for `tx.withdrawal()`:
 - `amount` (required): Amount to withdraw in base units (number, bigint, or string).
 - `type` (optional): Coin type, defaults to SUI.
 
-Note: `tx.withdrawal()` creates a `Withdrawal<Balance<T>>` capability that must be redeemed. For portable code that works across different gas payment methods, prefer `coinWithBalance` instead.
+Note: `tx.withdrawal()` creates a `Withdrawal<Balance<T>>` capability that must be redeemed to create a coin or balance. Use `0x2::coin::redeem_funds()` or `0x2::balance::redeem_funds()` to do this.
+The `coinWithBalance` intent does this automatically.
 
 ### Rust SDK: Manual withdrawals
 
@@ -216,6 +219,8 @@ public fun send_funds<T>(coin: Coin<T>, recipient: address)
 ```
 
 ### Sending funds via the CLI
+
+The CLI currently has limited support for address balances, but can be used to send funds from coins into address balances by manually constructing the PTB to do so:
 
 [Sui CLI Reference - PTB](https://docs.sui.io/references/cli/ptb):
 
