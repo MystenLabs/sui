@@ -38,7 +38,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
 }
 
 task 4, line 22:
-//# transfer-object --recipient A --sender B 0,1 --gas-budget-from-address-balance 1000000000
+//# transfer-object --recipient A --sender B 0,1 --gas-budget 1000000000 --address-balance-gas
 mutated: object(0,1)
 accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
@@ -48,7 +48,7 @@ task 5, lines 24-26:
 Checkpoint created: 2
 
 task 6, lines 27-29:
-//# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) @C --gas-budget-from-address-balance 1000000000
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) @C --gas-budget 1000000000 --address-balance-gas
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
 accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split), (object(1,1), C, sui::balance::Balance<sui::sui::SUI>, Merge)
