@@ -17,6 +17,7 @@ use rand::seq::SliceRandom;
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
+use crate::workloads::composite::operations::ObjectBalanceOverdraw;
 use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER, Workload,
@@ -296,6 +297,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(TestCoinObjectWithdraw::FLAG, 0.1);
         probabilities.insert(AddressBalanceOverdraw::FLAG, 0.1);
         probabilities.insert(AccumulatorBalanceRead::FLAG, 0.3);
+        probabilities.insert(ObjectBalanceOverdraw::FLAG, 0.1);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -884,7 +886,8 @@ impl Payload for CompositePayload {
         self.current_batch_num_conflicting_transactions = 0;
         let mut transactions = Vec::with_capacity(batch_size + 1);
 
-        let account_state = AccountState::new(sender, &self.fullnode_proxies).await;
+        let account_state =
+            AccountState::new(sender, &self.fullnode_proxies, self.pool.balance_pool).await;
 
         let mut used_gas = vec![];
 
@@ -1052,12 +1055,14 @@ impl Payload for CompositePayload {
 pub struct AccountState {
     pub sender: SuiAddress,
     pub sui_balance: u64,
+    pub pool_balance: u64,
 }
 
 impl AccountState {
     pub async fn new(
         sender: SuiAddress,
         fullnode_proxies: &Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
+        balance_pool: Option<(ObjectID, SequenceNumber)>,
     ) -> Self {
         let mut retries = 0;
         while retries < 3 {
@@ -1069,14 +1074,25 @@ impl AccountState {
                 continue;
             };
             assert_reachable!("successfully got sui balance for address");
+            let pool_balance = if let Some((pool_id, _)) = balance_pool {
+                let pool_address: SuiAddress = pool_id.into();
+                proxy
+                    .get_sui_address_balance(pool_address)
+                    .await
+                    .unwrap_or(0)
+            } else {
+                0
+            };
             return Self {
                 sender,
                 sui_balance,
+                pool_balance,
             };
         }
         Self {
             sender,
             sui_balance: 0,
+            pool_balance: 0,
         }
     }
 }

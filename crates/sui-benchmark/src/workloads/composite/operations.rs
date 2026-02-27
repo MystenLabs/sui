@@ -54,6 +54,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     TestCoinObjectWithdraw::DESCRIPTOR,
     AddressBalanceOverdraw::DESCRIPTOR,
     AccumulatorBalanceRead::DESCRIPTOR,
+    ObjectBalanceOverdraw::DESCRIPTOR,
 ];
 
 pub fn describe_flags(flags: u32) -> String {
@@ -990,5 +991,91 @@ impl Operation for AccumulatorBalanceRead {
             vec![],
             vec![root_arg, addr_arg],
         );
+    }
+}
+
+pub struct ObjectBalanceOverdraw;
+
+impl ObjectBalanceOverdraw {
+    pub const FLAG: u32 = 1 << 16;
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: "ObjectBalanceOverdraw",
+        flag: Self::FLAG,
+        factory: || Box::new(ObjectBalanceOverdraw),
+    };
+}
+
+impl Operation for ObjectBalanceOverdraw {
+    fn name(&self) -> &'static str {
+        "object_balance_overdraw"
+    }
+
+    fn operation_flag(&self) -> u32 {
+        Self::FLAG
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::ObjectBalance]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![
+            InitRequirement::CreateBalancePool,
+            InitRequirement::SeedBalancePool,
+        ]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let (pool_id, initial_shared_version) =
+            resources.balance_pool.expect("Balance pool not resolved");
+
+        let withdraw_amount = if account_state.pool_balance == 0 {
+            0
+        } else {
+            let half_balance = std::cmp::max(1, account_state.pool_balance / 2);
+            get_rng().gen_range(half_balance..=account_state.pool_balance)
+        };
+
+        let pool_arg = builder
+            .obj(ObjectArg::SharedObject {
+                id: pool_id,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap();
+
+        let amount_arg = builder.pure(withdraw_amount).unwrap();
+
+        let withdrawal = builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("balance_pool").unwrap(),
+            Identifier::new("withdraw").unwrap(),
+            vec![GAS::type_tag()],
+            vec![pool_arg, amount_arg],
+        );
+
+        let balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdrawal],
+        );
+
+        let coin = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("from_balance").unwrap(),
+            vec![GAS::type_tag()],
+            vec![balance],
+        );
+
+        let recipient = SuiAddress::random_for_testing_only();
+        builder.transfer_arg(recipient, coin);
     }
 }
