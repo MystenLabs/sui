@@ -261,11 +261,36 @@ async fn authenticated_events_mmr_validation_test() {
         .await
         .expect("Should be able to load event stream head at checkpoint X");
 
+    assert!(
+        sui_stream_head_x.checkpoint_seq > start_checkpoint,
+        "checkpoint_seq ({}) must be after start ({})",
+        sui_stream_head_x.checkpoint_seq,
+        start_checkpoint,
+    );
+    assert!(
+        sui_stream_head_x.checkpoint_seq <= checkpoint_x,
+        "checkpoint_seq ({}) must not exceed latest checkpoint ({})",
+        sui_stream_head_x.checkpoint_seq,
+        checkpoint_x,
+    );
+
     let mut events_up_to_x = Vec::new();
     for cp_seq in (start_checkpoint + 1)..=checkpoint_x {
         let cp_events = build_event_commitments_from_checkpoint(&state, cp_seq)
             .expect("Should be able to build event commitments");
         if !cp_events.is_empty() {
+            for commitment in &cp_events {
+                assert_eq!(
+                    commitment.checkpoint_seq, cp_seq,
+                    "Event commitment checkpoint_seq should match its containing checkpoint"
+                );
+            }
+            for pair in cp_events.windows(2) {
+                assert!(
+                    pair[0].transaction_idx <= pair[1].transaction_idx,
+                    "tx_index should be non-decreasing within a checkpoint"
+                );
+            }
             events_up_to_x.push(cp_events);
         }
     }
@@ -282,7 +307,26 @@ async fn authenticated_events_mmr_validation_test() {
         "MMR should match at checkpoint X"
     );
 
+    assert_eq!(
+        calculated_stream_head_x.checkpoint_seq, sui_stream_head_x.checkpoint_seq,
+        "checkpoint_seq should match at checkpoint X"
+    );
+
     let stream_head_x = &sui_stream_head_x;
+
+    for _ in 0..3 {
+        let tx = sui_test_transaction_builder::make_transfer_sui_transaction(
+            &test_cluster.wallet,
+            Some(sender),
+            None,
+        )
+        .await;
+        test_cluster
+            .wallet
+            .execute_transaction_may_fail(tx)
+            .await
+            .expect("Transfer should succeed");
+    }
 
     for i in 0..4 {
         let _resp = try_emit_authenticated_event(&mut test_cluster, package_id, sender, 200 + i)
@@ -310,6 +354,13 @@ async fn authenticated_events_mmr_validation_test() {
             .await
             .expect("Should be able to load event stream head at checkpoint X'");
 
+    assert!(
+        actual_stream_head_x_prime.checkpoint_seq > sui_stream_head_x.checkpoint_seq,
+        "checkpoint_seq should advance: {} -> {}",
+        sui_stream_head_x.checkpoint_seq,
+        actual_stream_head_x_prime.checkpoint_seq,
+    );
+
     let calculated_stream_head_x_prime = apply_stream_updates(stream_head_x, events_between);
 
     assert_eq!(
@@ -320,5 +371,10 @@ async fn authenticated_events_mmr_validation_test() {
     assert_eq!(
         calculated_stream_head_x_prime.mmr, actual_stream_head_x_prime.mmr,
         "MMR should match between calculated and actual stream heads"
+    );
+
+    assert_eq!(
+        calculated_stream_head_x_prime.checkpoint_seq, actual_stream_head_x_prime.checkpoint_seq,
+        "checkpoint_seq should match between calculated and actual stream heads"
     );
 }
