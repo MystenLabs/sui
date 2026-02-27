@@ -84,10 +84,6 @@ jobs:
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ubuntu-ghcloud
-      RUSTC_WRAPPER: sccache
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -98,12 +94,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -134,10 +129,6 @@ jobs:
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ubuntu-ghcloud
-      RUSTC_WRAPPER: sccache
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -148,12 +139,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -178,10 +168,6 @@ jobs:
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ubuntu-ghcloud
-      RUSTC_WRAPPER: sccache
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -192,12 +178,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -253,21 +238,15 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: [ windows-ghcloud-128 ]
-    env:
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: windows-ghcloud
-      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
 
@@ -286,20 +265,15 @@ jobs:
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: windows-ghcloud
-      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
 
@@ -316,20 +290,15 @@ jobs:
     runs-on: [ ubuntu-ghcloud ]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ubuntu-ghcloud
-      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -353,20 +322,15 @@ jobs:
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
       SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ubuntu-ghcloud
-      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -390,21 +354,15 @@ jobs:
     if: needs.diff.outputs.isRust == 'false' && needs.diff.outputs.isMove == 'true'
     timeout-minutes: 10
     runs-on: [ ubuntu-ghcloud ]
-    env:
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ubuntu-ghcloud
-      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
         run: |
@@ -492,21 +450,15 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
-    env:
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ubuntu-ghcloud
-      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: ubuntu-ghcloud
       - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
@@ -559,21 +511,15 @@ jobs:
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
-    env:
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ubuntu-ghcloud
-      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: ubuntu-ghcloud
       - name: Install cargo-hakari, and cache the binary
         uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:

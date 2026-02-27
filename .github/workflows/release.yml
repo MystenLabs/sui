@@ -46,7 +46,6 @@ jobs:
       SCCACHE_BUCKET: mystenlabs-sccache
       SCCACHE_REGION: us-west-2
       SCCACHE_S3_KEY_PREFIX: ${{ matrix.os }}
-      RUSTC_WRAPPER: sccache
     strategy:
       matrix:
         os:
@@ -165,7 +164,14 @@ jobs:
 
       - name: Setup sccache
         if: ${{ env.s3_existing_archive == '' }}
+        id: sccache
+        continue-on-error: true
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+
+      - name: Enable sccache
+        if: steps.sccache.outcome == 'success'
+        shell: bash
+        run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
 
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_existing_archive == '' }}
