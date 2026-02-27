@@ -387,6 +387,54 @@ public fun create_for_testing(ctx: &TxContext) {
     create(ctx);
 }
 
+/// Creates and returns a new AuthenticatorState object for unit testing.
+/// Unlike `create_for_testing`, the object is NOT shared, so callers hold it directly
+/// and can pass mutable references in the same test function.
+#[test_only]
+public fun new_for_testing(ctx: &mut TxContext): AuthenticatorState {
+    let version = CurrentVersion;
+    let inner = AuthenticatorStateInner { version, active_jwks: vector[] };
+    let mut self = AuthenticatorState { id: object::new(ctx), version };
+    dynamic_field::add(&mut self.id, version, inner);
+    self
+}
+
+/// Directly sets the active JWKs on a test AuthenticatorState, bypassing the
+/// system-address sender check so it can be used in plain `#[test]` functions.
+#[test_only]
+public fun set_active_jwks_for_testing(self: &mut AuthenticatorState, active_jwks: vector<ActiveJwk>) {
+    let inner = self.load_inner_mut();
+    inner.active_jwks = active_jwks;
+}
+
+/// Drops a test-only AuthenticatorState created by `new_for_testing`.
+#[test_only]
+public fun destroy_for_testing(self: AuthenticatorState) {
+    let AuthenticatorState { mut id, version } = self;
+    let inner: AuthenticatorStateInner = dynamic_field::remove(&mut id, version);
+    let AuthenticatorStateInner { version: _, active_jwks: _ } = inner;
+    object::delete(id);
+}
+
+/// Creates an `ActiveJwk` with caller-supplied modulus and exponent (as base64url strings),
+/// for use when tests need realistic key material rather than the placeholder values in
+/// `create_active_jwk`.
+#[test_only]
+public fun create_active_jwk_with_n_e(
+    iss: std::string::String,
+    kid: std::string::String,
+    kty: std::string::String,
+    n: std::string::String,
+    e: std::string::String,
+    epoch: u64,
+): ActiveJwk {
+    ActiveJwk {
+        jwk_id: JwkId { iss, kid },
+        jwk: JWK { kty, e, n, alg: utf8(b"RS256") },
+        epoch,
+    }
+}
+
 #[test_only]
 public fun update_authenticator_state_for_testing(
     self: &mut AuthenticatorState,

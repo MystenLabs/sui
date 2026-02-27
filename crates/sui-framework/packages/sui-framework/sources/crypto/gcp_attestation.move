@@ -3,7 +3,9 @@
 
 module sui::gcp_attestation;
 
+use sui::authenticator_state::{Self, AuthenticatorState};
 use sui::clock::Clock;
+use std::string;
 
 #[allow(unused_const)]
 /// Error that the feature is not available on this network.
@@ -14,6 +16,9 @@ const EParseError: u64 = 1;
 #[allow(unused_const)]
 /// Error that the attestation failed to be verified.
 const EVerifyError: u64 = 2;
+
+/// The GCP Confidential Spaces token issuer; used to scope the JWK lookup.
+const GCP_ISS: vector<u8> = b"https://confidentialcomputing.googleapis.com";
 
 /// Verified claims extracted from a GCP Confidential Spaces attestation JWT.
 public struct GcpAttestationDocument has drop {
@@ -49,21 +54,37 @@ public struct GcpAttestationDocument has drop {
 
 /// Verify a GCP Confidential Spaces attestation JWT and return the extracted claims.
 ///
+/// The RSA public key is looked up from `auth_state` using the GCP issuer and the
+/// supplied `kid`, ensuring the key is consensus-validated rather than caller-controlled.
+///
 /// @param token: The RS256 JWT token bytes (UTF-8 encoded header.payload.signature).
-/// @param jwk_n: RSA public key modulus in big-endian bytes.
-/// @param jwk_e: RSA public key exponent in big-endian bytes.
+/// @param auth_state: The on-chain AuthenticatorState containing trusted GCP JWKs.
+/// @param kid: The key ID from the JWT header, identifying which trusted key to use.
 /// @param clock: The clock object used to check token expiry.
 ///
 /// Aborts with ENotSupportedError if the feature is disabled,
 /// EParseError if the token cannot be parsed,
-/// EVerifyError if the signature or claims are invalid.
+/// EVerifyError if the signature or claims are invalid, or if `kid` is not found in
+/// `auth_state` for the GCP issuer.
 entry fun verify_gcp_attestation(
     token: vector<u8>,
-    jwk_n: vector<u8>,
-    jwk_e: vector<u8>,
+    auth_state: &AuthenticatorState,
+    kid: vector<u8>,
     clock: &Clock,
 ): GcpAttestationDocument {
-    verify_gcp_attestation_internal(&token, &jwk_n, &jwk_e, clock.timestamp_ms())
+    let iss = string::utf8(GCP_ISS);
+    let kid_str = string::utf8(kid);
+    let jwk_opt = authenticator_state::get_jwk_by_kid(auth_state, iss, kid_str);
+    assert!(jwk_opt.is_some(), EVerifyError);
+    let jwk = jwk_opt.destroy_some();
+    // jwk_n and jwk_e are base64url-encoded strings (as stored in AuthenticatorState).
+    // The native decodes them internally before RSA verification.
+    verify_gcp_attestation_internal(
+        &token,
+        authenticator_state::jwk_n(&jwk).as_bytes(),
+        authenticator_state::jwk_e(&jwk).as_bytes(),
+        clock.timestamp_ms(),
+    )
 }
 
 public fun iss(doc: &GcpAttestationDocument): &vector<u8> {
@@ -131,8 +152,7 @@ public fun restart_policy(doc: &GcpAttestationDocument): &vector<u8> {
 /// Internal native function.
 native fun verify_gcp_attestation_internal(
     token: &vector<u8>,
-    jwk_n: &vector<u8>,
-    jwk_e: &vector<u8>,
+    jwk_n_b64: &vector<u8>,
+    jwk_e_b64: &vector<u8>,
     current_timestamp_ms: u64,
 ): GcpAttestationDocument;
-

@@ -222,6 +222,7 @@ mod simulator {
 
     thread_local! {
         static JWK_INJECTOR: std::cell::RefCell<Arc<JwkInjector>> = std::cell::RefCell::new(Arc::new(default_fetch_jwks));
+        static GCP_JWK_INJECTOR: std::cell::RefCell<Vec<(JwkId, JWK)>> = std::cell::RefCell::new(vec![]);
     }
 
     pub(super) fn get_jwk_injector() -> Arc<JwkInjector> {
@@ -231,10 +232,20 @@ mod simulator {
     pub fn set_jwk_injector(injector: Arc<JwkInjector>) {
         JWK_INJECTOR.with(|cell| *cell.borrow_mut() = injector);
     }
+
+    pub fn set_gcp_jwk_injector(jwks: Vec<(JwkId, JWK)>) {
+        GCP_JWK_INJECTOR.with(|cell| *cell.borrow_mut() = jwks);
+    }
+
+    pub(super) fn get_gcp_jwk_injector() -> Vec<(JwkId, JWK)> {
+        GCP_JWK_INJECTOR.with(|cell| cell.borrow().clone())
+    }
 }
 
 #[cfg(msim)]
 pub use simulator::set_jwk_injector;
+#[cfg(msim)]
+pub use simulator::set_gcp_jwk_injector;
 #[cfg(msim)]
 use simulator::*;
 use sui_core::authority::authority_store_pruner::PrunerWatermarks;
@@ -2416,8 +2427,7 @@ impl SuiNode {
 
     #[allow(unused_variables)]
     async fn fetch_gcp_jwks(_authority: AuthorityName) -> SuiResult<Vec<(JwkId, JWK)>> {
-        // GCP JWK fetching is not simulated; return empty set.
-        Ok(vec![])
+        Ok(get_gcp_jwk_injector())
     }
 }
 

@@ -4,10 +4,9 @@
 #[test_only]
 module sui::gcp_attestation_tests;
 
+use std::string;
+use sui::authenticator_state;
 use sui::gcp_attestation;
-
-// RSA exponent e = 65537 in big-endian bytes (same for all GCP JWKS keys).
-const TEST_JWK_E: vector<u8> = x"010001";
 
 // A minimal valid JWT structure with RS256 header but an invalid signature,
 // producing EVerifyError.
@@ -17,11 +16,29 @@ const TEST_JWK_E: vector<u8> = x"010001";
 const WELL_FORMED_INVALID_SIG_TOKEN: vector<u8> =
     b"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNzAwMDAwMDAwfQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-// Real GCP Confidential Spaces JWKS key (kid: c6e6f04bed13a968c22fcfaaf5ef89afc5fe2333).
-// Source: https://www.googleapis.com/service_accounts/v1/metadata/jwk/signer@confidentialspace-sign.iam.gserviceaccount.com
-// This is a 256-byte (2048-bit) RSA modulus.
-const TEST_JWK_N: vector<u8> =
-    x"b32e9cedeb3f5b57c4bedf09a987112886f2891076e0de8df5a1e8251e4bd28a327f038c5fca4ba33e1b004835018337fbdbba755d0cc5e92d3f14242dded4474c5d27fae555ed58bac8b18de5e74bc0db52adddf2c6ec711b14e77a2a443f2b122d58ac39bd7b2a2a783027c4601d0e24fd79d71e87c5affb999ea9b38765c69591c31e277345e0f4ceae28b94b918fc019e478be1fd2bbd1cdf2ee89e64917b8c4d9815c3bac622ba3f8651bf0603097b5a1476c113114785a37d0c949c71867013a6720267e069ccab3862c1b9e3223bdd4f2e0c40ce77825be00a0103281f2c90720ecce346235ae9f024ef2172500ac3f47df9a4f64e13e9358f7beca85";
+const GCP_ISS: vector<u8> = b"https://confidentialcomputing.googleapis.com";
+const TEST_KID: vector<u8> = b"test-kid-001";
+
+// Real GCP Confidential Spaces JWKS key in base64url format (as stored in AuthenticatorState).
+// This is a 2048-bit RSA public key; using the real modulus ensures the ring size check passes
+// so that the signature verification (rather than the key-size check) determines the outcome.
+const TEST_JWK_N_B64: vector<u8> =
+    b"sy6c7es_W1fEvt8JqYcRKIbyiRB24N6N9aHoJR5L0ooyfwOMX8pLoz4bAEg1AYM3-9u6dV0MxektPxQkLd7UR0xdJ_rlVe1YusixjeXnS8DbUq3d8sbscRsU53oqRD8rEi1YrDm9eyoqeDAnxGAdDiT9edceh8Wv-5meqbOHZcaVkcMeJ3NF4PTOrii5S5GPwBnkeL4f0rvRzfLuieZJF7jE2YFcO6xiK6P4ZRvwYDCXtaFHbBExFHhaN9DJSccYZwE6ZyAmfgacyrOGLBueMiO91PLgxAzneCW-AKAQMoHyyQcg7M40YjWunwJO8hclAKw_R9-aT2ThPpNY977KhQ";
+const TEST_JWK_E_B64: vector<u8> = b"AQAB";
+
+fun make_auth_state(ctx: &mut tx_context::TxContext): authenticator_state::AuthenticatorState {
+    let mut auth_state = authenticator_state::new_for_testing(ctx);
+    let jwk = authenticator_state::create_active_jwk_with_n_e(
+        string::utf8(GCP_ISS),
+        string::utf8(TEST_KID),
+        string::utf8(b"RSA"),
+        string::utf8(TEST_JWK_N_B64),
+        string::utf8(TEST_JWK_E_B64),
+        0,
+    );
+    authenticator_state::set_active_jwks_for_testing(&mut auth_state, vector[jwk]);
+    auth_state
+}
 
 #[test]
 #[expected_failure(abort_code = gcp_attestation::EParseError)]
@@ -29,11 +46,12 @@ fun test_gcp_attestation_invalid_token_bytes() {
     let mut ctx = tx_context::dummy();
     let mut clock = sui::clock::create_for_testing(&mut ctx);
     clock.set_for_testing(1_700_000_000_000);
+    let auth_state = make_auth_state(&mut ctx);
 
     // Non-UTF8 bytes cannot be parsed as a JWT.
-    let invalid_token = x"fffe";
-    gcp_attestation::verify_gcp_attestation(invalid_token, TEST_JWK_N, TEST_JWK_E, &clock);
+    gcp_attestation::verify_gcp_attestation(x"fffe", &auth_state, TEST_KID, &clock);
 
+    auth_state.destroy_for_testing();
     clock.destroy_for_testing();
 }
 
@@ -43,11 +61,12 @@ fun test_gcp_attestation_not_three_parts() {
     let mut ctx = tx_context::dummy();
     let mut clock = sui::clock::create_for_testing(&mut ctx);
     clock.set_for_testing(1_700_000_000_000);
+    let auth_state = make_auth_state(&mut ctx);
 
     // Valid UTF-8 but not "header.payload.signature" format.
-    let invalid_token = b"not_a_valid_jwt_token";
-    gcp_attestation::verify_gcp_attestation(invalid_token, TEST_JWK_N, TEST_JWK_E, &clock);
+    gcp_attestation::verify_gcp_attestation(b"not_a_valid_jwt_token", &auth_state, TEST_KID, &clock);
 
+    auth_state.destroy_for_testing();
     clock.destroy_for_testing();
 }
 
@@ -58,14 +77,35 @@ fun test_gcp_attestation_invalid_signature() {
     let mut clock = sui::clock::create_for_testing(&mut ctx);
     // Timestamp is before expiry (exp = 9999999999 seconds).
     clock.set_for_testing(1_700_000_000_000);
+    let auth_state = make_auth_state(&mut ctx);
 
     gcp_attestation::verify_gcp_attestation(
         WELL_FORMED_INVALID_SIG_TOKEN,
-        TEST_JWK_N,
-        TEST_JWK_E,
+        &auth_state,
+        TEST_KID,
         &clock,
     );
 
+    auth_state.destroy_for_testing();
     clock.destroy_for_testing();
 }
 
+#[test]
+#[expected_failure(abort_code = gcp_attestation::EVerifyError)]
+fun test_gcp_attestation_kid_not_found() {
+    let mut ctx = tx_context::dummy();
+    let mut clock = sui::clock::create_for_testing(&mut ctx);
+    clock.set_for_testing(1_700_000_000_000);
+    // AuthenticatorState with no JWKs — kid lookup must fail with EVerifyError.
+    let auth_state = authenticator_state::new_for_testing(&mut ctx);
+
+    gcp_attestation::verify_gcp_attestation(
+        WELL_FORMED_INVALID_SIG_TOKEN,
+        &auth_state,
+        TEST_KID,
+        &clock,
+    );
+
+    auth_state.destroy_for_testing();
+    clock.destroy_for_testing();
+}

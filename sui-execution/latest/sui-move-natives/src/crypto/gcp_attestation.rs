@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::native_functions::NativeContext;
@@ -59,14 +61,15 @@ pub fn verify_gcp_attestation_internal(
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
-    // Pop args in reverse order from the Move call: (token, jwk_n, jwk_e, current_timestamp_ms).
-    // Use VectorRef to borrow the Move vectors without moving/destructing them.
+    // Pop args in reverse order from the Move call:
+    // (token, jwk_n_b64, jwk_e_b64, current_timestamp_ms).
+    // n and e are UTF-8 bytes of base64url-encoded strings, as stored in AuthenticatorState.
     let current_timestamp_ms = pop_arg!(args, u64);
     let jwk_e_ref = pop_arg!(args, VectorRef);
     let jwk_n_ref = pop_arg!(args, VectorRef);
     let token_ref = pop_arg!(args, VectorRef);
-    let jwk_e = jwk_e_ref.as_bytes_ref();
-    let jwk_n = jwk_n_ref.as_bytes_ref();
+    let jwk_e_b64 = jwk_e_ref.as_bytes_ref();
+    let jwk_n_b64 = jwk_n_ref.as_bytes_ref();
     let token = token_ref.as_bytes_ref();
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -81,6 +84,15 @@ pub fn verify_gcp_attestation_internal(
                 .map(|per_byte| base + per_byte * (token.len() as u64).into())
         })
     );
+
+    let jwk_n = match URL_SAFE_NO_PAD.decode(&*jwk_n_b64) {
+        Ok(v) => v,
+        Err(_) => return Ok(NativeResult::err(context.gas_used(), PARSE_ERROR)),
+    };
+    let jwk_e = match URL_SAFE_NO_PAD.decode(&*jwk_e_b64) {
+        Ok(v) => v,
+        Err(_) => return Ok(NativeResult::err(context.gas_used(), PARSE_ERROR)),
+    };
 
     match verify_gcp_attestation(&token, &jwk_n, &jwk_e, current_timestamp_ms) {
         Ok(doc) => {
