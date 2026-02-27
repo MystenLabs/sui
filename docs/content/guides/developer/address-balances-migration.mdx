@@ -13,10 +13,10 @@ For the full specification, see [SIP-58: Sui Address Balances](https://github.co
 Previously, balances on Sui were computed by summing the values of all `Coin<T>` objects owned by an address. With address balances, each address may additionally have one address-owned balance for each currency type `T`. The total balance is the sum of all `Coin<T>` objects plus the address balance value for that coin type.
 
 `Coin<T>` and address balances coexist. Existing coins remain functional and can still be transferred with `transfer::public_transfer`. However, address balances provide significant operational advantages:
-- No coin selection logic required
-- Automatic deposit merging into a single canonical balance
-- Stateless transaction construction without querying object states
-- Direct gas payment from SUI address balances
+- No coin selection logic required.
+- Automatic deposit merging into a single canonical balance.
+- Stateless transaction construction without querying object states.
+- Direct gas payment from SUI address balances.
 
 ## Funding transactions from address balances
 
@@ -291,11 +291,11 @@ TransactionData::V1(TransactionDataV1 {
 ```
 
 Requirements for address balance gas payments:
-- `gas_data.payment` must be empty
-- `expiration` must be `ValidDuring` with both `min_epoch` and `max_epoch` specified
-- `max_epoch` must be at most `min_epoch + 1` (single epoch or 1-epoch range)
-- Timestamp-based expiration is not currently supported
-- The transaction kind must be `ProgrammableTransaction`
+- `gas_data.payment` must be empty.
+- `expiration` must be `ValidDuring` with both `min_epoch` and `max_epoch` specified.
+- `max_epoch` must be at most `min_epoch + 1` (single epoch or 1-epoch range).
+- Timestamp-based expiration is not currently supported.
+- The transaction kind must be `ProgrammableTransaction`.
 
 The `nonce` field differentiates otherwise identical transactions. Unlike EVM chains, the nonce has no semantic requirements—it does not need to be sequential, and there is no "nonce gap" problem. It simply allows you to submit two transactions that would otherwise have the same digest. In most cases, generate the nonce randomly or use an incrementing counter in your application:
 
@@ -466,9 +466,9 @@ Response:
 ```
 
 Fields:
-- `coinBalance`: Total held in coin objects
-- `addressBalance`: Amount held in address balance
-- `balance`: Sum of the two
+- `coinBalance`: Total held in coin objects.
+- `addressBalance`: Amount held in address balance.
+- `balance`: Sum of the two.
 
 [gRPC Reference - `ListBalancesRequest`](https://docs.sui.io/references/fullnode-protocol#sui-rpc-v2-ListBalancesRequest):
 
@@ -565,11 +565,11 @@ let balance_changes: Vec<BalanceChange> = derive_balance_changes(
 ```
 
 The algorithm:
-1. **Subtract input coins**: For each input coin object, subtract its value from `(owner, coin_type)`
-2. **Add output coins**: For each mutated/created coin object, add its value to `(owner, coin_type)`
+1. **Subtract input coins**: For each input coin object, subtract its value from `(owner, coin_type)`.
+2. **Add output coins**: For each mutated/created coin object, add its value to `(owner, coin_type)`.
 3. **Process accumulator events**: For each accumulator event with a `Balance<T>` type:
-   - `Split` operation: Subtract the amount (funds withdrawn from address balance)
-   - `Merge` operation: Add the amount (funds deposited to address balance)
+   - `Split` operation: Subtract the amount (funds withdrawn from address balance).
+   - `Merge` operation: Add the amount (funds deposited to address balance).
 
 [Reference implementation](https://github.com/MystenLabs/sui/blob/e23cc4bb0215ec065785a19772f22eda8ada14ae/crates/sui-types/src/balance_change.rs#L86)
 
