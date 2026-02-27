@@ -58,10 +58,41 @@ With `forceAddressBalance: true`, the SDK skips all coin object lookups and uses
 
 For manual PTB construction, add a `FundsWithdrawalArg` to declare the withdrawal.
 
+### TypeScript SDK: Manual withdrawals
+
+For explicit control over address balance withdrawals, use `tx.withdrawal()`.
+
+[TypeScript SDK - Transaction Reference](https://sui-typescript-docs.vercel.app/sui/transactions/reference#address-balance-withdrawals):
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+
+// Withdraw SUI from address balance
+const withdrawal = tx.withdrawal({ amount: 1_000_000_000 }); // 1 SUI in MIST
+
+// Withdraw a custom coin type
+const customWithdrawal = tx.withdrawal({
+    amount: 1_000_000,
+    type: '0xPackageId::module::CoinType'
+});
+
+// Use the withdrawal (e.g., transfer to recipient)
+tx.transferObjects([withdrawal], recipient);
+```
+
+Parameters:
+- `amount` (required): Amount to withdraw in base units (number, bigint, or string).
+- `type` (optional): Coin type, defaults to SUI.
+
+Note: `tx.withdrawal()` creates a direct withdrawal from the sender's address balance. For portable code that works across different gas payment methods, prefer `coinWithBalance` instead.
+
+### Rust SDK: Manual withdrawals
+
 [Source: `sui-types/src/transaction.rs` - `FundsWithdrawalArg`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
 
 ```rust
-// Rust
 use sui_types::transaction::{FundsWithdrawalArg, WithdrawalTypeArg, Reservation, WithdrawFrom};
 
 let withdrawal_arg = FundsWithdrawalArg {
@@ -74,8 +105,8 @@ let withdrawal_arg = FundsWithdrawalArg {
 The helper `FundsWithdrawalArg::balance_from_sender(amount, balance_type)` provides a convenient constructor.
 
 In your PTB, pass the withdrawal input to either:
-- `0x2::balance::redeem_funds<T>()` to obtain a `Balance<T>`
-- `0x2::coin::redeem_funds<T>()` to obtain a `Coin<T>`
+- `0x2::balance::redeem_funds<T>()` to obtain a `Balance<T>`.
+- `0x2::coin::redeem_funds<T>()` to obtain a `Coin<T>`.
 
 [Source: `sui-types/src/programmable_transaction_builder.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/programmable_transaction_builder.rs):
 
@@ -116,36 +147,6 @@ public fun withdrawal_split<T: store>(withdrawal: &mut Withdrawal<T>, sub_limit:
 // Join two withdrawals together (must have same owner)
 public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: Withdrawal<T>)
 ```
-
-### TypeScript SDK: Manual Withdrawals
-
-For explicit control over address balance withdrawals, use `tx.withdrawal()`.
-
-[TypeScript SDK - Transaction Reference](https://sui-typescript-docs.vercel.app/sui/transactions/reference#address-balance-withdrawals):
-
-```typescript
-import { Transaction } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-
-// Withdraw SUI from address balance
-const withdrawal = tx.withdrawal({ amount: 1_000_000_000 }); // 1 SUI in MIST
-
-// Withdraw a custom coin type
-const customWithdrawal = tx.withdrawal({
-    amount: 1_000_000,
-    type: '0xPackageId::module::CoinType'
-});
-
-// Use the withdrawal (e.g., transfer to recipient)
-tx.transferObjects([withdrawal], recipient);
-```
-
-Parameters:
-- `amount` (required): Amount to withdraw in base units (number, bigint, or string)
-- `type` (optional): Coin type, defaults to SUI
-
-Note: `tx.withdrawal()` creates a direct withdrawal from the sender's address balance. For portable code that works across different gas payment methods, prefer `coinWithBalance` instead.
 
 ## Sending funds
 
