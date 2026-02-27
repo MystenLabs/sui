@@ -27,6 +27,7 @@ mod checked {
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
+        coin_reservation::ParsedDigest,
         error::SuiError,
         fp_bail, fp_ensure,
         gas::SuiGasStatus,
@@ -230,8 +231,68 @@ mod checked {
             true, // gas_ownership_checks
         )?;
         check_objects(transaction, input_objects)?;
+        check_address_balance_replay_protection(protocol_config, transaction, input_objects)?;
 
         Ok(gas_status)
+    }
+
+    /// For transactions paying gas from address balance without ValidDuring expiration,
+    /// verify that the input objects provide replay protection.
+    /// This check happens here (not at validation time) because we need access to the
+    /// actual objects to determine if they are owned vs immutable.
+    fn check_address_balance_replay_protection(
+        protocol_config: &ProtocolConfig,
+        transaction: &TransactionData,
+        input_objects: &InputObjects,
+    ) -> UserInputResult<()> {
+        // Only applies to address balance gas payments
+        if !transaction.is_gas_paid_from_address_balance() {
+            return Ok(());
+        }
+
+        // Only applies when the feature flag is enabled
+        if !protocol_config.relax_valid_during_for_owned_inputs() {
+            return Ok(());
+        }
+
+        // If using ValidDuring expiration, no additional check needed
+        if matches!(
+            transaction.expiration(),
+            sui_types::transaction::TransactionExpiration::ValidDuring { .. }
+        ) {
+            return Ok(());
+        }
+
+        // Check if any input provides replay protection
+        let has_replay_protection = input_objects.iter().any(|obj| {
+            // Only ImmOrOwnedMoveObject can provide replay protection
+            let InputObjectKind::ImmOrOwnedMoveObject(obj_ref) = &obj.input_object_kind else {
+                return false;
+            };
+
+            // Coin reservations provide replay protection via epoch binding
+            if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) {
+                return true;
+            }
+
+            // Check the actual object ownership
+            let Some(object) = obj.as_object() else {
+                return false;
+            };
+
+            // Only owned objects provide replay protection, not immutable objects
+            matches!(object.owner, Owner::AddressOwner(_) | Owner::ObjectOwner(_))
+        });
+
+        if !has_replay_protection {
+            return Err(UserInputError::InvalidExpiration {
+                error: "Address balance gas payments without ValidDuring expiration require \
+                        at least one owned object or coin reservation for replay protection"
+                    .to_string(),
+            });
+        }
+
+        Ok(())
     }
 
     fn check_receiving_objects(

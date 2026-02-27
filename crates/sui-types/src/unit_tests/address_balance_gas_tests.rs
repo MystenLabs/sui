@@ -3,12 +3,14 @@
 
 use super::*;
 use crate::{
-    base_types::{SuiAddress, random_object_ref},
-    digests::{ChainIdentifier, CheckpointDigest},
+    base_types::{ObjectID, SequenceNumber, SuiAddress, random_object_ref},
+    coin_reservation::ParsedObjectRefWithdrawal,
+    digests::{ChainIdentifier, CheckpointDigest, ObjectDigest},
     error::UserInputError,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        CallArg, GasData, ObjectArg, TransactionDataV1, TransactionExpiration, TransactionKind,
+        CallArg, GasData, ObjectArg, SharedObjectMutability, TransactionDataV1,
+        TransactionExpiration, TransactionKind,
     },
 };
 use sui_protocol_config::ProtocolConfig;
@@ -749,5 +751,56 @@ fn test_address_balance_with_multiple_owned_inputs() {
     assert!(
         result.is_ok(),
         "Address balance gas with multiple owned inputs should allow None expiration"
+    );
+}
+
+fn create_coin_reservation_object_ref() -> ObjectRef {
+    let withdrawal = ParsedObjectRefWithdrawal::new(ObjectID::random(), 0, 1000);
+    (
+        ObjectID::random(),
+        SequenceNumber::from_u64(1),
+        ObjectDigest::from(withdrawal.parsed_digest),
+    )
+}
+
+#[test]
+fn test_address_balance_with_shared_objects_and_coin_reservation_allows_relaxed_expiration() {
+    let mut config = create_config_with_address_balance_gas_payments_enabled();
+    config.enable_coin_reservation_for_testing();
+
+    // Shared objects + coin reservation should allow relaxed expiration
+    // because the coin reservation provides replay protection via epoch binding
+    let sender = SuiAddress::random_for_testing_only();
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .input(CallArg::Object(ObjectArg::SharedObject {
+            id: ObjectID::random(),
+            initial_shared_version: SequenceNumber::from_u64(1),
+            mutability: SharedObjectMutability::Mutable,
+        }))
+        .unwrap();
+    builder
+        .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(
+            create_coin_reservation_object_ref(),
+        )))
+        .unwrap();
+    let pt = builder.finish();
+
+    let tx_data = TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: 1000,
+            budget: 1000000,
+        },
+        expiration: TransactionExpiration::None,
+    };
+
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    assert!(
+        result.is_ok(),
+        "Transaction with shared objects + coin reservation should allow None expiration"
     );
 }
