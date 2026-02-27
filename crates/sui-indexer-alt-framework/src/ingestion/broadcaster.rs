@@ -275,16 +275,15 @@ fn ingest_and_broadcast_range(
                 match stream.next().now_or_never() {
                     Some(Some(cp)) => {
                         spawn_ingest(cp, &client, &subscribers, epoch, retry_interval, &mut tasks);
+                        if tasks.len() >= gauge {
+                            was_saturated = true;
+                        }
                     }
                     Some(None) => {
                         stream_done = true;
                     }
                     None => break,
                 }
-            }
-
-            if tasks.len() >= gauge {
-                was_saturated = true;
             }
 
             metrics.ingestion_concurrency_limit.set(gauge as i64);
@@ -315,6 +314,11 @@ fn ingest_and_broadcast_range(
                                 cp, &client, &subscribers, epoch,
                                 retry_interval, &mut tasks,
                             );
+                            // Only mark saturated when a real spawn filled the last slot,
+                            // meaning the stream had work but the gauge was the bottleneck.
+                            if tasks.len() >= gauge {
+                                was_saturated = true;
+                            }
                         }
                         None => {
                             stream_done = true;
