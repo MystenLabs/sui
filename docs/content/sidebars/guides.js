@@ -137,6 +137,7 @@ const guides = [
       'guides/developer/accessing-data/query-with-graphql',
       'guides/developer/accessing-data/archival-store',
       'guides/developer/accessing-data/using-events',
+      'guides/developer/accessing-data/authenticated-events',
       {
         type: 'category',
         label: 'Custom Indexing Framework',
