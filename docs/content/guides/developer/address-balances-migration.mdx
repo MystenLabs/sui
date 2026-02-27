@@ -222,7 +222,7 @@ public fun send_funds<T>(coin: Coin<T>, recipient: address)
 
 The CLI currently has limited support for address balances, but can be used to send funds from coins into address balances by manually constructing the PTB to do so:
 
-[Sui CLI Reference - PTB](https://docs.sui.io/references/cli/ptb):
+[Sui CLI Reference - PTB](/references/cli/ptb):
 
 ```bash
 # Send from gas coin to address balance
@@ -376,7 +376,7 @@ for (const balance of balances) {
 }
 ```
 
-[JSON-RPC Reference - `suix_getBalance`](https://docs.sui.io/sui-api-ref#suix_getbalance):
+[JSON-RPC Reference - `suix_getBalance`](/sui-api-ref#suix_getbalance):
 
 ```bash
 curl -s https://fullnode.testnet.sui.io \
@@ -398,7 +398,7 @@ console.log(balance.fundsInAddressBalance);  // Amount in address balance only
 
 A new `fundsInAddressBalance` field indicates address balance holdings.
 
-[JSON-RPC Reference - `suix_getBalance`](https://docs.sui.io/sui-api-ref#suix_getbalance):
+[JSON-RPC Reference - `suix_getBalance`](/sui-api-ref#suix_getbalance):
 
 ```bash
 # JSON-RPC
@@ -425,7 +425,7 @@ Response:
 
 The `totalBalance` includes both coin objects and address balance funds. To get only the coin-based balance, subtract `fundsInAddressBalance` from `totalBalance`.
 
-[JSON-RPC Reference - `suix_getAllBalances`](https://docs.sui.io/sui-api-ref#suix_getallbalances):
+[JSON-RPC Reference - `suix_getAllBalances`](/sui-api-ref#suix_getallbalances):
 
 ```bash
 # Get all balances
@@ -443,7 +443,7 @@ curl -s https://fullnode.testnet.sui.io \
 
 Use `GetBalance` and `ListBalances` from `StateService`.
 
-[gRPC Reference - `GetBalanceRequest`](https://docs.sui.io/references/fullnode-protocol#sui-rpc-v2-GetBalanceRequest):
+[gRPC Reference - `GetBalanceRequest`](/references/fullnode-protocol#sui-rpc-v2-GetBalanceRequest):
 
 ```bash
 buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService/GetBalance \
@@ -470,7 +470,7 @@ Fields:
 - `addressBalance`: Amount held in address balance.
 - `balance`: Sum of the two.
 
-[gRPC Reference - `ListBalancesRequest`](https://docs.sui.io/references/fullnode-protocol#sui-rpc-v2-ListBalancesRequest):
+[gRPC Reference - `ListBalancesRequest`](/references/fullnode-protocol#sui-rpc-v2-ListBalancesRequest):
 
 ```bash
 # List all balances
@@ -480,7 +480,7 @@ buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService
 
 ### GraphQL
 
-[GraphQL Reference - `IAddressable.balance`](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/interfaces/iaddressable) |
+[GraphQL Reference - `IAddressable.balance`](/references/sui-api/sui-graphql/beta/reference/types/interfaces/iaddressable) |
 Copy the examples below into [GraphQL IDE (Testnet)](https://graphql.testnet.sui.io/graphql) to try them out.
 
 ```graphql
@@ -622,7 +622,7 @@ Migration is optional. The SDK automatically selects coins or address balances a
 
 To consolidate coins into address balances:
 
-[Sui CLI Reference - PTB](https://docs.sui.io/references/cli/ptb):
+[Sui CLI Reference - PTB](/references/cli/ptb):
 
 ```bash
 sui client ptb \
