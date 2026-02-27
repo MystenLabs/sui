@@ -1585,6 +1585,11 @@ impl ObjectID {
         ObjectID::new(bytes)
     }
 
+    /// System objects have IDs that fit in the last 8 bytes (24 leading zero bytes).
+    pub fn is_system_object(&self) -> bool {
+        self.0.as_ref()[..24] == [0u8; 24]
+    }
+
     /// Convert from hex string to ObjectID where the string is prefixed with 0x
     /// Padding 0s if the string is too short.
     pub fn from_hex_literal(literal: &str) -> Result<Self, ObjectIDParseError> {
