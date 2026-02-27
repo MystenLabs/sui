@@ -297,7 +297,7 @@ Requirements for address balance gas payments:
 - Timestamp-based expiration is not currently supported.
 - The transaction kind must be `ProgrammableTransaction`.
 
-The `nonce` field differentiates otherwise identical transactions. Unlike EVM chains, the nonce has no semantic requirements—it does not need to be sequential, and there is no "nonce gap" problem. It simply allows you to submit two transactions that would otherwise have the same digest. In most cases, generate the nonce randomly or use an incrementing counter in your application:
+The `nonce` field differentiates otherwise identical transactions. Unlike EVM chains, the nonce has no semantic requirements. It does not need to be sequential, and there is no "nonce gap" problem. It simply allows you to submit two transactions that would otherwise have the same digest. For most use cases, generate the nonce randomly or use an incrementing counter in your application:
 
 ```rust
 // Random nonce
