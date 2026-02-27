@@ -152,42 +152,25 @@ public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: With
 
 ### Before: Coin transfers
 
-To send funds to another address with coins:
-
-1. **Select or create a coin**: Either use an existing coin of the exact amount, or split from a larger coin.
-2. **Transfer the object**: Use `transfer::public_transfer` to send the coin object to the recipient.
-3. **Recipient receives an object**: The recipient now owns a new `Coin<T>` object they must manage.
-
-[TypeScript SDK - `Transaction.transferObjects`](https://sdk.mystenlabs.com/sui/transaction-building/basics#transferobjects):
+Transferring coins sends a coin object to the recipient:
 
 ```typescript
-// Before: Transfer a coin object
+import { coinWithBalance } from '@mysten/sui/transactions';
+
 const tx = new Transaction();
-const [coin] = tx.splitCoins(tx.gas, [amount]);
+const coin = coinWithBalance({ balance: amount });
 tx.transferObjects([coin], recipient);
-```
-
-[Source: `sui-framework/sources/transfer.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
-
-```move
-// Before: In Move contract
-public fun send_payment(coin: Coin<SUI>, recipient: address) {
-    transfer::public_transfer(coin, recipient);
-}
 ```
 
 Each transfer creates a new object for the recipient, contributing to object proliferation. Recipients accumulate many small coin objects over time, requiring periodic consolidation.
 
 ### After: Address balance deposits
 
-With address balances, funds merge automatically into the recipient's canonical balance.
-
-[TypeScript SDK - `coinWithBalance`](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
+With address balances, use `send_funds` to deposit directly into the recipient's address balance:
 
 ```typescript
 import { coinWithBalance } from '@mysten/sui/transactions';
 
-// After: Send to address balance using coinWithBalance (portable across gas payment methods)
 const tx = new Transaction();
 const coin = coinWithBalance({ balance: amount });
 tx.moveCall({
@@ -197,7 +180,7 @@ tx.moveCall({
 });
 ```
 
-Note: Using `coinWithBalance` instead of `tx.splitCoins(tx.gas, ...)` makes the code portable across gas payment methods. When gas is paid from address balances, `tx.gas` is not available.
+The recipient's balance increases without creating new objects. Multiple deposits from different senders all merge into one balance.
 
 [Source: `sui-framework/sources/coin.move` - `send_funds`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
 
