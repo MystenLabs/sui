@@ -22,64 +22,37 @@ Previously, balances on Sui were computed by summing the values of all `Coin<T>`
 
 ### Before: Coin selection
 
-With the coin-based model, funding a transaction requires:
-
-1. **Query owned coins**: Call `suix_getCoins` or `suix_getAllCoins` to retrieve all `Coin<T>` objects owned by the address.
-2. **Select coins**: Implement coin selection logic to choose a set of coins whose values sum to at least the required amount.
-3. **Handle object references**: Include the exact `ObjectRef` (object ID, version, digest) for each selected coin in the transaction.
-4. **Merge if needed**: If multiple coins are selected, add `MergeCoins` commands to combine them before use.
-5. **Manage concurrency**: Track which coins are "in flight" to avoid double-spending across parallel transactions.
-
-[TypeScript SDK - SuiClient](https://sdk.mystenlabs.com/sui/clients):
+With the coin-based model, `coinWithBalance` queries owned coins and handles selection automatically at build time:
 
 ```typescript
-// Before: Coin-based funding
-const coins = await client.getCoins({ owner: address, coinType: '0x2::sui::SUI' });
+import { coinWithBalance } from '@mysten/sui/transactions';
 
-// Select coins that sum to required amount
-let selected = [];
-let total = 0n;
-for (const coin of coins.data) {
-    selected.push(coin);
-    total += BigInt(coin.balance);
-    if (total >= requiredAmount) break;
-}
-
-if (total < requiredAmount) {
-    throw new Error('Insufficient balance');
-}
-
-// Use selected coins in transaction
 const tx = new Transaction();
-if (selected.length > 1) {
-    tx.mergeCoins(selected[0].coinObjectId, selected.slice(1).map(c => c.coinObjectId));
-}
-const [coin] = tx.splitCoins(selected[0].coinObjectId, [requiredAmount]);
+const coin = coinWithBalance({ balance: requiredAmount });
+tx.transferObjects([coin], recipient);
 ```
+
+While `coinWithBalance` abstracts away coin selection, the underlying coin-based model still requires network queries to fetch coin objects and their versions. This creates concurrency challenges when building multiple transactions in parallel.
 
 ### After: Address balance withdrawals
 
-With address balances, declare the amount needed and the protocol handles the rest.
+With address balances and `forceAddressBalance: true`, transactions can be built entirely offline with no network queries:
 
 [TypeScript SDK - `coinWithBalance`](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
 
 ```typescript
 import { coinWithBalance } from '@mysten/sui/transactions';
 
-// After: Address balance funding
 const tx = new Transaction();
-
-// coinWithBalance handles everything automatically
-const coin = coinWithBalance({ balance: requiredAmount });
-
+const coin = coinWithBalance({ balance: requiredAmount, forceAddressBalance: true });
 tx.transferObjects([coin], recipient);
 ```
 
-The SDK's `coinWithBalance` intent automatically selects address balance funds or coins as needed. No object queries, no coin selection, no concurrency management.
+With `forceAddressBalance: true`, the SDK skips all coin object lookups and uses a `FundsWithdrawal` input directly. This enables fully offline transaction building with no network client required, and eliminates concurrency issues when building multiple transactions in parallel.
 
-Options:
-- `balance` (required): Amount in base units (MIST for SUI)
-- `type` (optional): Coin type, defaults to `0x2::sui::SUI`
+`coinWithBalance` options:
+- `balance` (required): Amount in base units (MIST for SUI).
+- `type` (optional): Coin type, defaults to `0x2::sui::SUI`.
 - `useGasCoin` (optional): Whether to split from gas coin for SUI (default `true`). Set to `false` for sponsored transactions.
 - `forceAddressBalance` (optional): Force address balance withdrawals, enabling fully offline building (default `false`).
 
