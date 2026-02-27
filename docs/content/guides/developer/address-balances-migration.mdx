@@ -322,10 +322,13 @@ tx.setGasPayment([]); // Empty array = sponsor pays from address balance
 const bytes = await tx.build({ client });
 const { signature: userSignature } = await userKeypair.signTransaction(bytes);
 
-// 2. Sponsor signs (can happen asynchronously)
+// Option A: Send transaction and signature to sponsor, sponsor can sign and execute immediately:
+// (`send_tx_to_sponsor` is a placeholder, there is no such API in the SDK)
+await send_tx_to_sponsor(userSignature, bytes);
+
+// Option B: Get signature from sponsor and submit it ourselves. Sponsor signs (can happen asynchronously)
 const { signature: sponsorSignature } = await sponsorKeypair.signTransaction(bytes);
 
-// 3. Either party executes
 const result = await client.executeTransaction({
     transaction: bytes,
     signatures: [userSignature, sponsorSignature],
@@ -374,7 +377,15 @@ The `totalBalance` field represented the sum of all `Coin<T>` object values owne
 
 ### After: Including address balances
 
-The same RPC methods now include address balance information. A new `fundsInAddressBalance` field indicates address balance holdings.
+The same RPC methods now include address balance information:
+
+```typescript
+const balance = await client.core.getBalance({ owner: address, coinType: '0x2::sui::SUI' });
+console.log(balance.totalBalance);           // Sum of coins + address balance
+console.log(balance.fundsInAddressBalance);  // Amount in address balance only
+```
+
+A new `fundsInAddressBalance` field indicates address balance holdings.
 
 [JSON-RPC Reference - suix_getBalance](https://docs.sui.io/sui-api-ref#suix_getbalance):
 
