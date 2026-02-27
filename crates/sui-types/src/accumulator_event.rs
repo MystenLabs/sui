@@ -64,9 +64,9 @@ impl AccumulatorEvent {
         let accumulator_address = AccumulatorAddress::new(address, balance_type);
 
         let (operation, amount) = if net_change < 0 {
-            (AccumulatorOperation::Split, net_change as u64)
+            (AccumulatorOperation::Split, net_change.unsigned_abs())
         } else {
-            (AccumulatorOperation::Merge, (-net_change) as u64)
+            (AccumulatorOperation::Merge, net_change.unsigned_abs())
         };
 
         let accumulator_write = AccumulatorWriteV1 {
