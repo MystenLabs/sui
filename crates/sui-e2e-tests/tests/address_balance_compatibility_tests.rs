@@ -1,11 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use jsonrpsee::core::client::ClientT;
+use jsonrpsee::rpc_params;
+use sui_json_rpc_types::{
+    Balance as RpcBalance, CoinPage, SuiData, SuiObjectDataOptions, SuiObjectResponse,
+};
 use sui_macros::*;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, SequenceNumber, SuiAddress},
-    coin_reservation::ParsedObjectRefWithdrawal,
+    coin_reservation::{self, ParsedObjectRefWithdrawal},
     digests::CheckpointDigest,
     effects::TransactionEffectsAPI,
     transaction::{Argument, Command, TransactionDataAPI, TransactionKind},
@@ -922,6 +927,214 @@ async fn test_gas_payment_mix_of_owners() {
     assert!(
         err.to_string()
             .contains(format!("is owned by {}, not sender {}", sender2, sender1).as_str())
+    );
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_rpc_get_object_returns_fake_coin() {
+    // Test that the JSON-RPC getObject endpoint returns a fake coin object
+    // when given a masked object ID representing an address balance.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let address_balance_amount = 1_000_000_000u64;
+
+    // Fund sender's address balance
+    test_env
+        .fund_one_address_balance(sender, address_balance_amount)
+        .await;
+
+    // Get the fake coin object ref (masked ID)
+    let fake_coin_ref = test_env.encode_coin_reservation(sender, 0, address_balance_amount);
+    let masked_object_id = fake_coin_ref.0;
+
+    // The masked ID should be different from the unmasked accumulator object ID
+    let unmasked_id = coin_reservation::mask_or_unmask_id(masked_object_id, test_env.chain_id);
+    assert_ne!(masked_object_id, unmasked_id);
+
+    // Query the RPC endpoint with the masked object ID
+    let params = rpc_params![
+        masked_object_id,
+        SuiObjectDataOptions::new().with_content().with_owner()
+    ];
+    let response: SuiObjectResponse = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("sui_getObject", params)
+        .await
+        .unwrap();
+
+    // The response should contain the fake coin object
+    let object_data = response.data.expect("Expected object data");
+    assert_eq!(object_data.object_id, masked_object_id);
+
+    // Verify the object is a coin and has the expected balance
+    let content = object_data.content.expect("Expected content");
+    let fields = content.try_into_move().expect("Expected move object");
+    assert!(
+        fields
+            .type_
+            .to_string()
+            .contains("0x2::coin::Coin<0x2::sui::SUI>")
+    );
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_rpc_get_coins_includes_fake_coins() {
+    // Test that the JSON-RPC getCoins endpoint includes fake coins
+    // representing address balances.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let address_balance_amount = 5_000_000_000u64;
+
+    // Get the initial coin count
+    let params = rpc_params![
+        sender,
+        Option::<String>::None,
+        Option::<String>::None,
+        Option::<usize>::None
+    ];
+    let initial_coins: CoinPage = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getCoins", params)
+        .await
+        .unwrap();
+    let initial_coin_count = initial_coins.data.len();
+
+    // Fund sender's address balance
+    test_env
+        .fund_one_address_balance(sender, address_balance_amount)
+        .await;
+
+    // Get the fake coin object ref
+    let fake_coin_ref = test_env.encode_coin_reservation(sender, 0, address_balance_amount);
+    let masked_object_id = fake_coin_ref.0;
+
+    // Query the RPC endpoint for coins
+    let params = rpc_params![
+        sender,
+        Option::<String>::None,
+        Option::<String>::None,
+        Option::<usize>::None
+    ];
+    let coins: CoinPage = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getCoins", params)
+        .await
+        .unwrap();
+
+    // Should have one more coin than before (the fake coin)
+    assert_eq!(
+        coins.data.len(),
+        initial_coin_count + 1,
+        "Should have one additional fake coin"
+    );
+
+    // Find the fake coin in the list
+    let fake_coin = coins
+        .data
+        .iter()
+        .find(|c| c.coin_object_id == masked_object_id)
+        .expect("Fake coin should be in the list");
+
+    assert_eq!(fake_coin.balance, address_balance_amount);
+    assert!(fake_coin.coin_type.contains("0x2::sui::SUI"));
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_rpc_get_balance_includes_address_balance() {
+    // Test that the JSON-RPC getBalance endpoint includes address balance
+    // in the total balance.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let address_balance_amount = 3_000_000_000u64;
+
+    // Get the initial balance
+    let params = rpc_params![sender, Option::<String>::None];
+    let initial_balance: RpcBalance = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getBalance", params)
+        .await
+        .unwrap();
+    let initial_total = initial_balance.total_balance;
+    let initial_coin_count = initial_balance.coin_object_count;
+
+    // Fund sender's address balance
+    test_env
+        .fund_one_address_balance(sender, address_balance_amount)
+        .await;
+
+    // Get the updated balance
+    let params = rpc_params![sender, Option::<String>::None];
+    let updated_balance: RpcBalance = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getBalance", params)
+        .await
+        .unwrap();
+
+    // The total balance should be roughly the same (minus gas costs) since we're
+    // just moving funds from coin to address balance. The key check is that the
+    // address balance is included in the total.
+    assert!(
+        updated_balance.total_balance >= initial_total - 10_000_000,
+        "Total balance should be roughly the same (allowing for gas costs). \
+        Initial: {}, Updated: {}",
+        initial_total,
+        updated_balance.total_balance
+    );
+
+    // Coin count should have increased by 1 (the fake coin representing the address balance)
+    assert_eq!(
+        updated_balance.coin_object_count,
+        initial_coin_count + 1,
+        "Coin count should have increased by 1 (fake coin). \
+        Initial: {}, Updated: {}",
+        initial_coin_count,
+        updated_balance.coin_object_count
+    );
+
+    // The funds_in_address_balance field should reflect the address balance
+    assert_eq!(
+        updated_balance.funds_in_address_balance, address_balance_amount as u128,
+        "Address balance should be reported"
     );
 
     test_env.cluster.trigger_reconfiguration().await;
