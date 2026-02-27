@@ -4,7 +4,7 @@
 use mysten_common::random::get_rng;
 use rand::Rng;
 use sui_types::TypeTag;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
@@ -25,6 +25,7 @@ pub enum InitRequirement {
     CreateTestCoinCap,
     SeedTestCoinAddressBalance,
     EnableAddressAlias,
+    CreateImmutableObject,
 }
 
 // Flags reserved for metrics use, even though alias testing is not implemented
@@ -55,6 +56,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     AddressBalanceOverdraw::DESCRIPTOR,
     AccumulatorBalanceRead::DESCRIPTOR,
     ObjectBalanceOverdraw::DESCRIPTOR,
+    ImmutableObjectRead::DESCRIPTOR,
 ];
 
 pub fn describe_flags(flags: u32) -> String {
@@ -78,6 +80,7 @@ pub enum ResourceRequest {
     ObjectBalance,
     TestCoinCap,
     AccumulatorRoot,
+    ImmutableObject,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -94,6 +97,7 @@ pub struct OperationResources {
     pub balance_pool: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_type: Option<TypeTag>,
+    pub immutable_object: Option<ObjectRef>,
 }
 
 pub trait Operation: Send + Sync {
@@ -1077,5 +1081,55 @@ impl Operation for ObjectBalanceOverdraw {
 
         let recipient = SuiAddress::random_for_testing_only();
         builder.transfer_arg(recipient, coin);
+    }
+}
+
+pub struct ImmutableObjectRead;
+
+impl ImmutableObjectRead {
+    pub const FLAG: u32 = 1 << 17;
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: "ImmutableObjectRead",
+        flag: Self::FLAG,
+        factory: || Box::new(ImmutableObjectRead),
+    };
+}
+
+impl Operation for ImmutableObjectRead {
+    fn name(&self) -> &'static str {
+        "immutable_object_read"
+    }
+
+    fn operation_flag(&self) -> u32 {
+        Self::FLAG
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::ImmutableObject]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::CreateImmutableObject]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let obj_ref = resources
+            .immutable_object
+            .expect("ImmutableObject not resolved");
+
+        let obj_arg = builder.obj(ObjectArg::ImmOrOwnedObject(obj_ref)).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("immutable_object").unwrap(),
+            Identifier::new("value").unwrap(),
+            vec![],
+            vec![obj_arg],
+        );
     }
 }
