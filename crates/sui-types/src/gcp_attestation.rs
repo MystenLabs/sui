@@ -14,6 +14,8 @@ const MAX_JWT_TOKEN_SIZE: usize = 16 * 1024;
 const MIN_RSA_MODULUS_SIZE: usize = 256;
 /// Maximum RSA modulus size (4096-bit key = 512 bytes).
 const MAX_RSA_MODULUS_SIZE: usize = 512;
+/// Minimum RSA exponent size. GCP uses e = 65537 (3 bytes); reject weaker exponents (e.g. e=3).
+const MIN_RSA_EXPONENT_SIZE: usize = 3;
 /// Maximum RSA exponent size.
 const MAX_RSA_EXPONENT_SIZE: usize = 8;
 const EXPECTED_ISSUER: &str = "https://confidentialcomputing.googleapis.com";
@@ -197,7 +199,7 @@ pub fn verify_gcp_attestation(
             "RSA modulus size out of bounds".to_string(),
         ));
     }
-    if jwk_e.is_empty() || jwk_e.len() > MAX_RSA_EXPONENT_SIZE {
+    if jwk_e.len() < MIN_RSA_EXPONENT_SIZE || jwk_e.len() > MAX_RSA_EXPONENT_SIZE {
         return Err(GcpAttestationError::ParseError(
             "RSA exponent size out of bounds".to_string(),
         ));
@@ -254,29 +256,41 @@ pub fn verify_gcp_attestation(
         .map_err(|e| GcpAttestationError::ParseError(format!("payload JSON: {}", e)))?;
 
     if payload.iss != EXPECTED_ISSUER {
-        return Err(GcpAttestationError::VerifyError(format!(
-            "invalid issuer: {}",
-            payload.iss
-        )));
+        return Err(GcpAttestationError::VerifyError(
+            "invalid issuer".to_string(),
+        ));
     }
 
-    // Multiply by 1000 to convert seconds to ms; use saturating_mul to avoid overflow.
-    if payload.exp.saturating_mul(1000) <= current_timestamp_ms {
+    // Guard against timestamps that would overflow when converted to milliseconds.
+    // u64::MAX / 1000 ≈ year 584,554,530 — any real token is far below this.
+    const MAX_TIMESTAMP_SECS: u64 = u64::MAX / 1000;
+    if payload.exp > MAX_TIMESTAMP_SECS || payload.iat > MAX_TIMESTAMP_SECS {
+        return Err(GcpAttestationError::VerifyError(
+            "token timestamp out of range".to_string(),
+        ));
+    }
+
+    if payload.exp * 1000 <= current_timestamp_ms {
         return Err(GcpAttestationError::VerifyError(
             "token has expired".to_string(),
         ));
     }
 
-    if payload.iat.saturating_mul(1000) > current_timestamp_ms {
+    if payload.iat * 1000 > current_timestamp_ms {
         return Err(GcpAttestationError::VerifyError(
             "token issued in the future".to_string(),
         ));
     }
 
     // nbf (not-before): when present, the token must not be used before this time.
-    // Falls back to iat when absent. Uses saturating_mul to avoid overflow.
-    let nbf_ms = payload.nbf.unwrap_or(payload.iat).saturating_mul(1000);
-    if nbf_ms > current_timestamp_ms {
+    // Falls back to iat when absent.
+    let nbf = payload.nbf.unwrap_or(payload.iat);
+    if nbf > MAX_TIMESTAMP_SECS {
+        return Err(GcpAttestationError::VerifyError(
+            "token timestamp out of range".to_string(),
+        ));
+    }
+    if nbf * 1000 > current_timestamp_ms {
         return Err(GcpAttestationError::VerifyError(
             "token not yet valid".to_string(),
         ));

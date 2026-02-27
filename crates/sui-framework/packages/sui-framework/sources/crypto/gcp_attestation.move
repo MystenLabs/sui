@@ -74,6 +74,9 @@ public fun sub(doc: &GcpAttestationDocument): &vector<u8> {
     &doc.sub
 }
 
+/// Returns the first audience value. When the token carries multiple audiences,
+/// only the first is returned; callers requiring multi-audience validation should
+/// use the raw JWT claims directly.
 public fun aud(doc: &GcpAttestationDocument): &vector<u8> {
     &doc.aud
 }
@@ -90,6 +93,9 @@ public fun eat_nonce(doc: &GcpAttestationDocument): &vector<vector<u8>> {
     &doc.eat_nonce
 }
 
+/// Returns whether secure boot was enabled. Defaults to `false` when the
+/// `secboot` field is absent from the token; callers that require secure boot
+/// must assert this value is `true` rather than treating absence as enabled.
 public fun secboot(doc: &GcpAttestationDocument): bool {
     doc.secboot
 }

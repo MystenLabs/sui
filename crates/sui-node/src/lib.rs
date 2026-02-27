@@ -2365,17 +2365,30 @@ impl SuiNode {
         use sui_types::error::SuiErrorKind;
         const GCP_JWKS_URL: &str = "https://www.googleapis.com/service_accounts/v1/metadata/jwk/signer@confidentialspace-sign.iam.gserviceaccount.com";
         const GCP_ISS: &str = "https://confidentialcomputing.googleapis.com";
+        // Bound response size to prevent memory exhaustion from a malicious or misconfigured endpoint.
+        const GCP_JWKS_MAX_RESPONSE_BYTES: u64 = 64 * 1024;
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .map_err(|_| SuiErrorKind::JWKRetrievalError)?;
         let resp = client
             .get(GCP_JWKS_URL)
             .send()
             .await
             .map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+        if let Some(len) = resp.content_length() {
+            if len > GCP_JWKS_MAX_RESPONSE_BYTES {
+                return Err(SuiErrorKind::JWKRetrievalError.into());
+            }
+        }
         let body = resp
             .text()
             .await
             .map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+        if body.len() as u64 > GCP_JWKS_MAX_RESPONSE_BYTES {
+            return Err(SuiErrorKind::JWKRetrievalError.into());
+        }
         parse_gcp_jwks(&body, GCP_ISS).map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 }
