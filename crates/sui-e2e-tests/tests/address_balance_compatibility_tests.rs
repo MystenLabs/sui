@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(deprecated)] // We need to use rpc_client for JSON-RPC testing
+
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
 use sui_json_rpc_types::{
@@ -10,12 +12,12 @@ use sui_macros::*;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, SequenceNumber, SuiAddress},
-    coin_reservation::{self, ParsedObjectRefWithdrawal},
-    digests::CheckpointDigest,
+    coin_reservation::{self, ParsedDigest, ParsedObjectRefWithdrawal},
+    digests::{CheckpointDigest, ObjectDigest},
     effects::TransactionEffectsAPI,
     transaction::{Argument, Command, TransactionDataAPI, TransactionKind},
 };
-use test_cluster::addr_balance_test_env::{TestEnvBuilder, get_sui_accumulator_object_id};
+use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder, get_sui_accumulator_object_id};
 
 #[sim_test]
 async fn test_coin_reservation_validation() {
@@ -208,11 +210,18 @@ async fn test_coin_reservation_validation() {
 
 #[sim_test]
 async fn test_coin_reservation_gating() {
-    let mut test_env = TestEnvBuilder::new().build().await;
+    // Explicitly disable coin reservations to test gating (they're on by default for devnet/localnet)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.disable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
 
     let sender = test_env.get_sender(0);
 
-    // Verify transaction is rejected if coin reservation is not enabled.
+    // Verify transaction is rejected if coin reservation is not enabled (as input).
     {
         let coin_reservation = test_env.encode_coin_reservation(sender, 0, 1);
 
@@ -222,7 +231,25 @@ async fn test_coin_reservation_gating() {
             .unwrap_err();
         assert!(
             err.to_string()
-                .contains("coin reservation backward compatibility layer is not enabled")
+                .contains("coin reservation backward compatibility layer is not enabled"),
+            "Expected gating error for coin reservation in input, got: {}",
+            err
+        );
+    }
+
+    // Verify transaction is rejected if coin reservation is used as gas payment.
+    {
+        let coin_reservation = test_env.encode_coin_reservation(sender, 0, 5_000_000_000);
+
+        let tx = test_env
+            .tx_builder_with_gas(sender, coin_reservation)
+            .build();
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("coin reservation backward compatibility layer is not enabled"),
+            "Expected gating error for coin reservation in gas payment, got: {}",
+            err
         );
     }
 
@@ -1136,6 +1163,423 @@ async fn test_rpc_get_balance_includes_address_balance() {
         updated_balance.funds_in_address_balance, address_balance_amount as u128,
         "Address balance should be reported"
     );
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+/// Helper function to fetch SUI coins using pagination with a specific page size.
+/// Returns a list of (object_id, balance, digest) tuples in the order returned by the API.
+async fn fetch_sui_coins_paginated(
+    rpc_client: &impl ClientT,
+    owner: SuiAddress,
+    page_size: usize,
+) -> Vec<(ObjectID, u64, ObjectDigest)> {
+    let mut all_coins = Vec::new();
+    let mut cursor: Option<String> = None;
+    let mut iteration = 0;
+
+    loop {
+        iteration += 1;
+        if iteration > 100 {
+            panic!(
+                "fetch_sui_coins_paginated: too many iterations ({}), likely infinite loop",
+                iteration
+            );
+        }
+
+        // suix_getCoins with None coin_type defaults to SUI
+        let params = rpc_params![
+            owner,
+            Option::<String>::None,
+            cursor.clone(),
+            Some(page_size)
+        ];
+        let page: CoinPage = rpc_client.request("suix_getCoins", params).await.unwrap();
+
+        for coin in &page.data {
+            all_coins.push((coin.coin_object_id, coin.balance, coin.digest));
+        }
+
+        if !page.has_next_page {
+            break;
+        }
+        cursor = page.next_cursor;
+    }
+
+    all_coins
+}
+
+/// Helper function to fetch ALL coins (all types) using pagination with a specific page size.
+/// Uses suix_getAllCoins which returns coins of all types sorted by (type, inverted_balance, id).
+async fn fetch_all_coins_paginated(
+    rpc_client: &impl ClientT,
+    owner: SuiAddress,
+    page_size: usize,
+) -> Vec<(ObjectID, u64, ObjectDigest)> {
+    let mut all_coins = Vec::new();
+    let mut cursor: Option<String> = None;
+    let mut iteration = 0;
+
+    loop {
+        iteration += 1;
+        if iteration > 100 {
+            panic!(
+                "fetch_all_coins_paginated: too many iterations ({}), likely infinite loop",
+                iteration
+            );
+        }
+
+        let params = rpc_params![owner, cursor.clone(), Some(page_size)];
+        let page: CoinPage = rpc_client
+            .request("suix_getAllCoins", params)
+            .await
+            .unwrap();
+
+        for coin in &page.data {
+            all_coins.push((coin.coin_object_id, coin.balance, coin.digest));
+        }
+
+        if !page.has_next_page {
+            break;
+        }
+        cursor = page.next_cursor;
+    }
+
+    all_coins
+}
+
+/// Helper to verify pagination consistency for a sender with coins.
+/// Tests that fetching coins with different page sizes always returns identical results.
+/// For "multi_type" test, uses suix_getAllCoins; otherwise uses suix_getCoins (SUI only).
+async fn verify_pagination_consistency(
+    test_env: &TestEnv,
+    sender: SuiAddress,
+    expected_fake_position: &str,
+) {
+    let rpc_client = &test_env.cluster.fullnode_handle.rpc_client;
+
+    // Use getAllCoins for multi-type tests, getCoins (SUI only) for single-type tests
+    let use_all_coins = expected_fake_position == "multi_type";
+
+    // Get baseline with large page size (effectively no pagination)
+    let baseline = if use_all_coins {
+        fetch_all_coins_paginated(rpc_client, sender, 100).await
+    } else {
+        fetch_sui_coins_paginated(rpc_client, sender, 100).await
+    };
+    let total_coins = baseline.len();
+
+    assert!(
+        total_coins >= 2,
+        "Need at least 2 coins for meaningful pagination test, got {}",
+        total_coins
+    );
+
+    // Test with various page sizes from 1 to total_coins + 2
+    for page_size in 1..=total_coins + 2 {
+        let paginated = if use_all_coins {
+            fetch_all_coins_paginated(rpc_client, sender, page_size).await
+        } else {
+            fetch_sui_coins_paginated(rpc_client, sender, page_size).await
+        };
+
+        assert_eq!(
+            paginated.len(),
+            baseline.len(),
+            "Page size {} returned different number of coins for {} fake coin position. \
+            Expected {}, got {}",
+            page_size,
+            expected_fake_position,
+            baseline.len(),
+            paginated.len()
+        );
+
+        // Verify each coin matches in the same order
+        for (i, (baseline_coin, paginated_coin)) in
+            baseline.iter().zip(paginated.iter()).enumerate()
+        {
+            assert_eq!(
+                baseline_coin, paginated_coin,
+                "Page size {} returned different coin at position {} for {} fake coin position. \
+                Expected {:?}, got {:?}",
+                page_size, i, expected_fake_position, baseline_coin, paginated_coin
+            );
+        }
+    }
+
+    // Find all fake coins (one per coin type with address balance)
+    let fake_coin_positions: Vec<usize> = baseline
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, _, digest))| ParsedDigest::is_coin_reservation_digest(digest))
+        .map(|(i, _)| i)
+        .collect();
+
+    assert!(
+        !fake_coin_positions.is_empty(),
+        "No fake coins found in results for {} position test",
+        expected_fake_position
+    );
+
+    // For position checks, we care about the first fake coin (SUI type for single-type tests)
+    let first_fake_pos = fake_coin_positions[0];
+
+    match expected_fake_position {
+        "largest" => assert_eq!(
+            first_fake_pos, 0,
+            "Fake SUI coin should be at position 0 (largest), but was at {}",
+            first_fake_pos
+        ),
+        "smallest" => {
+            // The SUI fake coin should be the last coin (smallest balance)
+            assert_eq!(
+                first_fake_pos,
+                total_coins - 1,
+                "Fake SUI coin should be at last position (smallest), but was at {}",
+                first_fake_pos
+            );
+        }
+        "middle" => assert!(
+            first_fake_pos > 0 && first_fake_pos < total_coins - 1,
+            "Fake SUI coin should be in middle, but was at position {} of {}",
+            first_fake_pos,
+            total_coins
+        ),
+        "multi_type" => {
+            assert!(
+                fake_coin_positions.len() >= 2,
+                "Expected multiple fake coins (one per type), but found {}",
+                fake_coin_positions.len()
+            );
+        }
+        _ => {}
+    }
+}
+
+#[sim_test]
+async fn test_rpc_get_coins_pagination_multi_type() {
+    // Test pagination with multiple coin types: SUI real coins, SUI fake coin (address balance),
+    // and a custom coin fake coin. Coins are sorted by (coin_type, inverted_balance, object_id),
+    // so SUI coins (0x2::sui::SUI) come before custom coins lexicographically.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    let gas = all_gas.pop().unwrap();
+    let coin_to_split = all_gas.pop().unwrap();
+
+    // Create real SUI coins with small balances: 100, 200, 300, 400 mist
+    let split_amounts = vec![100u64, 200, 300, 400];
+    let tx = test_env
+        .tx_builder_with_gas(sender, gas)
+        .split_coin(coin_to_split, split_amounts.clone())
+        .build();
+    let (digest, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "Split coin failed");
+    test_env.cluster.wait_for_tx_settlement(&[digest]).await;
+
+    // Fund SUI address balance (creates fake SUI coin)
+    let sui_fake_balance = 250u64;
+    test_env
+        .fund_one_address_balance(sender, sui_fake_balance)
+        .await;
+
+    // Publish a custom coin and mint to address balance (creates fake custom coin)
+    let custom_coin_balance = 5000u64;
+    let (_, _) = test_env
+        .publish_and_mint_trusted_coin(sender, custom_coin_balance)
+        .await;
+
+    // Verify pagination consistency across all coin types
+    verify_pagination_consistency(&test_env, sender, "multi_type").await;
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_rpc_get_coins_pagination_fake_coin_largest() {
+    // Test pagination when SUI fake coin has the LARGEST balance among SUI coins.
+    // Also includes a custom coin to test multi-type pagination.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    let gas = all_gas.pop().unwrap();
+    let coin_to_split = all_gas.pop().unwrap();
+
+    // Create real SUI coins with small balances: 100, 200, 300, 400 mist
+    let split_amounts = vec![100u64, 200, 300, 400];
+    let tx = test_env
+        .tx_builder_with_gas(sender, gas)
+        .split_coin(coin_to_split, split_amounts.clone())
+        .build();
+    let (digest, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "Split coin failed");
+    test_env.cluster.wait_for_tx_settlement(&[digest]).await;
+
+    // Get current SUI coins to find the max balance
+    let params = rpc_params![
+        sender,
+        Option::<String>::None,
+        Option::<String>::None,
+        Option::<usize>::None
+    ];
+    let coins_before: CoinPage = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getCoins", params)
+        .await
+        .unwrap();
+    let max_balance = coins_before.data.iter().map(|c| c.balance).max().unwrap();
+
+    // Fund SUI address balance twice to create a fake coin larger than any real coin.
+    let funding_amount = (max_balance as u128 * 6 / 10) as u64;
+
+    // First funding
+    test_env
+        .fund_one_address_balance(sender, funding_amount)
+        .await;
+
+    // Swap in a fresh gas coin for the second funding
+    let params = rpc_params![
+        sender,
+        Option::<String>::None,
+        Option::<String>::None,
+        Option::<usize>::None
+    ];
+    let coins_mid: CoinPage = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getCoins", params)
+        .await
+        .unwrap();
+
+    let fresh_coin = coins_mid
+        .data
+        .iter()
+        .find(|c| c.balance >= funding_amount + 1_000_000_000)
+        .expect("Should have a coin with enough balance for second funding");
+
+    test_env.gas_objects.get_mut(&sender).unwrap()[0] = (
+        fresh_coin.coin_object_id,
+        fresh_coin.version,
+        fresh_coin.digest,
+    );
+
+    // Second funding
+    test_env
+        .fund_one_address_balance(sender, funding_amount)
+        .await;
+
+    // Publish a custom coin and mint to address balance
+    let custom_coin_balance = 7500u64;
+    let (_, _) = test_env
+        .publish_and_mint_trusted_coin(sender, custom_coin_balance)
+        .await;
+
+    verify_pagination_consistency(&test_env, sender, "largest").await;
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_rpc_get_coins_pagination_fake_coin_smallest() {
+    // Test pagination when SUI fake coin has the SMALLEST balance among SUI coins.
+    // Also includes a custom coin to test multi-type pagination.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    let gas = all_gas.pop().unwrap();
+    let coin_to_split = all_gas.pop().unwrap();
+
+    // Create real SUI coins with balances: 1000, 2000, 3000, 4000 mist
+    let split_amounts = vec![1000u64, 2000, 3000, 4000];
+    let tx = test_env
+        .tx_builder_with_gas(sender, gas)
+        .split_coin(coin_to_split, split_amounts.clone())
+        .build();
+    let (digest, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "Split coin failed");
+    test_env.cluster.wait_for_tx_settlement(&[digest]).await;
+
+    // Fund SUI address balance with amount smaller than smallest split coin
+    let fake_balance = 50u64;
+    test_env
+        .fund_one_address_balance(sender, fake_balance)
+        .await;
+
+    // Publish a custom coin and mint to address balance
+    let custom_coin_balance = 2500u64;
+    let (_, _) = test_env
+        .publish_and_mint_trusted_coin(sender, custom_coin_balance)
+        .await;
+
+    verify_pagination_consistency(&test_env, sender, "smallest").await;
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_rpc_get_coins_pagination_fake_coin_middle() {
+    // Test pagination when SUI fake coin has a MIDDLE balance among SUI coins.
+    // Also includes a custom coin to test multi-type pagination.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    let gas = all_gas.pop().unwrap();
+    let coin_to_split = all_gas.pop().unwrap();
+
+    // Create real SUI coins with balances: 100, 200, 400, 500 mist (gap at 300)
+    let split_amounts = vec![100u64, 200, 400, 500];
+    let tx = test_env
+        .tx_builder_with_gas(sender, gas)
+        .split_coin(coin_to_split, split_amounts.clone())
+        .build();
+    let (digest, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "Split coin failed");
+    test_env.cluster.wait_for_tx_settlement(&[digest]).await;
+
+    // Fund SUI address balance with 300 - between 200 and 400
+    let fake_balance = 300u64;
+    test_env
+        .fund_one_address_balance(sender, fake_balance)
+        .await;
+
+    // Publish a custom coin and mint to address balance
+    let custom_coin_balance = 350u64;
+    let (_, _) = test_env
+        .publish_and_mint_trusted_coin(sender, custom_coin_balance)
+        .await;
+
+    verify_pagination_consistency(&test_env, sender, "middle").await;
 
     test_env.cluster.trigger_reconfiguration().await;
 }

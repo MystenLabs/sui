@@ -113,6 +113,7 @@ feature_flags:
   allow_unbounded_system_objects: true
   type_tags_in_object_runtime: true
   enable_accumulators: true
+  enable_coin_reservation_obj_refs: true
   create_root_accumulator_object: true
   enable_authenticated_event_streams: true
   enable_address_balance_gas_payments: true

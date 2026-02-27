@@ -2988,13 +2988,13 @@ impl TransactionDataAPI for TransactionDataV1 {
 
             // Reject transactions that use Argument::GasCoin when gas payment is empty.
             // There is no gas coin to reference in this case.
-            if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
-                if pt.uses_gas_coin() {
-                    return Err(UserInputError::Unsupported(
-                        "Argument::GasCoin cannot be used when gas payment is empty".to_string(),
-                    )
-                    .into());
-                }
+            if let TransactionKind::ProgrammableTransaction(pt) = &self.kind
+                && pt.uses_gas_coin()
+            {
+                return Err(UserInputError::Unsupported(
+                    "Argument::GasCoin cannot be used when gas payment is empty".to_string(),
+                )
+                .into());
             }
         } else {
             fp_ensure!(
@@ -3020,6 +3020,18 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
             .into()
         );
+
+        // Check if any gas payment contains a coin reservation
+        if !config.enable_coin_reservation_obj_refs() {
+            for gas_ref in self.gas() {
+                if ParsedDigest::is_coin_reservation_digest(&gas_ref.2) {
+                    return Err(UserInputError::Unsupported(
+                        "coin reservation backward compatibility layer is not enabled".to_string(),
+                    )
+                    .into());
+                }
+            }
+        }
 
         if !self.is_system_tx() {
             fp_ensure!(
