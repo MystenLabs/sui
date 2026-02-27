@@ -2641,6 +2641,7 @@ impl AuthorityState {
                     cloned_gas,
                     retry_gas_status,
                     cloned_kind,
+                    None,
                     signer,
                     tx_digest,
                     dev_inspect,
