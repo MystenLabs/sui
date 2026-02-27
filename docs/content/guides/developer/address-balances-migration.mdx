@@ -1,6 +1,3 @@
-{/* Copyright (c) Mysten Labs, Inc. */}
-{/* SPDX-License-Identifier: Apache-2.0 */}
-
 ---
 title: Address Balances Migration Guide
 description: Migrating from Coin objects to address balances on Sui.
@@ -21,17 +18,17 @@ Previously, balances on Sui were computed by summing the values of all `Coin<T>`
 - Stateless transaction construction without querying object states
 - Direct gas payment from SUI address balances
 
-## Funding Transactions from Address Balances
+## Funding transactions from address balances
 
-### Before: Coin Selection
+### Before: Coin selection
 
 With the coin-based model, funding a transaction requires:
 
-1. **Query owned coins**: Call `suix_getCoins` or `suix_getAllCoins` to retrieve all `Coin<T>` objects owned by the address
-2. **Select coins**: Implement coin selection logic to choose a set of coins whose values sum to at least the required amount
-3. **Handle object references**: Include the exact `ObjectRef` (object ID, version, digest) for each selected coin in the transaction
-4. **Merge if needed**: If multiple coins are selected, add `MergeCoins` commands to combine them before use
-5. **Manage concurrency**: Track which coins are "in flight" to avoid double-spending across parallel transactions
+1. **Query owned coins**: Call `suix_getCoins` or `suix_getAllCoins` to retrieve all `Coin<T>` objects owned by the address.
+2. **Select coins**: Implement coin selection logic to choose a set of coins whose values sum to at least the required amount.
+3. **Handle object references**: Include the exact `ObjectRef` (object ID, version, digest) for each selected coin in the transaction.
+4. **Merge if needed**: If multiple coins are selected, add `MergeCoins` commands to combine them before use.
+5. **Manage concurrency**: Track which coins are "in flight" to avoid double-spending across parallel transactions.
 
 [TypeScript SDK - SuiClient](https://sdk.mystenlabs.com/sui/clients):
 
@@ -60,11 +57,11 @@ if (selected.length > 1) {
 const [coin] = tx.splitCoins(selected[0].coinObjectId, [requiredAmount]);
 ```
 
-### After: Address Balance Withdrawals
+### After: Address balance withdrawals
 
 With address balances, declare the amount needed and the protocol handles the rest.
 
-[TypeScript SDK - CoinWithBalance](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
+[TypeScript SDK - `coinWithBalance`](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
 
 ```typescript
 import { coinWithBalance } from '@mysten/sui/transactions';
@@ -88,7 +85,7 @@ Options:
 
 For manual PTB construction, add a `FundsWithdrawalArg` to declare the withdrawal.
 
-[Source: sui-types/src/transaction.rs - FundsWithdrawalArg](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
+[Source: `sui-types/src/transaction.rs` - `FundsWithdrawalArg`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
 
 ```rust
 // Rust
@@ -107,7 +104,7 @@ In your PTB, pass the withdrawal input to either:
 - `0x2::balance::redeem_funds<T>()` to obtain a `Balance<T>`
 - `0x2::coin::redeem_funds<T>()` to obtain a `Coin<T>`
 
-[Source: sui-types/src/programmable_transaction_builder.rs](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/programmable_transaction_builder.rs):
+[Source: `sui-types/src/programmable_transaction_builder.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/programmable_transaction_builder.rs):
 
 ```rust
 // Rust example: withdraw and transfer
@@ -133,11 +130,11 @@ builder.transfer_arg(recipient, coin);
 
 You may have multiple `FundsWithdrawalArg` inputs in a PTB, even for the same coin type.
 
-### Splitting and Joining Withdrawals
+### Splitting and joining withdrawals
 
 Withdrawals can be split and merged within a PTB.
 
-[Source: sui-framework/sources/funds_accumulator.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/funds_accumulator.move):
+[Source: `sui-framework/sources/funds_accumulator.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/funds_accumulator.move):
 
 ```move
 // Split a sub-withdrawal from an existing withdrawal
@@ -177,17 +174,17 @@ Parameters:
 
 Note: `tx.withdrawal()` creates a direct withdrawal from the sender's address balance. For portable code that works across different gas payment methods, prefer `coinWithBalance` instead.
 
-## Sending Funds
+## Sending funds
 
-### Before: Coin Transfers
+### Before: Coin transfers
 
 To send funds to another address with coins:
 
-1. **Select or create a coin**: Either use an existing coin of the exact amount, or split from a larger coin
-2. **Transfer the object**: Use `transfer::public_transfer` to send the coin object to the recipient
-3. **Recipient receives an object**: The recipient now owns a new `Coin<T>` object they must manage
+1. **Select or create a coin**: Either use an existing coin of the exact amount, or split from a larger coin.
+2. **Transfer the object**: Use `transfer::public_transfer` to send the coin object to the recipient.
+3. **Recipient receives an object**: The recipient now owns a new `Coin<T>` object they must manage.
 
-[TypeScript SDK - Transaction.transferObjects](https://sdk.mystenlabs.com/sui/transaction-building/basics#transferobjects):
+[TypeScript SDK - `Transaction.transferObjects`](https://sdk.mystenlabs.com/sui/transaction-building/basics#transferobjects):
 
 ```typescript
 // Before: Transfer a coin object
@@ -196,7 +193,7 @@ const [coin] = tx.splitCoins(tx.gas, [amount]);
 tx.transferObjects([coin], recipient);
 ```
 
-[Source: sui-framework/sources/transfer.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
+[Source: `sui-framework/sources/transfer.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
 
 ```move
 // Before: In Move contract
@@ -207,11 +204,11 @@ public fun send_payment(coin: Coin<SUI>, recipient: address) {
 
 Each transfer creates a new object for the recipient, contributing to object proliferation. Recipients accumulate many small coin objects over time, requiring periodic consolidation.
 
-### After: Address Balance Deposits
+### After: Address balance deposits
 
 With address balances, funds merge automatically into the recipient's canonical balance.
 
-[TypeScript SDK - coinWithBalance](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
+[TypeScript SDK - `coinWithBalance`](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
 
 ```typescript
 import { coinWithBalance } from '@mysten/sui/transactions';
@@ -228,7 +225,7 @@ tx.moveCall({
 
 Note: Using `coinWithBalance` instead of `tx.splitCoins(tx.gas, ...)` makes the code portable across gas payment methods. When gas is paid from address balances, `tx.gas` is not available.
 
-[Source: sui-framework/sources/coin.move - send_funds](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
+[Source: `sui-framework/sources/coin.move` - `send_funds`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
 
 ```move
 // After: In Move contract
@@ -239,23 +236,23 @@ public fun send_payment(coin: Coin<SUI>, recipient: address) {
 
 The recipient's balance increases without creating new objects. Multiple deposits from different senders all merge into one balance.
 
-### Move Functions
+### Move functions
 
-[Source: sui-framework/sources/balance.move - send_funds](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/balance.move#L102):
+[Source: `sui-framework/sources/balance.move` - `send_funds`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/balance.move#L102):
 
 ```move
 // Send a Balance<T> to an address balance
 public fun send_funds<T>(balance: Balance<T>, recipient: address)
 ```
 
-[Source: sui-framework/sources/coin.move - send_funds](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
+[Source: `sui-framework/sources/coin.move` - `send_funds`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
 
 ```move
 // Send a Coin<T> to an address balance (converts to balance internally)
 public fun send_funds<T>(coin: Coin<T>, recipient: address)
 ```
 
-### Sending Funds via the CLI
+### Sending funds via the CLI
 
 [Sui CLI Reference - PTB](https://docs.sui.io/references/cli/ptb):
 
@@ -273,18 +270,18 @@ sui client ptb \
     --move-call 0x2::coin::send_funds '<coin_type>' coin @<recipient_address>
 ```
 
-## Paying Gas from Address Balances
+## Paying for gas from address balances
 
-### Before: Gas Coin Management
+### Before: Gas coin management
 
 With coin-based gas payment:
 
-1. **Query gas coins**: Fetch owned SUI coins to find suitable gas payment objects
-2. **Select gas coin(s)**: Choose coin(s) with sufficient balance for the gas budget
-3. **Include object references**: Provide exact `ObjectRef` for each gas coin in `gas_data.payment`
-4. **Handle gas coin mutations**: The gas coin is mutated by the transaction, changing its version
+1. **Query gas coins**: Fetch owned SUI coins to find suitable gas payment objects.
+2. **Select gas coin(s)**: Choose coin(s) with sufficient balance for the gas budget.
+3. **Include object references**: Provide exact `ObjectRef` for each gas coin in `gas_data.payment`.
+4. **Handle gas coin mutations**: The gas coin is mutated by the transaction, changing its version.
 
-[Source: sui-types/src/transaction.rs - GasData](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
+[Source: `sui-types/src/transaction.rs` - `GasData`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
 
 ```rust
 // Before: Gas paid from coin objects
@@ -306,11 +303,11 @@ Gas coin management creates coordination challenges:
 - Parallel transactions require separate gas coins or careful sequencing
 - Gas coin version changes after each transaction
 
-### After: Stateless Gas Payment
+### After: Stateless gas payment
 
-With address balance gas payment, no gas coin queries needed.
+With address balance gas payments, no gas coin queries needed.
 
-[Source: sui-types/src/transaction.rs - TransactionExpiration::ValidDuring](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
+[Source: `sui-types/src/transaction.rs` - `TransactionExpiration::ValidDuring`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
 
 ```rust
 // After: Gas paid from address balance
@@ -351,20 +348,20 @@ let nonce: u32 = rand::random();
 let nonce: u32 = self.next_nonce.fetch_add(1, Ordering::SeqCst);
 ```
 
-### Sponsored Transactions
+### Sponsored transactions
 
-#### Before: Sponsored Gas with Coins
+#### Before: Sponsored gas with coins
 
 Gas sponsorship with coins requires coordination between user and sponsor:
 
-1. User constructs transaction without gas
-2. Sponsor selects gas coin(s) and adds to transaction
-3. Both parties sign
-4. Risk: sponsor's gas coins could be locked if user doesn't complete signing
+1. User constructs transaction without gas.
+2. Sponsor selects gas coin(s) and adds to transaction.
+3. Both parties sign.
+4. Risk: sponsor's gas coins could be locked if user doesn't complete signing.
 
-#### After: Sponsored Gas with Address Balances
+#### After: Sponsored gas with address balances
 
-[Source: sui-types/src/transaction.rs](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
+[Source: `sui-types/src/transaction.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
 
 ```rust
 TransactionData::V1(TransactionDataV1 {
@@ -394,9 +391,9 @@ Benefits over coin-based sponsorship:
 - Sponsor doesn't need to manage gas coin inventory
 - Enables permissionless public gas stations
 
-## Querying Balances via RPC
+## Querying balances via RPC
 
-### Before: Querying Coin-Based Balances
+### Before: Querying coin-based balances
 
 To determine total balance, the RPC layer sums all coin objects for you:
 
@@ -426,7 +423,7 @@ curl -s https://fullnode.testnet.sui.io \
 
 The `totalBalance` field represented the sum of all `Coin<T>` object values owned by the address.
 
-### After: Including Address Balances
+### After: Including address balances
 
 The same RPC methods now include address balance information. A new `fundsInAddressBalance` field indicates address balance holdings.
 
@@ -543,15 +540,15 @@ buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService
 }
 ```
 
-## Computing Balance Changes from Checkpoint Data
+## Computing balance changes from checkpoint data
 
-### Before: Coin Object Diffs
+### Before: Coin object diffs
 
 To compute balance changes from checkpoint data with coins only:
 
-1. Get input objects (coins at their pre-transaction versions)
-2. Get output objects (coins at their post-transaction versions)
-3. For each `(address, coin_type)` pair, sum output coin values minus input coin values
+1. Get input objects (coins at their pre-transaction versions).
+2. Get output objects (coins at their post-transaction versions).
+3. For each `(address, coin_type)` pair, sum output coin values minus input coin values.
 
 ```rust
 // Before: Coin-only balance changes
@@ -579,11 +576,11 @@ fn derive_coin_balance_changes(
 }
 ```
 
-### After: Coins Plus Accumulator Events
+### After: Coins plus accumulator events
 
 With address balances, you must also process accumulator events from `TransactionEffects`.
 
-[Source: sui-types/src/balance_change.rs](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/balance_change.rs):
+[Source: `sui-types/src/balance_change.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/balance_change.rs):
 
 ```rust
 // After: Include accumulator events
@@ -603,11 +600,11 @@ The algorithm:
    - `Split` operation: Subtract the amount (funds withdrawn from address balance)
    - `Merge` operation: Add the amount (funds deposited to address balance)
 
-### Accessing Accumulator Events
+### Accessing accumulator events
 
 Accumulator events are embedded in `TransactionEffects`.
 
-[Source: sui-types/src/effects/mod.rs - TransactionEffectsAPI](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/effects/mod.rs):
+[Source: `sui-types/src/effects/mod.rs` - `TransactionEffectsAPI`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/effects/mod.rs):
 
 ```rust
 use sui_types::effects::TransactionEffectsAPI;
@@ -634,9 +631,9 @@ for event in events {
 }
 ```
 
-### Key Types
+### Key types
 
-[Source: sui-types/src/balance_change.rs](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/balance_change.rs):
+[Source: `sui-types/src/balance_change.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/balance_change.rs):
 
 ```rust
 pub struct BalanceChange {
@@ -646,7 +643,7 @@ pub struct BalanceChange {
 }
 ```
 
-## Converting Existing Coins to Address Balances
+## Converting existing coins to address balances
 
 Migration is optional. The SDK automatically selects coins or address balances as needed.
 
@@ -662,7 +659,7 @@ sui client ptb \
 
 Or using `coinWithBalance` in TypeScript:
 
-[TypeScript SDK - CoinWithBalance](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
+[TypeScript SDK - `coinWithBalance`](https://sui-typescript-docs.vercel.app/sui/transactions/intents#coinwithbalance):
 
 ```typescript
 import { coinWithBalance } from '@mysten/sui/transactions';
@@ -678,21 +675,21 @@ tx.moveCall({
 
 This may earn storage rebates from deleted coin objects.
 
-## Backward Compatibility
+## Backward compatibility
 
-### Existing Contracts
+### Existing contracts
 
 Contracts that accept `Coin<T>` or `Balance<T>` remain callable. The `redeem_funds` functions convert withdrawals to the expected types within the PTB.
 
-### Legacy Clients
+### Legacy clients
 
 A JSON-RPC compatibility layer presents "fake coins" representing address balance reservations. This preserves basic functionality for clients that cannot upgrade, but should not be relied upon for new development.
 
-## Framework Functions Reference
+## Framework functions reference
 
 ### balance.move
 
-[Source: sui-framework/sources/balance.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/balance.move):
+[Source: `sui-framework/sources/balance.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/balance.move):
 
 ```move
 // Send balance to an address's funds accumulator
@@ -707,7 +704,7 @@ public fun withdraw_funds_from_object<T>(obj: &mut UID, value: u64): Withdrawal<
 
 ### coin.move
 
-[Source: sui-framework/sources/coin.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move):
+[Source: `sui-framework/sources/coin.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move):
 
 ```move
 // Redeem a withdrawal and create a Coin<T>
@@ -719,7 +716,7 @@ public fun send_funds<T>(coin: Coin<T>, recipient: address)
 
 ### funds_accumulator.move
 
-[Source: sui-framework/sources/funds_accumulator.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/funds_accumulator.move):
+[Source: `sui-framework/sources/funds_accumulator.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/funds_accumulator.move):
 
 ```move
 // Withdrawal struct - created via FundsWithdrawalArg or withdraw_from_object
