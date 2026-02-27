@@ -76,7 +76,15 @@ const [coin] = tx.moveCall({
     arguments: [tx.withdrawal({ amount: 1_000_000_000 })], // 1 SUI in MIST
 });
 
-// Transfer the coin to recipient
+// Withdraw a custom coin type
+const coinType = '0xPackageId::module::CoinType';
+const [customCoin] = tx.moveCall({
+    target: '0x2::coin::redeem_funds',
+    typeArguments: [coinType],
+    arguments: [tx.withdrawal({ amount: 1_000_000, type: coinType })],
+});
+
+// Transfer to recipient
 tx.transferObjects([coin], recipient);
 ```
 
