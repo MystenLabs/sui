@@ -231,43 +231,34 @@ sui client ptb \
 
 ### Before: Gas coin management
 
-With coin-based gas payment:
+With coin-based gas payment, you must query and select gas coins:
 
-1. **Query gas coins**: Fetch owned SUI coins to find suitable gas payment objects.
-2. **Select gas coin(s)**: Choose coin(s) with sufficient balance for the gas budget.
-3. **Include object references**: Provide exact `ObjectRef` for each gas coin in `gas_data.payment`.
-4. **Handle gas coin mutations**: The gas coin is mutated by the transaction, changing its version.
-
-[Source: `sui-types/src/transaction.rs` - `GasData`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
-
-```rust
-// Before: Gas paid from coin objects
-TransactionData::V1(TransactionDataV1 {
-    kind: tx_kind,
-    sender,
-    gas_data: GasData {
-        payment: vec![gas_coin_ref],  // Must have current ObjectRef
-        owner: sender,
-        price: rgp,
-        budget: 10_000_000,
-    },
-    expiration: TransactionExpiration::None,
-})
+```typescript
+const tx = new Transaction();
+// Gas coins are selected automatically at build time, requiring network queries
 ```
 
 Gas coin management creates coordination challenges:
-- Must query current gas coin state before each transaction
-- Parallel transactions require separate gas coins or careful sequencing
-- Gas coin version changes after each transaction
+- Must query current gas coin state before each transaction.
+- Parallel transactions require separate gas coins or careful sequencing.
+- Gas coin version changes after each transaction.
 
 ### After: Stateless gas payment
 
-With address balance gas payments, no gas coin queries needed.
+With address balance gas payments, pass an empty array to `setGasPayment`:
+
+```typescript
+const tx = new Transaction();
+tx.setGasPayment([]); // Empty array = use address balance for gas
+```
+
+This enables fully offline transaction building since there are no coin object versions to look up.
+
+In Rust, set `gas_data.payment` to an empty vector and use `ValidDuring` expiration:
 
 [Source: `sui-types/src/transaction.rs` - `TransactionExpiration::ValidDuring`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
 
 ```rust
-// After: Gas paid from address balance
 TransactionData::V1(TransactionDataV1 {
     kind: tx_kind,
     sender,
@@ -318,35 +309,36 @@ Gas sponsorship with coins requires coordination between user and sponsor:
 
 #### After: Sponsored gas with address balances
 
-[Source: `sui-types/src/transaction.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
+With address balances, the user can sign before the sponsor, enabling simpler async flows:
 
-```rust
-TransactionData::V1(TransactionDataV1 {
-    kind: tx_kind,
-    sender,
-    gas_data: GasData {
-        payment: vec![],
-        owner: sponsor,  // Sponsor's address balance pays gas
-        price: rgp,
-        budget: budget,
-    },
-    expiration: TransactionExpiration::ValidDuring {
-        min_epoch: Some(epoch),
-        max_epoch: Some(epoch + 1),
-        min_timestamp: None,
-        max_timestamp: None,
-        chain: chain_id,
-        nonce: nonce,
-    },
-})
+```typescript
+// 1. User builds and signs the transaction first
+const tx = new Transaction();
+tx.setSender(userAddress);
+tx.setGasOwner(sponsorAddress);
+tx.setGasPayment([]); // Empty array = sponsor pays from address balance
+// ... add commands ...
+
+const bytes = await tx.build({ client });
+const { signature: userSignature } = await userKeypair.signTransaction(bytes);
+
+// 2. Sponsor signs (can happen asynchronously)
+const { signature: sponsorSignature } = await sponsorKeypair.signTransaction(bytes);
+
+// 3. Either party executes
+const result = await client.executeTransaction({
+    transaction: bytes,
+    signatures: [userSignature, sponsorSignature],
+});
 ```
 
 Both sender and sponsor must sign. Storage rebates are credited to the sponsor's address balance.
 
 Benefits over coin-based sponsorship:
-- No gas coin locking risk
-- Sponsor doesn't need to manage gas coin inventory
-- Enables permissionless public gas stations
+- No gas coin locking risk.
+- Sponsor doesn't need to manage gas coin inventory.
+- User can sign before sponsor, enabling simpler async flows.
+- Enables permissionless public gas stations.
 
 ## Querying balances via RPC
 
