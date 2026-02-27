@@ -2433,6 +2433,7 @@ impl SuiNode {
 
 /// Parse a GCP JWKS JSON response into `(JwkId, JWK)` pairs.
 /// Only RSA keys with alg=RS256 are accepted.
+#[cfg(not(msim))]
 fn parse_gcp_jwks(body: &str, iss: &str) -> Result<Vec<(JwkId, JWK)>, serde_json::Error> {
     let v: serde_json::Value = serde_json::from_str(body)?;
     let keys = match v.get("keys").and_then(|k| k.as_array()) {

@@ -28,9 +28,12 @@ title: Module `sui::gcp_attestation`
 <b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
 <b>use</b> <a href="../std/option.md#std_option">std::option</a>;
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
+<b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="../sui/authenticator_state.md#sui_authenticator_state">sui::authenticator_state</a>;
 <b>use</b> <a href="../sui/clock.md#sui_clock">sui::clock</a>;
+<b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
@@ -182,23 +185,37 @@ Error that the attestation failed to be verified.
 
 
 
+<a name="sui_gcp_attestation_GCP_ISS"></a>
+
+The GCP Confidential Spaces token issuer; used to scope the JWK lookup.
+
+
+<pre><code><b>const</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GCP_ISS">GCP_ISS</a>: vector&lt;u8&gt; = vector[104, 116, 116, 112, 115, 58, 47, 47, 99, 111, 110, 102, 105, 100, 101, 110, 116, 105, 97, 108, 99, 111, 109, 112, 117, 116, 105, 110, 103, 46, 103, 111, 111, 103, 108, 101, 97, 112, 105, 115, 46, 99, 111, 109];
+</code></pre>
+
+
+
 <a name="sui_gcp_attestation_verify_gcp_attestation"></a>
 
 ## Function `verify_gcp_attestation`
 
 Verify a GCP Confidential Spaces attestation JWT and return the extracted claims.
 
+The RSA public key is looked up from <code>auth_state</code> using the GCP issuer and the
+supplied <code>kid</code>, ensuring the key is consensus-validated rather than caller-controlled.
+
 @param token: The RS256 JWT token bytes (UTF-8 encoded header.payload.signature).
-@param jwk_n: RSA public key modulus in big-endian bytes.
-@param jwk_e: RSA public key exponent in big-endian bytes.
+@param auth_state: The on-chain AuthenticatorState containing trusted GCP JWKs.
+@param kid: The key ID from the JWT header, identifying which trusted key to use.
 @param clock: The clock object used to check token expiry.
 
 Aborts with ENotSupportedError if the feature is disabled,
 EParseError if the token cannot be parsed,
-EVerifyError if the signature or claims are invalid.
+EVerifyError if the signature or claims are invalid, or if <code>kid</code> is not found in
+<code>auth_state</code> for the GCP issuer.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation">verify_gcp_attestation</a>(<a href="../sui/token.md#sui_token">token</a>: vector&lt;u8&gt;, jwk_n: vector&lt;u8&gt;, jwk_e: vector&lt;u8&gt;, <a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation">verify_gcp_attestation</a>(<a href="../sui/token.md#sui_token">token</a>: vector&lt;u8&gt;, auth_state: &<a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">sui::authenticator_state::AuthenticatorState</a>, kid: vector&lt;u8&gt;, <a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>
 </code></pre>
 
 
@@ -209,11 +226,23 @@ EVerifyError if the signature or claims are invalid.
 
 <pre><code><b>entry</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation">verify_gcp_attestation</a>(
     <a href="../sui/token.md#sui_token">token</a>: vector&lt;u8&gt;,
-    jwk_n: vector&lt;u8&gt;,
-    jwk_e: vector&lt;u8&gt;,
+    auth_state: &AuthenticatorState,
+    kid: vector&lt;u8&gt;,
     <a href="../sui/clock.md#sui_clock">clock</a>: &Clock,
 ): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">GcpAttestationDocument</a> {
-    <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation_internal">verify_gcp_attestation_internal</a>(&<a href="../sui/token.md#sui_token">token</a>, &jwk_n, &jwk_e, <a href="../sui/clock.md#sui_clock">clock</a>.timestamp_ms())
+    <b>let</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_iss">iss</a> = string::utf8(<a href="../sui/gcp_attestation.md#sui_gcp_attestation_GCP_ISS">GCP_ISS</a>);
+    <b>let</b> kid_str = string::utf8(kid);
+    <b>let</b> jwk_opt = <a href="../sui/authenticator_state.md#sui_authenticator_state_get_jwk_by_kid">authenticator_state::get_jwk_by_kid</a>(auth_state, <a href="../sui/gcp_attestation.md#sui_gcp_attestation_iss">iss</a>, kid_str);
+    <b>assert</b>!(jwk_opt.is_some(), <a href="../sui/gcp_attestation.md#sui_gcp_attestation_EVerifyError">EVerifyError</a>);
+    <b>let</b> jwk = jwk_opt.destroy_some();
+    // jwk_n and jwk_e are base64url-encoded strings (<b>as</b> stored in AuthenticatorState).
+    // The <b>native</b> decodes them internally before RSA verification.
+    <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation_internal">verify_gcp_attestation_internal</a>(
+        &<a href="../sui/token.md#sui_token">token</a>,
+        <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_n">authenticator_state::jwk_n</a>(&jwk).as_bytes(),
+        <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_e">authenticator_state::jwk_e</a>(&jwk).as_bytes(),
+        <a href="../sui/clock.md#sui_clock">clock</a>.timestamp_ms(),
+    )
 }
 </code></pre>
 
@@ -273,6 +302,9 @@ EVerifyError if the signature or claims are invalid.
 
 ## Function `aud`
 
+Returns the first audience value. When the token carries multiple audiences,
+only the first is returned; callers requiring multi-audience validation should
+use the raw JWT claims directly.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_aud">aud</a>(doc: &<a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>): &vector&lt;u8&gt;
@@ -369,6 +401,9 @@ EVerifyError if the signature or claims are invalid.
 
 ## Function `secboot`
 
+Returns whether secure boot was enabled. Defaults to <code><b>false</b></code> when the
+<code><a href="../sui/gcp_attestation.md#sui_gcp_attestation_secboot">secboot</a></code> field is absent from the token; callers that require secure boot
+must assert this value is <code><b>true</b></code> rather than treating absence as enabled.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_secboot">secboot</a>(doc: &<a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>): bool
@@ -564,7 +599,7 @@ EVerifyError if the signature or claims are invalid.
 Internal native function.
 
 
-<pre><code><b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation_internal">verify_gcp_attestation_internal</a>(<a href="../sui/token.md#sui_token">token</a>: &vector&lt;u8&gt;, jwk_n: &vector&lt;u8&gt;, jwk_e: &vector&lt;u8&gt;, current_timestamp_ms: u64): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>
+<pre><code><b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation_internal">verify_gcp_attestation_internal</a>(<a href="../sui/token.md#sui_token">token</a>: &vector&lt;u8&gt;, jwk_n_b64: &vector&lt;u8&gt;, jwk_e_b64: &vector&lt;u8&gt;, current_timestamp_ms: u64): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>
 </code></pre>
 
 
@@ -575,8 +610,8 @@ Internal native function.
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation_internal">verify_gcp_attestation_internal</a>(
     <a href="../sui/token.md#sui_token">token</a>: &vector&lt;u8&gt;,
-    jwk_n: &vector&lt;u8&gt;,
-    jwk_e: &vector&lt;u8&gt;,
+    jwk_n_b64: &vector&lt;u8&gt;,
+    jwk_e_b64: &vector&lt;u8&gt;,
     current_timestamp_ms: u64,
 ): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">GcpAttestationDocument</a>;
 </code></pre>

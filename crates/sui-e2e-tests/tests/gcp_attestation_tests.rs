@@ -3,6 +3,7 @@
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+#[cfg(msim)]
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use move_core_types::identifier::Identifier;
 use rsa::RsaPrivateKey;
@@ -13,7 +14,7 @@ use sha2::Sha256;
 use sui_macros::sim_test;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Owner;
-use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TransactionKind};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, TransactionData, TransactionKind};
 use sui_types::{SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -106,7 +107,7 @@ async fn test_gcp_attestation_verifies_on_chain() {
         return;
     }
 
-    let (signing_key, n_b64, e_b64) = make_test_key();
+    let (signing_key, _n_b64, _e_b64) = make_test_key();
 
     // Register the test GCP JWK in the simtest injector before building the cluster.
     // The GCP JWK updater task will pick it up on the first fetch cycle and submit
@@ -114,7 +115,7 @@ async fn test_gcp_attestation_verifies_on_chain() {
     #[cfg(msim)]
     sui_node::set_gcp_jwk_injector(vec![(
         JwkId { iss: GCP_ISS.to_string(), kid: TEST_KID.to_string() },
-        JWK { kty: "RSA".to_string(), e: e_b64, n: n_b64, alg: "RS256".to_string() },
+        JWK { kty: "RSA".to_string(), e: _e_b64, n: _n_b64, alg: "RS256".to_string() },
     )]);
 
     let test_cluster = TestClusterBuilder::new()
@@ -149,7 +150,7 @@ async fn test_gcp_attestation_verifies_on_chain() {
         .input(CallArg::Object(ObjectArg::SharedObject {
             id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
             initial_shared_version: auth_state_version,
-            mutable: false,
+            mutability: SharedObjectMutability::Immutable,
         }))
         .unwrap();
     let kid_arg = ptb.pure(TEST_KID.as_bytes().to_vec()).unwrap();
@@ -209,7 +210,7 @@ async fn test_gcp_attestation_rejects_unknown_kid() {
         .input(CallArg::Object(ObjectArg::SharedObject {
             id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
             initial_shared_version: auth_state_version,
-            mutable: false,
+            mutability: SharedObjectMutability::Immutable,
         }))
         .unwrap();
     let kid_arg = ptb.pure(TEST_KID.as_bytes().to_vec()).unwrap();
