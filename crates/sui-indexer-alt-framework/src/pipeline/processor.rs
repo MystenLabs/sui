@@ -94,10 +94,18 @@ pub(super) fn processor<P: Processor>(
         // Adaptive row budget gate: before each checkpoint enters the processing fanout,
         // adjust the gauge based on processor→collector channel fill, then wait until
         // pending rows are below the budget.
+        //
+        // Two-level gating:
+        // 1. `.then()` gate (here): blocks the stream so no new checkpoints enter the fanout
+        // 2. In-task gate (inside try_for_each_spawned): catches overshoot from the up-to
+        //    `fanout` tasks that passed the stream gate simultaneously before any had processed.
+        //    Without this, overshoot = fanout * rows_per_checkpoint.
         let was_saturated = Arc::new(AtomicBool::new(false));
+        let budget_limit = Arc::new(AtomicUsize::new(row_budget.value()));
         let stream = ReceiverStream::new(rx).then({
             let mut gauge = row_budget;
             let was_saturated = was_saturated.clone();
+            let budget_limit = budget_limit.clone();
             let pending_rows = pending_rows.clone();
             let pending_rows_notify = pending_rows_notify.clone();
             let tx_fill = tx.clone();
@@ -110,6 +118,7 @@ pub(super) fn processor<P: Processor>(
                 gauge.adjust(gauge.epoch(), fill);
 
                 let limit = gauge.value();
+                budget_limit.store(limit, Ordering::Relaxed);
                 metrics
                     .processor_pending_rows_limit
                     .with_label_values(&[P::NAME])
@@ -142,8 +151,21 @@ pub(super) fn processor<P: Processor>(
                 let processor = processor.clone();
                 let pending_rows = pending_rows.clone();
                 let pending_rows_notify = pending_rows_notify.clone();
+                let budget_limit = budget_limit.clone();
+                let was_saturated = was_saturated.clone();
 
                 async move {
+                    // In-task gate: up to `fanout` tasks may have passed the stream-level
+                    // gate simultaneously (before any had processed). Wait here so that
+                    // only one actually proceeds to process when the budget is tight.
+                    let limit = budget_limit.load(Ordering::Relaxed);
+                    if pending_rows.load(Ordering::Relaxed) >= limit {
+                        was_saturated.store(true, Ordering::Relaxed);
+                        while pending_rows.load(Ordering::Relaxed) >= limit {
+                            pending_rows_notify.notified().await;
+                        }
+                    }
+
                     metrics
                         .total_handler_checkpoints_received
                         .with_label_values(&[P::NAME])
