@@ -30,17 +30,7 @@ jobs:
 
   version-bump:
     name: Generate Version Bump PR
-    runs-on: ubuntu-ghcloud
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
-
-      - name: Create PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # git also uses this
-          GITHUB_ACTOR: ${{ github.actor }}
-        shell: bash
-        run: |
-          ./scripts/gen_branch_cut_prs.sh version-bump
+    uses: ./.github/workflows/version-bump.yml
+    with:
+      type: minor
+      delivery: pr

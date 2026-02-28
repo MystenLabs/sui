@@ -1,0 +1,108 @@
+name: Sui Version Bump
+run-name: "Sui Version Bump (${{ inputs.type }})"
+
+on:
+  workflow_call:
+    inputs:
+      type:
+        description: "Bump type: patch or minor"
+        type: string
+        required: false
+        default: "minor"
+      delivery:
+        description: "Delivery method: pr or direct"
+        type: string
+        required: false
+        default: "pr"
+
+  workflow_dispatch:
+    inputs:
+      type:
+        description: "Bump type"
+        type: choice
+        required: true
+        default: "patch"
+        options:
+          - patch
+          - minor
+      delivery:
+        description: "Delivery method"
+        type: choice
+        required: true
+        default: "pr"
+        options:
+          - pr
+          - direct
+
+concurrency:
+  group: version-bump-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version-bump:
+    name: Bump Version
+    runs-on: ubuntu-ghcloud
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run version bump
+        id: bump
+        run: |
+          ./scripts/version-bump.sh --type "${{ inputs.type }}" -y 2>&1 | tee /tmp/bump-output.txt
+          # Extract the new version from the script output
+          NEW_VERSION=$(grep '^NEW_VERSION=' /tmp/bump-output.txt | cut -d= -f2)
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Deliver via PR
+        if: inputs.delivery == 'pr'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          STAMP="$(date +%Y%m%d%H%M%S)"
+          BRANCH="${GITHUB_ACTOR}/sui-v${NEW_VERSION}-version-bump-${STAMP}"
+
+          git checkout -b "$BRANCH"
+          git add \
+            Cargo.toml \
+            Cargo.lock \
+            crates/sui-open-rpc/spec/openrpc.json \
+            crates/sui-open-rpc/tests/snapshots/generate_spec__openrpc.snap.json
+          BODY="Sui v${NEW_VERSION} Version Bump"
+          git commit -m "$BODY"
+          git push -u origin "$BRANCH"
+
+          gh pr create \
+            --base "${{ github.ref_name }}" \
+            --head "$BRANCH" \
+            --title "$BODY" \
+            --reviewer "ebmifa,pei-mysten,tharbert" \
+            --body "$BODY"
+
+          gh pr merge --auto --squash --delete-branch "$BRANCH"
+
+      - name: Deliver direct push
+        if: inputs.delivery == 'direct'
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          BODY="Sui v${NEW_VERSION} Version Bump"
+
+          git add \
+            Cargo.toml \
+            Cargo.lock \
+            crates/sui-open-rpc/spec/openrpc.json \
+            crates/sui-open-rpc/tests/snapshots/generate_spec__openrpc.snap.json
+          git commit -m "$BODY"
+          git push origin HEAD:"${{ github.ref_name }}"
