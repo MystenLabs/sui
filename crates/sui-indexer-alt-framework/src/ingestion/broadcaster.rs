@@ -21,6 +21,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::ingestion::IngestConcurrencyConfig;
 use crate::ingestion::IngestionConfig;
 use crate::ingestion::error::Error;
 use crate::ingestion::ingestion_client::IngestionClient;
@@ -123,10 +124,11 @@ where
                 checkpoint_hi,
                 ingestion_end,
                 config.retry_interval(),
-                config.ingest_concurrency,
+                config.ingest_concurrency.clone(),
                 ingest_hi_rx.cloned(),
                 client.clone(),
                 subscribers.clone(),
+                metrics.clone(),
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -209,41 +211,56 @@ fn backpressured_checkpoint_stream(
     })
 }
 
-/// Fetch and broadcasts checkpoints from a range [start..end) to subscribers. This task is
-/// ingest_hi-aware via the backpressured stream that gates checkpoint yielding based on
-/// the current ingest_hi, resuming when ingest_hi advances.
+/// Fetch and broadcasts checkpoints from a range [start..end) to subscribers. Manages its own
+/// concurrency using a JoinSet and permit counter. When adaptive concurrency is enabled, the
+/// concurrency limit (gauge) adjusts based on subscriber channel fill fraction after each
+/// completion:
+///
+/// - fill >= 0.85: proportional decrease (severity scales with congestion)
+/// - fill < 0.6 and under pressure: sqrt-scaled increase
+/// - fill in [0.6, 0.85): dead zone, hold steady
+///
+/// An epoch counter prevents cascading reductions: each task captures the epoch at spawn time,
+/// and a decrease is only applied when the completing task's epoch matches the current one (the
+/// epoch is bumped on every decrease). This way a single congestion event produces at most one
+/// reduction regardless of how many tasks from that epoch complete in quick succession.
+///
+/// Fill is measured at decision time in the join_next handler (not inside the spawned task after
+/// send) so that the reading reflects the actual channel state when the concurrency decision is
+/// made.
+///
+/// For fixed concurrency, the gauge never changes.
 fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
     retry_interval: Duration,
-    ingest_concurrency: usize,
+    concurrency: IngestConcurrencyConfig,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     client: IngestionClient,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    metrics: Arc<IngestionMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
-        // Backpressure is enforced at the stream level: checkpoints are only yielded when
-        // ingest_hi allows, preventing spawned tasks from piling up while blocked.
+        let report_metrics = metrics.clone();
         backpressured_checkpoint_stream(start, end, ingest_hi_rx)
-            .try_for_each_spawned(ingest_concurrency, |cp| {
-                let client = client.clone();
-                let subscribers = subscribers.clone();
-
-                async move {
-                    // Fetch the checkpoint or stop if cancelled.
-                    let checkpoint = client.wait_for(cp, retry_interval).await?;
-
-                    // Send checkpoint to all subscribers.
-                    if send_checkpoint(checkpoint, &subscribers).await.is_ok() {
+            .try_for_each_broadcast_spawned(
+                concurrency.into(),
+                |cp| {
+                    let client = client.clone();
+                    async move {
+                        let checkpoint = client.wait_for(cp, retry_interval).await?;
                         debug!(checkpoint = cp, "Broadcasted checkpoint");
-                        Ok(())
-                    } else {
-                        // An error is returned meaning some subscriber channel has closed, which
-                        // we consider a shutdown signal for ingestion.
-                        Err(Break::Break)
+                        Ok(checkpoint)
                     }
-                }
-            })
+                },
+                subscribers,
+                move |gauge, inflight| {
+                    report_metrics.ingestion_concurrency_limit.set(gauge as i64);
+                    report_metrics
+                        .ingestion_concurrency_inflight
+                        .set(inflight as i64);
+                },
+            )
             .await
     }))
 }
@@ -467,7 +484,7 @@ mod tests {
     fn test_config() -> IngestionConfig {
         IngestionConfig {
             checkpoint_buffer_size: 5,
-            ingest_concurrency: 2,
+            ingest_concurrency: IngestConcurrencyConfig::Fixed(2),
             retry_interval_ms: 100,
             streaming_backoff_initial_batch_size: 2,
             streaming_backoff_max_batch_size: 16,

@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::ProcessorConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 
 use crate::pipeline::Pipeline;
@@ -108,9 +109,10 @@ impl CommitterLayer {
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub checkpoint_lag: Option<u64>,
-    pub fanout: Option<usize>,
+    pub fanout: Option<ProcessorConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
+    pub channel_size: Option<usize>,
 }
 
 impl SequentialLayer {
@@ -125,6 +127,7 @@ impl SequentialLayer {
             fanout: self.fanout.or(base.fanout),
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
+            channel_size: self.channel_size.unwrap_or(base.channel_size),
         }
     }
 }

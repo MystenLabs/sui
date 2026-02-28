@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
+use sui_indexer_alt_framework::ingestion::IngestConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::ProcessorConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
@@ -48,7 +50,7 @@ pub struct IndexerConfig {
 #[serde(deny_unknown_fields)]
 pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
-    pub ingest_concurrency: Option<usize>,
+    pub ingest_concurrency: Option<IngestConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
     pub streaming_backoff_initial_batch_size: Option<usize>,
     pub streaming_backoff_max_batch_size: Option<usize>,
@@ -62,9 +64,10 @@ pub struct IngestionLayer {
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub checkpoint_lag: Option<u64>,
-    pub fanout: Option<usize>,
+    pub fanout: Option<ProcessorConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
+    pub channel_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -73,10 +76,11 @@ pub struct SequentialLayer {
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub pruner: Option<PrunerLayer>,
-    pub fanout: Option<usize>,
+    pub fanout: Option<ProcessorConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
+    pub channel_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -153,7 +157,7 @@ impl IndexerConfig {
             .merge(IndexerConfig {
                 ingestion: IngestionLayer {
                     retry_interval_ms: Some(10),
-                    ingest_concurrency: Some(1),
+                    ingest_concurrency: Some(IngestConcurrencyConfig::Fixed(1)),
                     ..Default::default()
                 },
                 committer: CommitterLayer {
@@ -208,6 +212,7 @@ impl SequentialLayer {
             fanout: self.fanout.or(base.fanout),
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
+            channel_size: self.channel_size.unwrap_or(base.channel_size),
         })
     }
 }
@@ -230,6 +235,7 @@ impl ConcurrentLayer {
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
+            channel_size: self.channel_size.unwrap_or(base.channel_size),
         })
     }
 }
@@ -332,6 +338,7 @@ impl Merge for SequentialLayer {
             fanout: other.fanout.or(self.fanout),
             min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
             max_batch_checkpoints: other.max_batch_checkpoints.or(self.max_batch_checkpoints),
+            channel_size: other.channel_size.or(self.channel_size),
         })
     }
 }
@@ -345,6 +352,7 @@ impl Merge for ConcurrentLayer {
             min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
             max_pending_rows: other.max_pending_rows.or(self.max_pending_rows),
             max_watermark_updates: other.max_watermark_updates.or(self.max_watermark_updates),
+            channel_size: other.channel_size.or(self.channel_size),
         })
     }
 }
@@ -443,6 +451,7 @@ impl From<SequentialConfig> for SequentialLayer {
             fanout: config.fanout,
             min_eager_rows: config.min_eager_rows,
             max_batch_checkpoints: config.max_batch_checkpoints,
+            channel_size: Some(config.channel_size),
         }
     }
 }
@@ -456,6 +465,7 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
             min_eager_rows: config.min_eager_rows,
             max_pending_rows: config.max_pending_rows,
             max_watermark_updates: config.max_watermark_updates,
+            channel_size: Some(config.channel_size),
         }
     }
 }

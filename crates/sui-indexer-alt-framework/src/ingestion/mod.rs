@@ -53,8 +53,10 @@ pub struct IngestionConfig {
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     pub checkpoint_buffer_size: usize,
 
-    /// Maximum number of checkpoints to attempt to fetch concurrently.
-    pub ingest_concurrency: usize,
+    /// Concurrency control for checkpoint ingestion. A plain integer gives fixed concurrency;
+    /// an object with `initial`, `min`, and `max` fields enables adaptive concurrency that adjusts
+    /// based on subscriber channel fill fraction.
+    pub ingest_concurrency: IngestConcurrencyConfig,
 
     /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
     pub retry_interval_ms: u64,
@@ -70,6 +72,100 @@ pub struct IngestionConfig {
 
     /// Timeout for streaming statement (peek/next) operations in milliseconds.
     pub streaming_statement_timeout_ms: u64,
+}
+
+/// Concurrency control configuration for checkpoint ingestion.
+///
+/// `Fixed(n)` uses a static concurrency limit (same as the previous `usize` field).
+/// `Adaptive` adjusts concurrency based on subscriber channel fill fraction, using a
+/// fill-proportional controller with a dead band.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum IngestConcurrencyConfig {
+    Fixed(usize),
+    Adaptive {
+        initial: usize,
+        min: usize,
+        max: usize,
+        /// Fill fraction above which concurrency decreases (default 0.85).
+        #[serde(default = "default_fill_high")]
+        fill_high: f64,
+        /// Fill fraction below which concurrency may increase (default 0.6).
+        #[serde(default = "default_fill_low")]
+        fill_low: f64,
+    },
+}
+
+fn default_fill_high() -> f64 {
+    0.85
+}
+
+fn default_fill_low() -> f64 {
+    0.6
+}
+
+impl IngestConcurrencyConfig {
+    pub fn initial(&self) -> usize {
+        match self {
+            Self::Fixed(n) => *n,
+            Self::Adaptive { initial, .. } => *initial,
+        }
+    }
+
+    pub fn min(&self) -> usize {
+        let v = match self {
+            Self::Fixed(n) => *n,
+            Self::Adaptive { min, .. } => *min,
+        };
+        assert!(v >= 1, "min concurrency must be >= 1");
+        v
+    }
+
+    pub fn max(&self) -> usize {
+        match self {
+            Self::Fixed(n) => *n,
+            Self::Adaptive { max, .. } => *max,
+        }
+    }
+
+    pub fn fill_high(&self) -> f64 {
+        match self {
+            Self::Fixed(_) => default_fill_high(),
+            Self::Adaptive { fill_high, .. } => *fill_high,
+        }
+    }
+
+    pub fn fill_low(&self) -> f64 {
+        match self {
+            Self::Fixed(_) => default_fill_low(),
+            Self::Adaptive { fill_low, .. } => *fill_low,
+        }
+    }
+
+    pub fn is_adaptive(&self) -> bool {
+        matches!(self, Self::Adaptive { .. })
+    }
+}
+
+impl From<IngestConcurrencyConfig> for sui_futures::stream::ConcurrencyConfig {
+    fn from(config: IngestConcurrencyConfig) -> Self {
+        match config {
+            IngestConcurrencyConfig::Fixed(n) => Self::fixed(n),
+            IngestConcurrencyConfig::Adaptive {
+                initial,
+                min,
+                max,
+                fill_high,
+                fill_low,
+            } => Self {
+                initial,
+                min,
+                max,
+                fill_high,
+                fill_low,
+            },
+        }
+    }
 }
 
 pub struct IngestionService {
@@ -219,8 +315,8 @@ impl IngestionService {
 impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
-            checkpoint_buffer_size: 50,
-            ingest_concurrency: 50,
+            checkpoint_buffer_size: 100,
+            ingest_concurrency: IngestConcurrencyConfig::Fixed(50),
             retry_interval_ms: 200,
             streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
@@ -262,7 +358,7 @@ mod tests {
             },
             IngestionConfig {
                 checkpoint_buffer_size,
-                ingest_concurrency,
+                ingest_concurrency: IngestConcurrencyConfig::Fixed(ingest_concurrency),
                 ..Default::default()
             },
             None,
