@@ -99,6 +99,8 @@ struct TestHarness {
 
 impl TestHarness {
     fn new() -> Self {
+        telemetry_subscribers::init_for_testing();
+
         let ingestion_dir = TempDir::new().expect("Failed to create ingestion temp dir");
         let object_store = Arc::new(InMemory::new());
 
