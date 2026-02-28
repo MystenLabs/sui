@@ -49,6 +49,31 @@ fun test_diff() {
 }
 
 #[test]
+fun test_mul_div() {
+    integer_tests::test_mul_div!<u128, u256>(MAX, CASES);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u128)]
+fun test_mul_div_div_by_zero() {
+    1u128.mul_div(1, 0);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u256)]
+fun test_mul_div_ceil_div_by_zero() {
+    1u128.mul_div_ceil(1, 0);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u128)]
+fun test_mul_div_overflow() {
+    MAX.mul_div(MAX, 1);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u128)]
+fun test_mul_div_ceil_overflow() {
+    MAX.mul_div_ceil(MAX, 1);
+}
+
+#[test]
 fun test_divide_and_round_up() {
     integer_tests::test_divide_and_round_up!(MAX, CASES);
 }

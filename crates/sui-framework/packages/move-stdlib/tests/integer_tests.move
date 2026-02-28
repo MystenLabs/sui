@@ -7,15 +7,28 @@ module std::integer_tests;
 
 use std::unit_test::assert_eq;
 
+/// Calls `$f` for all N³ permutations of cases.
+public(package) macro fun exhaustive_cases($cases: vector<_>, $f: |_, _, _|) {
+    let cases = $cases;
+    let len = cases.length();
+    len.do!(|i| {
+        len.do!(|j| {
+            len.do!(|k| {
+                $f(cases[i], cases[j], cases[k]);
+            });
+        });
+    });
+}
+
+/// Iterate over cases and apply `$f(a, b, c)`.
 public(package) macro fun cases($max: _, $cases: vector<_>, $f: |_, _, _|) {
-    let mut cases = $cases;
+    let cases = $cases;
     let max_pred = $max - 1;
-    while (!cases.is_empty()) {
-        let case = cases.pop_back();
+    cases.destroy!(|case| {
         let case_pred = case.max(1) - 1;
         let case_succ = case.min(max_pred) + 1;
         $f(case_pred, case, case_succ);
-    }
+    });
 }
 
 public(package) macro fun test_bitwise_not($max: _, $cases: vector<_>) {
@@ -102,6 +115,92 @@ public(package) macro fun test_divide_and_round_up($max: _, $cases: vector<_>) {
         check_div_round!(case_succ, case);
         check_div_round!(case, case_succ);
     })
+}
+
+public(package) macro fun check_mul_div<$T, $U>($max: $T, $x: $T, $y: $T, $z: $T) {
+    let max = $max;
+    let x = $x;
+    let y = $y;
+    let z = $z;
+
+    // Div by zero is tested separately
+    if (z == 0) return;
+
+    // Overflows are tested separately
+    let zu = z as $U;
+    if ((x as $U) * (y as $U) >= ((max as $U) + 1) * zu) return;
+
+    // Test for commutativity
+    assert_eq!(x.mul_div(y, z), y.mul_div(x, z));
+
+    // Test for precision: (x/z)*y loses floor(x%z * y / z)
+    if ((x as $U) % zu * (y as $U) >= zu) {
+        assert!((x / z) * y < x.mul_div(y, z));
+    } else {
+        assert_eq!((x / z) * y, x.mul_div(y, z));
+    };
+    // Test for precision: x*(y/z) loses floor(x * y%z / z)
+    if ((y as $U) % zu * (x as $U) >= zu) {
+        assert!(x * (y / z) < x.mul_div(y, z));
+    } else {
+        assert_eq!(x * (y / z), x.mul_div(y, z));
+    };
+}
+
+public(package) macro fun check_mul_div_ceil<$T, $U>($max: $T, $x: $T, $y: $T, $z: $T) {
+    let max = $max;
+    let x = $x;
+    let y = $y;
+    let z = $z;
+
+    // Div by zero is tested separately
+    if (z == 0) return;
+
+    // Overflows are tested separately
+    let zu = z as $U;
+    if ((x as $U) * (y as $U) > (max as $U) * zu) return;
+
+    // Test for commutativity
+    assert_eq!(x.mul_div_ceil(y, z), y.mul_div_ceil(x, z));
+
+    // Test for precision: ceil == floor + 1 when x*y is not divisible by z
+    let xyu = (x as $U) * (y as $U);
+    if (xyu % zu != 0) {
+        assert_eq!((x.mul_div(y, z) as $U) + 1, x.mul_div_ceil(y, z) as $U);
+    } else {
+        assert_eq!(x.mul_div(y, z), x.mul_div_ceil(y, z));
+    };
+}
+
+public(package) macro fun check_mul_div_precision($max: _, $x: _, $z: _) {
+    let x = $x;
+    let z = $z;
+    let max = $max;
+    // Identity: mul_div(x, z, z) == x even when x * z overflows.
+    if (z != 0) {
+        assert_eq!(x.mul_div(z, z), x);
+        assert_eq!(x.mul_div_ceil(z, z), x);
+    };
+    // Precision with distinct y != z: mul_div(x, y, z) >= (x/z)*y.
+    assert!((x / 3) * 2 <= x.mul_div(2, 3));
+    assert!((x / 3) * 2 <= x.mul_div_ceil(2, 3));
+    if (x <= max / 3 * 2) {
+        assert!((x / 2) * 3 <= x.mul_div(3, 2));
+        assert!((x / 2) * 3 <= x.mul_div_ceil(3, 2));
+    };
+}
+
+public(package) macro fun test_mul_div<$T, $U>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    assert_eq!(max.mul_div(max, max.max(1)), max);
+    cases!(max, cases, |case_pred, case, case_succ| {
+        check_mul_div!<$T, $U>(max, case_pred, case, case_succ);
+        check_mul_div_ceil!<$T, $U>(max, case_pred, case, case_succ);
+        check_mul_div_precision!(max, case_pred, case_succ);
+    });
+    check_mul_div!<$T, $U>(max, max, max, max);
+    check_mul_div_ceil!<$T, $U>(max, max, max, max);
 }
 
 public(package) macro fun slow_pow($base: _, $exp: u8): _ {

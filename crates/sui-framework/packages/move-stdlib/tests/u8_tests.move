@@ -49,6 +49,42 @@ fun test_diff() {
 }
 
 #[test]
+fun test_mul_div() {
+    let max: u8 = MAX;
+    let ex_cases: vector<u8> = vector[0, 1, 10, 127, 128, 255];
+    assert_eq!(max.mul_div(max, max.max(1)), max);
+    integer_tests::exhaustive_cases!(ex_cases, |x, y, z| {
+        integer_tests::check_mul_div!<u8, u16>(max, x, y, z);
+        integer_tests::check_mul_div_ceil!<u8, u16>(max, x, y, z);
+    });
+    integer_tests::cases!(max, CASES, |case_pred, _case, case_succ| {
+        integer_tests::check_mul_div_precision!(max, case_pred, case_succ);
+    });
+    integer_tests::check_mul_div!<u8, u16>(max, max, max, max);
+    integer_tests::check_mul_div_ceil!<u8, u16>(max, max, max, max);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u8)]
+fun test_mul_div_div_by_zero() {
+    1u8.mul_div(1, 0);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u16)]
+fun test_mul_div_ceil_div_by_zero() {
+    1u8.mul_div_ceil(1, 0);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u8)]
+fun test_mul_div_overflow() {
+    MAX.mul_div(MAX, 1);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u8)]
+fun test_mul_div_ceil_overflow() {
+    MAX.mul_div_ceil(MAX, 1);
+}
+
+#[test]
 fun test_divide_and_round_up() {
     integer_tests::test_divide_and_round_up!(MAX, CASES);
 }
