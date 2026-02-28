@@ -26,7 +26,8 @@ impl UpdateDeps {
         wallet: &WalletContext,
     ) -> anyhow::Result<()> {
         let path = reroot_path(path)?;
-        let environment = find_environment(&path, build_config.environment.clone(), wallet).await?;
+        let environment =
+            find_environment(&path, build_config.environment.clone(), wallet, false).await?;
         self.update_deps
             .execute::<SuiFlavor>(Some(&path), &build_config, environment)
             .await

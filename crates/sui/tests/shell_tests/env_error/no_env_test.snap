@@ -1,0 +1,20 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# This tests the error message when you set your local client to an ephemeral network and then do `sui move test`
+
+echo "== should fail and ask user to provide -e =="
+sui move --client.config client.yaml test
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+== should fail and ask user to provide -e ==
+Could not determine the correct dependencies to use for `devnet`; pass one of `--build-env testnet` or `--build-env mainnet`.
+
+----- stderr -----
