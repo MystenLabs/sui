@@ -144,6 +144,7 @@ where
         let handle = Handle {
             sender,
             checkpoint_event_sender: checkpoint_event_sender.clone(),
+            metrics: metrics.clone(),
         };
         let peer_heights = PeerHeights {
             peers: HashMap::new(),
