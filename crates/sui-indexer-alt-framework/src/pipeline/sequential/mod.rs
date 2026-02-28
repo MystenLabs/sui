@@ -14,6 +14,7 @@ use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::PIPELINE_BUFFER;
 use crate::pipeline::Processor;
+use crate::pipeline::ProcessorConcurrencyConfig;
 use crate::pipeline::processor::processor;
 use crate::pipeline::sequential::committer::committer;
 use crate::store::Store;
@@ -86,7 +87,7 @@ pub struct SequentialConfig {
     pub checkpoint_lag: u64,
 
     /// Override for `Processor::FANOUT` (processor concurrency).
-    pub fanout: Option<usize>,
+    pub fanout: Option<ProcessorConcurrencyConfig>,
 
     /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
     pub min_eager_rows: Option<usize>,
@@ -134,13 +135,16 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         "Starting pipeline with config: {config:#?}",
     );
 
-    let fanout = config.fanout.unwrap_or(H::FANOUT);
+    let concurrency = config
+        .fanout
+        .clone()
+        .unwrap_or(ProcessorConcurrencyConfig::Fixed(H::FANOUT));
     let min_eager_rows = config.min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
     let max_batch_checkpoints = config
         .max_batch_checkpoints
         .unwrap_or(H::MAX_BATCH_CHECKPOINTS);
 
-    let (processor_tx, committer_rx) = mpsc::channel(fanout + PIPELINE_BUFFER);
+    let (processor_tx, committer_rx) = mpsc::channel(concurrency.max() + PIPELINE_BUFFER);
 
     let handler = Arc::new(handler);
 
@@ -149,7 +153,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
-        fanout,
+        concurrency,
     );
 
     let s_committer = committer::<H>(

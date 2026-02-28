@@ -147,6 +147,27 @@ impl IngestConcurrencyConfig {
     }
 }
 
+impl From<IngestConcurrencyConfig> for sui_futures::stream::ConcurrencyConfig {
+    fn from(config: IngestConcurrencyConfig) -> Self {
+        match config {
+            IngestConcurrencyConfig::Fixed(n) => Self::fixed(n),
+            IngestConcurrencyConfig::Adaptive {
+                initial,
+                min,
+                max,
+                fill_high,
+                fill_low,
+            } => Self {
+                initial,
+                min,
+                max,
+                fill_high,
+                fill_low,
+            },
+        }
+    }
+}
+
 pub struct IngestionService {
     config: IngestionConfig,
     ingestion_client: IngestionClient,

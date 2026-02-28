@@ -5,6 +5,7 @@ use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::ingestion::IngestConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::ProcessorConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
@@ -63,7 +64,7 @@ pub struct IngestionLayer {
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub checkpoint_lag: Option<u64>,
-    pub fanout: Option<usize>,
+    pub fanout: Option<ProcessorConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
 }
@@ -74,7 +75,7 @@ pub struct SequentialLayer {
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub pruner: Option<PrunerLayer>,
-    pub fanout: Option<usize>,
+    pub fanout: Option<ProcessorConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,

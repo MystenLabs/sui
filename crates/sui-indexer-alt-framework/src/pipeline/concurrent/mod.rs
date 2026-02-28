@@ -17,6 +17,7 @@ use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::PIPELINE_BUFFER;
 use crate::pipeline::Processor;
+use crate::pipeline::ProcessorConcurrencyConfig;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::collector::collector;
 use crate::pipeline::concurrent::commit_watermark::commit_watermark;
@@ -122,7 +123,7 @@ pub struct ConcurrentConfig {
     pub pruner: Option<PrunerConfig>,
 
     /// Override for `Processor::FANOUT` (processor concurrency).
-    pub fanout: Option<usize>,
+    pub fanout: Option<ProcessorConcurrencyConfig>,
 
     /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
     pub min_eager_rows: Option<usize>,
@@ -246,12 +247,12 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         max_watermark_updates,
     } = config;
 
-    let fanout = fanout.unwrap_or(H::FANOUT);
+    let concurrency = fanout.unwrap_or(ProcessorConcurrencyConfig::Fixed(H::FANOUT));
     let min_eager_rows = min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
     let max_pending_rows = max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
     let max_watermark_updates = max_watermark_updates.unwrap_or(H::MAX_WATERMARK_UPDATES);
 
-    let (processor_tx, collector_rx) = mpsc::channel(fanout + PIPELINE_BUFFER);
+    let (processor_tx, collector_rx) = mpsc::channel(concurrency.max() + PIPELINE_BUFFER);
 
     //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
     let (collector_tx, committer_rx) =
@@ -268,7 +269,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
-        fanout,
+        concurrency,
     );
 
     let s_collector = collector::<H>(

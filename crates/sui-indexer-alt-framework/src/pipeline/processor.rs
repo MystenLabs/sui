@@ -5,8 +5,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
+use sui_futures::stream::ConcurrencyConfig;
 use sui_futures::stream::TrySpawnStreamExt;
 use sui_types::full_checkpoint_content::Checkpoint;
 use tokio::sync::mpsc;
@@ -26,6 +29,75 @@ const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 
 /// If the processor needs to retry processing a checkpoint, it will wait at most this long between retries.
 const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+
+fn default_fill_high() -> f64 {
+    0.85
+}
+
+fn default_fill_low() -> f64 {
+    0.6
+}
+
+/// Serde-friendly concurrency configuration for the processor.
+///
+/// `Fixed(n)` gives constant concurrency. `Adaptive { .. }` adjusts the gauge based on
+/// downstream channel fill fraction. The `#[serde(untagged)]` attribute allows backward-compatible
+/// deserialization: a bare integer like `10` deserializes as `Fixed(10)`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum ProcessorConcurrencyConfig {
+    Fixed(usize),
+    Adaptive {
+        initial: usize,
+        min: usize,
+        max: usize,
+        #[serde(default = "default_fill_high")]
+        fill_high: f64,
+        #[serde(default = "default_fill_low")]
+        fill_low: f64,
+    },
+}
+
+impl ProcessorConcurrencyConfig {
+    pub fn initial(&self) -> usize {
+        match self {
+            Self::Fixed(n) => *n,
+            Self::Adaptive { initial, .. } => *initial,
+        }
+    }
+
+    pub fn max(&self) -> usize {
+        match self {
+            Self::Fixed(n) => *n,
+            Self::Adaptive { max, .. } => *max,
+        }
+    }
+
+    pub fn is_adaptive(&self) -> bool {
+        matches!(self, Self::Adaptive { .. })
+    }
+}
+
+impl From<ProcessorConcurrencyConfig> for ConcurrencyConfig {
+    fn from(config: ProcessorConcurrencyConfig) -> Self {
+        match config {
+            ProcessorConcurrencyConfig::Fixed(n) => ConcurrencyConfig::fixed(n),
+            ProcessorConcurrencyConfig::Adaptive {
+                initial,
+                min,
+                max,
+                fill_high,
+                fill_low,
+            } => ConcurrencyConfig {
+                initial,
+                min,
+                max,
+                fill_high,
+                fill_low,
+            },
+        }
+    }
+}
 
 /// Implementors of this trait are responsible for transforming checkpoint into rows for their
 /// table. The `FANOUT` associated value controls how many concurrent workers will be used to
@@ -58,7 +130,7 @@ pub trait Processor: Send + Sync + 'static {
 
 /// The processor task is responsible for taking checkpoint data and breaking it down into rows
 /// ready to commit. It spins up a supervisor that waits on the `rx` channel for checkpoints, and
-/// distributes them among `H::FANOUT` workers.
+/// distributes them among workers whose concurrency is governed by `concurrency`.
 ///
 /// Each worker processes a checkpoint into rows and sends them on to the committer using the `tx`
 /// channel.
@@ -67,7 +139,7 @@ pub(super) fn processor<P: Processor>(
     rx: mpsc::Receiver<Arc<Checkpoint>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
-    fanout: usize,
+    concurrency: ProcessorConcurrencyConfig,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = P::NAME, "Starting processor");
@@ -77,80 +149,90 @@ pub(super) fn processor<P: Processor>(
             &metrics.latest_processed_checkpoint,
         );
 
+        let report_metrics = metrics.clone();
         match ReceiverStream::new(rx)
-            .try_for_each_spawned(fanout, |checkpoint| {
-                let tx = tx.clone();
-                let metrics = metrics.clone();
-                let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
-                let processor = processor.clone();
+            .try_for_each_map_spawned(
+                concurrency.into(),
+                |checkpoint| {
+                    let metrics = metrics.clone();
+                    let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
+                    let processor = processor.clone();
 
-                async move {
-                    metrics
-                        .total_handler_checkpoints_received
+                    async move {
+                        metrics
+                            .total_handler_checkpoints_received
+                            .with_label_values(&[P::NAME])
+                            .inc();
+
+                        let guard = metrics
+                            .handler_checkpoint_latency
+                            .with_label_values(&[P::NAME])
+                            .start_timer();
+
+                        // Retry processing with exponential backoff
+                        let backoff = ExponentialBackoff {
+                            initial_interval: INITIAL_RETRY_INTERVAL,
+                            current_interval: INITIAL_RETRY_INTERVAL,
+                            max_interval: MAX_RETRY_INTERVAL,
+                            max_elapsed_time: None,
+                            ..Default::default()
+                        };
+
+                        let values = backoff::future::retry(backoff, || async {
+                            processor
+                                .process(&checkpoint)
+                                .await
+                                .map_err(backoff::Error::transient)
+                        })
+                        .await?;
+
+                        let elapsed = guard.stop_and_record();
+
+                        let epoch = checkpoint.summary.epoch;
+                        let cp_sequence_number = checkpoint.summary.sequence_number;
+                        let tx_hi = checkpoint.summary.network_total_transactions;
+                        let timestamp_ms = checkpoint.summary.timestamp_ms;
+
+                        debug!(
+                            pipeline = P::NAME,
+                            checkpoint = cp_sequence_number,
+                            elapsed_ms = elapsed * 1000.0,
+                            "Processed checkpoint",
+                        );
+
+                        checkpoint_lag_reporter.report_lag(cp_sequence_number, timestamp_ms);
+
+                        metrics
+                            .total_handler_checkpoints_processed
+                            .with_label_values(&[P::NAME])
+                            .inc();
+
+                        metrics
+                            .total_handler_rows_created
+                            .with_label_values(&[P::NAME])
+                            .inc_by(values.len() as u64);
+
+                        Ok(IndexedCheckpoint::new(
+                            epoch,
+                            cp_sequence_number,
+                            tx_hi,
+                            timestamp_ms,
+                            values,
+                        ))
+                    }
+                },
+                tx,
+                move |gauge, inflight| {
+                    report_metrics
+                        .processor_concurrency_limit
                         .with_label_values(&[P::NAME])
-                        .inc();
-
-                    let guard = metrics
-                        .handler_checkpoint_latency
+                        .set(gauge as i64);
+                    report_metrics
+                        .processor_concurrency_inflight
                         .with_label_values(&[P::NAME])
-                        .start_timer();
-
-                    // Retry processing with exponential backoff - treat all errors as transient
-                    let backoff = ExponentialBackoff {
-                        initial_interval: INITIAL_RETRY_INTERVAL,
-                        current_interval: INITIAL_RETRY_INTERVAL,
-                        max_interval: MAX_RETRY_INTERVAL,
-                        max_elapsed_time: None, // Retry indefinitely
-                        ..Default::default()
-                    };
-
-                    let values = backoff::future::retry(backoff, || async {
-                        processor
-                            .process(&checkpoint)
-                            .await
-                            .map_err(backoff::Error::transient)
-                    })
-                    .await?;
-
-                    let elapsed = guard.stop_and_record();
-
-                    let epoch = checkpoint.summary.epoch;
-                    let cp_sequence_number = checkpoint.summary.sequence_number;
-                    let tx_hi = checkpoint.summary.network_total_transactions;
-                    let timestamp_ms = checkpoint.summary.timestamp_ms;
-
-                    debug!(
-                        pipeline = P::NAME,
-                        checkpoint = cp_sequence_number,
-                        elapsed_ms = elapsed * 1000.0,
-                        "Processed checkpoint",
-                    );
-
-                    checkpoint_lag_reporter.report_lag(cp_sequence_number, timestamp_ms);
-
-                    metrics
-                        .total_handler_checkpoints_processed
-                        .with_label_values(&[P::NAME])
-                        .inc();
-
-                    metrics
-                        .total_handler_rows_created
-                        .with_label_values(&[P::NAME])
-                        .inc_by(values.len() as u64);
-
-                    tx.send(IndexedCheckpoint::new(
-                        epoch,
-                        cp_sequence_number,
-                        tx_hi,
-                        timestamp_ms,
-                        values,
-                    ))
-                    .await
-                    .map_err(|_| Break::Break)?;
-
-                    Ok(())
-                }
-            })
+                        .set(inflight as i64);
+                },
+            )
             .await
         {
             Ok(()) => {
@@ -241,7 +323,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
-            DataPipeline::FANOUT,
+            ProcessorConcurrencyConfig::Fixed(DataPipeline::FANOUT),
         );
 
         // Send both checkpoints
@@ -301,7 +383,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
-            DataPipeline::FANOUT,
+            ProcessorConcurrencyConfig::Fixed(DataPipeline::FANOUT),
         );
 
         // Send first checkpoint.
@@ -375,7 +457,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
-            DataPipeline::FANOUT,
+            ProcessorConcurrencyConfig::Fixed(DataPipeline::FANOUT),
         );
 
         // Send and verify first checkpoint (should succeed immediately)
@@ -441,7 +523,7 @@ mod tests {
             data_rx,
             indexed_tx,
             metrics,
-            SlowProcessor::FANOUT,
+            ProcessorConcurrencyConfig::Fixed(SlowProcessor::FANOUT),
         );
 
         // Send all checkpoints and measure time
@@ -465,5 +547,74 @@ mod tests {
 
         // Verify results
         assert_eq!(received.len(), 5);
+    }
+
+    #[test]
+    fn serde_fixed_roundtrip() {
+        let config = ProcessorConcurrencyConfig::Fixed(10);
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: ProcessorConcurrencyConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, config);
+    }
+
+    #[test]
+    fn serde_adaptive_roundtrip() {
+        let config = ProcessorConcurrencyConfig::Adaptive {
+            initial: 10,
+            min: 2,
+            max: 50,
+            fill_high: 0.9,
+            fill_low: 0.5,
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: ProcessorConcurrencyConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, config);
+    }
+
+    #[test]
+    fn serde_bare_integer_deserializes_as_fixed() {
+        let parsed: ProcessorConcurrencyConfig = serde_json::from_str("10").unwrap();
+        assert_eq!(parsed, ProcessorConcurrencyConfig::Fixed(10));
+    }
+
+    #[test]
+    fn serde_adaptive_defaults() {
+        let json = r#"{"initial": 5, "min": 1, "max": 20}"#;
+        let parsed: ProcessorConcurrencyConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            parsed,
+            ProcessorConcurrencyConfig::Adaptive {
+                initial: 5,
+                min: 1,
+                max: 20,
+                fill_high: 0.85,
+                fill_low: 0.6,
+            }
+        );
+    }
+
+    #[test]
+    fn concurrency_config_from_fixed() {
+        let config: ConcurrencyConfig = ProcessorConcurrencyConfig::Fixed(10).into();
+        assert_eq!(config.initial, 10);
+        assert_eq!(config.min, 10);
+        assert_eq!(config.max, 10);
+        assert!(!config.is_adaptive());
+    }
+
+    #[test]
+    fn concurrency_config_from_adaptive() {
+        let config: ConcurrencyConfig = ProcessorConcurrencyConfig::Adaptive {
+            initial: 10,
+            min: 2,
+            max: 50,
+            fill_high: 0.9,
+            fill_low: 0.5,
+        }
+        .into();
+        assert_eq!(config.initial, 10);
+        assert_eq!(config.min, 2);
+        assert_eq!(config.max, 50);
+        assert!(config.is_adaptive());
     }
 }

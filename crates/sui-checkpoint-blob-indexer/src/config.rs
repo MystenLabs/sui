@@ -3,6 +3,7 @@
 
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::ProcessorConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::{self as framework};
 
@@ -42,7 +43,7 @@ impl CommitterLayer {
 #[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
-    pub fanout: Option<usize>,
+    pub fanout: Option<ProcessorConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
@@ -57,7 +58,10 @@ impl ConcurrentLayer {
                 base.committer
             },
             pruner: None,
-            fanout: self.fanout.or(base.fanout).or(Some(num_cpus::get())),
+            fanout: self
+                .fanout
+                .or(base.fanout)
+                .or(Some(ProcessorConcurrencyConfig::Fixed(num_cpus::get()))),
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
