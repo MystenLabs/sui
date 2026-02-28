@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 114;
+const MAX_PROTOCOL_VERSION: u64 = 115;
 
 // Record history of protocol version allocations here:
 //
@@ -299,6 +299,7 @@ const MAX_PROTOCOL_VERSION: u64 = 114;
 // Version 112: Enable Ristretto255 in devnet.
 // Version 113: Validate gas price >= RGP at signing for address balance gas payments.
 // Version 114: Gate seeded test overrides for checkpoint tx limit behind feature flag.
+// Version 115: Gasless transaction drop safety.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1006,6 +1007,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
+
+    // If true, mark the gas coin as uninitialized in drop safety when there is no gas coin.
+    #[serde(skip_serializing_if = "is_false")]
+    gasless_transaction_drop_safety: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2630,6 +2635,10 @@ impl ProtocolConfig {
 
     pub fn defer_unpaid_amplification(&self) -> bool {
         self.feature_flags.defer_unpaid_amplification
+    }
+
+    pub fn gasless_transaction_drop_safety(&self) -> bool {
+        self.feature_flags.gasless_transaction_drop_safety
     }
 }
 
@@ -4632,6 +4641,9 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .include_checkpoint_artifacts_digest_in_summary = true;
                     }
+                }
+                115 => {
+                    cfg.feature_flags.gasless_transaction_drop_safety = true;
                 }
                 // Use this template when making changes:
                 //
