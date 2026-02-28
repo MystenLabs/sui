@@ -4,5 +4,5 @@
 module legacy::legacy;
 
 public fun legacy() {
-  legacy_dep::legacy_dep::legacy_dep();
+	legacy_dep::legacy_dep::legacy_dep();
 }
