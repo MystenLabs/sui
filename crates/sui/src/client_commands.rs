@@ -3188,7 +3188,9 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     let tx_data = if use_address_balance_gas {
         // Use address balance for gas payment: empty gas coins + ValidDuring expiration
         let TransactionKind::ProgrammableTransaction(pt) = tx_kind else {
-            anyhow::bail!("--use-address-balance-gas is only supported for programmable transactions.");
+            anyhow::bail!(
+                "--use-address-balance-gas is only supported for programmable transactions."
+            );
         };
         let chain_identifier = client.get_chain_identifier().await?;
         let system_state_summary = client.get_system_state_summary(None).await?;
