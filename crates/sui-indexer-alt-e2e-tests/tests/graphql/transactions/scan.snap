@@ -1,0 +1,1126 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 22 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 6-27:
+//# publish
+created: object(1,0)
+mutated: object(0,3)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 28:
+//# run Test::M1::create --sender A --args 0 @A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 30-32:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 33:
+//# run Test::M1::create --sender A --args 1 @B
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 35-37:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, line 38:
+//# run Test::M1::create --sender B --args 2 @A
+created: object(6,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 7, lines 40-42:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, line 43:
+//# run Test::M1::create --sender C --args 3 @A
+created: object(8,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 9, lines 45-47:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 10, line 48:
+//# run Test::M1::create --sender A --args 10 @A
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, line 50:
+//# run Test::M1::create --sender A --args 11 @A
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 52:
+//# run Test::M1::create --sender A --args 12 @A
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, lines 54-56:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 14, line 57:
+//# create-checkpoint 995
+Checkpoint created: 1000
+
+task 15, lines 60-62:
+//# run Test::M1::create --sender A --args 100 @C
+created: object(15,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, line 63:
+//# create-checkpoint
+Checkpoint created: 1001
+
+task 17, lines 65-122:
+//# run-graphql
+Response: {
+  "data": {
+    "scanTransactionsA": {
+      "pageInfo": {
+        "startCursor": "MA==",
+        "endCursor": "OQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "MA==",
+          "node": {
+            "digest": "BTts7EAgPrFtKKMFM2WB2zz8zkiTumXwN7C8DjRpRDEb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "CbqfqPqiJXnc3b5oXC1RmGdgQTHGdjwe3vay6AoMGdNc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "GxzHztdrcHGeWdCNt4DwE5WdeyZ4dDpjpmv8TuqE1K7B",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7PQs2ZG4cXQ52kE4h2bGoq4mqRdANXhN5hXZNpebVqLq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "iNKPq8CmUWRDTYnEvAggeizPXCXqFUvi8BWhMnSz2ao",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Nw==",
+          "node": {
+            "digest": "5WTk3hjbQaLmjgTJwb1JYj94fDTH4P2m7fxeA7m78Ca3",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "BsKiwYgspBG3CVZnFFEDUftYQ42xBi6p2i4TgSU7a4Uq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OQ==",
+          "node": {
+            "digest": "6BtSF6K4ePk4qXZJx8NFREr51iJr2jaBz8Ln2K3P3byC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1001
+              }
+            }
+          }
+        }
+      ]
+    },
+    "paginateTransactionsA": {
+      "pageInfo": {
+        "startCursor": "MA==",
+        "endCursor": "OQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "MA==",
+          "node": {
+            "digest": "BTts7EAgPrFtKKMFM2WB2zz8zkiTumXwN7C8DjRpRDEb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "CbqfqPqiJXnc3b5oXC1RmGdgQTHGdjwe3vay6AoMGdNc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "GxzHztdrcHGeWdCNt4DwE5WdeyZ4dDpjpmv8TuqE1K7B",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7PQs2ZG4cXQ52kE4h2bGoq4mqRdANXhN5hXZNpebVqLq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "iNKPq8CmUWRDTYnEvAggeizPXCXqFUvi8BWhMnSz2ao",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Nw==",
+          "node": {
+            "digest": "5WTk3hjbQaLmjgTJwb1JYj94fDTH4P2m7fxeA7m78Ca3",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "BsKiwYgspBG3CVZnFFEDUftYQ42xBi6p2i4TgSU7a4Uq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OQ==",
+          "node": {
+            "digest": "6BtSF6K4ePk4qXZJx8NFREr51iJr2jaBz8Ln2K3P3byC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1001
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsAWithObj": {
+      "pageInfo": {
+        "startCursor": "Mw==",
+        "endCursor": "Mw==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "GxzHztdrcHGeWdCNt4DwE5WdeyZ4dDpjpmv8TuqE1K7B",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsBSentToA": {
+      "pageInfo": {
+        "startCursor": "NA==",
+        "endCursor": "NA==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7PQs2ZG4cXQ52kE4h2bGoq4mqRdANXhN5hXZNpebVqLq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanFnAndObj": {
+      "pageInfo": {
+        "startCursor": "Mw==",
+        "endCursor": "Mw==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "GxzHztdrcHGeWdCNt4DwE5WdeyZ4dDpjpmv8TuqE1K7B",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanFnAndAddr": {
+      "pageInfo": {
+        "startCursor": "NQ==",
+        "endCursor": "OQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "iNKPq8CmUWRDTYnEvAggeizPXCXqFUvi8BWhMnSz2ao",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OQ==",
+          "node": {
+            "digest": "6BtSF6K4ePk4qXZJx8NFREr51iJr2jaBz8Ln2K3P3byC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1001
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsWithPackage": {
+      "pageInfo": {
+        "startCursor": "Mg==",
+        "endCursor": "OQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "CbqfqPqiJXnc3b5oXC1RmGdgQTHGdjwe3vay6AoMGdNc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "GxzHztdrcHGeWdCNt4DwE5WdeyZ4dDpjpmv8TuqE1K7B",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7PQs2ZG4cXQ52kE4h2bGoq4mqRdANXhN5hXZNpebVqLq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "iNKPq8CmUWRDTYnEvAggeizPXCXqFUvi8BWhMnSz2ao",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Nw==",
+          "node": {
+            "digest": "5WTk3hjbQaLmjgTJwb1JYj94fDTH4P2m7fxeA7m78Ca3",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "BsKiwYgspBG3CVZnFFEDUftYQ42xBi6p2i4TgSU7a4Uq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OQ==",
+          "node": {
+            "digest": "6BtSF6K4ePk4qXZJx8NFREr51iJr2jaBz8Ln2K3P3byC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1001
+              }
+            }
+          }
+        }
+      ]
+    },
+    "atCheckpoint": {
+      "pageInfo": {
+        "startCursor": "Ng==",
+        "endCursor": "OA==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Nw==",
+          "node": {
+            "digest": "5WTk3hjbQaLmjgTJwb1JYj94fDTH4P2m7fxeA7m78Ca3",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "BsKiwYgspBG3CVZnFFEDUftYQ42xBi6p2i4TgSU7a4Uq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanAcrossBlocks": {
+      "pageInfo": {
+        "startCursor": "Mg==",
+        "endCursor": "OQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "CbqfqPqiJXnc3b5oXC1RmGdgQTHGdjwe3vay6AoMGdNc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "GxzHztdrcHGeWdCNt4DwE5WdeyZ4dDpjpmv8TuqE1K7B",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7PQs2ZG4cXQ52kE4h2bGoq4mqRdANXhN5hXZNpebVqLq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "iNKPq8CmUWRDTYnEvAggeizPXCXqFUvi8BWhMnSz2ao",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Nw==",
+          "node": {
+            "digest": "5WTk3hjbQaLmjgTJwb1JYj94fDTH4P2m7fxeA7m78Ca3",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "BsKiwYgspBG3CVZnFFEDUftYQ42xBi6p2i4TgSU7a4Uq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OQ==",
+          "node": {
+            "digest": "6BtSF6K4ePk4qXZJx8NFREr51iJr2jaBz8Ln2K3P3byC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1001
+              }
+            }
+          }
+        }
+      ]
+    },
+    "emptyNonExistent": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    },
+    "emptyConflicting": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    },
+    "emptyBeyondData": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 18, lines 124-146:
+//# run-graphql --cursors 5 7 20
+Response: {
+  "data": {
+    "first2": {
+      "pageInfo": {
+        "startCursor": "MA==",
+        "endCursor": "Mg==",
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "MA==",
+          "node": {
+            "digest": "BTts7EAgPrFtKKMFM2WB2zz8zkiTumXwN7C8DjRpRDEb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "CbqfqPqiJXnc3b5oXC1RmGdgQTHGdjwe3vay6AoMGdNc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "last2": {
+      "pageInfo": {
+        "startCursor": "OA==",
+        "endCursor": "OQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "BsKiwYgspBG3CVZnFFEDUftYQ42xBi6p2i4TgSU7a4Uq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OQ==",
+          "node": {
+            "digest": "6BtSF6K4ePk4qXZJx8NFREr51iJr2jaBz8Ln2K3P3byC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1001
+              }
+            }
+          }
+        }
+      ]
+    },
+    "firstAfter": {
+      "pageInfo": {
+        "startCursor": "Ng==",
+        "endCursor": "OQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Nw==",
+          "node": {
+            "digest": "5WTk3hjbQaLmjgTJwb1JYj94fDTH4P2m7fxeA7m78Ca3",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "BsKiwYgspBG3CVZnFFEDUftYQ42xBi6p2i4TgSU7a4Uq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OQ==",
+          "node": {
+            "digest": "6BtSF6K4ePk4qXZJx8NFREr51iJr2jaBz8Ln2K3P3byC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1001
+              }
+            }
+          }
+        }
+      ]
+    },
+    "lastBefore": {
+      "pageInfo": {
+        "startCursor": "MA==",
+        "endCursor": "Ng==",
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "MA==",
+          "node": {
+            "digest": "BTts7EAgPrFtKKMFM2WB2zz8zkiTumXwN7C8DjRpRDEb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "CbqfqPqiJXnc3b5oXC1RmGdgQTHGdjwe3vay6AoMGdNc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "GxzHztdrcHGeWdCNt4DwE5WdeyZ4dDpjpmv8TuqE1K7B",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7PQs2ZG4cXQ52kE4h2bGoq4mqRdANXhN5hXZNpebVqLq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "iNKPq8CmUWRDTYnEvAggeizPXCXqFUvi8BWhMnSz2ao",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    "firstBefore": {
+      "pageInfo": {
+        "startCursor": "MA==",
+        "endCursor": "Ng==",
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "MA==",
+          "node": {
+            "digest": "BTts7EAgPrFtKKMFM2WB2zz8zkiTumXwN7C8DjRpRDEb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "CbqfqPqiJXnc3b5oXC1RmGdgQTHGdjwe3vay6AoMGdNc",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mw==",
+          "node": {
+            "digest": "GxzHztdrcHGeWdCNt4DwE5WdeyZ4dDpjpmv8TuqE1K7B",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "7PQs2ZG4cXQ52kE4h2bGoq4mqRdANXhN5hXZNpebVqLq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "iNKPq8CmUWRDTYnEvAggeizPXCXqFUvi8BWhMnSz2ao",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    "lastAfter": {
+      "pageInfo": {
+        "startCursor": "Ng==",
+        "endCursor": "OQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Nw==",
+          "node": {
+            "digest": "5WTk3hjbQaLmjgTJwb1JYj94fDTH4P2m7fxeA7m78Ca3",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OA==",
+          "node": {
+            "digest": "BsKiwYgspBG3CVZnFFEDUftYQ42xBi6p2i4TgSU7a4Uq",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        },
+        {
+          "cursor": "OQ==",
+          "node": {
+            "digest": "6BtSF6K4ePk4qXZJx8NFREr51iJr2jaBz8Ln2K3P3byC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1001
+              }
+            }
+          }
+        }
+      ]
+    },
+    "windowFirst": {
+      "pageInfo": {
+        "startCursor": "Ng==",
+        "endCursor": "Ng==",
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    "windowLast": {
+      "pageInfo": {
+        "startCursor": "Ng==",
+        "endCursor": "Ng==",
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "Ng==",
+          "node": {
+            "digest": "qdSwcToNtAVT8TtNUoNG4ZFo1DnVbEn5iLmkHTKuMfi",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nonexistentCursor": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    },
+    "invalidOrder": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 19, lines 148-153:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": Unbounded scan, add beforeCheckpoint or atCheckpoint filters (Scan limit: 3000000).",
+      "locations": [
+        {
+          "line": 2,
+          "column": 48
+        }
+      ],
+      "path": [
+        "noCheckpointBounds"
+      ]
+    }
+  ]
+}
+
+task 20, lines 155-160:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": Unbounded scan, add beforeCheckpoint or atCheckpoint filters (Scan limit: 3000000).",
+      "locations": [
+        {
+          "line": 2,
+          "column": 43
+        }
+      ],
+      "path": [
+        "unboundedScan"
+      ]
+    }
+  ]
+}
+
+task 21, lines 162-167:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"TransactionFilter\": Scan of 3000001 checkpoints exceeds maximum of 3000000. Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to reduce the range.",
+      "locations": [
+        {
+          "line": 2,
+          "column": 39
+        }
+      ],
+      "path": [
+        "scanLimit"
+      ]
+    }
+  ]
+}

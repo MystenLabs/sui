@@ -3484,6 +3484,14 @@ type Query {
 	"""
 	protocolConfigs(version: UInt53): ProtocolConfigs
 	"""
+	The transactions that exist in the network, optionally filtered by multiple transaction filters.
+	
+	Supports combining filters (e.g. `affectedAddress` AND `function`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `checkpointBound` to narrow it. Supports a longer retention than `Query.transactions`.
+	
+	Note that this differs from `Query.transactions`, which supports a single filter with an optional sender filter, with no checkpoint range restriction and generally a shorter retention.
+	"""
+	scanTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter!): TransactionConnection
+	"""
 	Configuration for this RPC service.
 	"""
 	serviceConfig: ServiceConfig!
@@ -3711,6 +3719,10 @@ type ServiceConfig {
 	Maximum number of paginated fields that can return results in a single request. Queries on paginated fields that exceed this limit will return an error.
 	"""
 	maxRichQueries: Int
+	"""
+	Maximum number of checkpoints that can be scanned in a single scanning pagination query.
+	"""
+	maxScanLimit: Int
 	"""
 	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
 	

@@ -329,6 +329,12 @@ impl ServiceConfig {
         )
     }
 
+    /// Maximum number of checkpoints that can be scanned in a single scanning pagination query.
+    async fn max_scan_limit(&self, ctx: &Context<'_>) -> Result<Option<u64>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_scan_limit))
+    }
+
     /// Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
     async fn available_range(
         &self,

@@ -57,6 +57,7 @@ use crate::api::types::service_config::ServiceConfig;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::ScanFilterValidator;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
@@ -710,9 +711,35 @@ impl Query {
                 let limits = pagination.limits("Query", "transactions");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
-                // Use the filter if provided, otherwise use default (unfiltered)
                 let filter = filter.unwrap_or_default();
                 Transaction::paginate(ctx, scope, page, filter).await
+            }
+            .await,
+        )
+    }
+
+    /// The transactions that exist in the network, optionally filtered by multiple transaction filters.
+    ///
+    /// Supports combining filters (e.g. `affectedAddress` AND `function`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `checkpointBound` to narrow it. Supports a longer retention than `Query.transactions`.
+    ///
+    /// Note that this differs from `Query.transactions`, which supports a single filter with an optional sender filter, with no checkpoint range restriction and generally a shorter retention.
+    async fn scan_transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        #[graphql(validator(custom = "ScanFilterValidator::new(ctx)"))] filter: TransactionFilter,
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+        Some(
+            async {
+                let scope = self.scope(ctx)?;
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "scanTransactions");
+                let page = Page::from_params(limits, first, after, last, before)?;
+
+                Transaction::scan(ctx, scope, page, filter).await
             }
             .await,
         )

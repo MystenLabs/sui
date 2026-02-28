@@ -52,7 +52,7 @@ impl DoubleHasher {
     }
 
     /// Generate a new hash value from the current h1 and h2 with:
-    /// - modulo addition of two independent hashes with well distributed bits to ensure inputs diverge into uncorrelated bits.
+    /// - modulo addition of two hashes with well distributed bits to ensure inputs diverge into uncorrelated bits.
     /// - circular left shift by 5 (coprime to 64) to avoid evenly spaced distributions by mixing high and low bits after the addition.
     pub fn next_hash(&mut self) -> u64 {
         self.h1 = self.h1.wrapping_add(self.h2).rotate_left(5);
@@ -68,12 +68,12 @@ impl Iterator for DoubleHasher {
     }
 }
 
-pub fn set_bit(bits: &mut [u8], pos: usize) {
-    bits[pos / 8] |= 1 << (pos % 8);
+pub fn set_bit(bytes: &mut [u8], bit_idx: usize) {
+    bytes[bit_idx / 8] |= 1 << (bit_idx % 8);
 }
 
-pub fn check_bit(bits: &[u8], pos: usize) -> bool {
-    bits[pos / 8] & (1 << (pos % 8)) != 0
+pub fn check_bit(bytes: &[u8], bit_idx: usize) -> bool {
+    bytes[bit_idx / 8] & (1 << (bit_idx % 8)) != 0
 }
 
 #[cfg(test)]
