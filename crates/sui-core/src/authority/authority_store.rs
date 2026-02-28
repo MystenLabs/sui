@@ -1193,9 +1193,28 @@ impl AuthorityStore {
                                     total_storage_rebate += object.storage_rebate;
                                     // get_total_sui includes storage rebate, however all storage rebate is
                                     // also stored in the storage fund, so we need to subtract it here.
-                                    total_sui +=
-                                        object.get_total_sui(layout_resolver.as_mut()).unwrap()
-                                            - object.storage_rebate;
+                                    let object_contained_sui = match object
+                                        .get_total_sui(layout_resolver.as_mut())
+                                    {
+                                        Ok(sui) => sui,
+                                        Err(e)
+                                            if old_epoch_store.get_chain()
+                                                == sui_protocol_config::Chain::Testnet =>
+                                        {
+                                            error!(
+                                                "Error calculating total SUI for object {:?}: {:?}",
+                                                object.compute_object_reference(),
+                                                e
+                                            );
+                                            0
+                                        }
+                                        Err(e) => panic!(
+                                            "Error calculating total SUI for object {:?}: {:?}",
+                                            object.compute_object_reference(),
+                                            e
+                                        ),
+                                    };
+                                    total_sui += object_contained_sui - object.storage_rebate;
                                 }
                                 if count % 50_000_000 == 0 {
                                     info!("Processed {} objects", count);
