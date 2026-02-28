@@ -117,97 +117,58 @@ public(package) macro fun test_divide_and_round_up($max: _, $cases: vector<_>) {
     })
 }
 
-public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
+public(package) macro fun check_mul_div<$T, $U>($max: $T, $x: $T, $y: $T, $z: $T) {
+    let max = $max;
     let x = $x;
     let y = $y;
     let z = $z;
-    let max = $max;
 
-    if (z == 0) return; // Tested separately.
+    // Div by zero is tested separately
+    if (z == 0) return;
 
-    if (x == 0 || y == 0) {
-        assert_eq!(x.mul_div(y, z), 0);
-        return
-    };
+    // Overflows are tested separately
+    let zu = z as $U;
+    if ((x as $U) * (y as $U) >= ((max as $U) + 1) * zu) return;
 
-    // Skip if mul_div would abort (result > max).
-    // floor(x*y/z) = (x/z)*y + floor((x%z)*y/z), where the second term < y.
-    if (x / z > max / y) return;
-    let first = (x / z) * y;
-    let r = x % z;
-    if (r != 0) {
-        if (r > max / y) {
-            // r*y overflows; remainder term < y. Skip if first is too close to max.
-            if (max - first < y) return;
-        } else if (r * y / z > max - first) {
-            return
-        };
-    };
+    // Test for commutativity
+    assert_eq!(x.mul_div(y, z), y.mul_div(x, z));
 
-    // Precision: mul_div(x,y,z) >= (x/z)*y, with equality iff floor(r*y/z) == 0.
-    // floor(r*y/z) > 0 iff r*y >= z iff r > (z-1)/y.
-    if (r > (z - 1) / y) {
-        assert!(first < x.mul_div(y, z));
+    // Test for precision: (x/z)*y loses floor(x%z * y / z)
+    if ((x as $U) % zu * (y as $U) >= zu) {
+        assert!((x / z) * y < x.mul_div(y, z));
     } else {
-        assert_eq!(first, x.mul_div(y, z));
+        assert_eq!((x / z) * y, x.mul_div(y, z));
     };
-    // Precision: mul_div(x,y,z) >= x*(y/z), with equality iff floor(x*(y%z)/z) == 0.
-    if (y / z <= max / x) {
-        let ry = y % z;
-        if (ry != 0 && x > (z - 1) / ry) {
-            assert!(x * (y / z) < x.mul_div(y, z));
-        } else {
-            assert_eq!(x * (y / z), x.mul_div(y, z));
-        };
+    // Test for precision: x*(y/z) loses floor(x * y%z / z)
+    if ((y as $U) % zu * (x as $U) >= zu) {
+        assert!(x * (y / z) < x.mul_div(y, z));
+    } else {
+        assert_eq!(x * (y / z), x.mul_div(y, z));
     };
 }
 
-public(package) macro fun check_mul_div_ceil($max: _, $x: _, $y: _, $z: _) {
+public(package) macro fun check_mul_div_ceil<$T, $U>($max: $T, $x: $T, $y: $T, $z: $T) {
+    let max = $max;
     let x = $x;
     let y = $y;
     let z = $z;
-    let max = $max;
 
-    if (z == 0) return; // Tested separately.
+    // Div by zero is tested separately
+    if (z == 0) return;
 
-    if (x == 0 || y == 0) {
-        assert_eq!(x.mul_div_ceil(y, z), 0);
-        return
-    };
+    // Overflows are tested separately
+    let zu = z as $U;
+    if ((x as $U) * (y as $U) > (max as $U) * zu) return;
 
-    // Skip if mul_div_ceil would abort (result > max).
-    // ceil(x*y/z) = floor(x*y/z) + (1 if x*y%z != 0 else 0).
-    // floor(x*y/z) = (x/z)*y + floor((x%z)*y/z), where the second term < y.
-    if (x / z > max / y) return;
-    let first = (x / z) * y;
-    let r = x % z;
-    if (r != 0) {
-        if (r > max / y) {
-            // r*y overflows; remainder term < y, ceil adds at most 1.
-            // Skip if first + y > max.
-            if (max - first < y) return;
-        } else {
-            let ry = r * y;
-            let ceil_adj = if (ry % z != 0) { 1 } else { 0 };
-            if (ry / z + ceil_adj > max - first) return;
-        };
-    };
+    // Test for commutativity
+    assert_eq!(x.mul_div_ceil(y, z), y.mul_div_ceil(x, z));
 
-    // Precision: ceil(x*y/z) >= (x/z)*y, strict iff x%z != 0.
-    // (When r > 0, either floor(r*y/z) >= 1 making floor > first, or
-    // 0 < r*y < z making ceil round up past first.)
-    if (r != 0) {
-        assert!(first < x.mul_div_ceil(y, z));
+    // Test for precision: ceil == floor + 1 when x*y is not divisible by z
+    let xyu = (x as $U) * (y as $U);
+    if (xyu % zu != 0) {
+        assert_eq!((x.mul_div(y, z) as $U) + 1, x.mul_div_ceil(y, z) as $U);
     } else {
-        assert_eq!(first, x.mul_div_ceil(y, z));
-    };
-    // Precision: ceil(x*y/z) >= x*(y/z), strict iff y%z != 0.
-    if (y / z <= max / x) {
-        if (y % z != 0) {
-            assert!(x * (y / z) < x.mul_div_ceil(y, z));
-        } else {
-            assert_eq!(x * (y / z), x.mul_div_ceil(y, z));
-        };
+        assert_eq!(x.mul_div(y, z), x.mul_div_ceil(y, z));
     };
 }
 
@@ -229,17 +190,17 @@ public(package) macro fun check_mul_div_precision($max: _, $x: _, $z: _) {
     };
 }
 
-public(package) macro fun test_mul_div<$T>($max: $T, $cases: vector<$T>) {
+public(package) macro fun test_mul_div<$T, $U>($max: $T, $cases: vector<$T>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.mul_div(max, max.max(1)), max);
-    exhaustive_cases!(cases, |case_pred, case, case_succ| {
-        check_mul_div!(max, case_pred, case, case_succ);
-        check_mul_div_ceil!(max, case_pred, case, case_succ);
+    cases!(max, cases, |case_pred, case, case_succ| {
+        check_mul_div!<$T, $U>(max, case_pred, case, case_succ);
+        check_mul_div_ceil!<$T, $U>(max, case_pred, case, case_succ);
         check_mul_div_precision!(max, case_pred, case_succ);
     });
-    check_mul_div!(max, max, max, max);
-    check_mul_div_ceil!(max, max, max, max);
+    check_mul_div!<$T, $U>(max, max, max, max);
+    check_mul_div_ceil!<$T, $U>(max, max, max, max);
 }
 
 public(package) macro fun slow_pow($base: _, $exp: u8): _ {

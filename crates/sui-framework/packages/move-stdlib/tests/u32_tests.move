@@ -50,7 +50,7 @@ fun test_diff() {
 
 #[test]
 fun test_mul_div() {
-    integer_tests::test_mul_div!(MAX, CASES);
+    integer_tests::test_mul_div!<u32, u64>(MAX, CASES);
 }
 
 #[test, expected_failure(arithmetic_error, location = std::u32)]
