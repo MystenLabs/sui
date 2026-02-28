@@ -335,7 +335,7 @@ impl UnsignedGenesis {
     }
 
     pub fn coin_deny_list_state(&self) -> Option<PerTypeDenyList> {
-        get_coin_deny_list(&self.objects())
+        get_coin_deny_list(&self.objects()).expect("read from genesis cannot fail")
     }
 }
 

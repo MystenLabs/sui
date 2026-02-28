@@ -173,7 +173,7 @@ impl EpochStartConfiguration {
         let randomness_obj_initial_shared_version =
             get_randomness_state_obj_initial_shared_version(object_store)?;
         let coin_deny_list_obj_initial_shared_version =
-            get_deny_list_obj_initial_shared_version(object_store);
+            get_deny_list_obj_initial_shared_version(object_store)?;
         let bridge_obj_initial_shared_version =
             get_bridge_obj_initial_shared_version(object_store)?;
         let accumulator_root_obj_initial_shared_version =
