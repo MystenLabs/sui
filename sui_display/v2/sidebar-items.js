@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FormatError","Value"],"struct":["Display","Extract","Format","Interpreter","Limits","Name","OwnedSlice"],"trait":["Store"]};

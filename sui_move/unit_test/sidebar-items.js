@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["run_move_unit_tests"],"static":["MAX_UNIT_TEST_INSTRUCTIONS"],"struct":["SuiGasStatusTestWrapper","SuiVMTestSetup","Test"]};

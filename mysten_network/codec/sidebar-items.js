@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["anemo"],"struct":["BcsCodec","BcsDecoder","BcsEncoder","BcsSnappyCodec","BcsSnappyDecoder","BcsSnappyEncoder"]};

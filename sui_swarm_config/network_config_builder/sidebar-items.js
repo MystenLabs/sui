@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CommitteeConfig","FundsWithdrawSchedulerTypeConfig","GlobalStateHashV2EnabledConfig","ProtocolVersionsConfig"],"struct":["ConfigBuilder","KeyPairWrapper"],"type":["FundsWithdrawSchedulerTypeCallback","GlobalStateHashV2EnabledCallback","SupportedProtocolVersionsCallback"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["enum_dispatch"],"constant":["MAX_SIGNER_IN_MULTISIG"],"fn":["bitmap_to_u16"],"struct":["MultiSigLegacy","MultiSigPublicKeyLegacy"],"type":["ThresholdUnit","WeightUnit"]};

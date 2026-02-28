@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Envelope","TrustedEnvelope","VerifiedEnvelope"],"trait":["Message"]};

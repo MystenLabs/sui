@@ -1,0 +1,725 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `consensus/core/src/commit_test_fixture.rs`."><title>commit_test_fixture.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="consensus_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">consensus_core/</div>commit_test_fixture.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! Shared test fixture for commit-related tests.
+<a href=#5 id=5 data-nosnippet>5</a>//! Used by both commit_finalizer.rs tests and randomized_tests.rs.
+<a href=#6 id=6 data-nosnippet>6</a>
+<a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, VecDeque};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>std::ops::Bound::Included;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>std::sync::Arc;
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>consensus_config::{AuthorityIndex, Stake};
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>consensus_types::block::{BlockDigest, BlockRef};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>consensus_types::block::{Round, TransactionIndex};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>mysten_metrics::monitored_mpsc::unbounded_channel;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>parking_lot::RwLock;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>rand::prelude::SliceRandom;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>rand::{Rng, rngs::StdRng};
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span><span class="kw">crate</span>::Transaction;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span><span class="kw">crate</span>::block::{BlockTransactionVotes, TestBlock, genesis_blocks};
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use crate</span>::{
+<a href=#22 id=22 data-nosnippet>22</a>    block::{BlockAPI, VerifiedBlock},
+<a href=#23 id=23 data-nosnippet>23</a>    block_manager::BlockManager,
+<a href=#24 id=24 data-nosnippet>24</a>    block_verifier::NoopBlockVerifier,
+<a href=#25 id=25 data-nosnippet>25</a>    commit::{CommittedSubDag, DecidedLeader},
+<a href=#26 id=26 data-nosnippet>26</a>    commit_finalizer::CommitFinalizer,
+<a href=#27 id=27 data-nosnippet>27</a>    context::Context,
+<a href=#28 id=28 data-nosnippet>28</a>    dag_state::DagState,
+<a href=#29 id=29 data-nosnippet>29</a>    leader_schedule::{LeaderSchedule, LeaderSwapTable},
+<a href=#30 id=30 data-nosnippet>30</a>    linearizer::Linearizer,
+<a href=#31 id=31 data-nosnippet>31</a>    storage::mem_store::MemStore,
+<a href=#32 id=32 data-nosnippet>32</a>    transaction_certifier::TransactionCertifier,
+<a href=#33 id=33 data-nosnippet>33</a>    universal_committer::{
+<a href=#34 id=34 data-nosnippet>34</a>        UniversalCommitter, universal_committer_builder::UniversalCommitterBuilder,
+<a href=#35 id=35 data-nosnippet>35</a>    },
+<a href=#36 id=36 data-nosnippet>36</a>};
+<a href=#37 id=37 data-nosnippet>37</a>
+<a href=#38 id=38 data-nosnippet>38</a><span class="doccomment">/// A test fixture that provides all the components needed for testing commit processing,
+<a href=#39 id=39 data-nosnippet>39</a>/// similar to the actual logic in Core::try_commit() and CommitFinalizer::run().
+<a href=#40 id=40 data-nosnippet>40</a></span><span class="kw">pub struct </span>CommitTestFixture {
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="kw">pub </span>context: Arc&lt;Context&gt;,
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">pub </span>linearizer: Linearizer,
+<a href=#43 id=43 data-nosnippet>43</a>    <span class="kw">pub </span>transaction_certifier: TransactionCertifier,
+<a href=#44 id=44 data-nosnippet>44</a>    <span class="kw">pub </span>commit_finalizer: CommitFinalizer,
+<a href=#45 id=45 data-nosnippet>45</a>
+<a href=#46 id=46 data-nosnippet>46</a>    dag_state: Arc&lt;RwLock&lt;DagState&gt;&gt;,
+<a href=#47 id=47 data-nosnippet>47</a>    block_manager: BlockManager,
+<a href=#48 id=48 data-nosnippet>48</a>    committer: UniversalCommitter,
+<a href=#49 id=49 data-nosnippet>49</a>}
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a><span class="kw">impl </span>CommitTestFixture {
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="doccomment">/// Creates a new CommitTestFixture from a context.
+<a href=#53 id=53 data-nosnippet>53</a>    </span><span class="kw">pub fn </span>new(context: Arc&lt;Context&gt;) -&gt; <span class="self">Self </span>{
+<a href=#54 id=54 data-nosnippet>54</a>        <span class="kw">let </span>leader_schedule = Arc::new(LeaderSchedule::new(
+<a href=#55 id=55 data-nosnippet>55</a>            context.clone(),
+<a href=#56 id=56 data-nosnippet>56</a>            LeaderSwapTable::default(),
+<a href=#57 id=57 data-nosnippet>57</a>        ));
+<a href=#58 id=58 data-nosnippet>58</a>        <span class="kw">let </span>dag_state = Arc::new(RwLock::new(DagState::new(
+<a href=#59 id=59 data-nosnippet>59</a>            context.clone(),
+<a href=#60 id=60 data-nosnippet>60</a>            Arc::new(MemStore::new()),
+<a href=#61 id=61 data-nosnippet>61</a>        )));
+<a href=#62 id=62 data-nosnippet>62</a>
+<a href=#63 id=63 data-nosnippet>63</a>        <span class="comment">// Create committer with pipelining and only 1 leader per leader round
+<a href=#64 id=64 data-nosnippet>64</a>        </span><span class="kw">let </span>committer =
+<a href=#65 id=65 data-nosnippet>65</a>            UniversalCommitterBuilder::new(context.clone(), leader_schedule, dag_state.clone())
+<a href=#66 id=66 data-nosnippet>66</a>                .with_pipeline(<span class="bool-val">true</span>)
+<a href=#67 id=67 data-nosnippet>67</a>                .build();
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a>        <span class="kw">let </span>block_manager = BlockManager::new(context.clone(), dag_state.clone());
+<a href=#70 id=70 data-nosnippet>70</a>
+<a href=#71 id=71 data-nosnippet>71</a>        <span class="kw">let </span>linearizer = Linearizer::new(context.clone(), dag_state.clone());
+<a href=#72 id=72 data-nosnippet>72</a>        <span class="kw">let </span>(blocks_sender, _blocks_receiver) = unbounded_channel(<span class="string">"consensus_block_output"</span>);
+<a href=#73 id=73 data-nosnippet>73</a>        <span class="kw">let </span>transaction_certifier = TransactionCertifier::new(
+<a href=#74 id=74 data-nosnippet>74</a>            context.clone(),
+<a href=#75 id=75 data-nosnippet>75</a>            Arc::new(NoopBlockVerifier {}),
+<a href=#76 id=76 data-nosnippet>76</a>            dag_state.clone(),
+<a href=#77 id=77 data-nosnippet>77</a>            blocks_sender,
+<a href=#78 id=78 data-nosnippet>78</a>        );
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="kw">let </span>(commit_sender, _commit_receiver) = unbounded_channel(<span class="string">"consensus_commit_output"</span>);
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="kw">let </span>commit_finalizer = CommitFinalizer::new(
+<a href=#81 id=81 data-nosnippet>81</a>            context.clone(),
+<a href=#82 id=82 data-nosnippet>82</a>            dag_state.clone(),
+<a href=#83 id=83 data-nosnippet>83</a>            transaction_certifier.clone(),
+<a href=#84 id=84 data-nosnippet>84</a>            commit_sender,
+<a href=#85 id=85 data-nosnippet>85</a>        );
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="self">Self </span>{
+<a href=#88 id=88 data-nosnippet>88</a>            context,
+<a href=#89 id=89 data-nosnippet>89</a>            linearizer,
+<a href=#90 id=90 data-nosnippet>90</a>            transaction_certifier,
+<a href=#91 id=91 data-nosnippet>91</a>            commit_finalizer,
+<a href=#92 id=92 data-nosnippet>92</a>            dag_state,
+<a href=#93 id=93 data-nosnippet>93</a>            block_manager,
+<a href=#94 id=94 data-nosnippet>94</a>            committer,
+<a href=#95 id=95 data-nosnippet>95</a>        }
+<a href=#96 id=96 data-nosnippet>96</a>    }
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="doccomment">/// Creates a new CommitTestFixture with more options.
+<a href=#99 id=99 data-nosnippet>99</a>    </span><span class="kw">pub fn </span>with_options(
+<a href=#100 id=100 data-nosnippet>100</a>        num_authorities: usize,
+<a href=#101 id=101 data-nosnippet>101</a>        authority_index: u32,
+<a href=#102 id=102 data-nosnippet>102</a>        gc_depth: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#103 id=103 data-nosnippet>103</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#104 id=104 data-nosnippet>104</a>        <span class="self">Self</span>::new(<span class="self">Self</span>::context_with_options(
+<a href=#105 id=105 data-nosnippet>105</a>            num_authorities,
+<a href=#106 id=106 data-nosnippet>106</a>            authority_index,
+<a href=#107 id=107 data-nosnippet>107</a>            gc_depth,
+<a href=#108 id=108 data-nosnippet>108</a>        ))
+<a href=#109 id=109 data-nosnippet>109</a>    }
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">pub fn </span>context_with_options(
+<a href=#112 id=112 data-nosnippet>112</a>        num_authorities: usize,
+<a href=#113 id=113 data-nosnippet>113</a>        authority_index: u32,
+<a href=#114 id=114 data-nosnippet>114</a>        gc_depth: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#115 id=115 data-nosnippet>115</a>    ) -&gt; Arc&lt;Context&gt; {
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">let </span>(<span class="kw-2">mut </span>context, _keys) = Context::new_for_test(num_authorities);
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(gc_depth) = gc_depth {
+<a href=#118 id=118 data-nosnippet>118</a>            context
+<a href=#119 id=119 data-nosnippet>119</a>                .protocol_config
+<a href=#120 id=120 data-nosnippet>120</a>                .set_consensus_gc_depth_for_testing(gc_depth);
+<a href=#121 id=121 data-nosnippet>121</a>        }
+<a href=#122 id=122 data-nosnippet>122</a>        <span class="comment">// Skipping equivocation validation is necessary when testing with equivocators.
+<a href=#123 id=123 data-nosnippet>123</a>        // Also it is ok when only testing the commit code path.
+<a href=#124 id=124 data-nosnippet>124</a>        </span>context.parameters.internal.skip_equivocation_validation = <span class="bool-val">true</span>;
+<a href=#125 id=125 data-nosnippet>125</a>        Arc::new(context.with_authority_index(AuthorityIndex::new_for_test(authority_index)))
+<a href=#126 id=126 data-nosnippet>126</a>    }
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="comment">// Adds the blocks to the transaction certifier and then tries to accept them via BlockManager.
+<a href=#129 id=129 data-nosnippet>129</a>    </span><span class="doccomment">/// This registers the blocks for reject vote tracking (with no reject votes).
+<a href=#130 id=130 data-nosnippet>130</a>    </span><span class="kw">pub fn </span>try_accept_blocks(<span class="kw-2">&amp;mut </span><span class="self">self</span>, blocks: Vec&lt;VerifiedBlock&gt;) {
+<a href=#131 id=131 data-nosnippet>131</a>        <span class="self">self</span>.transaction_certifier
+<a href=#132 id=132 data-nosnippet>132</a>            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), <span class="macro">vec!</span>[])).collect());
+<a href=#133 id=133 data-nosnippet>133</a>        <span class="self">self</span>.block_manager.try_accept_blocks(blocks);
+<a href=#134 id=134 data-nosnippet>134</a>    }
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a>    <span class="doccomment">/// Adds blocks to the transaction certifier and dag state.
+<a href=#137 id=137 data-nosnippet>137</a>    /// This registers the blocks for reject vote tracking (with no reject votes).
+<a href=#138 id=138 data-nosnippet>138</a>    </span><span class="kw">pub fn </span>add_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, blocks: Vec&lt;VerifiedBlock&gt;) {
+<a href=#139 id=139 data-nosnippet>139</a>        <span class="kw">let </span>blocks_and_votes = blocks.iter().map(|b| (b.clone(), <span class="macro">vec!</span>[])).collect();
+<a href=#140 id=140 data-nosnippet>140</a>        <span class="self">self</span>.transaction_certifier
+<a href=#141 id=141 data-nosnippet>141</a>            .add_voted_blocks(blocks_and_votes);
+<a href=#142 id=142 data-nosnippet>142</a>        <span class="self">self</span>.dag_state.write().accept_blocks(blocks);
+<a href=#143 id=143 data-nosnippet>143</a>    }
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">pub fn </span>add_blocks_with_own_votes(
+<a href=#146 id=146 data-nosnippet>146</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#147 id=147 data-nosnippet>147</a>        blocks_and_votes: Vec&lt;(VerifiedBlock, Vec&lt;TransactionIndex&gt;)&gt;,
+<a href=#148 id=148 data-nosnippet>148</a>    ) {
+<a href=#149 id=149 data-nosnippet>149</a>        <span class="kw">let </span>blocks = blocks_and_votes.iter().map(|(b, <span class="kw">_</span>)| b.clone()).collect();
+<a href=#150 id=150 data-nosnippet>150</a>        <span class="self">self</span>.transaction_certifier
+<a href=#151 id=151 data-nosnippet>151</a>            .add_voted_blocks(blocks_and_votes);
+<a href=#152 id=152 data-nosnippet>152</a>        <span class="self">self</span>.dag_state.write().accept_blocks(blocks);
+<a href=#153 id=153 data-nosnippet>153</a>    }
+<a href=#154 id=154 data-nosnippet>154</a>
+<a href=#155 id=155 data-nosnippet>155</a>    <span class="doccomment">/// Checks if the block manager has no suspended blocks.
+<a href=#156 id=156 data-nosnippet>156</a>    </span><span class="attr">#[cfg(test)]
+<a href=#157 id=157 data-nosnippet>157</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>has_no_suspended_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#158 id=158 data-nosnippet>158</a>        <span class="self">self</span>.block_manager.is_empty()
+<a href=#159 id=159 data-nosnippet>159</a>    }
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="doccomment">/// Tries to decide leaders, process and finalize commits, returning finalized commits
+<a href=#162 id=162 data-nosnippet>162</a>    /// and the updated last_decided slot.
+<a href=#163 id=163 data-nosnippet>163</a>    </span><span class="kw">pub async fn </span>try_commit(
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#165 id=165 data-nosnippet>165</a>        last_decided: <span class="kw">crate</span>::block::Slot,
+<a href=#166 id=166 data-nosnippet>166</a>    ) -&gt; (Vec&lt;CommittedSubDag&gt;, <span class="kw">crate</span>::block::Slot) {
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">let </span>sequence = <span class="self">self</span>.committer.try_decide(last_decided);
+<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">let </span>new_last_decided = sequence
+<a href=#169 id=169 data-nosnippet>169</a>            .last()
+<a href=#170 id=170 data-nosnippet>170</a>            .map(|leader| leader.slot())
+<a href=#171 id=171 data-nosnippet>171</a>            .unwrap_or(last_decided);
+<a href=#172 id=172 data-nosnippet>172</a>        <span class="kw">let </span>finalized = <span class="self">self</span>.process_commits(sequence).<span class="kw">await</span>;
+<a href=#173 id=173 data-nosnippet>173</a>        (finalized, new_last_decided)
+<a href=#174 id=174 data-nosnippet>174</a>    }
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a>    <span class="doccomment">/// Process decided leaders through linearizer and commit finalizer,
+<a href=#177 id=177 data-nosnippet>177</a>    /// similar to Core::try_commit() and CommitFinalizer::run().
+<a href=#178 id=178 data-nosnippet>178</a>    ///
+<a href=#179 id=179 data-nosnippet>179</a>    /// This extracts leader blocks from DecidedLeader::Commit, creates CommittedSubDags
+<a href=#180 id=180 data-nosnippet>180</a>    /// via the linearizer, and processes them through the commit finalizer.
+<a href=#181 id=181 data-nosnippet>181</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>process_commits(
+<a href=#182 id=182 data-nosnippet>182</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#183 id=183 data-nosnippet>183</a>        sequence: Vec&lt;DecidedLeader&gt;,
+<a href=#184 id=184 data-nosnippet>184</a>    ) -&gt; Vec&lt;CommittedSubDag&gt; {
+<a href=#185 id=185 data-nosnippet>185</a>        <span class="comment">// Extract leader blocks from DecidedLeader::Commit (skip Skip decisions)
+<a href=#186 id=186 data-nosnippet>186</a>        </span><span class="kw">let </span>leaders: Vec&lt;VerifiedBlock&gt; = sequence
+<a href=#187 id=187 data-nosnippet>187</a>            .into_iter()
+<a href=#188 id=188 data-nosnippet>188</a>            .filter_map(|d| <span class="kw">match </span>d {
+<a href=#189 id=189 data-nosnippet>189</a>                DecidedLeader::Commit(block, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(block),
+<a href=#190 id=190 data-nosnippet>190</a>                DecidedLeader::Skip(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+<a href=#191 id=191 data-nosnippet>191</a>            })
+<a href=#192 id=192 data-nosnippet>192</a>            .collect();
+<a href=#193 id=193 data-nosnippet>193</a>
+<a href=#194 id=194 data-nosnippet>194</a>        <span class="kw">if </span>leaders.is_empty() {
+<a href=#195 id=195 data-nosnippet>195</a>            <span class="kw">return </span><span class="macro">vec!</span>[];
+<a href=#196 id=196 data-nosnippet>196</a>        }
+<a href=#197 id=197 data-nosnippet>197</a>
+<a href=#198 id=198 data-nosnippet>198</a>        <span class="comment">// Use linearizer to create CommittedSubDag
+<a href=#199 id=199 data-nosnippet>199</a>        </span><span class="kw">let </span>committed_sub_dags = <span class="self">self</span>.linearizer.handle_commit(leaders);
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a>        <span class="comment">// After handle_commit(), the GC round is updated. We need to unsuspend any blocks that were
+<a href=#202 id=202 data-nosnippet>202</a>        // suspended because of missing ancestors that are now GC'ed.
+<a href=#203 id=203 data-nosnippet>203</a>        </span><span class="self">self</span>.block_manager
+<a href=#204 id=204 data-nosnippet>204</a>            .try_unsuspend_blocks_for_latest_gc_round();
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="comment">// Process through commit finalizer
+<a href=#207 id=207 data-nosnippet>207</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>finalized_commits = <span class="macro">vec!</span>[];
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">for </span><span class="kw-2">mut </span>subdag <span class="kw">in </span>committed_sub_dags {
+<a href=#209 id=209 data-nosnippet>209</a>            subdag.decided_with_local_blocks = <span class="bool-val">true</span>;
+<a href=#210 id=210 data-nosnippet>210</a>            <span class="kw">let </span>finalized = <span class="self">self</span>.commit_finalizer.process_commit(subdag).<span class="kw">await</span>;
+<a href=#211 id=211 data-nosnippet>211</a>            finalized_commits.extend(finalized);
+<a href=#212 id=212 data-nosnippet>212</a>        }
+<a href=#213 id=213 data-nosnippet>213</a>
+<a href=#214 id=214 data-nosnippet>214</a>        finalized_commits
+<a href=#215 id=215 data-nosnippet>215</a>    }
+<a href=#216 id=216 data-nosnippet>216</a>}
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a><span class="doccomment">/// Compare commit sequences across all runs, asserting they are identical.
+<a href=#219 id=219 data-nosnippet>219</a>/// Returns the shortest commit sequence for additional assertions if needed.
+<a href=#220 id=220 data-nosnippet>220</a></span><span class="kw">pub fn </span>assert_commit_sequences_match(
+<a href=#221 id=221 data-nosnippet>221</a>    commit_sequences: Vec&lt;Vec&lt;CommittedSubDag&gt;&gt;,
+<a href=#222 id=222 data-nosnippet>222</a>) -&gt; Vec&lt;CommittedSubDag&gt; {
+<a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">let </span>(shortest_idx, shortest_sequence) = commit_sequences
+<a href=#224 id=224 data-nosnippet>224</a>        .iter()
+<a href=#225 id=225 data-nosnippet>225</a>        .enumerate()
+<a href=#226 id=226 data-nosnippet>226</a>        .min_by_key(|(<span class="kw">_</span>, seq)| seq.len())
+<a href=#227 id=227 data-nosnippet>227</a>        .expect(<span class="string">"commit_sequences should not be empty"</span>);
+<a href=#228 id=228 data-nosnippet>228</a>
+<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">for </span>(run, commit_sequence) <span class="kw">in </span>commit_sequences.iter().enumerate() {
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="comment">// Since INDIRECT_REJECT_DEPTH is 3, the maximum number of commits buffered in CommitFinalizer is 3.
+<a href=#231 id=231 data-nosnippet>231</a>        // And because of the direct finalization optimization, it might happen the last 3 commits are pending in
+<a href=#232 id=232 data-nosnippet>232</a>        // one run but all finalized in another.
+<a href=#233 id=233 data-nosnippet>233</a>        </span><span class="macro">assert!</span>(
+<a href=#234 id=234 data-nosnippet>234</a>            commit_sequence.len() &lt;= shortest_sequence.len() + <span class="number">3</span>,
+<a href=#235 id=235 data-nosnippet>235</a>            <span class="string">"Commit sequence at run {run} is more than 3 commits longer than shortest (run {shortest_idx}): {} vs {}"</span>,
+<a href=#236 id=236 data-nosnippet>236</a>            commit_sequence.len(),
+<a href=#237 id=237 data-nosnippet>237</a>            shortest_sequence.len()
+<a href=#238 id=238 data-nosnippet>238</a>        );
+<a href=#239 id=239 data-nosnippet>239</a>
+<a href=#240 id=240 data-nosnippet>240</a>        <span class="kw">for </span>(commit_index, (c1, c2)) <span class="kw">in </span>commit_sequence
+<a href=#241 id=241 data-nosnippet>241</a>            .iter()
+<a href=#242 id=242 data-nosnippet>242</a>            .zip(shortest_sequence.iter())
+<a href=#243 id=243 data-nosnippet>243</a>            .enumerate()
+<a href=#244 id=244 data-nosnippet>244</a>        {
+<a href=#245 id=245 data-nosnippet>245</a>            <span class="macro">assert_eq!</span>(
+<a href=#246 id=246 data-nosnippet>246</a>                c1.leader, c2.leader,
+<a href=#247 id=247 data-nosnippet>247</a>                <span class="string">"Leader mismatch at run {run} commit {commit_index}"
+<a href=#248 id=248 data-nosnippet>248</a>            </span>);
+<a href=#249 id=249 data-nosnippet>249</a>            <span class="macro">assert_eq!</span>(
+<a href=#250 id=250 data-nosnippet>250</a>                c1.commit_ref, c2.commit_ref,
+<a href=#251 id=251 data-nosnippet>251</a>                <span class="string">"Commit sequence mismatch at run {run} commit {commit_index}"
+<a href=#252 id=252 data-nosnippet>252</a>            </span>);
+<a href=#253 id=253 data-nosnippet>253</a>            <span class="macro">assert_eq!</span>(
+<a href=#254 id=254 data-nosnippet>254</a>                c1.rejected_transactions_by_block, c2.rejected_transactions_by_block,
+<a href=#255 id=255 data-nosnippet>255</a>                <span class="string">"Rejected transactions mismatch at run {run} commit {commit_index}"
+<a href=#256 id=256 data-nosnippet>256</a>            </span>);
+<a href=#257 id=257 data-nosnippet>257</a>        }
+<a href=#258 id=258 data-nosnippet>258</a>    }
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>    <span class="kw">let </span><span class="kw-2">mut </span>total_transactions = <span class="number">0</span>;
+<a href=#261 id=261 data-nosnippet>261</a>    <span class="kw">let </span><span class="kw-2">mut </span>rejected_transactions = <span class="number">0</span>;
+<a href=#262 id=262 data-nosnippet>262</a>    <span class="kw">let </span><span class="kw-2">mut </span>reject_votes = <span class="number">0</span>;
+<a href=#263 id=263 data-nosnippet>263</a>    <span class="kw">let </span><span class="kw-2">mut </span>blocks = <span class="number">4</span>;
+<a href=#264 id=264 data-nosnippet>264</a>    <span class="kw">for </span>commit <span class="kw">in </span>shortest_sequence.iter() {
+<a href=#265 id=265 data-nosnippet>265</a>        total_transactions += commit
+<a href=#266 id=266 data-nosnippet>266</a>            .blocks
+<a href=#267 id=267 data-nosnippet>267</a>            .iter()
+<a href=#268 id=268 data-nosnippet>268</a>            .map(|block| block.transactions().len())
+<a href=#269 id=269 data-nosnippet>269</a>            .sum::&lt;usize&gt;();
+<a href=#270 id=270 data-nosnippet>270</a>        rejected_transactions += commit
+<a href=#271 id=271 data-nosnippet>271</a>            .rejected_transactions_by_block
+<a href=#272 id=272 data-nosnippet>272</a>            .values()
+<a href=#273 id=273 data-nosnippet>273</a>            .map(|transactions| transactions.len())
+<a href=#274 id=274 data-nosnippet>274</a>            .sum::&lt;usize&gt;();
+<a href=#275 id=275 data-nosnippet>275</a>        reject_votes += commit
+<a href=#276 id=276 data-nosnippet>276</a>            .blocks
+<a href=#277 id=277 data-nosnippet>277</a>            .iter()
+<a href=#278 id=278 data-nosnippet>278</a>            .map(|block| block.transaction_votes().len())
+<a href=#279 id=279 data-nosnippet>279</a>            .sum::&lt;usize&gt;();
+<a href=#280 id=280 data-nosnippet>280</a>        blocks += commit.blocks.len();
+<a href=#281 id=281 data-nosnippet>281</a>    }
+<a href=#282 id=282 data-nosnippet>282</a>
+<a href=#283 id=283 data-nosnippet>283</a>    <span class="macro">tracing::info!</span>(
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="string">"Finished comparing commit sequences. Commits: {}, Blocks: {}, Total transactions: {}, Rejected transactions: {}, Reject votes: {}"</span>,
+<a href=#285 id=285 data-nosnippet>285</a>        shortest_sequence.len(),
+<a href=#286 id=286 data-nosnippet>286</a>        blocks,
+<a href=#287 id=287 data-nosnippet>287</a>        total_transactions,
+<a href=#288 id=288 data-nosnippet>288</a>        rejected_transactions,
+<a href=#289 id=289 data-nosnippet>289</a>        reject_votes
+<a href=#290 id=290 data-nosnippet>290</a>    );
+<a href=#291 id=291 data-nosnippet>291</a>
+<a href=#292 id=292 data-nosnippet>292</a>    shortest_sequence.clone()
+<a href=#293 id=293 data-nosnippet>293</a>}
+<a href=#294 id=294 data-nosnippet>294</a>
+<a href=#295 id=295 data-nosnippet>295</a><span class="comment">// ---- RandomDag, RandomDagConfig and RandomDagIterator ----
+<a href=#296 id=296 data-nosnippet>296</a>
+<a href=#297 id=297 data-nosnippet>297</a></span><span class="doccomment">/// Configuration for generating a randomized DAG.
+<a href=#298 id=298 data-nosnippet>298</a></span><span class="kw">pub struct </span>RandomDagConfig {
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="comment">// Number of distinct authorities creating blocks.
+<a href=#300 id=300 data-nosnippet>300</a>    </span><span class="kw">pub </span>num_authorities: usize,
+<a href=#301 id=301 data-nosnippet>301</a>    <span class="comment">// Number of rounds to generate.
+<a href=#302 id=302 data-nosnippet>302</a>    </span><span class="kw">pub </span>num_rounds: Round,
+<a href=#303 id=303 data-nosnippet>303</a>    <span class="comment">// Number of transactions per block.
+<a href=#304 id=304 data-nosnippet>304</a>    </span><span class="kw">pub </span>num_transactions: u32,
+<a href=#305 id=305 data-nosnippet>305</a>    <span class="comment">// Percentage chance of transactions to randomly reject.
+<a href=#306 id=306 data-nosnippet>306</a>    </span><span class="kw">pub </span>reject_percentage: u8,
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="comment">// Each element specifies the authority index, and the number of equivocators
+<a href=#308 id=308 data-nosnippet>308</a>    // that are acting under this authority.
+<a href=#309 id=309 data-nosnippet>309</a>    </span><span class="kw">pub </span>equivocators: Vec&lt;(AuthorityIndex, u16)&gt;,
+<a href=#310 id=310 data-nosnippet>310</a>}
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a><span class="doccomment">/// A randomly generated DAG for testing commit patterns with reject votes.
+<a href=#313 id=313 data-nosnippet>313</a></span><span class="kw">pub struct </span>RandomDag {
+<a href=#314 id=314 data-nosnippet>314</a>    context: Arc&lt;Context&gt;,
+<a href=#315 id=315 data-nosnippet>315</a>    <span class="kw">pub </span>blocks: Vec&lt;VerifiedBlock&gt;,
+<a href=#316 id=316 data-nosnippet>316</a>    num_rounds: Round,
+<a href=#317 id=317 data-nosnippet>317</a>}
+<a href=#318 id=318 data-nosnippet>318</a>
+<a href=#319 id=319 data-nosnippet>319</a><span class="kw">impl </span>RandomDag {
+<a href=#320 id=320 data-nosnippet>320</a>    <span class="doccomment">/// Creates a new RandomDag with generated blocks containing transactions and reject votes.
+<a href=#321 id=321 data-nosnippet>321</a>    </span><span class="kw">pub fn </span>new(context: Arc&lt;Context&gt;, rng: <span class="kw-2">&amp;mut </span>StdRng, config: RandomDagConfig) -&gt; <span class="self">Self </span>{
+<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw">let </span>RandomDagConfig {
+<a href=#323 id=323 data-nosnippet>323</a>            num_authorities: <span class="kw">_</span>,
+<a href=#324 id=324 data-nosnippet>324</a>            num_rounds,
+<a href=#325 id=325 data-nosnippet>325</a>            num_transactions,
+<a href=#326 id=326 data-nosnippet>326</a>            reject_percentage,
+<a href=#327 id=327 data-nosnippet>327</a>            equivocators,
+<a href=#328 id=328 data-nosnippet>328</a>        } = config;
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="kw">let </span>committee = <span class="kw-2">&amp;</span>context.committee;
+<a href=#331 id=331 data-nosnippet>331</a>        <span class="kw">let </span>quorum_threshold = committee.quorum_threshold();
+<a href=#332 id=332 data-nosnippet>332</a>        <span class="kw">let </span>total_stake = committee.total_stake();
+<a href=#333 id=333 data-nosnippet>333</a>
+<a href=#334 id=334 data-nosnippet>334</a>        <span class="comment">// Create instance ID for each authority and equivocators.
+<a href=#335 id=335 data-nosnippet>335</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>instances: Vec&lt;InstanceID&gt; = committee.authorities().map(|(a, <span class="kw">_</span>)| (a, <span class="number">0</span>)).collect();
+<a href=#336 id=336 data-nosnippet>336</a>        <span class="kw">for </span>(authority, num_equivocators) <span class="kw">in </span>equivocators {
+<a href=#337 id=337 data-nosnippet>337</a>            <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..=num_equivocators {
+<a href=#338 id=338 data-nosnippet>338</a>                instances.push((authority, i));
+<a href=#339 id=339 data-nosnippet>339</a>            }
+<a href=#340 id=340 data-nosnippet>340</a>        }
+<a href=#341 id=341 data-nosnippet>341</a>
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="kw">let </span>genesis_blocks = genesis_blocks(<span class="kw-2">&amp;</span>context)
+<a href=#343 id=343 data-nosnippet>343</a>            .into_iter()
+<a href=#344 id=344 data-nosnippet>344</a>            .map(|b| (b.author(), b))
+<a href=#345 id=345 data-nosnippet>345</a>            .collect::&lt;BTreeMap&lt;AuthorityIndex, VerifiedBlock&gt;&gt;();
+<a href=#346 id=346 data-nosnippet>346</a>        <span class="kw">let </span>last_round_blocks: Vec&lt;VerifiedBlock&gt; = genesis_blocks.values().cloned().collect();
+<a href=#347 id=347 data-nosnippet>347</a>
+<a href=#348 id=348 data-nosnippet>348</a>        <span class="comment">// Store all blocks for lookup and range search.
+<a href=#349 id=349 data-nosnippet>349</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>all_blocks: BTreeMap&lt;BlockRef, VerifiedBlock&gt; = BTreeMap::new();
+<a href=#350 id=350 data-nosnippet>350</a>        <span class="comment">// Initialize with genesis blocks.
+<a href=#351 id=351 data-nosnippet>351</a>        </span><span class="kw">for </span>block <span class="kw">in </span><span class="kw-2">&amp;</span>last_round_blocks {
+<a href=#352 id=352 data-nosnippet>352</a>            all_blocks.insert(block.reference(), block.clone());
+<a href=#353 id=353 data-nosnippet>353</a>        }
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a>        <span class="comment">// Track the latest block per instance. Equivocators start from the same genesis blocks per authority.
+<a href=#356 id=356 data-nosnippet>356</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>latest_blocks = instances
+<a href=#357 id=357 data-nosnippet>357</a>            .iter()
+<a href=#358 id=358 data-nosnippet>358</a>            .map(|<span class="kw-2">&amp;</span>(a, i)| {
+<a href=#359 id=359 data-nosnippet>359</a>                <span class="kw">let </span>b = genesis_blocks.get(<span class="kw-2">&amp;</span>a).unwrap();
+<a href=#360 id=360 data-nosnippet>360</a>                ((a, i), b.clone())
+<a href=#361 id=361 data-nosnippet>361</a>            })
+<a href=#362 id=362 data-nosnippet>362</a>            .collect::&lt;BTreeMap&lt;InstanceID, VerifiedBlock&gt;&gt;();
+<a href=#363 id=363 data-nosnippet>363</a>
+<a href=#364 id=364 data-nosnippet>364</a>        <span class="comment">// Track included blocks per instance (simulates link_causal_history).
+<a href=#365 id=365 data-nosnippet>365</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>included_refs = BTreeMap::&lt;InstanceID, BTreeSet&lt;BlockRef&gt;&gt;::new();
+<a href=#366 id=366 data-nosnippet>366</a>
+<a href=#367 id=367 data-nosnippet>367</a>        <span class="kw">for </span>r <span class="kw">in </span><span class="number">1</span>..=num_rounds {
+<a href=#368 id=368 data-nosnippet>368</a>            <span class="comment">// Select random quorum-or-more stake to produce blocks this round.
+<a href=#369 id=369 data-nosnippet>369</a>            </span><span class="kw">let </span>target_stake = rng.gen_range(quorum_threshold..=total_stake);
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a>            <span class="comment">// Select random instances to produce blocks this round.
+<a href=#372 id=372 data-nosnippet>372</a>            // Equivocations are allowed when multiple instances from the same authority propose at
+<a href=#373 id=373 data-nosnippet>373</a>            // the same slot.
+<a href=#374 id=374 data-nosnippet>374</a>            </span><span class="kw">let </span><span class="kw-2">mut </span>proposers = instances.clone();
+<a href=#375 id=375 data-nosnippet>375</a>            proposers.shuffle(rng);
+<a href=#376 id=376 data-nosnippet>376</a>            <span class="kw">let </span><span class="kw-2">mut </span>selected_stake = <span class="number">0</span>;
+<a href=#377 id=377 data-nosnippet>377</a>            <span class="comment">// Ensure stake across equivocations are counted only once.
+<a href=#378 id=378 data-nosnippet>378</a>            </span><span class="kw">let </span><span class="kw-2">mut </span>selected_authorities = <span class="macro">vec!</span>[<span class="bool-val">false</span>; committee.size()];
+<a href=#379 id=379 data-nosnippet>379</a>            <span class="kw">let </span>selected_proposers: Vec&lt;<span class="kw">_</span>&gt; = proposers
+<a href=#380 id=380 data-nosnippet>380</a>                .into_iter()
+<a href=#381 id=381 data-nosnippet>381</a>                .take_while(|instance| {
+<a href=#382 id=382 data-nosnippet>382</a>                    <span class="kw">if </span>selected_stake &gt;= target_stake {
+<a href=#383 id=383 data-nosnippet>383</a>                        <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#384 id=384 data-nosnippet>384</a>                    }
+<a href=#385 id=385 data-nosnippet>385</a>                    <span class="kw">if </span>!selected_authorities[instance.<span class="number">0</span>.value()] {
+<a href=#386 id=386 data-nosnippet>386</a>                        selected_authorities[instance.<span class="number">0</span>.value()] = <span class="bool-val">true</span>;
+<a href=#387 id=387 data-nosnippet>387</a>                        selected_stake += committee.stake(instance.<span class="number">0</span>);
+<a href=#388 id=388 data-nosnippet>388</a>                    }
+<a href=#389 id=389 data-nosnippet>389</a>                    <span class="bool-val">true
+<a href=#390 id=390 data-nosnippet>390</a>                </span>})
+<a href=#391 id=391 data-nosnippet>391</a>                .collect();
+<a href=#392 id=392 data-nosnippet>392</a>
+<a href=#393 id=393 data-nosnippet>393</a>            <span class="kw">let </span><span class="kw-2">mut </span>current_round_blocks = Vec::new();
+<a href=#394 id=394 data-nosnippet>394</a>            <span class="kw">for </span>instance_id <span class="kw">in </span>selected_proposers {
+<a href=#395 id=395 data-nosnippet>395</a>                <span class="kw">let </span>block = build_block_for_instance(
+<a href=#396 id=396 data-nosnippet>396</a>                    <span class="kw-2">&amp;</span>context,
+<a href=#397 id=397 data-nosnippet>397</a>                    <span class="kw-2">&amp;</span>instances,
+<a href=#398 id=398 data-nosnippet>398</a>                    rng,
+<a href=#399 id=399 data-nosnippet>399</a>                    r,
+<a href=#400 id=400 data-nosnippet>400</a>                    instance_id,
+<a href=#401 id=401 data-nosnippet>401</a>                    num_transactions,
+<a href=#402 id=402 data-nosnippet>402</a>                    reject_percentage,
+<a href=#403 id=403 data-nosnippet>403</a>                    <span class="kw-2">&amp;</span>all_blocks,
+<a href=#404 id=404 data-nosnippet>404</a>                    <span class="kw-2">&amp;mut </span>latest_blocks,
+<a href=#405 id=405 data-nosnippet>405</a>                    <span class="kw-2">&amp;mut </span>included_refs,
+<a href=#406 id=406 data-nosnippet>406</a>                );
+<a href=#407 id=407 data-nosnippet>407</a>                current_round_blocks.push((instance_id, block));
+<a href=#408 id=408 data-nosnippet>408</a>            }
+<a href=#409 id=409 data-nosnippet>409</a>
+<a href=#410 id=410 data-nosnippet>410</a>            <span class="comment">// Update state with current round blocks.
+<a href=#411 id=411 data-nosnippet>411</a>            </span><span class="kw">for </span>(instance_id, block) <span class="kw">in </span>current_round_blocks {
+<a href=#412 id=412 data-nosnippet>412</a>                all_blocks.insert(block.reference(), block.clone());
+<a href=#413 id=413 data-nosnippet>413</a>                latest_blocks.insert(instance_id, block);
+<a href=#414 id=414 data-nosnippet>414</a>            }
+<a href=#415 id=415 data-nosnippet>415</a>        }
+<a href=#416 id=416 data-nosnippet>416</a>
+<a href=#417 id=417 data-nosnippet>417</a>        RandomDag {
+<a href=#418 id=418 data-nosnippet>418</a>            context,
+<a href=#419 id=419 data-nosnippet>419</a>            blocks: all_blocks.values().cloned().collect(),
+<a href=#420 id=420 data-nosnippet>420</a>            num_rounds,
+<a href=#421 id=421 data-nosnippet>421</a>        }
+<a href=#422 id=422 data-nosnippet>422</a>    }
+<a href=#423 id=423 data-nosnippet>423</a>
+<a href=#424 id=424 data-nosnippet>424</a>    <span class="doccomment">/// Creates a RandomDag from existing blocks.
+<a href=#425 id=425 data-nosnippet>425</a>    </span><span class="kw">pub fn </span>from_blocks(context: Arc&lt;Context&gt;, blocks: Vec&lt;VerifiedBlock&gt;) -&gt; <span class="self">Self </span>{
+<a href=#426 id=426 data-nosnippet>426</a>        <span class="kw">let </span>num_rounds = blocks.iter().map(|b| b.round()).max().unwrap_or(<span class="number">0</span>);
+<a href=#427 id=427 data-nosnippet>427</a>        RandomDag {
+<a href=#428 id=428 data-nosnippet>428</a>            context,
+<a href=#429 id=429 data-nosnippet>429</a>            blocks,
+<a href=#430 id=430 data-nosnippet>430</a>            num_rounds,
+<a href=#431 id=431 data-nosnippet>431</a>        }
+<a href=#432 id=432 data-nosnippet>432</a>    }
+<a href=#433 id=433 data-nosnippet>433</a>
+<a href=#434 id=434 data-nosnippet>434</a>    <span class="doccomment">/// Creates an iterator yielding blocks in constrained random order.
+<a href=#435 id=435 data-nosnippet>435</a>    </span><span class="kw">pub fn </span>random_iter&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+<a href=#437 id=437 data-nosnippet>437</a>        rng: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>StdRng,
+<a href=#438 id=438 data-nosnippet>438</a>        max_step: Round,
+<a href=#439 id=439 data-nosnippet>439</a>    ) -&gt; RandomDagIterator&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#440 id=440 data-nosnippet>440</a>        RandomDagIterator::new(<span class="self">self</span>, rng, max_step)
+<a href=#441 id=441 data-nosnippet>441</a>    }
+<a href=#442 id=442 data-nosnippet>442</a>}
+<a href=#443 id=443 data-nosnippet>443</a>
+<a href=#444 id=444 data-nosnippet>444</a><span class="comment">// Identifies a consensus instance, by its authority index and another index to differentiate between equivocators.
+<a href=#445 id=445 data-nosnippet>445</a></span><span class="kw">type </span>InstanceID = (AuthorityIndex, u16);
+<a href=#446 id=446 data-nosnippet>446</a>
+<a href=#447 id=447 data-nosnippet>447</a><span class="doccomment">/// Builds a single block for the given consensus instance at the specified round.
+<a href=#448 id=448 data-nosnippet>448</a></span><span class="kw">fn </span>build_block_for_instance(
+<a href=#449 id=449 data-nosnippet>449</a>    context: <span class="kw-2">&amp;</span>Arc&lt;Context&gt;,
+<a href=#450 id=450 data-nosnippet>450</a>    instances: <span class="kw-2">&amp;</span>[InstanceID],
+<a href=#451 id=451 data-nosnippet>451</a>    rng: <span class="kw-2">&amp;mut </span>StdRng,
+<a href=#452 id=452 data-nosnippet>452</a>    round: Round,
+<a href=#453 id=453 data-nosnippet>453</a>    own_instance: InstanceID,
+<a href=#454 id=454 data-nosnippet>454</a>    num_transactions: u32,
+<a href=#455 id=455 data-nosnippet>455</a>    reject_percentage: u8,
+<a href=#456 id=456 data-nosnippet>456</a>    all_blocks: <span class="kw-2">&amp;</span>BTreeMap&lt;BlockRef, VerifiedBlock&gt;,
+<a href=#457 id=457 data-nosnippet>457</a>    latest_blocks: <span class="kw-2">&amp;mut </span>BTreeMap&lt;InstanceID, VerifiedBlock&gt;,
+<a href=#458 id=458 data-nosnippet>458</a>    included_refs: <span class="kw-2">&amp;mut </span>BTreeMap&lt;InstanceID, BTreeSet&lt;BlockRef&gt;&gt;,
+<a href=#459 id=459 data-nosnippet>459</a>) -&gt; VerifiedBlock {
+<a href=#460 id=460 data-nosnippet>460</a>    <span class="kw">let </span>committee = <span class="kw-2">&amp;</span>context.committee;
+<a href=#461 id=461 data-nosnippet>461</a>    <span class="kw">let </span>quorum_threshold = committee.quorum_threshold();
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">let </span>own_authority = own_instance.<span class="number">0</span>;
+<a href=#463 id=463 data-nosnippet>463</a>
+<a href=#464 id=464 data-nosnippet>464</a>    <span class="comment">// Select blocks from the previous round until quorum stake is reached.
+<a href=#465 id=465 data-nosnippet>465</a>    </span><span class="kw">let </span>prev_round = round - <span class="number">1</span>;
+<a href=#466 id=466 data-nosnippet>466</a>    <span class="kw">let </span><span class="kw-2">mut </span>prev_round_blocks: Vec&lt;<span class="kw">_</span>&gt; = all_blocks
+<a href=#467 id=467 data-nosnippet>467</a>        .range((
+<a href=#468 id=468 data-nosnippet>468</a>            Included(BlockRef::new(
+<a href=#469 id=469 data-nosnippet>469</a>                prev_round,
+<a href=#470 id=470 data-nosnippet>470</a>                AuthorityIndex::MIN,
+<a href=#471 id=471 data-nosnippet>471</a>                BlockDigest::MIN,
+<a href=#472 id=472 data-nosnippet>472</a>            )),
+<a href=#473 id=473 data-nosnippet>473</a>            Included(BlockRef::new(
+<a href=#474 id=474 data-nosnippet>474</a>                prev_round,
+<a href=#475 id=475 data-nosnippet>475</a>                AuthorityIndex::MAX,
+<a href=#476 id=476 data-nosnippet>476</a>                BlockDigest::MAX,
+<a href=#477 id=477 data-nosnippet>477</a>            )),
+<a href=#478 id=478 data-nosnippet>478</a>        ))
+<a href=#479 id=479 data-nosnippet>479</a>        .map(|(<span class="kw">_</span>, b)| b)
+<a href=#480 id=480 data-nosnippet>480</a>        .cloned()
+<a href=#481 id=481 data-nosnippet>481</a>        .collect();
+<a href=#482 id=482 data-nosnippet>482</a>    prev_round_blocks.shuffle(rng);
+<a href=#483 id=483 data-nosnippet>483</a>    <span class="kw">let </span><span class="kw-2">mut </span>parent_stake: Stake = <span class="number">0</span>;
+<a href=#484 id=484 data-nosnippet>484</a>    <span class="comment">// Ensure only one block gets selected per authority, regardless of equivocations.
+<a href=#485 id=485 data-nosnippet>485</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>selected_authorities = <span class="macro">vec!</span>[<span class="bool-val">false</span>; committee.size()];
+<a href=#486 id=486 data-nosnippet>486</a>    <span class="kw">let </span>quorum_parents: Vec&lt;<span class="kw">_</span>&gt; = prev_round_blocks
+<a href=#487 id=487 data-nosnippet>487</a>        .into_iter()
+<a href=#488 id=488 data-nosnippet>488</a>        .filter_map(|b| {
+<a href=#489 id=489 data-nosnippet>489</a>            <span class="kw">if </span>parent_stake &gt;= quorum_threshold {
+<a href=#490 id=490 data-nosnippet>490</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#491 id=491 data-nosnippet>491</a>            }
+<a href=#492 id=492 data-nosnippet>492</a>            <span class="kw">if </span>selected_authorities[b.author().value()] {
+<a href=#493 id=493 data-nosnippet>493</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#494 id=494 data-nosnippet>494</a>            }
+<a href=#495 id=495 data-nosnippet>495</a>            selected_authorities[b.author().value()] = <span class="bool-val">true</span>;
+<a href=#496 id=496 data-nosnippet>496</a>            parent_stake += committee.stake(b.author());
+<a href=#497 id=497 data-nosnippet>497</a>            <span class="prelude-val">Some</span>(b)
+<a href=#498 id=498 data-nosnippet>498</a>        })
+<a href=#499 id=499 data-nosnippet>499</a>        .collect();
+<a href=#500 id=500 data-nosnippet>500</a>
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="comment">// Find so far unselected instances.
+<a href=#502 id=502 data-nosnippet>502</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>unselected_instances: Vec&lt;<span class="kw">_</span>&gt; = instances
+<a href=#503 id=503 data-nosnippet>503</a>        .iter()
+<a href=#504 id=504 data-nosnippet>504</a>        .filter(|(authority, <span class="kw">_</span>)| !selected_authorities[authority.value()])
+<a href=#505 id=505 data-nosnippet>505</a>        .cloned()
+<a href=#506 id=506 data-nosnippet>506</a>        .collect();
+<a href=#507 id=507 data-nosnippet>507</a>
+<a href=#508 id=508 data-nosnippet>508</a>    <span class="comment">// Randomly select extra blocks to link to among ancestors.
+<a href=#509 id=509 data-nosnippet>509</a>    </span>unselected_instances.shuffle(rng);
+<a href=#510 id=510 data-nosnippet>510</a>    <span class="comment">// Use min of two uniform samples to bias toward fewer additional ancestors
+<a href=#511 id=511 data-nosnippet>511</a>    // while maintaining non-zero probability for all counts.
+<a href=#512 id=512 data-nosnippet>512</a>    </span><span class="kw">let </span>extra_count = rng
+<a href=#513 id=513 data-nosnippet>513</a>        .gen_range(<span class="number">0</span>..=unselected_instances.len())
+<a href=#514 id=514 data-nosnippet>514</a>        .min(rng.gen_range(<span class="number">0</span>..=unselected_instances.len()));
+<a href=#515 id=515 data-nosnippet>515</a>    <span class="kw">let </span>additional_ancestor_blocks: Vec&lt;<span class="kw">_</span>&gt; = unselected_instances[<span class="number">0</span>..extra_count]
+<a href=#516 id=516 data-nosnippet>516</a>        .iter()
+<a href=#517 id=517 data-nosnippet>517</a>        .filter_map(|<span class="kw-2">&amp;</span>(authority, instance)| {
+<a href=#518 id=518 data-nosnippet>518</a>            <span class="kw">if </span>selected_authorities[authority.value()] {
+<a href=#519 id=519 data-nosnippet>519</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#520 id=520 data-nosnippet>520</a>            }
+<a href=#521 id=521 data-nosnippet>521</a>            <span class="kw">let </span>block = latest_blocks.get(<span class="kw-2">&amp;</span>(authority, instance))<span class="question-mark">?</span>;
+<a href=#522 id=522 data-nosnippet>522</a>            <span class="macro">assert!</span>(
+<a href=#523 id=523 data-nosnippet>523</a>                block.round() &lt; round,
+<a href=#524 id=524 data-nosnippet>524</a>                <span class="string">"latest_blocks should only contain blocks from previous rounds"
+<a href=#525 id=525 data-nosnippet>525</a>            </span>);
+<a href=#526 id=526 data-nosnippet>526</a>            selected_authorities[authority.value()] = <span class="bool-val">true</span>;
+<a href=#527 id=527 data-nosnippet>527</a>            <span class="prelude-val">Some</span>(block.clone())
+<a href=#528 id=528 data-nosnippet>528</a>        })
+<a href=#529 id=529 data-nosnippet>529</a>        .collect();
+<a href=#530 id=530 data-nosnippet>530</a>
+<a href=#531 id=531 data-nosnippet>531</a>    <span class="comment">// Combine ancestors: quorum parents + extra ancestors from unselected authorities + own latest block if necessary.
+<a href=#532 id=532 data-nosnippet>532</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>ancestor_blocks = quorum_parents;
+<a href=#533 id=533 data-nosnippet>533</a>    ancestor_blocks.extend(additional_ancestor_blocks);
+<a href=#534 id=534 data-nosnippet>534</a>    <span class="kw">if </span>!ancestor_blocks.iter().any(|b| b.author() == own_authority) {
+<a href=#535 id=535 data-nosnippet>535</a>        ancestor_blocks.push(latest_blocks[<span class="kw-2">&amp;</span>own_instance].clone());
+<a href=#536 id=536 data-nosnippet>536</a>    }
+<a href=#537 id=537 data-nosnippet>537</a>    <span class="kw">let </span>ancestors: Vec&lt;<span class="kw">_</span>&gt; = ancestor_blocks.iter().map(|b| b.reference()).collect();
+<a href=#538 id=538 data-nosnippet>538</a>
+<a href=#539 id=539 data-nosnippet>539</a>    <span class="comment">// Find newly connected blocks via BFS (similar to link_causal_history).
+<a href=#540 id=540 data-nosnippet>540</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>newly_connected = Vec::new();
+<a href=#541 id=541 data-nosnippet>541</a>    <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::from_iter(ancestors.iter().copied());
+<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(block_ref) = queue.pop_front() {
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="kw">if </span>block_ref.round == <span class="number">0 </span>{
+<a href=#544 id=544 data-nosnippet>544</a>            <span class="kw">continue</span>; <span class="comment">// Skip genesis blocks.
+<a href=#545 id=545 data-nosnippet>545</a>        </span>}
+<a href=#546 id=546 data-nosnippet>546</a>        <span class="kw">if </span>included_refs
+<a href=#547 id=547 data-nosnippet>547</a>            .entry(own_instance)
+<a href=#548 id=548 data-nosnippet>548</a>            .or_default()
+<a href=#549 id=549 data-nosnippet>549</a>            .contains(<span class="kw-2">&amp;</span>block_ref)
+<a href=#550 id=550 data-nosnippet>550</a>        {
+<a href=#551 id=551 data-nosnippet>551</a>            <span class="kw">continue</span>; <span class="comment">// Already included.
+<a href=#552 id=552 data-nosnippet>552</a>        </span>}
+<a href=#553 id=553 data-nosnippet>553</a>        included_refs
+<a href=#554 id=554 data-nosnippet>554</a>            .entry(own_instance)
+<a href=#555 id=555 data-nosnippet>555</a>            .or_default()
+<a href=#556 id=556 data-nosnippet>556</a>            .insert(block_ref);
+<a href=#557 id=557 data-nosnippet>557</a>        newly_connected.push(block_ref);
+<a href=#558 id=558 data-nosnippet>558</a>        <span class="comment">// Traverse ancestors.
+<a href=#559 id=559 data-nosnippet>559</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(block) = all_blocks.get(<span class="kw-2">&amp;</span>block_ref) {
+<a href=#560 id=560 data-nosnippet>560</a>            queue.extend(block.ancestors().iter().cloned());
+<a href=#561 id=561 data-nosnippet>561</a>        }
+<a href=#562 id=562 data-nosnippet>562</a>    }
+<a href=#563 id=563 data-nosnippet>563</a>
+<a href=#564 id=564 data-nosnippet>564</a>    <span class="comment">// Generate random reject votes for newly connected blocks only.
+<a href=#565 id=565 data-nosnippet>565</a>    </span><span class="kw">let </span>votes: Vec&lt;<span class="kw">_</span>&gt; = newly_connected
+<a href=#566 id=566 data-nosnippet>566</a>        .iter()
+<a href=#567 id=567 data-nosnippet>567</a>        .filter(|<span class="kw">_</span>| reject_percentage &gt; <span class="number">0</span>)
+<a href=#568 id=568 data-nosnippet>568</a>        .filter_map(|<span class="kw-2">&amp;</span>block_ref| {
+<a href=#569 id=569 data-nosnippet>569</a>            <span class="kw">let </span>rejects: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..num_transactions)
+<a href=#570 id=570 data-nosnippet>570</a>                .filter(|<span class="kw">_</span>| rng.gen_range(<span class="number">0</span>..<span class="number">100</span>) &lt; reject_percentage)
+<a href=#571 id=571 data-nosnippet>571</a>                .map(|idx| idx <span class="kw">as </span>TransactionIndex)
+<a href=#572 id=572 data-nosnippet>572</a>                .collect();
+<a href=#573 id=573 data-nosnippet>573</a>            (!rejects.is_empty()).then_some(BlockTransactionVotes { block_ref, rejects })
+<a href=#574 id=574 data-nosnippet>574</a>        })
+<a href=#575 id=575 data-nosnippet>575</a>        .collect();
+<a href=#576 id=576 data-nosnippet>576</a>
+<a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">let </span>transactions: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..num_transactions)
+<a href=#578 id=578 data-nosnippet>578</a>        .map(|<span class="kw">_</span>| Transaction::new(<span class="macro">vec!</span>[<span class="number">1_u8</span>; <span class="number">16</span>]))
+<a href=#579 id=579 data-nosnippet>579</a>        .collect();
+<a href=#580 id=580 data-nosnippet>580</a>
+<a href=#581 id=581 data-nosnippet>581</a>    <span class="kw">let </span>timestamp = (round <span class="kw">as </span>u64) * <span class="number">1000 </span>+ (own_authority.value() <span class="kw">as </span>u64) + rng.gen_range(<span class="number">0</span>..<span class="number">100</span>);
+<a href=#582 id=582 data-nosnippet>582</a>
+<a href=#583 id=583 data-nosnippet>583</a>    VerifiedBlock::new_for_test(
+<a href=#584 id=584 data-nosnippet>584</a>        TestBlock::new(round, own_authority.value() <span class="kw">as </span>u32)
+<a href=#585 id=585 data-nosnippet>585</a>            .set_transactions(transactions)
+<a href=#586 id=586 data-nosnippet>586</a>            .set_transaction_votes(votes)
+<a href=#587 id=587 data-nosnippet>587</a>            .set_ancestors(ancestors)
+<a href=#588 id=588 data-nosnippet>588</a>            .set_timestamp_ms(timestamp)
+<a href=#589 id=589 data-nosnippet>589</a>            .build(),
+<a href=#590 id=590 data-nosnippet>590</a>    )
+<a href=#591 id=591 data-nosnippet>591</a>}
+<a href=#592 id=592 data-nosnippet>592</a>
+<a href=#593 id=593 data-nosnippet>593</a><span class="doccomment">/// Per-round state for iteration.
+<a href=#594 id=594 data-nosnippet>594</a></span><span class="attr">#[derive(Clone, Default)]
+<a href=#595 id=595 data-nosnippet>595</a></span><span class="kw">struct </span>RoundState {
+<a href=#596 id=596 data-nosnippet>596</a>    <span class="comment">// Total stake of visited blocks in this round.
+<a href=#597 id=597 data-nosnippet>597</a>    </span>visited_stake: Stake,
+<a href=#598 id=598 data-nosnippet>598</a>    <span class="comment">// Indices of unvisited blocks in this round.
+<a href=#599 id=599 data-nosnippet>599</a>    </span>unvisited: Vec&lt;usize&gt;,
+<a href=#600 id=600 data-nosnippet>600</a>}
+<a href=#601 id=601 data-nosnippet>601</a>
+<a href=#602 id=602 data-nosnippet>602</a><span class="doccomment">/// Iterator yielding blocks in constrained random order. Selects from rounds
+<a href=#603 id=603 data-nosnippet>603</a>/// `completed_round + 1` to `quorum_round + max_step`, simulating arrival with delays.
+<a href=#604 id=604 data-nosnippet>604</a></span><span class="kw">pub struct </span>RandomDagIterator&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#605 id=605 data-nosnippet>605</a>    dag: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>RandomDag,
+<a href=#606 id=606 data-nosnippet>606</a>    rng: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>StdRng,
+<a href=#607 id=607 data-nosnippet>607</a>    quorum_threshold: Stake,
+<a href=#608 id=608 data-nosnippet>608</a>    max_step: Round,
+<a href=#609 id=609 data-nosnippet>609</a>    <span class="comment">// Highest round where all prior rounds have quorum stake visited.
+<a href=#610 id=610 data-nosnippet>610</a>    </span>quorum_round: Round,
+<a href=#611 id=611 data-nosnippet>611</a>    <span class="comment">// Highest round where all prior rounds have all blocks visited.
+<a href=#612 id=612 data-nosnippet>612</a>    </span>completed_round: Round,
+<a href=#613 id=613 data-nosnippet>613</a>    <span class="comment">// State of each round.
+<a href=#614 id=614 data-nosnippet>614</a>    </span>round_states: Vec&lt;RoundState&gt;,
+<a href=#615 id=615 data-nosnippet>615</a>    <span class="comment">// Number of blocks remaining to visit.
+<a href=#616 id=616 data-nosnippet>616</a>    </span>num_remaining: usize,
+<a href=#617 id=617 data-nosnippet>617</a>}
+<a href=#618 id=618 data-nosnippet>618</a>
+<a href=#619 id=619 data-nosnippet>619</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; RandomDagIterator&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#620 id=620 data-nosnippet>620</a>    <span class="kw">fn </span>new(dag: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>RandomDag, rng: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>StdRng, max_step: Round) -&gt; <span class="self">Self </span>{
+<a href=#621 id=621 data-nosnippet>621</a>        <span class="kw">let </span>num_rounds = dag.num_rounds <span class="kw">as </span>usize;
+<a href=#622 id=622 data-nosnippet>622</a>        <span class="kw">let </span>committee = <span class="kw-2">&amp;</span>dag.context.committee;
+<a href=#623 id=623 data-nosnippet>623</a>        <span class="kw">let </span>quorum_threshold = committee.quorum_threshold();
+<a href=#624 id=624 data-nosnippet>624</a>
+<a href=#625 id=625 data-nosnippet>625</a>        <span class="kw">let </span><span class="kw-2">mut </span>round_states: Vec&lt;RoundState&gt; = <span class="macro">vec!</span>[RoundState::default(); num_rounds + <span class="number">1</span>];
+<a href=#626 id=626 data-nosnippet>626</a>
+<a href=#627 id=627 data-nosnippet>627</a>        <span class="kw">for </span>(idx, block) <span class="kw">in </span>dag.blocks.iter().enumerate() {
+<a href=#628 id=628 data-nosnippet>628</a>            <span class="kw">let </span>round = block.round() <span class="kw">as </span>usize;
+<a href=#629 id=629 data-nosnippet>629</a>            round_states[round].unvisited.push(idx);
+<a href=#630 id=630 data-nosnippet>630</a>        }
+<a href=#631 id=631 data-nosnippet>631</a>
+<a href=#632 id=632 data-nosnippet>632</a>        <span class="kw">let </span>num_remaining = dag.blocks.len();
+<a href=#633 id=633 data-nosnippet>633</a>
+<a href=#634 id=634 data-nosnippet>634</a>        <span class="self">Self </span>{
+<a href=#635 id=635 data-nosnippet>635</a>            dag,
+<a href=#636 id=636 data-nosnippet>636</a>            rng,
+<a href=#637 id=637 data-nosnippet>637</a>            max_step,
+<a href=#638 id=638 data-nosnippet>638</a>            quorum_round: <span class="number">0</span>,
+<a href=#639 id=639 data-nosnippet>639</a>            completed_round: <span class="number">0</span>,
+<a href=#640 id=640 data-nosnippet>640</a>            quorum_threshold,
+<a href=#641 id=641 data-nosnippet>641</a>            round_states,
+<a href=#642 id=642 data-nosnippet>642</a>            num_remaining,
+<a href=#643 id=643 data-nosnippet>643</a>        }
+<a href=#644 id=644 data-nosnippet>644</a>    }
+<a href=#645 id=645 data-nosnippet>645</a>}
+<a href=#646 id=646 data-nosnippet>646</a>
+<a href=#647 id=647 data-nosnippet>647</a><span class="kw">impl </span>Iterator <span class="kw">for </span>RandomDagIterator&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#648 id=648 data-nosnippet>648</a>    <span class="kw">type </span>Item = VerifiedBlock;
+<a href=#649 id=649 data-nosnippet>649</a>
+<a href=#650 id=650 data-nosnippet>650</a>    <span class="doccomment">/// The high level algorithm is to randomly select a block from unvisited blocks,
+<a href=#651 id=651 data-nosnippet>651</a>    /// up to quorum_round + max_step round.
+<a href=#652 id=652 data-nosnippet>652</a>    /// It is possible a sequence of blocks are suspended until their common ancestors
+<a href=#653 id=653 data-nosnippet>653</a>    /// gets selected and accepted.
+<a href=#654 id=654 data-nosnippet>654</a>    ///
+<a href=#655 id=655 data-nosnippet>655</a>    /// An alternative approach is to keep track of selected blocks, and only select blocks without
+<a href=#656 id=656 data-nosnippet>656</a>    /// missing dependencies. Even though block selection order is also randomized, this approach
+<a href=#657 id=657 data-nosnippet>657</a>    /// seems to have less test coverage, and was unable to expose errors when incorrect logic was
+<a href=#658 id=658 data-nosnippet>658</a>    /// introduced to CommitFinalizer.
+<a href=#659 id=659 data-nosnippet>659</a>    </span><span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+<a href=#660 id=660 data-nosnippet>660</a>        <span class="kw">if </span><span class="self">self</span>.num_remaining == <span class="number">0 </span>{
+<a href=#661 id=661 data-nosnippet>661</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#662 id=662 data-nosnippet>662</a>        }
+<a href=#663 id=663 data-nosnippet>663</a>
+<a href=#664 id=664 data-nosnippet>664</a>        <span class="comment">// Eligible rounds: from first unvisited to quorum_round + max_step.
+<a href=#665 id=665 data-nosnippet>665</a>        </span><span class="kw">let </span>min_round = <span class="self">self</span>.completed_round <span class="kw">as </span>usize + <span class="number">1</span>;
+<a href=#666 id=666 data-nosnippet>666</a>        <span class="kw">let </span>max_round =
+<a href=#667 id=667 data-nosnippet>667</a>            ((<span class="self">self</span>.quorum_round + <span class="self">self</span>.max_step) <span class="kw">as </span>usize).min(<span class="self">self</span>.round_states.len() - <span class="number">1</span>);
+<a href=#668 id=668 data-nosnippet>668</a>        <span class="kw">let </span>eligible_rounds = min_round..=max_round;
+<a href=#669 id=669 data-nosnippet>669</a>
+<a href=#670 id=670 data-nosnippet>670</a>        <span class="kw">let </span>total_candidates: usize = eligible_rounds
+<a href=#671 id=671 data-nosnippet>671</a>            .clone()
+<a href=#672 id=672 data-nosnippet>672</a>            .map(|r| <span class="self">self</span>.round_states[r].unvisited.len())
+<a href=#673 id=673 data-nosnippet>673</a>            .sum();
+<a href=#674 id=674 data-nosnippet>674</a>
+<a href=#675 id=675 data-nosnippet>675</a>        <span class="kw">if </span>total_candidates == <span class="number">0 </span>{
+<a href=#676 id=676 data-nosnippet>676</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#677 id=677 data-nosnippet>677</a>        }
+<a href=#678 id=678 data-nosnippet>678</a>
+<a href=#679 id=679 data-nosnippet>679</a>        <span class="comment">// Select random candidate by index across eligible rounds.
+<a href=#680 id=680 data-nosnippet>680</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>selection = <span class="self">self</span>.rng.gen_range(<span class="number">0</span>..total_candidates);
+<a href=#681 id=681 data-nosnippet>681</a>        <span class="kw">let </span><span class="kw-2">mut </span>selected_round = <span class="number">0</span>;
+<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">let </span><span class="kw-2">mut </span>selected_pos = <span class="number">0</span>;
+<a href=#683 id=683 data-nosnippet>683</a>
+<a href=#684 id=684 data-nosnippet>684</a>        <span class="kw">for </span>r <span class="kw">in </span>eligible_rounds {
+<a href=#685 id=685 data-nosnippet>685</a>            <span class="kw">let </span>count = <span class="self">self</span>.round_states[r].unvisited.len();
+<a href=#686 id=686 data-nosnippet>686</a>            <span class="kw">if </span>selection &lt; count {
+<a href=#687 id=687 data-nosnippet>687</a>                selected_round = r;
+<a href=#688 id=688 data-nosnippet>688</a>                selected_pos = selection;
+<a href=#689 id=689 data-nosnippet>689</a>                <span class="kw">break</span>;
+<a href=#690 id=690 data-nosnippet>690</a>            }
+<a href=#691 id=691 data-nosnippet>691</a>            selection -= count;
+<a href=#692 id=692 data-nosnippet>692</a>        }
+<a href=#693 id=693 data-nosnippet>693</a>
+<a href=#694 id=694 data-nosnippet>694</a>        <span class="comment">// Get block index and remove from unvisited.
+<a href=#695 id=695 data-nosnippet>695</a>        </span><span class="kw">let </span>block_idx = <span class="self">self</span>.round_states[selected_round]
+<a href=#696 id=696 data-nosnippet>696</a>            .unvisited
+<a href=#697 id=697 data-nosnippet>697</a>            .swap_remove(selected_pos);
+<a href=#698 id=698 data-nosnippet>698</a>        <span class="kw">let </span>block = <span class="self">self</span>.dag.blocks[block_idx].clone();
+<a href=#699 id=699 data-nosnippet>699</a>
+<a href=#700 id=700 data-nosnippet>700</a>        <span class="comment">// Update visited stake for this round.
+<a href=#701 id=701 data-nosnippet>701</a>        </span><span class="kw">let </span>stake = <span class="self">self</span>.dag.context.committee.stake(block.author());
+<a href=#702 id=702 data-nosnippet>702</a>        <span class="self">self</span>.round_states[selected_round].visited_stake += stake;
+<a href=#703 id=703 data-nosnippet>703</a>        <span class="self">self</span>.num_remaining -= <span class="number">1</span>;
+<a href=#704 id=704 data-nosnippet>704</a>
+<a href=#705 id=705 data-nosnippet>705</a>        <span class="comment">// Advance completed_round while next round has all blocks visited.
+<a href=#706 id=706 data-nosnippet>706</a>        </span><span class="kw">while </span><span class="self">self
+<a href=#707 id=707 data-nosnippet>707</a>            </span>.round_states
+<a href=#708 id=708 data-nosnippet>708</a>            .get(<span class="self">self</span>.completed_round <span class="kw">as </span>usize + <span class="number">1</span>)
+<a href=#709 id=709 data-nosnippet>709</a>            .is_some_and(|s| s.unvisited.is_empty())
+<a href=#710 id=710 data-nosnippet>710</a>        {
+<a href=#711 id=711 data-nosnippet>711</a>            <span class="self">self</span>.completed_round += <span class="number">1</span>;
+<a href=#712 id=712 data-nosnippet>712</a>        }
+<a href=#713 id=713 data-nosnippet>713</a>
+<a href=#714 id=714 data-nosnippet>714</a>        <span class="comment">// Advance quorum_round while next round has quorum stake visited.
+<a href=#715 id=715 data-nosnippet>715</a>        </span><span class="kw">while </span><span class="self">self
+<a href=#716 id=716 data-nosnippet>716</a>            </span>.round_states
+<a href=#717 id=717 data-nosnippet>717</a>            .get(<span class="self">self</span>.quorum_round <span class="kw">as </span>usize + <span class="number">1</span>)
+<a href=#718 id=718 data-nosnippet>718</a>            .is_some_and(|s| s.visited_stake &gt;= <span class="self">self</span>.quorum_threshold)
+<a href=#719 id=719 data-nosnippet>719</a>        {
+<a href=#720 id=720 data-nosnippet>720</a>            <span class="self">self</span>.quorum_round += <span class="number">1</span>;
+<a href=#721 id=721 data-nosnippet>721</a>        }
+<a href=#722 id=722 data-nosnippet>722</a>
+<a href=#723 id=723 data-nosnippet>723</a>        <span class="prelude-val">Some</span>(block)
+<a href=#724 id=724 data-nosnippet>724</a>    }
+<a href=#725 id=725 data-nosnippet>725</a>}</code></pre></div></section></main></body></html>

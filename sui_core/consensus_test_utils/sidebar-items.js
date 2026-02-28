@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["make_consensus_adapter_for_test","setup_consensus_handler_for_testing_with_checkpoint_service"],"struct":["TestConsensusCommit","TestConsensusHandlerSetup"]};

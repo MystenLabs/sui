@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ExecuteTransactionResult","SuiClient","SuiClientInternal"],"trait":["SuiClientInner"],"type":["SuiBridgeClient"]};

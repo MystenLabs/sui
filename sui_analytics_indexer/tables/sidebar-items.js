@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InputObjectKind","ObjectStatus","OwnerType"],"struct":["CheckpointRow","DynamicFieldRow","EventRow","MoveCallRow","MovePackageRow","ObjectRow","PackageBCSRow","TransactionBCSRow","TransactionObjectRow","TransactionRow","WrappedObjectRow"]};
