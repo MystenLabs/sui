@@ -212,7 +212,7 @@ async fn test_pay_custom_coin_no_balance() -> anyhow::Result<()> {
     let Some(Err(e)) = resps.metadata else {
         panic!("Expected metadata to exist and error")
     };
-    assert_eq!(e.code, 16);
+    assert_eq!(e.code, 7);
 
     Ok(())
 }

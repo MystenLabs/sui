@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use move_core_types::identifier::Identifier;
 use prost_types::FieldMask;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -9,9 +10,10 @@ use sui_rpc::client::Client;
 
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, ListOwnedObjectsRequest};
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::governance::WITHDRAW_STAKE_FUN_NAME;
+use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::rpc_proto_conversions::ObjectReferenceExt;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -106,7 +108,7 @@ impl TryConstructTransaction for WithdrawStake {
             }
         }
 
-        let pt = withdraw_stake_pt(stake_refs.clone(), withdraw_all)?;
+        let pt = withdraw_stake_pt(sender, stake_refs.clone(), withdraw_all)?;
         let (budget, gas_coin_objs) =
             simulate_transaction(client, pt, sender, vec![], gas_price, budget).await?;
 
@@ -122,21 +124,25 @@ impl TryConstructTransaction for WithdrawStake {
             party_objects: vec![],
             total_sui_balance,
             budget,
+            address_balance_withdrawal: 0,
         })
     }
 }
 
 pub fn withdraw_stake_pt(
+    sender: SuiAddress,
     stake_objs: Vec<ObjectRef>,
     withdraw_all: bool,
 ) -> anyhow::Result<ProgrammableTransaction> {
     let mut builder = ProgrammableTransactionBuilder::new();
+    let sui_type_tag = GAS::type_tag();
 
+    // request_withdraw_stake_non_entry returns Balance<SUI> directly.
+    let mut withdrawn_balances = Vec::new();
     for stake_id in stake_objs {
-        // [WORKAROUND] - this is a hack to work out if the withdraw stake ops is for selected stake_ids or None (all stakes) using the index of the call args.
-        // if stake_ids is not empty, id input will be created after the system object input
-        // TODO: Investigate whether using asimple input argument with relevant metadata, similar
-        // to PayCoinOperation, would work as well or even better. Would help with consistency.
+        // [WORKAROUND] - input ordering hack for withdraw_all detection during parsing.
+        // If stake_ids specified: system object input BEFORE stake id input
+        // If withdraw_all: stake id input BEFORE system object input
         let (system_state, id) = if !withdraw_all {
             let system_state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
             let id = builder.obj(ObjectArg::ImmOrOwnedObject(stake_id))?;
@@ -147,14 +153,38 @@ pub fn withdraw_stake_pt(
             (system_state, id)
         };
 
-        let arguments = vec![system_state, id];
-        builder.command(Command::move_call(
+        let balance = builder.command(Command::move_call(
             SUI_SYSTEM_PACKAGE_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
-            WITHDRAW_STAKE_FUN_NAME.to_owned(),
+            Identifier::new("request_withdraw_stake_non_entry")?,
             vec![],
-            arguments,
+            vec![system_state, id],
+        ));
+        withdrawn_balances.push(balance);
+    }
+
+    // Join all withdrawn balances into the first, then send to address balance.
+    if let Some(target) = withdrawn_balances.first().copied() {
+        for &other in &withdrawn_balances[1..] {
+            builder.command(Command::move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                Identifier::new("balance")?,
+                Identifier::new("join")?,
+                vec![sui_type_tag.clone()],
+                vec![target, other],
+            ));
+        }
+
+        // balance::send_funds<SUI>(balance, sender)
+        let sender_arg = builder.pure(sender)?;
+        builder.command(Command::move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance")?,
+            Identifier::new("send_funds")?,
+            vec![sui_type_tag],
+            vec![target, sender_arg],
         ));
     }
+
     Ok(builder.finish())
 }
