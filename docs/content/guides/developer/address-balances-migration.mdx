@@ -1,0 +1,712 @@
+---
+title: Address Balances Migration Guide
+description: Migrating from Coin objects to address balances on Sui.
+keywords: [address balances, migration, coin objects, funds withdrawal, balance transfer, gas payment, SIP-58, fungible assets]
+---
+
+Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This replaces the UTXO-style `Coin<T>` model with direct address-owned balances, simplifying transaction construction and eliminating coin selection complexity.
+
+For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
+
+## Overview
+
+Previously, balances on Sui were computed by summing the values of all `Coin<T>` objects owned by an address. With address balances, each address may additionally have one address-owned balance for each currency type `T`. The total balance is the sum of all `Coin<T>` objects plus the address balance value for that coin type.
+
+`Coin<T>` and address balances coexist. Existing coins remain functional and can still be transferred with `transfer::public_transfer`. However, address balances provide significant operational advantages:
+- No coin selection logic required.
+- Automatic deposit merging into a single canonical balance.
+- Stateless transaction construction without querying object states.
+- Direct gas payment from SUI address balances.
+
+## Funding transactions from address balances
+
+### Before: Coin selection
+
+With the coin-based model, `coinWithBalance` queries owned coins and handles selection automatically at build time:
+
+```typescript
+import { coinWithBalance } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+const coin = coinWithBalance({ balance: requiredAmount });
+tx.transferObjects([coin], recipient);
+```
+
+While `coinWithBalance` abstracts away coin selection, the underlying coin-based model still requires network queries to fetch coin objects and their versions. This creates concurrency challenges when building multiple transactions in parallel.
+
+### After: Address balance withdrawals
+
+With address balances and `forceAddressBalance: true`, transactions can be built entirely offline with no network queries:
+
+[TypeScript SDK - `coinWithBalance`](https://sui-typescript-docs-git-mh-address-balance-docs-mysten-labs.vercel.app/sui/transactions/intents#coinwithbalance):
+
+```typescript
+import { coinWithBalance } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+const coin = coinWithBalance({ balance: requiredAmount, forceAddressBalance: true });
+tx.transferObjects([coin], recipient);
+```
+
+With `forceAddressBalance: true`, the SDK skips all coin object lookups and uses a `FundsWithdrawal` input directly. This enables fully offline transaction building with no network client required, and eliminates concurrency issues when building multiple transactions in parallel.
+
+If your funds are mixed between coins and address balances, omit `forceAddressBalance: true` and the SDK will use both address balances and coins as necessary. The address balance will be prioritized first, coins will only be used if necessary.
+
+`coinWithBalance` options:
+- `balance` (required): Amount in base units (MIST for SUI).
+- `type` (optional): Coin type, defaults to `0x2::sui::SUI`.
+- `useGasCoin` (optional): Whether to split from gas coin for SUI (default `true`). Set to `false` for sponsored transactions.
+- `forceAddressBalance` (optional): Force address balance withdrawals, enabling fully offline building (default `false`).
+
+For manual PTB construction, add a `FundsWithdrawalArg` to declare the withdrawal.
+
+### TypeScript SDK: Manual withdrawals
+
+For explicit control over address balance withdrawals, use `tx.withdrawal()`. The withdrawal must be redeemed via `redeem_funds` to produce a usable `Coin<T>` or `Balance<T>`.
+
+[TypeScript SDK - Transaction Reference](https://sui-typescript-docs-git-mh-address-balance-docs-mysten-labs.vercel.app/sui/transactions/reference#address-balance-withdrawals):
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+
+// Withdraw SUI from address balance and redeem to Coin
+const [coin] = tx.moveCall({
+    target: '0x2::coin::redeem_funds',
+    typeArguments: ['0x2::sui::SUI'],
+    arguments: [tx.withdrawal({ amount: 1_000_000_000 })], // 1 SUI in MIST
+});
+
+// Withdraw a custom coin type
+const coinType = '0xPackageId::module::CoinType';
+const [customCoin] = tx.moveCall({
+    target: '0x2::coin::redeem_funds',
+    typeArguments: [coinType],
+    arguments: [tx.withdrawal({ amount: 1_000_000, type: coinType })],
+});
+
+// Transfer to recipient
+tx.transferObjects([coin], recipient);
+```
+
+Parameters for `tx.withdrawal()`:
+- `amount` (required): Amount to withdraw in base units (number, bigint, or string).
+- `type` (optional): Coin type, defaults to SUI.
+
+Note: `tx.withdrawal()` creates a `Withdrawal<Balance<T>>` capability that must be redeemed to create a coin or balance. Use `0x2::coin::redeem_funds()` or `0x2::balance::redeem_funds()` to do this.
+The `coinWithBalance` intent does this automatically.
+
+### Rust SDK: Manual withdrawals
+
+[Source: `sui-types/src/transaction.rs` - `FundsWithdrawalArg`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
+
+```rust
+use sui_types::transaction::{FundsWithdrawalArg, WithdrawalTypeArg, Reservation, WithdrawFrom};
+
+let withdrawal_arg = FundsWithdrawalArg {
+    reservation: Reservation::MaxAmountU64(amount),
+    type_arg: WithdrawalTypeArg::Balance(coin_type),
+    withdraw_from: WithdrawFrom::Sender,
+};
+```
+
+The helper `FundsWithdrawalArg::balance_from_sender(amount, balance_type)` provides a convenient constructor.
+
+In your PTB, pass the withdrawal input to either:
+- `0x2::balance::redeem_funds<T>()` to obtain a `Balance<T>`.
+- `0x2::coin::redeem_funds<T>()` to obtain a `Coin<T>`.
+
+[Source: `sui-types/src/programmable_transaction_builder.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/programmable_transaction_builder.rs):
+
+```rust
+// Rust example: withdraw and transfer
+let mut builder = ProgrammableTransactionBuilder::new();
+
+let withdraw_arg = FundsWithdrawalArg::balance_from_sender(
+    withdraw_amount,
+    sui_types::gas_coin::GAS::type_tag(),
+);
+let withdraw_input = builder.funds_withdrawal(withdraw_arg).unwrap();
+
+// Redeem to coin
+let coin = builder.programmable_move_call(
+    SUI_FRAMEWORK_PACKAGE_ID,
+    Identifier::new("coin").unwrap(),
+    Identifier::new("redeem_funds").unwrap(),
+    vec!["0x2::sui::SUI".parse().unwrap()],
+    vec![withdraw_input],
+);
+
+builder.transfer_arg(recipient, coin);
+```
+
+You may have multiple `FundsWithdrawalArg` inputs in a PTB, even for the same coin type.
+
+### Splitting and joining withdrawals
+
+Withdrawals can be split and merged within a PTB.
+
+[Source: `sui-framework/sources/funds_accumulator.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/funds_accumulator.move):
+
+```move
+// Split a sub-withdrawal from an existing withdrawal
+public fun withdrawal_split<T: store>(withdrawal: &mut Withdrawal<T>, sub_limit: u256): Withdrawal<T>
+
+// Join two withdrawals together (must have same owner)
+public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: Withdrawal<T>)
+```
+
+## Sending funds
+
+### Before: Coin transfers
+
+Transferring coins sends a coin object to the recipient:
+
+```typescript
+import { coinWithBalance } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+const coin = coinWithBalance({ balance: amount });
+tx.transferObjects([coin], recipient);
+```
+
+Each transfer creates a new object for the recipient, contributing to object proliferation. Recipients accumulate many small coin objects over time, requiring periodic consolidation.
+
+### After: Address balance deposits
+
+With address balances, use `send_funds` to deposit directly into the recipient's address balance:
+
+```typescript
+import { coinWithBalance } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+const coin = coinWithBalance({ balance: amount });
+tx.moveCall({
+    target: '0x2::coin::send_funds',
+    typeArguments: ['0x2::sui::SUI'],
+    arguments: [coin, tx.pure.address(recipient)],
+});
+```
+
+The recipient's balance increases without creating new objects. Multiple deposits from different senders all merge into one balance.
+
+[Source: `sui-framework/sources/coin.move` - `send_funds`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
+
+```move
+// After: In Move contract
+public fun send_payment(coin: Coin<SUI>, recipient: address) {
+    coin::send_funds(coin, recipient);
+}
+```
+
+The recipient's balance increases without creating new objects. Multiple deposits from different senders all merge into one balance.
+
+### Move functions
+
+[Source: `sui-framework/sources/balance.move` - `send_funds`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/balance.move#L102):
+
+```move
+// Send a Balance<T> to an address balance
+public fun send_funds<T>(balance: Balance<T>, recipient: address)
+```
+
+[Source: `sui-framework/sources/coin.move` - `send_funds`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176):
+
+```move
+// Send a Coin<T> to an address balance (converts to balance internally)
+public fun send_funds<T>(coin: Coin<T>, recipient: address)
+```
+
+### Sending funds via the CLI
+
+The CLI currently has limited support for address balances, but can be used to send funds from coins into address balances by manually constructing the PTB to do so:
+
+[Sui CLI Reference - PTB](/references/cli/ptb):
+
+```bash
+# Send from gas coin to address balance
+sui client ptb \
+    --split-coins gas '[5000000]' \
+    --assign coin \
+    --move-call 0x2::coin::send_funds '<0x2::sui::SUI>' coin @<recipient_address>
+
+# Send from another coin
+sui client ptb \
+    --split-coins @<coin_id> '[5000000]' \
+    --assign coin \
+    --move-call 0x2::coin::send_funds '<coin_type>' coin @<recipient_address>
+```
+
+## Paying for gas from address balances
+
+### Before: Gas coin management
+
+With coin-based gas payment, you must query and select gas coins:
+
+```typescript
+const tx = new Transaction();
+// Gas coins are selected automatically at build time, requiring network queries
+```
+
+Gas coin management creates coordination challenges:
+- Must query current gas coin state before each transaction.
+- Parallel transactions require separate gas coins or careful sequencing.
+- Gas coin version changes after each transaction.
+
+### After: Stateless gas payment
+
+With address balance gas payments, pass an empty array to `setGasPayment`:
+
+```typescript
+const tx = new Transaction();
+tx.setGasPayment([]); // Empty array = use address balance for gas
+```
+
+This enables fully offline transaction building since there are no coin object versions to look up.
+
+In Rust, set `gas_data.payment` to an empty vector and use `ValidDuring` expiration:
+
+[Source: `sui-types/src/transaction.rs` - `TransactionExpiration::ValidDuring`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/transaction.rs):
+
+```rust
+TransactionData::V1(TransactionDataV1 {
+    kind: tx_kind,
+    sender,
+    gas_data: GasData {
+        payment: vec![],  // Empty - gas paid from address balance
+        owner: sender,
+        price: rgp,
+        budget: 10_000_000,
+    },
+    expiration: TransactionExpiration::ValidDuring {
+        min_epoch: Some(current_epoch),
+        max_epoch: Some(current_epoch + 1),
+        min_timestamp: None,
+        max_timestamp: None,
+        chain: chain_identifier,
+        nonce: unique_nonce,
+    },
+})
+```
+
+Requirements for address balance gas payments:
+- `gas_data.payment` must be empty.
+- `expiration` must be `ValidDuring` with both `min_epoch` and `max_epoch` specified.
+- `max_epoch` must be at most `min_epoch + 1` (single epoch or 1-epoch range).
+- Timestamp-based expiration is not currently supported.
+- The transaction kind must be `ProgrammableTransaction`.
+
+The `nonce` field differentiates otherwise identical transactions. Unlike EVM chains, the nonce has no semantic requirements. It does not need to be sequential, and there is no "nonce gap" problem. It simply allows you to submit two transactions that would otherwise have the same digest. For most use cases, generate the nonce randomly or use an incrementing counter in your application:
+
+```rust
+// Random nonce
+let nonce: u32 = rand::random();
+
+// Or incrementing counter
+let nonce: u32 = self.next_nonce.fetch_add(1, Ordering::SeqCst);
+```
+
+### Sponsored transactions
+
+#### Before: Sponsored gas with coins
+
+Gas sponsorship with coins requires coordination between user and sponsor:
+
+1. User constructs transaction without gas.
+2. Sponsor selects gas coin(s) and adds to transaction.
+3. Both parties sign.
+4. Risk: sponsor's gas coins could be locked if user doesn't complete signing.
+
+#### After: Sponsored gas with address balances
+
+With address balances, the user can sign before the sponsor, enabling simpler async flows:
+
+```typescript
+// 1. User builds and signs the transaction first
+const tx = new Transaction();
+tx.setSender(userAddress);
+tx.setGasOwner(sponsorAddress);
+tx.setGasPayment([]); // Empty array = sponsor pays from address balance
+// ... add commands ...
+
+const bytes = await tx.build({ client });
+const { signature: userSignature } = await userKeypair.signTransaction(bytes);
+
+// Option A: Send transaction and signature to sponsor, sponsor can sign and execute immediately:
+// (`send_tx_to_sponsor` is a placeholder, there is no such API in the SDK)
+await send_tx_to_sponsor(userSignature, bytes);
+
+// Option B: Get signature from sponsor and submit it ourselves. Sponsor signs (can happen asynchronously)
+const { signature: sponsorSignature } = await sponsorKeypair.signTransaction(bytes);
+
+const result = await client.executeTransaction({
+    transaction: bytes,
+    signatures: [userSignature, sponsorSignature],
+});
+```
+
+Both sender and sponsor must sign. Storage rebates are credited to the sponsor's address balance.
+
+Benefits over coin-based sponsorship:
+- No gas coin locking risk.
+- Sponsor doesn't need to manage gas coin inventory.
+- User can sign before sponsor, enabling simpler async flows.
+- Enables permissionless public gas stations.
+
+## Querying balances via RPC
+
+### Before: Querying coin-based balances
+
+To determine total balance, the RPC layer sums all coin objects for you:
+
+[TypeScript SDK - Core API](https://sdk.mystenlabs.com/sui/clients/core):
+
+```typescript
+// Before: Get balance (RPC sums all coin objects)
+const balance = await client.core.getBalance({ owner: address, coinType: '0x2::sui::SUI' });
+console.log(balance.totalBalance);  // Sum of all Coin<SUI> objects
+```
+
+```typescript
+// List all balances for an address
+const { balances } = await client.core.listBalances({ owner: address });
+for (const balance of balances) {
+    console.log(`${balance.coinType}: ${balance.totalBalance}`);
+}
+```
+
+[JSON-RPC Reference - `suix_getBalance`](/sui-api-ref#suix_getbalance):
+
+```bash
+curl -s https://fullnode.testnet.sui.io \
+    -H 'Content-Type: application/json' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"suix_getBalance","params":["<address>", "0x2::sui::SUI"]}'
+```
+
+The `totalBalance` field represented the sum of all `Coin<T>` object values owned by the address.
+
+### After: Including address balances
+
+The same RPC methods now include address balance information:
+
+```typescript
+const balance = await client.core.getBalance({ owner: address, coinType: '0x2::sui::SUI' });
+console.log(balance.totalBalance);           // Sum of coins + address balance
+console.log(balance.fundsInAddressBalance);  // Amount in address balance only
+```
+
+A new `fundsInAddressBalance` field indicates address balance holdings.
+
+[JSON-RPC Reference - `suix_getBalance`](/sui-api-ref#suix_getbalance):
+
+```bash
+# JSON-RPC
+curl -s https://fullnode.testnet.sui.io \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "jsonrpc":"2.0",
+        "id":1,
+        "method":"suix_getBalance",
+        "params":["<address>", "0x2::sui::SUI"]
+    }'
+```
+
+Response:
+```json
+{
+    "coinType": "0x2::sui::SUI",
+    "coinObjectCount": 2,
+    "totalBalance": "99998990120",
+    "lockedBalance": {},
+    "fundsInAddressBalance": "5000000"
+}
+```
+
+The `totalBalance` includes both coin objects and address balance funds. To get only the coin-based balance, subtract `fundsInAddressBalance` from `totalBalance`.
+
+[JSON-RPC Reference - `suix_getAllBalances`](/sui-api-ref#suix_getallbalances):
+
+```bash
+# Get all balances
+curl -s https://fullnode.testnet.sui.io \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "jsonrpc":"2.0",
+        "id":1,
+        "method":"suix_getAllBalances",
+        "params":["<address>"]
+    }'
+```
+
+### gRPC
+
+Use `GetBalance` and `ListBalances` from `StateService`.
+
+[gRPC Reference - `GetBalanceRequest`](/references/fullnode-protocol#sui-rpc-v2-GetBalanceRequest):
+
+```bash
+buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService/GetBalance \
+    -d '{
+        "owner": "<address>",
+        "coin_type": "0x2::sui::SUI"
+    }'
+```
+
+Response:
+```json
+{
+    "balance": {
+        "coinType": "0x2::sui::SUI",
+        "balance": "99998990120",
+        "addressBalance": "5000000",
+        "coinBalance": "99993990120"
+    }
+}
+```
+
+Fields:
+- `coinBalance`: Total held in coin objects.
+- `addressBalance`: Amount held in address balance.
+- `balance`: Sum of the two.
+
+[gRPC Reference - `ListBalancesRequest`](/references/fullnode-protocol#sui-rpc-v2-ListBalancesRequest):
+
+```bash
+# List all balances
+buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService/ListBalances \
+    -d '{"owner": "<address>"}'
+```
+
+### GraphQL
+
+[GraphQL Reference - `IAddressable.balance`](/references/sui-api/sui-graphql/beta/reference/types/interfaces/iaddressable) |
+Copy the examples below into [GraphQL IDE (Testnet)](https://graphql.testnet.sui.io/graphql) to try them out.
+
+```graphql
+# Single balance
+{
+    address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
+        balance(coinType: "0x2::sui::SUI") {
+            coinType { repr }
+            addressBalance
+            coinBalance
+            totalBalance
+        }
+    }
+}
+
+# All balances
+{
+    address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
+        balances {
+            nodes {
+                coinType { repr }
+                addressBalance
+                coinBalance
+                totalBalance
+            }
+        }
+    }
+}
+```
+
+## Computing balance changes from checkpoint data
+
+### Before: Coin object diffs
+
+To compute balance changes from checkpoint data with coins only:
+
+1. Get input objects (coins at their pre-transaction versions).
+2. Get output objects (coins at their post-transaction versions).
+3. For each `(address, coin_type)` pair, sum output coin values minus input coin values.
+
+```rust
+// Before: Coin-only balance changes
+fn derive_coin_balance_changes(
+    input_objects: &[Object],
+    output_objects: &[Object],
+) -> BTreeMap<(SuiAddress, TypeTag), i128> {
+    let mut balances = BTreeMap::new();
+
+    // Subtract input coins
+    for obj in input_objects {
+        if let Some((owner, coin_type, value)) = extract_coin_info(obj) {
+            *balances.entry((owner, coin_type)).or_default() -= value as i128;
+        }
+    }
+
+    // Add output coins
+    for obj in output_objects {
+        if let Some((owner, coin_type, value)) = extract_coin_info(obj) {
+            *balances.entry((owner, coin_type)).or_default() += value as i128;
+        }
+    }
+
+    balances
+}
+```
+
+### After: Coins plus accumulator events
+
+With address balances, you must also process accumulator events from `TransactionEffects`.
+
+[Source: `sui-types/src/balance_change.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/balance_change.rs):
+
+```rust
+// After: Include accumulator events
+use sui_types::balance_change::{derive_balance_changes, BalanceChange};
+
+let balance_changes: Vec<BalanceChange> = derive_balance_changes(
+    &effects,
+    &input_objects,
+    &output_objects,
+);
+```
+
+The algorithm:
+1. **Subtract input coins**: For each input coin object, subtract its value from `(owner, coin_type)`.
+2. **Add output coins**: For each mutated/created coin object, add its value to `(owner, coin_type)`.
+3. **Process accumulator events**: For each accumulator event with a `Balance<T>` type:
+   - `Split` operation: Subtract the amount (funds withdrawn from address balance).
+   - `Merge` operation: Add the amount (funds deposited to address balance).
+
+[Reference implementation](https://github.com/MystenLabs/sui/blob/e23cc4bb0215ec065785a19772f22eda8ada14ae/crates/sui-types/src/balance_change.rs#L86)
+
+### Accessing accumulator events
+
+Accumulator events are embedded in `TransactionEffects`.
+
+[Source: `sui-types/src/effects/mod.rs` - `TransactionEffectsAPI`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/effects/mod.rs):
+
+```rust
+use sui_types::effects::TransactionEffectsAPI;
+
+let events = effects.accumulator_events();
+for event in events {
+    let address = event.write.address.address;
+    let balance_type = &event.write.address.ty;
+
+    // Only Balance<T> types represent balance changes
+    if let Some(coin_type) = Balance::maybe_get_balance_type_param(balance_type) {
+        let amount = match &event.write.value {
+            AccumulatorValue::Integer(v) => *v as i128,
+            _ => continue,
+        };
+
+        let signed_amount = match event.write.operation {
+            AccumulatorOperation::Split => -amount,  // Withdrawal
+            AccumulatorOperation::Merge => amount,   // Deposit
+        };
+
+        // (address, coin_type, signed_amount) represents the balance change
+    }
+}
+```
+
+### Key types
+
+[Source: `sui-types/src/balance_change.rs`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/balance_change.rs):
+
+```rust
+pub struct BalanceChange {
+    pub address: SuiAddress,
+    pub coin_type: TypeTag,
+    pub amount: i128,  // Negative = spent, positive = received
+}
+```
+
+## Converting existing coins to address balances
+
+Migration is optional. The SDK automatically selects coins or address balances as needed.
+
+To consolidate coins into address balances:
+
+[Sui CLI Reference - PTB](/references/cli/ptb):
+
+```bash
+sui client ptb \
+    --merge-coins @<coin1> '[@<coin2>, @<coin3>]' \
+    --move-call 0x2::coin::send_funds '<0x2::sui::SUI>' @<coin1> @<your_address>
+```
+
+Or using `coinWithBalance` in TypeScript:
+
+[TypeScript SDK - `coinWithBalance`](https://sui-typescript-docs-git-mh-address-balance-docs-mysten-labs.vercel.app/sui/transactions/intents#coinwithbalance):
+
+```typescript
+import { coinWithBalance } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+const coin = coinWithBalance({ balance: totalAmount });
+tx.moveCall({
+    target: '0x2::coin::send_funds',
+    typeArguments: ['0x2::sui::SUI'],
+    arguments: [coin, tx.pure.address(yourAddress)],
+});
+```
+
+This may earn storage rebates from deleted coin objects.
+
+## Backward compatibility
+
+### Existing contracts
+
+Contracts that accept `Coin<T>` or `Balance<T>` remain callable. The `redeem_funds` functions convert withdrawals to the expected types within the PTB.
+
+### Legacy clients
+
+A JSON-RPC compatibility layer presents "fake coins" representing address balance reservations. This preserves basic functionality for clients that cannot upgrade, but should not be relied upon for new development.
+
+## Framework functions reference
+
+### `balance.move`
+
+[Source: `sui-framework/sources/balance.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/balance.move):
+
+```move
+// Send balance to an address's funds accumulator
+public fun send_funds<T>(balance: Balance<T>, recipient: address)
+
+// Redeem a withdrawal to get Balance<T>
+public fun redeem_funds<T>(withdrawal: Withdrawal<Balance<T>>): Balance<T>
+
+// Create a withdrawal from an object's balance
+public fun withdraw_funds_from_object<T>(obj: &mut UID, value: u64): Withdrawal<Balance<T>>
+```
+
+### `coin.move`
+
+[Source: `sui-framework/sources/coin.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move):
+
+```move
+// Redeem a withdrawal and create a Coin<T>
+public fun redeem_funds<T>(withdrawal: Withdrawal<Balance<T>>, ctx: &mut TxContext): Coin<T>
+
+// Send a coin to an address balance
+public fun send_funds<T>(coin: Coin<T>, recipient: address)
+```
+
+### `funds_accumulator.move`
+
+[Source: `sui-framework/sources/funds_accumulator.move`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/funds_accumulator.move):
+
+```move
+// Withdrawal struct - created via FundsWithdrawalArg or withdraw_from_object
+public struct Withdrawal<phantom T: store> has drop {
+    owner: address,
+    limit: u256,
+}
+
+// Get withdrawal limit
+public fun withdrawal_limit<T: store>(withdrawal: &Withdrawal<T>): u256
+
+// Get withdrawal owner
+public fun withdrawal_owner<T: store>(withdrawal: &Withdrawal<T>): address
+
+// Split a sub-withdrawal
+public fun withdrawal_split<T: store>(withdrawal: &mut Withdrawal<T>, sub_limit: u256): Withdrawal<T>
+
+// Join withdrawals (must have same owner)
+public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: Withdrawal<T>)
+```
