@@ -136,7 +136,7 @@ pub trait TrySpawnStreamExt: Stream {
     /// of the output channel.
     ///
     /// The `report` callback is invoked each iteration with `(gauge, inflight)` for metrics.
-    fn try_for_each_map_spawned<Fut, F, T, E, R>(
+    fn try_for_each_send_spawned<Fut, F, T, E, R>(
         self,
         config: ConcurrencyConfig,
         f: F,
@@ -152,7 +152,7 @@ pub trait TrySpawnStreamExt: Stream {
 
     /// Process each stream item through a spawned task, broadcasting results to multiple channels.
     ///
-    /// Same as [`try_for_each_map_spawned`](TrySpawnStreamExt::try_for_each_map_spawned) but
+    /// Same as [`try_for_each_send_spawned`](TrySpawnStreamExt::try_for_each_send_spawned) but
     /// sends a clone of each result to every channel in `txs`. Fill fraction is measured as the
     /// maximum across all channels.
     fn try_for_each_broadcast_spawned<Fut, F, T, E, R>(
@@ -207,7 +207,7 @@ fn adjust_gauge(
     }
 }
 
-/// Shared adaptive concurrency loop used by both `try_for_each_map_spawned` and
+/// Shared adaptive concurrency loop used by both `try_for_each_send_spawned` and
 /// `try_for_each_broadcast_spawned`.
 async fn adaptive_for_each_spawned<S, Fut, F, E, Tx, R>(
     stream: S,
@@ -443,7 +443,7 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
         if let Some(e) = error { Err(e) } else { Ok(()) }
     }
 
-    async fn try_for_each_map_spawned<Fut, F, T, E, R>(
+    async fn try_for_each_send_spawned<Fut, F, T, E, R>(
         self,
         config: ConcurrencyConfig,
         f: F,
@@ -648,7 +648,7 @@ mod tests {
     async fn map_spawned_basic() {
         let (tx, mut rx) = mpsc::channel(100);
         let result = stream::iter(0..10u64)
-            .try_for_each_map_spawned(
+            .try_for_each_send_spawned(
                 ConcurrencyConfig::fixed(4),
                 |i| async move { Ok::<_, Break<()>>(i * 2) },
                 tx,
@@ -671,7 +671,7 @@ mod tests {
     async fn map_spawned_error_propagation() {
         let (tx, _rx) = mpsc::channel(100);
         let result: Result<(), Break<String>> = stream::iter(0..10u64)
-            .try_for_each_map_spawned(
+            .try_for_each_send_spawned(
                 ConcurrencyConfig::fixed(1),
                 |i| async move {
                     if i < 3 {
@@ -694,7 +694,7 @@ mod tests {
         drop(rx);
 
         let result: Result<(), Break<()>> = stream::iter(0..10u64)
-            .try_for_each_map_spawned(
+            .try_for_each_send_spawned(
                 ConcurrencyConfig::fixed(1),
                 |i| async move { Ok(i) },
                 tx,
@@ -712,7 +712,7 @@ mod tests {
 
         let reported2 = reported.clone();
         let _ = stream::iter(0..5u64)
-            .try_for_each_map_spawned(
+            .try_for_each_send_spawned(
                 ConcurrencyConfig::fixed(2),
                 |i| async move { Ok::<_, Break<()>>(i) },
                 tx,
@@ -769,7 +769,7 @@ mod tests {
         let gauges2 = gauges.clone();
         let handle = tokio::spawn(async move {
             stream::iter(0..100u64)
-                .try_for_each_map_spawned(
+                .try_for_each_send_spawned(
                     ConcurrencyConfig {
                         initial: 10,
                         min: 1,
@@ -834,7 +834,7 @@ mod tests {
         let gauges2 = gauges.clone();
         let handle = tokio::spawn(async move {
             stream::iter(0..20u64)
-                .try_for_each_map_spawned(
+                .try_for_each_send_spawned(
                     ConcurrencyConfig::fixed(5),
                     |i| async move { Ok::<_, Break<()>>(i) },
                     tx,

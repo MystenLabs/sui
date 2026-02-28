@@ -151,7 +151,7 @@ pub(super) fn processor<P: Processor>(
 
         let report_metrics = metrics.clone();
         match ReceiverStream::new(rx)
-            .try_for_each_map_spawned(
+            .try_for_each_send_spawned(
                 concurrency.into(),
                 |checkpoint| {
                     let metrics = metrics.clone();
