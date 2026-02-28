@@ -642,6 +642,14 @@ pub struct GasDataArgs {
     /// sign and execute transactions that have a sponsor set.
     #[arg(long)]
     pub gas_sponsor: Option<SuiAddress>,
+    /// Use address balance to pay for gas instead of a gas coin object.
+    /// When set, the transaction uses an empty gas payment vector and a ValidDuring expiration,
+    /// which signals the validators to deduct gas from the sender's address balance.
+    /// This is useful when you want to consume all coin objects (e.g., via send_funds) without
+    /// reserving one for gas payment. Requires that the sender's address balance has sufficient
+    /// funds to cover the gas budget.
+    #[arg(long)]
+    pub use_address_balance_gas: bool,
 }
 
 /// Arguments related to what to do to a transaction after it has been built.
@@ -1503,6 +1511,7 @@ impl SuiClientCommands {
                     gas_budget: Some(tx_data.gas_budget()),
                     gas_price: Some(tx_data.gas_price()),
                     gas_sponsor: Some(tx_data.gas_owner()),
+                    use_address_balance_gas: false,
                 };
                 let tx_kind = tx_data.into_kind();
 
@@ -3092,6 +3101,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         gas_budget,
         gas_price,
         gas_sponsor,
+        use_address_balance_gas,
     } = gas_data;
 
     let TxProcessingArgs {
@@ -3107,6 +3117,17 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
         "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
     );
+
+    if use_address_balance_gas {
+        ensure!(
+            gas_payment.is_empty(),
+            "Cannot specify --gas-coin together with --use-address-balance-gas."
+        );
+        ensure!(
+            gas_sponsor.is_none(),
+            "Cannot specify --gas-sponsor together with --use-address-balance-gas."
+        );
+    }
 
     let gas_price = if let Some(gas_price) = gas_price {
         gas_price
@@ -3163,41 +3184,63 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         }
     };
 
-    let gas_payment = if !gas_payment.is_empty() {
-        gas_payment
-    } else {
-        let input_objects: Vec<_> = tx_kind
-            .input_objects()?
-            .iter()
-            .filter_map(|o| match o {
-                InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
-                _ => None,
-            })
-            .collect();
-
-        let gas_payment = client
-            .transaction_builder()
-            .select_gas(
-                gas_sponsor.unwrap_or(signer),
-                None,
-                gas_budget,
-                input_objects,
-                gas_price,
-            )
-            .await?;
-
-        vec![gas_payment]
-    };
-
     debug!("Preparing transaction data");
-    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
-        tx_kind,
-        signer,
-        gas_payment,
-        gas_budget,
-        gas_price,
-        gas_sponsor.unwrap_or(signer),
-    );
+    let tx_data = if use_address_balance_gas {
+        // Use address balance for gas payment: empty gas coins + ValidDuring expiration
+        let TransactionKind::ProgrammableTransaction(pt) = tx_kind else {
+            anyhow::bail!(
+                "--use-address-balance-gas is only supported for programmable transactions."
+            );
+        };
+        let chain_identifier = client.get_chain_identifier().await?;
+        let system_state_summary = client.get_system_state_summary(None).await?;
+        let current_epoch = system_state_summary.epoch;
+        let nonce: u32 = rand::random();
+        TransactionData::new_programmable_with_address_balance_gas(
+            signer,
+            pt,
+            gas_budget,
+            gas_price,
+            chain_identifier,
+            current_epoch,
+            nonce,
+        )
+    } else {
+        let gas_payment = if !gas_payment.is_empty() {
+            gas_payment
+        } else {
+            let input_objects: Vec<_> = tx_kind
+                .input_objects()?
+                .iter()
+                .filter_map(|o| match o {
+                    InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
+                    _ => None,
+                })
+                .collect();
+
+            let gas_payment = client
+                .transaction_builder()
+                .select_gas(
+                    gas_sponsor.unwrap_or(signer),
+                    None,
+                    gas_budget,
+                    input_objects,
+                    gas_price,
+                )
+                .await?;
+
+            vec![gas_payment]
+        };
+
+        TransactionData::new_with_gas_coins_allow_sponsor(
+            tx_kind,
+            signer,
+            gas_payment,
+            gas_budget,
+            gas_price,
+            gas_sponsor.unwrap_or(signer),
+        )
+    };
     debug!("Finished preparing transaction data");
 
     if serialize_unsigned_transaction {
