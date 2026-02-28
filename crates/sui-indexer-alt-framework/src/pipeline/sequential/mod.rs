@@ -10,6 +10,8 @@ use serde::Serialize;
 use sui_futures::service::Service;
 use tokio::sync::Notify;
 use tokio::sync::mpsc;
+
+use crate::ingestion::ConcurrencyConfig;
 use tracing::info;
 
 use crate::metrics::IndexerMetrics;
@@ -47,6 +49,11 @@ pub trait Handler: Processor {
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
+
+    /// Maximum number of rows that can be pending (processed but not yet committed). When this
+    /// limit is reached, the processor will stop accepting new checkpoints until rows are drained
+    /// by the committer.
+    const MAX_PENDING_ROWS: usize = 5000;
 
     /// Maximum number of checkpoints to try and write in a single batch. The larger this number
     /// is, the more chances the pipeline has to merge redundant writes, but the longer each write
@@ -89,6 +96,10 @@ pub struct SequentialConfig {
 
     /// Override for `Processor::FANOUT` (processor concurrency).
     pub fanout: Option<usize>,
+
+    /// Override for `Handler::MAX_PENDING_ROWS` (row budget for back-pressure). Can be a fixed
+    /// integer or an adaptive configuration with min/max/initial.
+    pub max_pending_rows: Option<ConcurrencyConfig>,
 
     /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
     pub min_eager_rows: Option<usize>,
@@ -137,10 +148,18 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let fanout = config.fanout.unwrap_or(H::FANOUT);
+    let row_budget = config
+        .max_pending_rows
+        .clone()
+        .unwrap_or(ConcurrencyConfig::Fixed(H::MAX_PENDING_ROWS))
+        .to_gauge();
     let min_eager_rows = config.min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
     let max_batch_checkpoints = config
         .max_batch_checkpoints
         .unwrap_or(H::MAX_BATCH_CHECKPOINTS);
+
+    let pending_rows = Arc::new(AtomicUsize::new(0));
+    let pending_rows_notify = Arc::new(Notify::new());
 
     let (processor_tx, committer_rx) = mpsc::channel(fanout + PIPELINE_BUFFER);
 
@@ -152,9 +171,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_tx,
         metrics.clone(),
         fanout,
-        None,
-        Arc::new(AtomicUsize::new(0)),
-        Arc::new(Notify::new()),
+        row_budget,
+        pending_rows,
+        pending_rows_notify,
     );
 
     let s_committer = committer::<H>(

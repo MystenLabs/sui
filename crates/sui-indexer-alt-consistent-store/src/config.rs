@@ -38,7 +38,7 @@ pub struct ServiceConfig {
 #[serde(deny_unknown_fields)]
 pub struct IngestionConfig {
     pub checkpoint_buffer_size: usize,
-    pub ingest_concurrency: framework::ingestion::IngestConcurrencyConfig,
+    pub ingest_concurrency: framework::ingestion::ConcurrencyConfig,
     pub retry_interval_ms: u64,
     pub streaming_backoff_initial_batch_size: usize,
     pub streaming_backoff_max_batch_size: usize,
@@ -105,8 +105,7 @@ impl ServiceConfig {
         let mut for_test = Self::example();
 
         for_test.ingestion.retry_interval_ms = 10;
-        for_test.ingestion.ingest_concurrency =
-            framework::ingestion::IngestConcurrencyConfig::Fixed(1);
+        for_test.ingestion.ingest_concurrency = framework::ingestion::ConcurrencyConfig::Fixed(1);
 
         for_test.committer.collect_interval_ms = Some(50);
         for_test.committer.watermark_interval_ms = Some(50);

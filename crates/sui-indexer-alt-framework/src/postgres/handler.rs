@@ -44,7 +44,7 @@ pub trait Handler: Processor<Value: FieldCount> {
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
 
-    /// If there are more than this many rows pending, the committer applies backpressure.
+    /// Maximum number of rows that can be pending (processed but not yet committed).
     const MAX_PENDING_ROWS: usize = 5000;
 
     /// The maximum number of watermarks that can show up in a single batch.

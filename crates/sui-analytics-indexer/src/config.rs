@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_framework::ingestion::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
@@ -109,6 +110,7 @@ pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub checkpoint_lag: Option<u64>,
     pub fanout: Option<usize>,
+    pub max_pending_rows: Option<ConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
 }
@@ -123,6 +125,7 @@ impl SequentialLayer {
             },
             checkpoint_lag: self.checkpoint_lag.unwrap_or(base.checkpoint_lag),
             fanout: self.fanout.or(base.fanout),
+            max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
         }

@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
 use sui_futures::service::Service;
+use sui_futures::stream::AdaptiveGauge;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
 use sui_types::full_checkpoint_content::Checkpoint;
@@ -67,13 +69,17 @@ pub trait Processor: Send + Sync + 'static {
 ///
 /// Each worker processes a checkpoint into rows and sends them on to the committer using the `tx`
 /// channel.
+///
+/// Back-pressure is applied via an adaptive row budget: the processor gates new checkpoints until
+/// the number of pending (processed but uncommitted) rows drops below the budget. The budget
+/// adapts based on the processor→collector channel fill fraction.
 pub(super) fn processor<P: Processor>(
     processor: Arc<P>,
     rx: mpsc::Receiver<Arc<Checkpoint>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     fanout: usize,
-    max_pending_rows: Option<usize>,
+    row_budget: AdaptiveGauge,
     pending_rows: Arc<AtomicUsize>,
     pending_rows_notify: Arc<Notify>,
 ) -> Service {
@@ -85,16 +91,41 @@ pub(super) fn processor<P: Processor>(
             &metrics.latest_processed_checkpoint,
         );
 
-        let stream = ReceiverStream::new(rx);
-        let stream = stream.then({
+        // Adaptive row budget gate: before each checkpoint enters the processing fanout,
+        // adjust the gauge based on processor→collector channel fill, then wait until
+        // pending rows are below the budget.
+        let was_saturated = Arc::new(AtomicBool::new(false));
+        let stream = ReceiverStream::new(rx).then({
+            let mut gauge = row_budget;
+            let was_saturated = was_saturated.clone();
             let pending_rows = pending_rows.clone();
             let pending_rows_notify = pending_rows_notify.clone();
+            let tx_fill = tx.clone();
+            let metrics = metrics.clone();
             move |checkpoint| {
+                let fill = 1.0 - (tx_fill.capacity() as f64 / tx_fill.max_capacity() as f64);
+                if was_saturated.swap(false, Ordering::Relaxed) {
+                    gauge.mark_saturated();
+                }
+                gauge.adjust(gauge.epoch(), fill);
+
+                let limit = gauge.value();
+                metrics
+                    .processor_pending_rows_limit
+                    .with_label_values(&[P::NAME])
+                    .set(limit as i64);
+                metrics
+                    .processor_pending_rows
+                    .with_label_values(&[P::NAME])
+                    .set(pending_rows.load(Ordering::Relaxed) as i64);
+
                 let pending_rows = pending_rows.clone();
                 let pending_rows_notify = pending_rows_notify.clone();
+                let was_saturated = was_saturated.clone();
                 async move {
-                    if let Some(max) = max_pending_rows {
-                        while pending_rows.load(Ordering::Relaxed) >= max {
+                    if pending_rows.load(Ordering::Relaxed) >= limit {
+                        was_saturated.store(true, Ordering::Relaxed);
+                        while pending_rows.load(Ordering::Relaxed) >= limit {
                             pending_rows_notify.notified().await;
                         }
                     }
@@ -212,6 +243,7 @@ mod tests {
     use std::time::Duration;
 
     use anyhow::ensure;
+    use sui_futures::stream::AdaptiveGauge;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use tokio::sync::Notify;
     use tokio::sync::mpsc;
@@ -276,7 +308,7 @@ mod tests {
             indexed_tx,
             metrics,
             DataPipeline::FANOUT,
-            None,
+            AdaptiveGauge::fixed(5000),
             Arc::new(AtomicUsize::new(0)),
             Arc::new(Notify::new()),
         );
@@ -339,7 +371,7 @@ mod tests {
             indexed_tx,
             metrics,
             DataPipeline::FANOUT,
-            None,
+            AdaptiveGauge::fixed(5000),
             Arc::new(AtomicUsize::new(0)),
             Arc::new(Notify::new()),
         );
@@ -416,7 +448,7 @@ mod tests {
             indexed_tx,
             metrics,
             DataPipeline::FANOUT,
-            None,
+            AdaptiveGauge::fixed(5000),
             Arc::new(AtomicUsize::new(0)),
             Arc::new(Notify::new()),
         );
@@ -485,7 +517,7 @@ mod tests {
             indexed_tx,
             metrics,
             SlowProcessor::FANOUT,
-            None,
+            AdaptiveGauge::fixed(5000),
             Arc::new(AtomicUsize::new(0)),
             Arc::new(Notify::new()),
         );

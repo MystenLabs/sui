@@ -151,6 +151,9 @@ pub struct IndexerMetrics {
     pub watermark_timestamp_in_db_ms: IntGaugeVec,
     pub watermark_reader_lo_in_db: IntGaugeVec,
     pub watermark_pruner_hi_in_db: IntGaugeVec,
+
+    pub processor_pending_rows_limit: IntGaugeVec,
+    pub processor_pending_rows: IntGaugeVec,
 }
 
 /// A helper struct to report metrics regarding the checkpoint lag at various points in the indexer.
@@ -682,6 +685,20 @@ impl IndexerMetrics {
             watermark_pruner_hi_in_db: register_int_gauge_vec_with_registry!(
                 name("watermark_pruner_hi_in_db"),
                 "Last pruner high watermark this pruner wrote to the DB",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            processor_pending_rows_limit: register_int_gauge_vec_with_registry!(
+                name("processor_pending_rows_limit"),
+                "Current adaptive row budget for this pipeline's processor back-pressure",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            processor_pending_rows: register_int_gauge_vec_with_registry!(
+                name("processor_pending_rows"),
+                "Current number of pending (processed but uncommitted) rows for this pipeline",
                 &["pipeline"],
                 registry,
             )

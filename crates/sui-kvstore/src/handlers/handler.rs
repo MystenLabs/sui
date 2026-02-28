@@ -33,11 +33,11 @@ pub trait BigTableProcessor: Processor<Value = Entry> {
     /// How much concurrency to use when processing checkpoint data (default: 10).
     const FANOUT: usize = 10;
 
+    /// Maximum pending rows for back-pressure (default: 5000).
+    const MAX_PENDING_ROWS: usize = 5000;
+
     /// Minimum rows before eager commit (default: 50).
     const MIN_EAGER_ROWS: usize = 50;
-
-    /// Maximum pending rows before back-pressure kicks in (default: 5000).
-    const MAX_PENDING_ROWS: usize = 5000;
 }
 
 /// Generic wrapper that implements `concurrent::Handler` for any `BigTableProcessor`.
@@ -102,8 +102,8 @@ where
     type Store = BigTableStore;
     type Batch = BigTableBatch;
 
-    const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
     const MAX_PENDING_ROWS: usize = P::MAX_PENDING_ROWS;
+    const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
 
     fn batch(
         &self,

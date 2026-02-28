@@ -60,8 +60,8 @@ impl Processor for KvProtocolConfigs {
 
 #[async_trait]
 impl Handler for KvProtocolConfigs {
-    const MIN_EAGER_ROWS: usize = 1;
     const MAX_PENDING_ROWS: usize = 10000;
+    const MIN_EAGER_ROWS: usize = 1;
 
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_protocol_configs::table)

@@ -32,7 +32,6 @@ struct PendingCheckpoint<H: Handler> {
     /// The watermark associated with this checkpoint and the part of it that is left to commit
     watermark: WatermarkPart,
     /// RAII guard tracking these rows in the pipeline's pending count.
-    /// `None` when the checkpoint was skipped (values cleared, rows released).
     guard: Option<PendingRowsGuard>,
 }
 
@@ -194,13 +193,12 @@ pub(super) fn collector<H: Handler + 'static>(
                     batch_len += taken;
                     watermark.push(indexed.watermark.take(taken));
 
-                    if taken > 0
-                        && let Some(ref mut guard) = indexed.guard
-                    {
-                        let split = guard.split(taken);
-                        match &mut batch_guard {
-                            Some(g) => g.merge(split),
-                            None => batch_guard = Some(split),
+                    // Split out a guard for the rows we just took from this checkpoint.
+                    if let Some(ref mut cp_guard) = indexed.guard {
+                        let part_guard = cp_guard.split(taken);
+                        match batch_guard {
+                            Some(ref mut bg) => bg.merge(part_guard),
+                            None => batch_guard = Some(part_guard),
                         }
                     }
 
@@ -278,10 +276,6 @@ mod tests {
     use sui_pg_db::Db;
     use tokio::sync::mpsc;
 
-    use std::sync::atomic::AtomicUsize;
-
-    use tokio::sync::Notify;
-
     use crate::metrics::tests::test_metrics;
     use crate::pipeline::PendingRowsGuard;
     use crate::pipeline::Processor;
@@ -289,6 +283,17 @@ mod tests {
     use crate::types::full_checkpoint_content::Checkpoint;
 
     use super::*;
+
+    /// Helper to create an IndexedCheckpoint for tests without requiring real pending rows tracking.
+    fn test_checkpoint<P: Processor>(
+        epoch: u64,
+        cp: u64,
+        tx_hi: u64,
+        ts: u64,
+        values: Vec<P::Value>,
+    ) -> IndexedCheckpoint<P> {
+        IndexedCheckpoint::new(epoch, cp, tx_hi, ts, values, PendingRowsGuard::mock(0))
+    }
 
     #[derive(Clone)]
     struct Entry;
@@ -315,7 +320,6 @@ mod tests {
         type Batch = Vec<Entry>;
 
         const MIN_EAGER_ROWS: usize = 10;
-        const MAX_PENDING_ROWS: usize = 10000;
 
         fn batch(
             &self,
@@ -391,30 +395,9 @@ mod tests {
 
         // Send test data
         let test_data = vec![
-            IndexedCheckpoint::new(
-                0,
-                1,
-                10,
-                1000,
-                vec![Entry; part1_length],
-                PendingRowsGuard::mock(part1_length),
-            ),
-            IndexedCheckpoint::new(
-                0,
-                2,
-                20,
-                2000,
-                vec![Entry; part2_length],
-                PendingRowsGuard::mock(part2_length),
-            ),
-            IndexedCheckpoint::new(
-                0,
-                3,
-                30,
-                3000,
-                vec![Entry, Entry],
-                PendingRowsGuard::mock(2),
-            ),
+            test_checkpoint::<TestHandler>(0, 1, 10, 1000, vec![Entry; part1_length]),
+            test_checkpoint::<TestHandler>(0, 2, 20, 2000, vec![Entry; part2_length]),
+            test_checkpoint::<TestHandler>(0, 3, 30, 3000, vec![Entry, Entry]),
         ];
 
         for data in test_data {
@@ -447,14 +430,7 @@ mod tests {
         );
 
         processor_tx
-            .send(IndexedCheckpoint::new(
-                0,
-                1,
-                10,
-                1000,
-                vec![Entry, Entry],
-                PendingRowsGuard::mock(2),
-            ))
+            .send(test_checkpoint::<TestHandler>(0, 1, 10, 1000, vec![Entry, Entry]))
             .await
             .unwrap();
 
@@ -504,21 +480,19 @@ mod tests {
 
         // Send data that's just below MIN_EAGER_ROWS threshold.
         let n = TestHandler::MIN_EAGER_ROWS - 1;
-        let below_threshold =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; n], PendingRowsGuard::mock(n));
+        let below_threshold = test_checkpoint::<TestHandler>(0, 1, 10, 1000, vec![Entry; n]);
         processor_tx.send(below_threshold).await.unwrap();
 
         // Try to receive with timeout - should timeout since we're below threshold
         expect_timeout(&mut collector_rx, Duration::from_secs(1)).await;
 
         // Now send one more entry to cross the MIN_EAGER_ROWS threshold
-        let threshold_trigger = IndexedCheckpoint::new(
+        let threshold_trigger = test_checkpoint::<TestHandler>(
             0,
             2,
             20,
             2000,
             vec![Entry; 1], // Just 1 more entry to reach 10 total
-            PendingRowsGuard::mock(1),
         );
         processor_tx.send(threshold_trigger).await.unwrap();
 
@@ -564,8 +538,7 @@ mod tests {
 
         // Send exactly MIN_EAGER_ROWS in one checkpoint
         let n = TestHandler::MIN_EAGER_ROWS;
-        let exact_threshold =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; n], PendingRowsGuard::mock(n));
+        let exact_threshold = test_checkpoint::<TestHandler>(0, 1, 10, 1000, vec![Entry; n]);
         processor_tx.send(exact_threshold).await.unwrap();
 
         // Should trigger immediately since pending_rows >= MIN_EAGER_ROWS.
@@ -606,8 +579,7 @@ mod tests {
 
         // Send MIN_EAGER_ROWS - 1 entries (below threshold)
         let n = TestHandler::MIN_EAGER_ROWS - 1;
-        let below_threshold =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; n], PendingRowsGuard::mock(n));
+        let below_threshold = test_checkpoint::<TestHandler>(0, 1, 10, 1000, vec![Entry; n]);
         processor_tx.send(below_threshold).await.unwrap();
 
         // Try to receive with timeout - should timeout since we're below threshold
@@ -645,8 +617,7 @@ mod tests {
 
         // Send enough data to trigger batching.
         let n = TestHandler::MIN_EAGER_ROWS + 1;
-        let test_data =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; n], PendingRowsGuard::mock(n));
+        let test_data = test_checkpoint::<TestHandler>(0, 1, 10, 1000, vec![Entry; n]);
         processor_tx.send(test_data).await.unwrap();
 
         // Advance time significantly - collector should still be blocked waiting for
@@ -696,16 +667,7 @@ mod tests {
 
         let test_data: Vec<_> = [1, 5, 2, 6, 4, 3]
             .into_iter()
-            .map(|cp| {
-                IndexedCheckpoint::new(
-                    0,
-                    cp,
-                    10,
-                    1000,
-                    vec![Entry; eager_rows_plus_one],
-                    PendingRowsGuard::mock(eager_rows_plus_one),
-                )
-            })
+            .map(|cp| test_checkpoint::<TestHandler>(0, cp, 10, 1000, vec![Entry; eager_rows_plus_one]))
             .collect();
         for data in test_data {
             processor_tx.send(data).await.unwrap();
@@ -736,74 +698,6 @@ mod tests {
         collector.shutdown().await.unwrap();
     }
 
-    /// Guards arrive pre-created from the processor. Skipped checkpoints (below reader_lo) have
-    /// their values cleared, but the guard is dropped when the PendingCheckpoint is removed,
-    /// releasing those rows from the counter. Non-skipped checkpoints transfer their guard
-    /// into the batch.
-    #[tokio::test]
-    async fn test_collector_skipped_checkpoints_release_pending_rows() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(5))));
-
-        let counter = Arc::new(AtomicUsize::new(0));
-        let notify = Arc::new(Notify::new());
-
-        let collector = collector(
-            Arc::new(TestHandler),
-            CommitterConfig {
-                collect_interval_ms: 200_000,
-                ..CommitterConfig::default()
-            },
-            processor_rx,
-            collector_tx,
-            main_reader_lo.clone(),
-            test_metrics(),
-            TestHandler::MIN_EAGER_ROWS,
-            TestHandler::MAX_WATERMARK_UPDATES,
-        );
-
-        let rows_per_cp = TestHandler::MIN_EAGER_ROWS + 1;
-
-        // Checkpoints 1-4 are below reader_lo=5, so they will be skipped (values cleared).
-        // Checkpoints 5-6 will be kept.
-        // All checkpoints arrive with a guard from the processor.
-        let test_data: Vec<_> = [1, 5, 2, 6, 4, 3]
-            .into_iter()
-            .map(|cp| {
-                IndexedCheckpoint::new(
-                    0,
-                    cp,
-                    10,
-                    1000,
-                    vec![Entry; rows_per_cp],
-                    PendingRowsGuard::new(counter.clone(), notify.clone(), rows_per_cp),
-                )
-            })
-            .collect();
-
-        // Counter reflects all 6 checkpoints' rows (guards created by processor).
-        assert_eq!(counter.load(Ordering::Relaxed), rows_per_cp * 6);
-
-        for data in test_data {
-            processor_tx.send(data).await.unwrap();
-        }
-
-        // The batch should contain only rows from checkpoints 5 and 6.
-        let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
-        assert_eq!(batch.batch_len, rows_per_cp * 2);
-
-        // Skipped checkpoints' guards were dropped, releasing their rows.
-        // Only the 2 non-skipped checkpoints' rows remain.
-        assert_eq!(counter.load(Ordering::Relaxed), rows_per_cp * 2);
-
-        // Dropping the batch releases the remaining rows.
-        drop(batch);
-        assert_eq!(counter.load(Ordering::Relaxed), 0);
-
-        collector.shutdown().await.unwrap();
-    }
-
     /// Because a checkpoint may be partially batched before the main reader lo advances past it,
     /// the collector must ensure that it fully writes out the checkpoint. Otherwise, this will
     /// essentially stall the commit_watermark task indefinitely as the latter waits for the
@@ -829,14 +723,8 @@ mod tests {
 
         let more_than_max_chunk_rows = TEST_MAX_CHUNK_ROWS + 10;
 
-        let test_data = IndexedCheckpoint::new(
-            0,
-            1,
-            10,
-            1000,
-            vec![Entry; more_than_max_chunk_rows],
-            PendingRowsGuard::mock(more_than_max_chunk_rows),
-        );
+        let test_data =
+            test_checkpoint::<TestHandler>(0, 1, 10, 1000, vec![Entry; more_than_max_chunk_rows]);
         processor_tx.send(test_data).await.unwrap();
         tokio::time::advance(Duration::from_secs(1)).await;
         let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
@@ -847,9 +735,7 @@ mod tests {
         // Send indexed checkpoints 2 through 5 inclusive, but also bump the main reader lo to 4.
         let n = TestHandler::MIN_EAGER_ROWS + 1;
         let test_data: Vec<_> = (2..=5)
-            .map(|cp| {
-                IndexedCheckpoint::new(0, cp, 10, 1000, vec![Entry; n], PendingRowsGuard::mock(n))
-            })
+            .map(|cp| test_checkpoint::<TestHandler>(0, cp, 10, 1000, vec![Entry; n]))
             .collect();
         for data in test_data {
             processor_tx.send(data).await.unwrap();

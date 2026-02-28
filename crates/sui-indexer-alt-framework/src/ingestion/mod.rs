@@ -13,6 +13,7 @@ use prometheus::Registry;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_futures::service::Service;
+use sui_futures::stream::AdaptiveGauge;
 use tokio::sync::mpsc;
 
 use crate::ingestion::broadcaster::broadcaster;
@@ -56,7 +57,7 @@ pub struct IngestionConfig {
     /// Concurrency control for checkpoint ingestion. A plain integer gives fixed concurrency;
     /// an object with `initial`, `min`, and `max` fields enables adaptive concurrency that adjusts
     /// based on subscriber channel fill fraction.
-    pub ingest_concurrency: IngestConcurrencyConfig,
+    pub ingest_concurrency: ConcurrencyConfig,
 
     /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
     pub retry_interval_ms: u64,
@@ -81,7 +82,7 @@ pub struct IngestionConfig {
 /// fill-proportional controller with a dead band.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
-pub enum IngestConcurrencyConfig {
+pub enum ConcurrencyConfig {
     Fixed(usize),
     Adaptive {
         initial: usize,
@@ -104,7 +105,7 @@ fn default_fill_low() -> f64 {
     0.6
 }
 
-impl IngestConcurrencyConfig {
+impl ConcurrencyConfig {
     pub fn initial(&self) -> usize {
         match self {
             Self::Fixed(n) => *n,
@@ -144,6 +145,22 @@ impl IngestConcurrencyConfig {
 
     pub fn is_adaptive(&self) -> bool {
         matches!(self, Self::Adaptive { .. })
+    }
+
+    /// Convert this config into an [`AdaptiveGauge`] for use with
+    /// [`try_for_each_spawned_adaptive`](sui_futures::stream::TrySpawnStreamExt::try_for_each_spawned_adaptive).
+    pub fn to_gauge(&self) -> AdaptiveGauge {
+        match self {
+            Self::Fixed(n) => AdaptiveGauge::fixed(*n),
+            Self::Adaptive {
+                initial,
+                min,
+                max,
+                fill_high,
+                fill_low,
+            } => AdaptiveGauge::adaptive(*initial, *min, *max)
+                .with_fill_thresholds(*fill_high, *fill_low),
+        }
     }
 }
 
@@ -295,7 +312,7 @@ impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
             checkpoint_buffer_size: 100,
-            ingest_concurrency: IngestConcurrencyConfig::Fixed(50),
+            ingest_concurrency: ConcurrencyConfig::Fixed(50),
             retry_interval_ms: 200,
             streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
@@ -337,7 +354,7 @@ mod tests {
             },
             IngestionConfig {
                 checkpoint_buffer_size,
-                ingest_concurrency: IngestConcurrencyConfig::Fixed(ingest_concurrency),
+                ingest_concurrency: ConcurrencyConfig::Fixed(ingest_concurrency),
                 ..Default::default()
             },
             None,

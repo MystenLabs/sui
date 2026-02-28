@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
-use sui_indexer_alt_framework::ingestion::IngestConcurrencyConfig;
+use sui_indexer_alt_framework::ingestion::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
@@ -49,7 +49,7 @@ pub struct IndexerConfig {
 #[serde(deny_unknown_fields)]
 pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
-    pub ingest_concurrency: Option<IngestConcurrencyConfig>,
+    pub ingest_concurrency: Option<ConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
     pub streaming_backoff_initial_batch_size: Option<usize>,
     pub streaming_backoff_max_batch_size: Option<usize>,
@@ -64,6 +64,7 @@ pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub checkpoint_lag: Option<u64>,
     pub fanout: Option<usize>,
+    pub max_pending_rows: Option<ConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
 }
@@ -75,8 +76,8 @@ pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub pruner: Option<PrunerLayer>,
     pub fanout: Option<usize>,
+    pub max_pending_rows: Option<ConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
-    pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
 }
 
@@ -154,7 +155,7 @@ impl IndexerConfig {
             .merge(IndexerConfig {
                 ingestion: IngestionLayer {
                     retry_interval_ms: Some(10),
-                    ingest_concurrency: Some(IngestConcurrencyConfig::Fixed(1)),
+                    ingest_concurrency: Some(ConcurrencyConfig::Fixed(1)),
                     ..Default::default()
                 },
                 committer: CommitterLayer {
@@ -207,6 +208,7 @@ impl SequentialLayer {
             },
             checkpoint_lag: self.checkpoint_lag.unwrap_or(base.checkpoint_lag),
             fanout: self.fanout.or(base.fanout),
+            max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
         })
@@ -228,8 +230,8 @@ impl ConcurrentLayer {
                 (Some(pruner), Some(base)) => Some(pruner.finish(base)?),
             },
             fanout: self.fanout.or(base.fanout),
-            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
         })
     }
@@ -331,6 +333,7 @@ impl Merge for SequentialLayer {
             committer: self.committer.merge(other.committer)?,
             checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
             fanout: other.fanout.or(self.fanout),
+            max_pending_rows: other.max_pending_rows.or(self.max_pending_rows),
             min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
             max_batch_checkpoints: other.max_batch_checkpoints.or(self.max_batch_checkpoints),
         })
@@ -343,8 +346,8 @@ impl Merge for ConcurrentLayer {
             committer: self.committer.merge(other.committer)?,
             pruner: self.pruner.merge(other.pruner)?,
             fanout: other.fanout.or(self.fanout),
-            min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
             max_pending_rows: other.max_pending_rows.or(self.max_pending_rows),
+            min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
             max_watermark_updates: other.max_watermark_updates.or(self.max_watermark_updates),
         })
     }
@@ -442,6 +445,7 @@ impl From<SequentialConfig> for SequentialLayer {
             committer: Some(config.committer.into()),
             checkpoint_lag: Some(config.checkpoint_lag),
             fanout: config.fanout,
+            max_pending_rows: config.max_pending_rows,
             min_eager_rows: config.min_eager_rows,
             max_batch_checkpoints: config.max_batch_checkpoints,
         }
@@ -454,8 +458,8 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
             committer: Some(config.committer.into()),
             pruner: config.pruner.map(Into::into),
             fanout: config.fanout,
-            min_eager_rows: config.min_eager_rows,
             max_pending_rows: config.max_pending_rows,
+            min_eager_rows: config.min_eager_rows,
             max_watermark_updates: config.max_watermark_updates,
         }
     }

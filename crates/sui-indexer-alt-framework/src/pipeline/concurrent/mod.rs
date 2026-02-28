@@ -11,6 +11,8 @@ use serde::Serialize;
 use sui_futures::service::Service;
 use tokio::sync::Notify;
 use tokio::sync::SetOnce;
+
+use crate::ingestion::ConcurrencyConfig;
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -74,7 +76,9 @@ pub trait Handler: Processor {
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
 
-    /// If there are more than this many rows pending, the committer applies backpressure.
+    /// Maximum number of rows that can be pending (processed but not yet committed). When this
+    /// limit is reached, the processor will stop accepting new checkpoints until rows are drained
+    /// by the committer. This provides back-pressure from committer to processor.
     const MAX_PENDING_ROWS: usize = 5000;
 
     /// The maximum number of watermarks that can show up in a single batch.
@@ -127,11 +131,12 @@ pub struct ConcurrentConfig {
     /// Override for `Processor::FANOUT` (processor concurrency).
     pub fanout: Option<usize>,
 
+    /// Override for `Handler::MAX_PENDING_ROWS` (row budget for back-pressure). Can be a fixed
+    /// integer or an adaptive configuration with min/max/initial.
+    pub max_pending_rows: Option<ConcurrencyConfig>,
+
     /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
     pub min_eager_rows: Option<usize>,
-
-    /// Override for `Handler::MAX_PENDING_ROWS` (backpressure threshold).
-    pub max_pending_rows: Option<usize>,
 
     /// Override for `Handler::MAX_WATERMARK_UPDATES` (watermarks per batch cap).
     pub max_watermark_updates: Option<usize>,
@@ -168,7 +173,7 @@ struct BatchedRows<H: Handler> {
     batch_len: usize,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
-    /// RAII guard tracking these rows in the pending count. Dropped after commit to decrement.
+    /// RAII guard tracking these rows in the pipeline's pending count. Dropped after commit.
     _guard: Option<PendingRowsGuard>,
 }
 
@@ -247,15 +252,20 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer: committer_config,
         pruner: pruner_config,
         fanout,
-        min_eager_rows,
         max_pending_rows,
+        min_eager_rows,
         max_watermark_updates,
     } = config;
 
     let fanout = fanout.unwrap_or(H::FANOUT);
+    let row_budget = max_pending_rows
+        .unwrap_or(ConcurrencyConfig::Fixed(H::MAX_PENDING_ROWS))
+        .to_gauge();
     let min_eager_rows = min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
-    let max_pending_rows = max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
     let max_watermark_updates = max_watermark_updates.unwrap_or(H::MAX_WATERMARK_UPDATES);
+
+    let pending_rows = Arc::new(AtomicUsize::new(0));
+    let pending_rows_notify = Arc::new(Notify::new());
 
     let (processor_tx, collector_rx) = mpsc::channel(fanout + PIPELINE_BUFFER);
 
@@ -269,16 +279,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let handler = Arc::new(handler);
 
-    let pending_rows = Arc::new(AtomicUsize::new(0));
-    let pending_rows_notify = Arc::new(Notify::new());
-
     let s_processor = processor(
         handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
         fanout,
-        Some(max_pending_rows),
+        row_budget,
         pending_rows,
         pending_rows_notify,
     );
@@ -391,7 +398,6 @@ mod tests {
         type Batch = Vec<TestValue>;
 
         const MIN_EAGER_ROWS: usize = 1000; // High value to disable eager batching
-        const MAX_PENDING_ROWS: usize = 4; // Small value to trigger back pressure quickly
         const MAX_WATERMARK_UPDATES: usize = 1; // Each batch will have 1 checkpoint for an ease of testing.
 
         fn batch(

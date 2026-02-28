@@ -61,8 +61,8 @@ impl Processor for EvStructInst {
 
 #[async_trait]
 impl Handler for EvStructInst {
-    const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
+    const MIN_EAGER_ROWS: usize = 100;
 
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(ev_struct_inst::table)

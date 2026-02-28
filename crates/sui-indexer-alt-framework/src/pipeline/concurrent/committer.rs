@@ -187,12 +187,16 @@ pub(super) fn committer<H: Handler + 'static>(
                         // not produce any permanent errors, but if it does, we need to shutdown
                         // the pipeline).
                         backoff::future::retry(backoff, commit).await?;
+
+                        // Release the pending rows guard now that commit succeeded,
+                        // decrementing the counter and waking the processor if blocked.
+                        drop(_guard);
+
                         if tx.send(watermark).await.is_err() {
                             info!(pipeline = H::NAME, "Watermark closed channel");
                             return Err(Break::<anyhow::Error>::Break);
                         }
 
-                        drop(_guard);
                         Ok(())
                     }
                 },

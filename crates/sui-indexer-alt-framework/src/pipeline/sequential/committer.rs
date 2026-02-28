@@ -155,7 +155,9 @@ where
                                 batch_checkpoints += 1;
                                 handler.batch(&mut batch, indexed.values.into_iter());
                                 watermark = Some(indexed.watermark);
-                                batch_guards.extend(indexed.guard);
+                                if let Some(g) = indexed.guard {
+                                    batch_guards.push(g);
+                                }
                                 next_checkpoint += 1;
                             }
 
@@ -411,7 +413,6 @@ mod tests {
     use crate::mocks::store::MockConnection;
     use crate::mocks::store::MockStore;
     use crate::pipeline::CommitterConfig;
-    use crate::pipeline::PendingRowsGuard;
     use crate::pipeline::Processor;
 
     use super::*;

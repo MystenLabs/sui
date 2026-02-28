@@ -184,6 +184,24 @@ mod tests {
         }
     }
 
+    /// Helper to create an IndexedCheckpoint for tests without requiring real pending rows tracking.
+    fn test_indexed_checkpoint<P: Processor>(
+        epoch: u64,
+        cp_sequence_number: u64,
+        tx_hi: u64,
+        timestamp_ms: u64,
+        values: Vec<P::Value>,
+    ) -> IndexedCheckpoint<P> {
+        IndexedCheckpoint::new(
+            epoch,
+            cp_sequence_number,
+            tx_hi,
+            timestamp_ms,
+            values,
+            PendingRowsGuard::mock(0),
+        )
+    }
+
     #[test]
     fn test_watermark_part_getters() {
         let watermark = CommitterWatermark {
@@ -263,21 +281,9 @@ mod tests {
     }
 
     #[test]
-    fn test_indexed_checkpoint() {
-        let epoch = 1;
-        let cp_sequence_number = 100;
-        let tx_hi = 1000;
-        let timestamp_ms = 1234567890;
-        let values = vec![1, 2, 3];
-
-        let checkpoint = IndexedCheckpoint::<TestProcessor>::new(
-            epoch,
-            cp_sequence_number,
-            tx_hi,
-            timestamp_ms,
-            values,
-            PendingRowsGuard::mock(3),
-        );
+    fn indexed_checkpoint_basics() {
+        let checkpoint =
+            test_indexed_checkpoint::<TestProcessor>(1, 100, 1000, 1234567890, vec![1, 2, 3]);
 
         assert_eq!(checkpoint.len(), 3);
         assert_eq!(checkpoint.checkpoint(), 100);
@@ -285,20 +291,8 @@ mod tests {
 
     #[test]
     fn test_indexed_checkpoint_with_empty_values() {
-        let epoch = 1;
-        let cp_sequence_number = 100;
-        let tx_hi = 1000;
-        let timestamp_ms = 1234567890;
-        let values: Vec<<TestProcessor as Processor>::Value> = vec![];
-
-        let checkpoint = IndexedCheckpoint::<TestProcessor>::new(
-            epoch,
-            cp_sequence_number,
-            tx_hi,
-            timestamp_ms,
-            values,
-            PendingRowsGuard::mock(0),
-        );
+        let checkpoint =
+            test_indexed_checkpoint::<TestProcessor>(1, 100, 1000, 1234567890, vec![]);
 
         assert_eq!(checkpoint.len(), 0);
         assert_eq!(checkpoint.checkpoint(), 100);
