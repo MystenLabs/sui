@@ -9,11 +9,11 @@ on:
       - 'mainnet'
       - 'releases/sui-*-release'
   pull_request:
-    types: [ opened, synchronize, reopened, ready_for_review ]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
       sui_repo_ref:
-        description: "Branch / commit to test"
+        description: 'Branch / commit to test'
         type: string
         required: false
         default: ''
@@ -51,7 +51,7 @@ env:
 
 jobs:
   diff:
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
@@ -65,7 +65,7 @@ jobs:
 
   license-check:
     name: license-check
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -88,7 +88,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
+          - [ubuntu-ghcloud]
       fail-fast: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
@@ -133,7 +133,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
+          - [ubuntu-ghcloud]
       fail-fast: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
@@ -172,7 +172,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
+          - [ubuntu-ghcloud]
       fail-fast: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
@@ -234,10 +234,12 @@ jobs:
         shell: bash
 
   windows-build:
+    env:
+      CARGO_BUILD_JOBS: 16
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ windows-ghcloud-128 ]
+    runs-on: [windows-ghcloud]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -259,12 +261,13 @@ jobs:
     needs: [diff]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ windows-ghcloud-128 ]
+    runs-on: [windows-ghcloud]
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
+      CARGO_BUILD_JOBS: 16
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -280,14 +283,13 @@ jobs:
       - name: cargo test Sui CLI
         shell: bash
         run: |
-          # We have temporarily disabled the network tests on windows, until we triage + fix the performance issues.
-          cargo nextest run -p sui --no-fail-fast --profile ci --cargo-quiet --filter-expr "not test(shell_tests::with_network)"
+          cargo nextest run -p sui --no-fail-fast --profile ci --cargo-quiet -j 16
 
   simtest:
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
     steps:
@@ -318,7 +320,7 @@ jobs:
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
       SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
@@ -353,7 +355,7 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'false' && needs.diff.outputs.isMove == 'true'
     timeout-minutes: 10
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -420,8 +422,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
-          - [ windows-ghcloud ]
+          - [ubuntu-ghcloud]
+          - [windows-ghcloud]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
@@ -440,8 +442,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
-          - [ windows-ghcloud ]
+          - [ubuntu-ghcloud]
+          - [windows-ghcloud]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
@@ -449,7 +451,7 @@ jobs:
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -474,7 +476,7 @@ jobs:
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -486,7 +488,7 @@ jobs:
     name: cargo-deny (bans, licenses, sources)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -498,7 +500,7 @@ jobs:
     name: cargo-deny (advisories)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -510,7 +512,7 @@ jobs:
     name: cutting a new execution layer
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:

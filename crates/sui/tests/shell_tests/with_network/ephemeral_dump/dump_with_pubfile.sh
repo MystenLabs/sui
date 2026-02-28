@@ -34,7 +34,9 @@ EOF
 sui move --client.config "$CONFIG" \
   build -p main_pkg --dump --pubfile-path Pub.test.toml -e testnet --no-tree-shaking > output.json
 
-cat output.json | sed 's/.*"modules":\["\([^"]*\)".*/\1/' | base64 -d > main.mv
+tr -d '\r' < output.json | grep -E '^(INCLUDING DEPENDENCY|BUILDING )' >&2 || true
+
+tr -d '\r\n' < output.json | sed -n 's/.*"modules"[[:space:]]*:[[:space:]]*\[[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1 | base64 -d > main.mv
 sui move disassemble main.mv > main.move
 
 echo
