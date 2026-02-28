@@ -6,6 +6,7 @@ use crate::accumulators::coin_reservations::CoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
+use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -66,6 +67,7 @@ use std::{
 };
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
+use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::crypto::RandomnessRound;
@@ -1050,6 +1052,7 @@ impl AuthorityState {
             &receiving_objects,
             &self.metrics.bytecode_verifier_metrics,
             &self.config.verifier_signing_config,
+            epoch_store.get_chain_identifier(),
         )?;
 
         self.handle_coin_deny_list_checks(
@@ -1887,6 +1890,67 @@ impl AuthorityState {
         );
     }
 
+    /// Helper function that handles transaction rewriting for coin reservations and executes
+    /// the transaction to effects. Returns the execution results along with the command offset
+    /// used for rewriting failure command indices.
+    fn execute_transaction_with_rewriting(
+        &self,
+        executor: &dyn Executor,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        gas_data: GasData,
+        gas_status: SuiGasStatus,
+        sender: SuiAddress,
+        mut kind: TransactionKind,
+        signer: SuiAddress,
+        tx_digest: TransactionDigest,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionError>,
+    ) {
+        let compat_args = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            sender,
+            &mut kind,
+        );
+
+        let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
+            .execute_transaction_to_effects(
+                store,
+                protocol_config,
+                self.metrics.limits_metrics.clone(),
+                enable_expensive_checks,
+                execution_params,
+                epoch_id,
+                epoch_timestamp_ms,
+                input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                compat_args,
+                signer,
+                tx_digest,
+                &mut None,
+            );
+
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            timings,
+            execution_error,
+        )
+    }
+
     /// execute_certificate validates the transaction input, and executes the certificate,
     /// returning transaction outputs.
     ///
@@ -1928,6 +1992,7 @@ impl AuthorityState {
             input_objects,
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
+            epoch_store.get_chain_identifier(),
         ) {
             Ok(result) => result,
             Err(e) => return ExecutionOutput::Fatal(e),
@@ -1940,6 +2005,7 @@ impl AuthorityState {
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
+        let sender = transaction_data.sender();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
         let early_execution_error = get_early_execution_error(
             &tx_digest,
@@ -1955,11 +2021,11 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
-            epoch_store.executor().execute_transaction_to_effects(
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
+            .execute_transaction_with_rewriting(
+                &**epoch_store.executor(),
                 &tracking_store,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.config
@@ -1974,10 +2040,10 @@ impl AuthorityState {
                 input_objects,
                 gas_data,
                 gas_status,
+                sender,
                 kind,
                 signer,
                 tx_digest,
-                &mut None,
             );
 
         let object_funds_checker = self.object_funds_checker.load();
@@ -2248,6 +2314,7 @@ impl AuthorityState {
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
+                    epoch_store.get_chain_identifier(),
                 )?,
                 Some(gas_object_id),
             )
@@ -2261,6 +2328,7 @@ impl AuthorityState {
                     &receiving_objects,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
+                    epoch_store.get_chain_identifier(),
                 )?,
                 None,
             )
@@ -2289,11 +2357,12 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (inner_temp_store, _, effects, _timings, execution_error) = executor
-            .execute_transaction_to_effects(
+
+        let (inner_temp_store, _, effects, _timings, execution_error) = self
+            .execute_transaction_with_rewriting(
+                executor.as_ref(),
                 self.get_backing_store().as_ref(),
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
                 expensive_checks,
                 execution_params,
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
@@ -2304,11 +2373,12 @@ impl AuthorityState {
                 checked_input_objects,
                 gas_data,
                 gas_status,
+                transaction.sender(),
                 kind,
                 signer,
                 transaction_digest,
-                &mut None,
             );
+
         let tx_digest = *effects.transaction_digest();
 
         let module_cache =
@@ -2473,6 +2543,7 @@ impl AuthorityState {
                 input_objects,
                 receiving_objects,
                 epoch_store.reference_gas_price(),
+                epoch_store.get_chain_identifier(),
             )?
         } else {
             sui_transaction_checks::check_transaction_input(
@@ -2483,6 +2554,7 @@ impl AuthorityState {
                 &receiving_objects,
                 &self.metrics.bytecode_verifier_metrics,
                 &self.config.verifier_signing_config,
+                epoch_store.get_chain_identifier(),
             )?
         };
 
@@ -2529,6 +2601,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             kind,
+            None, // compat_args - not needed for dev_inspect
             signer,
             tx_digest,
             dev_inspect,
@@ -2743,6 +2816,7 @@ impl AuthorityState {
                 input_objects,
                 receiving_objects,
                 reference_gas_price,
+                epoch_store.get_chain_identifier(),
             )?
         } else {
             // If we are not skipping checks, then we call the check_transaction_input function and its dummy gas
@@ -2764,6 +2838,7 @@ impl AuthorityState {
                     dummy_gas_object,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
+                    epoch_store.get_chain_identifier(),
                 )?
             } else {
                 sui_transaction_checks::check_transaction_input(
@@ -2774,6 +2849,7 @@ impl AuthorityState {
                     &receiving_objects,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
+                    epoch_store.get_chain_identifier(),
                 )?
             }
         };
@@ -2817,6 +2893,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             transaction_kind,
+            None, // compat_args - not needed for dev_inspect
             sender,
             transaction_digest,
             skip_checks,
@@ -4651,7 +4728,7 @@ impl AuthorityState {
         Ok(Some((object, layout)))
     }
 
-    fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
+    pub fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
         let layout = object
             .data
             .try_as_move()
