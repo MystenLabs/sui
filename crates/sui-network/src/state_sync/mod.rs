@@ -288,7 +288,7 @@ impl PeerHeights {
 
         info.height = std::cmp::max(*checkpoint.sequence_number(), info.height);
         if let Some(low_watermark) = low_watermark {
-            info.lowest = low_watermark;
+            info.lowest = std::cmp::max(info.lowest, low_watermark);
         }
         self.insert_checkpoint(checkpoint);
 
@@ -338,7 +338,7 @@ impl PeerHeights {
 
         info.height = std::cmp::max(height, info.height);
         if let Some(low_watermark) = low_watermark {
-            info.lowest = low_watermark;
+            info.lowest = std::cmp::max(info.lowest, low_watermark);
         }
 
         true
@@ -397,6 +397,19 @@ impl PeerHeights {
 
     pub fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<&Checkpoint> {
         self.unprocessed_checkpoints.get(digest)
+    }
+
+    /// Bump the lowest available checkpoint watermark for all peers on the same chain
+    /// to be at least `checkpoint + 1`. This is used when all peers fail to serve a
+    /// checkpoint's contents despite advertising availability, so that the archive
+    /// fallback path naturally triggers via the existing watermark comparison.
+    pub fn bump_lowest_for_unservable_checkpoint(&mut self, checkpoint: CheckpointSequenceNumber) {
+        let new_lowest = checkpoint + 1;
+        for info in self.peers.values_mut() {
+            if info.on_same_chain_as_us {
+                info.lowest = std::cmp::max(info.lowest, new_lowest);
+            }
+        }
     }
 
     #[cfg(test)]
@@ -1569,6 +1582,11 @@ async fn sync_checkpoint_contents<S>(
                         } else {
                             info!("unable to sync contents of checkpoint through state sync {}", checkpoint.sequence_number());
 
+                        }
+                        // Bump peer lowest watermarks past this checkpoint so the archive
+                        // fallback naturally triggers via the existing watermark comparison.
+                        if let Ok(mut heights) = peer_heights.write() {
+                            heights.bump_lowest_for_unservable_checkpoint(*checkpoint.sequence_number());
                         }
                         // Calculate tx_count for retry by getting previous checkpoint
                         let retry_tx_count = if *checkpoint.sequence_number() == 0 {
