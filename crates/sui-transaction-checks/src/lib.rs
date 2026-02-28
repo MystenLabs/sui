@@ -236,8 +236,12 @@ mod checked {
         Ok(gas_status)
     }
 
-    /// For transactions paying gas from address balance without ValidDuring expiration,
-    /// verify that the input objects provide replay protection.
+    /// For transactions paying gas from address balance, verify replay protection.
+    /// Replay protection can come from:
+    /// - ValidDuring expiration with single-epoch range (max_epoch = min_epoch + 1)
+    /// - Owned objects (which have unique versions)
+    /// - Coin reservations (which have epoch binding)
+    ///
     /// This check happens here (not at validation time) because we need access to the
     /// actual objects to determine if they are owned vs immutable.
     fn check_address_balance_replay_protection(
@@ -255,11 +259,14 @@ mod checked {
             return Ok(());
         }
 
-        // If using ValidDuring expiration, no additional check needed
-        if matches!(
-            transaction.expiration(),
-            sui_types::transaction::TransactionExpiration::ValidDuring { .. }
-        ) {
+        // ValidDuring with single-epoch range (max_epoch = min_epoch + 1) provides replay protection
+        if let sui_types::transaction::TransactionExpiration::ValidDuring {
+            min_epoch: Some(min),
+            max_epoch: Some(max),
+            ..
+        } = transaction.expiration()
+            && *max == *min + 1
+        {
             return Ok(());
         }
 
@@ -286,8 +293,8 @@ mod checked {
 
         if !has_replay_protection {
             return Err(UserInputError::InvalidExpiration {
-                error: "Address balance gas payments without ValidDuring expiration require \
-                        at least one owned object or coin reservation for replay protection"
+                error: "Address balance gas payments require replay protection: either a \
+                        single-epoch ValidDuring expiration, an owned object, or a coin reservation"
                     .to_string(),
             });
         }
