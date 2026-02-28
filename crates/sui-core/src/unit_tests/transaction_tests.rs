@@ -159,6 +159,9 @@ async fn test_empty_gas_data() {
         |err| {
             // Transaction with no gas payment and no owned inputs fails because
             // address balance gas requires ValidDuring for replay protection.
+            // We preserve the existing behavior of returning MissingGasPayment in this
+            // case to avoid unnecessarily changing behavior for clients, rather than
+            // returning InvalidExpiration.
             assert_matches!(
                 err,
                 SuiErrorKind::UserInputError {

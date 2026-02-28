@@ -2009,6 +2009,20 @@ pub enum TransactionExpiration {
     },
 }
 
+impl TransactionExpiration {
+    /// Validators remember all executed transaction digests from the current and previous
+    /// epoch. Therefore, ValidDuring with a one or two epoch range provides replay protection.
+    /// Either the transaction is statically invalid (current epoch not within range) or the
+    /// validator will remember if the transaction was already executed.
+    pub fn is_replay_protected(&self) -> bool {
+        matches!(self, TransactionExpiration::ValidDuring {
+                min_epoch: Some(min_epoch),
+                max_epoch: Some(max_epoch),
+                ..
+            } if *max_epoch == *min_epoch || *max_epoch == min_epoch.saturating_add(1))
+    }
+}
+
 #[enum_dispatch(TransactionDataAPI)]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum TransactionData {
@@ -2818,9 +2832,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                     .into());
                 }
 
-                // TODO: these checks can be loosened in the case where the transaction is not stateless,
-                // i.e. contains AddressOwned inputs.
+                // Legacy behavior: If ValidDuring is present, it must have either one- or two-epoch
+                // validity, even if the transaction is has other replay-protection.
+                // New behavior: ValidDuring can specify any epoch range. Replay protection is enforced
+                // by sui_transaction_checks::check_replay_protection.
                 match (min_epoch, max_epoch) {
+                    _ if config.relax_valid_during_for_owned_inputs() => (),
                     (Some(min), Some(max)) => {
                         if config.enable_multi_epoch_transaction_expiration() {
                             if !(*max == *min || *max == min.saturating_add(1)) {
@@ -2964,26 +2981,23 @@ impl TransactionDataAPI for TransactionDataV1 {
                 );
             }
 
-            // When relax_valid_during_for_owned_inputs is enabled, we defer the
-            // expiration check to sui-transaction-checks where we have access to
-            // actual object ownership. This allows transactions with owned inputs
-            // to use relaxed expiration while still requiring ValidDuring for
-            // stateless transactions.
+            // Legacy behavior: when paying gas from address balance, we require ValidDuring expiration
+            // even if the transaction has other replay-protected inputs.
+            // New behavior: the check is done in `check_address_balance_replay_protection`, which only
+            // requires two-epoch ValidDuring if there are no replay-protected inputs.
             if !config.relax_valid_during_for_owned_inputs() {
-                match self.expiration() {
-                    TransactionExpiration::None => {
-                        // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
-                        // instead of a missing expiration error.
-                        return Err(UserInputError::MissingGasPayment.into());
+                if matches!(self.expiration(), TransactionExpiration::None) {
+                    // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
+                    // instead of a missing expiration error.
+                    return Err(UserInputError::MissingGasPayment.into());
+                }
+
+                if !self.expiration().is_replay_protected() {
+                    return Err(UserInputError::InvalidExpiration {
+                        error: "Address balance gas payments require ValidDuring expiration"
+                            .to_string(),
                     }
-                    TransactionExpiration::Epoch(_) => {
-                        return Err(UserInputError::InvalidExpiration {
-                            error: "Address balance gas payments require ValidDuring expiration"
-                                .to_string(),
-                        }
-                        .into());
-                    }
-                    TransactionExpiration::ValidDuring { .. } => {}
+                    .into());
                 }
             }
         } else {
@@ -4348,8 +4362,8 @@ impl ObjectReadResult {
         }
     }
 
-    /// Return the object ref iff the object is an owned object (i.e. not shared, not immutable).
-    pub fn get_owned_objref(&self) -> Option<ObjectRef> {
+    /// Return the object ref iff the object is an address-owned object (i.e. not shared, not immutable).
+    pub fn get_address_owned_objref(&self) -> Option<ObjectRef> {
         match (&self.input_object_kind, &self.object) {
             (InputObjectKind::MovePackage(_), _) => None,
             (
@@ -4374,8 +4388,18 @@ impl ObjectReadResult {
         }
     }
 
-    pub fn is_owned(&self) -> bool {
-        self.get_owned_objref().is_some()
+    pub fn is_address_owned(&self) -> bool {
+        self.get_address_owned_objref().is_some()
+    }
+
+    pub fn is_replay_protected_input(&self) -> bool {
+        if let InputObjectKind::ImmOrOwnedMoveObject(obj_ref) = &self.input_object_kind
+            && ParsedDigest::is_coin_reservation_digest(&obj_ref.2)
+        {
+            true
+        } else {
+            self.is_address_owned()
+        }
     }
 
     pub fn to_shared_input(&self) -> Option<SharedInput> {
@@ -4512,7 +4536,7 @@ impl InputObjects {
         let owned_objects: Vec<_> = self
             .objects
             .iter()
-            .filter_map(|obj| obj.get_owned_objref())
+            .filter_map(|obj| obj.get_address_owned_objref())
             .collect();
 
         trace!(
