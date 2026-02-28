@@ -1,0 +1,10 @@
+---
+source: crates/sui-indexer-alt-graphql/src/lib.rs
+expression: "String::from_utf8(output.stdout).unwrap()"
+---
+Output the contents of the default configuration to STDOUT
+
+Usage: sui-indexer-alt-graphql generate-config
+
+Options:
+  -h, --help  Print help

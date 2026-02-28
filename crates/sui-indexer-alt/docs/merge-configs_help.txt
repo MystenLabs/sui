@@ -1,0 +1,8 @@
+Combine the configuration held across multiple files into one and output it to STDOUT. When two
+configurations set the same field, the last write wins
+
+Usage: sui-indexer-alt merge-configs --config <CONFIG>
+
+Options:
+      --config <CONFIG>  Path to a TOML file to be merged
+  -h, --help             Print help

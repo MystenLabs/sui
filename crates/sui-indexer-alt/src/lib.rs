@@ -208,3 +208,45 @@ pub async fn setup_indexer(
 
     Ok(indexer)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    use crate::args;
+    use insta::assert_snapshot;
+
+    #[test]
+    fn test_help() {
+        vec![
+            "indexer",
+            "generate-config",
+            "merge-configs",
+            "reset-database",
+        ]
+        .iter()
+        .for_each(|subcommand| {
+            let output = Command::new("cargo")
+                .args(["run", subcommand, "--help"])
+                .output()
+                .expect(format!("subcommand {subcommand} execution failed").as_str());
+
+            if !output.status.success() {
+                panic!(
+                    "subcommand {subcommand} failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+
+            // Update the current file
+            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("docs")
+                .join(format!("{subcommand}_help.txt"));
+            fs::write(path, &output.stdout).unwrap();
+
+            assert_snapshot!(*subcommand, String::from_utf8(output.stdout).unwrap());
+        })
+    }
+}

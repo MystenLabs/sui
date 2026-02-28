@@ -1,0 +1,49 @@
+---
+source: crates/sui-indexer-alt-consistent-store/src/lib.rs
+expression: "String::from_utf8(output.stdout).unwrap()"
+---
+Restore the database from a formal snapshot
+
+Usage: sui-indexer-alt-consistent-store restore [OPTIONS] --database-path <DATABASE_PATH> <--s3 <S3>|--gcs <GCS>|--azure <AZURE>|--http <HTTP>|--path <PATH>|--remote-store-url <REMOTE_STORE_URL>|--epoch <EPOCH>>
+
+Options:
+      --database-path <DATABASE_PATH>
+          The path where the RocksDB database will be stored. The database will be created if it
+          does not exist
+      --s3 <S3>
+          Fetch formal snapshot from AWS S3. Provide the bucket name or endpoint-and-bucket. (env:
+          AWS_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION)
+      --gcs <GCS>
+          Fetch formal snapshot from Google Cloud Storage. Provide the bucket name. (env:
+          GOOGLE_SERVICE_ACCOUNT_PATH)
+      --azure <AZURE>
+          Fetch formal snapshot from Azure Blob Storage. Provide the container name. (env:
+          AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_ACCESS_KEY)
+      --http <HTTP>
+          Fetch formal snapshot from a generic HTTP endpoint
+      --path <PATH>
+          Fetch formal snapshot from local filesystem. Provide the path to the snapshot directory
+      --remote-store-url <REMOTE_STORE_URL>
+          URL of the remote checkpoint store. Used to fetch the mapping between epochs and
+          checkpoints
+      --epoch <EPOCH>
+          The epoch to restore from. Restores from the latest epoch if not specified
+      --snapshot-timeout-ms <SNAPSHOT_TIMEOUT_MS>
+          How long to wait for a snapshot file to be downloaded (default to no timeout)
+      --snapshot-connection-timeout-ms <SNAPSHOT_CONNECTION_TIMEOUT_MS>
+          How long to wait while establishing a connection to the snapshot store (defaults to no
+          timeout)
+      --object-file-concurrency <OBJECT_FILE_CONCURRENCY>
+          Number of object files to download concurrently [default: 25]
+      --object-file-buffer-size <OBJECT_FILE_BUFFER_SIZE>
+          Maximum size of the backlog of object files waiting to be processed by one worker
+          [default: 25]
+      --metrics-address <METRICS_ADDRESS>
+          Address to serve Prometheus metrics from [default: 0.0.0.0:9184]
+      --pipeline <PIPELINE>
+          The pipelines to restore
+      --config <CONFIG>
+          Path to the RPC's configuration TOML file. If one is not provided, the default values for
+          the configuration will be set. Only the `rocksdb` section is read for restoration
+  -h, --help
+          Print help
