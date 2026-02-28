@@ -16,7 +16,8 @@ use move_binary_format::file_format::{Ability, AbilitySet};
 use move_core_types::account_address::AccountAddress;
 use std::rc::Rc;
 use sui_types::{
-    balance::RESOLVED_BALANCE_STRUCT,    base_types::{ObjectID, ObjectRef, TxContextKind},
+    balance::RESOLVED_BALANCE_STRUCT,
+    base_types::{ObjectID, ObjectRef, TxContextKind},
     coin::{COIN_MODULE_NAME, REDEEM_FUNDS_FUNC_NAME, RESOLVED_COIN_STRUCT},
     error::{ExecutionError, ExecutionErrorKind, SafeIndex, command_argument_error},
     execution_status::CommandArgumentError,
