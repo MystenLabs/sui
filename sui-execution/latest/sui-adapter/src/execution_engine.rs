@@ -711,6 +711,7 @@ mod checked {
                     pt,
                     trace_builder_opt,
                 )
+                .map_err(|(e, timings)| (e.into(), timings))
             }
             TransactionKind::ProgrammableSystemTransaction(pt) => {
                 programmable_transactions::execution::execute::<execution_mode::System>(
@@ -724,7 +725,8 @@ mod checked {
                     None,
                     pt,
                     trace_builder_opt,
-                )?;
+                )
+                .map_err(|(e, vec)| (ExecutionError::from_kind(e), vec))?;
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {

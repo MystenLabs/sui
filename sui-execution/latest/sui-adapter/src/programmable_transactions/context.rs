@@ -664,7 +664,7 @@ mod checked {
             updates: &mut Mode::ArgumentUpdates,
             arg: Arg,
             value: Value,
-        ) -> Result<(), ExecutionError> {
+        ) -> Result<(), Mode::Error> {
             let per_command_shared_object_transfer_rules = self
                 .protocol_config
                 .per_command_shared_object_transfer_rules();
