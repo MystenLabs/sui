@@ -1,4 +1,8 @@
-# Authenticated Events
+---
+title: Authenticated Events
+description: Cryptographically verifiable Move events that can be verified by a light client without trusting any intermediary, suitable for trustless event consumption.
+keywords: [authenticated events, light client, event verification, MMR, Merkle Mountain Range, event streaming, cryptographic verification, move events, event completeness]
+---
 
 Authenticated Events provide a cryptographically verifiable stream of Move events from Sui smart contracts. Unlike regular events, authenticated events can be verified by a light client without trusting any intermediary, making them suitable for applications requiring trustless event consumption.
 
@@ -88,7 +92,7 @@ while let Some(result) = stream.next().await {
 
 ### Resuming from a Checkpoint
 
-To resume a stream, the client needs a verified starting state. To guarantee completeness, this requires an OCS inclusion proof showing the `EventStreamHead` at that checkpoint — which only exists if authenticated events were emitted for the stream at that checkpoint. In practice, this would be the checkpoint sequence of the last event the client recieved before a disconnection.
+To resume a stream, the client needs a verified starting state. To guarantee completeness, this requires an OCS inclusion proof showing the `EventStreamHead` at that checkpoint — which only exists if authenticated events were emitted for the stream at that checkpoint. In practice, this would be the checkpoint sequence of the last event the client received before a disconnection.
 
 If the specified checkpoint does not have events for that stream_id, the client will fail to initialize.
 
