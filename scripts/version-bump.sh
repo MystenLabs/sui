@@ -103,7 +103,7 @@ if [[ -n "$OVERRIDE_VERSION" ]]; then
 else
   IFS=. read -r major minor patch <<<"$CURRENT_VERSION"
   if [[ "$BUMP_TYPE" == "minor" ]]; then
-    NEW_VERSION="$major.$((minor + 1)).$patch"
+    NEW_VERSION="$major.$((minor + 1)).0"
   else
     NEW_VERSION="$major.$minor.$((patch + 1))"
   fi
@@ -159,7 +159,9 @@ fi
 
 # ── Cargo check ──────────────────────────────────────────────────────
 echo -e "${YELLOW}Running cargo check (regenerates Cargo.lock)...${NC}"
-cargo check || true
+if ! cargo check; then
+  echo -e "${YELLOW}Warning: cargo check failed. Cargo.lock may not be fully updated.${NC}" >&2
+fi
 echo -e "${GREEN}✓ cargo check completed${NC}"
 
 # ── Summary ──────────────────────────────────────────────────────────

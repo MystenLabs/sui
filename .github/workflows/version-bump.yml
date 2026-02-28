@@ -75,7 +75,11 @@ jobs:
           BRANCH="${GITHUB_ACTOR}/sui-v${NEW_VERSION}-version-bump-${STAMP}"
 
           git checkout -b "$BRANCH"
-          git add -A .
+          git add \
+            Cargo.toml \
+            Cargo.lock \
+            crates/sui-open-rpc/spec/openrpc.json \
+            crates/sui-open-rpc/tests/snapshots/generate_spec__openrpc.snap.json
           BODY="Sui v${NEW_VERSION} Version Bump"
           git commit -m "$BODY"
           git push -u origin "$BRANCH"
@@ -95,6 +99,10 @@ jobs:
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           BODY="Sui v${NEW_VERSION} Version Bump"
 
-          git add -A .
+          git add \
+            Cargo.toml \
+            Cargo.lock \
+            crates/sui-open-rpc/spec/openrpc.json \
+            crates/sui-open-rpc/tests/snapshots/generate_spec__openrpc.snap.json
           git commit -m "$BODY"
           git push origin HEAD:"${{ github.ref_name }}"
