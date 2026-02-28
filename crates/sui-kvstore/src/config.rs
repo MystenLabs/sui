@@ -63,6 +63,7 @@ pub struct ConcurrentLayer {
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
+    pub channel_size: Option<usize>,
 }
 
 impl ConcurrentLayer {
@@ -81,6 +82,7 @@ impl ConcurrentLayer {
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
+            channel_size: self.channel_size.unwrap_or(base.channel_size),
         }
     }
 }

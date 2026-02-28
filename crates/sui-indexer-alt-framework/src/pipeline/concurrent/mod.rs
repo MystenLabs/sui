@@ -114,7 +114,7 @@ pub trait Handler: Processor {
 }
 
 /// Configuration for a concurrent pipeline
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ConcurrentConfig {
     /// Configuration for the writer, that makes forward progress.
     pub committer: CommitterConfig,
@@ -133,6 +133,30 @@ pub struct ConcurrentConfig {
 
     /// Override for `Handler::MAX_WATERMARK_UPDATES` (watermarks per batch cap).
     pub max_watermark_updates: Option<usize>,
+
+    /// Size of the channel between the processor and collector.
+    #[serde(default = "ConcurrentConfig::default_channel_size")]
+    pub channel_size: usize,
+}
+
+impl ConcurrentConfig {
+    fn default_channel_size() -> usize {
+        5
+    }
+}
+
+impl Default for ConcurrentConfig {
+    fn default() -> Self {
+        Self {
+            committer: CommitterConfig::default(),
+            pruner: None,
+            fanout: None,
+            min_eager_rows: None,
+            max_pending_rows: None,
+            max_watermark_updates: None,
+            channel_size: Self::default_channel_size(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -245,6 +269,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         min_eager_rows,
         max_pending_rows,
         max_watermark_updates,
+        channel_size,
     } = config;
 
     let concurrency = fanout.unwrap_or(ProcessorConcurrencyConfig::Fixed(H::FANOUT));
@@ -252,7 +277,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let max_pending_rows = max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
     let max_watermark_updates = max_watermark_updates.unwrap_or(H::MAX_WATERMARK_UPDATES);
 
-    let (processor_tx, collector_rx) = mpsc::channel(concurrency.max() + PIPELINE_BUFFER);
+    let (processor_tx, collector_rx) = mpsc::channel(concurrency.initial() + channel_size);
 
     //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
     let (collector_tx, committer_rx) =

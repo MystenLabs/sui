@@ -67,6 +67,7 @@ pub struct SequentialLayer {
     pub fanout: Option<ProcessorConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
+    pub channel_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -79,6 +80,7 @@ pub struct ConcurrentLayer {
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
+    pub channel_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -210,6 +212,7 @@ impl SequentialLayer {
             fanout: self.fanout.or(base.fanout),
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
+            channel_size: self.channel_size.unwrap_or(base.channel_size),
         })
     }
 }
@@ -232,6 +235,7 @@ impl ConcurrentLayer {
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
+            channel_size: self.channel_size.unwrap_or(base.channel_size),
         })
     }
 }
@@ -334,6 +338,7 @@ impl Merge for SequentialLayer {
             fanout: other.fanout.or(self.fanout),
             min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
             max_batch_checkpoints: other.max_batch_checkpoints.or(self.max_batch_checkpoints),
+            channel_size: other.channel_size.or(self.channel_size),
         })
     }
 }
@@ -347,6 +352,7 @@ impl Merge for ConcurrentLayer {
             min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
             max_pending_rows: other.max_pending_rows.or(self.max_pending_rows),
             max_watermark_updates: other.max_watermark_updates.or(self.max_watermark_updates),
+            channel_size: other.channel_size.or(self.channel_size),
         })
     }
 }
@@ -445,6 +451,7 @@ impl From<SequentialConfig> for SequentialLayer {
             fanout: config.fanout,
             min_eager_rows: config.min_eager_rows,
             max_batch_checkpoints: config.max_batch_checkpoints,
+            channel_size: Some(config.channel_size),
         }
     }
 }
@@ -458,6 +465,7 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
             min_eager_rows: config.min_eager_rows,
             max_pending_rows: config.max_pending_rows,
             max_watermark_updates: config.max_watermark_updates,
+            channel_size: Some(config.channel_size),
         }
     }
 }

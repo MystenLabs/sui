@@ -12,7 +12,6 @@ use tracing::info;
 
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
-use crate::pipeline::PIPELINE_BUFFER;
 use crate::pipeline::Processor;
 use crate::pipeline::ProcessorConcurrencyConfig;
 use crate::pipeline::processor::processor;
@@ -78,7 +77,7 @@ pub trait Handler: Processor {
 }
 
 /// Configuration for a sequential pipeline
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SequentialConfig {
     /// Configuration for the writer, that makes forward progress.
     pub committer: CommitterConfig,
@@ -94,6 +93,29 @@ pub struct SequentialConfig {
 
     /// Override for `Handler::MAX_BATCH_CHECKPOINTS` (checkpoints per write batch).
     pub max_batch_checkpoints: Option<usize>,
+
+    /// Size of the channel between the processor and committer.
+    #[serde(default = "SequentialConfig::default_channel_size")]
+    pub channel_size: usize,
+}
+
+impl SequentialConfig {
+    fn default_channel_size() -> usize {
+        5
+    }
+}
+
+impl Default for SequentialConfig {
+    fn default() -> Self {
+        Self {
+            committer: CommitterConfig::default(),
+            checkpoint_lag: 0,
+            fanout: None,
+            min_eager_rows: None,
+            max_batch_checkpoints: None,
+            channel_size: Self::default_channel_size(),
+        }
+    }
 }
 
 /// Start a new sequential (in-order) indexing pipeline, served by the handler, `H`. Starting
@@ -144,7 +166,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         .max_batch_checkpoints
         .unwrap_or(H::MAX_BATCH_CHECKPOINTS);
 
-    let (processor_tx, committer_rx) = mpsc::channel(concurrency.max() + PIPELINE_BUFFER);
+    let (processor_tx, committer_rx) = mpsc::channel(concurrency.initial() + config.channel_size);
 
     let handler = Arc::new(handler);
 
