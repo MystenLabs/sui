@@ -1,0 +1,497 @@
+---
+source: crates/sui/tests/shell_tests.rs
+assertion_line: 113
+---
+----- script -----
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+run_ptb() {
+  local output=$1
+  shift
+  if ! sui client --client.config "$CONFIG" ptb \
+    --move-call sui::tx_context::sender \
+    --assign sender \
+    --split-coins gas "[1000]" \
+    --assign split_coin \
+    --transfer-objects "[split_coin]" sender \
+    --gas-budget 50000000 \
+    "$@" \
+    > "$output" 2>&1; then
+    cat "$output"
+    exit 1
+  fi
+}
+
+redact_output() {
+  perl -pe '
+    s/0x[0-9a-fA-F]{64}/"0x" . ("X" x 64)/eg;
+
+    s/\b([1-9A-HJ-NP-Za-km-z]{32,})\b/"D" x length($1)/eg;
+    s/\b([A-Za-z0-9+\/]{80,}={0,2})\b/"S" x length($1)/eg;
+
+    s/"D{32,}"/"<DIGEST>"/g;
+    s/"S{80,}"/"<SIGNATURE>"/g;
+    s/(Transaction Digest:\s+)D+/$1<DIGEST>/g;
+    s/(Digest:\s+)([^│\n]+)(│)/$1 . "<DIGEST>" . (" " x (length($2) > 8 ? length($2) - 8 : 0)) . $3/eg;
+
+    s/(\bExecuted Epoch:\s*)(\d+)/$1 . ("0" x length($2))/eg;
+    s/("executedEpoch":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+    s/("timestampMs":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+    s/("checkpoint":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+
+    s/(\bVersion:\s*)(\d+)/$1 . ("0" x length($2))/eg;
+    s/("version":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+    s/("version":\s*)(\d+)(,?)/$1 . ("0" x length($2)) . $3/eg;
+    s/("previousVersion":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+    s/("sequenceNumber":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+
+    s/(Estimated gas cost \(includes a small buffer\):\s*)(\d+)( MIST)/$1 . ("0" x length($2)) . $3/eg;
+    s/(\bStorage Cost:\s*)(\d+)( MIST)/$1 . ("0" x length($2)) . $3/eg;
+    s/(\bComputation Cost:\s*)(\d+)( MIST)/$1 . ("0" x length($2)) . $3/eg;
+    s/(\bStorage Rebate:\s*)(\d+)( MIST)/$1 . ("0" x length($2)) . $3/eg;
+    s/(\bNon-refundable Storage Fee:\s*)(\d+)( MIST)/$1 . ("0" x length($2)) . $3/eg;
+    s/(\bAmount:\s*)(-?)(\d+)/$1 . $2 . ("0" x length($3))/eg;
+
+    s/("computationCost":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+    s/("storageCost":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+    s/("storageRebate":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+    s/("nonRefundableStorageFee":\s*")(\d+)(")/$1 . ("0" x length($2)) . $3/eg;
+    s/("amount":\s*")(-?)(\d+)(")/$1 . $2 . ("0" x length($3)) . $4/eg;
+  ' "$@"
+}
+
+echo "=== dry-run ==="
+run_ptb dry-run.log --dry-run
+redact_output dry-run.log
+
+echo
+echo "=== execute ==="
+run_ptb execute.log
+redact_output execute.log
+
+echo
+echo "=== json ==="
+run_ptb json.log --json
+jq '
+  .objectChanges |= sort_by(.type, .objectId)
+  | .effects.created |= sort_by(.reference.objectId)
+  | .effects.mutated |= sort_by(.reference.objectId)
+  | .effects.modifiedAtVersions |= sort_by(.objectId)
+' json.log | redact_output
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+=== dry-run ===
+Dry run completed, execution status: success
+╭──────────────────────────────────────────────────────────────────────────────────────╮
+│ Dry Run Transaction Data                                                             │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX           │
+│ Gas Owner: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX        │
+│ Gas Budget: 50000000 MIST                                                            │
+│ Gas Price: 1000 MIST                                                                 │
+│ Gas Payment:                                                                         │
+│                                                                                      │
+│                                                                                      │
+│ Transaction Kind: Programmable                                                       │
+│ ╭───────────────────────────────────╮                                                │
+│ │ Input Objects                     │                                                │
+│ ├───────────────────────────────────┤                                                │
+│ │ 0   Pure Arg: [232,3,0,0,0,0,0,0] │                                                │
+│ ╰───────────────────────────────────╯                                                │
+│ ╭──────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Commands                                                                         │ │
+│ ├──────────────────────────────────────────────────────────────────────────────────┤ │
+│ │ 0  MoveCall:                                                                     │ │
+│ │  ┌                                                                               │ │
+│ │  │ Function:  sender                                                             │ │
+│ │  │ Module:    tx_context                                                         │ │
+│ │  │ Package:   0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX │ │
+│ │  └                                                                               │ │
+│ │                                                                                  │ │
+│ │ 1  SplitCoins:                                                                   │ │
+│ │  ┌                                                                               │ │
+│ │  │ Coin: GasCoin                                                                 │ │
+│ │  │ Amounts:                                                                      │ │
+│ │  │   Input  0                                                                    │ │
+│ │  └                                                                               │ │
+│ │                                                                                  │ │
+│ │ 2  TransferObjects:                                                              │ │
+│ │  ┌                                                                               │ │
+│ │  │ Arguments:                                                                    │ │
+│ │  │   Result 1                                                                    │ │
+│ │  │ Address: Result 0                                                             │ │
+│ │  └                                                                               │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────╯ │
+│                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: <DIGEST>                                                                                  │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 0                                                                                 │
+│                                                                                                   │
+│ Created Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                         │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX )  │
+│  │ Version: 0                                                                                     │
+│  │ Digest: <DIGEST>                                                                               │
+│  └──                                                                                              │
+│ Mutated Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                         │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX )  │
+│  │ Version: 0                                                                                     │
+│  │ Digest: <DIGEST>                                                                               │
+│  └──                                                                                              │
+│ Gas Object:                                                                                       │
+│  ┌──                                                                                              │
+│  │ ID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                         │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX )  │
+│  │ Version: 0                                                                                     │
+│  │ Digest: <DIGEST>                                                                               │
+│  └──                                                                                              │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 0000000 MIST                                                                     │
+│    Computation Cost: 0000000 MIST                                                                 │
+│    Storage Rebate: 0 MIST                                                                         │
+│    Non-refundable Storage Fee: 0 MIST                                                             │
+│                                                                                                   │
+│ Transaction Dependencies:                                                                         │
+│    DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────╮
+│ No transaction block events │
+╰─────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Object Changes                                                                                   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Created Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                  │
+│  │ Sender: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                    │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX ) │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                    │
+│  │ Version: 0                                                                                    │
+│  │ Digest: <DIGEST>                                                                              │
+│  └──                                                                                             │
+│ Mutated Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                  │
+│  │ Sender: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                    │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX ) │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                    │
+│  │ Version: 0                                                                                    │
+│  │ Digest: <DIGEST>                                                                              │
+│  └──                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Balance Changes                                                                                   │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──                                                                                              │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX )  │
+│  │ CoinType: 0x2::sui::SUI                                                                        │
+│  │ Amount: -0000000                                                                               │
+│  └──                                                                                              │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+Dry run completed, execution status: success
+Estimated gas cost (includes a small buffer): 0000000 MIST
+
+
+
+=== execute ===
+Transaction Digest: <DIGEST>
+╭─────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Data                                                                            │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                  │
+│ Gas Owner: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX               │
+│ Gas Budget: 50000000 MIST                                                                   │
+│ Gas Price: 1000 MIST                                                                        │
+│ Gas Payment:                                                                                │
+│  ┌──                                                                                        │
+│  │ ID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                   │
+│  │ Version: 0                                                                               │
+│  │ Digest: <DIGEST>                                                                         │
+│  └──                                                                                        │
+│                                                                                             │
+│ Transaction Kind: Programmable                                                              │
+│ ╭───────────────────────────────────╮                                                       │
+│ │ Input Objects                     │                                                       │
+│ ├───────────────────────────────────┤                                                       │
+│ │ 0   Pure Arg: [232,3,0,0,0,0,0,0] │                                                       │
+│ ╰───────────────────────────────────╯                                                       │
+│ ╭──────────────────────────────────────────────────────────────────────────────────╮        │
+│ │ Commands                                                                         │        │
+│ ├──────────────────────────────────────────────────────────────────────────────────┤        │
+│ │ 0  MoveCall:                                                                     │        │
+│ │  ┌                                                                               │        │
+│ │  │ Function:  sender                                                             │        │
+│ │  │ Module:    tx_context                                                         │        │
+│ │  │ Package:   0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX │        │
+│ │  └                                                                               │        │
+│ │                                                                                  │        │
+│ │ 1  SplitCoins:                                                                   │        │
+│ │  ┌                                                                               │        │
+│ │  │ Coin: GasCoin                                                                 │        │
+│ │  │ Amounts:                                                                      │        │
+│ │  │   Input  0                                                                    │        │
+│ │  └                                                                               │        │
+│ │                                                                                  │        │
+│ │ 2  TransferObjects:                                                              │        │
+│ │  ┌                                                                               │        │
+│ │  │ Arguments:                                                                    │        │
+│ │  │   Result 1                                                                    │        │
+│ │  │ Address: Result 0                                                             │        │
+│ │  └                                                                               │        │
+│ ╰──────────────────────────────────────────────────────────────────────────────────╯        │
+│                                                                                             │
+│ Signatures:                                                                                 │
+│    SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS== │
+│                                                                                             │
+╰─────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: <DIGEST>                                                                                  │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 0                                                                                 │
+│                                                                                                   │
+│ Created Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                         │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX )  │
+│  │ Version: 0                                                                                     │
+│  │ Digest: <DIGEST>                                                                               │
+│  └──                                                                                              │
+│ Mutated Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                         │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX )  │
+│  │ Version: 0                                                                                     │
+│  │ Digest: <DIGEST>                                                                               │
+│  └──                                                                                              │
+│ Gas Object:                                                                                       │
+│  ┌──                                                                                              │
+│  │ ID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                         │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX )  │
+│  │ Version: 0                                                                                     │
+│  │ Digest: <DIGEST>                                                                               │
+│  └──                                                                                              │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 0000000 MIST                                                                     │
+│    Computation Cost: 0000000 MIST                                                                 │
+│    Storage Rebate: 0 MIST                                                                         │
+│    Non-refundable Storage Fee: 0 MIST                                                             │
+│                                                                                                   │
+│ Transaction Dependencies:                                                                         │
+│    DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Object Changes                                                                                   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Created Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                  │
+│  │ Sender: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                    │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX ) │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                    │
+│  │ Version: 0                                                                                    │
+│  │ Digest: <DIGEST>                                                                              │
+│  └──                                                                                             │
+│ Mutated Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                  │
+│  │ Sender: 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX                    │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX ) │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                    │
+│  │ Version: 0                                                                                    │
+│  │ Digest: <DIGEST>                                                                              │
+│  └──                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Balance Changes                                                                                   │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──                                                                                              │
+│  │ Owner: Account Address ( 0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX )  │
+│  │ CoinType: 0x2::sui::SUI                                                                        │
+│  │ Amount: -0000000                                                                               │
+│  └──                                                                                              │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+=== json ===
+{
+  "digest": "<DIGEST>",
+  "transaction": {
+    "data": {
+      "messageVersion": "v1",
+      "transaction": {
+        "kind": "ProgrammableTransaction",
+        "inputs": [
+          {
+            "type": "pure",
+            "valueType": null,
+            "value": [
+              232,
+              3,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "transactions": [
+          {
+            "MoveCall": {
+              "package": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+              "module": "tx_context",
+              "function": "sender"
+            }
+          },
+          {
+            "SplitCoins": [
+              "GasCoin",
+              [
+                {
+                  "Input": 0
+                }
+              ]
+            ]
+          },
+          {
+            "TransferObjects": [
+              [
+                {
+                  "Result": 1
+                }
+              ],
+              {
+                "Result": 0
+              }
+            ]
+          }
+        ]
+      },
+      "sender": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "gasData": {
+        "payment": [
+          {
+            "objectId": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+            "version": 0,
+            "digest": "<DIGEST>"
+          }
+        ],
+        "owner": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+        "price": "1000",
+        "budget": "50000000"
+      }
+    },
+    "txSignatures": [
+      "SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS=="
+    ]
+  },
+  "effects": {
+    "messageVersion": "v1",
+    "status": {
+      "status": "success"
+    },
+    "executedEpoch": "0",
+    "gasUsed": {
+      "computationCost": "0000000",
+      "storageCost": "0000000",
+      "storageRebate": "0",
+      "nonRefundableStorageFee": "0"
+    },
+    "modifiedAtVersions": [
+      {
+        "objectId": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+        "sequenceNumber": "0"
+      }
+    ],
+    "transactionDigest": "<DIGEST>",
+    "created": [
+      {
+        "owner": {
+          "AddressOwner": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        },
+        "reference": {
+          "objectId": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+          "version": 0,
+          "digest": "<DIGEST>"
+        }
+      }
+    ],
+    "mutated": [
+      {
+        "owner": {
+          "AddressOwner": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        },
+        "reference": {
+          "objectId": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+          "version": 0,
+          "digest": "<DIGEST>"
+        }
+      }
+    ],
+    "gasObject": {
+      "owner": {
+        "AddressOwner": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "reference": {
+        "objectId": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+        "version": 0,
+        "digest": "<DIGEST>"
+      }
+    },
+    "dependencies": [
+      "<DIGEST>"
+    ]
+  },
+  "objectChanges": [
+    {
+      "type": "created",
+      "sender": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "owner": {
+        "AddressOwner": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+      "objectId": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "version": "0",
+      "digest": "<DIGEST>"
+    },
+    {
+      "type": "mutated",
+      "sender": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "owner": {
+        "AddressOwner": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+      "objectId": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "version": "0",
+      "previousVersion": "0",
+      "digest": "<DIGEST>"
+    }
+  ],
+  "balanceChanges": [
+    {
+      "owner": {
+        "AddressOwner": "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "coinType": "0x2::sui::SUI",
+      "amount": "-0000000"
+    }
+  ],
+  "timestampMs": "0000000000000",
+  "checkpoint": "00"
+}
+
+----- stderr -----
