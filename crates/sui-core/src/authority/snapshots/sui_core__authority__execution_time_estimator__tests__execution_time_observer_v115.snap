@@ -1,5 +1,6 @@
 ---
 source: crates/sui-core/src/authority/execution_time_estimator.rs
+assertion_line: 2218
 expression: snapshot_data
 ---
 protocol_version: 115
