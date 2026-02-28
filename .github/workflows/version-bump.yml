@@ -48,6 +48,25 @@ jobs:
     runs-on: ubuntu-ghcloud
 
     steps:
+      - name: Validate inputs
+        env:
+          INPUT_TYPE: ${{ inputs.type }}
+          INPUT_DELIVERY: ${{ inputs.delivery }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$INPUT_TYPE" != "patch" && "$INPUT_TYPE" != "minor" ]]; then
+            echo "::error::Invalid input: 'type' must be 'patch' or 'minor', got '$INPUT_TYPE'"
+            exit 1
+          fi
+          if [[ "$INPUT_DELIVERY" != "pr" && "$INPUT_DELIVERY" != "direct" ]]; then
+            echo "::error::Invalid input: 'delivery' must be 'pr' or 'direct', got '$INPUT_DELIVERY'"
+            exit 1
+          fi
+          if [[ "$INPUT_DELIVERY" == "direct" && "$REF_NAME" == "main" ]]; then
+            echo "::error::Cannot direct-push to main. Use delivery=pr instead."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
 
@@ -58,8 +77,10 @@ jobs:
 
       - name: Run version bump
         id: bump
+        env:
+          INPUT_TYPE: ${{ inputs.type }}
         run: |
-          ./scripts/version-bump.sh --type "${{ inputs.type }}" -y 2>&1 | tee /tmp/bump-output.txt
+          ./scripts/version-bump.sh --type "$INPUT_TYPE" -y 2>&1 | tee /tmp/bump-output.txt
           # Extract the new version from the script output
           NEW_VERSION=$(grep '^NEW_VERSION=' /tmp/bump-output.txt | cut -d= -f2)
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
@@ -69,8 +90,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           STAMP="$(date +%Y%m%d%H%M%S)"
           BRANCH="${GITHUB_ACTOR}/sui-v${NEW_VERSION}-version-bump-${STAMP}"
 
@@ -85,7 +107,7 @@ jobs:
           git push -u origin "$BRANCH"
 
           gh pr create \
-            --base "${{ github.ref_name }}" \
+            --base "$REF_NAME" \
             --head "$BRANCH" \
             --title "$BODY" \
             --reviewer "ebmifa,pei-mysten,tharbert" \
@@ -95,8 +117,10 @@ jobs:
 
       - name: Deliver direct push
         if: inputs.delivery == 'direct'
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           BODY="Sui v${NEW_VERSION} Version Bump"
 
           git add \
@@ -105,4 +129,4 @@ jobs:
             crates/sui-open-rpc/spec/openrpc.json \
             crates/sui-open-rpc/tests/snapshots/generate_spec__openrpc.snap.json
           git commit -m "$BODY"
-          git push origin HEAD:"${{ github.ref_name }}"
+          git push origin HEAD:"$REF_NAME"
