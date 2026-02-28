@@ -80,7 +80,7 @@ fn thdb_config() -> Config {
     #[cfg(debug_assertions)]
     let max_maps = 4;
     #[cfg(not(debug_assertions))]
-    let max_maps = 8; // 8Gb of mapped space for prod
+    let max_maps = 16; // 8Gb of mapped space for prod
     #[cfg(debug_assertions)]
     let commit_pool_size = 0;
     #[cfg(not(debug_assertions))]
