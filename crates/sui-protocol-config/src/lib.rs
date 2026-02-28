@@ -299,6 +299,7 @@ const MAX_PROTOCOL_VERSION: u64 = 114;
 // Version 112: Enable Ristretto255 in devnet.
 // Version 113: Validate gas price >= RGP at signing for address balance gas payments.
 // Version 114: Gate seeded test overrides for checkpoint tx limit behind feature flag.
+//              Relax ValidDuring requirement for transactions with owned inputs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -829,6 +830,10 @@ struct FeatureFlags {
     // Enable multi-epoch transaction expiration (max 1 epoch difference)
     #[serde(skip_serializing_if = "is_false")]
     enable_multi_epoch_transaction_expiration: bool,
+
+    // Relax ValidDuring expiration requirement for transactions with owned inputs
+    #[serde(skip_serializing_if = "is_false")]
+    relax_valid_during_for_owned_inputs: bool,
 
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
@@ -2174,6 +2179,10 @@ impl ProtocolConfig {
 
     pub fn enable_multi_epoch_transaction_expiration(&self) -> bool {
         self.feature_flags.enable_multi_epoch_transaction_expiration
+    }
+
+    pub fn relax_valid_during_for_owned_inputs(&self) -> bool {
+        self.feature_flags.relax_valid_during_for_owned_inputs
     }
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
@@ -4632,6 +4641,7 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .include_checkpoint_artifacts_digest_in_summary = true;
                     }
+                    cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
                 }
                 // Use this template when making changes:
                 //
