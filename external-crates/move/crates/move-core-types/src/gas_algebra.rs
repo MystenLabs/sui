@@ -22,13 +22,13 @@ pub enum InternalGasUnit {}
 /// Unit for counting bytes.
 pub enum Byte {}
 
-/// Alternative unit for counting bytes. 1 kibibyte = 1024 bytes.
+/// Alternative unit for counting bytes. 1 kilobyte = 1024 bytes.
 pub enum KibiByte {}
 
-/// Alternative unit for counting bytes. 1 mebibyte = 1024 kibibytes.
+/// Alternative unit for counting bytes. 1 megabyte = 1024 kilobytes.
 pub enum MebiByte {}
 
-/// Alternative unit for counting bytes. 1 gibibyte = 1024 mebibytes.
+/// Alternative unit for counting bytes. 1 gigabyte = 1024 megabytes.
 pub enum GibiByte {}
 
 /// Unit of abstract memory usage in the Move VM.
