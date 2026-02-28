@@ -192,6 +192,39 @@ impl TestCase {
     }
 }
 
+/// Generate all valid test case permutations
+fn generate_test_cases() -> Vec<TestCase> {
+    let mut cases = Vec::new();
+
+    for payment_type in GasPaymentType::all() {
+        for charge_type in GasChargeType::all() {
+            // Skip negative gas charge cases for now to conserve resources.
+            // TODO: Add a separate test for negative gas charge cases with dedicated test environments.
+            if *charge_type == GasChargeType::NegativeFromStorageRebate {
+                continue;
+            }
+
+            for coin_usage in GasCoinUsage::all() {
+                // Skip invalid combinations
+                if coin_usage.should_skip_for(*payment_type) {
+                    continue;
+                }
+
+                for budget_type in GasBudgetType::all() {
+                    cases.push(TestCase {
+                        payment_type: *payment_type,
+                        charge_type: *charge_type,
+                        coin_usage: *coin_usage,
+                        budget_type: *budget_type,
+                    });
+                }
+            }
+        }
+    }
+
+    cases
+}
+
 fn move_test_code_path() -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests/move_test_code");
@@ -212,77 +245,49 @@ async fn test_gas_coin_handling_matrix() {
     // Publish the gas_test package for creating/deleting large objects
     let gas_test_package_id = test_env.setup_test_package(move_test_code_path()).await;
 
-    let mut test_count = 0;
+    let test_cases = generate_test_cases();
+    let total_cases = test_cases.len();
     let mut passed = 0;
     let mut skipped = 0;
 
-    // Generate all test case permutations
-    // Note: We skip negative gas charge (storage rebate) cases to avoid gas exhaustion.
-    // Negative gas charge tests require creating large objects which uses extra gas.
-    // TODO: Add a separate test for negative gas charge cases with dedicated test environments.
-    for payment_type in GasPaymentType::all() {
-        for charge_type in GasChargeType::all() {
-            // Skip negative gas charge cases for now to conserve resources
-            if *charge_type == GasChargeType::NegativeFromStorageRebate {
-                continue;
+    for (i, test_case) in test_cases.iter().enumerate() {
+        tracing::info!(
+            "Running test case {}/{}: {}",
+            i + 1,
+            total_cases,
+            test_case.name()
+        );
+
+        match run_test_case(&mut test_env, test_case, gas_test_package_id).await {
+            Ok(()) => {
+                passed += 1;
+                tracing::info!("Test case {} PASSED", test_case.name());
             }
-
-            for coin_usage in GasCoinUsage::all() {
-                for budget_type in GasBudgetType::all() {
-                    let test_case = TestCase {
-                        payment_type: *payment_type,
-                        charge_type: *charge_type,
-                        coin_usage: *coin_usage,
-                        budget_type: *budget_type,
-                    };
-
-                    // Skip invalid combinations
-                    if coin_usage.should_skip_for(*payment_type) {
-                        tracing::info!(
-                            "Skipping test case: {} (invalid combination)",
-                            test_case.name()
-                        );
-                        skipped += 1;
-                        continue;
-                    }
-
-                    test_count += 1;
-                    tracing::info!("Running test case {}: {}", test_count, test_case.name());
-
-                    match run_test_case(&mut test_env, &test_case, gas_test_package_id).await {
-                        Ok(()) => {
-                            passed += 1;
-                            tracing::info!("Test case {} PASSED", test_case.name());
-                        }
-                        Err(e) => {
-                            let err_str = e.to_string();
-                            if err_str.contains("No gas objects available") {
-                                tracing::warn!(
-                                    "Test case {} SKIPPED due to gas exhaustion: {}",
-                                    test_case.name(),
-                                    err_str
-                                );
-                                skipped += 1;
-                                // Break out of inner loops - we've exhausted gas
-                                break;
-                            } else {
-                                panic!("Test case {} FAILED: {:?}", test_case.name(), e);
-                            }
-                        }
-                    }
-
-                    // Trigger reconfiguration after each test to check for conservation errors
-                    test_env.trigger_reconfiguration().await;
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("No gas objects available") {
+                    tracing::warn!(
+                        "Test case {} SKIPPED due to gas exhaustion: {}",
+                        test_case.name(),
+                        err_str
+                    );
+                    skipped += 1;
+                    break;
+                } else {
+                    panic!("Test case {} FAILED: {:?}", test_case.name(), e);
                 }
             }
         }
+
+        // Trigger reconfiguration after each test to check for conservation errors
+        test_env.trigger_reconfiguration().await;
     }
 
     tracing::info!(
         "Test matrix complete: {} passed, {} skipped out of {} total",
         passed,
         skipped,
-        test_count + skipped
+        total_cases
     );
 }
 
