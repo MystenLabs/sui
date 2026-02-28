@@ -1,0 +1,22 @@
+// Tests references for basic Move constructs
+{
+  "References": {
+    "project": "tests/module-ext",
+    "file_tests": {
+      "M1.move": [
+        {
+          "use_line": 17,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 28,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 39,
+          "use_ndx": 0
+        }
+      ]
+    }
+  }
+}

@@ -144,17 +144,11 @@ impl UseDefTest {
             )?;
             return Ok(());
         };
-        let Some(mod_defs) = symbols.file_mods.get(use_file_path) else {
-            writeln!(
-                output,
-                "ERROR: No modules found for file at {use_file_path:?}"
-            )?;
+
+        let Some(use_file_hash) = symbols.files.file_hash(&use_file_path.to_path_buf()) else {
+            writeln!(output, "ERROR: No file hash for file at {use_file_path:?}")?;
             return Ok(());
         };
-        // symbols.file_mods only has an entry if there are actual modules in the file
-        // (BTreeSet containing module defs is never empty)
-        debug_assert!(!mod_defs.is_empty());
-        let use_file_hash = mod_defs.first().unwrap().fhash;
         let Some((_, use_file_content)) = symbols.files.get(&use_file_hash) else {
             writeln!(
                 output,
@@ -278,23 +272,15 @@ impl CursorTest {
         let cursor_path = path.to_path_buf();
         let cursor_info = Some((&cursor_path, Position { line, character }));
         let mut symbols_computation_data = SymbolsComputationData::new();
-        let typed_mod_named_address_maps = compiled_pkg_info
-            .program
-            .typed_modules
-            .iter()
-            .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
-            .collect::<BTreeMap<_, _>>();
         let mut cursor_context = compute_symbols_pre_process(
             &mut symbols_computation_data,
             &mut compiled_pkg_info,
             cursor_info,
-            &typed_mod_named_address_maps,
         );
         cursor_context = compute_symbols_parsed_program(
             &mut symbols_computation_data,
             &compiled_pkg_info,
             cursor_context,
-            &typed_mod_named_address_maps,
         );
         symbols.cursor_context = cursor_context.clone();
 
