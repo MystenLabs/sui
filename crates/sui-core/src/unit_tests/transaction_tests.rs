@@ -147,17 +147,22 @@ async fn test_empty_gas_data() {
     do_transaction_test_skip_cert_checks(
         |tx| {
             tx.gas_data_mut().payment = vec![];
+            // Clear inputs so this is a stateless transaction (no owned inputs).
+            // Address balance gas without ValidDuring requires replay protection from
+            // owned inputs, so this should fail with MissingGasPayment.
+            if let TransactionKind::ProgrammableTransaction(pt) = tx.kind_mut() {
+                pt.inputs.clear();
+                pt.commands.clear();
+            }
         },
         |_| {},
         |err| {
-            // When gas payment is empty, the transaction tries to use address balance gas.
-            // Since the relax_valid_during_for_owned_inputs flag is enabled and these
-            // transactions have owned inputs, they pass the expiration check but fail
-            // because there's insufficient balance for the withdrawal.
+            // Transaction with no gas payment and no owned inputs fails because
+            // address balance gas requires ValidDuring for replay protection.
             assert_matches!(
                 err,
                 SuiErrorKind::UserInputError {
-                    error: UserInputError::InvalidWithdrawReservation { .. }
+                    error: UserInputError::MissingGasPayment
                 }
             );
         },
