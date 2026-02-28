@@ -4449,34 +4449,6 @@ impl CheckedInputObjects {
     pub fn into_inner(self) -> InputObjects {
         self.0
     }
-
-    /// Checks if the checked input objects provide replay protection.
-    /// Returns true if there is at least one input that provides replay protection:
-    /// - Owned objects (AddressOwner or ObjectOwner) provide replay protection via unique versions
-    /// - Coin reservations provide replay protection via epoch binding
-    ///
-    /// Immutable objects and shared objects do NOT provide replay protection.
-    pub fn has_replay_protected_inputs(&self) -> bool {
-        self.0.objects.iter().any(|obj| {
-            // Only ImmOrOwnedMoveObject can provide replay protection
-            let InputObjectKind::ImmOrOwnedMoveObject(obj_ref) = &obj.input_object_kind else {
-                return false;
-            };
-
-            // Coin reservations provide replay protection via epoch binding
-            if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) {
-                return true;
-            }
-
-            // Check the actual object ownership
-            let Some(object) = obj.as_object() else {
-                return false;
-            };
-
-            // Only owned objects provide replay protection, not immutable objects
-            matches!(object.owner, Owner::AddressOwner(_) | Owner::ObjectOwner(_))
-        })
-    }
 }
 
 impl From<Vec<ObjectReadResult>> for InputObjects {
