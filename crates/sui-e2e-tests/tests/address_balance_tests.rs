@@ -3214,7 +3214,6 @@ async fn test_funds_withdraw_scheduler_type_alternation() {
         );
     }
 }
-<<<<<<< HEAD
 
 #[sim_test]
 async fn test_simulate_address_funds_sufficient() {
