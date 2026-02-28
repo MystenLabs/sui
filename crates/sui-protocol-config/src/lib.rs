@@ -2627,10 +2627,6 @@ impl ProtocolConfig {
     pub fn validator_metadata_verify_v2(&self) -> bool {
         self.feature_flags.validator_metadata_verify_v2
     }
-
-    pub fn defer_unpaid_amplification(&self) -> bool {
-        self.feature_flags.defer_unpaid_amplification
-    }
 }
 
 #[cfg(not(msim))]
@@ -4619,9 +4615,6 @@ impl ProtocolConfig {
                 }
                 113 => {
                     cfg.feature_flags.address_balance_gas_check_rgp_at_signing = true;
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.defer_unpaid_amplification = true;
-                    }
                 }
                 114 => {
                     cfg.feature_flags.randomize_checkpoint_tx_limit_in_tests = true;
