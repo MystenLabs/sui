@@ -2964,26 +2964,27 @@ impl TransactionDataAPI for TransactionDataV1 {
                 );
             }
 
-            let requires_valid_during = !(config.relax_valid_during_for_owned_inputs()
-                && self.has_replay_protected_inputs());
-            match self.expiration() {
-                TransactionExpiration::None => {
-                    if requires_valid_during {
+            // When relax_valid_during_for_owned_inputs is enabled, we defer the
+            // expiration check to sui-transaction-checks where we have access to
+            // actual object ownership. This allows transactions with owned inputs
+            // to use relaxed expiration while still requiring ValidDuring for
+            // stateless transactions.
+            if !config.relax_valid_during_for_owned_inputs() {
+                match self.expiration() {
+                    TransactionExpiration::None => {
                         // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
                         // instead of a missing expiration error.
                         return Err(UserInputError::MissingGasPayment.into());
                     }
-                }
-                TransactionExpiration::Epoch(_) => {
-                    if requires_valid_during {
+                    TransactionExpiration::Epoch(_) => {
                         return Err(UserInputError::InvalidExpiration {
                             error: "Address balance gas payments require ValidDuring expiration"
                                 .to_string(),
                         }
                         .into());
                     }
+                    TransactionExpiration::ValidDuring { .. } => {}
                 }
-                TransactionExpiration::ValidDuring { .. } => {}
             }
         } else {
             fp_ensure!(
@@ -3129,18 +3130,6 @@ impl TransactionDataAPI for TransactionDataV1 {
 }
 
 impl TransactionDataV1 {
-    /// Checks if the transaction has inputs that provide replay protection.
-    /// This includes owned objects (which have unique versions) and coin reservations
-    /// (which have epoch binding via their encoded digest).
-    fn has_replay_protected_inputs(&self) -> bool {
-        let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
-            return false;
-        };
-        pt.inputs
-            .iter()
-            .any(|input| matches!(input, CallArg::Object(ObjectArg::ImmOrOwnedObject(_))))
-    }
-
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
         if self.is_gas_paid_from_address_balance() {
             Some(if self.sender() != self.gas_owner() {
@@ -4465,6 +4454,7 @@ impl CheckedInputObjects {
     /// Returns true if there is at least one input that provides replay protection:
     /// - Owned objects (AddressOwner or ObjectOwner) provide replay protection via unique versions
     /// - Coin reservations provide replay protection via epoch binding
+    ///
     /// Immutable objects and shared objects do NOT provide replay protection.
     pub fn has_replay_protected_inputs(&self) -> bool {
         self.0.objects.iter().any(|obj| {

@@ -6,12 +6,16 @@ use sui_config::{
     dynamic_transaction_signing_checks::DynamicCheckRunnerError,
     transaction_deny_config::TransactionDenyConfig,
 };
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectRef,
+    coin_reservation::ParsedDigest,
     error::{SuiError, SuiErrorKind, SuiResult, UserInputError},
     signature::GenericSignature,
     storage::BackingPackageStore,
-    transaction::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
+    transaction::{
+        Command, InputObjectKind, TransactionData, TransactionDataAPI, TransactionExpiration,
+    },
 };
 use tracing::{error, warn};
 macro_rules! deny_if_true {
@@ -207,6 +211,71 @@ fn check_input_objects(
             "Usage of shared object in transactions is temporarily disabled"
         );
     }
+    Ok(())
+}
+
+/// Early check for address balance gas expiration requirements.
+/// This must be called BEFORE processing withdrawals to avoid hitting withdrawal
+/// errors for transactions that should be rejected due to missing replay protection.
+///
+/// When `relax_valid_during_for_owned_inputs` is enabled, transactions paying gas
+/// from address balance without ValidDuring expiration must have at least one input
+/// that provides replay protection (owned object or coin reservation).
+pub fn check_address_balance_expiration_early(
+    protocol_config: &ProtocolConfig,
+    tx_data: &TransactionData,
+    input_object_kinds: &[InputObjectKind],
+) -> SuiResult {
+    // Only applies to address balance gas payments
+    if !tx_data.is_gas_paid_from_address_balance() {
+        return Ok(());
+    }
+
+    // Only applies when the feature flag is enabled
+    if !protocol_config.relax_valid_during_for_owned_inputs() {
+        return Ok(());
+    }
+
+    // If using ValidDuring expiration, no check needed
+    if matches!(
+        tx_data.expiration(),
+        TransactionExpiration::ValidDuring { .. }
+    ) {
+        return Ok(());
+    }
+
+    // Check if any input might provide replay protection.
+    // At this point we only have InputObjectKind, not the actual objects, so we
+    // can't distinguish between owned and immutable objects. But we CAN check:
+    // 1. If there are no ImmOrOwnedMoveObject inputs at all -> definitely no replay protection
+    // 2. If all ImmOrOwnedMoveObject inputs are coin reservations -> no replay protection
+    //    (coin reservations provide replay protection but are checked separately)
+    let has_potential_replay_protection = input_object_kinds.iter().any(|kind| {
+        if let InputObjectKind::ImmOrOwnedMoveObject(obj_ref) = kind {
+            // Non-coin-reservation ImmOrOwnedMoveObject might be an owned object
+            // (could also be immutable - we'll verify in check_transaction_input)
+            !ParsedDigest::is_coin_reservation_digest(&obj_ref.2)
+        } else {
+            false
+        }
+    });
+
+    // Also check for coin reservations which provide replay protection
+    let has_coin_reservation = input_object_kinds.iter().any(|kind| {
+        if let InputObjectKind::ImmOrOwnedMoveObject(obj_ref) = kind {
+            ParsedDigest::is_coin_reservation_digest(&obj_ref.2)
+        } else {
+            false
+        }
+    });
+
+    if !has_potential_replay_protection && !has_coin_reservation {
+        return Err(SuiErrorKind::UserInputError {
+            error: UserInputError::MissingGasPayment,
+        }
+        .into());
+    }
+
     Ok(())
 }
 

@@ -988,6 +988,7 @@ impl AuthorityState {
     /// objects, since these checks don't depend on object state.
     fn pre_object_load_checks(
         &self,
+        epoch_store: &AuthorityPerEpochStore,
         tx_data: &TransactionData,
         tx_signatures: &[GenericSignature],
         input_object_kinds: &[InputObjectKind],
@@ -1003,6 +1004,15 @@ impl AuthorityState {
             receiving_objects_refs,
             &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
+        )?;
+
+        // Check address balance expiration early, before processing withdrawals.
+        // This ensures transactions without proper replay protection are rejected
+        // before hitting withdrawal-related errors.
+        sui_transaction_checks::deny::check_address_balance_expiration_early(
+            epoch_store.protocol_config(),
+            tx_data,
+            input_object_kinds,
         )?;
 
         let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
@@ -1029,6 +1039,7 @@ impl AuthorityState {
         let receiving_objects_refs = tx_data.receiving_objects();
 
         self.pre_object_load_checks(
+            epoch_store,
             tx_data,
             transaction.tx_signatures(),
             &input_object_kinds,
@@ -2442,6 +2453,7 @@ impl AuthorityState {
         };
 
         let declared_withdrawals = self.pre_object_load_checks(
+            &epoch_store,
             &transaction,
             &[],
             &input_object_kinds,

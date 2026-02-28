@@ -13,10 +13,17 @@ use crate::{
         TransactionExpiration, TransactionKind,
     },
 };
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
 fn create_config_with_address_balance_gas_payments_enabled() -> ProtocolConfig {
     let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+    config.enable_address_balance_gas_payments_for_testing();
+    config
+}
+
+fn create_config_without_relax_valid_during() -> ProtocolConfig {
+    // Use version 114 which has address balance gas but not the relax flag
+    let mut config = ProtocolConfig::get_for_version(ProtocolVersion::new(114), Chain::Unknown);
     config.enable_address_balance_gas_payments_for_testing();
     config
 }
@@ -180,7 +187,9 @@ fn test_address_balance_payment_valid() {
 
 #[test]
 fn test_address_balance_payment_requires_valid_during_expiration() {
-    let config = create_config_with_address_balance_gas_payments_enabled();
+    // When relax_valid_during_for_owned_inputs is disabled, validity_check
+    // requires ValidDuring for all address balance gas payments.
+    let config = create_config_without_relax_valid_during();
 
     let tx_data = create_test_transaction_data(vec![], TransactionExpiration::None);
 
@@ -701,37 +710,9 @@ fn test_address_balance_with_owned_inputs_allows_valid_during_expiration() {
     );
 }
 
-#[test]
-fn test_address_balance_stateless_still_requires_valid_during() {
-    let config = create_config_with_address_balance_gas_payments_enabled();
-
-    // Stateless transaction (no owned inputs) should still require ValidDuring
-    let tx_data = create_test_transaction_data(vec![], TransactionExpiration::None);
-
-    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
-    assert!(result.is_err());
-    match result.unwrap_err().into_inner() {
-        SuiErrorKind::UserInputError {
-            error: UserInputError::MissingGasPayment,
-        } => {}
-        _ => {
-            panic!("Expected MissingGasPayment error for stateless transaction without ValidDuring")
-        }
-    }
-
-    let tx_data = create_test_transaction_data(vec![], TransactionExpiration::Epoch(1));
-
-    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
-    assert!(result.is_err());
-    match result.unwrap_err().into_inner() {
-        SuiErrorKind::UserInputError {
-            error: UserInputError::InvalidExpiration { .. },
-        } => {}
-        _ => panic!(
-            "Expected InvalidExpiration error for stateless transaction with Epoch expiration"
-        ),
-    }
-}
+// Note: The test for stateless transactions requiring ValidDuring is now in
+// sui-transaction-checks where we have access to actual object ownership.
+// See check_address_balance_replay_protection() in sui-transaction-checks/src/lib.rs.
 
 #[test]
 fn test_address_balance_with_multiple_owned_inputs() {
