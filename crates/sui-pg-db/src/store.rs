@@ -215,6 +215,15 @@ impl store::Connection for Connection<'_> {
             .await?
             > 0)
     }
+
+    async fn reset_watermark(&mut self, pipeline: &str) -> anyhow::Result<bool> {
+        Ok(
+            diesel::delete(watermarks::table.filter(watermarks::pipeline.eq(pipeline)))
+                .execute(self)
+                .await?
+                > 0,
+        )
+    }
 }
 
 #[async_trait]

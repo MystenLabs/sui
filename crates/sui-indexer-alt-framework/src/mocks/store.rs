@@ -233,6 +233,10 @@ impl Connection for MockConnection<'_> {
         curr.pruner_hi = pruner_hi;
         Ok(true)
     }
+
+    async fn reset_watermark(&mut self, pipeline: &str) -> anyhow::Result<bool> {
+        Ok(self.0.watermarks.remove(pipeline).is_some())
+    }
 }
 
 #[async_trait]

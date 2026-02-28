@@ -14,6 +14,8 @@ use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::Merge;
 use sui_indexer_alt::setup_indexer;
 use sui_indexer_alt_framework::postgres::reset_database;
+use sui_indexer_alt_framework::postgres::Db;
+use sui_indexer_alt_framework::store::Connection as _;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_framework::service::terminate;
 use sui_indexer_alt_metrics::MetricsService;
@@ -133,6 +135,23 @@ async fn main() -> Result<()> {
                 .context("Failed to serialize merged configuration to TOML.")?;
 
             println!("{config_toml}");
+        }
+
+        Command::ResetPipeline {
+            database_url,
+            db_args,
+            pipeline,
+        } => {
+            let db = Db::for_write(database_url, db_args).await?;
+            let mut conn = db.connect().await?;
+            for name in &pipeline {
+                let deleted = conn.reset_watermark(name).await?;
+                if deleted {
+                    info!("Reset watermark for pipeline: {name}");
+                } else {
+                    info!("No watermark found for pipeline: {name} (skipped)");
+                }
+            }
         }
 
         Command::ResetDatabase {

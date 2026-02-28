@@ -212,4 +212,115 @@ pub mod tests {
             .unwrap();
         assert_eq!(indexer.first_ingestion_checkpoint, 11);
     }
+
+    #[tokio::test]
+    async fn test_reset_watermark_existing_pipeline() {
+        let (indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+
+        // Set a watermark
+        let watermark = CommitterWatermark::new_for_testing(10);
+        assert!(
+            conn.set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
+                .await
+                .unwrap()
+        );
+
+        // Verify it exists
+        let wm = conn
+            .committer_watermark(ConcurrentPipeline1::NAME)
+            .await
+            .unwrap();
+        assert!(wm.is_some());
+
+        // Reset it
+        let deleted = conn
+            .reset_watermark(ConcurrentPipeline1::NAME)
+            .await
+            .unwrap();
+        assert!(deleted);
+
+        // Verify it's gone
+        let wm = conn
+            .committer_watermark(ConcurrentPipeline1::NAME)
+            .await
+            .unwrap();
+        assert!(wm.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_reset_watermark_nonexistent_pipeline() {
+        let (indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+
+        // Reset a pipeline that doesn't exist
+        let deleted = conn.reset_watermark("nonexistent_pipeline").await.unwrap();
+        assert!(!deleted);
+    }
+
+    #[tokio::test]
+    async fn test_reset_watermark_does_not_affect_other_pipelines() {
+        let (indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+
+        // Set watermarks for two pipelines
+        let wm1 = CommitterWatermark::new_for_testing(10);
+        let wm2 = CommitterWatermark::new_for_testing(20);
+        conn.set_committer_watermark(ConcurrentPipeline1::NAME, wm1)
+            .await
+            .unwrap();
+        conn.set_committer_watermark(ConcurrentPipeline2::NAME, wm2)
+            .await
+            .unwrap();
+
+        // Reset only pipeline 1
+        conn.reset_watermark(ConcurrentPipeline1::NAME)
+            .await
+            .unwrap();
+
+        // Pipeline 1 gone
+        assert!(
+            conn.committer_watermark(ConcurrentPipeline1::NAME)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        // Pipeline 2 still there
+        let wm = conn
+            .committer_watermark(ConcurrentPipeline2::NAME)
+            .await
+            .unwrap();
+        assert!(wm.is_some());
+        assert_eq!(wm.unwrap().checkpoint_hi_inclusive, 20);
+    }
+
+    #[tokio::test]
+    async fn test_reset_then_re_add_pipeline_starts_from_zero() {
+        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+
+        // Set a watermark at checkpoint 50
+        {
+            let mut conn = indexer.store().connect().await.unwrap();
+            let watermark = CommitterWatermark::new_for_testing(50);
+            conn.set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
+                .await
+                .unwrap();
+        }
+
+        // Reset it
+        {
+            let mut conn = indexer.store().connect().await.unwrap();
+            conn.reset_watermark(ConcurrentPipeline1::NAME)
+                .await
+                .unwrap();
+        }
+
+        // Adding the pipeline should now start from 0 (not 51)
+        indexer
+            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(indexer.first_ingestion_checkpoint, 0);
+    }
 }
