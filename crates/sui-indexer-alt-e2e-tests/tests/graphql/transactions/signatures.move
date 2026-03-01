@@ -19,6 +19,13 @@
     digest
     signatures {
       signatureBytes
+      scheme {
+        __typename
+        ... on Ed25519Signature {
+          signature
+          publicKey
+        }
+      }
     }
   }
 }
@@ -29,6 +36,13 @@
     digest
     signatures {
       signatureBytes
+      scheme {
+        __typename
+        ... on Ed25519Signature {
+          signature
+          publicKey
+        }
+      }
     }
   }
 }

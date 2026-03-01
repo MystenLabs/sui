@@ -473,6 +473,12 @@ DynamicField.receivedTransactions
 DynamicField.value
   => {}
 
+Ed25519Signature.signature
+  => {}
+
+Ed25519Signature.publicKey
+  => {}
+
 EndOfEpochTransaction.transactions
   => {}
 
@@ -1451,6 +1457,18 @@ ReadConsensusStreamEnded.sequenceNumber
 Receiving.object
   => {}
 
+Secp256K1Signature.signature
+  => {}
+
+Secp256K1Signature.publicKey
+  => {}
+
+Secp256R1Signature.signature
+  => {}
+
+Secp256R1Signature.publicKey
+  => {}
+
 ServiceConfig.mutationTimeoutMs
   => {}
 
@@ -1662,6 +1680,9 @@ UpgradeCommand.upgradeTicket
   => {}
 
 UserSignature.signatureBytes
+  => {}
+
+UserSignature.scheme
   => {}
 
 Validator.atRisk
