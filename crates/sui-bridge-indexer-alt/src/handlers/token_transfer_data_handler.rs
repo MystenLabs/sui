@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::handlers::{BRIDGE, TOKEN_DEPOSITED_EVENT, is_bridge_txn};
+use crate::handlers::{BRIDGE, TOKEN_DEPOSITED_EVENT, TOKEN_DEPOSITED_EVENT_V2, is_bridge_txn};
 use crate::struct_tag;
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
 use move_core_types::language_storage::StructTag;
 use std::sync::Arc;
-use sui_bridge::events::MoveTokenDepositedEvent;
+use sui_bridge::events::{MoveTokenDepositedEvent, MoveTokenDepositedEventV2};
 use sui_bridge_schema::models::TokenTransferData;
 use sui_bridge_schema::schema::token_transfer_data;
 use sui_indexer_alt_framework::pipeline::Processor;
@@ -18,12 +18,14 @@ use tracing::info;
 
 pub struct TokenTransferDataHandler {
     deposited_event_type: StructTag,
+    deposited_event_v2_type: StructTag,
 }
 
 impl Default for TokenTransferDataHandler {
     fn default() -> Self {
         Self {
             deposited_event_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, TOKEN_DEPOSITED_EVENT),
+            deposited_event_v2_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, TOKEN_DEPOSITED_EVENT_V2),
         }
     }
 }
@@ -47,24 +49,41 @@ impl Processor for TokenTransferDataHandler {
                 continue;
             }
             for ev in tx.events.iter().flat_map(|e| &e.data) {
-                if self.deposited_event_type != ev.type_ {
-                    continue;
+                if self.deposited_event_type == ev.type_ {
+                    info!(?ev, "Observed Sui Deposit");
+                    let event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
+                    results.push(TokenTransferData {
+                        chain_id: event.source_chain as i32,
+                        nonce: event.seq_num as i64,
+                        block_height,
+                        timestamp_ms,
+                        destination_chain: event.target_chain as i32,
+                        sender_address: event.sender_address.clone(),
+                        recipient_address: event.target_address.clone(),
+                        token_id: event.token_type as i32,
+                        amount: event.amount_sui_adjusted as i64,
+                        is_finalized: true,
+                        txn_hash: tx.transaction.digest().inner().to_vec(),
+                        message_timestamp_ms: None,
+                    });
+                } else if self.deposited_event_v2_type == ev.type_ {
+                    info!(?ev, "Observed Sui V2 Deposit");
+                    let event: MoveTokenDepositedEventV2 = bcs::from_bytes(&ev.contents)?;
+                    results.push(TokenTransferData {
+                        chain_id: event.source_chain as i32,
+                        nonce: event.seq_num as i64,
+                        block_height,
+                        timestamp_ms,
+                        destination_chain: event.target_chain as i32,
+                        sender_address: event.sender_address.clone(),
+                        recipient_address: event.target_address.clone(),
+                        token_id: event.token_type as i32,
+                        amount: event.amount_sui_adjusted as i64,
+                        is_finalized: true,
+                        txn_hash: tx.transaction.digest().inner().to_vec(),
+                        message_timestamp_ms: Some(event.timestamp_ms as i64),
+                    });
                 }
-                info!(?ev, "Observed Sui Deposit");
-                let event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
-                results.push(TokenTransferData {
-                    chain_id: event.source_chain as i32,
-                    nonce: event.seq_num as i64,
-                    block_height,
-                    timestamp_ms,
-                    destination_chain: event.target_chain as i32,
-                    sender_address: event.sender_address.clone(),
-                    recipient_address: event.target_address.clone(),
-                    token_id: event.token_type as i32,
-                    amount: event.amount_sui_adjusted as i64,
-                    is_finalized: true,
-                    txn_hash: tx.transaction.digest().inner().to_vec(),
-                });
             }
         }
         Ok(results)

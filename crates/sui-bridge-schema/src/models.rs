@@ -101,6 +101,11 @@ pub struct TokenTransferData {
     pub token_id: i32,
     pub amount: i64,
     pub is_finalized: bool,
+    /// For V2 transfers, the timestamp (in ms) embedded in the bridge message.
+    /// NULL for V1 transfers. The frontend uses this to determine limiter-bypass
+    /// eligibility: if `now - message_timestamp_ms > 48h`, the transfer bypasses
+    /// the rate limiter.
+    pub message_timestamp_ms: Option<i64>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug, FieldCount)]

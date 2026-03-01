@@ -56,6 +56,7 @@ diesel::table! {
         token_id -> Int4,
         amount -> Int8,
         is_finalized -> Bool,
+        message_timestamp_ms -> Nullable<Int8>,
     }
 }
 
