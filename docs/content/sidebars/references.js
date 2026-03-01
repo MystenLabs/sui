@@ -85,6 +85,7 @@ const references = [
 			'references/cli/client',
 			'references/cli/ptb',
 			'references/cli/keytool',
+			'references/cli/external-signers',
 			'references/cli/move',
       		'references/cli/replay',
 			'references/cli/trace-analysis',
