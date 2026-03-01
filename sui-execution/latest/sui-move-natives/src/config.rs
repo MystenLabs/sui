@@ -10,13 +10,13 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::StructTag,
     runtime_value as R, vm_status::StatusCode,
 };
+use move_vm_runtime::execution::values::{Struct, Vector};
 use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::native_functions::NativeContext;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::natives::functions::NativeContext;
+use move_vm_runtime::{
+    execution::{Type, values::Value},
+    natives::functions::NativeResult,
     pop_arg,
-    values::{Struct, Value, Vector},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -150,8 +150,8 @@ fn consistent_value_before_current_epoch(
     let [newer_value_epoch, newer_value, older_value_opt]: [Value; 3] = unpack_struct(data)?;
     let newer_value_epoch: u64 = newer_value_epoch.value_as()?;
     debug_assert!(
-        unpack_option(newer_value.copy_value()?, value_ty)?.is_some()
-            || unpack_option(older_value_opt.copy_value()?, value_ty)?.is_some()
+        unpack_option(newer_value.copy_value(), value_ty)?.is_some()
+            || unpack_option(older_value_opt.copy_value(), value_ty)?.is_some()
     );
     Ok(if current_epoch > newer_value_epoch {
         newer_value
@@ -162,7 +162,7 @@ fn consistent_value_before_current_epoch(
 
 fn unpack_struct<const N: usize>(s: Value) -> PartialVMResult<[Value; N]> {
     let s: Struct = s.value_as()?;
-    s.unpack()?.collect::<Vec<_>>().try_into().map_err(|e| {
+    s.unpack().collect::<Vec<_>>().try_into().map_err(|e| {
         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
             .with_message(format!("struct expected to have {N} fields: {e:?}"))
     })
@@ -171,7 +171,7 @@ fn unpack_struct<const N: usize>(s: Value) -> PartialVMResult<[Value; N]> {
 fn unpack_option(option: Value, type_param: &Type) -> PartialVMResult<Option<Value>> {
     let [vec_value]: [Value; 1] = unpack_struct(option)?;
     let vec: Vector = vec_value.value_as()?;
-    Ok(if vec.elem_len() == 0 {
+    Ok(if vec.elem_len()? == 0 {
         None
     } else {
         let [elem]: [Value; 1] = vec.unpack(type_param, 1)?.try_into().map_err(|e| {

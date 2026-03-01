@@ -18,6 +18,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
+name = "ahash"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+dependencies = [
+ "cfg-if",
+ "getrandom 0.3.1",
+ "once_cell",
+ "version_check",
+ "zerocopy 0.8.27",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -371,6 +384,21 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "bytecode-verifier-tests-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-replay_cut",
  "move-core-types",
  "move-vm-config",
  "petgraph",
@@ -864,6 +892,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core 0.9.10",
+]
+
+[[package]]
 name = "datatest-stable"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1323,6 +1365,16 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hashbrown"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
+dependencies = [
+ "ahash",
+ "allocator-api2",
+]
+
+[[package]]
+name = "hashbrown"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
@@ -1331,6 +1383,12 @@ dependencies = [
  "equivalent",
  "foldhash",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 
 [[package]]
 name = "heck"
@@ -1784,15 +1842,24 @@ dependencies = [
 name = "language-benchmarks"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "criterion",
  "move-binary-format",
  "move-compiler",
  "move-core-types",
+ "move-package",
  "move-stdlib",
- "move-stdlib-natives",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
+]
+
+[[package]]
+name = "lasso"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e14eda50a3494b3bf7b9ce51c52434a761e383d7238ce1dd5dcec2fbc13e9fb"
+dependencies = [
+ "dashmap",
+ "hashbrown 0.14.5",
 ]
 
 [[package]]
@@ -1906,6 +1973,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
+dependencies = [
+ "hashbrown 0.15.2",
+]
+
+[[package]]
 name = "lsp-server"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2004,6 +2080,13 @@ dependencies = [
 
 [[package]]
 name = "move-abstract-interpreter"
+version = "0.1.0"
+dependencies = [
+ "itertools 0.10.5",
+]
+
+[[package]]
+name = "move-abstract-interpreter-replay_cut"
 version = "0.1.0"
 dependencies = [
  "itertools 0.10.5",
@@ -2133,6 +2216,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-bytecode-verifier-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "move-abstract-interpreter",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-regex-borrow-graph",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
 name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
@@ -2196,11 +2295,10 @@ name = "move-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bcs",
  "clap 4.5.28",
- "codespan-reporting",
  "colored",
  "datatest-stable",
+ "indexmap 2.8.0",
  "indoc",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -2219,15 +2317,12 @@ dependencies = [
  "move-package-alt",
  "move-package-alt-compilation",
  "move-stdlib",
- "move-stdlib-natives",
  "move-symbol-pool",
  "move-trace-format",
  "move-unit-test",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
  "path-clean",
  "serde",
  "serde_json",
@@ -2235,7 +2330,6 @@ dependencies = [
  "similar",
  "tempfile",
  "tokio",
- "toml_edit 0.22.24",
  "tracing",
  "tracing-subscriber",
  "treeline",
@@ -2248,7 +2342,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "colored",
  "dirs-next",
  "hex",
  "insta",
@@ -2770,7 +2863,6 @@ dependencies = [
  "move-docgen",
  "move-package-alt",
  "move-package-alt-compilation",
- "move-stdlib-natives",
  "move-unit-test",
  "move-vm-runtime",
  "sha2",
@@ -2780,14 +2872,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stdlib-natives"
+name = "move-stdlib-natives-replay_cut"
 version = "0.1.1"
 dependencies = [
  "hex",
  "move-binary-format",
  "move-core-types",
- "move-vm-runtime",
- "move-vm-types",
+ "move-vm-runtime-replay_cut",
+ "move-vm-types-replay_cut",
  "sha2",
  "sha3",
  "smallvec",
@@ -2876,12 +2968,9 @@ dependencies = [
  "move-ir-types",
  "move-regex-borrow-graph",
  "move-stdlib",
- "move-stdlib-natives",
  "move-symbol-pool",
  "move-vm-config",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
  "rayon",
  "regex",
  "serde_json",
@@ -2909,14 +2998,11 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-stdlib",
- "move-stdlib-natives",
  "move-symbol-pool",
  "move-trace-format",
  "move-vm-config",
- "move-vm-profiler",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
+ "parking_lot 0.11.2",
  "rand 0.8.5",
  "rayon",
  "regex",
@@ -2927,28 +3013,6 @@ name = "move-vm-config"
 version = "0.1.0"
 dependencies = [
  "move-binary-format",
-]
-
-[[package]]
-name = "move-vm-integration-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fail",
- "memory-stats",
- "move-binary-format",
- "move-bytecode-verifier",
- "move-compiler",
- "move-core-types",
- "move-ir-to-bytecode",
- "move-stdlib",
- "move-stdlib-natives",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
- "tempfile",
 ]
 
 [[package]]
@@ -2967,17 +3031,57 @@ name = "move-vm-runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "better_any",
+ "bumpalo",
+ "dashmap",
  "fail",
  "hex",
+ "indexmap 2.8.0",
+ "insta",
+ "lasso",
+ "lru 0.13.0",
+ "memory-stats",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",
+ "move-ir-to-bytecode",
+ "move-proc-macros",
+ "move-stdlib",
  "move-trace-format",
  "move-vm-config",
- "move-vm-types",
+ "move-vm-profiler",
+ "parking_lot 0.11.2",
+ "petgraph",
+ "proptest",
+ "quick_cache",
+ "serde",
+ "sha2",
+ "sha3",
+ "smallvec",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-replay_cut",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-trace-format",
+ "move-vm-config",
+ "move-vm-types-replay_cut",
  "parking_lot 0.11.2",
  "proptest",
  "smallvec",
@@ -3051,27 +3155,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-vm-test-utils"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "move-binary-format",
- "move-core-types",
- "move-vm-profiler",
- "move-vm-types",
- "serde",
-]
-
-[[package]]
 name = "move-vm-transactional-tests"
 version = "0.1.0"
 dependencies = [
  "datatest-stable",
+ "insta",
  "move-transactional-test-runner",
 ]
 
 [[package]]
-name = "move-vm-types"
+name = "move-vm-types-replay_cut"
 version = "0.1.0"
 dependencies = [
  "bcs",
@@ -3542,7 +3635,7 @@ version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77957b295656769bb8ad2b6a6b09d897d94f05c41b069aede1fcdaa675eaea04"
 dependencies = [
- "zerocopy",
+ "zerocopy 0.7.35",
 ]
 
 [[package]]
@@ -3688,6 +3781,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
+name = "quick_cache"
+version = "0.6.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ada44a88ef953a3294f6eb55d2007ba44646015e18613d2f213016379203ef3"
+dependencies = [
+ "ahash",
+ "equivalent",
+ "hashbrown 0.16.1",
+ "parking_lot 0.12.3",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3810,7 +3915,7 @@ dependencies = [
  "indoc",
  "instability",
  "itertools 0.13.0",
- "lru",
+ "lru 0.12.5",
  "paste",
  "strum 0.26.3",
  "unicode-segmentation",
@@ -4113,6 +4218,7 @@ dependencies = [
 name = "serializer-tests"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "move-binary-format",
  "proptest",
  "proptest-derive",
@@ -4420,10 +4526,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-stdlib",
- "move-stdlib-natives",
  "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
  "num_cpus",
  "rand 0.8.5",
  "tracing",
@@ -5339,7 +5442,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
 dependencies = [
  "byteorder",
- "zerocopy-derive",
+ "zerocopy-derive 0.7.35",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.8.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0894878a5fa3edfd6da3f88c4805f4c8558e2b996227a3d864f47fe11e38282c"
+dependencies = [
+ "zerocopy-derive 0.8.27",
 ]
 
 [[package]]
@@ -5347,6 +5459,17 @@ name = "zerocopy-derive"
 version = "0.7.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.8.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88d2b8d9c68ad2b9e4340d7832716a4d21a22a1154777ad56ea55c51a9cf3831"
 dependencies = [
  "proc-macro2",
  "quote",

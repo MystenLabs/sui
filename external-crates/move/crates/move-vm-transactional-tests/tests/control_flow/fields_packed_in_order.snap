@@ -11,4 +11,5 @@ Error: Function execution failed with VMError: {
     location: 0x6::M,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000006::M::error at offset 1",
 }

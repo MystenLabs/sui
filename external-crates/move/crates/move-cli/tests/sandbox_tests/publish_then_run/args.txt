@@ -1,2 +1,6 @@
 sandbox publish
-sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000002/modules/M.mv f --dry-run
+sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000002/package/M.mv f --dry-run
+
+# Publish the package at a different storage address
+sandbox publish --publish-at 0x42
+sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000042/package/M.mv f --dry-run

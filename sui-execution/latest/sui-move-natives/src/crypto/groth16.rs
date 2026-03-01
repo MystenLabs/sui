@@ -3,13 +3,15 @@
 use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{self, Value, VectorRef},
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{self, Value, VectorRef},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -54,7 +56,7 @@ pub fn prepare_verifying_key_internal(
         )
     };
     let bytes = pop_arg!(args, VectorRef);
-    let verifying_key = bytes.as_bytes_ref();
+    let verifying_key = bytes.as_bytes_ref()?;
 
     let curve = pop_arg!(args, u8);
 
@@ -69,7 +71,7 @@ pub fn prepare_verifying_key_internal(
         }
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
-            context.charge_gas(crypto_invalid_arguments_cost);
+            context.charge_gas(crypto_invalid_arguments_cost)?;
             return Ok(NativeResult::err(context.gas_used(), INVALID_CURVE));
         }
     };
@@ -144,22 +146,22 @@ pub fn verify_groth16_proof_internal(
         )
     };
     let bytes5 = pop_arg!(args, VectorRef);
-    let proof_points = bytes5.as_bytes_ref();
+    let proof_points = bytes5.as_bytes_ref()?;
 
     let bytes4 = pop_arg!(args, VectorRef);
-    let public_proof_inputs = bytes4.as_bytes_ref();
+    let public_proof_inputs = bytes4.as_bytes_ref()?;
 
     let bytes3 = pop_arg!(args, VectorRef);
-    let delta_g2_neg_pc = bytes3.as_bytes_ref();
+    let delta_g2_neg_pc = bytes3.as_bytes_ref()?;
 
     let bytes2 = pop_arg!(args, VectorRef);
-    let gamma_g2_neg_pc = bytes2.as_bytes_ref();
+    let gamma_g2_neg_pc = bytes2.as_bytes_ref()?;
 
     let byte1 = pop_arg!(args, VectorRef);
-    let alpha_g1_beta_g2 = byte1.as_bytes_ref();
+    let alpha_g1_beta_g2 = byte1.as_bytes_ref()?;
 
     let bytes = pop_arg!(args, VectorRef);
-    let vk_gamma_abc_g1 = bytes.as_bytes_ref();
+    let vk_gamma_abc_g1 = bytes.as_bytes_ref()?;
 
     let curve = pop_arg!(args, u8);
 
@@ -184,7 +186,7 @@ pub fn verify_groth16_proof_internal(
         ),
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
-            context.charge_gas(crypto_invalid_arguments_cost);
+            context.charge_gas(crypto_invalid_arguments_cost)?;
             let cost = if get_extension!(context, ObjectRuntime)?
                 .protocol_config
                 .native_charging_v2()

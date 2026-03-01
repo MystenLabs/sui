@@ -35,8 +35,7 @@ move-vm-config.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
-move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
-move-vm-types = { path = "../../external-crates/move/crates/move-vm-types" }
+move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime", features = ["tiered-gas"] }
 sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 

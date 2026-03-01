@@ -5,11 +5,13 @@ use std::collections::VecDeque;
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, u256::U256, vm_status::StatusCode};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
-    values::{Struct, Value},
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Struct, Value},
+    },
+    native_charge_gas_early_exit,
+    natives::functions::{NativeContext, NativeResult},
 };
 use smallvec::smallvec;
 use sui_types::base_types::ObjectID;
@@ -62,10 +64,7 @@ pub fn add_to_accumulator_address(
         .into();
 
     // TODO this will need to look at the layout of T when this is not guaranteed to be a Balance
-    let Some([amount]): Option<[Value; 1]> = value
-        .unpack()
-        .ok()
-        .and_then(|vs| vs.collect::<Vec<_>>().try_into().ok())
+    let Some([amount]): Option<[Value; 1]> = value.unpack().collect::<Vec<_>>().try_into().ok()
     else {
         debug_assert!(false);
         return Err(

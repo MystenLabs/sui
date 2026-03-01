@@ -15,7 +15,10 @@ use crate::{
 use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use move_core_types::resolver::SerializedPackage;
+use move_core_types::{
+    account_address::AccountAddress, language_storage::ModuleId, resolver::ModuleResolver,
+};
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
@@ -41,7 +44,7 @@ use sui_types::execution_params::{
 };
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
-use sui_types::storage::{PackageObject, get_module};
+use sui_types::storage::{PackageObject, get_module, get_package};
 use sui_types::transaction::GasData;
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
@@ -2075,6 +2078,24 @@ impl ModuleResolver for LocalExec {
             });
         res
     }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        let mut res = [const { None }; N];
+        for i in 0..N {
+            res[i] = get_package(self, &ids[i].into())?;
+        }
+        Ok(res)
+    }
+
+    fn get_packages<'a>(
+        &self,
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.map(|id| get_package(self, &(*id).into())).collect()
+    }
 }
 
 impl ModuleResolver for &mut LocalExec {
@@ -2083,6 +2104,20 @@ impl ModuleResolver for &mut LocalExec {
     fn get_module(&self, module_id: &ModuleId) -> SuiResult<Option<Vec<u8>>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_module(module_id)
+    }
+
+    fn get_packages<'a>(
+        &self,
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        (**self).get_packages(ids)
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        (**self).get_packages_static(ids)
     }
 }
 

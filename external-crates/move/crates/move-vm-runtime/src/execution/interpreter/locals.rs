@@ -1,0 +1,333 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+#![allow(unsafe_code)]
+
+use crate::{
+    execution::values::{MemBox, values_impl::Value},
+    shared::safe_ops::SafeArithmetic as _,
+};
+
+use move_binary_format::{errors::PartialVMResult, partial_vm_error, safe_assert};
+
+use std::collections::HashMap;
+
+// -------------------------------------------------------------------------------------------------
+// Heap
+// -------------------------------------------------------------------------------------------------
+
+/// The Move VM's base heap. This is PTBs and arguments to invocation functions are stored, so that
+/// we can handle references to/from them.
+#[derive(Debug)]
+pub struct BaseHeap {
+    next_id: usize,
+    values: HashMap<BaseHeapId, MemBox<Value>>,
+}
+
+/// An ID for an entry in a Base Heap.
+#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
+pub struct BaseHeapId(usize);
+
+/// The runtime machine "heap" for execution. This allows us to grab and return frame slots and the
+/// like. Note that this isn't a _true_ heap (crrently), it only allows for allocating and freeing
+/// stackframes.
+#[derive(Debug)]
+pub struct MachineHeap {
+    /// Tracks the current stack frame slots on the heap
+    cur_size: usize,
+}
+
+/// A stack frame is an allocated frame. It was allocated starting at `start` in the heap. When it
+/// is freed, we need to check that we are freeing the one on the end of the heap.
+#[derive(Debug)]
+pub struct StackFrame {
+    slice: Vec<MemBox<Value>>,
+}
+
+// -------------------------------------------------------------------------------------------------
+// Base (Machine-External) Heap
+// -------------------------------------------------------------------------------------------------
+
+impl Default for BaseHeap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BaseHeap {
+    pub fn new() -> Self {
+        Self {
+            values: HashMap::new(),
+            next_id: 0,
+        }
+    }
+
+    /// Allocate a slot for the value in the base heap
+    pub fn allocate_value(&mut self, value: Value) -> PartialVMResult<BaseHeapId> {
+        let next_id = BaseHeapId(self.next_id);
+        self.next_id = self.next_id.safe_add(1)?;
+        let previous = self.values.insert(next_id, MemBox::new(value));
+        safe_assert!(previous.is_none());
+        Ok(next_id)
+    }
+
+    /// Allocate a slot for the value in the base heap, and then borrow it
+    pub fn allocate_and_borrow_loc(
+        &mut self,
+        value: Value,
+    ) -> PartialVMResult<(BaseHeapId, Value)> {
+        let id = self.allocate_value(value)?;
+        let ref_ = self.borrow_loc(id)?;
+        Ok((id, ref_))
+    }
+
+    /// Moves a location out of memory
+    pub fn take_loc(&mut self, ndx: BaseHeapId) -> PartialVMResult<Value> {
+        if self.is_invalid(ndx)? {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Cannot move from an invalid memory location"
+            ));
+        }
+
+        let Some(value_box) = self.values.get_mut(&ndx) else {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Invalid index: {}",
+                ndx
+            ));
+        };
+        Ok(value_box.replace(Value::invalid()))
+    }
+
+    /// Borrows the specified location
+    pub fn borrow_loc(&self, ndx: BaseHeapId) -> PartialVMResult<Value> {
+        self.values
+            .get(&ndx)
+            .ok_or_else(|| {
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Heap index invalid: {}",
+                    ndx
+                )
+            })
+            .map(|value| value.as_ref_value())
+    }
+
+    /// Checks if the value at the location is invalid
+    pub fn is_invalid(&self, ndx: BaseHeapId) -> PartialVMResult<bool> {
+        self.values
+            .get(&ndx)
+            .ok_or_else(|| {
+                partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "Invalid index: {}", ndx)
+            })
+            .and_then(|value| Ok(matches!(&*value.try_borrow()?, &Value::Invalid)))
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Machine (Runtime) Heap
+// -------------------------------------------------------------------------------------------------
+
+impl MachineHeap {
+    pub fn new() -> Self {
+        Self { cur_size: 0 }
+    }
+
+    pub fn cur_size(&self) -> usize {
+        self.cur_size
+    }
+
+    /// Allocates a stack frame with the given size.
+    /// If there is not enough space in the heap, it returns an error.
+    pub fn allocate_stack_frame(
+        &mut self,
+        params: Vec<Value>,
+        size: usize,
+    ) -> PartialVMResult<StackFrame> {
+        // Calculate how many invalid values need to be added
+        let invalids_len = size.safe_sub(params.len())?;
+
+        self.cur_size = self.cur_size.safe_add(size)?;
+
+        // Initialize the stack frame with the provided parameters and fill remaining slots with `Invalid`
+        let local_values = params
+            .into_iter()
+            .chain((0..invalids_len).map(|_| Value::invalid())) // Fill the rest with `Invalid`
+            .map(MemBox::new) // Make them into MemBoxes
+            .collect::<Vec<MemBox<Value>>>();
+
+        Ok(StackFrame {
+            slice: local_values,
+        })
+    }
+
+    /// Frees the given stack frame, ensuring that it is the last frame on the heap.
+    pub fn free_stack_frame(&mut self, frame: StackFrame) -> PartialVMResult<()> {
+        self.cur_size = self.cur_size.safe_sub(frame.slice.len())?;
+        Ok(())
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Stack Frame
+// -------------------------------------------------------------------------------------------------
+
+impl StackFrame {
+    pub(crate) fn iter(&self) -> std::slice::Iter<'_, MemBox<Value>> {
+        self.slice.iter()
+    }
+
+    /// Makes a copy of the value, via `value.copy_value`
+    pub fn copy_loc(&self, ndx: usize) -> PartialVMResult<Value> {
+        self.get_valid(ndx)
+            .and_then(|value| Ok(value.try_borrow()?.copy_value()))
+    }
+
+    /// Moves a location out of memory, swapping it with `ValueImpl::Invalid`
+    pub fn move_loc(&mut self, ndx: usize) -> PartialVMResult<Value> {
+        let value_slot = self.get_valid_mut(ndx)?;
+        Ok(std::mem::replace(
+            &mut *value_slot.try_borrow_mut()?,
+            Value::invalid(),
+        ))
+    }
+
+    pub fn borrow_loc(&mut self, ndx: usize) -> PartialVMResult<Value> {
+        self.get_valid_mut(ndx).map(|value| value.as_ref_value())
+    }
+
+    /// Stores the value at the location
+    pub fn store_loc(&mut self, ndx: usize, x: Value) -> PartialVMResult<()> {
+        if ndx >= self.slice.len() {
+            return Err(partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "Local index out of bounds: {}",
+                ndx
+            ));
+        }
+        let _ = self
+            .slice
+            .get_mut(ndx)
+            .ok_or_else(|| {
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Local index out of bounds: {}",
+                    ndx
+                )
+            })?
+            .replace(x);
+        Ok(())
+    }
+
+    /// Gets an index, or returns an error if the index is out of range or the value is unset.
+    fn get_valid(&self, ndx: usize) -> PartialVMResult<&MemBox<Value>> {
+        self.slice
+            .get(ndx)
+            .ok_or_else(|| {
+                partial_vm_error!(INTERNAL_TYPE_ERROR, "Local index out of bounds: {}", ndx)
+            })
+            .and_then(|value| {
+                if matches!(&*value.try_borrow()?, &Value::Invalid) {
+                    Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "Local index {} is unset",
+                        ndx
+                    ))
+                } else {
+                    Ok(value)
+                }
+            })
+    }
+
+    /// Gets an index, or returns an error if the index is out of range or the value is unset.
+    fn get_valid_mut(&mut self, ndx: usize) -> PartialVMResult<&mut MemBox<Value>> {
+        self.slice
+            .get_mut(ndx)
+            .ok_or_else(|| {
+                partial_vm_error!(INTERNAL_TYPE_ERROR, "Local index out of bounds: {}", ndx)
+            })
+            .and_then(|value| {
+                if matches!(&*value.try_borrow()?, &Value::Invalid) {
+                    Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "Local index {} is unset",
+                        ndx
+                    ))
+                } else {
+                    Ok(value)
+                }
+            })
+    }
+
+    pub fn drop_all_values(&mut self) -> PartialVMResult<Vec<Value>> {
+        let borrow_muts = self
+            .slice
+            .iter_mut()
+            .map(|membox| {
+                let value_ref = &mut *membox.try_borrow_mut()?;
+                match &*value_ref {
+                    Value::Invalid => Ok(None),
+                    Value::Reference(_) => {
+                        *value_ref = Value::Invalid;
+                        Ok(None)
+                    }
+                    Value::U8(_)
+                    | Value::U16(_)
+                    | Value::U32(_)
+                    | Value::U64(_)
+                    | Value::U128(_)
+                    | Value::U256(_)
+                    | Value::Bool(_)
+                    | Value::Address(_)
+                    | Value::Vec(_)
+                    | Value::PrimVec(_)
+                    | Value::Struct(_)
+                    | Value::Variant(_) => {
+                        Ok(Some(std::mem::replace(&mut *value_ref, Value::Invalid)))
+                    }
+                }
+            })
+            .collect::<PartialVMResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<Value>>();
+        Ok(borrow_muts)
+    }
+
+    #[cfg(test)]
+    #[allow(non_snake_case, clippy::indexing_slicing)]
+    /// This is strictly for testing cycle dropping.
+    /// If you ever mark this not #[cfg(test)] you will have your VM implementor card revoked.
+    pub(crate) fn UNSAFE_copy_local_box(&mut self, ndx: usize) -> MemBox<Value> {
+        self.slice[ndx].UNSAFE_ptr_clone()
+    }
+
+    #[cfg(test)]
+    #[allow(non_snake_case)]
+    /// This is strictly for testing dropping.
+    /// If you ever mark this not #[cfg(test)] you will have your VM implementor card revoked.
+    pub(crate) fn UNSAFE_borrow_slice(&self) -> &[MemBox<Value>] {
+        &self.slice
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Display
+// -------------------------------------------------------------------------------------------------
+
+impl std::fmt::Display for StackFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "StackFrame(size: {})", self.slice.len())?;
+        for (i, value) in self.slice.iter().enumerate() {
+            writeln!(f, "  [{}]: {:?}", i, value)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for BaseHeapId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "base#{}", self.0)
+    }
+}

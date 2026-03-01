@@ -4,7 +4,7 @@
 use crate::{
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
-    sp,
+    object_runtime, sp,
     static_programmable_transactions::{
         env::Env,
         execution::context::{Context, CtxValue},
@@ -26,8 +26,8 @@ use sui_types::{
 };
 use tracing::instrument;
 
-pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
-    env: &'env mut Env<'pc, 'vm, 'state, 'linkage>,
+pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
+    env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension>,
     metrics: Arc<LimitsMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
@@ -58,9 +58,9 @@ where
     }
 }
 
-pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
+pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
     timings: &mut Vec<ExecutionTiming>,
-    env: &'env mut Env<'pc, 'vm, 'state, 'linkage>,
+    env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension>,
     metrics: Arc<LimitsMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
@@ -100,9 +100,8 @@ where
         if let Err(err) =
             execute_command::<Mode>(&mut context, &mut mode_results, c, trace_builder_opt)
         {
-            let object_runtime = context.object_runtime()?;
             // We still need to record the loaded child objects for replay
-            let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+            let loaded_runtime_objects = object_runtime!(context)?.loaded_runtime_objects();
             // we do not save the wrapped objects since on error, they should not be modified
             drop(context);
             // TODO wtf is going on with the borrow checker here. 'state is bound into the object
@@ -115,16 +114,16 @@ where
         timings.push(ExecutionTiming::Success(start.elapsed()));
     }
     // Save loaded objects table in case we fail in post execution
-    let object_runtime = context.object_runtime()?;
+    //
     // We still need to record the loaded child objects for replay
     // Record the objects loaded at runtime (dynamic fields + received) for
     // storage rebate calculation.
-    let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+    let loaded_runtime_objects = object_runtime!(context)?.loaded_runtime_objects();
     // We record what objects were contained in at the start of the transaction
     // for expensive invariant checks
-    let wrapped_object_containers = object_runtime.wrapped_object_containers();
+    let wrapped_object_containers = object_runtime!(context)?.wrapped_object_containers();
     // We record the generated object IDs for expensive invariant checks
-    let generated_object_ids = object_runtime.generated_object_ids();
+    let generated_object_ids = object_runtime!(context)?.generated_object_ids();
 
     // apply changes
     let finished = context.finish::<Mode>();
@@ -309,7 +308,7 @@ fn execute_command<Mode: ExecutionMode>(
             let modules =
                 context.deserialize_modules(&module_bytes, /* is upgrade */ false)?;
 
-            let runtime_id = context.publish_and_init_package::<Mode>(
+            let original_id = context.publish_and_init_package::<Mode>(
                 modules,
                 &dep_ids,
                 linkage,
@@ -320,7 +319,7 @@ fn execute_command<Mode: ExecutionMode>(
                 // no upgrade cap for genesis modules
                 std::vec![]
             } else {
-                std::vec![context.new_upgrade_cap(runtime_id)?]
+                std::vec![context.new_upgrade_cap(original_id)?]
             }
         }
         T::Command__::Upgrade(

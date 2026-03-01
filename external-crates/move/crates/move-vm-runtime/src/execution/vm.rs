@@ -1,0 +1,439 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::{
+    cache::identifier_interner::IdentifierInterner,
+    dbg_println,
+    execution::{
+        dispatch_tables::VMDispatchTables, interpreter, tracing::tracer::VMTracer, values::Value,
+    },
+    jit::execution::ast::{Function, Type},
+    natives::extensions::NativeExtensions,
+    runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
+    shared::{
+        gas::GasMeter,
+        linkage_context::LinkageContext,
+        types::{DefiningTypeId, OriginalId},
+        vm_pointer::VMPointer,
+    },
+    try_block,
+};
+use move_binary_format::{
+    checked_as,
+    errors::{Location, VMError, VMResult},
+    file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility},
+    partial_vm_error,
+};
+use move_core_types::{
+    annotated_value,
+    identifier::{IdentStr, Identifier},
+    language_storage::{ModuleId, TypeTag},
+    runtime_value,
+    vm_status::StatusType,
+};
+use move_trace_format::format::MoveTraceBuilder;
+use move_vm_config::runtime::VMConfig;
+use std::sync::Arc;
+
+// -------------------------------------------------------------------------------------------------
+// Types
+// -------------------------------------------------------------------------------------------------
+
+/// A runnable Instance of a Virtual Machine. This is an instance holding the Runtime VTables in
+/// order to invoke functions from it. This instance is the main "execution" context for a virtual
+/// machine, allowing calls to `execute_function` to run Move code located in the VM Cache.
+///
+/// Note this does NOT support publication. See `vm.rs` for publication.
+#[allow(dead_code)]
+pub struct MoveVM<'extensions> {
+    /// The VM cache
+    pub(crate) virtual_tables: VMDispatchTables,
+    /// The linkage context used to create this VM instance
+    pub(crate) link_context: LinkageContext,
+    /// Native context extensions for the interpreter
+    pub(crate) native_extensions: NativeExtensions<'extensions>,
+    /// The Move VM's configuration.
+    pub(crate) vm_config: Arc<VMConfig>,
+    /// The Move VM's interner.
+    pub(crate) interner: Arc<IdentifierInterner>,
+    /// The Move Runtime telemetry
+    pub(crate) telemetry: Arc<TelemetryContext>,
+}
+
+pub(crate) struct MoveVMFunction {
+    function: VMPointer<Function>,
+    pub(crate) parameters: Vec<Type>,
+    pub(crate) return_type: Vec<Type>,
+}
+
+/// Externally visibile information about a function that can be asked and the VM will answer.
+pub struct LoadedFunctionInformation {
+    pub is_entry: bool,
+    pub is_native: bool,
+    pub visibility: Visibility,
+    pub index: FunctionDefinitionIndex,
+    pub instruction_count: CodeOffset,
+    pub parameters: Vec<Type>,
+    pub return_: Vec<Type>,
+}
+
+pub struct LoadedTypeInformation {
+    pub abilities: AbilitySet,
+    pub datatype_info: Option<DatatypeInfo>,
+}
+
+pub struct DatatypeInfo {
+    pub original_id: OriginalId,
+    pub defining_id: DefiningTypeId,
+    pub module_name: Identifier,
+    pub type_name: Identifier,
+}
+
+impl<'extensions> MoveVM<'extensions> {
+    // -------------------------------------------
+    // Entry Points
+    // -------------------------------------------
+
+    /// Execute a Move function with the given arguments. This is mainly designed for an external
+    /// environment to invoke system logic written in Move.
+    ///
+    /// NOTE: There are NO checks on the `args` except that they can deserialize into the provided
+    /// types.
+    /// The ability to deserialize `args` into arbitrary types is *very* powerful, e.g. it can
+    /// used to manufacture `signer`'s or `Coin`'s from raw bytes. It is the responsibility of the
+    /// caller (e.g. adapter) to ensure that this power is used responsibly/securely for its
+    /// use-case.
+    ///
+    /// The caller MUST ensure
+    ///   - All types and modules referred to by the type arguments exist.
+    ///   - The signature is valid for the rules of the adapter
+    ///
+    /// The Move VM MUST return an invariant violation if the caller fails to follow any of the
+    /// rules above.
+    ///
+    /// The VM will check that the function is marked as an 'entry' function.
+    ///
+    /// Currently if any other error occurs during execution, the Move VM will simply propagate that
+    /// error back to the outer environment without handling/translating it. This behavior may be
+    /// revised in the future.
+    ///
+    /// In case an invariant violation occurs, the whole Session should be considered corrupted and
+    /// one shall not proceed with effect generation.
+    pub fn execute_entry_function(
+        &mut self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+        gas_meter: &mut impl GasMeter,
+    ) -> VMResult<Vec<Value>> {
+        let bypass_declared_entry_check = false;
+        self.execute_function(
+            module,
+            function_name,
+            ty_args,
+            args,
+            None,
+            gas_meter,
+            bypass_declared_entry_check,
+        )
+    }
+
+    /// Similar to execute_entry_function, but it bypasses visibility checks and accepts a tracer
+    pub fn execute_function_bypass_visibility(
+        &mut self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+        gas_meter: &mut impl GasMeter,
+        tracer: Option<&mut MoveTraceBuilder>,
+    ) -> VMResult<Vec<Value>> {
+        let tracer = if cfg!(feature = "tracing") {
+            tracer
+        } else {
+            None
+        };
+
+        dbg_println!("running {module}::{function_name}");
+        dbg_println!("tables: {:#?}", self.virtual_tables.loaded_packages);
+        let bypass_declared_entry_check = true;
+        self.execute_function(
+            module,
+            function_name,
+            ty_args,
+            args,
+            tracer,
+            gas_meter,
+            bypass_declared_entry_check,
+        )
+    }
+
+    // -------------------------------------------
+    // External Queries
+    // -------------------------------------------
+
+    /// NB: The `module_id` is using the _runtime_ ID.
+    pub fn function_information(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: &[Type],
+    ) -> VMResult<LoadedFunctionInformation> {
+        let MoveVMFunction {
+            function,
+            parameters,
+            return_type,
+        } = self.find_function(module_id, function_name, ty_args)?;
+        let instruction_count = checked_as!(function.to_ref().code.len(), CodeOffset)
+            .map_err(|e| e.finish(Location::Module(module_id.clone())))?;
+
+        Ok(LoadedFunctionInformation {
+            is_entry: function.to_ref().is_entry,
+            is_native: function.to_ref().def_is_native,
+            visibility: function.to_ref().visibility,
+            index: function.to_ref().index,
+            instruction_count,
+            parameters,
+            return_: return_type,
+        })
+    }
+
+    pub fn vm_config(&self) -> &move_vm_config::runtime::VMConfig {
+        &self.vm_config
+    }
+
+    pub fn type_information(&self, ty: &Type) -> VMResult<LoadedTypeInformation> {
+        let abilities = self.type_abilities(ty)?;
+        let datatype_info = self
+            .virtual_tables
+            .datatype_information(ty)
+            .map_err(|e| e.finish(Location::Undefined))?;
+        Ok(LoadedTypeInformation {
+            abilities,
+            datatype_info,
+        })
+    }
+
+    pub fn type_abilities(&self, ty: &Type) -> VMResult<AbilitySet> {
+        self.virtual_tables
+            .abilities(ty)
+            .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    /// Return a `TypeTag` for the provided `Type` using the VM's virtual tables. The returned
+    /// `TypeTag` will use defining type IDs.
+    pub fn type_tag_for_type_defining_ids(&self, ty: &Type) -> VMResult<TypeTag> {
+        self.virtual_tables
+            .type_to_type_tag(ty)
+            .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    /// Resolve a `TypeTag` to a `Type` using the VM's virtual tables.
+    /// NB: the `TypeTag` is coming from outside and therefore _may_ not represent a valid type
+    /// (e.g., an undefined type). Therefore any errors in resolution should be treated as runtime
+    /// errors and not anything else.
+    /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
+    /// IDs) are not correct here.
+    pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
+        self.virtual_tables.load_type(tag).map_err(|e| {
+            Self::convert_to_external_resolution_error(
+                e,
+                format!("Failed to load VM type for {tag}",),
+            )
+        })
+    }
+
+    /// Resolve a `TypeTag` to a runtime type layout using the VM's virtual tables.
+    /// NB: the `TypeTag` is coming from outside and therefore _may_ not represent a valid type
+    /// (e.g., an undefined type). Therefore any errors in resolution should be treated as runtime
+    /// errors and not anything else.
+    /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
+    /// IDs) are not correct here.
+    pub fn runtime_type_layout(&self, ty: &TypeTag) -> VMResult<runtime_value::MoveTypeLayout> {
+        self.virtual_tables.get_type_layout(ty).map_err(|e| {
+            Self::convert_to_external_resolution_error(
+                e,
+                format!("Failed to resolve type layout for {ty}",),
+            )
+        })
+    }
+
+    /// Resolve a `TypeTag` to an annotated type layout using the VM's virtual tables.
+    /// NB: the `TypeTag` is coming from outside and therefore _may_ not represent a valid type
+    /// (e.g., an undefined type). Therefore any errors in resolution should be treated as runtime
+    /// errors and not anything else.
+    /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
+    /// IDs) are not correct here.
+    pub fn annotated_type_layout(&self, ty: &TypeTag) -> VMResult<annotated_value::MoveTypeLayout> {
+        self.virtual_tables
+            .get_fully_annotated_type_layout(ty)
+            .map_err(|e| {
+                Self::convert_to_external_resolution_error(
+                    e,
+                    format!("Failed to resolve external type tag {ty}",),
+                )
+            })
+    }
+
+    fn convert_to_external_resolution_error(err: VMError, msg: String) -> VMError {
+        if err.major_status().status_type() == StatusType::InvariantViolation {
+            partial_vm_error!(
+                EXTERNAL_RESOLUTION_REQUEST_ERROR,
+                "{msg}{}",
+                err.message()
+                    .map(|s| format!(": {}", s))
+                    .unwrap_or_default()
+            )
+            .finish(Location::Undefined)
+        } else {
+            err
+        }
+    }
+
+    /// Return the linkage context of the VM.
+    pub fn linkage_context(&self) -> &LinkageContext {
+        &self.link_context
+    }
+
+    // -------------------------------------------
+    // Execution Operations
+    // -------------------------------------------
+
+    /// Entry point for function execution, allowing an instance to run the specified function.
+    /// Note that the specified module is an `original_id`, meaning it should already be resolved
+    /// with respect to the linkage context.
+    fn execute_function(
+        &mut self,
+        original_id: &ModuleId,
+        function_name: &IdentStr,
+        type_arguments: Vec<Type>,
+        args: Vec<Value>,
+        tracer: Option<&mut MoveTraceBuilder>,
+        gas_meter: &mut impl GasMeter,
+        bypass_declared_entry_check: bool,
+    ) -> VMResult<Vec<Value>> {
+        let telemetry = Arc::clone(&self.telemetry);
+        telemetry.with_transaction_telemetry(|txn_telemetry| {
+            let execution_timer =
+                txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Execution);
+
+            let result = try_block! {
+                // Find the function definition
+                let MoveVMFunction {
+                    function,
+                    parameters: _,
+                    return_type: _,
+                } = self.find_function(original_id, function_name, &type_arguments)?;
+
+                if !bypass_declared_entry_check && !function.to_ref().is_entry {
+                    return Err(partial_vm_error!(EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION)
+                    .finish(Location::Module(function.module_id(&self.interner))));
+                }
+
+                // execute the function
+                self.execute_function_impl(
+                    txn_telemetry,
+                    &mut tracer.map(|tracer| VMTracer::new(tracer, self.interner.clone())),
+                    gas_meter,
+                    function,
+                    type_arguments,
+                    args,
+                )
+            };
+
+            txn_telemetry.report_time(execution_timer);
+
+            result
+        })
+    }
+
+    /// Find the function definition int the specified module and return the information required
+    /// to do final verification and execution.
+    pub(crate) fn find_function(
+        &self,
+        // This is expected to be the translated version of the module ID, already translated by
+        // the link context to the original ID. See `sui-adapter/src/static_programmable_transactions/env.rs`
+        original_id: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: &[Type],
+    ) -> VMResult<MoveVMFunction> {
+        let function = self
+            .virtual_tables
+            .try_resolve_function_for_external(original_id, function_name)
+            .ok_or_else(|| {
+                partial_vm_error!(
+                    EXTERNAL_RESOLUTION_REQUEST_ERROR,
+                    "Failed to find function {original_id}::{function_name}"
+                )
+                .finish(Location::Module(original_id.clone()))
+            })?;
+
+        let fun_ref = function.to_ref();
+
+        let parameters = fun_ref.parameters.iter().map(|ty| ty.to_type()).collect();
+
+        let return_ = fun_ref.return_.iter().map(|ty| ty.to_type()).collect();
+
+        // verify type arguments
+        self.virtual_tables
+            .verify_ty_args(fun_ref.type_parameters(), ty_args)
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
+
+        let function = MoveVMFunction {
+            function,
+            parameters,
+            return_type: return_,
+        };
+        Ok(function)
+    }
+
+    /// Perform the actual execution, including setting up the interpreter machine, running the
+    /// interpreter, and serializing the return value(s).
+    fn execute_function_impl(
+        &mut self,
+        txn_telemetry: &mut TransactionTelemetryContext,
+        tracer: &mut Option<VMTracer<'_>>,
+        gas_meter: &mut impl GasMeter,
+        func: VMPointer<Function>,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+    ) -> VMResult<Vec<Value>> {
+        interpreter::run(
+            &mut self.virtual_tables,
+            txn_telemetry,
+            self.vm_config.clone(),
+            &mut *self.native_extensions.try_borrow_mut().map_err(|e| {
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "native extensions already mutably borrowed: {e}"
+                )
+                .finish(Location::Undefined)
+            })?,
+            tracer,
+            gas_meter,
+            func,
+            ty_args,
+            args,
+        )
+    }
+
+    // -------------------------------------------
+    // Into Methods
+    // -------------------------------------------
+
+    pub fn extensions(&self) -> &NativeExtensions<'extensions> {
+        &self.native_extensions
+    }
+}
+
+impl std::fmt::Debug for MoveVM<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MoveVM")
+            .field("virtual_tables", &self.virtual_tables)
+            .field("link_context", &self.link_context)
+            .field("vm_config", &self.vm_config)
+            // Note: native_extensions is intentionally omitted
+            .finish()
+    }
+}

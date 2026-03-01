@@ -7,12 +7,15 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::u256::U256;
 use move_core_types::vm_status::StatusCode;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::natives::function::PartialVMError;
-use move_vm_types::values::VectorRef;
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Value, VectorRef},
+    },
+    natives::functions::{NativeResult, PartialVMError},
+    pop_arg,
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -83,10 +86,10 @@ pub fn check_zklogin_id_internal(
 
     let result = check_id_internal(
         &address,
-        &key_claim_name.as_bytes_ref(),
-        &key_claim_value.as_bytes_ref(),
-        &audience.as_bytes_ref(),
-        &issuer.as_bytes_ref(),
+        &key_claim_name.as_bytes_ref()?,
+        &key_claim_value.as_bytes_ref()?,
+        &audience.as_bytes_ref()?,
+        &issuer.as_bytes_ref()?,
         &pin_hash,
     );
 
@@ -172,7 +175,7 @@ pub fn check_zklogin_issuer_internal(
     // The address to check
     let address = pop_arg!(args, AccountAddress);
 
-    let result = check_issuer_internal(&address, &address_seed, &issuer.as_bytes_ref());
+    let result = check_issuer_internal(&address, &address_seed, &issuer.as_bytes_ref()?);
 
     match result {
         Ok(result) => Ok(NativeResult::ok(

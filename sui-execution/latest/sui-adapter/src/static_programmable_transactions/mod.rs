@@ -6,7 +6,10 @@
 #![deny(clippy::cast_possible_truncation)]
 
 use crate::{
-    data_store::cached_package_store::CachedPackageStore,
+    data_store::{
+        cached_package_store::CachedPackageStore,
+        transaction_package_store::TransactionPackageStore,
+    },
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
     gas_charger::GasCharger,
@@ -15,16 +18,17 @@ use crate::{
     },
 };
 use move_trace_format::format::MoveTraceBuilder;
-use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::runtime::MoveRuntime;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::TxContext, error::ExecutionError, execution::ResultWithTimings,
-    metrics::LimitsMetrics, storage::BackingPackageStore, transaction::ProgrammableTransaction,
+    base_types::TxContext,
+    error::{ExecutionError, ExecutionErrorKind},
+    execution::ResultWithTimings,
+    metrics::LimitsMetrics,
+    storage::BackingPackageStore,
+    transaction::ProgrammableTransaction,
 };
-
-// TODO we might replace this with a new one
-pub use crate::data_store::legacy::linkage_view::LinkageView;
 
 pub mod env;
 pub mod execution;
@@ -37,7 +41,7 @@ pub mod typing;
 pub fn execute<Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
-    vm: &MoveVM,
+    vm: &MoveRuntime,
     state_view: &mut dyn ExecutionState,
     package_store: &dyn BackingPackageStore,
     tx_context: Rc<RefCell<TxContext>>,
@@ -47,9 +51,23 @@ pub fn execute<Mode: ExecutionMode>(
     txn: ProgrammableTransaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
-    let package_store = CachedPackageStore::new(Box::new(package_store));
+    let package_store = CachedPackageStore::new(vm, TransactionPackageStore::new(package_store));
     let linkage_analysis =
         LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
+    let ptb_type_linkage = linkage_analysis
+        .compute_input_type_resolution_linkage(&txn, &package_store, state_view)
+        .map_err(|e| (e, vec![]))?;
+    let resolution_vm = vm
+        .make_vm(
+            &package_store.package_store,
+            ptb_type_linkage.linkage_context(),
+        )
+        .map_err(|e| {
+            (
+                ExecutionError::new_with_source(ExecutionErrorKind::InvalidLinkage, e),
+                vec![],
+            )
+        })?;
 
     let mut env = Env::new(
         protocol_config,
@@ -57,6 +75,7 @@ pub fn execute<Mode: ExecutionMode>(
         state_view,
         &package_store,
         &linkage_analysis,
+        &resolution_vm,
     );
     let mut translation_meter =
         translation_meter::TranslationMeter::new(protocol_config, gas_charger);

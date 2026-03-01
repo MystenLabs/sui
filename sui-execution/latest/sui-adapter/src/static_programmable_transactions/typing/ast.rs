@@ -6,7 +6,7 @@ use crate::static_programmable_transactions::{
 };
 use indexmap::{IndexMap, IndexSet};
 use move_core_types::{account_address::AccountAddress, u256::U256};
-use move_vm_types::values::VectorSpecialization;
+use move_vm_runtime::execution::values::VectorSpecialization;
 use std::cell::OnceCell;
 use sui_types::base_types::{ObjectID, ObjectRef};
 

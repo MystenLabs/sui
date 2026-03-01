@@ -5,13 +5,14 @@
 use move_binary_format::errors::*;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::{AccountChangeSet, ChangeSet, Op},
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
-    resolver::MoveResolver,
     vm_status::StatusCode,
 };
-use move_vm_types::data_store::DataStore;
+use move_vm_types::{
+    data_store::{DataStore, MoveResolver},
+    effects::{AccountChangeSet, ChangeSet, Op},
+};
 use std::collections::btree_map::BTreeMap;
 
 pub struct AccountDataCache {
@@ -60,8 +61,7 @@ impl<S: MoveResolver> TransactionDataCache<S> {
             }
             if !modules.is_empty() {
                 change_set
-                    .add_account_changeset(addr, AccountChangeSet::from_modules(modules))
-                    .expect("accounts should be unique");
+                    .add_account_changeset(addr, AccountChangeSet::from_modules(addr, modules))
             }
         }
 

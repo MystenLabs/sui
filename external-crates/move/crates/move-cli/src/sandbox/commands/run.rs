@@ -9,12 +9,15 @@ use anyhow::{Result, anyhow, bail};
 use move_binary_format::file_format::CompiledModule;
 use move_command_line_common::files::try_exists;
 use move_core_types::{
-    account_address::AccountAddress, identifier::IdentStr, language_storage::TypeTag,
-    runtime_value::MoveValue,
+    identifier::IdentStr,
+    language_storage::TypeTag,
+    runtime_value::{MoveValue, serialize_values},
 };
 use move_package_alt_compilation::compiled_package::CompiledPackage;
 use move_unit_test::vm_test_setup::VMTestSetup;
-use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::{
+    dev_utils::vm_arguments::ValueFrame, natives::functions::NativeFunctions, runtime::MoveRuntime,
+};
 use std::{fs, path::Path};
 
 pub fn run<V: VMTestSetup>(
@@ -22,8 +25,7 @@ pub fn run<V: VMTestSetup>(
     state: &OnDiskStateView,
     _package: &CompiledPackage,
     module_file: &Path,
-    function_name: &str,
-    signers: &[String],
+    function: &str,
     txn_args: &[MoveValue],
     vm_type_tags: Vec<TypeTag>,
     gas_budget: Option<u64>,
@@ -35,57 +37,45 @@ pub fn run<V: VMTestSetup>(
     };
     assert!(
         is_bytecode_file(module_file)
-            && (state.is_module_path(module_file) || !contains_module(module_file)),
+            && (state.is_package_path(module_file) || !contains_module(module_file)),
         "Attempting to run module {:?} outside of the `storage/` directory.
         move run` must be applied to a module inside `storage/`",
         module_file
     );
     let bytecode = fs::read(module_file)?;
 
-    let signer_addresses = signers
-        .iter()
-        .map(|s| AccountAddress::from_hex_literal(s))
-        .collect::<Result<Vec<AccountAddress>, _>>()?;
-    let vm_args: Vec<Vec<u8>> = txn_args
-        .iter()
-        .map(|arg| {
-            arg.simple_serialize()
-                .expect("Transaction arguments must serialize")
-        })
-        .collect();
+    let natives = NativeFunctions::new(vm_test_setup.native_function_table())?;
+    let runtime = MoveRuntime::new_with_default_config(natives);
 
-    let vm = MoveVM::new(vm_test_setup.native_function_table()).unwrap();
     let mut gas_status = vm_test_setup.new_meter(gas_budget);
-    let mut session = vm.new_session(state);
 
     let script_type_parameters = vec![];
     let script_parameters = vec![];
 
-    let script_type_arguments = vm_type_tags
-        .iter()
-        .map(|tag| session.load_type(tag))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    // TODO rethink move-cli arguments for executing functions
-    let vm_args = signer_addresses
-        .iter()
-        .map(|a| {
-            MoveValue::Signer(*a)
-                .simple_serialize()
-                .expect("transaction arguments must serialize")
-        })
-        .chain(vm_args)
-        .collect();
+    // // TODO rethink move-cli arguments for executing functions
     let res = {
         // script fun. parse module, extract script ID to pass to VM
         let module = CompiledModule::deserialize_with_defaults(&bytecode)
             .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
-        session.execute_entry_function(
+        let mut linkage = state.generate_linkage_context(module.address())?;
+        linkage.add_type_arg_addresses_reflexive(&vm_type_tags);
+
+        let mut vm_instance = runtime.make_vm(state, linkage)?;
+        let type_args = vm_type_tags
+            .iter()
+            .map(|tag| vm_instance.load_type(tag))
+            .collect::<Result<Vec<_>, _>>()?;
+        let function = IdentStr::new(function)?;
+
+        ValueFrame::serialized_call(
+            &mut vm_instance,
             &module.self_id(),
-            IdentStr::new(function_name)?,
-            script_type_arguments,
-            vm_args,
+            function,
+            type_args,
+            serialize_values(txn_args.iter()),
             &mut gas_status,
+            None,
+            false, /*  bypass_declared_entry_check */
         )
     };
 
@@ -96,11 +86,9 @@ pub fn run<V: VMTestSetup>(
             &script_type_parameters,
             &script_parameters,
             &vm_type_tags,
-            &signer_addresses,
             txn_args,
         )
     } else {
-        let _changeset = session.finish().0?;
         Ok(())
     }
 }

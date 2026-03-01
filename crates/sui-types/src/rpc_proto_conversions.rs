@@ -1369,6 +1369,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
+            E::DuplicateModuleName { .. } => todo!("Add DuplicateModuleName to rpc sdk"),
         };
 
         message.set_kind(kind);

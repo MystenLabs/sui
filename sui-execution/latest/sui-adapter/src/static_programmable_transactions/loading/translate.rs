@@ -5,7 +5,6 @@ use crate::{
     execution_mode::ExecutionMode,
     static_programmable_transactions::{
         env::Env,
-        linkage::resolved_linkage::RootedLinkage,
         loading::ast as L,
         metering::{self, translation_meter::TranslationMeter},
     },
@@ -108,7 +107,7 @@ fn input<Mode: ExecutionMode>(
         }) => {
             let obj = env.read_object(&id)?;
             let Some(ty) = obj.type_() else {
-                invariant_violation!("Object {:?} has does not have a Move type", id);
+                invariant_violation!("Object {:?} does not have a Move type", id);
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
@@ -192,9 +191,6 @@ fn object_mutability(mutability: SharedObjectMutability) -> L::ObjectMutability 
 fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError> {
     Ok(match command {
         P::Command::MoveCall(pmc) => {
-            let resolved_linkage = env
-                .linkage_analysis
-                .compute_call_linkage(&pmc, env.linkable_store)?;
             let P::ProgrammableMoveCall {
                 package,
                 module,
@@ -202,13 +198,12 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
                 type_arguments: ptype_arguments,
                 arguments,
             } = *pmc;
-            let linkage = RootedLinkage::new(*package, resolved_linkage);
             let type_arguments = ptype_arguments
                 .into_iter()
                 .enumerate()
                 .map(|(idx, ty)| env.load_type_input(idx, ty))
                 .collect::<Result<Vec<_>, _>>()?;
-            let function = env.load_function(package, module, name, type_arguments, linkage)?;
+            let function = env.load_function(package, module, name, type_arguments)?;
             L::Command::MoveCall(Box::new(L::MoveCall {
                 function,
                 arguments,

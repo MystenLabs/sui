@@ -4,7 +4,7 @@
 use super::{ast as T, env::Env};
 use crate::{
     execution_mode::ExecutionMode,
-    programmable_transactions::context::EitherError,
+    static_programmable_transactions::execution::context::EitherError,
     static_programmable_transactions::{
         loading::ast::{self as L, Type},
         spanned::sp,
@@ -557,7 +557,7 @@ fn move_call_arguments(
                 "Expected {} argument{} calling function '{}::{}', but found {}",
                 num_parameters,
                 if num_parameters == 1 { "" } else { "s" },
-                function.storage_id,
+                function.version_mid,
                 function.name,
                 num_args,
             ),

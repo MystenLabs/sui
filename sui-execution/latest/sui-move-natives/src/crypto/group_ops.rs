@@ -12,12 +12,14 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::native_functions::NativeContext;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::natives::functions::NativeContext;
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Value, VectorRef},
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{Value, VectorRef},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -252,7 +254,7 @@ pub fn internal_validate(
     }
 
     let bytes_ref = pop_arg!(args, VectorRef);
-    let bytes = bytes_ref.as_bytes_ref();
+    let bytes = bytes_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -314,9 +316,9 @@ pub fn internal_add(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -387,9 +389,9 @@ pub fn internal_sub(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -460,9 +462,9 @@ pub fn internal_mul(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -549,9 +551,9 @@ pub fn internal_div(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -639,7 +641,7 @@ pub fn internal_hash_to(
     }
 
     let m_ref = pop_arg!(args, VectorRef);
-    let m = m_ref.as_bytes_ref();
+    let m = m_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     if m.is_empty() {
@@ -794,9 +796,9 @@ pub fn internal_multi_scalar_mul(
     }
 
     let elements_ref = pop_arg!(args, VectorRef);
-    let elements = elements_ref.as_bytes_ref();
+    let elements = elements_ref.as_bytes_ref()?;
     let scalars_ref = pop_arg!(args, VectorRef);
-    let scalars = scalars_ref.as_bytes_ref();
+    let scalars = scalars_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -864,9 +866,9 @@ pub fn internal_pairing(
     }
 
     let e2_ref = pop_arg!(args, VectorRef);
-    let e2 = e2_ref.as_bytes_ref();
+    let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
-    let e1 = e1_ref.as_bytes_ref();
+    let e1 = e1_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
 
     let cost_params = get_extension!(context, NativesCostTable)?
@@ -909,7 +911,7 @@ pub fn internal_convert(
     }
 
     let e_ref = pop_arg!(args, VectorRef);
-    let e = e_ref.as_bytes_ref();
+    let e = e_ref.as_bytes_ref()?;
     let to_type = pop_arg!(args, u8);
     let from_type = pop_arg!(args, u8);
 
@@ -999,18 +1001,20 @@ pub fn internal_sum(
             );
 
             // Read the input vector
-            (0..length)
+            let input_values: Vec<Vec<u8>> = (0..length)
                 .map(|i| {
                     inputs
                         .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
                         .and_then(Value::value_as::<VectorRef>)
+                        .and_then(|v| Ok(v.as_bytes_ref()?.to_vec()))
+                })
+                .collect::<PartialVMResult<Vec<_>>>()?;
+
+            input_values
+                .into_iter()
+                .map(|v| {
+                    v.try_into()
                         .map_err(|_| FastCryptoError::InvalidInput)
-                        .and_then(|v| {
-                            v.as_bytes_ref()
-                                .to_vec()
-                                .try_into()
-                                .map_err(|_| FastCryptoError::InvalidInput)
-                        })
                         .map(bls::G1ElementUncompressed::from_trusted_byte_array)
                 })
                 .collect::<FastCryptoResult<Vec<_>>>()

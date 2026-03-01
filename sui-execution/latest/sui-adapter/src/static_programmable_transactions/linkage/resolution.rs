@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::data_store::PackageStore;
+use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use std::{
+    borrow::Borrow,
     collections::{BTreeMap, btree_map::Entry},
-    rc::Rc,
+    sync::Arc,
 };
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
+    base_types::ObjectID,
     error::{ExecutionError, ExecutionErrorKind},
-    move_package::MovePackage,
 };
 
 /// Unifiers. These are used to determine how to unify two packages.
@@ -18,11 +19,11 @@ pub enum VersionConstraint {
     /// An exact constraint unifies as follows:
     /// 1. Exact(a) ~ Exact(b) ==> Exact(a), iff a == b
     /// 2. Exact(a) ~ AtLeast(b) ==> Exact(a), iff a >= b
-    Exact(SequenceNumber, ObjectID),
+    Exact(u64, ObjectID),
     /// An at least constraint unifies as follows:
     /// * AtLeast(a, a_version) ~ AtLeast(b, b_version) ==> AtLeast(x, max(a_version, b_version)),
     ///   where x is the package id of either a or b (the one with the greatest version).
-    AtLeast(SequenceNumber, ObjectID),
+    AtLeast(u64, ObjectID),
 }
 
 #[derive(Debug, Clone)]
@@ -40,15 +41,45 @@ impl ResolutionTable {
             all_versions_resolution_table: BTreeMap::new(),
         }
     }
+
+    /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
+    /// Since this linkage analysis should only be used for types, all packages are resolved
+    /// "upwards" (i.e., later versions of the package are preferred).
+    pub fn add_type_linkages_to_table<I>(
+        &mut self,
+        ids: I,
+        store: &dyn PackageStore,
+    ) -> Result<(), ExecutionError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<ObjectID>,
+    {
+        for id in ids {
+            let pkg = get_package(id.borrow(), store)?;
+            let transitive_deps = pkg.linkage_table().values().copied().map(ObjectID::from);
+            let package_id = pkg.version_id().into();
+            add_and_unify(&package_id, store, self, VersionConstraint::at_least)?;
+            for object_id in transitive_deps {
+                add_and_unify(&object_id, store, self, VersionConstraint::at_least)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl VersionConstraint {
-    pub fn exact(pkg: &MovePackage) -> Option<VersionConstraint> {
-        Some(VersionConstraint::Exact(pkg.version(), pkg.id()))
+    pub fn exact(pkg: &VerifiedPackage) -> Option<VersionConstraint> {
+        Some(VersionConstraint::Exact(
+            pkg.version(),
+            pkg.version_id().into(),
+        ))
     }
 
-    pub fn at_least(pkg: &MovePackage) -> Option<VersionConstraint> {
-        Some(VersionConstraint::AtLeast(pkg.version(), pkg.id()))
+    pub fn at_least(pkg: &VerifiedPackage) -> Option<VersionConstraint> {
+        Some(VersionConstraint::AtLeast(
+            pkg.version(),
+            pkg.version_id().into(),
+        ))
     }
 
     pub fn unify(&self, other: &VersionConstraint) -> Result<VersionConstraint, ExecutionError> {
@@ -117,7 +148,7 @@ impl VersionConstraint {
 pub(crate) fn get_package(
     object_id: &ObjectID,
     store: &dyn PackageStore,
-) -> Result<Rc<MovePackage>, ExecutionError> {
+) -> Result<Arc<VerifiedPackage>, ExecutionError> {
     store
         .get_package(object_id)
         .map_err(|e| {
@@ -132,7 +163,7 @@ pub(crate) fn add_and_unify(
     object_id: &ObjectID,
     store: &dyn PackageStore,
     resolution_table: &mut ResolutionTable,
-    resolution_fn: fn(&MovePackage) -> Option<VersionConstraint>,
+    resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
 ) -> Result<(), ExecutionError> {
     let package = get_package(object_id, store)?;
 
@@ -141,7 +172,7 @@ pub(crate) fn add_and_unify(
         // resolution table, and this does not contribute to the linkage analysis.
         return Ok(());
     };
-    let original_pkg_id = package.original_package_id();
+    let original_pkg_id = package.original_id().into();
 
     if let Entry::Vacant(e) = resolution_table.resolution_table.entry(original_pkg_id) {
         e.insert(resolution);

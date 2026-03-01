@@ -4,10 +4,13 @@
 use move_core_types::account_address::AccountAddress;
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
-    native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
+    dev_utils::gas_schedule::{Gas, GasStatus, unit_cost_schedule},
+    natives::{
+        extensions::NativeContextExtensions, functions::NativeFunctionTable,
+        move_stdlib::GasParameters,
+    },
+    shared::gas::GasMeter,
 };
-use move_vm_test_utils::gas_schedule::{Gas, GasStatus, unit_cost_schedule};
-use move_vm_types::gas::GasMeter;
 
 pub trait VMTestSetup {
     type Meter<'a>: GasMeter + Send
@@ -28,13 +31,13 @@ pub trait VMTestSetup {
 }
 
 pub struct DefaultVMTestSetup {
-    pub cost_table: move_vm_test_utils::gas_schedule::CostTable,
+    pub cost_table: move_vm_runtime::dev_utils::gas_schedule::CostTable,
     pub native_function_table: NativeFunctionTable,
 }
 
 impl DefaultVMTestSetup {
     pub fn new(
-        cost_table: move_vm_test_utils::gas_schedule::CostTable,
+        cost_table: move_vm_runtime::dev_utils::gas_schedule::CostTable,
         native_function_table: NativeFunctionTable,
     ) -> Self {
         Self {
@@ -46,9 +49,9 @@ impl DefaultVMTestSetup {
     pub fn legacy_default() -> Self {
         Self::new(
             unit_cost_schedule(),
-            move_stdlib_natives::all_natives(
+            move_vm_runtime::natives::move_stdlib::stdlib_native_function_table(
                 AccountAddress::ONE,
-                move_stdlib_natives::GasParameters::zeros(),
+                GasParameters::zeros(),
                 /* silent */ false,
             ),
         )

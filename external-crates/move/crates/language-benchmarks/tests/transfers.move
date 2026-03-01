@@ -8,7 +8,7 @@ module 0x1::bench {
         let Account { balance: _ } = account;
     }
 
-    public fun bench() {
+    public fun bench_account_transfers() {
         let mut accounts = vector::empty<Account>();
         let num_accounts = COUNT;
         let transfer_amount = 10;

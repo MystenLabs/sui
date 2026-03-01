@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/instantiation_loops/nested_types_2_enum.mvir
 ---
 processed 1 task
 
@@ -12,4 +11,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [],
     offsets: [],
+    message: "edges with constructors: [f0#0 --StructInstantiation(DatatypeHandleIndex(1), [U64, StructInstantiation(DatatypeHandleIndex(0), [StructInstantiation(DatatypeHandleIndex(0), [TypeParameter(0)])])])--> f0#0], nodes: [f0#0]",
 }

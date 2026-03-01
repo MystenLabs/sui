@@ -10,12 +10,14 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
 };
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
-    values::{Value, VectorSpecialization},
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Value, Vector, VectorSpecialization},
+    },
+    natives::functions::NativeResult,
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::ObjectID, error::VMMemoryLimitExceededSubStatusCode};
@@ -264,7 +266,7 @@ pub fn get_events_by_type(
         .iter()
         .filter_map(|(tag, event)| {
             if &specified_type_tag == tag {
-                Some(event.copy_value().unwrap())
+                Some(event.copy_value())
             } else {
                 None
             }
@@ -272,9 +274,6 @@ pub fn get_events_by_type(
         .collect::<Vec<_>>();
     Ok(NativeResult::ok(
         legacy_test_cost(),
-        smallvec![move_vm_types::values::Vector::pack(
-            specialization,
-            matched_events
-        )?],
+        smallvec![Vector::pack(specialization, matched_events)?],
     ))
 }

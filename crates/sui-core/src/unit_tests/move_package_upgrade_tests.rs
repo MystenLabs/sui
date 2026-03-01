@@ -64,7 +64,7 @@ enum FileOverlay<'a> {
 fn build_upgrade_test_modules_with_overlay(
     base_pkg: &str,
     overlay: FileOverlay<'_>,
-) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
+) -> (Vec<u8>, Vec<Vec<u8>>) {
     // Root temp dirs under `move_upgrade` directory so that dependency paths remain correct.
     let mut tmp_dir_root_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     tmp_dir_root_path.extend(["src", "unit_tests", "data", "move_upgrade"]);
@@ -97,8 +97,7 @@ fn build_upgrade_test_modules_with_overlay(
 
 fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
     let path = pkg_path_of(test_dir);
-    let (digest, modules, _dep_ids) = build_pkg_at_path(&path);
-    (digest, modules)
+    build_pkg_at_path(&path)
 }
 
 fn pkg_path_of(pkg_name: &str) -> PathBuf {
@@ -107,13 +106,12 @@ fn pkg_path_of(pkg_name: &str) -> PathBuf {
     path
 }
 
-fn build_pkg_at_path(path: &Path) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
+fn build_pkg_at_path(path: &Path) -> (Vec<u8>, Vec<Vec<u8>>) {
     let with_unpublished_deps = false;
     let package = BuildConfig::new_for_testing().build(path).unwrap();
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
-        package.get_published_dependencies_ids(),
     )
 }
 
@@ -522,7 +520,9 @@ async fn test_upgrade_package_compatible_in_dep_only_mode() {
     );
 }
 
+// TODO(bella-ciao): Ignore this test until we do an execution version cut and then re-enable
 #[tokio::test]
+#[ignore]
 async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
     // Allow new modules in deps-only mode for this test.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
@@ -533,7 +533,7 @@ async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
     let base_pkg = "dep_only_upgrade";
     assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
-    let (digest, modules, dep_ids) = build_upgrade_test_modules_with_overlay(
+    let (digest, modules) = build_upgrade_test_modules_with_overlay(
         base_pkg,
         FileOverlay::Add {
             file_name: "new_module.move",
@@ -541,7 +541,12 @@ async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
         },
     );
     let effects = runner
-        .upgrade(UpgradePolicy::DEP_ONLY, digest, modules, dep_ids)
+        .upgrade(
+            UpgradePolicy::DEP_ONLY,
+            digest,
+            modules,
+            vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+        )
         .await;
 
     assert!(effects.status().is_ok(), "{:#?}", effects.status());
@@ -568,9 +573,14 @@ public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
         FileOverlay::Remove("friend_module.move"),
     ];
     for overlay in overlays {
-        let (digest, modules, dep_ids) = build_upgrade_test_modules_with_overlay(base_pkg, overlay);
+        let (digest, modules) = build_upgrade_test_modules_with_overlay(base_pkg, overlay);
         let effects = runner
-            .upgrade(UpgradePolicy::DEP_ONLY, digest, modules, dep_ids)
+            .upgrade(
+                UpgradePolicy::DEP_ONLY,
+                digest,
+                modules,
+                vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+            )
             .await;
 
         assert_eq!(
@@ -603,9 +613,14 @@ public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
     ];
 
     for overlay in overlays {
-        let (digest, modules, dep_ids) = build_upgrade_test_modules_with_overlay(base_pkg, overlay);
+        let (digest, modules) = build_upgrade_test_modules_with_overlay(base_pkg, overlay);
         let effects = runner
-            .upgrade(UpgradePolicy::DEP_ONLY, digest, modules, dep_ids)
+            .upgrade(
+                UpgradePolicy::DEP_ONLY,
+                digest,
+                modules,
+                vec![SUI_FRAMEWORK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID],
+            )
             .await;
 
         assert_eq!(

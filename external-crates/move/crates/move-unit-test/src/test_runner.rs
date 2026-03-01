@@ -13,10 +13,10 @@ use anyhow::Result;
 use colored::*;
 
 use move_binary_format::{
+    binary_config::BinaryConfig,
     errors::{Location, VMResult},
     file_format::CompiledModule,
 };
-use move_bytecode_utils::Modules;
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_compiler::{
     compiled_unit::NamedCompiledModule,
@@ -31,19 +31,36 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_trace_format::format::{MoveTraceBuilder, TRACE_FILE_EXTENSION};
-use move_vm_runtime::move_vm::MoveVM;
-use move_vm_test_utils::InMemoryStorage;
+use move_vm_runtime::{dev_utils::storage::StoredPackage, shared::gas::GasMeter};
+use move_vm_runtime::{
+    dev_utils::{
+        in_memory_test_adapter::InMemoryTestAdapter, storage::InMemoryStorage,
+        vm_arguments::ValueFrame, vm_test_adapter::VMTestAdapter,
+    },
+    natives::functions::NativeFunctions,
+    runtime::MoveRuntime,
+};
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 use regex::Regex;
-use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    io::Write,
+    marker::Send,
+    rc::Rc,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
+
+use parking_lot::RwLock;
 
 /// Test state common to all tests
 pub struct SharedTestingConfig<V: VMTestSetup> {
     report_stacktrace_on_abort: bool,
     execution_bound: u64,
     vm_test_setup: V,
-    starting_storage_state: InMemoryStorage,
+    vm_test_adapter: Arc<RwLock<dyn VMTestAdapter<InMemoryStorage> + Sync + Send>>,
     prng_seed: Option<u64>,
     num_iters: u64,
     deterministic_generation: bool,
@@ -56,21 +73,25 @@ pub struct TestRunner<V: VMTestSetup> {
     tests: TestPlan,
 }
 
-/// Setup storage state with the set of modules that will be needed for all tests
+/// Insert the provided modules into the provided test store so that they can be loaded by the
+/// vm during test execution.
 fn setup_test_storage<'a>(
+    adapter: &mut InMemoryTestAdapter,
     modules: impl Iterator<Item = &'a CompiledModule>,
     bytecode_deps_modules: impl Iterator<Item = &'a CompiledModule>,
-) -> Result<InMemoryStorage> {
-    let mut storage = InMemoryStorage::new();
-    let modules = Modules::new(modules.chain(bytecode_deps_modules));
-    for module in modules.compute_topological_order()? {
-        let module_id = module.self_id();
-        let mut module_bytes = Vec::new();
-        module.serialize_with_version(module.version, &mut module_bytes)?;
-        storage.publish_or_overwrite_module(module_id, module_bytes);
+) -> Result<()> {
+    let mut packages = BTreeMap::new();
+    for module in modules.chain(bytecode_deps_modules) {
+        let entry = packages
+            .entry(*module.self_id().address())
+            .or_insert_with(Vec::new);
+        entry.push(module.clone());
     }
-
-    Ok(storage)
+    for (addr, modules) in packages {
+        let package = StoredPackage::from_modules_for_testing(addr, modules).unwrap();
+        adapter.insert_package_into_storage(package);
+    }
+    Ok(())
 }
 
 fn convert_clever_move_abort_error(
@@ -84,7 +105,7 @@ fn convert_clever_move_abort_error(
 
     // Otherwise it should be a tagged error
     match location {
-        Location::Undefined => None,
+        Location::Undefined | Location::Package(_) => None,
         Location::Module(module_id) => {
             let module = test_info.get(module_id)?;
             let name_constant_index = bitset.identifier_index()?;
@@ -124,14 +145,28 @@ impl<V: VMTestSetup + Sync> TestRunner<V> {
             }
         };
 
+        let native_functions = NativeFunctions::new(vm_test_setup.native_function_table())?;
+        // Allow loading of unpublishable modules for the purpose of running tests.
+        let vm_config = move_vm_config::runtime::VMConfig {
+            binary_config: BinaryConfig::new_unpublishable(),
+            ..Default::default()
+        };
+        let runtime = MoveRuntime::new(native_functions, vm_config);
+
+        let mut vm_test_adapter = InMemoryTestAdapter::new_with_runtime(runtime);
+
         let modules = tests.module_info.values().map(|info| &info.module);
-        let starting_storage_state =
-            setup_test_storage(modules, tests.bytecode_deps_modules.iter())?;
+        setup_test_storage(
+            &mut vm_test_adapter,
+            modules,
+            tests.bytecode_deps_modules.iter(),
+        )?;
+
         Ok(Self {
             testing_config: SharedTestingConfig {
                 report_stacktrace_on_abort,
-                starting_storage_state,
                 execution_bound,
+                vm_test_adapter: Arc::new(RwLock::new(vm_test_adapter)),
                 vm_test_setup,
                 prng_seed,
                 num_iters,
@@ -238,21 +273,43 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
         test_plan: &ModuleTestPlan,
         function_name: &str,
         arguments: Vec<MoveValue>,
-    ) -> (VMResult<Vec<Vec<u8>>>, TestRunInfo) {
-        // Allow loading of unpublishable modules for the purpose of running tests.
-        let vm_config = {
-            let mut vm_config = self.vm_test_setup.vm_config();
-            vm_config
-                .binary_config
-                .allow_unpublishable_for_move_unit_testing();
-            vm_config
-        };
-        let natives = self.vm_test_setup.native_function_table();
-        let move_vm = MoveVM::new_with_config(natives, vm_config).unwrap();
-        let extensions_builder = self.vm_test_setup.new_extensions_builder();
-        let native_context_extensions = self
-            .vm_test_setup
-            .new_native_context_extensions(&extensions_builder);
+    ) -> (VMResult<ValueFrame>, TestRunInfo) {
+        // A nicety since Rust doesn't have `try { .. }` yet
+        fn do_call<V: VMTestSetup>(
+            test_config: &SharedTestingConfig<V>,
+            gas_meter: &mut impl GasMeter,
+            tracer: Option<&mut MoveTraceBuilder>,
+            module_id: ModuleId,
+            function_name: &str,
+            arguments: Vec<MoveValue>,
+        ) -> VMResult<ValueFrame> {
+            let link_context = test_config
+                .vm_test_adapter
+                .read()
+                .get_linkage_context(*module_id.address())?;
+            let extensions_builder = test_config.vm_test_setup.new_extensions_builder();
+            let native_context_extensions = test_config
+                .vm_test_setup
+                .new_native_context_extensions(&extensions_builder);
+            let adapter = test_config.vm_test_adapter.read();
+            let mut vm_instance = adapter.make_vm_with_native_extensions(
+                link_context,
+                Rc::new(RefCell::new(native_context_extensions)),
+            )?;
+
+            let function_name = IdentStr::new(function_name).unwrap();
+
+            ValueFrame::serialized_call(
+                &mut vm_instance,
+                &module_id,
+                function_name,
+                vec![],
+                serialize_values(arguments.iter()),
+                gas_meter,
+                tracer,
+                true, /* bypass declared entry check */
+            )
+        }
 
         let mut move_tracer = MoveTraceBuilder::new();
         let tracer = if self.trace_location.is_some() {
@@ -261,31 +318,26 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
             None
         };
 
-        let mut session = move_vm
-            .new_session_with_extensions(&self.starting_storage_state, native_context_extensions);
         let mut gas_meter = self.vm_test_setup.new_meter(Some(self.execution_bound));
-
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
         let now = Instant::now();
-        let serialized_return_values_result = session.execute_function_bypass_visibility(
-            &test_plan.module_id,
-            IdentStr::new(function_name).unwrap(),
-            vec![], // no ty args, at least for now
-            serialize_values(arguments.iter()),
+        let module_id = test_plan.module_id.clone();
+
+        let mut return_result = do_call(
+            self,
             &mut gas_meter,
             tracer,
+            module_id,
+            function_name,
+            arguments,
         );
-        let mut return_result = serialized_return_values_result.map(|res| {
-            res.return_values
-                .into_iter()
-                .map(|(bytes, _layout)| bytes)
-                .collect()
-        });
+
         if !self.report_stacktrace_on_abort
             && let Err(err) = &mut return_result
         {
             err.remove_exec_state();
         }
+
         let trace = if self.trace_location.is_some() {
             Some(move_tracer.into_trace())
         } else {
@@ -296,7 +348,6 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
             self.vm_test_setup.used_gas(self.execution_bound, gas_meter),
             trace,
         );
-        session.finish().0.unwrap();
         (return_result, test_run_info)
     }
 
@@ -392,7 +443,8 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
             TypeTag::Bool => MoveValue::Bool(rng.r#gen::<bool>()),
             TypeTag::Struct(_) => {
                 unreachable!(
-                    "Structs are not supported as generated values in unit tests and cannot get to this point"
+                    "Structs are not supported as generated values \
+                     in unit tests and cannot get to this point"
                 )
             }
             TypeTag::Signer => unreachable!("Signer arguments not allowed"),

@@ -5,9 +5,9 @@ use std::collections::BTreeSet;
 
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::u256::U256;
-use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
+    TypeTag,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
@@ -72,6 +72,12 @@ pub enum InputObjectMetadata {
     },
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
+pub struct ExecutionType {
+    pub type_: TypeTag,
+    pub abilities: AbilitySet,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsageKind {
     BorrowImm,
@@ -111,12 +117,12 @@ pub struct ResultValue {
 pub enum Value {
     Object(ObjectValue),
     Raw(RawValueType, Vec<u8>),
-    Receiving(ObjectID, SequenceNumber, Option<Type>),
+    Receiving(ObjectID, SequenceNumber, Option<ExecutionType>),
 }
 
 #[derive(Debug, Clone)]
 pub struct ObjectValue {
-    pub type_: Type,
+    pub type_: ExecutionType,
     pub has_public_transfer: bool,
     // true if it has been used in a public, non-entry Move call
     // In other words, false if all usages have been with non-Move commands or
@@ -142,8 +148,7 @@ pub enum ObjectContents {
 pub enum RawValueType {
     Any,
     Loaded {
-        ty: Type,
-        abilities: AbilitySet,
+        ty: ExecutionType,
         used_in_non_entry_move_call: bool,
     },
 }
@@ -226,7 +231,7 @@ impl Value {
         match self {
             Value::Object(_) => false,
             Value::Raw(RawValueType::Any, _) => true,
-            Value::Raw(RawValueType::Loaded { abilities, .. }, _) => abilities.has_copy(),
+            Value::Raw(RawValueType::Loaded { ty, .. }, _) => ty.abilities.has_copy(),
             Value::Receiving(_, _, _) => false,
         }
     }
@@ -272,8 +277,8 @@ impl Value {
 
 impl ObjectValue {
     /// # Safety
-    /// We must have the Type is the coin type, but we are unable to check it at this spot
-    pub unsafe fn coin(type_: Type, coin: Coin) -> Self {
+    /// We must have the TypeTag is the coin type, but we are unable to check it at this spot
+    pub unsafe fn coin(type_: ExecutionType, coin: Coin) -> Self {
         Self {
             type_,
             has_public_transfer: true,
@@ -355,19 +360,19 @@ impl TryFromValue for ObjectValue {
 
 impl TryFromValue for SuiAddress {
     fn try_from_value(value: Value) -> Result<Self, CommandArgumentError> {
-        try_from_value_prim(&value, Type::Address)
+        try_from_value_prim(&value, TypeTag::Address)
     }
 }
 
 impl TryFromValue for u64 {
     fn try_from_value(value: Value) -> Result<Self, CommandArgumentError> {
-        try_from_value_prim(&value, Type::U64)
+        try_from_value_prim(&value, TypeTag::U64)
     }
 }
 
 fn try_from_value_prim<'a, T: Deserialize<'a>>(
     value: &'a Value,
-    expected_ty: Type,
+    expected_ty: TypeTag,
 ) -> Result<T, CommandArgumentError> {
     match value {
         Value::Object(_) => Err(CommandArgumentError::TypeMismatch),
@@ -376,7 +381,7 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
-            if ty != &expected_ty {
+            if ty.type_ != expected_ty {
                 return Err(CommandArgumentError::TypeMismatch);
             }
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)

@@ -2,170 +2,105 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sandbox::utils::{
-    explain_publish_changeset, explain_publish_error, on_disk_state_view::OnDiskStateView,
-};
+use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
 use anyhow::{Result, bail};
-use move_binary_format::errors::Location;
 use move_package_alt_compilation::compiled_package::CompiledPackage;
 use move_unit_test::vm_test_setup::VMTestSetup;
-use move_vm_runtime::move_vm::MoveVM;
-use std::collections::BTreeMap;
+use move_vm_runtime::{
+    dev_utils::storage::StoredPackage,
+    natives::{extensions::NativeExtensions, functions::NativeFunctions},
+    runtime::MoveRuntime,
+    shared::{linkage_context::LinkageContext, types::VersionId},
+};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn publish<V: VMTestSetup>(
     vm_test_setup: V,
     state: &OnDiskStateView,
     package: &CompiledPackage,
-    ignore_breaking_changes: bool,
-    with_deps: bool,
-    bundle: bool,
-    override_ordering: Option<&[String]>,
+    package_version_id: &Option<VersionId>,
     verbose: bool,
 ) -> Result<()> {
-    // collect all modules compiled
-    let compiled_modules = if with_deps {
-        package.all_compiled_units_with_source().collect::<Vec<_>>()
-    } else {
-        package.root_modules().collect::<Vec<_>>()
-    };
+    // collect all modules compiled for the root package
+    let compiled_modules = package.root_modules().collect::<Vec<_>>();
     if verbose {
         println!("Found {} modules", compiled_modules.len());
     }
 
-    // order the modules for publishing
-    let modules_to_publish = match override_ordering {
-        Some(ordering) => {
-            let module_map: BTreeMap<_, _> = compiled_modules
-                .into_iter()
-                .map(|unit| (unit.unit.name().to_string(), unit))
-                .collect();
-
-            let mut ordered_modules = vec![];
-            for name in ordering {
-                match module_map.get(name) {
-                    None => bail!("Invalid module name in publish ordering: {}", name),
-                    Some(unit) => {
-                        ordered_modules.push(*unit);
-                    }
-                }
-            }
-            ordered_modules
-        }
-        None => compiled_modules,
-    };
-
-    let republished = modules_to_publish
+    let root_package_addrs = compiled_modules
         .iter()
-        .filter_map(|unit| {
-            let id = unit.unit.module.self_id();
-            if state.has_module(&id) {
-                Some(format!("{}", id))
-            } else {
-                None
-            }
-        })
+        .map(|module| *module.unit.module.self_id().address())
+        .collect::<BTreeSet<_>>();
+    if root_package_addrs.is_empty() {
+        bail!("No modules to publish -- a package cannot be empty");
+    }
+    if root_package_addrs.len() != 1 {
+        bail!("All modules in a package must have the same address");
+    }
+
+    let package_original_id = *root_package_addrs.iter().next().unwrap();
+    let package_version_id = package_version_id.unwrap_or_else(|| package_original_id);
+
+    // We don't allow republishing of packages
+    if state.has_package(&package_version_id) {
+        bail!(
+            "Tried to republish the package at  {}. You will need to provide a different 'publish-at' address for the package",
+            package_version_id
+        );
+    }
+
+    let compiled_modules = compiled_modules
+        .into_iter()
+        .map(|module| module.unit.module.clone())
         .collect::<Vec<_>>();
 
-    if !republished.is_empty() {
-        eprintln!(
-            "Tried to republish the following modules: {}",
-            republished.join(", ")
-        );
-        return Ok(());
+    // Build the dependency map from the package
+    let mut dependency_map = BTreeMap::new();
+    for (name, unit) in package.deps_compiled_units.iter() {
+        let unit_address = *unit.unit.module.self_id().address();
+        if let Some(other) = dependency_map.insert(unit_address, unit_address)
+            && other != unit_address
+        {
+            bail!(
+                "Package {name} has linkages: {} and {}",
+                other,
+                unit_address
+            );
+        }
     }
+    dependency_map.insert(package_original_id, package_version_id);
 
-    // use the publish_module API from the VM if we do not allow breaking changes
-    if !ignore_breaking_changes {
-        let vm = MoveVM::new(vm_test_setup.native_function_table()).unwrap();
-        let mut gas_status = vm_test_setup.new_meter(None);
-        let mut session = vm.new_session(state);
-        let mut has_error = false;
+    // use the publish_module API from the VM since we don't allow breaking changes
+    let natives = NativeFunctions::new(vm_test_setup.native_function_table())?;
+    let runtime = MoveRuntime::new_with_default_config(natives);
 
-        if bundle {
-            // publish all modules together as a bundle
-            let mut sender_opt = None;
-            let mut module_bytes_vec = vec![];
-            for unit in &modules_to_publish {
-                let module_bytes = unit.unit.serialize();
-                module_bytes_vec.push(module_bytes);
+    let mut gas_status = vm_test_setup.new_meter(None);
 
-                let module_address = *unit.unit.module.self_id().address();
-                match &sender_opt {
-                    None => {
-                        sender_opt = Some(module_address);
-                    }
-                    Some(val) => {
-                        if val != &module_address {
-                            bail!("All modules in the bundle must share the same address");
-                        }
-                    }
-                }
-            }
-            match sender_opt {
-                None => bail!("No modules to publish"),
-                Some(sender) => {
-                    let res =
-                        session.publish_module_bundle(module_bytes_vec, sender, &mut gas_status);
-                    if let Err(err) = res {
-                        println!("Invalid multi-module publishing: {}", err);
-                        if let Location::Module(module_id) = err.location() {
-                            // find the module where error occures and explain
-                            if let Some(unit) = modules_to_publish
-                                .into_iter()
-                                .find(|&x| x.unit.name().as_str() == module_id.name().as_str())
-                            {
-                                explain_publish_error(err, state, unit)?
-                            } else {
-                                println!(
-                                    "Unable to locate the module in the multi-module publishing error"
-                                );
-                            }
-                        }
-                        has_error = true;
-                    }
-                }
-            }
-        } else {
-            // publish modules sequentially, one module at a time
-            for unit in &modules_to_publish {
-                let module_bytes = unit.unit.serialize();
-                let id = unit.unit.module.self_id();
-                let sender = *id.address();
+    // Create a `LinkageContext`
+    let linkage_context = LinkageContext::new(dependency_map);
 
-                let res = session.publish_module(module_bytes, sender, &mut gas_status);
-                if let Err(err) = res {
-                    explain_publish_error(err, state, unit)?;
-                    has_error = true;
-                    break;
-                }
-            }
-        }
+    // Serialize the modules into a package to prepare them for publishing
+    let pkg = StoredPackage::from_module_for_testing_with_linkage(
+        package_version_id,
+        linkage_context,
+        compiled_modules,
+    )
+    .unwrap();
 
-        if !has_error {
-            let changeset = session.finish().0?;
-            if verbose {
-                explain_publish_changeset(&changeset);
-            }
-            let modules: Vec<_> = changeset
-                .into_modules()
-                .map(|(module_id, blob_opt)| {
-                    (module_id, blob_opt.ok().expect("must be non-deletion"))
-                })
-                .collect();
-            state.save_modules(&modules)?;
-        }
-    } else {
-        // NOTE: the VM enforces the most strict way of module republishing and does not allow
-        // backward incompatible changes, as as result, if this flag is set, we skip the VM process
-        // and force the CLI to override the on-disk state directly
-        let mut serialized_modules = vec![];
-        for unit in modules_to_publish {
-            let id = unit.unit.module.self_id();
-            let module_bytes = unit.unit.serialize();
-            serialized_modules.push((id, module_bytes));
-        }
-        state.save_modules(&serialized_modules)?;
-    }
+    let ser_pkg = pkg.into_serialized_package();
+    // Validate the package using the VM
+    runtime.validate_package(
+        state,
+        package_original_id,
+        ser_pkg.clone(),
+        &mut gas_status,
+        NativeExtensions::default(),
+    )?;
+    // TODO: Fix this?
+    // if verbose {
+    //     explain_publish_changeset(&changeset);
+    // }
+    state.save_package(ser_pkg)?;
 
     Ok(())
 }

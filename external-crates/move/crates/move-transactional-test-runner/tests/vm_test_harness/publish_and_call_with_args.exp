@@ -1,0 +1,7 @@
+processed 1 task
+
+task 0, lines 1-10:
+//# publish-and-call --call 0x42::m::a 0 --call 0x42::m::b vector[1,2,3]
+return values: 1
+return values: 10
+

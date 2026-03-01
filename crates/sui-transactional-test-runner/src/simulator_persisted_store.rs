@@ -5,6 +5,8 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::resolver::SerializedPackage;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
@@ -478,6 +480,30 @@ impl ModuleResolver for PersistedStore {
                     .get(module_id.name().as_str())
                     .cloned()
             }))
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        let mut packages = [const { None }; N];
+        for (i, id) in ids.iter().enumerate() {
+            packages[i] = self
+                .get_package_object(&ObjectID::from(*id))?
+                .map(|pkg| pkg.move_package().into_serialized_move_package());
+        }
+        Ok(packages)
+    }
+
+    fn get_packages<'a>(
+        &self,
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.map(|id| {
+            self.get_package_object(&ObjectID::from(*id))
+                .map(|x| x.map(|pkg| pkg.move_package().into_serialized_move_package()))
+        })
+        .collect()
     }
 }
 

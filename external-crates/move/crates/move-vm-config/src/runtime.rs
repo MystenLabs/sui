@@ -33,6 +33,8 @@ pub struct VMConfig {
     pub variant_nodes: bool,
     /// Check for deprecated global storage operations during deserialization.
     pub deprecate_global_storage_ops_during_deserialization: bool,
+    /// Enable or disable bytecode optimization passes while caching bytecode in the Move Runtime.
+    pub optimize_bytecode: bool,
 }
 
 impl Default for VMConfig {
@@ -52,6 +54,10 @@ impl Default for VMConfig {
             max_type_to_layout_nodes: Some(512),
             variant_nodes: true,
             deprecate_global_storage_ops_during_deserialization: false,
+            // FIXME FIXME FIXME
+            // FEATURE GATE THIS AFTER GAS BLOCKS
+            // FIXME FIXME FIXME
+            optimize_bytecode: false,
         }
     }
 }

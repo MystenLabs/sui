@@ -11,4 +11,5 @@ Error: Function execution failed with VMError: {
     location: undefined,
     indices: [],
     offsets: [],
+    message: "argument length mismatch: expected 1 got 0",
 }

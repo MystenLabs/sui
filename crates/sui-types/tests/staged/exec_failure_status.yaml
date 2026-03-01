@@ -41,3 +41,4 @@
 39: InvalidLinkage
 40: InsufficientFundsForWithdraw
 41: NonExclusiveWriteInputObjectModified
+42: DuplicateModuleName

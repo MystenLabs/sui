@@ -935,6 +935,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { id } => {
                 Self::NonExclusiveWriteInputObjectModified { object: id.into() }
             }
+            crate::execution_status::ExecutionFailureStatus::DuplicateModuleName { .. } => {
+                todo!("Add DuplicateModuleName to sdk")
+            }
         }
     }
 }

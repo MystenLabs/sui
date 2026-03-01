@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
+use super::gas_predicates::charge_input_as_memory;
+use crate::gas_model::units_types::{CostTable, Gas, GasCost};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 
 use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas};
 
 use move_core_types::vm_status::StatusCode;
 use once_cell::sync::Lazy;
-
-use crate::gas_model::units_types::{CostTable, Gas, GasCost};
-
-use super::gas_predicates::charge_input_as_memory;
+use std::collections::BTreeMap;
 
 /// VM flat fee
 pub const VM_FLAT_FEE: Gas = Gas::new(8_000);
@@ -34,8 +31,6 @@ pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize = AbstractMemorySize::new(100
 
 pub static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
 
-pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_schedule_v1);
-
 /// The Move VM implementation of state for gas metering.
 ///
 /// Initialize with a `CostTable` and the gas provided to the transaction.
@@ -43,7 +38,7 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_sched
 ///
 /// Every client must use an instance of this type to interact with the Move VM.
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GasStatus {
     pub gas_model_version: u64,
     cost_table: CostTable,
@@ -573,18 +568,5 @@ pub fn initial_cost_schedule_v5() -> CostTable {
         instruction_tiers,
         stack_size_tiers,
         stack_height_tiers,
-    }
-}
-
-// Convert from our representation of gas costs to the type that the MoveVM expects for unit tests.
-// We don't want our gas depending on the MoveVM test utils and we don't want to fix our
-// representation to whatever is there, so instead we perform this translation from our gas units
-// and cost schedule to the one expected by the Move unit tests.
-pub fn initial_cost_schedule_for_unit_tests() -> move_vm_test_utils::gas_schedule::CostTable {
-    let table = initial_cost_schedule_v5();
-    move_vm_test_utils::gas_schedule::CostTable {
-        instruction_tiers: table.instruction_tiers.into_iter().collect(),
-        stack_height_tiers: table.stack_height_tiers.into_iter().collect(),
-        stack_size_tiers: table.stack_size_tiers.into_iter().collect(),
     }
 }

@@ -22,7 +22,7 @@ module 0x42::matrix {
 }
 
 //# run
-module 0x42::main {
+module 0x43::main {
     use 0x42::matrix;
 
     fun main() {

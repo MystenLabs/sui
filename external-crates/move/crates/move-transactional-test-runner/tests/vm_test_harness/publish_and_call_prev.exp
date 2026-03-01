@@ -1,0 +1,7 @@
+processed 2 tasks
+
+task 1, lines 8-15:
+//# publish-and-call --call 0x42::m::a --call 0x40::m::next 1
+return values: 11
+return values: 2
+

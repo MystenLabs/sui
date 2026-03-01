@@ -461,6 +461,11 @@ impl ConsensusOutputCache {
             .get_all_deferred_transactions_v2()
             .expect("load deferred transactions cannot fail");
 
+        // assert!(
+        //     epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch(),
+        //     "This version of sui-node can only run after data quarantining has been enabled. Please run version 1.45.0 or later to the end of the current epoch and retry"
+        // );
+
         let executed_in_epoch_cache_capacity = 50_000;
 
         Self {

@@ -4,4 +4,5 @@
 
 pub mod cli;
 pub mod commands;
+// pub mod adapter;
 pub mod utils;

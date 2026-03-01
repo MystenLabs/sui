@@ -1,0 +1,471 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::{
+    cache::identifier_interner::IdentifierInterner,
+    execution::{
+        dispatch_tables::VMDispatchTables,
+        interpreter::{
+            locals::{MachineHeap, StackFrame},
+            set_err_info,
+        },
+        values::values_impl::{self as values, VMValueCast, Value},
+    },
+    jit::execution::ast::{Function, InternedDisplay, Type},
+    shared::{
+        constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
+        safe_ops::{SafeArithmetic as _, SafeIndex as _},
+        vm_pointer::VMPointer,
+    },
+};
+use move_binary_format::{errors::*, partial_vm_error};
+
+use std::{fmt::Write, sync::Arc};
+
+#[cfg(any(debug_assertions, feature = "testing"))]
+macro_rules! debug_write {
+    ($($toks: tt)*) => {
+        write!($($toks)*).expect("failed to write to buffer")
+    };
+}
+
+#[cfg(any(debug_assertions, feature = "testing"))]
+macro_rules! debug_writeln {
+    ($($toks: tt)*) => {
+        writeln!($($toks)*).expect("failed to write to buffer")
+    };
+}
+
+// -------------------------------------------------------------------------------------------------
+// Types
+// -------------------------------------------------------------------------------------------------
+
+/// `MachineState` instances can execute Move functions.
+///
+/// An `MachineState` instance is a stand alone execution context for a function.
+/// It mimics execution on a single thread, with an call stack and an operand stack.
+pub(crate) struct MachineState {
+    pub(crate) call_stack: CallStack,
+    /// Operand stack, where Move `Value`s are stored for stack operations.
+    pub(crate) operand_stack: ValueStack,
+    pub(crate) interner: Arc<IdentifierInterner>,
+    pub(crate) callstack_highwatermark: usize,
+    pub(crate) valuestack_highwatermark: usize,
+}
+
+/// The operand stack.
+pub(crate) struct ValueStack {
+    pub(crate) value: Vec<Value>,
+}
+
+/// A call stack.
+// #[derive(Debug)]
+pub(crate) struct CallStack {
+    /// The current frame we are computing in.
+    pub(crate) current_frame: CallFrame,
+    /// The current heap.
+    pub(crate) heap: MachineHeap,
+    /// The stack of active functions.
+    pub(crate) frames: Vec<CallFrame>,
+}
+
+/// A `Frame` is the execution context for a function. It holds the locals of the function and
+/// the function itself.
+#[derive(Debug)]
+pub(crate) struct CallFrame {
+    pub(crate) pc: u16,
+    pub(crate) function: VMPointer<Function>,
+    pub(crate) stack_frame: StackFrame,
+    pub(crate) ty_args: Vec<Type>,
+}
+
+// -------------------------------------------------------------------------------------------------
+// impl Blocks
+// -------------------------------------------------------------------------------------------------
+
+impl MachineState {
+    pub(super) fn new(interner: Arc<IdentifierInterner>, call_stack: CallStack) -> Self {
+        let callstack_highwatermark = call_stack.heap.cur_size();
+        MachineState {
+            operand_stack: ValueStack::new(),
+            call_stack,
+            interner,
+            callstack_highwatermark,
+            valuestack_highwatermark: 0,
+        }
+    }
+
+    /// Push a `Value` on the stack if the max stack size has not been reached. Abort execution
+    /// otherwise.
+    #[inline]
+    pub fn push_operand(&mut self, value: Value) -> PartialVMResult<()> {
+        self.operand_stack.push(value)?;
+        self.valuestack_highwatermark = self.valuestack_highwatermark.max(self.operand_stack.len());
+        Ok(())
+    }
+
+    /// Pop a `Value` off the stack or abort execution if the stack is empty.
+    #[inline]
+    pub fn pop_operand(&mut self) -> PartialVMResult<Value> {
+        self.operand_stack.pop()
+    }
+
+    /// Pop a `Value` of a given type off the stack. Abort if the value is not of the given
+    /// type or if the stack is empty.
+    #[inline]
+    pub fn pop_operand_as<T>(&mut self) -> PartialVMResult<T>
+    where
+        Value: VMValueCast<T>,
+    {
+        self.operand_stack.pop_as()
+    }
+
+    /// Pop n values off the stack.
+    #[inline]
+    pub fn pop_n_operands(&mut self, n: u16) -> PartialVMResult<Vec<Value>> {
+        self.operand_stack.pop_n(n)
+    }
+
+    #[inline]
+    pub fn last_n_operands(
+        &self,
+        n: usize,
+    ) -> PartialVMResult<impl ExactSizeIterator<Item = &Value>> {
+        self.operand_stack.last_n(n)
+    }
+
+    /// Push a new call frame (setting the machine's `current_frame` to the provided `new_frame`).
+    /// Produces a `VMError` using the machine state's previous `current_frame` if this would
+    /// overflow the call stack.
+    #[inline]
+    pub fn push_call(
+        &mut self,
+        function: VMPointer<Function>,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+    ) -> VMResult<()> {
+        self.call_stack
+            .push_call(&self.interner, function, ty_args, args)?;
+        self.callstack_highwatermark = self
+            .callstack_highwatermark
+            .max(self.call_stack.heap.cur_size());
+        Ok(())
+    }
+
+    /// Returns true if there is a frame to pop.
+    #[inline]
+    pub(super) fn can_pop_call_frame(&self) -> bool {
+        !self.call_stack.frames.is_empty()
+    }
+
+    /// Frees the current stack frame and puts the previous one there, or throws an error if there
+    /// is not a frame to pop.
+    #[inline]
+    pub(super) fn pop_call_frame(&mut self) -> VMResult<()> {
+        self.call_stack.pop_frame(&self.interner)
+    }
+
+    //
+    // Debugging and logging helpers.
+    //
+
+    #[cfg(any(debug_assertions, feature = "testing"))]
+    #[allow(clippy::expect_used)]
+    pub(super) fn debug_print_frame<B: Write>(
+        &self,
+        buf: &mut B,
+        vtables: &VMDispatchTables,
+        idx: usize,
+        frame: &CallFrame,
+    ) -> PartialVMResult<()> {
+        use std::cmp::min;
+
+        // Print function header (module::function<ty_args...>)
+        let func = frame.function();
+
+        debug_write!(buf, "    [{}] ", idx);
+        let module = func.module_id(&vtables.interner);
+        debug_write!(buf, "{}::{}::", module.address(), module.name());
+
+        debug_write!(buf, "{}", func.name(&vtables.interner));
+        let ty_args = frame.ty_args();
+        let mut ty_tags = vec![];
+        for ty in ty_args {
+            ty_tags.push(vtables.type_to_type_tag(ty)?);
+        }
+        if !ty_tags.is_empty() {
+            debug_write!(buf, "<");
+            let mut it = ty_tags.iter();
+            if let Some(tag) = it.next() {
+                debug_write!(buf, "{}", tag);
+                for tag in it {
+                    debug_write!(buf, ", ");
+                    debug_write!(buf, "{}", tag);
+                }
+            }
+            debug_write!(buf, ">");
+        }
+        debug_writeln!(buf);
+
+        // Print out the current instruction and a small window around it.
+        debug_writeln!(buf);
+        debug_writeln!(buf, "        Code:");
+
+        let pc = frame.pc as usize;
+        let code = func.code();
+
+        if pc < code.len() {
+            let before = pc.saturating_sub(3);
+            let after = min(code.len(), pc.saturating_add(4));
+
+            for (ndx, instr) in code.iter().enumerate().take(pc).skip(before) {
+                debug_write!(buf, "            [{}] ", ndx);
+                let _ = &instr
+                    .fmt(&mut *buf, &vtables.interner)
+                    .expect("failed to format instruction");
+                debug_writeln!(buf);
+            }
+            debug_write!(buf, "          > [{}] ", pc);
+            code.safe_get(pc)?
+                .fmt(&mut *buf, &vtables.interner)
+                .expect("failed to format instruction");
+            debug_writeln!(buf);
+            for (ndx, instr) in code
+                .iter()
+                .enumerate()
+                .take(after)
+                .skip(pc.saturating_add(1))
+            {
+                debug_write!(buf, "            [{}] ", ndx);
+                instr
+                    .fmt(&mut *buf, &vtables.interner)
+                    .expect("failed to format instruction");
+                debug_writeln!(buf);
+            }
+        } else {
+            // PC is past end (e.g., right after Ret); just show last few instructions.
+            let start = code.len().saturating_sub(4);
+            for (ndx, instr) in code.iter().enumerate().skip(start) {
+                debug_write!(buf, "            [{}] ", ndx);
+                instr
+                    .fmt(&mut *buf, &vtables.interner)
+                    .expect("failed to format instruction");
+                debug_writeln!(buf);
+            }
+            debug_writeln!(buf, "          > [{}] <pc out of bounds>", pc);
+        }
+
+        // Locals
+        debug_writeln!(buf);
+        debug_writeln!(buf, "        Locals:");
+        if func.local_count() > 0 {
+            values::debug::print_stack_frame(buf, &frame.stack_frame)?;
+            debug_writeln!(buf);
+        } else {
+            debug_writeln!(buf, "            (none)");
+        }
+
+        debug_writeln!(buf);
+        Ok(())
+    }
+
+    #[cfg(any(debug_assertions, feature = "testing"))]
+    pub(crate) fn debug_print_stack_trace<B: Write>(
+        &self,
+        vtables: &VMDispatchTables,
+        buf: &mut B,
+    ) -> PartialVMResult<()> {
+        debug_writeln!(buf, "Call Stack:");
+        self.debug_print_frame(buf, vtables, 0, &self.call_stack.current_frame)?;
+        for (i, frame) in self.call_stack.frames.iter().enumerate() {
+            self.debug_print_frame(buf, vtables, i.saturating_add(1), frame)?;
+        }
+        debug_writeln!(buf, "Operand Stack:");
+        for (idx, val) in self.operand_stack.value.iter().enumerate() {
+            // TODO: Currently we do not know the types of the values on the operand stack.
+            // Revisit.
+            debug_write!(buf, "    [{}] ", idx);
+            values::debug::print_value(buf, val)?;
+            debug_writeln!(buf);
+        }
+        Ok(())
+    }
+
+    pub(super) fn set_location(&self, err: PartialVMError) -> VMError {
+        err.finish(self.call_stack.current_frame.location(&self.interner))
+    }
+
+    pub(super) fn get_internal_state(&self) -> ExecutionState {
+        self.get_stack_frames(&self.interner, usize::MAX)
+    }
+
+    /// Get count stack frames starting from the top of the stack.
+    pub fn get_stack_frames(&self, interner: &IdentifierInterner, count: usize) -> ExecutionState {
+        // collect frames in the reverse order as this is what is
+        // normally expected from the stack trace (outermost frame
+        // is the last one)
+        let stack_trace = self
+            .call_stack
+            .frames
+            .iter()
+            .rev()
+            .take(count)
+            .map(|frame| {
+                let fun = frame.function();
+                (fun.module_id(interner).clone(), fun.index(), frame.pc)
+            })
+            .collect();
+        ExecutionState::new(stack_trace)
+    }
+}
+
+impl ValueStack {
+    /// Create a new empty operand stack.
+    fn new() -> Self {
+        ValueStack { value: vec![] }
+    }
+
+    /// Push a `Value` on the stack if the max stack size has not been reached. Abort execution
+    /// otherwise.
+    fn push(&mut self, value: Value) -> PartialVMResult<()> {
+        if self.value.len() < OPERAND_STACK_SIZE_LIMIT {
+            self.value.push(value);
+            Ok(())
+        } else {
+            Err(partial_vm_error!(EXECUTION_STACK_OVERFLOW))
+        }
+    }
+
+    /// Pop a `Value` off the stack or abort execution if the stack is empty.
+    fn pop(&mut self) -> PartialVMResult<Value> {
+        self.value
+            .pop()
+            .ok_or_else(|| partial_vm_error!(EMPTY_VALUE_STACK))
+    }
+
+    /// Pop a `Value` of a given type off the stack. Abort if the value is not of the given
+    /// type or if the stack is empty.
+    fn pop_as<T>(&mut self) -> PartialVMResult<T>
+    where
+        Value: VMValueCast<T>,
+    {
+        VMValueCast::cast(self.pop()?)
+    }
+
+    /// Pop n values off the stack.
+    fn pop_n(&mut self, n: u16) -> PartialVMResult<Vec<Value>> {
+        let remaining_stack_size = self
+            .value
+            .len()
+            .checked_sub(n as usize)
+            .ok_or_else(|| partial_vm_error!(EMPTY_VALUE_STACK))?;
+        let args = self.value.split_off(remaining_stack_size);
+        Ok(args)
+    }
+
+    fn last_n(&self, n: usize) -> PartialVMResult<impl ExactSizeIterator<Item = &Value>> {
+        if self.value.len() < n {
+            return Err(partial_vm_error!(
+                EMPTY_VALUE_STACK,
+                "Failed to get last n arguments on the argument stack"
+            ));
+        }
+        Ok(self.value.safe_get(self.value.len().safe_sub(n)?..)?.iter())
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.value.len()
+    }
+
+    pub(crate) fn value_at(&self, n: usize) -> Option<&Value> {
+        self.value.get(n)
+    }
+}
+
+impl CallStack {
+    /// Create a new empty call stack.
+    pub fn new(
+        function: VMPointer<Function>,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+    ) -> PartialVMResult<Self> {
+        let mut heap = MachineHeap::new();
+
+        let stack_frame = heap.allocate_stack_frame(args, function.local_count())?;
+        let current_frame = CallFrame {
+            pc: 0,
+            stack_frame,
+            function,
+            ty_args,
+        };
+
+        Ok(Self {
+            current_frame,
+            heap,
+            frames: vec![],
+        })
+    }
+
+    /// Create a new `Frame` given a `Function` and the function's `ty_args` and `args`.
+    /// This loads the locals, padding appropriately, and sets the call stack's current frame.
+    #[inline]
+    fn push_call(
+        &mut self,
+        interner: &IdentifierInterner,
+        function: VMPointer<Function>,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+    ) -> VMResult<()> {
+        let stack_frame = self
+            .heap
+            .allocate_stack_frame(args, function.local_count())
+            .map_err(|err| set_err_info!(interner, &self.current_frame, err))?;
+        let new_frame = CallFrame {
+            pc: 0,
+            stack_frame,
+            function,
+            ty_args,
+        };
+        if self.frames.len() < CALL_STACK_SIZE_LIMIT {
+            let prev_frame = std::mem::replace(&mut self.current_frame, new_frame);
+            self.frames.push(prev_frame);
+            Ok(())
+        } else {
+            let err = partial_vm_error!(CALL_STACK_OVERFLOW);
+            let err = set_err_info!(interner, new_frame, err);
+            Err(err)
+        }
+    }
+
+    /// Pop a `Frame` off the call stack, freeing the old one. Returns an error if there is no
+    /// frame to pop.
+    #[inline]
+    fn pop_frame(&mut self, interner: &IdentifierInterner) -> VMResult<()> {
+        let Some(return_frame) = self.frames.pop() else {
+            let err = partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR);
+            let err = set_err_info!(interner, self.current_frame, err);
+            return Err(err);
+        };
+        let frame = std::mem::replace(&mut self.current_frame, return_frame);
+        let index = frame.function().index();
+        let pc = frame.pc;
+        let loc = frame.location(interner);
+        self.heap
+            .free_stack_frame(frame.stack_frame)
+            .map_err(|e| e.at_code_offset(index, pc).finish(loc))
+    }
+}
+
+impl CallFrame {
+    pub(super) fn function<'a>(&self) -> &'a Function {
+        self.function.to_ref()
+    }
+
+    pub(super) fn ty_args(&self) -> &[Type] {
+        &self.ty_args
+    }
+
+    pub(super) fn location(&self, interner: &IdentifierInterner) -> Location {
+        Location::Module(self.function().module_id(interner).clone())
+    }
+}

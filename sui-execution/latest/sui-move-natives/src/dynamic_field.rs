@@ -17,13 +17,15 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::native_functions::NativeContext;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::natives::functions::NativeContext;
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{StructRef, Value},
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{StructRef, Value},
-    views::{SizeConfig, ValueView},
+    shared::views::{SizeConfig, ValueView},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -191,13 +193,8 @@ pub fn add_child_object(
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
 
-    let protocol_config = get_extension!(context, ObjectRuntime)?.protocol_config;
-    let child_value_size = if protocol_config.abstract_size_in_object_runtime() {
-        // The value already exists, the size of the value is irrelevant
-        PRE_EXISTING_ABSTRACT_SIZE
-    } else {
-        child.legacy_size().into()
-    };
+    // The value already exists, the size of the value is irrelevant
+    let child_value_size = PRE_EXISTING_ABSTRACT_SIZE;
     // ID extraction step
     native_charge_gas_early_exit!(
         context,
@@ -207,7 +204,7 @@ pub fn add_child_object(
     );
 
     // TODO remove this copy_value, which will require VM changes
-    let child_id = get_object_id(child.copy_value().unwrap())
+    let child_id = get_object_id(child.copy_value())
         .unwrap()
         .value_as::<AccountAddress>()
         .unwrap()
@@ -319,9 +316,7 @@ pub fn borrow_child_object(
     })?;
 
     charge_cache_or_load_gas!(context, cache_info);
-    let protocol_config = get_extension!(context, ObjectRuntime)?.protocol_config;
     let child_ref_size = match cache_info {
-        _ if !protocol_config.abstract_size_in_object_runtime() => child_ref.legacy_size(),
         CacheInfo::CachedValue => {
             // The value already existed
             BORROW_ABSTRACT_SIZE.into()
@@ -332,7 +327,6 @@ pub fn borrow_child_object(
             child_ref.abstract_memory_size(&SizeConfig {
                 include_vector_size: true,
                 traverse_references: true,
-                fine_grained_value_size: true,
             })?
         }
     };
@@ -406,9 +400,7 @@ pub fn remove_child_object(
 
     charge_cache_or_load_gas!(context, cache_info);
 
-    let protocol_config = get_extension!(context, ObjectRuntime)?.protocol_config;
     let child_size = match cache_info {
-        _ if !protocol_config.abstract_size_in_object_runtime() => child.legacy_size(),
         CacheInfo::CachedValue => {
             // The value already existed
             PRE_EXISTING_ABSTRACT_SIZE.into()
@@ -419,7 +411,6 @@ pub fn remove_child_object(
             child.abstract_memory_size(&SizeConfig {
                 include_vector_size: true,
                 traverse_references: false,
-                fine_grained_value_size: true,
             })?
         }
     };

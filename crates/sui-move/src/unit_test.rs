@@ -9,7 +9,7 @@ use move_cli::base::{
 use move_package_alt_compilation::build_config::BuildConfig;
 use move_unit_test::{UnitTestingConfig, vm_test_setup::VMTestSetup};
 use move_vm_config::runtime::VMConfig;
-use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_runtime::natives::extensions::NativeContextExtensions;
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -134,7 +134,7 @@ pub struct SuiVMTestSetup {
     gas_price: u64,
     reference_gas_price: u64,
     protocol_config: ProtocolConfig,
-    native_function_table: move_vm_runtime::native_functions::NativeFunctionTable,
+    native_function_table: move_vm_runtime::natives::functions::NativeFunctionTable,
 }
 
 impl Default for SuiVMTestSetup {
@@ -189,7 +189,7 @@ impl VMTestSetup for SuiVMTestSetup {
         sui_adapter::adapter::vm_config(&self.protocol_config)
     }
 
-    fn native_function_table(&self) -> move_vm_runtime::native_functions::NativeFunctionTable {
+    fn native_function_table(&self) -> move_vm_runtime::natives::functions::NativeFunctionTable {
         self.native_function_table.clone()
     }
 

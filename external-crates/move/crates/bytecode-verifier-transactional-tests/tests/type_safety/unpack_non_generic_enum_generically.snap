@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/unpack_non_generic_enum_generically.mvir
 ---
 processed 9 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::ByValue,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 0 type argument(s), got 1 at offset 1 ",
 }
 
 task 1, lines 14-25:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::ByImmRef,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 0 type argument(s), got 1 at offset 1 ",
 }
 
 task 2, lines 27-38:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::ByMutRef,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 0 type argument(s), got 1 at offset 1 ",
 }
 
 task 3, lines 40-51:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::ByValue,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 0 type argument(s), got 1 at offset 1 ",
 }
 
 task 4, lines 53-64:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::ByImmRef,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 0 type argument(s), got 1 at offset 1 ",
 }
 
 task 5, lines 66-77:
@@ -62,6 +66,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::ByMutRef,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 0 type argument(s), got 1 at offset 1 ",
 }
 
 task 6, lines 79-90:
@@ -72,6 +77,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::ByValue,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 0 type argument(s), got 1 at offset 1 ",
 }
 
 task 7, lines 92-103:
@@ -82,6 +88,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::ByImmRef,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 0 type argument(s), got 1 at offset 1 ",
 }
 
 task 8, lines 105-116:
@@ -92,4 +99,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::ByMutRef,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 0 type argument(s), got 1 at offset 1 ",
 }

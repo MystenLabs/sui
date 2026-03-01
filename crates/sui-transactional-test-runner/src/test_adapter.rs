@@ -27,7 +27,7 @@ use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::IdentStr,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
 };
 use move_symbol_pool::Symbol;
@@ -37,7 +37,7 @@ use move_transactional_test_runner::{
     framework::{CompiledState, MoveTestAdapter, compile_any, store_modules},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
-use move_vm_runtime::session::SerializedReturnValues;
+use move_vm_runtime::dev_utils::vm_arguments::ValueFrame;
 use once_cell::sync::Lazy;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde::Deserialize;
@@ -368,6 +368,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             | TaskCommand::PrintBytecode(_)
             | TaskCommand::Publish(_, _)
             | TaskCommand::Run(_, _)
+            | TaskCommand::PublishAndCall(_, _)
             | TaskCommand::Subcommand(..) => None,
         }
     }
@@ -641,7 +642,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         args: Vec<SuiValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
+    ) -> anyhow::Result<(Option<String>, ValueFrame)> {
         self.next_task();
         let SuiRunArgs { summarize, .. } = extra;
         let transaction = self.build_function_call_tx(
@@ -649,10 +650,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         )?;
         let summary = self.execute_txn(transaction).await?;
         let output = self.object_summary_output(&summary, summarize);
-        let empty = SerializedReturnValues {
-            mutable_reference_outputs: vec![],
-            return_values: vec![],
-        };
+        let empty = ValueFrame::empty();
         Ok((output, empty))
     }
 
@@ -1239,7 +1237,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         .named_address_mapping
                         .insert(package, before_upgrade);
                 }
-                let (warnings_opt, output, data, modules) = result?;
+                let (warnings_opt, data, (output, modules)) = result?;
                 // skip storing modules if this is a dry run
                 if !dry_run {
                     store_modules(self, syntax, data, modules);
@@ -1251,7 +1249,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 dependencies,
             }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
-                let (warnings_opt, output, data, modules) = compile_any(
+                let (warnings_opt, data, (output, modules)) = compile_any(
                     self,
                     "upgrade",
                     syntax,
@@ -1468,6 +1466,24 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             err = err.replace(&id[2..], &replace);
         }
         anyhow!(err)
+    }
+
+    /// Sui implements module publishes with calls via normal publish with `init` functions.
+    /// When we add init functions with arguments, we will need to implement this. For now we leave
+    /// this unimplemented.
+    async fn publish_modules_with_calls(
+        &mut self,
+        _modules: Vec<MaybeNamedCompiledModule>,
+        _calls: Vec<(ModuleId, Identifier, Vec<SuiValue>)>,
+        _signers: Vec<ParsedAddress>,
+        _gas_budget: Option<u64>,
+        _extra_args: Self::ExtraPublishArgs,
+    ) -> anyhow::Result<(
+        Option<String>,
+        Vec<MaybeNamedCompiledModule>,
+        Vec<ValueFrame>,
+    )> {
+        unimplemented!()
     }
 }
 

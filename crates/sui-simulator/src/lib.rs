@@ -18,6 +18,8 @@ pub use lru;
 pub use move_package_alt;
 pub use move_package_alt_compilation;
 pub use mysten_network;
+#[cfg(msim)]
+pub use sui_execution;
 pub use sui_framework;
 pub use sui_move_build;
 pub use sui_types;

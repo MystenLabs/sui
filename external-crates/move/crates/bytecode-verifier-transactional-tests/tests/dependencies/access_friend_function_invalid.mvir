@@ -7,7 +7,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.N {
+module 0x43.N {
     import 0x42.M;
     foo() {
     label b0:

@@ -9,14 +9,15 @@ use fastcrypto_vdf::vdf::wesolowski::DefaultVDF;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::natives::function::PartialVMError;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Value, VectorRef},
+    },
+    natives::functions::{NativeResult, PartialVMError},
     pop_arg,
-    values::{Value, VectorRef},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -81,17 +82,17 @@ pub fn vdf_verify_internal(
     let output_bytes = pop_arg!(args, VectorRef);
     let input_bytes = pop_arg!(args, VectorRef);
 
-    let input = match bcs::from_bytes::<QuadraticForm>(&input_bytes.as_bytes_ref()) {
+    let input = match bcs::from_bytes::<QuadraticForm>(&input_bytes.as_bytes_ref()?) {
         Ok(input) => input,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
 
-    let proof = match bcs::from_bytes::<QuadraticForm>(&proof_bytes.as_bytes_ref()) {
+    let proof = match bcs::from_bytes::<QuadraticForm>(&proof_bytes.as_bytes_ref()?) {
         Ok(proof) => proof,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
 
-    let output = match bcs::from_bytes::<QuadraticForm>(&output_bytes.as_bytes_ref()) {
+    let output = match bcs::from_bytes::<QuadraticForm>(&output_bytes.as_bytes_ref()?) {
         Ok(output) => output,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
@@ -146,7 +147,7 @@ pub fn hash_to_input_internal(
     let message = pop_arg!(args, VectorRef);
 
     let output = match QuadraticForm::hash_to_group_with_default_parameters(
-        &message.as_bytes_ref(),
+        &message.as_bytes_ref()?,
         &DISCRIMINANT_3072,
     ) {
         Ok(output) => output,

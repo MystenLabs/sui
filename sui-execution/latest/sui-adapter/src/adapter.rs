@@ -4,6 +4,9 @@
 pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use move_vm_runtime::natives::extensions::NativeExtensions;
+    use move_vm_runtime::natives::functions::{NativeFunctionTable, NativeFunctions};
+    use move_vm_runtime::runtime::MoveRuntime;
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::{collections::BTreeMap, sync::Arc};
@@ -16,10 +19,6 @@ mod checked {
     use move_vm_config::{
         runtime::{VMConfig, VMRuntimeLimitsConfig},
         verifier::VerifierConfig,
-    };
-    use move_vm_runtime::{
-        move_vm::MoveVM, native_extensions::NativeContextExtensions,
-        native_functions::NativeFunctionTable,
     };
     use mysten_common::debug_fatal;
     use sui_move_natives::{object_runtime, transaction_context::TransactionContext};
@@ -39,12 +38,16 @@ mod checked {
     };
     use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
 
-    pub fn new_move_vm(
+    pub fn new_move_runtime(
         natives: NativeFunctionTable,
         protocol_config: &ProtocolConfig,
-    ) -> Result<MoveVM, SuiError> {
-        MoveVM::new_with_config(natives, vm_config(protocol_config))
-            .map_err(|_| SuiErrorKind::ExecutionInvariantViolation.into())
+    ) -> Result<MoveRuntime, SuiError> {
+        let native_functions =
+            NativeFunctions::new(natives).map_err(|_| SuiErrorKind::ExecutionInvariantViolation)?;
+        Ok(MoveRuntime::new(
+            native_functions,
+            vm_config(protocol_config),
+        ))
     }
 
     pub fn vm_config(protocol_config: &ProtocolConfig) -> VMConfig {
@@ -69,6 +72,7 @@ mod checked {
             variant_nodes: protocol_config.variant_nodes(),
             deprecate_global_storage_ops_during_deserialization: protocol_config
                 .deprecate_global_storage_ops_during_deserialization(),
+            optimize_bytecode: false,
         }
     }
 
@@ -79,10 +83,15 @@ mod checked {
         protocol_config: &'r ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
-    ) -> NativeContextExtensions<'r> {
+    ) -> Result<NativeExtensions<'r>, ExecutionError> {
         let current_epoch_id: EpochId = tx_context.borrow().epoch();
-        let mut extensions = NativeContextExtensions::default();
-        extensions.add(ObjectRuntime::new(
+        let extensions = NativeExtensions::default();
+        let mut exts = extensions.try_borrow_mut().map_err(|_| {
+            make_invariant_violation!(
+                "Failed to mutably borrow native extensions to populate them right after creating them"
+            )
+        })?;
+        exts.add(ObjectRuntime::new(
             child_resolver,
             input_objects,
             is_metered,
@@ -90,9 +99,10 @@ mod checked {
             metrics,
             current_epoch_id,
         ));
-        extensions.add(NativesCostTable::from_protocol_config(protocol_config));
-        extensions.add(TransactionContext::new(tx_context));
-        extensions
+        exts.add(NativesCostTable::from_protocol_config(protocol_config));
+        exts.add(TransactionContext::new(tx_context));
+        drop(exts);
+        Ok(extensions)
     }
 
     /// Given a list of `modules` and an `object_id`, mutate each module's self ID (which must be
