@@ -154,7 +154,7 @@ impl<P> ObjectProviderCache<P> {
             let version = object.version();
 
             let key = (object_id, version);
-            object_cache.insert(key, object.clone());
+            object_cache.insert(key, object);
 
             match last_version_cache.get_mut(&key) {
                 Some(existing_seq_number) => {
@@ -178,7 +178,7 @@ impl<P> ObjectProviderCache<P> {
 
         for (object_id, (object_ref, object, _)) in written_objects {
             let key = (object_id, object_ref.1);
-            object_cache.insert(key, object.clone());
+            object_cache.insert(key, object);
 
             match last_version_cache.get_mut(&key) {
                 Some(existing_seq_number) => {
