@@ -11,6 +11,7 @@ mod dependency;
 mod errors;
 mod flavor;
 mod graph;
+mod graph2;
 mod logging;
 mod package;
 
@@ -23,7 +24,7 @@ pub use package::paths::read_name_from_manifest;
 // TODO: maybe put Vanilla into test_utils
 // TODO: maybe put SourcePackageLayout, NamedAddress into schema
 
-pub use errors::{PackageError, PackageResult};
+pub use errors::{PackageError, PrintedPackageError};
 pub use flavor::{MoveFlavor, Vanilla};
 pub use graph::{NamedAddress, PackageInfo};
 pub use package::layout::SourcePackageLayout;
