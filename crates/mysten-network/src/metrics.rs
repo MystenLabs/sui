@@ -78,11 +78,10 @@ impl<B, M: MetricsCallbackProvider> OnResponse<B> for MetricsHandler<M> {
         let grpc_status = Status::from_header_map(response.headers());
         let grpc_status_code = grpc_status.map_or(Code::Ok, |s| s.code());
 
-        let path: HeaderValue = response
+        let path: &HeaderValue = response
             .headers()
             .get(&GRPC_ENDPOINT_PATH_HEADER)
-            .unwrap()
-            .clone();
+            .unwrap();
 
         self.metrics_provider.on_response(
             path.to_str().unwrap().to_string(),
