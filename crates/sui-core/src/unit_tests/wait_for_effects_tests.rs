@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
+use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
@@ -180,7 +180,6 @@ async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
 
     match response {
         WaitForEffectsResponse::Rejected { error } => {
-            // TODO(fastpath): Test reject reason.
             assert!(error.is_none(), "{:?}", error);
         }
         _ => panic!("Expected Rejected response"),
@@ -295,114 +294,6 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
 }
 
 #[tokio::test]
-async fn test_wait_for_effects_fastpath_certified_only() {
-    // Without the fastpath cache, effects are always read from the regular execution cache.
-    // Even when only FastpathCertified is set (no Finalized), the outer select in
-    // wait_for_effects_response resolves via notify_read_executed_effects once the tx executes.
-    let test_context = TestContext::new().await;
-
-    let transaction = test_context.build_test_transaction();
-    let tx_digest = *transaction.digest();
-    let tx_position = ConsensusPosition {
-        epoch: EpochId::MIN,
-        block: BlockRef::MIN,
-        index: TransactionIndex::MIN,
-    };
-
-    let state_clone = test_context.state.clone();
-    let exec_handle = tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
-        state_clone
-            .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
-            .await
-            .unwrap()
-            .0
-    });
-
-    let request = WaitForEffectsRequest {
-        transaction_digest: Some(tx_digest),
-        consensus_position: Some(tx_position),
-        include_details: false,
-        ping_type: None,
-    };
-
-    let response = test_context
-        .client
-        .wait_for_effects(request, None)
-        .await
-        .unwrap();
-
-    let exec_effects = exec_handle.await.unwrap();
-    match response {
-        WaitForEffectsResponse::Executed {
-            details,
-            effects_digest,
-            fast_path: _,
-        } => {
-            assert!(details.is_none());
-            assert_eq!(effects_digest, exec_effects.digest());
-        }
-        _ => panic!("Expected Executed response"),
-    }
-}
-
-#[tokio::test]
-async fn test_wait_for_effects_fastpath_certified_then_executed() {
-    // This test exercises the path where the transaction is first fastpath certified,
-    // then executed right away.
-    let test_context = TestContext::new().await;
-
-    let transaction = test_context.build_test_transaction();
-    let tx_digest = *transaction.digest();
-    let tx_position = ConsensusPosition {
-        epoch: EpochId::MIN,
-        block: BlockRef::MIN,
-        index: TransactionIndex::MIN,
-    };
-
-    let request = WaitForEffectsRequest {
-        transaction_digest: Some(tx_digest),
-        consensus_position: Some(tx_position),
-        // Also test the case where details are not requested.
-        include_details: false,
-        ping_type: None,
-    };
-
-    let state_clone = test_context.state.clone();
-    let exec_handle = tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
-        state_clone
-            .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
-            .await
-            .unwrap()
-            .0
-    });
-
-    let response = test_context
-        .client
-        .wait_for_effects(request, None)
-        .await
-        .unwrap();
-
-    let exec_effects = exec_handle.await.unwrap();
-    match response {
-        WaitForEffectsResponse::Executed {
-            details,
-            effects_digest,
-            fast_path: _,
-        } => {
-            assert!(details.is_none());
-            assert_eq!(effects_digest, exec_effects.digest());
-        }
-        _ => panic!("Expected Executed response"),
-    }
-}
-
-#[tokio::test]
 async fn test_wait_for_effects_finalized() {
     telemetry_subscribers::init_for_testing();
     // This test exercises the path where after the transaction has been executed,
@@ -490,6 +381,57 @@ async fn test_wait_for_effects_finalized() {
 }
 
 #[tokio::test]
+async fn test_wait_for_effects_finalized_with_consensus_position() {
+    let test_context = TestContext::new().await;
+
+    let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
+    let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
+        block: BlockRef::MIN,
+        index: TransactionIndex::MIN,
+    };
+
+    let state_clone = test_context.state.clone();
+    let exec_handle = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let epoch_store = state_clone.epoch_store_for_testing();
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
+        state_clone
+            .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
+            .await
+            .unwrap()
+            .0
+    });
+
+    let request = WaitForEffectsRequest {
+        transaction_digest: Some(tx_digest),
+        consensus_position: Some(tx_position),
+        include_details: true,
+        ping_type: None,
+    };
+
+    let response = test_context
+        .client
+        .wait_for_effects(request, None)
+        .await
+        .unwrap();
+
+    let exec_effects = exec_handle.await.unwrap();
+    match response {
+        WaitForEffectsResponse::Executed {
+            details,
+            effects_digest,
+            fast_path: _,
+        } => {
+            assert!(details.is_some());
+            assert_eq!(effects_digest, exec_effects.digest());
+        }
+        _ => panic!("Expected Executed response"),
+    }
+}
+
+#[tokio::test]
 async fn test_wait_for_effects_expired() {
     let test_context = TestContext::new().await;
 
@@ -551,51 +493,7 @@ async fn test_wait_for_effects_ping() {
     let test_context = TestContext::new().await;
 
     println!(
-        "Case 1. Send a FastPath ping request. The end point should wait until the block is certified via MFP (we assume the ping transaction is in the block)."
-    );
-    {
-        let tx_position = ConsensusPosition {
-            epoch: EpochId::MIN,
-            block: BlockRef::MIN,
-            index: PING_TRANSACTION_INDEX,
-        };
-
-        let request = WaitForEffectsRequest {
-            transaction_digest: None,
-            consensus_position: Some(tx_position),
-            include_details: false,
-            ping_type: Some(PingType::FastPath),
-        };
-
-        let state_clone = test_context.state.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            let epoch_store = state_clone.epoch_store_for_testing();
-            epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
-        });
-
-        let response = test_context
-            .client
-            .wait_for_effects(request, None)
-            .await
-            .unwrap();
-
-        match response {
-            WaitForEffectsResponse::Executed {
-                effects_digest,
-                details,
-                fast_path,
-            } => {
-                assert!(details.is_none());
-                assert_eq!(effects_digest, TransactionEffectsDigest::ZERO);
-                assert!(fast_path);
-            }
-            _ => panic!("Expected Executed response for FastPath ping check"),
-        }
-    }
-
-    println!(
-        "Case 2. Send a Consensus ping request. The end point should wait for the transaction is finalised via Consensus."
+        "Case 1. Send a Consensus ping request. The end point should wait for the transaction is finalised via Consensus."
     );
     {
         let mut block = BlockRef::MIN;
@@ -645,7 +543,7 @@ async fn test_wait_for_effects_ping() {
     }
 
     println!(
-        "Case 3. Send a Consensus ping request but the corresponding block gets garbage collected and never committed."
+        "Case 2. Send a Consensus ping request but the corresponding block gets garbage collected and never committed."
     );
     {
         let mut block = BlockRef::MIN;

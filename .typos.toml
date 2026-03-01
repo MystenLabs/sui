@@ -16,4 +16,4 @@ TGE = "TGE"
 TTO = "TTO"
 
 [files]
-extend-exclude = ["**/*.excalidraw"]
+extend-exclude = ["**/*.excalidraw", "**/*.snap"]
