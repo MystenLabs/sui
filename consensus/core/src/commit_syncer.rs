@@ -174,7 +174,10 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         return;
                     }
                     let (target_end, commits) = result.unwrap();
-                    self.handle_fetch_result(target_end, commits).await;
+                    if !self.handle_fetch_result(target_end, commits).await {
+                        self.inflight_fetches.shutdown().await;
+                        return;
+                    }
                 }
                 _ = &mut rx_shutdown => {
                     // Shutdown requested.
@@ -250,7 +253,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         &mut self,
         target_end: CommitIndex,
         certified_commits: CertifiedCommits,
-    ) {
+    ) -> bool {
         assert!(!certified_commits.commits().is_empty());
 
         let (total_blocks_fetched, total_blocks_size_bytes) = certified_commits
@@ -364,7 +367,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 }
                 Err(e) => {
                     info!("Failed to add blocks, shutting down: {}", e);
-                    return;
+                    return false;
                 }
             };
 
@@ -381,6 +384,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         metrics
             .commit_sync_highest_synced_index
             .set(self.synced_commit_index as i64);
+        true
     }
 
     fn try_start_fetches(&mut self) {
