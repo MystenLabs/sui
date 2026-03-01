@@ -72,3 +72,5 @@ Use the following links to learn more about Sui and the Sui ecosystem:
  ## License
 
  See the [LICENSE](LICENSE) file for more details.
+<br>## Welcome to Parallel Execution<br>Sui's object-centric model enables fast DeFi tx—new contributors, start with the Move tutorial for your first smart object. Tip: Use Sui CLI for localnet! <br>
+
