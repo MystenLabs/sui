@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod multisig;
+pub(crate) mod passkey;
+pub(crate) mod zklogin;
 
 use async_graphql::{Object, SimpleObject, Union};
 use sui_types::crypto::{SignatureScheme as NativeSignatureScheme, SuiSignature};
@@ -11,6 +13,8 @@ use sui_types::signature::GenericSignature;
 use crate::api::scalars::base64::Base64;
 
 use self::multisig::MultisigSignature;
+use self::passkey::PasskeySignature;
+use self::zklogin::ZkLoginSignature;
 
 /// A user signature for a transaction.
 #[derive(Clone)]
@@ -35,8 +39,8 @@ impl UserSignature {
             GenericSignature::MultiSigLegacy(m) => MultiSig::try_from(m.clone())
                 .ok()
                 .map(|ms| SignatureScheme::Multisig((&ms).into())),
-            // TODO: Add support for ZkLogin and Passkey signature schemes.
-            _ => None,
+            GenericSignature::ZkLoginAuthenticator(z) => Some(SignatureScheme::ZkLogin(z.into())),
+            GenericSignature::PasskeyAuthenticator(p) => Some(SignatureScheme::Passkey(p.into())),
         }
     }
 }
@@ -54,6 +58,8 @@ pub(crate) enum SignatureScheme {
     Secp256k1(Secp256k1Signature),
     Secp256r1(Secp256r1Signature),
     Multisig(MultisigSignature),
+    ZkLogin(ZkLoginSignature),
+    Passkey(PasskeySignature),
 }
 
 /// An Ed25519 signature.

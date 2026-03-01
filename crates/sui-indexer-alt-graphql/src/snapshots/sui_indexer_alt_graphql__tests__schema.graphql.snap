@@ -3323,6 +3323,21 @@ type PasskeyPublicKey {
 	bytes: Base64!
 }
 
+type PasskeySignature {
+	"""
+	The authenticator data returned by the passkey device.
+	"""
+	authenticatorData: Base64!
+	"""
+	The client data JSON string passed to the authenticator.
+	"""
+	clientDataJson: String!
+	"""
+	The inner user signature (secp256r1).
+	"""
+	userSignature: SignatureScheme!
+}
+
 type PerEpochConfig {
 	"""
 	The per-epoch configuration object as of when the transaction was executed.
@@ -3930,7 +3945,7 @@ type SharedInput {
 """
 The structured details of a signature, varying by scheme.
 """
-union SignatureScheme = Ed25519Signature | Secp256K1Signature | Secp256R1Signature | MultisigSignature
+union SignatureScheme = Ed25519Signature | Secp256K1Signature | Secp256R1Signature | MultisigSignature | ZkLoginSignature | PasskeySignature
 
 """
 The result of simulating a transaction, including the predicted effects.
@@ -4510,6 +4525,17 @@ type ZkLoginPublicIdentifier {
 	The OAuth provider issuer string (e.g. "https://accounts.google.com").
 	"""
 	iss: String!
+}
+
+type ZkLoginSignature {
+	"""
+	The maximum epoch for which this signature is valid.
+	"""
+	maxEpoch: UInt53!
+	"""
+	The inner user signature (ed25519/secp256k1/secp256r1).
+	"""
+	userSignature: SignatureScheme!
 }
 
 """
