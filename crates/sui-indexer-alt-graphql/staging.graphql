@@ -1141,6 +1141,20 @@ The value of a dynamic field (`MoveValue`) or dynamic object field (`MoveObject`
 union DynamicFieldValue = MoveObject | MoveValue
 
 """
+An Ed25519 signature.
+"""
+type Ed25519Signature {
+	"""
+	The public key bytes.
+	"""
+	publicKey: Base64!
+	"""
+	The raw signature bytes.
+	"""
+	signature: Base64!
+}
+
+"""
 System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
 """
 type EndOfEpochTransaction {
@@ -3602,6 +3616,34 @@ enum RegulatedState {
 	UNREGULATED
 }
 
+"""
+A Secp256k1 signature.
+"""
+type Secp256K1Signature {
+	"""
+	The public key bytes.
+	"""
+	publicKey: Base64!
+	"""
+	The raw signature bytes.
+	"""
+	signature: Base64!
+}
+
+"""
+A Secp256r1 signature.
+"""
+type Secp256R1Signature {
+	"""
+	The public key bytes.
+	"""
+	publicKey: Base64!
+	"""
+	The raw signature bytes.
+	"""
+	signature: Base64!
+}
+
 type ServiceConfig {
 	"""
 	Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
@@ -3764,6 +3806,11 @@ type SharedInput {
 	"""
 	mutable: Boolean
 }
+
+"""
+The structured details of a signature, varying by scheme.
+"""
+union SignatureScheme = Ed25519Signature | Secp256K1Signature | Secp256R1Signature
 
 """
 The result of simulating a transaction, including the predicted effects.
@@ -4185,6 +4232,10 @@ type UpgradeCommand {
 }
 
 type UserSignature {
+	"""
+	The structured signature details, parsed by scheme.
+	"""
+	scheme: SignatureScheme
 	"""
 	The signature bytes, Base64-encoded.
 	For simple signatures: flag || signature || pubkey
