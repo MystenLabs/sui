@@ -563,7 +563,7 @@ impl SuiNode {
         let chain_id = ChainIdentifier::from(*genesis.checkpoint().digest());
         let chain = match config.chain_override_for_testing {
             Some(chain) => chain,
-            None => ChainIdentifier::from(*genesis.checkpoint().digest()).chain(),
+            None => chain_id.chain(),
         };
 
         let highest_executed_checkpoint = checkpoint_store
