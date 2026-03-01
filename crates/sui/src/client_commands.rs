@@ -766,10 +766,7 @@ pub struct TestUpgradeArgs {
     #[clap(flatten)]
     pub upgrade_args: UpgradeArgs,
 }
-#[derive(serde::Deserialize, Debug)]
-struct FaucetResponse {
-    error: Option<String>,
-}
+use sui_faucet::{CoinInfo, FaucetResponse, RequestStatus};
 
 impl SuiClientCommands {
     pub async fn execute(
@@ -1400,9 +1397,9 @@ impl SuiClientCommands {
                         bail!("No URL for faucet was provided and there is no active network.")
                     }
                 };
-                request_tokens_from_faucet(address, url).await?;
+                let coins = request_tokens_from_faucet(address, url).await?;
                 let _ = context.cache_chain_id().await?;
-                SuiClientCommandResult::NoOutput
+                SuiClientCommandResult::Faucet(coins)
             }
             SuiClientCommands::ChainIdentifier => {
                 let ci = context.cache_chain_id().await?;
@@ -2051,6 +2048,25 @@ impl Display for SuiClientCommandResult {
                 table.with(style);
                 write!(f, "{}", table)?
             }
+            SuiClientCommandResult::Faucet(coins) => {
+                if coins.is_empty() {
+                    write!(
+                        writer,
+                        "Request successful. It can take up to 1 minute to get the coins. \
+                         Run sui client gas to check your gas coins."
+                    )?;
+                } else {
+                    writeln!(writer, "Request successful. Received gas coins:")?;
+                    let mut builder = TableBuilder::default();
+                    builder.set_header(vec!["coinId", "amount (MIST)"]);
+                    for coin in coins {
+                        builder.push_record(vec![coin.id.to_string(), coin.amount.to_string()]);
+                    }
+                    let mut table = builder.build();
+                    table.with(TableStyle::rounded());
+                    write!(writer, "{}", table)?;
+                }
+            }
             SuiClientCommandResult::Gas(gas_coins) => {
                 let gas_coins = gas_coins
                     .iter()
@@ -2515,6 +2531,7 @@ pub enum SuiClientCommandResult {
     DryRun(SimulateTransactionResponse),
     DevInspect(SimulateTransactionResponse),
     Envs(Vec<SuiEnv>, Option<String>),
+    Faucet(Vec<CoinInfo>),
     Gas(Vec<GasCoin>),
     NewAddress(NewAddressOutput),
     NewEnv(SuiEnv),
@@ -2563,7 +2580,7 @@ impl Display for SwitchResponse {
 pub async fn request_tokens_from_faucet(
     address: SuiAddress,
     url: String,
-) -> Result<(), anyhow::Error> {
+) -> Result<Vec<CoinInfo>, anyhow::Error> {
     let address_str = address.to_string();
     let json_body = json![{
         "FixedAmountRequest": {
@@ -2571,7 +2588,6 @@ pub async fn request_tokens_from_faucet(
         }
     }];
 
-    // make the request to the faucet JSON RPC API for coin
     let client = reqwest::Client::new();
     let resp = client
         .post(&url)
@@ -2584,20 +2600,10 @@ pub async fn request_tokens_from_faucet(
     match resp.status() {
         StatusCode::ACCEPTED | StatusCode::CREATED | StatusCode::OK => {
             let faucet_resp: FaucetResponse = resp.json().await?;
-
-            if let Some(err) = faucet_resp.error {
+            if let RequestStatus::Failure(err) = faucet_resp.status {
                 bail!("Faucet request was unsuccessful: {err}")
-            } else {
-                println!(
-                    "Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins."
-                );
             }
-        }
-        StatusCode::BAD_REQUEST => {
-            let faucet_resp: FaucetResponse = resp.json().await?;
-            if let Some(err) = faucet_resp.error {
-                bail!("Faucet request was unsuccessful. {err}");
-            }
+            Ok(faucet_resp.coins_sent.unwrap_or_default())
         }
         StatusCode::TOO_MANY_REQUESTS => {
             bail!(
@@ -2611,7 +2617,6 @@ pub async fn request_tokens_from_faucet(
             bail!("Faucet request was unsuccessful: {status_code}");
         }
     }
-    Ok(())
 }
 
 fn pretty_print_balance(
