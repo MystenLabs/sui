@@ -718,7 +718,6 @@ impl ConsensusOutputQuarantine {
             if let Some(idx) = last_drain_idx {
                 for _ in 0..=idx {
                     let output = self.output_queue.pop_front().unwrap();
-                    info!("committing drain-boundary output");
                     self.remove_shared_object_next_versions(&output);
                     self.remove_processed_consensus_messages(&output);
                     self.remove_congestion_control_debts(&output);
