@@ -2008,12 +2008,12 @@ impl CheckpointBuilder {
         debug!(
             ?settlement_digests,
             ?settlement_key,
-            "fallback: reading settlement effects from cache"
+            "reading settlement effects from cache"
         );
 
         let settlement_effects = wait_for_effects_with_retry(
             self.effects_store.as_ref(),
-            "CheckpointBuilder::fallback_settlement_effects",
+            "CheckpointBuilder::settlement_effects",
             &settlement_digests,
             settlement_key,
         )
@@ -2031,7 +2031,7 @@ impl CheckpointBuilder {
 
         let barrier_effects = wait_for_effects_with_retry(
             self.effects_store.as_ref(),
-            "CheckpointBuilder::fallback_barrier_effects",
+            "CheckpointBuilder::barrier_effects",
             &[barrier_digest],
             settlement_key,
         )

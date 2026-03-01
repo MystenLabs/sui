@@ -15,7 +15,6 @@ use crate::{
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::assert_reachable;
 use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -136,13 +135,11 @@ impl SettlementScheduler {
                         let keys = [key];
                         tokio::select! {
                             txns = epoch_store.wait_for_settlement_transactions(key) => {
-                                assert_reachable!("settlement transactions received");
                                 (key, Some(txns), env)
                             }
                             result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
                                 let _ = result;
                                 debug!(?key, "Settlement already executed, skipping scheduler wait");
-                                assert_reachable!("settlement already executed");
                                 (key, None, env)
                             }
                         }
@@ -174,7 +171,6 @@ impl SettlementScheduler {
                     let keys = [settlement_key];
                     tokio::select! {
                         barrier_tx = epoch_store.wait_for_barrier_transaction(settlement_key) => {
-                            assert_reachable!("barrier transaction received");
                             let deps = barrier_deps
                                 .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
                             let env = env.with_barrier_dependencies(deps);
@@ -183,7 +179,6 @@ impl SettlementScheduler {
                         result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
                             let _ = result;
                             debug!(?settlement_key, "Barrier already executed, skipping scheduler wait");
-                            assert_reachable!("barrier already executed");
                         }
                     }
                 }));
