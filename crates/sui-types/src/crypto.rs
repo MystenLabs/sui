@@ -155,6 +155,15 @@ impl SuiKeyPair {
             SuiKeyPair::Secp256r1(kp) => kp.copy().into(),
         }
     }
+
+    /// Returns the signature scheme of this keypair.
+    pub fn scheme(&self) -> SignatureScheme {
+        match self {
+            SuiKeyPair::Ed25519(_) => SignatureScheme::ED25519,
+            SuiKeyPair::Secp256k1(_) => SignatureScheme::Secp256k1,
+            SuiKeyPair::Secp256r1(_) => SignatureScheme::Secp256r1,
+        }
+    }
 }
 
 impl Signer<Signature> for SuiKeyPair {
@@ -327,6 +336,46 @@ impl ZkLoginPublicIdentifier {
         }
 
         Ok(())
+    }
+
+    /// Returns the issuer string if the identifier is well-formed.
+    pub fn iss(&self) -> SuiResult<&str> {
+        let bytes = &self.0;
+        let iss_len = *bytes
+            .first()
+            .ok_or_else(|| SuiErrorKind::InvalidSignature {
+                error: "empty zklogin identifier".to_string(),
+            })? as usize;
+        let iss_bytes =
+            bytes
+                .get(1..1 + iss_len)
+                .ok_or_else(|| SuiErrorKind::InvalidSignature {
+                    error: "truncated iss in zklogin identifier".to_string(),
+                })?;
+        std::str::from_utf8(iss_bytes).map_err(|e| {
+            SuiErrorKind::InvalidSignature {
+                error: format!("invalid iss encoding: {}", e),
+            }
+            .into()
+        })
+    }
+
+    /// Returns the raw address seed bytes if the identifier is well-formed.
+    pub fn address_seed_bytes(&self) -> SuiResult<&[u8]> {
+        let bytes = &self.0;
+        let iss_len = *bytes
+            .first()
+            .ok_or_else(|| SuiErrorKind::InvalidSignature {
+                error: "empty zklogin identifier".to_string(),
+            })? as usize;
+        bytes
+            .get(1 + iss_len..)
+            .ok_or_else(|| {
+                SuiErrorKind::InvalidSignature {
+                    error: "truncated zklogin identifier".to_string(),
+                }
+                .into()
+            })
     }
 }
 impl AsRef<[u8]> for PublicKey {
@@ -1857,6 +1906,16 @@ impl RandomnessRound {
 
     pub fn checked_add(self, rhs: u64) -> Option<Self> {
         self.0.checked_add(rhs).map(Self)
+    }
+
+    /// Checked subtraction. Returns `None` if the result would underflow.
+    pub fn checked_sub(self, rhs: u64) -> Option<Self> {
+        self.0.checked_sub(rhs).map(Self)
+    }
+
+    /// Returns true if this round is zero.
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
     }
 
     pub fn signature_message(&self) -> Vec<u8> {
