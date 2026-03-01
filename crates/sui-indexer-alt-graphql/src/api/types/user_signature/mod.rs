@@ -1,11 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub(crate) mod multisig;
+
 use async_graphql::{Object, SimpleObject, Union};
 use sui_types::crypto::{SignatureScheme as NativeSignatureScheme, SuiSignature};
+use sui_types::multisig::MultiSig;
 use sui_types::signature::GenericSignature;
 
 use crate::api::scalars::base64::Base64;
+
+use self::multisig::MultisigSignature;
 
 /// A user signature for a transaction.
 #[derive(Clone)]
@@ -26,7 +31,11 @@ impl UserSignature {
     async fn scheme(&self) -> Option<SignatureScheme> {
         match &self.native {
             GenericSignature::Signature(s) => Some(simple_signature_to_scheme(s)),
-            // TODO: Add support for Multisig, ZkLogin, and Passkey signature schemes.
+            GenericSignature::MultiSig(m) => Some(SignatureScheme::Multisig(m.into())),
+            GenericSignature::MultiSigLegacy(m) => MultiSig::try_from(m.clone())
+                .ok()
+                .map(|ms| SignatureScheme::Multisig((&ms).into())),
+            // TODO: Add support for ZkLogin and Passkey signature schemes.
             _ => None,
         }
     }
@@ -44,6 +53,7 @@ pub(crate) enum SignatureScheme {
     Ed25519(Ed25519Signature),
     Secp256k1(Secp256k1Signature),
     Secp256r1(Secp256r1Signature),
+    Multisig(MultisigSignature),
 }
 
 /// An Ed25519 signature.

@@ -1141,6 +1141,16 @@ The value of a dynamic field (`MoveValue`) or dynamic object field (`MoveObject`
 union DynamicFieldValue = MoveObject | MoveValue
 
 """
+An Ed25519 public key.
+"""
+type Ed25519PublicKey {
+	"""
+	The raw public key bytes.
+	"""
+	bytes: Base64!
+}
+
+"""
 An Ed25519 signature.
 """
 type Ed25519Signature {
@@ -2731,6 +2741,82 @@ enum MoveVisibility {
 }
 
 """
+The multisig committee definition.
+"""
+type MultisigCommittee {
+	"""
+	The committee members (public key + weight).
+	"""
+	members: [MultisigMember!]!
+	"""
+	The threshold number of weight needed for a valid multisig.
+	"""
+	threshold: Int!
+}
+
+"""
+A single member of a multisig committee.
+"""
+type MultisigMember {
+	"""
+	The member's public key.
+	"""
+	publicKey: MultisigMemberPublicKey!
+	"""
+	The member's weight in the committee.
+	"""
+	weight: Int!
+}
+
+"""
+A multisig member's public key, varying by scheme.
+"""
+union MultisigMemberPublicKey = Ed25519PublicKey | Secp256K1PublicKey | Secp256R1PublicKey | PasskeyPublicKey | ZkLoginPublicIdentifier
+
+"""
+A single member's signature within a multisig.
+"""
+type MultisigMemberSignature {
+	"""
+	The signature scheme used by this member.
+	"""
+	scheme: MultisigMemberSignatureScheme!
+	"""
+	The raw signature bytes (without public key).
+	"""
+	signature: Base64!
+}
+
+"""
+The signature scheme of a multisig member's signature.
+"""
+enum MultisigMemberSignatureScheme {
+	ED25519
+	SECP256K1
+	SECP256R1
+	ZKLOGIN
+	PASSKEY
+}
+
+"""
+An aggregated multisig signature.
+"""
+type MultisigSignature {
+	"""
+	A bitmap indicating which members of the committee signed.
+	"""
+	bitmap: Int!
+	"""
+	The multisig committee (public keys + weights + threshold).
+	"""
+	committee: MultisigCommittee!
+	"""
+	The individual member signatures, one per signer who participated.
+	"""
+	signatures: [MultisigMemberSignature!]!
+}
+
+"""
 A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
 """
 type MutateConsensusStreamEnded {
@@ -3223,6 +3309,16 @@ type PageInfo {
 	startCursor: String
 }
 
+"""
+A Passkey public key.
+"""
+type PasskeyPublicKey {
+	"""
+	The raw public key bytes.
+	"""
+	bytes: Base64!
+}
+
 type PerEpochConfig {
 	"""
 	The per-epoch configuration object as of when the transaction was executed.
@@ -3617,6 +3713,16 @@ enum RegulatedState {
 }
 
 """
+A Secp256k1 public key.
+"""
+type Secp256K1PublicKey {
+	"""
+	The raw public key bytes.
+	"""
+	bytes: Base64!
+}
+
+"""
 A Secp256k1 signature.
 """
 type Secp256K1Signature {
@@ -3628,6 +3734,16 @@ type Secp256K1Signature {
 	The raw signature bytes.
 	"""
 	signature: Base64!
+}
+
+"""
+A Secp256r1 public key.
+"""
+type Secp256R1PublicKey {
+	"""
+	The raw public key bytes.
+	"""
+	bytes: Base64!
 }
 
 """
@@ -3810,7 +3926,7 @@ type SharedInput {
 """
 The structured details of a signature, varying by scheme.
 """
-union SignatureScheme = Ed25519Signature | Secp256K1Signature | Secp256R1Signature
+union SignatureScheme = Ed25519Signature | Secp256K1Signature | Secp256R1Signature | MultisigSignature
 
 """
 The result of simulating a transaction, including the predicted effects.
@@ -4376,6 +4492,20 @@ enum ZkLoginIntentScope {
 	Indicates that the bytes are to be parsed as a personal message.
 	"""
 	PERSONAL_MESSAGE
+}
+
+"""
+A zkLogin public identifier, containing the OAuth issuer and address seed.
+"""
+type ZkLoginPublicIdentifier {
+	"""
+	The address seed as a decimal string.
+	"""
+	addressSeed: String!
+	"""
+	The OAuth provider issuer string (e.g. "https://accounts.google.com").
+	"""
+	iss: String!
 }
 
 """
