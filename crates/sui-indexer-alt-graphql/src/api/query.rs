@@ -36,6 +36,7 @@ use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::filter::EventFilter;
+use crate::api::types::event::filter::EventFilterValidator as EFValidator;
 
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package;
@@ -295,7 +296,7 @@ impl Query {
         after: Option<CEvent>,
         last: Option<u64>,
         before: Option<CEvent>,
-        filter: Option<EventFilter>,
+        #[graphql(validator(custom = "EFValidator"))] filter: Option<EventFilter>,
     ) -> Option<Result<Connection<String, Event>, RpcError>> {
         Some(
             async {
@@ -321,16 +322,14 @@ impl Query {
         after: Option<CEvent>,
         last: Option<u64>,
         before: Option<CEvent>,
-        filter: Option<EventFilter>,
-    ) -> Result<Option<Connection<String, Event>>, RpcError<ScanError>> {
+        #[graphql(validator(custom = "ScanFilterValidator::new(ctx)"))] filter: EventFilter,
+    ) -> Result<Option<Connection<String, Event>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "events");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        Event::scan(ctx, scope, page, filter.unwrap_or_default())
-            .await
-            .map(Some)
+        Event::scan(ctx, scope, page, filter).await.map(Some)
     }
 
     /// Fetch addresses by their keys.

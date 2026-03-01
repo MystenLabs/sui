@@ -38,7 +38,7 @@ use crate::pagination::Page;
 use crate::scope::Scope;
 
 /// Multiplier to page limit to adjust for bloom filter false positives.
-const OVERFETCH_MULTIPLIER: f64 = 5.0;
+const OVERFETCH_MULTIPLIER: f64 = 3.0;
 
 pub(crate) trait CpBoundsCursor {
     fn cp_sequence_number(&self) -> u64;

@@ -32,13 +32,9 @@ use crate::api::types::move_module::MoveModule;
 use crate::api::types::move_package::MovePackage;
 use crate::api::types::move_type::MoveType;
 use crate::api::types::move_value::MoveValue;
-use crate::api::types::transaction::ScanError;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::bloom;
-use crate::config::Limits;
 use crate::error::RpcError;
-use crate::error::bad_user_input;
-use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
@@ -202,15 +198,14 @@ impl Event {
         scope: Scope,
         page: Page<CEvent>,
         filter: EventFilter,
-    ) -> Result<Connection<String, Event>, RpcError<ScanError>> {
-        let limits: &Limits = ctx.data()?;
+    ) -> Result<Connection<String, Event>, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
             field: Some("eventsScan".to_string()),
             filters: Some(filter.active_filters()),
         };
-        let reader_lo = available_range_key.reader_lo(watermarks).map_err(upcast)?;
+        let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(Connection::new(false, false));
@@ -226,22 +221,12 @@ impl Event {
             return Ok(Connection::new(false, false));
         };
 
-        let scan_range = cp_bounds.end() - cp_bounds.start() + 1;
-        if scan_range > limits.max_scan_limit {
-            return Err(bad_user_input(ScanError::LimitExceeded {
-                requested: scan_range,
-                max: limits.max_scan_limit,
-            }));
-        }
-
-        let events = bloom::events(ctx, &scope, &filter, &page, cp_bounds)
-            .await
-            .map_err(upcast)?;
+        let events = bloom::events(ctx, &scope, &filter, &page, cp_bounds).await?;
 
         page.paginate_filtered(
             &events,
             |event| filter.matches(&event.native),
-            |event| Ok::<_, RpcError<ScanError>>(event.clone()),
+            |event| Ok::<_, RpcError>(event.clone()),
         )
     }
 }

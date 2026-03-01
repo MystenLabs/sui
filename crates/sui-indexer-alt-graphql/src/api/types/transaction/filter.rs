@@ -65,8 +65,9 @@ pub(crate) struct TransactionFilter {
 }
 
 pub(crate) struct TransactionFilterValidator;
+
 pub(crate) struct ScanFilterValidator {
-    max_scan_limit: u64,
+    pub(crate) max_scan_limit: u64,
 }
 
 impl ScanFilterValidator {
