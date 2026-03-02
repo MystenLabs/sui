@@ -53,14 +53,28 @@ impl StoreIngestionClient {
     }
 
     async fn checkpoint_bytes(&self, checkpoint: u64) -> object_store::Result<Bytes> {
-        self.bytes(ObjectPath::from(format!("{checkpoint}.binpb.zst")))
-            .await
+        self.bytes(checkpoint_path(checkpoint)).await
     }
 
     async fn bytes(&self, path: ObjectPath) -> object_store::Result<Bytes> {
         let result = self.store.get(&path).await?;
         result.bytes().await
     }
+
+    async fn file_exists(&self, checkpoint: u64) -> anyhow::Result<bool> {
+        match self.store.head(&checkpoint_path(checkpoint)).await {
+            Ok(_) => Ok(true),
+            Err(ObjectStoreError::NotFound { .. }) => Ok(false),
+            Err(e) => {
+                error!("Failed to check if checkpoint exists: {e}");
+                Err(e.into())
+            }
+        }
+    }
+}
+
+fn checkpoint_path(checkpoint: u64) -> ObjectPath {
+    ObjectPath::from(format!("{checkpoint}.binpb.zst"))
 }
 
 #[async_trait::async_trait]
@@ -94,6 +108,35 @@ impl IngestionClientTrait for StoreIngestionClient {
                 })
             }
         }
+    }
+
+    async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        let end_of_epoch_checkpoints: Vec<u64> = self.end_of_epoch_checkpoints().await?;
+        let epoch_latest_checkpoint_number =
+            end_of_epoch_checkpoints.iter().max().map_or(0, |&n| n);
+
+        // Exponential binary search to find an upper bound that doesn't exist.
+        // Max expected calls: `ceil(log2(86400 [seconds/epoch] * 4.25 [checkpoints/second])) = 19`
+        let mut lo = epoch_latest_checkpoint_number;
+        let mut hi = lo + 1;
+        while self.file_exists(hi).await? {
+            let next_hi = hi + (hi - lo) * 2;
+            lo = hi;
+            hi = next_hi;
+        }
+
+        // Binary search between lo (exists) and hi (doesn't exist).
+        // Max expected calls: `log2(2^19 [exponentiation rounds]) = 19`
+        while lo + 1 < hi {
+            let mid = lo + (hi - lo) / 2;
+            if self.file_exists(mid).await? {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+
+        Ok(lo)
     }
 }
 

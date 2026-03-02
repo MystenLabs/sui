@@ -32,7 +32,7 @@ use crate::ingestion::Error as IngestionError;
 use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::Result as IngestionResult;
 use crate::ingestion::decode;
-use crate::ingestion::error::Error::FetchError;
+use crate::ingestion::error::Error::{FetchError, LatestCheckpointError};
 use crate::ingestion::store_client::StoreIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IngestionMetrics;
@@ -53,6 +53,8 @@ pub(crate) trait IngestionClientTrait: Send + Sync {
     async fn chain_id(&self) -> anyhow::Result<ChainIdentifier>;
 
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult;
+
+    async fn latest_checkpoint_number(&self) -> anyhow::Result<u64>;
 }
 
 #[derive(clap::Args, Clone, Debug)]
@@ -466,6 +468,41 @@ impl IngestionClient {
             .await?;
         Ok(chain_id)
     }
+
+    pub async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        let request = move || {
+            async move {
+                let latest_checkpoint_number = with_slow_future_monitor(
+                    self.client.latest_checkpoint_number(),
+                    SLOW_OPERATION_WARNING_THRESHOLD,
+                    /* on_threshold_exceeded =*/
+                    || {
+                        warn!(
+                            threshold_ms = SLOW_OPERATION_WARNING_THRESHOLD.as_millis(),
+                            "Slow chain_id operation detected"
+                        );
+                    },
+                )
+                .await
+                .map_err(|err| {
+                    let reason = "latest_checkpoint_number";
+                    warn!(reason, "Retrying due to error: {err}");
+                    backoff::Error::transient(LatestCheckpointError(err))
+                })?;
+
+                Ok::<_, backoff::Error<IngestionError>>(latest_checkpoint_number)
+            }
+        };
+
+        // Keep backing off until we are waiting for the max interval, but don't give up.
+        let backoff = ExponentialBackoff {
+            max_interval: MAX_TRANSIENT_RETRY_INTERVAL,
+            max_elapsed_time: None,
+            ..Default::default()
+        };
+
+        Ok(backoff::future::retry(backoff, request).await?)
+    }
 }
 
 #[cfg(test)]
@@ -547,6 +584,10 @@ mod tests {
                 .as_deref()
                 .cloned()
                 .ok_or(CheckpointError::NotFound)
+        }
+
+        async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+            Ok(0)
         }
     }
 

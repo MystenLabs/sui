@@ -15,6 +15,9 @@ pub enum Error {
     FetchError(u64, #[source] anyhow::Error),
 
     #[error(transparent)]
+    LatestCheckpointError(#[from] anyhow::Error),
+
+    #[error(transparent)]
     ObjectStoreError(#[from] object_store::Error),
 
     #[error("No subscribers for ingestion service")]

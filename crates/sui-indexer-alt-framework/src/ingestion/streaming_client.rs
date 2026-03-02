@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::pin::Pin;
 use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::Stream;
 use futures::StreamExt;
+use futures::stream::BoxStream;
+use futures::stream::Peekable;
 use sui_rpc::headers::X_SUI_CHAIN_ID;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
@@ -24,7 +24,7 @@ use crate::ingestion::error::Result;
 use crate::types::full_checkpoint_content::Checkpoint;
 
 pub struct CheckpointStream {
-    pub stream: Pin<Box<dyn Stream<Item = Result<Checkpoint>> + Send>>,
+    pub stream: Peekable<BoxStream<'static, Result<Checkpoint>>>,
     pub chain_id: ChainIdentifier,
 }
 
@@ -33,6 +33,15 @@ pub struct CheckpointStream {
 pub trait CheckpointStreamingClient {
     /// Returns the CheckpointStream and chain id.
     async fn connect(&mut self) -> Result<CheckpointStream>;
+
+    async fn latest_checkpoint_number(&mut self) -> anyhow::Result<u64> {
+        let mut stream = self.connect().await?.stream;
+        let checkpoint = stream
+            .peek()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("Streaming client returned empty stream"))??;
+        Ok(*checkpoint.summary.sequence_number())
+    }
 }
 
 #[derive(clap::Args, Clone, Debug, Default)]
@@ -85,30 +94,34 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
             .map_err(|e| Error::StreamingError(anyhow!("Chain ID parse error: {e}")))?
             .into();
 
-        let converted_stream = response.into_inner().map(|result| match result {
-            Ok(response) => response
-                .checkpoint
-                .context("Checkpoint data missing in response")
-                .and_then(|checkpoint| {
-                    Checkpoint::try_from(&checkpoint).context("Failed to parse checkpoint")
-                })
-                .map_err(Error::StreamingError),
-            Err(e) => Err(Error::RpcClientError(e)),
-        });
+        let stream = response
+            .into_inner()
+            .map(|result| match result {
+                Ok(response) => response
+                    .checkpoint
+                    .context("Checkpoint data missing in response")
+                    .and_then(|checkpoint| {
+                        Checkpoint::try_from(&checkpoint).context("Failed to parse checkpoint")
+                    })
+                    .map_err(Error::StreamingError),
+                Err(e) => Err(Error::RpcClientError(e)),
+            })
+            .boxed()
+            .peekable();
 
-        Ok(CheckpointStream {
-            stream: Box::pin(converted_stream),
-            chain_id,
-        })
+        Ok(CheckpointStream { stream, chain_id })
     }
 }
 
 #[cfg(test)]
 pub mod test_utils {
+    use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::time::Duration;
     use std::time::Instant;
+
+    use futures::Stream;
 
     use crate::types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
@@ -268,9 +281,11 @@ pub mod test_utils {
                     "Mock connection failure"
                 )));
             }
-            let stream = Box::pin(MockStreamState {
+            let stream = MockStreamState {
                 actions: Arc::clone(&self.actions),
-            });
+            }
+            .boxed()
+            .peekable();
 
             Ok(CheckpointStream {
                 stream,
