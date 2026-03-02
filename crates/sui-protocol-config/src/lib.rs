@@ -4632,6 +4632,8 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .include_checkpoint_artifacts_digest_in_summary = true;
                     }
+                    // Disabled while debugging
+                    cfg.feature_flags.defer_unpaid_amplification = false;
                 }
                 // Use this template when making changes:
                 //
