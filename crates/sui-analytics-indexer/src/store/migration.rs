@@ -253,7 +253,7 @@ impl MigrationStore {
 
     /// Initialize migration mode for a pipeline.
     ///
-    /// Reads existing watermark file if present, and ensures file ranges are loaded.
+    /// Reads existing watermark file if present.
     ///
     /// Returns the last processed checkpoint if a watermark exists, or None if starting fresh.
     /// The watermark file is created/updated by `update_watermark` after file uploads.
@@ -262,30 +262,10 @@ impl MigrationStore {
         pipeline: &str,
         _default_next_checkpoint: u64,
     ) -> anyhow::Result<Option<u64>> {
-        // Check existing watermark
-        let (checkpoint_hi, epoch_hi) =
-            if let Some(watermark) = self.committer_watermark(pipeline).await? {
-                (
-                    Some(watermark.checkpoint_hi_inclusive),
-                    Some(watermark.epoch_hi_inclusive),
-                )
-            } else {
-                // No existing watermark - framework will use default_next_checkpoint
-                // Watermark will be created by update_watermark after first file upload
-                (None, None)
-            };
-
-        // Load file ranges if not already pre-loaded
-        if !self.file_ranges.read().unwrap().contains_key(pipeline) {
-            let index =
-                FileRangeIndex::load_from_store(&self.object_store, pipeline, epoch_hi).await?;
-            self.file_ranges
-                .write()
-                .unwrap()
-                .insert(pipeline.to_string(), index);
-        }
-
-        Ok(checkpoint_hi)
+        Ok(self
+            .committer_watermark(pipeline)
+            .await?
+            .map(|w| w.checkpoint_hi_inclusive))
     }
 
     /// Update watermark for a single pipeline after successful file upload.
