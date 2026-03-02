@@ -991,6 +991,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     split_checkpoints_in_consensus_handler: bool,
 
+    #[serde(skip_serializing_if = "is_false")]
+    settle_early_in_consensus_handler: bool,
+
     // If true, always accept committed system transactions.
     #[serde(skip_serializing_if = "is_false")]
     consensus_always_accept_system_transactions: bool,
@@ -2617,6 +2620,10 @@ impl ProtocolConfig {
 
     pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
         self.feature_flags.split_checkpoints_in_consensus_handler
+    }
+
+    pub fn settle_early_in_consensus_handler(&self) -> bool {
+        self.feature_flags.settle_early_in_consensus_handler
     }
 
     pub fn consensus_always_accept_system_transactions(&self) -> bool {
@@ -5034,6 +5041,10 @@ impl ProtocolConfig {
 
     pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
         self.feature_flags.split_checkpoints_in_consensus_handler = val;
+    }
+
+    pub fn set_settle_early_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.settle_early_in_consensus_handler = val;
     }
 }
 

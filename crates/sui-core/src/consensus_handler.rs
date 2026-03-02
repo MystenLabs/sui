@@ -599,6 +599,7 @@ pub(crate) struct CheckpointQueue {
     max_tx: usize,
     min_checkpoint_interval_ms: u64,
     execution_scheduler_sender: ExecutionSchedulerSender,
+    settle_early: bool,
 }
 
 impl CheckpointQueue {
@@ -609,6 +610,7 @@ impl CheckpointQueue {
         max_tx: usize,
         min_checkpoint_interval_ms: u64,
         execution_scheduler_sender: ExecutionSchedulerSender,
+        settle_early: bool,
     ) -> Self {
         Self {
             last_built_timestamp,
@@ -619,6 +621,7 @@ impl CheckpointQueue {
             max_tx,
             min_checkpoint_interval_ms,
             execution_scheduler_sender,
+            settle_early,
         }
     }
 
@@ -640,6 +643,7 @@ impl CheckpointQueue {
             max_tx,
             min_checkpoint_interval_ms,
             execution_scheduler_sender: ExecutionSchedulerSender::new_for_testing(sender),
+            settle_early: false,
         }
     }
 
@@ -651,6 +655,7 @@ impl CheckpointQueue {
         max_tx: usize,
         min_checkpoint_interval_ms: u64,
         sender: monitored_mpsc::UnboundedSender<SchedulerMessage>,
+        settle_early: bool,
     ) -> Self {
         Self {
             last_built_timestamp,
@@ -661,6 +666,7 @@ impl CheckpointQueue {
             max_tx,
             min_checkpoint_interval_ms,
             execution_scheduler_sender: ExecutionSchedulerSender::new_for_testing(sender),
+            settle_early,
         }
     }
 
@@ -690,7 +696,10 @@ impl CheckpointQueue {
 
         let roots = chunk.to_checkpoint_roots();
 
-        let schedulables: Vec<_> = chunk
+        let chunk_height = chunk.height;
+        let settlement = chunk.settlement;
+
+        let mut schedulables: Vec<_> = chunk
             .schedulables
             .into_iter()
             .map(|s| {
@@ -708,20 +717,28 @@ impl CheckpointQueue {
             flushed_checkpoints.push(checkpoint);
         }
 
-        let settlement_info = chunk.settlement.as_ref().map(|s| {
-            let settlement_key = s.key();
-            let tx_keys: Vec<_> = schedulables.iter().map(|(s, _)| s.key()).collect();
-            SettlementBatchInfo {
-                settlement_key,
-                tx_keys,
-                checkpoint_height: chunk.height,
-                checkpoint_seq: self.current_checkpoint_seq,
-                assigned_versions: assigned_versions
-                    .get(&settlement_key)
-                    .cloned()
-                    .unwrap_or_default(),
+        let settlement_info = if self.settle_early {
+            settlement.as_ref().map(|s| {
+                let settlement_key = s.key();
+                let tx_keys: Vec<_> = schedulables.iter().map(|(s, _)| s.key()).collect();
+                SettlementBatchInfo {
+                    settlement_key,
+                    tx_keys,
+                    checkpoint_height: chunk_height,
+                    checkpoint_seq: self.current_checkpoint_seq,
+                    assigned_versions: assigned_versions
+                        .get(&settlement_key)
+                        .cloned()
+                        .unwrap_or_default(),
+                }
+            })
+        } else {
+            if let Some(s) = settlement {
+                let versions = assigned_versions.get(&s.key()).cloned().unwrap_or_default();
+                schedulables.push((s, versions));
             }
-        });
+            None
+        };
 
         self.execution_scheduler_sender
             .send(schedulables, settlement_info);
@@ -885,6 +902,9 @@ impl<C> ConsensusHandler<C> {
         } else {
             0
         };
+        let settle_early = epoch_store
+            .protocol_config()
+            .settle_early_in_consensus_handler();
         Self {
             epoch_store,
             last_consensus_stats,
@@ -912,6 +932,7 @@ impl<C> ConsensusHandler<C> {
                 max_tx,
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
+                settle_early,
             )),
         }
     }
@@ -947,6 +968,9 @@ impl<C> ConsensusHandler<C> {
             .unwrap_or_default();
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
+        let settle_early = epoch_store
+            .protocol_config()
+            .settle_early_in_consensus_handler();
         Self {
             epoch_store,
             last_consensus_stats,
@@ -974,6 +998,7 @@ impl<C> ConsensusHandler<C> {
                 max_tx,
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
+                settle_early,
             )),
         }
     }
@@ -4454,8 +4479,15 @@ mod tests {
             let max_tx = 10;
             let initial_seq = 5;
             let (sender, mut receiver) = monitored_mpsc::unbounded_channel("test_settlement_seq");
-            let mut queue =
-                CheckpointQueue::new_for_testing_with_sender(0, 0, initial_seq, max_tx, 0, sender);
+            let mut queue = CheckpointQueue::new_for_testing_with_sender(
+                0,
+                0,
+                initial_seq,
+                max_tx,
+                0,
+                sender,
+                true,
+            );
             let versions = default_versions();
 
             // Push a chunk that partially fills the queue (no flush).

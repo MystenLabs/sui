@@ -1939,21 +1939,36 @@ impl CheckpointBuilder {
             let ccp_digest = consensus_commit_prologue.map(|(d, _)| d);
             let mut sorted = CausalOrder::causal_sort_with_ccp(root_effects, ccp_digest);
 
-            if let Some(settlement_key) = &checkpoint_roots.settlement_root {
+            if checkpoint_roots.settlement_root.is_some() {
                 let checkpoint_seq = pending
                     .details
                     .checkpoint_seq
                     .expect("checkpoint_seq must be set");
                 let tx_index_offset = all_effects.len() as u64;
-                let effects = self
-                    .resolve_settlement_effects(
-                        *settlement_key,
+                let effects = if self
+                    .epoch_store
+                    .protocol_config()
+                    .settle_early_in_consensus_handler()
+                {
+                    self.resolve_settlement_effects(
+                        checkpoint_roots.settlement_root.unwrap(),
                         &sorted,
                         checkpoint_roots.height,
                         checkpoint_seq,
                         tx_index_offset,
                     )
-                    .await;
+                    .await
+                } else {
+                    let (_tx_key, effects) = self
+                        .construct_and_execute_settlement_transactions(
+                            &sorted,
+                            checkpoint_roots.height,
+                            checkpoint_seq,
+                            tx_index_offset,
+                        )
+                        .await;
+                    effects
+                };
                 sorted.extend(effects);
             }
 

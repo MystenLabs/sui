@@ -330,12 +330,11 @@ async fn test_congestion_control_execution_cancellation() {
         scheduled_txns
     };
 
-    // Both prologue and the cancelled transaction should be scheduled
-    // The cancelled transaction will abort during execution
+    // Prologue, cancelled transaction, and settlement should be scheduled
     assert_eq!(
         scheduled_txns.len(),
-        2,
-        "Expected prologue + cancelled transaction"
+        3,
+        "Expected prologue + cancelled transaction + settlement"
     );
 
     // Now execute the cancelled transaction to get the effects
