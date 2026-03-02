@@ -9,6 +9,7 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::anyhow;
 use futures::Stream;
+use futures::TryStreamExt;
 use futures::future::try_join_all;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
@@ -291,32 +292,21 @@ where
         (noop_streaming_task(ingestion_end), ingestion_end)
     };
 
-    // Wrap the stream with a statement timeout to prevent hanging indefinitely, and then make it
-    // peekable.
-    let CheckpointStream { stream, chain_id } = match streaming_client.connect().await {
+    let CheckpointStream {
+        mut stream,
+        chain_id,
+    } = match streaming_client.connect().await {
         Ok(checkpoint_stream) => checkpoint_stream,
         Err(e) => {
             return fallback(&format!("Streaming connection failed: {e}"));
         }
     };
 
-    let mut checkpoint_envelope_stream = Box::pin(
-        stream
-            .timeout(config.streaming_statement_timeout())
-            .map(move |result| {
-                result
-                    .map_err(|_| Error::StreamingError(anyhow!("Connection timeout")))
-                    .flatten()
-                    .map(|checkpoint| CheckpointEnvelope {
-                        checkpoint: Arc::new(checkpoint),
-                        chain_id,
-                    })
-            }),
-    )
-    .peekable();
-
-    let checkpoint_envelope = match checkpoint_envelope_stream.peek().await {
-        Some(Ok(checkpoint_envelope)) => checkpoint_envelope,
+    let checkpoint_envelope = match std::pin::Pin::new(&mut stream).peek().await {
+        Some(Ok(checkpoint)) => CheckpointEnvelope {
+            checkpoint: Arc::new(checkpoint.clone()),
+            chain_id,
+        },
         Some(Err(e)) => {
             return fallback(&format!("Failed to peek latest checkpoint: {e}"));
         }
@@ -343,10 +333,14 @@ where
         checkpoint_hi, "Within buffer size, starting streaming"
     );
 
+    let envelope_stream = stream.map_ok(move |checkpoint| CheckpointEnvelope {
+        checkpoint: Arc::new(checkpoint),
+        chain_id,
+    });
     let stream_guard = TaskGuard::new(tokio::spawn(stream_and_broadcast_range(
         network_latest_cp.max(checkpoint_hi),
         end_cp,
-        checkpoint_envelope_stream,
+        envelope_stream,
         subscribers.clone(),
         ingest_hi_rx,
         metrics.clone(),
