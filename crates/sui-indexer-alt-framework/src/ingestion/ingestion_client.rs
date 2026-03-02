@@ -47,7 +47,8 @@ const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
 #[async_trait]
 pub(crate) trait IngestionClientTrait: Send + Sync {
-    async fn fetch(&self, checkpoint: u64) -> FetchResult;
+    async fn fetch_latest_checkpoint_number(&self) -> FetchLatestCheckpointNumberResult;
+    async fn fetch_checkpoint(&self, checkpoint: u64) -> FetchCheckpointResult;
 }
 
 #[derive(clap::Args, Clone, Debug)]
@@ -153,11 +154,13 @@ pub enum FetchError {
     },
 }
 
-pub type FetchResult = Result<FetchData, FetchError>;
+pub type FetchLatestCheckpointNumberResult = Result<Option<u64>, FetchError>;
+
+pub type FetchCheckpointResult = Result<FetchCheckpointData, FetchError>;
 
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
-pub enum FetchData {
+pub enum FetchCheckpointData {
     Raw(Bytes),
     Checkpoint(Checkpoint),
 }
@@ -286,17 +289,23 @@ impl IngestionClient {
         let backoff = Constant::new(retry_interval);
         let fetch = || async move {
             use backoff::Error as BE;
-            self.fetch(checkpoint).await.map_err(|e| match e {
-                IngestionError::NotFound(checkpoint) => {
-                    debug!(checkpoint, "Checkpoint not found, retrying...");
-                    self.metrics.total_ingested_not_found_retries.inc();
-                    BE::transient(e)
-                }
-                e => BE::permanent(e),
-            })
+            self.fetch_checkpoint(checkpoint)
+                .await
+                .map_err(|e| match e {
+                    IngestionError::NotFound(checkpoint) => {
+                        debug!(checkpoint, "Checkpoint not found, retrying...");
+                        self.metrics.total_ingested_not_found_retries.inc();
+                        BE::transient(e)
+                    }
+                    e => BE::permanent(e),
+                })
         };
 
         backoff::future::retry(backoff, fetch).await
+    }
+
+    pub async fn fetch_latest_checkpoint_number(&self) -> anyhow::Result<Option<u64>> {
+        Ok(self.client.clone().fetch_latest_checkpoint_number().await?)
     }
 
     /// Fetch checkpoint data by sequence number.
@@ -307,13 +316,13 @@ impl IngestionClient {
     /// function if we fail to deserialize the result as [Checkpoint].
     ///
     /// The function will immediately return if the checkpoint is not found.
-    pub async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<Checkpoint>> {
+    pub async fn fetch_checkpoint(&self, checkpoint: u64) -> IngestionResult<Arc<Checkpoint>> {
         let client = self.client.clone();
         let request = move || {
             let client = client.clone();
             async move {
                 let fetch_data = with_slow_future_monitor(
-                    client.fetch(checkpoint),
+                    client.fetch_checkpoint(checkpoint),
                     SLOW_OPERATION_WARNING_THRESHOLD,
                     /* on_threshold_exceeded =*/
                     || {
@@ -343,7 +352,7 @@ impl IngestionClient {
                 })?;
 
                 Ok::<Checkpoint, backoff::Error<IngestionError>>(match fetch_data {
-                    FetchData::Raw(bytes) => {
+                    FetchCheckpointData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
 
                         decode::checkpoint(&bytes).map_err(|e| {
@@ -354,7 +363,7 @@ impl IngestionClient {
                             )
                         })?
                     }
-                    FetchData::Checkpoint(data) => {
+                    FetchCheckpointData::Checkpoint(data) => {
                         // We are not recording size metric for Checkpoint data (from RPC client).
                         // TODO: Record the metric when we have a good way to get the size information
                         data
@@ -427,7 +436,7 @@ mod tests {
     /// Mock implementation of IngestionClientTrait for testing
     #[derive(Default)]
     struct MockIngestionClient {
-        checkpoints: DashMap<u64, FetchData>,
+        checkpoints: DashMap<u64, FetchCheckpointData>,
         transient_failures: DashMap<u64, usize>,
         not_found_failures: DashMap<u64, usize>,
         permanent_failures: DashMap<u64, usize>,
@@ -435,7 +444,11 @@ mod tests {
 
     #[async_trait]
     impl IngestionClientTrait for MockIngestionClient {
-        async fn fetch(&self, checkpoint: u64) -> FetchResult {
+        async fn fetch_latest_checkpoint_number(&self) -> FetchLatestCheckpointNumberResult {
+            Ok(Some(0))
+        }
+
+        async fn fetch_checkpoint(&self, checkpoint: u64) -> FetchCheckpointResult {
             // Check for not found failures
             if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint)
                 && *remaining > 0
@@ -538,10 +551,11 @@ mod tests {
 
         // Create test data using test_checkpoint
         let bytes = Bytes::from(test_checkpoint_data(1));
-        mock.checkpoints.insert(1, FetchData::Raw(bytes.clone()));
+        mock.checkpoints
+            .insert(1, FetchCheckpointData::Raw(bytes.clone()));
 
         // Fetch and verify
-        let result = client.fetch(1).await.unwrap();
+        let result = client.fetch_checkpoint(1).await.unwrap();
         assert_eq!(result.summary.sequence_number(), &1);
     }
 
@@ -551,10 +565,10 @@ mod tests {
 
         // Create test data - now returns zstd-compressed protobuf
         let bytes = Bytes::from(test_checkpoint_data(1));
-        mock.checkpoints.insert(1, FetchData::Raw(bytes));
+        mock.checkpoints.insert(1, FetchCheckpointData::Raw(bytes));
 
         // Fetch and verify
-        let result = client.fetch(1).await.unwrap();
+        let result = client.fetch_checkpoint(1).await.unwrap();
         assert_eq!(result.summary.sequence_number(), &1);
     }
 
@@ -563,7 +577,7 @@ mod tests {
         let (client, _) = setup_test();
 
         // Try to fetch non-existent checkpoint
-        let result = client.fetch(1).await;
+        let result = client.fetch_checkpoint(1).await;
         assert!(matches!(result, Err(IngestionError::NotFound(1))));
     }
 
@@ -575,11 +589,11 @@ mod tests {
         let bytes = Bytes::from(test_checkpoint_data(1));
 
         // Add checkpoint to mock with 2 transient failures
-        mock.checkpoints.insert(1, FetchData::Raw(bytes));
+        mock.checkpoints.insert(1, FetchCheckpointData::Raw(bytes));
         mock.transient_failures.insert(1, 2);
 
         // Fetch and verify it succeeds after retries
-        let result = client.fetch(1).await.unwrap();
+        let result = client.fetch_checkpoint(1).await.unwrap();
         assert_eq!(*result.summary.sequence_number(), 1);
 
         // Verify that exactly 2 retries were recorded
@@ -599,7 +613,7 @@ mod tests {
         let bytes = Bytes::from(test_checkpoint_data(1));
 
         // Add checkpoint to mock with 1 not_found failures
-        mock.checkpoints.insert(1, FetchData::Raw(bytes));
+        mock.checkpoints.insert(1, FetchCheckpointData::Raw(bytes));
         mock.not_found_failures.insert(1, 1);
 
         // Wait for checkpoint with short retry interval
@@ -619,7 +633,7 @@ mod tests {
         let bytes = Bytes::from(test_checkpoint_data(1));
 
         // Add checkpoint to mock with no failures - data should be available immediately
-        mock.checkpoints.insert(1, FetchData::Raw(bytes));
+        mock.checkpoints.insert(1, FetchCheckpointData::Raw(bytes));
 
         // Wait for checkpoint with short retry interval
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
@@ -632,7 +646,7 @@ mod tests {
 
         // Add invalid data that will cause a deserialization error
         mock.checkpoints
-            .insert(1, FetchData::Raw(Bytes::from("invalid data")));
+            .insert(1, FetchCheckpointData::Raw(Bytes::from("invalid data")));
 
         // wait_for should keep retrying on deserialization errors and timeout
         timeout(
@@ -649,7 +663,7 @@ mod tests {
 
         mock.permanent_failures.insert(1, 1);
 
-        let result = client.fetch(1).await;
+        let result = client.fetch_checkpoint(1).await;
         assert!(matches!(result, Err(IngestionError::FetchError(1, _))));
 
         // Verify that the non-retryable error metric was incremented

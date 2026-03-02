@@ -438,14 +438,15 @@ mod tests {
 
     use super::*;
     use crate::ingestion::IngestionConfig;
-    use crate::ingestion::ingestion_client::FetchData;
+    use crate::ingestion::ingestion_client::FetchCheckpointData;
+    use crate::ingestion::ingestion_client::FetchCheckpointResult;
+    use crate::ingestion::ingestion_client::FetchLatestCheckpointNumberResult;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
 
     /// Create a mock IngestionClient for tests
     fn mock_client(metrics: Arc<IngestionMetrics>) -> IngestionClient {
-        use crate::ingestion::ingestion_client::FetchError;
         use crate::ingestion::ingestion_client::IngestionClientTrait;
         use async_trait::async_trait;
 
@@ -453,10 +454,14 @@ mod tests {
 
         #[async_trait]
         impl IngestionClientTrait for MockClient {
-            async fn fetch(&self, checkpoint: u64) -> Result<FetchData, FetchError> {
+            async fn fetch_latest_checkpoint_number(&self) -> FetchLatestCheckpointNumberResult {
+                Ok(Some(0))
+            }
+
+            async fn fetch_checkpoint(&self, checkpoint: u64) -> FetchCheckpointResult {
                 // Return mock checkpoint data for any checkpoint number
                 let bytes = test_checkpoint_data(checkpoint);
-                Ok(FetchData::Raw(bytes.into()))
+                Ok(FetchCheckpointData::Raw(bytes.into()))
             }
         }
 
