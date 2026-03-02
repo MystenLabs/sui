@@ -6,7 +6,7 @@ Authenticated Events provide a cryptographically verifiable stream of Move event
 
 Regular Sui events are indexed and queryable, but verifying them requires trusting the RPC provider. Authenticated events solve this by:
 
-1. **Cryptographic Commitments**: Events are committed into a Merkle Mountain Range (MMR) structure stored on-chain
+1. **Cryptographic Commitments**: Events are committed into a Merkle Mountain Range (MMR) structure stored on-chain (see [MMR section](#merkle-mountain-range-mmr) below)
 2. **Checkpoint Verification**: The commitment is tied to Sui checkpoints, which are signed by the validator committee
 3. **Light Client Verification**: Clients verify the chain from genesis committee → checkpoint signatures → event inclusion proofs
 
@@ -214,6 +214,45 @@ let client = AuthenticatedEventsClient::new_with_config(
 ).await?;
 ```
 
+## Merkle Mountain Range (MMR)
+
+An MMR is a forest of perfect binary trees ("mountains"). After `n` leaves are appended, mountain sizes correspond to the set bits in the binary representation of `n`. For example, when `n = 13 (1101 in binary with bit 3, 2 and 0 set)`, the mountains have sizes `2^3 = 8`, `2^2 = 4`, and `2^0 = 1`. The diagram below shows an expanded MMR (internal nodes and leaves).
+
+The MMR state in `EventStreamHead` is stored as a compact vector of digests indexed by tree height (not the full expanded tree). This keeps on-chain state `O(log n)` in the number of appended leaves.
+
+Key properties of an MMR:
+
+- Compact on-chain accumulator state: `O(log n)` digests.
+- Append-only updates: new leaves can be incorporated using only the current accumulator state (without the expanded MMR).
+- Inclusion proofs are `O(log n)` in size. Event-level MMR inclusion proofs are not yet exposed by current RPC services (this is separate from OCS inclusion proofs exposed by the ProofService). These inclusion proofs can lead to many interesting applications, e.g., move data storage off-chain, efficient cross-chain reads, prove inclusion in ZK, etc.
+
+### Expanded MMR with 13 leaves
+
+```
+                           Tree 0 (size 8)
+                              H0
+                     ┌────────┴────────┐
+                    H1                 H2
+               ┌─────┴─────┐     ┌─────┴─────┐
+              H3          H4     H5          H6
+            ┌──┴──┐     ┌──┴──┐ ┌──┴──┐     ┌──┴──┐
+           L0    L1    L2    L3 L4    L5    L6    L7
+
+
+                 Tree 1 (size 4)
+                     H7
+               ┌─────┴─────┐
+              H8          H9
+            ┌──┴──┐     ┌──┴──┐
+           L8    L9   L10   L11
+
+
+          Tree 2 (size 1)
+             L12
+```
+
+Note that leaves (`Lx`) correspond to the per-consensus-commit merkle tree digests, which in turn contain `AuthenticatedEvent` as its leaves.
+
 ## Trust Model
 
 1. **Genesis Committee**: The client is initialized with the genesis validator committee public keys
@@ -246,6 +285,7 @@ The client automatically handles epoch transitions and committee changes.
 - Events must be consumed in checkpoint order
 - The EventStreamHead must be updated at the resume checkpoint (authenticated events must have been emitted)
 - One stream per package (stream_id = package address)
+- Event-level MMR inclusion proofs are not supported
 
 ## Error Handling
 
