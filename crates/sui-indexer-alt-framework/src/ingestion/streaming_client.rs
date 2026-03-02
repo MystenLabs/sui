@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::pin::Pin;
 use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::Stream;
 use futures::StreamExt;
+use futures::stream::BoxStream;
+use futures::stream::Peekable;
 use sui_rpc::headers::X_SUI_CHAIN_ID;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
@@ -24,7 +24,7 @@ use crate::ingestion::error::Result;
 use crate::types::full_checkpoint_content::Checkpoint;
 
 pub struct CheckpointStream {
-    pub stream: Pin<Box<dyn Stream<Item = Result<Checkpoint>> + Send>>,
+    pub stream: Peekable<BoxStream<'static, Result<Checkpoint>>>,
     pub chain_id: ChainIdentifier,
 }
 
@@ -46,13 +46,15 @@ pub struct StreamingClientArgs {
 pub struct GrpcStreamingClient {
     uri: Uri,
     connection_timeout: Duration,
+    statement_timeout: Duration,
 }
 
 impl GrpcStreamingClient {
-    pub fn new(uri: Uri, connection_timeout: Duration) -> Self {
+    pub fn new(uri: Uri, connection_timeout: Duration, statement_timeout: Duration) -> Self {
         Self {
             uri,
             connection_timeout,
+            statement_timeout,
         }
     }
 }
@@ -85,7 +87,7 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
             .map_err(|e| Error::StreamingError(anyhow!("Chain ID parse error: {e}")))?
             .into();
 
-        let converted_stream = response.into_inner().map(|result| match result {
+        let stream = response.into_inner().map(|result| match result {
             Ok(response) => response
                 .checkpoint
                 .context("Checkpoint data missing in response")
@@ -95,20 +97,38 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
                 .map_err(Error::StreamingError),
             Err(e) => Err(Error::RpcClientError(e)),
         });
+        let stream = wrap_stream(stream, self.statement_timeout);
 
-        Ok(CheckpointStream {
-            stream: Box::pin(converted_stream),
-            chain_id,
-        })
+        Ok(CheckpointStream { stream, chain_id })
     }
+}
+
+/// Wraps a stream with a per-item timeout. Converts the resulting `Err(Elapsed)` into
+/// `Err(StreamingError)` if it occurs.
+fn wrap_stream(
+    stream: impl futures::Stream<Item = Result<Checkpoint>> + Send + 'static,
+    statement_timeout: Duration,
+) -> Peekable<BoxStream<'static, Result<Checkpoint>>> {
+    tokio_stream::StreamExt::timeout(stream, statement_timeout)
+        .map(move |result| match result {
+            Err(_elapsed) => Err(Error::StreamingError(anyhow!(
+                "Statement timeout after {statement_timeout:?}"
+            ))),
+            Ok(result) => result,
+        })
+        .boxed()
+        .peekable()
 }
 
 #[cfg(test)]
 pub mod test_utils {
+    use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::time::Duration;
     use std::time::Instant;
+
+    use futures::Stream;
 
     use crate::types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
@@ -180,7 +200,10 @@ pub mod test_utils {
         actions: Arc<Mutex<Vec<StreamAction>>>,
         connection_failures_remaining: usize,
         connection_timeouts_remaining: usize,
+        /// How long mock timeout actions hang (must be > statement_timeout for timeouts to fire).
         timeout_duration: Duration,
+        /// Statement timeout applied to the stream wrapper.
+        statement_timeout: Duration,
     }
 
     impl MockStreamingClient {
@@ -192,6 +215,7 @@ pub mod test_utils {
         where
             I: IntoIterator<Item = u64>,
         {
+            let timeout_duration = timeout_duration.unwrap_or(Duration::from_secs(5));
             Self {
                 actions: Arc::new(Mutex::new(
                     checkpoint_range
@@ -201,7 +225,8 @@ pub mod test_utils {
                 )),
                 connection_failures_remaining: 0,
                 connection_timeouts_remaining: 0,
-                timeout_duration: timeout_duration.unwrap_or(Duration::from_secs(5)),
+                statement_timeout: timeout_duration / 2,
+                timeout_duration,
             }
         }
 
@@ -268,12 +293,11 @@ pub mod test_utils {
                     "Mock connection failure"
                 )));
             }
-            let stream = Box::pin(MockStreamState {
+            let stream_state = MockStreamState {
                 actions: Arc::clone(&self.actions),
-            });
-
+            };
             Ok(CheckpointStream {
-                stream,
+                stream: wrap_stream(stream_state, self.statement_timeout),
                 chain_id: Self::mock_chain_id(),
             })
         }
