@@ -64,7 +64,12 @@ fun test_gcp_attestation_not_three_parts() {
     let auth_state = make_auth_state(&mut ctx);
 
     // Valid UTF-8 but not "header.payload.signature" format.
-    gcp_attestation::verify_gcp_attestation(b"not_a_valid_jwt_token", &auth_state, TEST_KID, &clock);
+    gcp_attestation::verify_gcp_attestation(
+        b"not_a_valid_jwt_token",
+        &auth_state,
+        TEST_KID,
+        &clock,
+    );
 
     auth_state.destroy_for_testing();
     clock.destroy_for_testing();

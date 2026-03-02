@@ -402,7 +402,10 @@ public fun new_for_testing(ctx: &mut TxContext): AuthenticatorState {
 /// Directly sets the active JWKs on a test AuthenticatorState, bypassing the
 /// system-address sender check so it can be used in plain `#[test]` functions.
 #[test_only]
-public fun set_active_jwks_for_testing(self: &mut AuthenticatorState, active_jwks: vector<ActiveJwk>) {
+public fun set_active_jwks_for_testing(
+    self: &mut AuthenticatorState,
+    active_jwks: vector<ActiveJwk>,
+) {
     let inner = self.load_inner_mut();
     inner.active_jwks = active_jwks;
 }

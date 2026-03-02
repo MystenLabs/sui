@@ -3,9 +3,9 @@
 
 module sui::gcp_attestation;
 
+use std::string;
 use sui::authenticator_state::{Self, AuthenticatorState};
 use sui::clock::Clock;
-use std::string;
 
 #[allow(unused_const)]
 /// Error that the feature is not available on this network.
