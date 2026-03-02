@@ -3400,3 +3400,38 @@ async fn test_simulate_overflowing_funds_withdrawal_returns_error() {
         .await;
     assert!(result.is_err());
 }
+
+#[sim_test]
+async fn test_two_large_reservations_overflow() {
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, gas_objects) = test_env.get_sender_and_all_gas(0);
+
+    let amount = u64::MAX / 2 + 1;
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+        amount,
+        GAS::type_tag(),
+    ))
+    .unwrap();
+    ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+        amount,
+        GAS::type_tag(),
+    ))
+    .unwrap();
+    let tx = TransactionData::new_programmable(sender, vec![gas_objects[0]], ptb.finish(), 1000, 1);
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false)
+        .await;
+    assert!(result.is_err());
+}
