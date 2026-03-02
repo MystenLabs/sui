@@ -208,7 +208,7 @@ impl AuthorityPerpetualTables {
         let objects_compactor = |iter: &mut dyn DoubleEndedIterator<Item = &Bytes>| {
             let mut retain = HashSet::new();
             let mut previous: Option<&[u8]> = None;
-            const OID_SIZE: usize = 16;
+            const OID_SIZE: usize = 32;
             for key in iter.rev() {
                 if let Some(prev) = previous {
                     if prev == &key[..OID_SIZE] {
