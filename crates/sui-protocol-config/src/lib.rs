@@ -299,6 +299,7 @@ const MAX_PROTOCOL_VERSION: u64 = 114;
 // Version 112: Enable Ristretto255 in devnet.
 // Version 113: Validate gas price >= RGP at signing for address balance gas payments.
 // Version 114: Gate seeded test overrides for checkpoint tx limit behind feature flag.
+//              Enable address aliases on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4634,6 +4635,8 @@ impl ProtocolConfig {
                     }
                     // Disabled while debugging
                     cfg.feature_flags.defer_unpaid_amplification = false;
+
+                    cfg.feature_flags.address_aliases = true;
                 }
                 // Use this template when making changes:
                 //
