@@ -2388,10 +2388,10 @@ impl SuiNode {
             .send()
             .await
             .map_err(|_| SuiErrorKind::JWKRetrievalError)?;
-        if let Some(len) = resp.content_length() {
-            if len > GCP_JWKS_MAX_RESPONSE_BYTES {
-                return Err(SuiErrorKind::JWKRetrievalError.into());
-            }
+        if let Some(len) = resp.content_length()
+            && len > GCP_JWKS_MAX_RESPONSE_BYTES
+        {
+            return Err(SuiErrorKind::JWKRetrievalError.into());
         }
         let body = resp
             .text()
