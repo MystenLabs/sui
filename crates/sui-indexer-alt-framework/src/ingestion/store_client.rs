@@ -53,14 +53,28 @@ impl StoreIngestionClient {
     }
 
     async fn checkpoint_bytes(&self, checkpoint: u64) -> object_store::Result<Bytes> {
-        self.bytes(ObjectPath::from(format!("{checkpoint}.binpb.zst")))
-            .await
+        self.bytes(checkpoint_path(checkpoint)).await
     }
 
     async fn bytes(&self, path: ObjectPath) -> object_store::Result<Bytes> {
         let result = self.store.get(&path).await?;
         result.bytes().await
     }
+
+    async fn file_exists(&self, checkpoint: u64) -> anyhow::Result<bool> {
+        match self.store.head(&checkpoint_path(checkpoint)).await {
+            Ok(_) => Ok(true),
+            Err(ObjectStoreError::NotFound { .. }) => Ok(false),
+            Err(e) => {
+                error!("Failed to check if checkpoint exists: {e}");
+                Err(e.into())
+            }
+        }
+    }
+}
+
+fn checkpoint_path(checkpoint: u64) -> ObjectPath {
+    ObjectPath::from(format!("{checkpoint}.binpb.zst"))
 }
 
 #[async_trait::async_trait]
@@ -94,6 +108,35 @@ impl IngestionClientTrait for StoreIngestionClient {
                 })
             }
         }
+    }
+
+    async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        let end_of_epoch_checkpoints: Vec<u64> = self.end_of_epoch_checkpoints().await?;
+        let epoch_latest_checkpoint_number =
+            end_of_epoch_checkpoints.iter().max().map_or(0, |&n| n);
+
+        // Exponential binary search to find an upper bound that doesn't exist.
+        // Max expected calls: `ceil(log2(86400 [seconds/epoch] * 4.25 [checkpoints/second])) = 19`
+        let mut lo = epoch_latest_checkpoint_number;
+        let mut hi = lo + 1;
+        while self.file_exists(hi).await? {
+            let next_hi = hi + (hi - lo) * 2;
+            lo = hi;
+            hi = next_hi;
+        }
+
+        // Binary search between lo (exists) and hi (doesn't exist).
+        // Max expected calls: `log2(2^19 [exponentiation rounds]) = 19`
+        while lo + 1 < hi {
+            let mid = lo + (hi - lo) / 2;
+            if self.file_exists(mid).await? {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+
+        Ok(lo)
     }
 }
 
@@ -160,6 +203,85 @@ pub(crate) mod tests {
             .map(Arc::new)
             .unwrap();
         IngestionClient::with_store(store, test_ingestion_metrics()).unwrap()
+    }
+
+    /// Set up a mock store with the given `epochs.json` content and checkpoint files
+    /// 0..=`latest_file`, then assert `latest_checkpoint_number()` returns `expected`.
+    async fn test_latest_checkpoint_number(
+        epochs: &[u64],
+        latest_file: Option<u64>,
+        expected: u64,
+    ) {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/epochs.json"))
+            .respond_with(
+                status(StatusCode::OK).set_body_bytes(serde_json::to_vec(epochs).unwrap()),
+            )
+            .mount(&server)
+            .await;
+
+        Mock::given(method("HEAD"))
+            .and(path_regex(r"/\d+\.binpb\.zst"))
+            .respond_with(move |req: &Request| {
+                let file = req.url.path().trim_start_matches('/');
+                let cp: u64 = file.trim_end_matches(".binpb.zst").parse().unwrap();
+                if latest_file.is_some_and(|latest| cp <= latest) {
+                    // Result needs a Content-Length header (value doesn't matter) to prevent
+                    // "Content-Length Header missing from response"
+                    status(StatusCode::OK).append_header("Content-Length", "0")
+                } else {
+                    status(StatusCode::NOT_FOUND)
+                }
+            })
+            .mount(&server)
+            .await;
+
+        let store = HttpBuilder::new()
+            .with_url(server.uri())
+            .with_client_options(ClientOptions::default().with_allow_http(true))
+            .build()
+            .map(Arc::new)
+            .unwrap();
+        let client = StoreIngestionClient::new(store);
+
+        assert_eq!(
+            IngestionClientTrait::latest_checkpoint_number(&client)
+                .await
+                .unwrap(),
+            expected,
+        );
+    }
+
+    /// Empty epochs, no files: no exponential search, no binary search.
+    #[tokio::test]
+    async fn test_latest_checkpoint_empty_epochs_no_files() {
+        test_latest_checkpoint_number(&[], None, 0).await;
+    }
+
+    /// Empty epochs, checkpoints 0..=2: one exponential iteration, one binary iteration.
+    #[tokio::test]
+    async fn test_latest_checkpoint_empty_epochs_one_exp_iteration() {
+        test_latest_checkpoint_number(&[], Some(2), 2).await;
+    }
+
+    /// Empty epochs, checkpoints 0..=7: multiple exponential and binary iterations.
+    #[tokio::test]
+    async fn test_latest_checkpoint_empty_epochs_multiple_exp_iterations() {
+        test_latest_checkpoint_number(&[], Some(7), 7).await;
+    }
+
+    /// Epoch ends at 5, no files beyond: no exponential or binary search needed.
+    #[tokio::test]
+    async fn test_latest_checkpoint_epoch_matches_latest() {
+        test_latest_checkpoint_number(&[5], Some(5), 5).await;
+    }
+
+    /// Epoch ends at 5, files through 9: exponential and binary search from non-zero start.
+    #[tokio::test]
+    async fn test_latest_checkpoint_files_beyond_epoch() {
+        test_latest_checkpoint_number(&[5], Some(9), 9).await;
     }
 
     #[tokio::test]

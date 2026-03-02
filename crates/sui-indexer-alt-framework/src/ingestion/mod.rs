@@ -22,6 +22,7 @@ use crate::ingestion::error::Result;
 use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::ingestion::ingestion_client::IngestionClient;
 use crate::ingestion::ingestion_client::IngestionClientArgs;
+use crate::ingestion::streaming_client::CheckpointStreamingClient;
 use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
@@ -138,6 +139,19 @@ impl IngestionService {
     /// The ingestion client this service uses to fetch checkpoints.
     pub(crate) fn ingestion_client(&self) -> &IngestionClient {
         &self.ingestion_client
+    }
+
+    pub async fn latest_checkpoint_number(&mut self) -> anyhow::Result<u64> {
+        let ingestion_fut = self.ingestion_client.latest_checkpoint_number();
+        if let Some(streaming_client) = self.streaming_client.as_mut() {
+            let streaming_fut = streaming_client.latest_checkpoint_number();
+            tokio::select! {
+                result = ingestion_fut => result,
+                result = streaming_fut => result,
+            }
+        } else {
+            ingestion_fut.await
+        }
     }
 
     /// Access to the ingestion metrics.
