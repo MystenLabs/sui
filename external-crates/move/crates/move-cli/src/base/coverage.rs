@@ -13,6 +13,7 @@ use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 
 use move_package_alt::{MoveFlavor, schema::Environment};
 use move_trace_format::format::MoveTraceReader;
+use move_unit_test::TRACE_DIR;
 use std::{
     fs::File,
     path::{Path, PathBuf},
@@ -157,7 +158,7 @@ impl Coverage {
             .cloned()
             .map(|unit| (unit.unit, unit.source_path))
             .collect();
-        let traces = path.join("traces");
+        let traces = path.join(TRACE_DIR);
         let sanitize_name = |s: &str| s.replace("::", "__");
         let trace_of_test = |test_name: &str| {
             let trace_substr_name = format!("{}.", sanitize_name(test_name));

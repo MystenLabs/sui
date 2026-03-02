@@ -2,24 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_cli::sandbox::commands::test;
-use std::{env, path::PathBuf};
-
-pub const CLI_METATEST_PATH: [&str; 3] = ["tests", "metatests", "args.txt"];
-
-fn get_cli_binary_path() -> PathBuf {
-    let cli_exe = env!("CARGO_BIN_EXE_move");
-    PathBuf::from(cli_exe)
-}
-
-fn get_metatest_path() -> PathBuf {
-    CLI_METATEST_PATH.iter().collect()
-}
-
+#[cfg(feature = "tracing")]
 #[test]
 fn run_metatest() {
-    let path_cli_binary = get_cli_binary_path();
-    let path_metatest = get_metatest_path();
+    use move_cli::sandbox::commands::test;
+    use std::{env, path::PathBuf};
+
+    let path_cli_binary = PathBuf::from(env!("CARGO_BIN_EXE_move"));
+    let path_metatest = PathBuf::from("tests/metatests/args.txt");
 
     // local workspace + with coverage
     assert!(test::run_all(&path_metatest, path_cli_binary.as_path(), false, true).is_ok());

@@ -8598,6 +8598,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
+ "sha3 0.9.1",
  "similar",
  "tempfile",
  "tokio",

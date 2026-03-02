@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use move_coverage::coverage_map::{CoverageMap, TraceMap, output_map_to_file};
+use move_coverage::coverage_map::{CoverageMap, TraceConsumer, TraceMap, output_map_to_file};
 use std::path::Path;
 
 #[derive(Debug, Parser)]
@@ -16,13 +16,13 @@ use std::path::Path;
     version
 )]
 struct Args {
-    /// The path to the input file
-    #[clap(long = "input-file-path", short = 'f')]
-    pub input_file_path: String,
+    /// The path to the input dir
+    #[clap(long = "input-dir-path", short = 'f')]
+    pub input_dir_path: String,
     /// The path to the output file location
     #[clap(long = "output-file-path", short = 'o')]
     pub output_file_path: String,
-    /// Add traces from `input_file_path` to an existing coverage map at `update_coverage_map`
+    /// Add traces from `input_dir_path` to an existing coverage map at `update_coverage_map`
     #[clap(long = "update", short = 'u')]
     pub update: Option<String>,
     /// Collect structured trace instead of aggregated coverage information
@@ -32,16 +32,16 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    let input_path = Path::new(&args.input_file_path);
+    let input_path = Path::new(&args.input_dir_path);
     let output_path = Path::new(&args.output_file_path);
 
     if !args.use_trace_map {
         let coverage_map = if let Some(old_coverage_path) = &args.update {
             let path = Path::new(&old_coverage_path);
             let old_coverage_map = CoverageMap::from_binary_file(path).unwrap();
-            old_coverage_map.update_coverage_from_trace_file(input_path)
+            old_coverage_map.ingest_trace_dir(input_path)
         } else {
-            CoverageMap::from_trace_file(input_path)
+            CoverageMap::from_trace_dir(input_path)
         };
 
         output_map_to_file(output_path, &coverage_map)
@@ -50,9 +50,9 @@ fn main() {
         let trace_map = if let Some(old_trace_path) = &args.update {
             let path = Path::new(&old_trace_path);
             let old_trace_map = TraceMap::from_binary_file(path);
-            old_trace_map.update_from_trace_file(input_path)
+            old_trace_map.ingest_trace_dir(input_path)
         } else {
-            TraceMap::from_trace_file(input_path)
+            TraceMap::from_trace_dir(input_path)
         };
 
         output_map_to_file(output_path, &trace_map)
