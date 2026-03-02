@@ -32,7 +32,7 @@ use test_case::{
     fullnode_build_publish_transaction_test::FullNodeBuildPublishTransactionTest,
     fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
     native_transfer_test::NativeTransferTest, random_beacon_test::RandomBeaconTest,
-    shared_object_test::SharedCounterTest,
+    shared_object_test::SharedCounterTest, staking_test::StakingTest,
 };
 use tokio::time::{self, Duration};
 use tracing::{error, info};
@@ -231,8 +231,11 @@ impl TestContext {
             .get_transaction_with_options(digest, SuiTransactionBlockResponseOptions::new())
             .await
         {
-            Ok(_) => (true, digest, retry_times),
-            Err(_) => {
+            // Wait for the transaction to be included in a checkpoint, not just
+            // known to the fullnode. Index data is only available after the
+            // checkpoint containing the transaction has been processed.
+            Ok(resp) if resp.checkpoint.is_some() => (true, digest, retry_times),
+            _ => {
                 time::sleep(Duration::from_millis(300 * retry_times)).await;
                 (false, digest, retry_times + 1)
             }
@@ -314,6 +317,7 @@ impl ClusterTest {
             TestCase::new(FullNodeBuildPublishTransactionTest {}),
             TestCase::new(CoinIndexTest {}),
             TestCase::new(RandomBeaconTest {}),
+            TestCase::new(StakingTest {}),
         ];
 
         // TODO: improve the runner parallelism for efficiency

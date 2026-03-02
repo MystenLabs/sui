@@ -1,11 +1,11 @@
-name: Docs CI
+name: Build and Deploy docs.sui.io
 
 on:
   push:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-
+  
 jobs:
   build:
     name: Lint, Build, and Test
@@ -19,7 +19,7 @@ jobs:
       - name: Install Nodejs
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # pin@v6.2.0
         with:
-          node-version: '18'
+          node-version: '24'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

@@ -4,7 +4,6 @@
 const path = require('path');
 const vscode = require('vscode');
 const prettier = require('prettier');
-const { cosmiconfigSync: cosmiconfig } = require('cosmiconfig');
 const { Worker } = require('node:worker_threads');
 
 /**
@@ -65,12 +64,18 @@ function activate(context) {
 					setTimeout(() => {
 						reject();
 						worker.off('message', handleMessage);
-						channel.appendLine('Timeout waiting for formatted text for: ' + documentUri);
 					}, WAIT_TIME);
 
 					worker.on('message', handleMessage);
 
-					function handleMessage({ text, message, documentUri }) {
+					function handleMessage({ text, message, documentUri, error }) {
+						if (error) {
+							channel.appendLine('Error formatting text: ' + message);
+							reject(new Error(message));
+							worker.off('message', handleMessage);
+							return;
+						}
+
 						if (documentUri === document.uri.fsPath) {
 							channel.appendLine('Received formatted text for: ' + documentUri);
 							resolve({ text, documentUri });
@@ -90,56 +95,47 @@ function activate(context) {
 }
 
 /**
- * For the given filepath, search for one of the following configuration files:
- * - .prettierrc (prettier.json etc)
+ * For the given filepath, search for a prettier configuration file and resolve
+ * it with overrides applied for the specific file path.
  *
- * Alternatively use (in order, if set):
- * - Extension settings
- * - Prettier extension settings
+ * Falls back to extension settings if no config file is found.
  */
 async function findMatchingConfig(documentUri) {
-	const workspaceFolder = vscode.workspace.getWorkspaceFolder(documentUri);
-	if (!workspaceFolder) {
-		const formatterConfig = vscode.workspace.getConfiguration(EXTENSION_NAME);
-		return {
-			tabWidth: formatterConfig.get('tabWidth'),
-			printWidth: formatterConfig.get('printWidth'),
+	const now = Date.now();
+	const filePath = documentUri.fsPath;
+
+	// Clear cosmiconfig's internal search cache so that config file
+	// changes are picked up without restarting the extension.
+	await prettier.clearConfigCache();
+
+	// prettier.resolveConfig uses cosmiconfig internally and resolves
+	// `overrides` by matching glob patterns against the file path.
+	const resolved = await prettier.resolveConfig(filePath, {
+		editorconfig: true,
+		useCache: false,
+	});
+
+	const formatterConfig = vscode.workspace.getConfiguration(EXTENSION_NAME);
+
+	if (resolved) {
+		channel.appendLine(`Resolved prettier config for ${filePath}`);
+
+		const config = {
 			wrapComments: formatterConfig.get('wrapComments'),
 			useModuleLabel: formatterConfig.get('useModuleLabel'),
 			autoGroupImports: formatterConfig.get('autoGroupImports'),
 			enableErrorDebug: formatterConfig.get('errorDebugMode'),
+			...resolved,
 		};
+
+		channel.appendLine('Resulting config:');
+		channel.append(JSON.stringify(config, null, 2));
+		channel.appendLine(`Time taken to resolve config: ${Date.now() - now}ms`);
+
+		return config;
 	}
 
-	const root = workspaceFolder.uri.fsPath;
-	let lookup = documentUri.fsPath;
-	let search = {};
-
-	// go back in the directory until the root is found; or until we find the
-	// .prettierrc (.json | .yml) file
-	while (lookup !== root && lookup !== '/') {
-		lookup = path.join(lookup, '..');
-
-		const prettierConfig = cosmiconfig('prettier', {
-			searchPlaces: [
-				'.prettierrc',
-				'.prettierrc.json',
-				'.prettierrc.yaml',
-				'.prettierrc.yml',
-				'.prettierrc.js',
-				'prettier.config.js',
-			],
-		}).search(lookup);
-
-		if (prettierConfig) {
-			channel.appendLine(`Found a prettier config at ${prettierConfig.filepath}`);
-			search = prettierConfig.config;
-			channel.append(JSON.stringify(search, null, 2));
-			break;
-		}
-	}
-
-	const formatterConfig = vscode.workspace.getConfiguration(EXTENSION_NAME);
+	channel.appendLine(`No prettier config found for ${filePath}, using extension settings`);
 
 	return {
 		tabWidth: formatterConfig.get('tabWidth'),
@@ -148,7 +144,6 @@ async function findMatchingConfig(documentUri) {
 		useModuleLabel: formatterConfig.get('useModuleLabel'),
 		autoGroupImports: formatterConfig.get('autoGroupImports'),
 		enableErrorDebug: formatterConfig.get('errorDebugMode'),
-		...search, // .prettierrc overrides the extension settings
 	};
 }
 

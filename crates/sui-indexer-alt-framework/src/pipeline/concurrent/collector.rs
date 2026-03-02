@@ -77,6 +77,9 @@ pub(super) fn collector<H: Handler + 'static>(
     tx: mpsc::Sender<BatchedRows<H>>,
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
+    min_eager_rows: usize,
+    max_pending_rows: usize,
+    max_watermark_updates: usize,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         // The `poll` interval controls the maximum time to wait between collecting batches,
@@ -96,123 +99,155 @@ pub(super) fn collector<H: Handler + 'static>(
 
         info!(pipeline = H::NAME, "Starting collector");
 
+        // Wait for main_reader_lo to be initialized before processing any checkpoints.
+        let reader_lo_atomic = main_reader_lo.wait().await;
+
         loop {
+            // === IDLE: block until timer fires or enough data accumulates ===
             tokio::select! {
-                // Time to create another batch and push it to the committer.
-                _ = poll.tick() => {
-                    let guard = metrics
-                        .collector_gather_latency
-                        .with_label_values(&[H::NAME])
-                        .start_timer();
-
-                    let mut batch = H::Batch::default();
-                    let mut watermark = Vec::new();
-                    let mut batch_len = 0;
-
-                    loop {
-                        let Some(mut entry) = pending.first_entry() else {
-                            break;
-                        };
-
-                        if watermark.len() >= H::MAX_WATERMARK_UPDATES {
-                            break;
-                        }
-
-                        let indexed = entry.get_mut();
-                        let before = indexed.values.len();
-                        let status = handler.batch(&mut batch, &mut indexed.values);
-                        let taken = before - indexed.values.len();
-
-                        batch_len += taken;
-                        watermark.push(indexed.watermark.take(taken));
-                        if indexed.is_empty() {
-                            checkpoint_lag_reporter.report_lag(
-                                indexed.watermark.checkpoint(),
-                                indexed.watermark.timestamp_ms(),
-                            );
-                            entry.remove();
-                        }
-
-                        if status == BatchStatus::Ready {
-                            // Batch is full, send it
-                            break;
-                        }
-                    }
-                    pending_rows -= batch_len;
-                    let elapsed = guard.stop_and_record();
-                    debug!(
-                        pipeline = H::NAME,
-                        elapsed_ms = elapsed * 1000.0,
-                        rows = batch_len,
-                        pending_rows = pending_rows,
-                        "Gathered batch",
-                    );
-
-                    metrics
-                        .total_collector_batches_created
-                        .with_label_values(&[H::NAME])
-                        .inc();
-
-                    metrics
-                        .collector_batch_size
-                        .with_label_values(&[H::NAME])
-                        .observe(batch_len as f64);
-
-                    let batched_rows = BatchedRows {
-                        batch,
-                        batch_len,
-                        watermark,
-                    };
-
-                    if tx.send(batched_rows).await.is_err() {
-                        info!(pipeline = H::NAME, "Committer closed channel, stopping collector");
-                        break;
-                    }
-
-                    if pending_rows > 0 {
-                        poll.reset_immediately();
-                    } else if rx.is_closed() && rx.is_empty() {
-                        info!(
-                            pipeline = H::NAME,
-                            "Processor closed channel, pending rows empty, stopping collector",
-                        );
-                        break;
-                    }
-                }
+                biased;
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                Some(mut indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
-                    // Clear the values of outdated checkpoints, so that we don't commit data to the
-                    // store, but can still advance watermarks.
-                    let reader_lo = main_reader_lo.wait().await.load(Ordering::Relaxed);
-                    if indexed.checkpoint() < reader_lo {
-                        indexed.values.clear();
-                        metrics.total_collector_skipped_checkpoints
-                            .with_label_values(&[H::NAME])
-                            .inc();
-                    }
+                Some(mut indexed) = rx.recv(), if pending_rows < max_pending_rows => {
+                    let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
 
-                    metrics
-                        .total_collector_rows_received
-                        .with_label_values(&[H::NAME])
-                        .inc_by(indexed.len() as u64);
-                    metrics
-                        .total_collector_checkpoints_received
-                        .with_label_values(&[H::NAME])
-                        .inc();
                     metrics
                         .collector_reader_lo
                         .with_label_values(&[H::NAME])
                         .set(reader_lo as i64);
 
-                    pending_rows += indexed.len();
-                    pending.insert(indexed.checkpoint(), indexed.into());
+                    let mut recv_cps = 0usize;
+                    let mut recv_rows = 0usize;
+                    loop {
+                        if indexed.checkpoint() < reader_lo {
+                            indexed.values.clear();
+                            metrics
+                                .total_collector_skipped_checkpoints
+                                .with_label_values(&[H::NAME])
+                                .inc();
+                        }
 
-                    if pending_rows >= H::MIN_EAGER_ROWS {
-                        poll.reset_immediately()
+                        recv_cps += 1;
+                        recv_rows += indexed.len();
+                        pending_rows += indexed.len();
+                        pending.insert(indexed.checkpoint(), indexed.into());
+
+                        if pending_rows >= max_pending_rows {
+                            break;
+                        }
+
+                        match rx.try_recv() {
+                            Ok(next) => indexed = next,
+                            Err(_) => break,
+                        }
+                    }
+
+                    metrics
+                        .total_collector_rows_received
+                        .with_label_values(&[H::NAME])
+                        .inc_by(recv_rows as u64);
+                    metrics
+                        .total_collector_checkpoints_received
+                        .with_label_values(&[H::NAME])
+                        .inc_by(recv_cps as u64);
+
+                    if pending_rows < min_eager_rows {
+                        continue;
                     }
                 }
                 // docs::/#collector
+
+                // Timer: always flush (even if empty, for watermark progress)
+                _ = poll.tick() => {}
+            }
+
+            // === FLUSHING: send batches until pending is drained ===
+            //
+            // Always executes at least once — on timer ticks this sends an empty
+            // heartbeat batch so watermarks make progress.
+            loop {
+                let guard = metrics
+                    .collector_gather_latency
+                    .with_label_values(&[H::NAME])
+                    .start_timer();
+
+                let mut batch = H::Batch::default();
+                let mut watermark = Vec::new();
+                let mut batch_len = 0;
+
+                loop {
+                    let Some(mut entry) = pending.first_entry() else {
+                        break;
+                    };
+
+                    if watermark.len() >= max_watermark_updates {
+                        break;
+                    }
+
+                    let indexed = entry.get_mut();
+                    let before = indexed.values.len();
+                    let status = handler.batch(&mut batch, &mut indexed.values);
+                    let taken = before - indexed.values.len();
+
+                    batch_len += taken;
+                    watermark.push(indexed.watermark.take(taken));
+                    if indexed.is_empty() {
+                        checkpoint_lag_reporter.report_lag(
+                            indexed.watermark.checkpoint(),
+                            indexed.watermark.timestamp_ms(),
+                        );
+                        entry.remove();
+                    }
+
+                    if status == BatchStatus::Ready {
+                        break;
+                    }
+                }
+
+                let elapsed = guard.stop_and_record();
+                debug!(
+                    pipeline = H::NAME,
+                    elapsed_ms = elapsed * 1000.0,
+                    rows = batch_len,
+                    "Gathered batch",
+                );
+
+                metrics
+                    .total_collector_batches_created
+                    .with_label_values(&[H::NAME])
+                    .inc();
+
+                metrics
+                    .collector_batch_size
+                    .with_label_values(&[H::NAME])
+                    .observe(batch_len as f64);
+
+                pending_rows -= batch_len;
+
+                let batched_rows = BatchedRows {
+                    batch,
+                    batch_len,
+                    watermark,
+                };
+                if tx.send(batched_rows).await.is_err() {
+                    info!(
+                        pipeline = H::NAME,
+                        "Committer closed channel, stopping collector"
+                    );
+                    return Ok(());
+                }
+
+                if pending.is_empty() {
+                    break;
+                }
+            }
+
+            if rx.is_closed() && rx.is_empty() && pending_rows == 0 {
+                info!(
+                    pipeline = H::NAME,
+                    "Processor closed channel, pending rows empty, stopping collector",
+                );
+                break;
             }
         }
 
@@ -328,6 +363,9 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         let part1_length = TEST_MAX_CHUNK_ROWS / 2;
@@ -349,9 +387,6 @@ mod tests {
 
         let batch2 = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
         assert_eq!(batch2.batch_len, 1);
-
-        let batch3 = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-        assert_eq!(batch3.batch_len, 0);
     }
 
     #[tokio::test]
@@ -368,6 +403,9 @@ mod tests {
             collector_tx,
             main_reader_lo,
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         processor_tx
@@ -408,6 +446,9 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         // Send more data than MAX_PENDING_ROWS plus collector channel buffer
@@ -462,6 +503,9 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         let start_time = std::time::Instant::now();
@@ -516,6 +560,9 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         // The collector starts with an immediate poll tick, creating an empty batch
@@ -559,6 +606,9 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         // Consume initial empty batch
@@ -599,6 +649,9 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         // Send enough data to trigger batching.
@@ -645,6 +698,9 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         let eager_rows_plus_one = TestHandler::MIN_EAGER_ROWS + 1;
@@ -701,6 +757,9 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
         );
 
         let more_than_max_chunk_rows = TEST_MAX_CHUNK_ROWS + 10;

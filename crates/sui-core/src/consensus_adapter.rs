@@ -1102,7 +1102,7 @@ impl ConsensusAdapter {
 
         self.metrics
             .sequencing_acknowledge_latency
-            .with_label_values(&[&bucket, tx_type])
+            .with_label_values(&[bucket.as_str(), tx_type])
             .observe(ack_start.elapsed().as_secs_f64());
 
         (consensus_positions, status_waiter)
@@ -1397,7 +1397,7 @@ impl Drop for InflightDropGuard<'_> {
         self.adapter
             .metrics
             .sequencing_certificate_latency
-            .with_label_values(&[&position, self.tx_type, processed_method])
+            .with_label_values(&[position.as_str(), self.tx_type, processed_method])
             .observe(latency.as_secs_f64());
 
         // Only sample latency after consensus quorum is up. Otherwise, the wait for consensus

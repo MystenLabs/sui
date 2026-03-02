@@ -23,6 +23,12 @@ impl Tracer for NopTracer {
     }
 }
 
+impl<T: Tracer> Tracer for &mut T {
+    fn notify(&mut self, event: &TraceEvent, writer: Writer<'_>) -> bool {
+        <T as Tracer>::notify(self, event, writer)
+    }
+}
+
 /// A writer that allows you to push custom events to the trace but encapsulates the trace so that
 /// non-external events cannot be accidentally added.
 pub struct Writer<'a>(pub(crate) &'a mut MoveTrace);

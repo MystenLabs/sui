@@ -62,6 +62,7 @@ impl Params {
 pub struct SharedObjectCongestionTracker {
     object_execution_cost: HashMap<ObjectID, u64>,
     params: Params,
+    log_entries: Option<Vec<TransactionCostLogEntry>>,
 }
 
 impl SharedObjectCongestionTracker {
@@ -69,6 +70,7 @@ impl SharedObjectCongestionTracker {
         initial_object_debts: impl IntoIterator<Item = (ObjectID, u64)>,
         params: ExecutionTimeEstimateParams,
         for_randomness: bool,
+        enable_logging: bool,
     ) -> Self {
         let object_execution_cost: HashMap<ObjectID, u64> =
             initial_object_debts.into_iter().collect();
@@ -85,6 +87,7 @@ impl SharedObjectCongestionTracker {
                 params,
                 for_randomness,
             },
+            log_entries: enable_logging.then(Vec::new),
         }
     }
 
@@ -92,6 +95,7 @@ impl SharedObjectCongestionTracker {
         initial_object_debts: impl IntoIterator<Item = (ObjectID, u64)>,
         protocol_config: &ProtocolConfig,
         for_randomness: bool,
+        enable_logging: bool,
     ) -> Self {
         let PerObjectCongestionControlMode::ExecutionTimeEstimate(params) =
             protocol_config.per_object_congestion_control_mode()
@@ -100,7 +104,7 @@ impl SharedObjectCongestionTracker {
                 "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
             );
         };
-        Self::new(initial_object_debts, params, for_randomness)
+        Self::new(initial_object_debts, params, for_randomness, enable_logging)
     }
 
     // Given a list of shared input objects, returns the starting cost of a transaction that operates on
@@ -221,23 +225,44 @@ impl SharedObjectCongestionTracker {
                 assert!(old_end_cost.is_none() || old_end_cost.unwrap() <= end_cost);
             }
         }
+
+        if let Some(entries) = &mut self.log_entries {
+            entries.push(TransactionCostLogEntry {
+                tx_digest: *cert.digest(),
+                start_cost,
+                end_cost,
+            });
+        }
     }
 
-    // Returns accumulated debts for objects whose budgets have been exceeded over the course
-    // of the commit. Consumes the tracker object, since this should only be called once after
+    // Returns end-of-commit data from congestion control:
+    // - Accumulated debts for objects whose budgets have been exceeded over the course of
+    //   the commit.
+    // - Detailed per-object congestion data for logging.
+    // Consumes the tracker object, since this should only be called once after
     // all tx have been processed.
-    pub fn accumulated_debts(self, commit_info: &ConsensusCommitInfo) -> Vec<(ObjectID, u64)> {
-        self.object_execution_cost
+    pub fn finish_commit(self, commit_info: &ConsensusCommitInfo) -> FinishedCommitData {
+        let commit_budget = self.params.commit_budget(commit_info);
+        let log_entries = self.log_entries.unwrap_or_default();
+        let final_object_execution_costs = self.object_execution_cost.clone();
+        let accumulated_debts = self
+            .object_execution_cost
             .into_iter()
             .filter_map(|(obj_id, cost)| {
-                let remaining_cost = cost.saturating_sub(self.params.commit_budget(commit_info));
+                let remaining_cost = cost.saturating_sub(commit_budget);
                 if remaining_cost > 0 {
                     Some((obj_id, remaining_cost))
                 } else {
                     None
                 }
             })
-            .collect()
+            .collect();
+        FinishedCommitData {
+            accumulated_debts,
+            log_entries,
+            final_object_execution_costs,
+            commit_budget,
+        }
     }
 
     // Returns the maximum cost of all objects.
@@ -265,6 +290,20 @@ impl CongestionPerObjectDebt {
             Self::V1(round, debt) => (round, debt),
         }
     }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct TransactionCostLogEntry {
+    pub tx_digest: TransactionDigest,
+    pub start_cost: u64,
+    pub end_cost: u64,
+}
+
+pub struct FinishedCommitData {
+    pub accumulated_debts: Vec<(ObjectID, u64)>,
+    pub log_entries: Vec<TransactionCostLogEntry>,
+    pub final_object_execution_costs: HashMap<ObjectID, u64>,
+    pub commit_budget: u64,
 }
 
 #[cfg(test)]
@@ -317,6 +356,7 @@ mod object_cost_tests {
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
             [(object_id_0, 5), (object_id_1, 10)],
             default_params(),
+            false,
             false,
         );
 
@@ -453,6 +493,7 @@ mod object_cost_tests {
             [(shared_obj_0, 750), (shared_obj_1, 0)],
             default_params(),
             false,
+            false,
         );
 
         // Read/write to object 0 should be deferred.
@@ -528,7 +569,7 @@ mod object_cost_tests {
 
         // Set initial cost that exceeds 0 burst limit
         let shared_object_congestion_tracker =
-            SharedObjectCongestionTracker::new([(shared_obj_0, 1)], default_params(), false);
+            SharedObjectCongestionTracker::new([(shared_obj_0, 1)], default_params(), false, false);
 
         // Insert a random pre-existing transaction.
         let mut previously_deferred_tx_digests = HashMap::new();
@@ -651,6 +692,7 @@ mod object_cost_tests {
                 observations_chunk_size: None,
             },
             false,
+            false,
         );
 
         // Read/write to object 0 should be deferred.
@@ -746,6 +788,7 @@ mod object_cost_tests {
                 observations_chunk_size: None,
             },
             false,
+            false,
         );
 
         // Read/write to object 0 should be deferred.
@@ -830,6 +873,7 @@ mod object_cost_tests {
             [(object_id_0, 5), (object_id_1, 10)],
             params,
             false,
+            false,
         );
         assert_eq!(shared_object_congestion_tracker.max_cost(), 10);
 
@@ -848,6 +892,7 @@ mod object_cost_tests {
             SharedObjectCongestionTracker::new(
                 [(object_id_0, 5), (object_id_1, 10)],
                 params,
+                false,
                 false,
             )
         );
@@ -870,6 +915,7 @@ mod object_cost_tests {
             SharedObjectCongestionTracker::new(
                 [(object_id_0, expected_object_0_cost), (object_id_1, 10)],
                 params,
+                false,
                 false,
             )
         );
@@ -906,6 +952,7 @@ mod object_cost_tests {
                     (object_id_2, expected_object_cost)
                 ],
                 params,
+                false,
                 false,
             )
         );
@@ -944,6 +991,7 @@ mod object_cost_tests {
                 ],
                 params,
                 false,
+                false,
             )
         );
         assert_eq!(
@@ -953,7 +1001,28 @@ mod object_cost_tests {
     }
 
     #[test]
-    fn test_accumulated_debts() {
+    fn test_finish_commit_empty_debts() {
+        let object_id_0 = ObjectID::random();
+        let object_id_1 = ObjectID::random();
+        let object_id_2 = ObjectID::random();
+
+        let tracker = SharedObjectCongestionTracker::new(
+            [(object_id_0, 0), (object_id_1, 0), (object_id_2, 0)],
+            default_params(),
+            false,
+            false,
+        );
+
+        let data = tracker.finish_commit(&ConsensusCommitInfo::new_for_congestion_test(
+            0,
+            0,
+            Duration::ZERO,
+        ));
+        assert!(data.accumulated_debts.is_empty());
+    }
+
+    #[test]
+    fn test_finish_commit_returns_correct_debts() {
         telemetry_subscribers::init_for_testing();
 
         let execution_time_estimator = ExecutionTimeEstimator::new_for_testing();
@@ -961,12 +1030,8 @@ mod object_cost_tests {
         let shared_obj_0 = ObjectID::random();
         let shared_obj_1 = ObjectID::random();
 
-        let tx_gas_budget = 100;
-
-        // Starting with two objects with accumulated cost 500.
         let params = ExecutionTimeEstimateParams {
             target_utilization: 100,
-            // set a burst limit to verify that it does not affect debt calculation.
             allowed_txn_cost_overage_burst_limit_us: 1_600 * 5,
             randomness_scalar: 0,
             max_estimate_us: u64::MAX,
@@ -976,17 +1041,16 @@ mod object_cost_tests {
             default_none_duration_for_new_keys: false,
             observations_chunk_size: None,
         };
-        let mut shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
+        let mut tracker = SharedObjectCongestionTracker::new(
             [(shared_obj_0, 500), (shared_obj_1, 500)],
             params,
             false,
+            false,
         );
 
-        // Simulate a tx on object 0 that exceeds the budget.
-        // Only mutable transactions bump cost, so only iterate once with mutable=true
-        let tx = build_transaction(&[(shared_obj_0, true)], tx_gas_budget);
-        shared_object_congestion_tracker.bump_object_execution_cost(
-            shared_object_congestion_tracker.get_tx_cost(
+        let tx = build_transaction(&[(shared_obj_0, true)], 100);
+        tracker.bump_object_execution_cost(
+            tracker.get_tx_cost(
                 &execution_time_estimator,
                 &tx,
                 &mut IndirectStateObserver::new(),
@@ -994,32 +1058,67 @@ mod object_cost_tests {
             &tx,
         );
 
-        // Verify that accumulated_debts reports the debt for object 0.
-        // With 100% target_utilization and 800us commit period, budget is 800
-        // init 500 + 1000 tx cost - budget 800 = 700
-        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(
-            &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::from_micros(800)),
-        );
-        assert_eq!(accumulated_debts.len(), 1);
-        assert_eq!(accumulated_debts[0], (shared_obj_0, 700));
+        let commit_info =
+            ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::from_micros(800));
+        let data = tracker.finish_commit(&commit_info);
+
+        assert_eq!(data.accumulated_debts.len(), 1);
+        assert_eq!(data.accumulated_debts[0], (shared_obj_0, 700));
+        assert_eq!(data.commit_budget, 800);
     }
 
     #[test]
-    fn test_accumulated_debts_empty() {
-        let object_id_0 = ObjectID::random();
-        let object_id_1 = ObjectID::random();
-        let object_id_2 = ObjectID::random();
+    fn test_finish_commit_with_logging() {
+        telemetry_subscribers::init_for_testing();
 
-        // Initialize with zero costs so there's no debt to accumulate
-        let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
-            [(object_id_0, 0), (object_id_1, 0), (object_id_2, 0)],
-            default_params(),
+        let execution_time_estimator = ExecutionTimeEstimator::new_for_testing();
+
+        let shared_obj_0 = ObjectID::random();
+        let shared_obj_1 = ObjectID::random();
+
+        let params = ExecutionTimeEstimateParams {
+            target_utilization: 100,
+            allowed_txn_cost_overage_burst_limit_us: 1_600 * 5,
+            randomness_scalar: 0,
+            max_estimate_us: u64::MAX,
+            stored_observations_num_included_checkpoints: 10,
+            stored_observations_limit: u64::MAX,
+            stake_weighted_median_threshold: 0,
+            default_none_duration_for_new_keys: false,
+            observations_chunk_size: None,
+        };
+        let mut tracker = SharedObjectCongestionTracker::new(
+            [(shared_obj_0, 0), (shared_obj_1, 0)],
+            params,
             false,
+            true,
         );
 
-        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(
-            &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::ZERO),
+        let tx = build_transaction(&[(shared_obj_0, true), (shared_obj_1, true)], 100);
+        let tx_digest = *tx.digest();
+        tracker.bump_object_execution_cost(
+            tracker.get_tx_cost(
+                &execution_time_estimator,
+                &tx,
+                &mut IndirectStateObserver::new(),
+            ),
+            &tx,
         );
-        assert!(accumulated_debts.is_empty());
+
+        let commit_info =
+            ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::from_micros(800));
+        let data = tracker.finish_commit(&commit_info);
+
+        assert_eq!(data.log_entries.len(), 1);
+        assert_eq!(data.log_entries[0].tx_digest, tx_digest);
+        assert_eq!(data.log_entries[0].start_cost, 0);
+        assert!(
+            data.final_object_execution_costs
+                .contains_key(&shared_obj_0)
+        );
+        assert!(
+            data.final_object_execution_costs
+                .contains_key(&shared_obj_1)
+        );
     }
 }

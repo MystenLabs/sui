@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
-import DocCardList from '@theme/DocCardList';
+import DocCardList from '@theme-original/DocCardList';
 import { useCurrentSidebarCategory } from '@docusaurus/theme-common';
 
 // Renders the current sidebar category *if* we're inside DocsSidebarProvider,

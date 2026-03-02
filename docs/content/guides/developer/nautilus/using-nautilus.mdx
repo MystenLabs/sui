@@ -4,7 +4,7 @@ description: Details on how to use Nautilus with the reproducible build template
 keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
 ---
 
-[Nautilus](/guides/developer/nautilus/index.mdx) is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
+[Nautilus](/guides/developer/nautilus/index.mdx) is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/guides/developer/nautilus/marlin) while preserving trust on-chain through smart contract-based verification.
 
 The [Nautilus repo](https://github.com/MystenLabs/nautilus) provides scaffolding such as reproducible builds, signature formatting, and HTTPS traffic forwarding. This allows you to focus on implementing the off-chain computation logic inside the enclave.
 
@@ -477,6 +477,19 @@ $ ENCLAVE_URL=http://<PUBLIC_IP>:3000
 You can view an [example enclave config object](https://testnet.suivision.xyz/object/0xe33641a2dae5eb4acad3859e603ec4e25641af05f837c85058645c7d8d9d831a) containing PCR values. You can also view an [example enclave object](https://testnet.suivision.xyz/object/0x53db077721140910697668f9b2ee80fbecd104ac076d60fc1fb49ae57cd96c0d) that includes the registered enclave public key.
 
 You can find the frontend code for the Twitter example [in this repository](https://github.com/MystenLabs/nautilus-twitter/tree/main/frontend).
+
+## Development mode
+
+For non-production development, you can inject a private key instead of generating it inside the enclave and run the enclave in debug mode anywhere.
+
+1. Modify the code to [inject a deterministic private key](https://github.com/MystenLabs/nautilus/blob/main/src/nautilus-server/src/main.rs#L16) into the enclave. This allows you to run the server anywhere with the same private key without needing an AWS Nitro instance.
+2. Use `make run-debug` instead of `make run`. Debug mode produces all-zero PCR values. You can register the enclave on-chain with these all-zero PCRs once and reuse it for development without needing to update PCRs on-chain. 
+
+:::danger
+
+For development only. Never use in production as all-zero PCRs provide no attestation guarantees and injected keys compromise the TEE security model.
+
+:::
 
 ## Troubleshooting
 

@@ -11,4 +11,3 @@ publish = false
 [dependencies]
 anyhow.workspace = true
 prometheus.workspace = true
-protobuf.workspace = true

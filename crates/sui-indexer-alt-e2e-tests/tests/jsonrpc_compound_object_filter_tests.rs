@@ -143,8 +143,7 @@ async fn test_multi_fetch() {
     assert!(has_next_page);
 }
 
-/// There are too few results in total to return a full page, so we end up fetching all the owned
-/// objects to make sure.
+/// Test correct pagination when there are fewer results than the requested limit.
 #[tokio::test]
 async fn test_too_few_results() {
     let mut cluster = setup_cluster(ObjectsConfig {

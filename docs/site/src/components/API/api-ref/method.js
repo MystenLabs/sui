@@ -20,90 +20,65 @@ const Method = (props) => {
   const handleClick = (e) => {
     let href = "#";
     if (!e.target.nodeName.match(/^H/)) return;
-    if (e.target.id) {
-      href += e.target.id;
-    } else {
-      href += e.target.parentNode.id;
-    }
-
+    href += e.target.id ? e.target.id : e.target.parentNode.id;
     history.push(href);
   };
 
   return (
     <>
       {apis.map((api) => {
+        const apiId = api.replaceAll(/\s/g, "-").toLowerCase();
+
         return (
-          <div
-            key={`div-${api.replaceAll(/\s/g, "-").toLowerCase()}`}
-            ref={parentScrollContainerRef()}
-          >
+          <div key={`div-${apiId}`} ref={parentScrollContainerRef()}>
             <h2
-              id={`${api.replaceAll(/\s/g, "-").toLowerCase()}`}
-              className="border-0 border-b border-solid border-sui-blue-dark dark:border-sui-blue scroll-mt-32 text-3xl text-sui-blue-dark dark:text-sui-blue font-bold mt-12 after:content-['_#'] after:hidden after:hover:inline after:opacity-20 cursor-pointer"
+              id={apiId}
+              className="scroll-mt-32 text-3xl font-extrabold mt-12 cursor-pointer"
               onClick={handleClick}
-              key={api.replaceAll(/\s/g, "-").toLowerCase()}
             >
               {api}
             </h2>
+
             <ScrollSpy parentScrollContainerRef={parentScrollContainerRef()}>
               {json["methods"]
                 .filter((method) => method.tags[0].name === api)
                 .map((method) => {
                   const desc = method.description
-                    ? method.description
-                        .replaceAll(/\</g, "&lt;")
-                        .replaceAll(/\{/g, "&#123;")
+                    ? method.description.replaceAll(/\</g, "&lt;").replaceAll(/\{/g, "&#123;")
                     : "";
+
                   return (
                     <div
-                      className={`snap-start scroll-mt-32 ${
-                        method.deprecated
-                          ? "bg-sui-warning-light p-8 pt-4 rounded-lg mt-8 dark:bg-sui-warning-dark"
-                          : "pt-8"
-                      }`}
-                      key={`div-${api
-                        .replaceAll(/\s/g, "-")
-                        .toLowerCase()}-${method.name.toLowerCase()}`}
-                      id={`${method.name.toLowerCase()}`}
+                      key={`div-${apiId}-${method.name.toLowerCase()}`}
+                      id={method.name.toLowerCase()}
+                      className="snap-start scroll-mt-32 mt-6"
                       onClick={handleClick}
                     >
-                      <h3
-                        className="text-2xl font-bold after:content-['_#'] after:hidden after:hover:inline after:opacity-20 cursor-pointer"
-                        key={`link-${method.name.toLowerCase()}`}
-                        onClick={null}
-                      >
-                        {method.name}
-                      </h3>
-
-                      {method.deprecated && (
-                        <div className="p-4 bg-sui-issue rounded-lg font-bold mt-4">
-                          Deprecated
+                      <div className="api-card api-card-pad-lg">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-2xl font-extrabold m-0">{method.name}</h3>
+                          {method.deprecated ? <span className="api-badge-warn">Deprecated</span> : null}
                         </div>
-                      )}
-                      <div className="">
-                        <p className="mb-8">
-                          <Markdown>{desc}</Markdown>
-                        </p>
-                        <p className="font-bold mt-4 mb-2 text-xl text-sui-grey-80 dark:text-sui-gray-70">
-                          Parameters
-                        </p>
-                        <Parameters
-                          method={method.name.toLowerCase()}
-                          params={method.params}
-                          schemas={schemas}
-                        />
-                        <p className="font-bold mb-2 text-xl text-sui-gray-80 dark:text-sui-gray-70">
-                          Result
-                        </p>
-                        <Result result={method.result} json={json} />
-                        {method.examples && (
-                          <>
-                            <p className="mt-4 font-bold text-xl text-sui-gray-80 dark:text-sui-gray-70">
-                              Example
-                            </p>
-                            <Examples method={method.name} examples={method.examples} />
-                          </>
+
+                        {desc && (
+                          <div className="mt-3 api-muted">
+                            <Markdown>{desc}</Markdown>
+                          </div>
                         )}
+
+                        <div className="mt-5 grid gap-4">
+                          <Parameters
+                            method={method.name.toLowerCase()}
+                            params={method.params}
+                            schemas={schemas}
+                          />
+
+                          <Result result={method.result} json={json} />
+
+                          {method.examples && (
+                            <Examples method={method.name} examples={method.examples} />
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

@@ -1548,6 +1548,42 @@ impl TransactionKind {
             })
     }
 
+    /// If this is an accumulator barrier settlement transaction, returns its
+    /// `AccumulatorSettlement` transaction key by extracting epoch and
+    /// checkpoint_height from the prologue call arguments.
+    pub fn accumulator_barrier_settlement_key(&self) -> Option<TransactionKey> {
+        let TransactionKind::ProgrammableSystemTransaction(pt) = self else {
+            return None;
+        };
+        let has_mutable_acc_root = pt.inputs.iter().any(|input| {
+            matches!(
+                input,
+                CallArg::Object(ObjectArg::SharedObject {
+                    id,
+                    mutability: SharedObjectMutability::Mutable,
+                    ..
+                }) if *id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+            )
+        });
+        if !has_mutable_acc_root {
+            return None;
+        }
+        // The prologue embeds epoch as Input(1) and checkpoint_height as Input(2),
+        // both as BCS-encoded u64 pure values.
+        let epoch = pt.inputs.get(1).and_then(|arg| match arg {
+            CallArg::Pure(bytes) => bcs::from_bytes::<u64>(bytes).ok(),
+            _ => None,
+        })?;
+        let checkpoint_height = pt.inputs.get(2).and_then(|arg| match arg {
+            CallArg::Pure(bytes) => bcs::from_bytes::<u64>(bytes).ok(),
+            _ => None,
+        })?;
+        Some(TransactionKey::AccumulatorSettlement(
+            epoch,
+            checkpoint_height,
+        ))
+    }
+
     /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
     /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
     /// directly.
@@ -2904,6 +2940,30 @@ impl TransactionDataAPI for TransactionDataV1 {
             && config.enable_address_balance_gas_payments()
             && self.is_gas_paid_from_address_balance()
         {
+            if config.address_balance_gas_reject_gas_coin_arg()
+                && let TransactionKind::ProgrammableTransaction(pt) = &self.kind
+            {
+                fp_ensure!(
+                    !pt.commands.iter().any(|cmd| cmd.is_gas_coin_used()),
+                    UserInputError::Unsupported(
+                        "Argument::GasCoin is not supported with address balance gas payments"
+                            .to_string(),
+                    )
+                    .into()
+                );
+            }
+
+            if config.address_balance_gas_check_rgp_at_signing() {
+                fp_ensure!(
+                    self.gas_data.price >= context.reference_gas_price,
+                    UserInputError::GasPriceUnderRGP {
+                        gas_price: self.gas_data.price,
+                        reference_gas_price: context.reference_gas_price,
+                    }
+                    .into()
+                );
+            }
+
             match self.expiration() {
                 TransactionExpiration::None => {
                     // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
@@ -3094,6 +3154,7 @@ pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
     pub epoch: EpochId,
     pub chain_identifier: ChainIdentifier,
+    pub reference_gas_price: u64,
 }
 
 impl<'a> TxValidityCheckContext<'a> {
@@ -3102,6 +3163,7 @@ impl<'a> TxValidityCheckContext<'a> {
             config,
             epoch: 0,
             chain_identifier: ChainIdentifier::default(),
+            reference_gas_price: 1000,
         }
     }
 }
@@ -4349,6 +4411,7 @@ impl std::fmt::Debug for InputObjects {
 
 // An InputObjects new-type that has been verified by sui-transaction-checks, and can be
 // safely passed to execution.
+#[derive(Clone)]
 pub struct CheckedInputObjects(InputObjects);
 
 // DO NOT CALL outside of sui-transaction-checks, genesis, or replay.

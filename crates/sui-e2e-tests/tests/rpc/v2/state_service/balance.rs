@@ -22,7 +22,10 @@ const INITIAL_SUI_BALANCE: u64 = 150000000000000000;
 
 #[sim_test]
 async fn test_balance_apis() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address = test_cluster.get_address_0();
@@ -40,7 +43,10 @@ async fn test_balance_apis() {
 
 #[sim_test]
 async fn test_balance_changes_on_transfer() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let sender = test_cluster.get_address_0();
@@ -86,7 +92,10 @@ async fn test_address_balance() {
         cfg
     });
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let sender = test_cluster.get_address_0();
@@ -133,7 +142,10 @@ async fn test_address_balance_account_with_only_address_balance() {
         cfg
     });
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let sender = test_cluster.get_address_0();
@@ -173,7 +185,10 @@ async fn test_address_balance_account_with_only_address_balance() {
 
 #[sim_test]
 async fn test_custom_coin_balance() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address = test_cluster.get_address_0();
@@ -370,7 +385,10 @@ async fn test_custom_coin_balance() {
 
 #[sim_test]
 async fn test_multiple_concurrent_balance_changes() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address_0 = test_cluster.get_address_0();
@@ -487,7 +505,10 @@ async fn test_multiple_concurrent_balance_changes() {
 
 #[sim_test]
 async fn test_fresh_address_with_no_coins() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     // Generate a new address that has never received any coins
@@ -528,7 +549,10 @@ async fn test_fresh_address_with_no_coins() {
 
 #[sim_test]
 async fn test_invalid_requests() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     // Test with missing owner

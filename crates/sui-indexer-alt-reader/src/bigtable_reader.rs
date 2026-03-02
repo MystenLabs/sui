@@ -34,6 +34,10 @@ pub struct BigtableArgs {
     /// App profile ID to use for Bigtable client. If not provided, the default profile will be used.
     #[arg(long)]
     pub bigtable_app_profile_id: Option<String>,
+
+    /// Maximum gRPC decoding message size for Bigtable responses, in bytes.
+    #[arg(long)]
+    pub bigtable_max_decoding_message_size: Option<usize>,
 }
 
 /// A reader backed by BigTable KV store.
@@ -74,9 +78,11 @@ impl BigtableReader {
                 bigtable_args.bigtable_project,
                 true,
                 timeout,
+                bigtable_args.bigtable_max_decoding_message_size,
                 client_name,
                 Some(registry),
                 bigtable_args.bigtable_app_profile_id,
+                None,
             )
             .await
             .context("Failed to create BigTable client")?,

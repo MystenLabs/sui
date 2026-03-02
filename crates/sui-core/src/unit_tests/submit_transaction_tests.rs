@@ -28,7 +28,6 @@ use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::consensus_test_utils::make_consensus_adapter_for_test;
-use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
 
 use super::AuthorityServerHandle;
@@ -223,45 +222,11 @@ async fn test_submit_transaction_already_executed() {
     );
     test_context
         .state
-        .try_execute_immediately(
-            &verified_transaction,
-            // Fastpath execution will only put outputs in a temporary cache,
-            // and the object changes in this transaction are not yet committed.
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
-            &epoch_store,
-        )
+        .try_execute_immediately(&verified_transaction, ExecutionEnv::new(), &epoch_store)
         .await
         .unwrap();
 
-    // Submit the same transaction that has already been fastpath executed.
-    let response1 = test_context
-        .client
-        .submit_transaction(request.clone(), None)
-        .await
-        .unwrap();
-
-    // Verify we still got a consensus position back, because the transaction has not been committed yet,
-    // so we can still sign the same transaction.
-    assert_eq!(response1.results.len(), 1);
-    match &response1.results[0] {
-        SubmitTxResult::Submitted { consensus_position } => {
-            assert_eq!(consensus_position.index, 0);
-        }
-        _ => panic!("Expected Submitted response"),
-    };
-
-    // Execute it again through non-fastpath, which will commit the object changes.
-    test_context
-        .state
-        .try_execute_immediately(
-            &verified_transaction,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            &epoch_store,
-        )
-        .await
-        .unwrap();
-
-    // Submit the same transaction again.
+    // Submit the same transaction that has already been executed.
     let response2 = test_context
         .client
         .submit_transaction(request, None)
@@ -423,11 +388,7 @@ async fn test_submit_batched_transactions_with_already_executed() {
     );
     test_context
         .state
-        .try_execute_immediately(
-            &verified_tx1,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            &epoch_store,
-        )
+        .try_execute_immediately(&verified_tx1, ExecutionEnv::new(), &epoch_store)
         .await
         .unwrap();
 
@@ -540,11 +501,7 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
     );
     test_context
         .state
-        .try_execute_immediately(
-            &verified_tx1,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            &epoch_store,
-        )
+        .try_execute_immediately(&verified_tx1, ExecutionEnv::new(), &epoch_store)
         .await
         .unwrap();
 

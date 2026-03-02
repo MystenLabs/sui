@@ -79,6 +79,7 @@ priority_queue.yaml
 protocol_config.yaml
 prover.yaml
 random.yaml
+ristretto255.yaml
 sui.yaml
 table.yaml
 table_vec.yaml

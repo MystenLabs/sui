@@ -11,6 +11,8 @@ use tokio::time::Instant;
 pub(crate) mod execution_scheduler_impl;
 pub(crate) mod funds_withdraw_scheduler;
 mod overload_tracker;
+pub(crate) mod settlement_scheduler;
+pub(crate) use settlement_scheduler::{SettlementBatchInfo, SettlementScheduler};
 
 // TODO: Cleanup this struct.
 #[derive(Clone, Debug)]
@@ -20,12 +22,6 @@ pub struct PendingCertificateStats {
     pub enqueue_time: Instant,
     // The time this certificate becomes ready for execution.
     pub ready_time: Option<Instant>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum SchedulingSource {
-    MysticetiFastPath,
-    NonFastPath,
 }
 
 #[derive(Debug)]

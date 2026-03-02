@@ -204,7 +204,15 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
             #sig {
                 async fn body_fn() #return_type { #body }
 
-                let ret = body_fn().await;
+                let timeout_secs: u64 = std::env::var("SUI_SIM_TEST_TIMEOUT_SECS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1000);
+                let timeout_duration = tokio::time::Duration::from_secs(timeout_secs);
+
+                let ret = tokio::time::timeout(timeout_duration, body_fn())
+                    .await
+                    .expect("sim_test timed out");
 
                 ::sui_simulator::task::shutdown_all_nodes();
 

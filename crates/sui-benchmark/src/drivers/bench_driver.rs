@@ -865,9 +865,9 @@ async fn run_bench_worker(
                     metrics
                         .num_error
                         .with_label_values(&[
-                            &payload.to_string(),
+                            payload.to_string().as_str(),
                             "execution",
-                            &client_type.to_string(),
+                            client_type.to_string().as_str(),
                         ])
                         .inc();
                 }
@@ -930,9 +930,9 @@ async fn run_bench_worker(
                             metrics
                                 .num_error
                                 .with_label_values(&[
-                                    &payload.to_string(),
+                                    payload.to_string().as_str(),
                                     "rpc",
-                                    &client_type.to_string(),
+                                    client_type.to_string().as_str(),
                                 ])
                                 .inc();
                             NextOp::Retry(Box::new((transaction, payload)))
@@ -1132,12 +1132,23 @@ async fn run_bench_worker(
                         let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
                         // TODO: clone committee for each request is not ideal.
                         let committee = worker.execution_proxy.clone_committee();
-                        let res = worker.execution_proxy
-                            .execute_transaction_block(tx.clone())
-                        .then(|(client_type, res)| async move {
+
+                        // Occasionally submit to multiple validators to test unpaid amplification deferral.
+                        // With 5% probability, submit to a random number of validators (3 to committee_size - 1)
+                        // to trigger the deferral logic. Randomizing increases chances of testing longer deferrals.
+                        let use_amplification = rand::thread_rng().gen_bool(0.05);
+                        let committee_size = committee.num_members();
+                        let proxy = worker.execution_proxy.clone_new();
+                        let res = async move {
+                            let (client_type, res) = if use_amplification {
+                                let num_validators = rand::thread_rng().gen_range(3..committee_size.max(4));
+                                proxy.execute_transaction_block_with_amplification(tx.clone(), num_validators).await
+                            } else {
+                                proxy.execute_transaction_block(tx.clone()).await
+                            };
                             metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
-                        }).count_in_flight(num_in_flight_metric);
+                        }.count_in_flight(num_in_flight_metric);
                         futures.push(Box::pin(res));
                     }
                 }
@@ -1368,7 +1379,7 @@ fn process_bundle_results(
     if any_success {
         metrics
             .num_success
-            .with_label_values(&[&payload.to_string(), "soft_bundle"])
+            .with_label_values(&[payload.to_string().as_str(), "soft_bundle"])
             .inc();
         NextOp::Response {
             latency,
@@ -1391,7 +1402,7 @@ fn process_bundle_results(
         metrics
             .num_error
             .with_label_values(&[
-                &payload.to_string(),
+                payload.to_string().as_str(),
                 "soft_bundle_all_failed",
                 "soft_bundle",
             ])

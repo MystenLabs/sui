@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
@@ -10,25 +11,14 @@ use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
-use sui_kvstore::BIGTABLE_MAX_MUTATIONS;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
-use sui_kvstore::set_max_mutations;
 use sui_kvstore::set_write_legacy_data;
+use sui_protocol_config::Chain;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
-
-fn parse_max_mutations(s: &str) -> Result<usize, String> {
-    let value: usize = s.parse().map_err(|e| format!("invalid number: {e}"))?;
-    if value >= BIGTABLE_MAX_MUTATIONS {
-        return Err(format!(
-            "args.max_mutations must be less than {BIGTABLE_MAX_MUTATIONS}"
-        ));
-    }
-    Ok(value)
-}
 
 #[derive(Parser)]
 #[command(name = "sui-kvstore-alt")]
@@ -49,9 +39,13 @@ struct Args {
     #[arg(long)]
     app_profile_id: Option<String>,
 
-    /// Maximum mutations per BigTable batch (must be < 100k)
-    #[arg(long, value_parser = parse_max_mutations)]
-    max_mutations: Option<usize>,
+    /// Maximum gRPC decoding message size for Bigtable responses, in bytes.
+    #[arg(long)]
+    bigtable_max_decoding_message_size: Option<usize>,
+
+    /// Chain identifier for resolving protocol configs (mainnet, testnet, or unknown)
+    #[arg(long)]
+    chain: Chain,
 
     /// Enable writing legacy data: watermark \[0\] row, epoch DEFAULT_COLUMN, and transaction tx column
     #[arg(long)]
@@ -85,22 +79,25 @@ async fn main() -> Result<()> {
 
     let is_bounded = args.indexer_args.last_checkpoint.is_some();
     set_write_legacy_data(args.write_legacy_data);
-    if let Some(v) = args.max_mutations {
-        set_max_mutations(v);
-    }
 
     info!("Starting sui-kvstore-alt indexer");
     info!(instance_id = %args.instance_id);
     info!("Config: {:#?}", config);
 
+    let channel_timeout = config
+        .bigtable_channel_timeout_ms
+        .map(Duration::from_millis);
+
     let client = BigTableClient::new_remote(
         args.instance_id,
         args.bigtable_project,
         false,
-        None,
+        channel_timeout,
+        args.bigtable_max_decoding_message_size,
         "sui-kvstore-alt".to_string(),
         None,
         args.app_profile_id,
+        config.bigtable_connection_pool_size,
     )
     .await?;
 
@@ -110,6 +107,7 @@ async fn main() -> Result<()> {
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
+    let indexer_config = config.clone();
     let committer = config.committer.finish(CommitterConfig::default());
     let bigtable_indexer = BigTableIndexer::new(
         store,
@@ -117,7 +115,9 @@ async fn main() -> Result<()> {
         args.client_args,
         config.ingestion,
         committer,
+        indexer_config,
         config.pipeline,
+        args.chain,
         &registry,
     )
     .await?;

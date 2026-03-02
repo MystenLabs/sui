@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/typing/assert_arity.move:4:9
+  │
+4 │         assert!();
+  │         ^^^^^^^^^
+  │         │      │
+  │         │      Found 0 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 0
+
+error[E04017]: too many arguments
+  ┌─ tests/move_2024/typing/assert_arity.move:7:9
+  │
+7 │         assert!(true, 1, 2u64);
+  │         ^^^^^^^^^^^^^^^^^^^^^^
+  │         │      │
+  │         │      Found 3 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 3
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_2024/typing/assert_arity.move:12:9
+   │
+11 │         move x;
+   │         ------
+   │         │
+   │         The value of 'x' was previously moved here.
+   │         Suggestion: use 'copy x' to avoid the move.
+12 │         move x;
+   │         ^^^^^^ Invalid usage of previously moved variable 'x'.

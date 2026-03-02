@@ -56,7 +56,7 @@ use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
 };
 use sui_types::messages_consensus::{
     AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, AuthorityIndex, ConsensusPosition,
@@ -310,6 +310,27 @@ pub struct ExecutionIndicesWithStats {
     pub stats: ConsensusStats,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ExecutionIndicesWithStatsV2 {
+    pub index: ExecutionIndices,
+    pub height: u64,
+    pub stats: ConsensusStats,
+    pub last_checkpoint_flush_timestamp: u64,
+    pub checkpoint_seq: u64,
+}
+
+impl From<ExecutionIndicesWithStats> for ExecutionIndicesWithStatsV2 {
+    fn from(v1: ExecutionIndicesWithStats) -> Self {
+        Self {
+            index: v1.index,
+            height: v1.height,
+            stats: v1.stats,
+            last_checkpoint_flush_timestamp: 0,
+            checkpoint_seq: 0,
+        }
+    }
+}
+
 type ExecutionModuleCache = SyncModuleCache<ResolverWrapper>;
 
 // Data related to VM and Move execution and type layout
@@ -403,6 +424,12 @@ pub struct AuthorityPerEpochStore {
     epoch_close_time: RwLock<Option<Instant>>,
     pub(crate) metrics: Arc<EpochMetrics>,
     epoch_start_configuration: Arc<EpochStartConfiguration>,
+
+    /// The last checkpoint sequence number from the previous epoch.
+    /// Used to derive the first checkpoint sequence number of this epoch for the
+    /// consensus handler.
+    /// In epoch 0, this is checkpoint_seq 0 - our first non-genesis checkpoint is seq=1.
+    previous_epoch_last_checkpoint: CheckpointSequenceNumber,
 
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
@@ -507,6 +534,8 @@ pub struct AuthorityEpochTables {
     /// This field is written by a single process (consensus handler).
     last_consensus_stats: DBMap<u64, ExecutionIndicesWithStats>,
 
+    last_consensus_stats_v2: DBMap<u64, ExecutionIndicesWithStatsV2>,
+
     /// This table contains current reconfiguration state for validator for current epoch
     reconfig_state: DBMap<u64, ReconfigState>,
 
@@ -519,11 +548,6 @@ pub struct AuthorityEpochTables {
     /// Maps non-digest TransactionKeys to the corresponding digest after execution, for use
     /// by checkpoint builder.
     transaction_key_to_digest: DBMap<TransactionKey, TransactionDigest>,
-
-    /// Stores pending signatures
-    /// The key in this table is checkpoint sequence number and an arbitrary integer
-    pub(crate) pending_checkpoint_signatures:
-        DBMap<(CheckpointSequenceNumber, u64), CheckpointSignatureMessage>,
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary_v2: DBMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
@@ -647,14 +671,13 @@ impl AuthorityEpochTables {
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(value_cache_size);
         let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);
-        let pending_checkpoint_signatures_config = KeySpaceConfig::new()
+        let builder_checkpoint_summary_v2_config = KeySpaceConfig::new()
             .disable_unload()
             .with_value_cache_size(default_value_cache_size());
-        let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
         let object_ref_indexing = KeyIndexing::Hash;
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
-        let sequence_key = KeyType::from_prefix_bits(1 * 8 + 4);
+        let sequence_key = KeyType::from_prefix_bits(6 * 8 + 4);
         let configs = vec![
             (
                 "signed_transactions".to_string(),
@@ -732,6 +755,10 @@ impl AuthorityEpochTables {
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
+                "last_consensus_stats_v2".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
                 "reconfig_state".to_string(),
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
@@ -756,15 +783,6 @@ impl AuthorityEpochTables {
                     mutexes,
                     uniform_key,
                     KeySpaceConfig::default(),
-                ),
-            ),
-            (
-                "pending_checkpoint_signatures".to_string(),
-                ThConfig::new_with_config(
-                    8 + 8,
-                    mutexes,
-                    uniform_key,
-                    pending_checkpoint_signatures_config,
                 ),
             ),
             (
@@ -931,8 +949,17 @@ impl AuthorityEpochTables {
             .map(|s| s.index))
     }
 
-    pub fn get_last_consensus_stats(&self) -> SuiResult<Option<ExecutionIndicesWithStats>> {
-        Ok(self.last_consensus_stats.get(&LAST_CONSENSUS_STATS_ADDR)?)
+    pub fn get_last_consensus_stats(&self) -> SuiResult<Option<ExecutionIndicesWithStatsV2>> {
+        if let Some(v2) = self
+            .last_consensus_stats_v2
+            .get(&LAST_CONSENSUS_STATS_ADDR)?
+        {
+            return Ok(Some(v2));
+        }
+        Ok(self
+            .last_consensus_stats
+            .get(&LAST_CONSENSUS_STATS_ADDR)?
+            .map(Into::into))
     }
 
     pub fn get_locked_transaction(&self, obj_ref: &ObjectRef) -> SuiResult<Option<LockDetails>> {
@@ -1058,6 +1085,7 @@ impl AuthorityPerEpochStore {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
+        previous_epoch_last_checkpoint: CheckpointSequenceNumber,
         submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
@@ -1111,7 +1139,9 @@ impl AuthorityPerEpochStore {
             chain_from_id, chain.1
         );
 
-        let protocol_config = ProtocolConfig::get_for_version(protocol_version, chain.1);
+        let mut protocol_config = ProtocolConfig::get_for_version(protocol_version, chain.1);
+        protocol_config
+            .apply_seeded_test_overrides(epoch_start_configuration.epoch_digest().inner());
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
@@ -1261,6 +1291,7 @@ impl AuthorityPerEpochStore {
             epoch_close_time: Default::default(),
             metrics,
             epoch_start_configuration,
+            previous_epoch_last_checkpoint,
             execution_component,
             chain,
             jwk_aggregator,
@@ -1415,6 +1446,10 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration.epoch_start_state()
     }
 
+    pub fn previous_epoch_last_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.previous_epoch_last_checkpoint
+    }
+
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain.0
     }
@@ -1431,7 +1466,7 @@ impl AuthorityPerEpochStore {
         backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
-        previous_epoch_last_checkpoint: CheckpointSequenceNumber,
+        epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Arc<Self>> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
@@ -1449,7 +1484,10 @@ impl AuthorityPerEpochStore {
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
             self.chain,
-            previous_epoch_last_checkpoint,
+            // At epoch boundary, highest_executed_checkpoint == epoch_last_checkpoint because
+            // all checkpoints must be executed before epoch transition.
+            epoch_last_checkpoint,
+            epoch_last_checkpoint,
             self.submitted_transaction_cache.metrics(),
         )
     }
@@ -1459,7 +1497,7 @@ impl AuthorityPerEpochStore {
         backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
-        previous_epoch_last_checkpoint: CheckpointSequenceNumber,
+        epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> Arc<Self> {
         let next_epoch = self.epoch() + 1;
         let next_committee = Committee::new(
@@ -1474,7 +1512,7 @@ impl AuthorityPerEpochStore {
             backing_package_store,
             object_store,
             expensive_safety_check_config,
-            previous_epoch_last_checkpoint,
+            epoch_last_checkpoint,
         )
         .expect("failed to create new authority per epoch store")
     }
@@ -1496,6 +1534,7 @@ impl AuthorityPerEpochStore {
             config: &self.protocol_config,
             epoch: self.epoch(),
             chain_identifier: self.get_chain_identifier(),
+            reference_gas_price: self.reference_gas_price(),
         }
     }
 
@@ -1925,6 +1964,13 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    /// Fire an in-memory notification that a barrier transaction has been executed.
+    /// Unlike `insert_tx_key`, this does NOT persist to the DB, avoiding crash
+    /// inconsistency where the key survives restart but the effects do not.
+    pub(crate) fn notify_barrier_executed(&self, key: TransactionKey, digest: TransactionDigest) {
+        self.executed_digests_notify_read.notify(&key, &digest);
+    }
+
     pub fn tx_key_to_digest(&self, key: &TransactionKey) -> SuiResult<Option<TransactionDigest>> {
         let tables = self.tables()?;
         if let TransactionKey::Digest(digest) = key {
@@ -1985,7 +2031,9 @@ impl AuthorityPerEpochStore {
             let BarrierRegistration::Waiting(tx) = registration else {
                 fatal!("Barrier registration should be waiting");
             };
-            tx.send(txn).unwrap();
+            // Receiver may have been dropped if the scheduler cancelled its wait
+            // (e.g. checkpoint executor already executed this transaction).
+            tx.send(txn).ok();
         } else {
             registrations.insert(tx_key, BarrierRegistration::Ready(Box::new(txn)));
         }
@@ -2194,7 +2242,7 @@ impl AuthorityPerEpochStore {
             .collect()
     }
 
-    pub fn get_last_consensus_stats(&self) -> SuiResult<ExecutionIndicesWithStats> {
+    pub fn get_last_consensus_stats(&self) -> SuiResult<ExecutionIndicesWithStatsV2> {
         assert!(
             self.consensus_quarantine.read().is_empty(),
             "get_last_consensus_stats should only be called at startup"
@@ -3755,29 +3803,6 @@ impl AuthorityPerEpochStore {
                     .expect("db error")
             },
         ))
-    }
-
-    pub fn get_last_checkpoint_signature_index(&self) -> SuiResult<u64> {
-        Ok(self
-            .tables()?
-            .pending_checkpoint_signatures
-            .reversed_safe_iter_with_bounds(None, None)?
-            .next()
-            .transpose()?
-            .map(|((_, index), _)| index)
-            .unwrap_or_default())
-    }
-
-    pub fn insert_checkpoint_signature(
-        &self,
-        checkpoint_seq: CheckpointSequenceNumber,
-        index: u64,
-        info: &CheckpointSignatureMessage,
-    ) -> SuiResult<()> {
-        Ok(self
-            .tables()?
-            .pending_checkpoint_signatures
-            .insert(&(checkpoint_seq, index), info)?)
     }
 
     pub(crate) fn record_epoch_pending_certs_process_time_metric(&self) {

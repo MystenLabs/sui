@@ -27,15 +27,17 @@ DeepBook Margin uses upgradeable contracts. When a contract is upgraded, only `M
 
 | Parameter | Value |
 |-----------|-------|
-| Version | 1 |
-| Package ID | `0x97d9473771b01f77b0940c589484184b49f6444627ec121314fae6a6d36fb86b` |
+| Version | 3 |
+| Package ID | `0xfbd322126f1452fd4c89aedbaeb9fd0c44df9b5cedbe70d76bf80dc086031377` |
 | Registry ID | `0x0e40998b359a9ccbab22a98ed21bd4346abf19158bc7980c8291908086b3a742` |
 
 ### Version history
 
-| Version | Date | Package ID | Changes |
-|---------|------|------------|---------|
-| 1 | Jan 13, 2026 | `0x97d9473771b01f77b0940c589484184b49f6444627ec121314fae6a6d36fb86b` | Original deployment |
+| Version | Date | Package ID | Changes | Status |
+|---------|------|------------|---------|--------|
+| 3 | Feb 10, 2026 | `0xfbd322126f1452fd4c89aedbaeb9fd0c44df9b5cedbe70d76bf80dc086031377` | Bug fix in market order function | Active |
+| 2 | Feb 10, 2026 | `0xcb4fc91921494ebe6979e201fdb2d67388ffdf6a1b1eb4952526259074de8d0b` | Oracle slippage prevention for margin managers | Disabled |
+| 1 | Jan 13, 2026 | `0x97d9473771b01f77b0940c589484184b49f6444627ec121314fae6a6d36fb86b` | Original deployment | Disabled |
 
 ## Supported coins
 
@@ -79,6 +81,16 @@ DeepBook Margin uses upgradeable contracts. When a contract is upgraded, only `M
 
 </details>
 
+<details>
+<summary>SUIUSDE Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x41d587e5336f1c86cad50d38a7136db99333bb9bda91cea4ba69115defeb1402::sui_usde::SUI_USDE` |
+| Decimals | 6 |
+
+</details>
+
 ## Margin pools
 
 Margin pools provide the liquidity for margin traders to borrow. Suppliers can deposit assets to earn interest from borrowers.
@@ -90,7 +102,7 @@ Margin pools provide the liquidity for margin traders to borrow. Suppliers can d
 |-----------|-------|
 | Pool ID | `0x53041c6f86c4782aabbfc1d4fe234a6d37160310c7ee740c915f0a01b7127344` |
 | Supply Cap | 500,000 SUI |
-| Max Utilization Rate | 80% |
+| Max Utilization Rate | 90% |
 | Referral Spread | 20% |
 | Min Borrow | 0.1 SUI |
 
@@ -102,8 +114,8 @@ Margin pools provide the liquidity for margin traders to borrow. Suppliers can d
 | Parameter | Value |
 |-----------|-------|
 | Pool ID | `0xba473d9ae278f10af75c50a8fa341e9c6a1c087dc91a3f23e8048baf67d0754f` |
-| Supply Cap | 1,000,000 USDC |
-| Max Utilization Rate | 80% |
+| Supply Cap | 2,000,000 USDC |
+| Max Utilization Rate | 90% |
 | Referral Spread | 20% |
 | Min Borrow | 0.1 USDC |
 
@@ -115,8 +127,8 @@ Margin pools provide the liquidity for margin traders to borrow. Suppliers can d
 | Parameter | Value |
 |-----------|-------|
 | Pool ID | `0x1d723c5cd113296868b55208f2ab5a905184950dd59c48eb7345607d6b5e6af7` |
-| Supply Cap | 20,000,000 DEEP |
-| Max Utilization Rate | 80% |
+| Supply Cap | 30,000,000 DEEP |
+| Max Utilization Rate | 90% |
 | Referral Spread | 20% |
 | Min Borrow | 0.1 DEEP |
 
@@ -129,9 +141,22 @@ Margin pools provide the liquidity for margin traders to borrow. Suppliers can d
 |-----------|-------|
 | Pool ID | `0x38decd3dbb62bd4723144349bf57bc403b393aee86a51596846a824a1e0c2c01` |
 | Supply Cap | 7,000,000 WAL |
-| Max Utilization Rate | 80% |
+| Max Utilization Rate | 90% |
 | Referral Spread | 20% |
 | Min Borrow | 0.1 WAL |
+
+</details>
+
+<details>
+<summary>SUIUSDE Margin Pool</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0xbb990ca04a7743e6c0a25a7fb16f60fc6f6d8bf213624ff03a63f1bb04c3a12f` |
+| Supply Cap | 1,000,000 SUIUSDE |
+| Max Utilization Rate | 90% |
+| Referral Spread | 20% |
+| Min Borrow | 0.1 SUIUSDE |
 
 </details>
 

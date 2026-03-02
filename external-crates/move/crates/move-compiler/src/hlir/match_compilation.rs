@@ -157,7 +157,7 @@ fn build_match_tree(
         return MatchTree::Failure;
     }
 
-    if let Some(leaf) = matrix.wild_tree_opt(&fringe) {
+    if let Some(leaf) = matrix.wild_tree_opt(context, &fringe) {
         debug_print!(context.debug.match_specialization, (msg "wild leaf"), ("matrix" => matrix));
         return MatchTree::Leaf(leaf);
     }
@@ -216,7 +216,7 @@ fn compile_match_literal(
 
     for lit in lits {
         debug_print!(context.debug.match_specialization, ("lit specializing" => lit ; fmt));
-        let (mut new_binders, inner_matrix) = matrix.specialize_literal(&lit);
+        let (mut new_binders, inner_matrix) = matrix.specialize_literal(context, &lit);
         subject_binders.append(&mut new_binders);
         arms.insert(
             lit,
@@ -224,7 +224,7 @@ fn compile_match_literal(
         );
     }
 
-    let (mut new_binders, default) = matrix.specialize_default();
+    let (mut new_binders, default) = matrix.specialize_default(context);
     subject_binders.append(&mut new_binders);
     let default_result = Box::new(build_match_tree(context, fringe, default));
 
@@ -264,7 +264,7 @@ fn compile_match_struct(
         );
         (subject_binders, unpack)
     } else {
-        let (subject_binders, default_matrix) = matrix.specialize_default();
+        let (subject_binders, default_matrix) = matrix.specialize_default(context);
         let unpack =
             StructUnpack::Default(Box::new(build_match_tree(context, fringe, default_matrix)));
         (subject_binders, unpack)
@@ -332,7 +332,7 @@ fn compile_variant_switch(
         };
         (vec![], empty_pattern)
     } else {
-        matrix.specialize_default()
+        matrix.specialize_default(context)
     };
     subject_binders.append(&mut new_binders);
 
@@ -837,7 +837,7 @@ fn make_arm_variant_unpack_fields(
             .make_unpack_binders(decl_fields.clone(), pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
-    let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
+    let ordered_pats = order_fields_by_decl(context.hlir_context, decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
     assert!(fringe_exps.len() == ordered_pats.len());
@@ -893,7 +893,7 @@ fn make_arm_struct_unpack_fields(
             .make_unpack_binders(decl_fields.clone(), pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
-    let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
+    let ordered_pats = order_fields_by_decl(context.hlir_context, decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
     assert!(fringe_exps.len() == ordered_pats.len());

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::Future, panic, pin::pin};
+use std::{future::Future, future::poll_fn, panic, pin::pin};
 
-use futures::stream::{Stream, StreamExt};
+use futures::{FutureExt, stream::Stream};
 use tokio::task::JoinSet;
 
 /// Extension trait introducing `try_for_each_spawned` to all streams.
@@ -11,7 +11,7 @@ pub trait TrySpawnStreamExt: Stream {
     /// Attempts to run this stream to completion, executing the provided asynchronous closure on
     /// each element from the stream as elements become available.
     ///
-    /// This is similar to [StreamExt::for_each_concurrent], but it may take advantage of any
+    /// This is similar to [`futures::stream::StreamExt::for_each_concurrent`], but it may take advantage of any
     /// parallelism available in the underlying runtime, because each unit of work is spawned as
     /// its own tokio task.
     ///
@@ -71,18 +71,26 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
         let mut self_ = pin!(self);
 
         loop {
-            tokio::select! {
-                next = self_.next(), if !draining && permits > 0 => {
-                    if let Some(item) = next {
+            // Eager inner loop: spawn tasks while permits allow and items are ready,
+            // avoiding select! overhead when items are immediately available.
+            while !draining && permits > 0 {
+                match poll_fn(|cx| self_.as_mut().poll_next(cx)).now_or_never() {
+                    Some(Some(item)) => {
                         permits -= 1;
                         join_set.spawn(f(item));
-                    } else {
+                    }
+                    Some(None) => {
                         // If the stream is empty, signal that the worker pool is going to
                         // start draining now, so that once we get all our permits back, we
                         // know we can wind down the pool.
                         draining = true;
                     }
+                    None => break,
                 }
+            }
+
+            tokio::select! {
+                biased;
 
                 Some(res) = join_set.join_next() => {
                     match res {
@@ -111,9 +119,17 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
                     }
                 }
 
+                next = poll_fn(|cx| self_.as_mut().poll_next(cx)),
+                    if !draining && permits > 0 => {
+                    if let Some(item) = next {
+                        permits -= 1;
+                        join_set.spawn(f(item));
+                    } else {
+                        draining = true;
+                    }
+                }
+
                 else => {
-                    // Not accepting any more items from the stream, and all our workers are
-                    // idle, so we stop.
                     if permits == limit && draining {
                         break;
                     }

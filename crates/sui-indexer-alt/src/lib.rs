@@ -149,6 +149,7 @@ pub async fn setup_indexer(
                         layer.finish(ConcurrentConfig {
                             committer: committer.clone(),
                             pruner: Some(pruner.clone()),
+                            ..Default::default()
                         })?,
                     )
                     .await?

@@ -268,19 +268,20 @@ impl PTB {
             }
         };
 
+        let command_result = SuiClientCommandResult::TransactionBlock(transaction_response);
+
         if program_metadata.json_set {
             let json_string = if program_metadata.summary_set {
                 serde_json::to_string_pretty(&serde_json::json!(summary))
                     .map_err(|_| anyhow!("Cannot serialize PTB result to json"))?
             } else {
-                serde_json::to_string_pretty(&serde_json::json!(transaction_response))
-                    .map_err(|_| anyhow!("Cannot serialize PTB result to json"))?
+                format!("{:?}", command_result)
             };
             println!("{}", json_string);
         } else if program_metadata.summary_set {
             println!("{}", Pretty(&summary));
         } else {
-            println!("{}", serde_json::to_string_pretty(&transaction_response)?);
+            println!("{}", command_result);
         }
 
         Ok(())

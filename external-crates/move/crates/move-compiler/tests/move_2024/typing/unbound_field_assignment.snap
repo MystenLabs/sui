@@ -1,0 +1,77 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03010]: unbound field
+  ┌─ tests/move_2024/typing/unbound_field_assignment.move:8:9
+  │
+8 │     let S { f } = s;
+  │         ^^^^^^^ Unbound field 'f' in '0x0::m::S'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/typing/unbound_field_assignment.move:8:9
+  │
+8 │     let S { f } = s;
+  │         ^^^^^^^ Missing binding for field 'a' in '0x0::m::S'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field_assignment.move:10:9
+   │
+10 │     let T { f, a } = t;
+   │         ^^^^^^^^^^ Unbound field 'f' in '0x0::m::T'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/typing/unbound_field_assignment.move:10:9
+   │
+10 │     let T { f, a } = t;
+   │         ^^^^^^^^^^ Missing binding for field 'b' in '0x0::m::T'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field_assignment.move:15:9
+   │
+15 │     let S { a, f } = s;
+   │         ^^^^^^^^^^ Unbound field 'f' in '0x0::m::S'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field_assignment.move:18:9
+   │
+18 │     let S { f, a } = s;
+   │         ^^^^^^^^^^ Unbound field 'f' in '0x0::m::S'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field_assignment.move:21:9
+   │
+21 │     let T { a, b, f } = t;
+   │         ^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::T'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field_assignment.move:25:9
+   │
+25 │     let T { f, a, b } = t;
+   │         ^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::T'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field_assignment.move:29:9
+   │
+29 │     let T { a, f, b, g } = t;
+   │         ^^^^^^^^^^^^^^^^ Unbound field 'f' in '0x0::m::T'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/typing/unbound_field_assignment.move:29:9
+   │
+29 │     let T { a, f, b, g } = t;
+   │         ^^^^^^^^^^^^^^^^ Unbound field 'g' in '0x0::m::T'
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_2024/typing/unbound_field_assignment.move:38:5
+   │
+37 │     move x;
+   │     ------
+   │     │
+   │     The value of 'x' was previously moved here.
+   │     Suggestion: use 'copy x' to avoid the move.
+38 │     move x;
+   │     ^^^^^^ Invalid usage of previously moved variable 'x'.

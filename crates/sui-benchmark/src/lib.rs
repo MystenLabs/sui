@@ -338,6 +338,17 @@ pub trait ValidatorProxy {
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>);
 
+    /// Submit a transaction to multiple validators to cause consensus amplification.
+    /// Used to test the unpaid amplification deferral logic.
+    /// Default implementation just calls execute_transaction_block.
+    async fn execute_transaction_block_with_amplification(
+        &self,
+        tx: Transaction,
+        _num_validators: usize,
+    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+        self.execute_transaction_block(tx).await
+    }
+
     fn clone_committee(&self) -> Arc<Committee>;
 
     fn get_current_epoch(&self) -> EpochId;
@@ -356,6 +367,9 @@ pub trait ValidatorProxy {
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>>;
 
     fn get_chain_identifier(&self) -> ChainIdentifier;
+
+    async fn is_transaction_checkpointed(&self, digest: &TransactionDigest)
+    -> anyhow::Result<bool>;
 }
 
 // TODO: Eventually remove this proxy because we shouldn't rely on validators to read objects.
@@ -364,6 +378,7 @@ pub struct LocalValidatorAggregatorProxy {
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
     chain_identifier: ChainIdentifier,
+    sui_client: Client,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -424,11 +439,22 @@ impl LocalValidatorAggregatorProxy {
             None,
             metrics.client_metrics.clone(),
         );
+
+        let http_url = if reconfig_fullnode_rpc_url.starts_with("http://")
+            || reconfig_fullnode_rpc_url.starts_with("https://")
+        {
+            reconfig_fullnode_rpc_url.to_string()
+        } else {
+            format!("http://{reconfig_fullnode_rpc_url}")
+        };
+        let sui_client = Client::new(&http_url).expect("Failed to create RPC client");
+
         Self {
             td,
             clients,
             committee,
             chain_identifier,
+            sui_client,
         }
     }
 
@@ -446,6 +472,39 @@ impl LocalValidatorAggregatorProxy {
             response.effects,
             response.events.unwrap_or_default(),
         ))
+    }
+
+    /// Submit a transaction to multiple validators to cause consensus amplification.
+    /// This is used to test the unpaid amplification deferral logic.
+    ///
+    /// `num_validators` specifies how many additional validators to submit to beyond
+    /// the normal submission path. For example, if `num_validators == 2`, the transaction
+    /// will be submitted to 2 validators directly, plus once via the normal driver path.
+    pub async fn submit_transaction_with_amplification(
+        &self,
+        tx: Transaction,
+        num_validators: usize,
+    ) -> anyhow::Result<ExecutionEffects> {
+        use sui_core::authority_client::AuthorityAPI;
+        use sui_types::messages_grpc::SubmitTxRequest;
+
+        // Submit to multiple validators in parallel
+        let validators: Vec<_> = self.clients.values().take(num_validators).collect();
+        let request = SubmitTxRequest::new_transaction(tx.clone());
+
+        let futures: Vec<_> = validators
+            .iter()
+            .map(|client| {
+                let req = request.clone();
+                async move { client.submit_transaction(req, None).await }
+            })
+            .collect();
+
+        // Fire off all submissions but don't wait for responses
+        let _ = futures::future::join_all(futures).await;
+
+        // Use the normal path to get the final result
+        self.submit_transaction_block(tx).await
     }
 }
 
@@ -489,6 +548,18 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         )
     }
 
+    async fn execute_transaction_block_with_amplification(
+        &self,
+        tx: Transaction,
+        num_validators: usize,
+    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+        (
+            ClientType::TransactionDriver,
+            self.submit_transaction_with_amplification(tx, num_validators)
+                .await,
+        )
+    }
+
     fn clone_committee(&self) -> Arc<Committee> {
         self.td.authority_aggregator().load().committee.clone()
     }
@@ -503,6 +574,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             clients: self.clients.clone(),
             committee: self.committee.clone(),
             chain_identifier: self.chain_identifier,
+            sui_client: self.sui_client.clone(),
         })
     }
 
@@ -524,6 +596,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
+    }
+
+    async fn is_transaction_checkpointed(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<bool, anyhow::Error> {
+        match self.sui_client.clone().get_transaction(digest).await {
+            Ok(executed_tx) => Ok(executed_tx.checkpoint.is_some()),
+            Err(_) => Ok(false),
+        }
     }
 }
 
@@ -952,6 +1034,16 @@ impl ValidatorProxy for FullNodeProxy {
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
+    }
+
+    async fn is_transaction_checkpointed(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<bool, anyhow::Error> {
+        match self.sui_client.clone().get_transaction(digest).await {
+            Ok(executed_tx) => Ok(executed_tx.checkpoint.is_some()),
+            Err(_) => Ok(false),
+        }
     }
 }
 

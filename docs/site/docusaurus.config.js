@@ -44,19 +44,25 @@ const config = {
   baseUrl: "/",
 
   onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "throw",
+  onBrokenAnchors: "ignore",
+  onDuplicateRoutes: 'ignore',
 
   staticDirectories: ["static", "src/open-spec"],
 
   markdown: {
     format: "detect",
     mermaid: true,
+    hooks: {
+    onBrokenMarkdownLinks: 'throw',
+  },
   },
   
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
     //require.resolve('./src/plugins/framework'),
     "docusaurus-plugin-copy-page-button",
+    require.resolve("./src/plugins/validate-openrpc"),
+
     [
       require.resolve("./src/shared/plugins/plausible"),
       {
@@ -109,9 +115,13 @@ const config = {
         schema: "../../crates/sui-indexer-alt-graphql/schema.graphql",
         rootPath: "../content",
         baseURL: "references/sui-api/sui-graphql/beta/reference",
+        homepage: false,
         docOptions: {
           frontMatter: {
             isGraphQlBeta: true,
+            pagination_next: null, // disable page navigation next
+            pagination_prev: null, // disable page navigation previous
+            hide_table_of_contents: true, // disable page table of content
           },
         },
         loaders: {
@@ -149,6 +159,7 @@ const config = {
           exclude: [
             "**/snippets/**",
             "**/standards/deepbook-ref/**",
+            "**/app-examples/ts-sdk-ref/**",
             "**/app-examples/ts-sdk-ref/**",
           ],
           admonitions: {

@@ -1,0 +1,10 @@
+[package]
+name = "ExtFriendError"
+edition = "2024.alpha"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+ExtDepError = { local = "../ext-dep-error/" }
+
+[addresses]
+ExtFriendError = "0x0"

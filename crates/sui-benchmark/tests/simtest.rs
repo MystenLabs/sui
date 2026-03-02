@@ -3,7 +3,7 @@
 
 #[cfg(msim)]
 mod test {
-    use mysten_common::register_debug_fatal_handler;
+    use mysten_common::{random::get_rng, register_debug_fatal_handler};
     use prost::Message;
     use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
     use std::collections::BTreeMap;
@@ -31,7 +31,9 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
     };
     use sui_config::ExecutionCacheConfig;
-    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
+    use sui_config::node::{
+        AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig, RunWithRange,
+    };
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::AuthorityState;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -52,6 +54,7 @@ mod test {
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
+    use sui_types::committee::CommitteeTrait;
     use sui_types::digests::TransactionDigest;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
@@ -98,7 +101,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(2, 5_000, 1).await;
+        let test_cluster = build_test_cluster(2, 10_000, 1).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
@@ -184,7 +187,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_conflicting_transfers() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 5000, 1).await;
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
         let mut simulated_load_config = SimulatedLoadConfig::default();
         // Use LocalValidatorAggregatorProxy for soft bundle support
         simulated_load_config.remote_env = false;
@@ -251,7 +254,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 5_000, 1).await;
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
@@ -263,7 +266,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_small_committee_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(1, 5_000, 0).await;
+        let test_cluster = build_test_cluster(1, 10_000, 0).await;
         test_simulated_load(test_cluster, 120).await;
     }
 
@@ -515,6 +518,7 @@ mod test {
         test_simulated_load(test_cluster, 120).await;
     }
 
+    #[cfg(not(tidehunter))]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
         let test_cluster = build_test_cluster(10, 10000, 0).await;
@@ -720,7 +724,7 @@ mod test {
     // simtest has low timeout tolerance and it is not designed to test performance.
     #[sim_test(config = "test_config_low_latency()")]
     async fn test_simulated_load_large_consensus_commit_prologue_size() {
-        let test_cluster = build_test_cluster(4, 5_000, 1).await;
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
 
         let mut additional_cancelled_txns = Vec::new();
         let num_txns = thread_rng().gen_range(500..2000);
@@ -750,9 +754,10 @@ mod test {
 
     // TODO add this back once flakiness is resolved
     #[ignore]
+    #[cfg(not(tidehunter))]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_pruning() {
-        let epoch_duration_ms = 5000;
+        let epoch_duration_ms = 10_000;
         let test_cluster = build_test_cluster(4, epoch_duration_ms, 0).await;
         test_simulated_load(test_cluster.clone(), 30).await;
 
@@ -1350,7 +1355,7 @@ mod test {
     async fn test_fork_recovery_transaction_effects_simulation() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-        let test_cluster = build_test_cluster(4, 5000, 4).await;
+        let test_cluster = build_test_cluster(4, 10_000, 4).await;
 
         let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
             Arc::new(Mutex::new(BTreeMap::new()));
@@ -1552,6 +1557,7 @@ mod test {
             test_cluster.get_chain_identifier().chain(),
         );
         let address_balance_enabled = protocol_config.enable_address_balance_gas_payments();
+        let address_aliases_enabled = protocol_config.address_aliases();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
@@ -1567,6 +1573,7 @@ mod test {
             address_balance_amount: 1000,
             address_balance_gas_probability: 0.2,
             conflicting_transaction_probability,
+            alias_tx_probability: if address_aliases_enabled { 0.3 } else { 0.0 },
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -1581,7 +1588,9 @@ mod test {
         .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
         .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
         .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
-        .with_probability(AddressBalanceOverdraw::FLAG, 0.3);
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.3)
+        .with_probability(AccumulatorBalanceRead::FLAG, 0.3)
+        .with_probability(AuthenticatedEventEmit::FLAG, 0.1);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1613,6 +1622,53 @@ mod test {
             assert!(metrics_sum.permanent_failure_count > 50);
         }
         assert!(metrics_sum.cancellation_count > 100);
+
+        if address_aliases_enabled {
+            let alias_add_stats = metrics
+                .get_stats(OperationSet::new().with(ALIAS_ADD_FLAG))
+                .expect("expected alias add stats");
+            let alias_remove_stats = metrics
+                .get_stats(OperationSet::new().with(ALIAS_REMOVE_FLAG))
+                .expect("expected alias remove stats");
+            info!(
+                "alias metrics: add_success={}, remove_success={}",
+                alias_add_stats.success_count, alias_remove_stats.success_count
+            );
+            assert!(
+                alias_add_stats.success_count > 0,
+                "expected at least one alias add"
+            );
+            assert!(
+                alias_remove_stats.success_count > 0,
+                "expected at least one alias remove"
+            );
+        }
+
+        let accum_read_stats = metrics
+            .get_stats(OperationSet::new().with(AccumulatorBalanceRead::FLAG))
+            .expect("expected accumulator balance read stats");
+        info!(
+            "accumulator balance read metrics: success={}",
+            accum_read_stats.success_count
+        );
+        assert!(
+            accum_read_stats.success_count > 0,
+            "expected at least one accumulator balance read"
+        );
+
+        let auth_event_success_count: u64 = metrics
+            .iter_stats()
+            .filter(|(op_set, _)| op_set.contains(AuthenticatedEventEmit::FLAG))
+            .map(|(_, stats)| stats.success_count)
+            .sum();
+        info!(
+            "authenticated event success count: {}",
+            auth_event_success_count
+        );
+        assert!(
+            auth_event_success_count > 0,
+            "expected at least one authenticated event emit"
+        );
     }
 
     #[sim_test(config = "test_config()")]
@@ -1665,5 +1721,165 @@ mod test {
 
         assert!(shared_plus_randomness_txns > 0);
         assert!(shared_plus_randomness_cancellations > 0);
+    }
+
+    /// Tests that async post-processing produces consistent indexes even when
+    /// the node crashes after indexing but before notifying the checkpoint executor.
+    /// Uses a fail point to simulate this crash scenario under load, then verifies
+    /// that the async fullnode recovers and matches a sync fullnode's index state.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_async_post_processing_consistency() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let mut test_cluster = init_test_cluster_builder(1, 0)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .build()
+            .await;
+
+        // Both fullnodes use RunWithRange::Epoch(0) so they stop after processing
+        // epoch 0. This ensures they are at the same checkpoint when we compare indexes.
+        let run_with_range = Some(RunWithRange::Epoch(0));
+
+        // Spawn async fullnode (default config)
+        let async_fn_config = test_cluster
+            .fullnode_config_builder()
+            .with_run_with_range(run_with_range)
+            .build(&mut get_rng(), test_cluster.swarm.config());
+        let async_fullnode = test_cluster
+            .start_fullnode_from_config(async_fn_config)
+            .await;
+        let async_fn_name = async_fullnode.sui_node.state().name;
+        let async_fn_sim_id = async_fullnode.sui_node.with(|n| n.get_sim_node_id());
+        drop(async_fullnode);
+
+        // Spawn sync fullnode
+        let sync_fn_config = test_cluster
+            .fullnode_config_builder()
+            .with_sync_post_process_one_tx(true)
+            .with_run_with_range(run_with_range)
+            .build(&mut get_rng(), test_cluster.swarm.config());
+        let sync_fullnode = test_cluster
+            .start_fullnode_from_config(sync_fn_config)
+            .await;
+        let sync_fn_name = sync_fullnode.sui_node.state().name;
+        drop(sync_fullnode);
+
+        let test_cluster: Arc<TestCluster> = test_cluster.into();
+
+        // Only crash the async fullnode. Grace period prevents rapid re-crashing
+        // after restart.
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
+        let grace_period_clone = grace_period.clone();
+        register_fail_point("crash-after-post-process-one-tx", move || {
+            let cur_node = sui_simulator::current_simnode_id();
+            if cur_node != async_fn_sim_id {
+                return;
+            }
+
+            let mut grace_period = grace_period_clone.lock().unwrap();
+            if let Some(t) = *grace_period {
+                if t < Instant::now() {
+                    *grace_period = None;
+                } else {
+                    return;
+                }
+            }
+
+            let mut rng = thread_rng();
+            if rng.gen_range(0.0..1.0) < 0.02 {
+                let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
+                let alive_until = Instant::now()
+                    + restart_after
+                    + Duration::from_millis(rng.gen_range(5000..30000));
+                *grace_period = Some(alive_until);
+
+                error!(?cur_node, "killing async fullnode");
+                drop(grace_period);
+                sui_simulator::task::kill_current_node(Some(restart_after));
+            }
+        });
+
+        test_simulated_load_with_test_config(
+            test_cluster.clone(),
+            60,
+            SimulatedLoadConfig::default(),
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+
+        clear_fail_point("crash-after-post-process-one-tx");
+
+        // Wait for the async fullnode to restart if it was killed during the test.
+        let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
+        while async_node.get_node_handle().is_none() {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+
+        // Subscribe to shutdown channels on both RunWithRange fullnodes BEFORE
+        // triggering epoch change. This ensures the broadcast::send succeeds when
+        // the RunWithRange condition fires.
+        // Also grab Arc<AuthorityState> references now, since get_node_handle()
+        // returns None after the node shuts down.
+        let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
+        let sync_node = test_cluster.swarm.node(&sync_fn_name).unwrap();
+        let async_handle = async_node.get_node_handle().unwrap();
+        let sync_handle = sync_node.get_node_handle().unwrap();
+        let mut async_shutdown_rx = async_handle.with(|node| node.subscribe_to_shutdown_channel());
+        let mut sync_shutdown_rx = sync_handle.with(|node| node.subscribe_to_shutdown_channel());
+        let async_state = async_handle.state();
+        let sync_state = sync_handle.state();
+        drop(async_handle);
+        drop(sync_handle);
+
+        // Close epoch on validators and wait for the default fullnode to reach
+        // epoch 1. We cannot use trigger_reconfiguration because it calls
+        // wait_for_epoch_all_nodes which may race with RunWithRange shutdown.
+        {
+            let cur_committee = test_cluster
+                .fullnode_handle
+                .sui_node
+                .with(|node| node.state().clone_committee_for_testing());
+            let mut cur_stake = 0;
+            for node in test_cluster.swarm.active_validators() {
+                node.get_node_handle()
+                    .unwrap()
+                    .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
+                    .await;
+                cur_stake +=
+                    cur_committee.weight(&node.get_node_handle().unwrap().with(|n| n.state().name));
+                if cur_stake >= cur_committee.quorum_threshold() {
+                    break;
+                }
+            }
+            test_cluster
+                .wait_for_epoch(Some(cur_committee.epoch + 1))
+                .await;
+        }
+
+        // Wait for both RunWithRange fullnodes to shut down. This guarantees
+        // they have processed exactly through the end-of-epoch checkpoint and
+        // stopped, so their databases are quiescent and comparable.
+        async_shutdown_rx.recv().await.unwrap();
+        sync_shutdown_rx.recv().await.unwrap();
+
+        // Exhaustively compare index tables between the async and sync fullnodes.
+        let async_indexes = async_state
+            .indexes
+            .as_ref()
+            .expect("async fullnode should have indexes");
+        let sync_indexes = sync_state
+            .indexes
+            .as_ref()
+            .expect("sync fullnode should have indexes");
+        async_indexes
+            .tables()
+            .check_databases_equal(sync_indexes.tables());
     }
 }

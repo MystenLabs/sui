@@ -135,24 +135,22 @@ const guides = [
     items: [
       'guides/developer/accessing-data/grpc-overview',
       'guides/developer/accessing-data/query-with-graphql',
+      'guides/developer/accessing-data/archival-store',
+      'guides/developer/accessing-data/using-events',
+      'guides/developer/accessing-data/authenticated-events',
       {
         type: 'category',
-        label: 'Custom Indexer Framework',
+        label: 'Custom Indexing Framework',
         link: {
           type: 'doc',
           id: 'guides/developer/accessing-data/custom-indexing-framework',
         },
-        items: [
-          'guides/developer/accessing-data/pipeline-architecture',
-          'guides/developer/accessing-data/custom-indexer/indexer-data-integration',
-          'guides/developer/accessing-data/custom-indexer/build',
-          'guides/developer/accessing-data/custom-indexer/indexer-runtime-perf',
-          'guides/developer/accessing-data/custom-indexer/indexer-walrus',
-
-        ],
-      },
-      'guides/developer/accessing-data/archival-store',
-      'guides/developer/accessing-data/using-events',
+          items: [
+            'guides/developer/accessing-data/custom-indexer/build',
+            'guides/developer/accessing-data/custom-indexer/indexer-walrus',
+            'guides/developer/accessing-data/custom-indexer/bring-your-own-store',
+          ]
+        },
     ],
   },
   {
@@ -228,8 +226,11 @@ const guides = [
       id: 'guides/developer/nautilus/index',
     },
     items: [
+      'guides/developer/nautilus/nautilus-design',
       'guides/developer/nautilus/using-nautilus',
       'guides/developer/nautilus/customize-nautilus',
+      'guides/developer/nautilus/marlin',
+      'guides/developer/nautilus/seal',
     ],
   },
   {

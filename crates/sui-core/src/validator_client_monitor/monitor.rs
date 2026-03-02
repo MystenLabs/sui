@@ -181,7 +181,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             let display_name = authority_agg.get_display_name(validator);
             self.metrics
                 .performance
-                .with_label_values(&[&display_name])
+                .with_label_values(&[display_name.as_str()])
                 .set(latency.as_secs_f64());
             cached_latencies.insert(*validator, *latency);
         }
@@ -212,17 +212,17 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             Ok(latency) => {
                 self.metrics
                     .observed_latency
-                    .with_label_values(&[&feedback.display_name, operation_str, ping_label])
+                    .with_label_values(&[feedback.display_name.as_str(), operation_str, ping_label])
                     .observe(latency.as_secs_f64());
                 self.metrics
                     .operation_success
-                    .with_label_values(&[&feedback.display_name, operation_str, ping_label])
+                    .with_label_values(&[feedback.display_name.as_str(), operation_str, ping_label])
                     .inc();
             }
             Err(()) => {
                 self.metrics
                     .operation_failure
-                    .with_label_values(&[&feedback.display_name, operation_str, ping_label])
+                    .with_label_values(&[feedback.display_name.as_str(), operation_str, ping_label])
                     .inc();
             }
         }

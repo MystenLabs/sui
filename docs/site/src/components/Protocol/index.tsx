@@ -5,8 +5,8 @@ import React, { useState, useEffect } from "react";
 
 export default function Protocol(props) {
   const { toc } = props;
-  const [proto, setProto] = useState(toc[0]);
-  const [belowFold, setBelowFold] = useState(false);
+  const [proto, setProto] = useState(() => (toc && toc.length ? toc[0] : null));
+if (!toc || !toc.length || !proto) return null;  const [belowFold, setBelowFold] = useState(false);
   const triggerY = 140;
 
   useEffect(() => {

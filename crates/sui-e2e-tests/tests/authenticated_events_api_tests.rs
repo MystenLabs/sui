@@ -4,6 +4,7 @@
 use itertools::Itertools;
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
+use std::time::Duration;
 use sui_keys::keystore::AccountKeystore;
 use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_light_client::proof::base::{Proof, ProofContents, ProofTarget, ProofVerifier};
@@ -169,6 +170,35 @@ async fn emit_large_test_event(
     test_cluster.sign_and_execute_transaction(&tx_data).await
 }
 
+/// Connect to an rpc client with timeout and retry logic.
+///
+/// gRPC connection establishment can hang indefinitely if the remote peer is unable to complete
+/// connection establishment. This helper ensures we always have bounded connection times and
+/// can retry on transient failures.
+async fn connect_with_retry<T, F, Fut>(connect_fn: F) -> T
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = Result<T, tonic::transport::Error>>,
+{
+    const MAX_RETRIES: u32 = 10;
+    const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+
+    for attempt in 0..MAX_RETRIES {
+        match tokio::time::timeout(CONNECT_TIMEOUT, connect_fn()).await {
+            Ok(Ok(client)) => return client,
+            Ok(Err(e)) if attempt + 1 < MAX_RETRIES => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Ok(Err(e)) => panic!("failed to connect after {MAX_RETRIES} attempts: {e}"),
+            Err(_) if attempt + 1 < MAX_RETRIES => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Err(_) => panic!("connection timed out after {MAX_RETRIES} attempts"),
+        }
+    }
+    unreachable!()
+}
+
 async fn query_authenticated_events(
     rpc_url: &str,
     stream_id: &str,
@@ -178,9 +208,7 @@ async fn query_authenticated_events(
     sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsResponse,
     tonic::Status,
 > {
-    let mut client = EventServiceClient::connect(rpc_url.to_owned())
-        .await
-        .unwrap();
+    let mut client = connect_with_retry(|| EventServiceClient::connect(rpc_url.to_owned())).await;
 
     let mut req = ListAuthenticatedEventsRequest::default();
     req.stream_id = Some(stream_id.to_string());
@@ -200,9 +228,8 @@ async fn list_authenticated_events(
     start_checkpoint: u64,
     page_size: Option<u32>,
 ) -> Vec<AuthenticatedEvent> {
-    let mut event_client = EventServiceClient::connect(rpc_url.to_owned())
-        .await
-        .unwrap();
+    let mut event_client =
+        connect_with_retry(|| EventServiceClient::connect(rpc_url.to_owned())).await;
 
     let mut all_events = Vec::new();
     let mut page_token: Option<Vec<u8>> = None;
@@ -252,13 +279,12 @@ async fn verify_events_with_stream_head(
     let stream_id = sui_types::base_types::SuiAddress::from(package_id);
     let event_stream_head_id = get_event_stream_head_object_id(stream_id).unwrap();
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client =
+        connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
 
-    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut ledger_client =
+        connect_with_retry(|| LedgerServiceClient::connect(test_cluster.rpc_url().to_owned()))
+            .await;
 
     let current_epoch = test_cluster
         .fullnode_handle
@@ -493,9 +519,9 @@ async fn get_last_checkpoint_of_epoch(
 }
 
 async fn get_genesis_committee(test_cluster: &TestCluster) -> Result<Committee, String> {
-    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .map_err(|e| format!("Failed to connect to ledger service: {}", e))?;
+    let mut ledger_client =
+        connect_with_retry(|| LedgerServiceClient::connect(test_cluster.rpc_url().to_owned()))
+            .await;
 
     get_committee_for_epoch_via_api(&mut ledger_client, 0).await
 }
@@ -723,7 +749,7 @@ async fn list_authenticated_events_end_to_end() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
         .with_rpc_config(rpc_config)
-        .with_epoch_duration_ms(5000)
+        .with_epoch_duration_ms(10000)
         .build()
         .await;
 
@@ -943,9 +969,8 @@ async fn authenticated_events_multiple_events_per_transaction() {
 
     let _response = emit_multiple_test_events(&test_cluster, package_id, sender, 100, 3).await;
 
-    let mut event_client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut event_client =
+        connect_with_retry(|| EventServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
 
     let mut req = ListAuthenticatedEventsRequest::default();
     req.stream_id = Some(package_id.to_string());
@@ -1066,9 +1091,8 @@ async fn test_object_inclusion_proof_error_code() {
             .unwrap()
     });
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client =
+        connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some(event_stream_head_id.to_string());
@@ -1120,9 +1144,8 @@ async fn test_size_based_pagination() {
     emit_large_test_event(&test_cluster, package_id, sender, 3, 200_000).await;
     emit_large_test_event(&test_cluster, package_id, sender, 4, 200_000).await;
 
-    let mut event_client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut event_client =
+        connect_with_retry(|| EventServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
 
     let mut req = ListAuthenticatedEventsRequest::default();
     req.stream_id = Some(package_id.to_string());

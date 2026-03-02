@@ -246,25 +246,36 @@ impl AuthenticatedEventsClient {
         genesis_committee: Committee,
         config: ClientConfig,
     ) -> Result<Self, ClientError> {
-        let channel = Channel::from_shared(rpc_url.to_string())
+        let endpoint = Channel::from_shared(rpc_url.to_string())
             .map_err(|e| ClientError::InternalError(format!("Invalid RPC URL: {}", e)))?
-            .timeout(config.rpc_timeout)
-            .connect()
-            .await?;
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(config.rpc_timeout);
 
-        let event_service = EventServiceClient::new(channel.clone());
-        let proof_service = ProofServiceClient::new(channel.clone());
-        let ledger_service = LedgerServiceClient::new(channel);
+        const MAX_RETRIES: u32 = 10;
+        let mut last_err = None;
+        for _ in 0..MAX_RETRIES {
+            match endpoint.connect().await {
+                Ok(ch) => {
+                    let event_service = EventServiceClient::new(ch.clone());
+                    let proof_service = ProofServiceClient::new(ch.clone());
+                    let ledger_service = LedgerServiceClient::new(ch);
+                    let epoch_cache = EpochCache::new(genesis_committee);
 
-        let epoch_cache = EpochCache::new(genesis_committee);
-
-        Ok(Self {
-            event_service,
-            proof_service,
-            ledger_service,
-            epoch_cache: Arc::new(tokio::sync::Mutex::new(epoch_cache)),
-            config,
-        })
+                    return Ok(Self {
+                        event_service,
+                        proof_service,
+                        ledger_service,
+                        epoch_cache: Arc::new(tokio::sync::Mutex::new(epoch_cache)),
+                        config,
+                    });
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        }
+        Err(last_err.unwrap().into())
     }
 
     fn extract_stream_head_from_object(

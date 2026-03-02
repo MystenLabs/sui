@@ -213,9 +213,9 @@ where
 
         if resp.is_ok() {
             if log_enabled!(Level::Debug) {
-                debug!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request succeeded");
+                debug!(request_id = %uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request succeeded");
             } else {
-                info!(%uuid, %addr, elapsed_ms, "Request succeeded");
+                info!(request_id = %uuid, %addr, elapsed_ms, "Request succeeded");
             }
             ext.metrics.queries_succeeded.inc();
         } else {
@@ -225,11 +225,11 @@ where
 
             // Log internal errors, timeouts, and unknown errors at a higher log level than other errors.
             if is_loud_query(&codes) {
-                warn!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
+                warn!(request_id = %uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
             } else if log_enabled!(Level::Debug) {
-                debug!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
+                debug!(request_id = %uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
             } else {
-                info!(%uuid, %addr, elapsed_ms, ?codes, "Request failed");
+                info!(request_id = %uuid, %addr, elapsed_ms, ?codes, "Request failed");
             }
 
             if codes.is_empty() {

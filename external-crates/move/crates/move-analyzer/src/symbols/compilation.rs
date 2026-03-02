@@ -783,6 +783,12 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         // no compilation happened, so we get everything from the cache, and
         // the unwraps are safe because the cache is guaranteed to exist (otherwise
         // compilation would have happened)
+        if let Some(Some(cached)) = packages_info.lock().unwrap().pkg_info.get(pkg_path) {
+            // Restore diagnostics from cache so that they can be propeerly
+            // displayed even if no compilation happened (e.g., upon first
+            // opening a package).
+            lsp_diags = (*cached.lsp_diags).clone();
+        }
         let cached_info = caching_result.pkg_deps.clone().unwrap();
         let compiled_program = cached_info.program.unwrap();
         (

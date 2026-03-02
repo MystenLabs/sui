@@ -269,7 +269,7 @@ impl RandomnessManager {
             ),
             nodes,
             t,
-            fastcrypto_tbls::random_oracle::RandomOracle::new(prefix_str.as_str()),
+            fastcrypto::random_oracle::RandomOracle::new(prefix_str.as_str()),
             &mut rand::thread_rng(),
         ) {
             Ok(party) => party,
@@ -818,7 +818,7 @@ pub enum DkgStatus {
 mod tests {
     use crate::{
         authority::{
-            authority_per_epoch_store::{ExecutionIndices, ExecutionIndicesWithStats},
+            authority_per_epoch_store::{ExecutionIndices, ExecutionIndicesWithStatsV2},
             test_authority_builder::TestAuthorityBuilder,
         },
         checkpoints::CheckpointStore,
@@ -925,7 +925,7 @@ mod tests {
         }
         for i in 0..randomness_managers.len() {
             let mut output = ConsensusCommitOutput::new(0);
-            output.record_consensus_commit_stats(ExecutionIndicesWithStats {
+            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
                 index: ExecutionIndices {
                     last_committed_round: 0,
                     ..Default::default()
@@ -962,7 +962,7 @@ mod tests {
         }
         for i in 0..randomness_managers.len() {
             let mut output = ConsensusCommitOutput::new(0);
-            output.record_consensus_commit_stats(ExecutionIndicesWithStats {
+            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
                 index: ExecutionIndices {
                     last_committed_round: 1,
                     ..Default::default()
@@ -1077,7 +1077,7 @@ mod tests {
         }
         for i in 0..randomness_managers.len() {
             let mut output = ConsensusCommitOutput::new(0);
-            output.record_consensus_commit_stats(ExecutionIndicesWithStats {
+            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
                 index: ExecutionIndices {
                     last_committed_round: 0,
                     ..Default::default()

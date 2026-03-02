@@ -503,7 +503,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             .metrics
                             .node_metrics
                             .commit_sync_fetch_once_errors
-                            .with_label_values(&[&hostname, e.name()])
+                            .with_label_values(&[hostname.as_str(), e.name()])
                             .inc();
                     }
                     Err(_) => {
@@ -519,7 +519,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             .metrics
                             .node_metrics
                             .commit_sync_fetch_once_errors
-                            .with_label_values(&[&hostname, "FetchTimeout"])
+                            .with_label_values(&[hostname.as_str(), "FetchTimeout"])
                             .inc();
                     }
                 }
@@ -660,7 +660,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .metrics
                 .node_metrics
                 .block_timestamp_drift_ms
-                .with_label_values(&[peer_hostname, "commit_syncer"])
+                .with_label_values(&[peer_hostname.as_str(), "commit_syncer"])
                 .inc_by(forward_drift);
         }
 

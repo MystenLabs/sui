@@ -3600,16 +3600,11 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                             (mloc, msg),
                             (head_ctor_name.loc, nmsg)
                         ));
-                        error_pattern!()
-                    } else {
-                        sp(
-                            loc,
-                            EP::ModuleAccessName(
-                                head_ctor_name,
-                                optional_sp_types(context, pts_opt),
-                            ),
-                        )
                     }
+                    sp(
+                        loc,
+                        EP::ModuleAccessName(head_ctor_name, optional_sp_types(context, pts_opt)),
+                    )
                 }
             }
         }

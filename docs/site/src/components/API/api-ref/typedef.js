@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import React from "react";
 import _ from "lodash";
 import { getRef } from "../index";
@@ -16,42 +17,38 @@ const TypeDef = (props) => {
   const collectRefs = (obj) => {
     for (const [key, value] of Object.entries(obj)) {
       if (value && Array.isArray(value)) {
-        for (let x = 0; x < value.length; x++) {
-          collectRefs(value[x]);
-        }
+        value.forEach((v) => collectRefs(v));
       } else if (value && typeof value === "object") {
         collectRefs(value);
       }
-      if (key == "$ref")
-        refs.push({ title: getRef(value), ...schemas[getRef(value)] });
+      if (key === "$ref") refs.push({ title: getRef(value), ...schemas[getRef(value)] });
     }
   };
 
   collectRefs(schemaObj);
-
-  refs.map((ref) => {
-    collectRefs(schemas[ref.title]);
-  });
-
-  refs.map((ref) => {
-    collectRefs(schemas[ref.title]);
-  });
+  refs.forEach((ref) => collectRefs(schemas[ref.title]));
+  refs.forEach((ref) => collectRefs(schemas[ref.title]));
 
   return (
-    <div>
-      {_.uniqWith(refs, (a, b) => {
-        return a.title === b.title;
-      }).map((curObj, idx) => {
-        return (
-          <div key={idx}>
-            <p className="text-lg font-bold mb-0 mt-8">{curObj.title}</p>
-            <hr className="mt-0" />
-            <SyntaxHighlighter language={json} style={dark}>
-              {JSON.stringify(_.omit(curObj, "title"), null, 4)}
-            </SyntaxHighlighter>
+    <div className="api-card api-card-pad">
+      <div className="api-section-title">Type definitions</div>
+
+      {_.uniqWith(refs, (a, b) => a.title === b.title).map((curObj, idx) => (
+        <div key={idx} className="mt-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-extrabold">{curObj.title}</div>
+            <span className="api-chip">JSON</span>
           </div>
-        );
-      })}
+
+          <div className="api-code mt-2">
+            <div className="api-code-body">
+              <SyntaxHighlighter language={json} style={dark}>
+                {JSON.stringify(_.omit(curObj, "title"), null, 4)}
+              </SyntaxHighlighter>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };

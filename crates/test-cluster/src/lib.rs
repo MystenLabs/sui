@@ -1217,6 +1217,10 @@ impl TestClusterBuilder {
     }
 
     pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
+        assert!(
+            epoch_duration_ms >= 10000,
+            "Epoch duration must be at least 10s (10000ms) to avoid flaky tests. Got {epoch_duration_ms}ms."
+        );
         self.get_or_init_genesis_config()
             .parameters
             .epoch_duration_ms = epoch_duration_ms;

@@ -499,3 +499,44 @@ pub fn build_accumulator_barrier_tx(
 
     TransactionKind::ProgrammableSystemTransaction(builder.finish())
 }
+
+#[cfg(test)]
+mod barrier_settlement_key_tests {
+    use super::*;
+    use sui_types::transaction::TransactionKey;
+
+    #[test]
+    fn test_barrier_tx_returns_accumulator_settlement_key() {
+        let epoch = 5u64;
+        let checkpoint_height = 42u64;
+
+        let kind = build_accumulator_barrier_tx(
+            epoch,
+            SequenceNumber::from_u64(1),
+            checkpoint_height,
+            &[], // no settlement effects needed for key extraction
+        );
+
+        assert_eq!(
+            kind.accumulator_barrier_settlement_key(),
+            Some(TransactionKey::AccumulatorSettlement(
+                epoch,
+                checkpoint_height
+            ))
+        );
+        assert!(kind.is_accumulator_barrier_settle_tx());
+    }
+
+    #[test]
+    fn test_settlement_tx_has_no_barrier_key() {
+        // Non-barrier settlement transactions use ReadOnly access to the accumulator root,
+        // so they should not return an AccumulatorSettlement key.
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let builder = AccumulatorSettlementTxBuilder::new(None, &[], 0, 0);
+        let txns = builder.build_tx(&protocol_config, 5, SequenceNumber::from_u64(1), 42, 0);
+        for txn in txns {
+            assert_eq!(txn.accumulator_barrier_settlement_key(), None);
+            assert!(!txn.is_accumulator_barrier_settle_tx());
+        }
+    }
+}

@@ -13,6 +13,7 @@ use futures::future::try_join_all;
 use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_rpc::proto::sui::rpc::v2 as proto;
+use tonic::Code;
 
 use crate::api::mutation::TransactionInputError;
 use crate::api::scalars::base64::Base64;
@@ -760,7 +761,7 @@ impl Query {
         let proto_tx: proto::Transaction = serde_json::from_value(json_value)
             .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionJson(err)))?;
 
-        // Simulate transaction using proto
+        // Simulate transaction via gRPC
         match fullnode_client
             .simulate_transaction(
                 proto_tx,
@@ -782,11 +783,13 @@ impl Query {
 
                 SimulationResult::from_simulation_response(scope, response, tx_data).map_err(upcast)
             }
-            Err(GrpcExecutionError(status)) => Ok(SimulationResult {
-                effects: None,
-                outputs: None,
-                error: Some(status.to_string()),
-            }),
+            Err(GrpcExecutionError(status))
+                if matches!(status.code(), Code::InvalidArgument | Code::NotFound) =>
+            {
+                Err(bad_user_input(TransactionInputError::InvalidArgument(
+                    status.message().to_string(),
+                )))
+            }
             Err(other_error) => Err(anyhow!(other_error)
                 .context("Failed to simulate transaction")
                 .into()),

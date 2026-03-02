@@ -89,7 +89,6 @@ enum ArgumentKind {
 struct SimulationResult {
     effects: Option<TransactionEffects>,
     outputs: Option<Vec<CommandResult>>,
-    error: Option<String>,
 }
 
 // Reuse TransactionEffects from execute_transaction tests
@@ -270,7 +269,6 @@ async fn test_simulate_transaction_basic() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -292,7 +290,6 @@ async fn test_simulate_transaction_basic() {
     // Verify simulation was successful
     let effects = simulation_result.effects.unwrap();
     assert_eq!(effects.status, "SUCCESS");
-    assert!(simulation_result.error.is_none());
 
     // Verify transaction data matches original
     let transaction = effects.transaction.unwrap();
@@ -349,7 +346,6 @@ async fn test_simulate_transaction_with_events() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -395,8 +391,7 @@ async fn test_simulate_transaction_with_events() {
             }
           ]
         }
-      },
-      "error": null
+      }
     }
     "#);
 }
@@ -413,7 +408,6 @@ async fn test_simulate_transaction_input_validation() {
             query($txData: JSON!) {
                 simulateTransaction(transaction: $txData) {
                     effects { digest }
-                    error
                 }
             }
         "#,
@@ -479,7 +473,6 @@ async fn test_simulate_transaction_object_changes() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -844,7 +837,6 @@ async fn test_simulate_transaction_json_transfer() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -862,7 +854,6 @@ async fn test_simulate_transaction_json_transfer() {
     // Verify simulation was successful
     let effects = simulation_result.effects.unwrap();
     assert_eq!(effects.status, "SUCCESS");
-    assert!(simulation_result.error.is_none());
 
     // Verify transaction data matches original
     let transaction = effects.transaction.unwrap();
@@ -1020,7 +1011,6 @@ async fn test_simulate_transaction_balance_changes() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -1122,7 +1112,6 @@ async fn test_simulate_transaction_with_gas_selection() {
                             transactionBcs
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -1155,7 +1144,6 @@ async fn test_simulate_transaction_with_gas_selection() {
             mutation($txData: Base64!, $sigs: [Base64!]!) {
                 executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects { status }
-                    errors
                 }
             }
         "#,
@@ -1170,10 +1158,6 @@ async fn test_simulate_transaction_with_gas_selection() {
     assert_eq!(
         execute_result.pointer("/data/executeTransaction/effects/status"),
         Some(&json!("SUCCESS"))
-    );
-    assert_eq!(
-        execute_result.pointer("/data/executeTransaction/errors"),
-        Some(&serde_json::Value::Null)
     );
 }
 
@@ -1199,7 +1183,6 @@ async fn test_simulate_transaction_effects_json() {
                         effectsJson
                         balanceChangesJson
                     }
-                    error
                 }
             }
         "#,
@@ -1258,7 +1241,6 @@ async fn test_simulate_transaction_payload_bypasses_query_limit() {
             query($txData: JSON!) {
                 simulateTransaction(transaction: $txData) {
                     effects { status }
-                    error
                 }
             }
         "#,
@@ -1276,10 +1258,6 @@ async fn test_simulate_transaction_payload_bypasses_query_limit() {
     assert_eq!(
         result.pointer("/data/simulateTransaction/effects/status"),
         Some(&json!("SUCCESS"))
-    );
-    assert_eq!(
-        result.pointer("/data/simulateTransaction/error"),
-        Some(&serde_json::Value::Null)
     );
 }
 
@@ -1306,7 +1284,6 @@ async fn test_simulate_transaction_transaction_json() {
                             transactionJson
                         }
                     }
-                    error
                 }
             }
         "#,

@@ -87,6 +87,13 @@ pub struct NodeConfig {
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
 
+    /// When true, post-processing (JSON-RPC indexing and event emission) runs
+    /// synchronously on the execution path instead of being spawned to a
+    /// background thread. This is the legacy behavior and can be used as a
+    /// rollback mechanism or for testing.
+    #[serde(default)]
+    pub sync_post_process_one_tx: bool,
+
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub remove_deprecated_tables: bool,
 
@@ -146,6 +153,10 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
+
+    /// Whether dev-inspect transaction execution is disabled on this node.
+    #[serde(default)]
+    pub dev_inspect_disabled: bool,
 
     #[serde(default)]
     pub certificate_deny_config: CertificateDenyConfig,
@@ -242,6 +253,11 @@ pub struct NodeConfig {
     /// Configuration for the transaction driver.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_driver_config: Option<TransactionDriverConfig>,
+
+    /// Configuration for congestion tracker binary logging.
+    /// When set, enables per-commit binary logs of congestion tracker state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub congestion_log: Option<CongestionLogConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -273,6 +289,24 @@ impl Default for TransactionDriverConfig {
             enable_early_validation: true,
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct CongestionLogConfig {
+    pub path: PathBuf,
+    #[serde(default = "default_congestion_log_max_file_size")]
+    pub max_file_size: u64,
+    #[serde(default = "default_congestion_log_max_files")]
+    pub max_files: u32,
+}
+
+fn default_congestion_log_max_file_size() -> u64 {
+    100 * 1024 * 1024 // 100MB
+}
+
+fn default_congestion_log_max_files() -> u32 {
+    10
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -486,8 +520,6 @@ pub enum ExecutionCacheConfig {
         /// Number of uncommitted transactions at which to refuse new transaction
         /// submissions. Defaults to backpressure_threshold if unset.
         backpressure_threshold_for_rpc: Option<u64>,
-
-        fastpath_transaction_outputs_cache_size: Option<u64>,
     },
 }
 
@@ -506,7 +538,6 @@ impl Default for ExecutionCacheConfig {
             effect_cache_size: None,
             events_cache_size: None,
             transaction_objects_cache_size: None,
-            fastpath_transaction_outputs_cache_size: None,
         }
     }
 }
@@ -661,19 +692,6 @@ impl ExecutionCacheConfig {
                 } => backpressure_threshold_for_rpc.unwrap_or(self.backpressure_threshold()),
             })
     }
-
-    pub fn fastpath_transaction_outputs_cache_size(&self) -> u64 {
-        std::env::var("SUI_FASTPATH_TRANSACTION_OUTPUTS_CACHE_SIZE")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_else(|| match self {
-                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
-                ExecutionCacheConfig::WritebackCache {
-                    fastpath_transaction_outputs_cache_size,
-                    ..
-                } => fastpath_transaction_outputs_cache_size.unwrap_or(10_000),
-            })
-    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -739,6 +757,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "EveFrontier".to_string(),
         "TestEveFrontier".to_string(),
         "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5".to_string(), // test Gamma Prime, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu".to_string(), // Gamma Prime, external partner
     ]);
 
     // providers that are available for mainnet and testnet.
@@ -943,6 +963,19 @@ pub struct ConsensusConfig {
     pub submit_delay_step_override_millis: Option<u64>,
 
     pub parameters: Option<ConsensusParameters>,
+
+    /// Override for the consensus network listen address.
+    /// When set, Mysticeti binds to this address instead of deriving from the committee.
+    /// Address override is advertised via the discovery protocol.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub listen_address: Option<Multiaddr>,
+
+    /// External consensus address that should be advertised via the discovery protocol,
+    /// if it is different from `listen_address` above.
+    ///
+    /// When neither this nor `listen_address` is set, peers use the on-chain committee address.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_address: Option<Multiaddr>,
 }
 
 impl ConsensusConfig {
@@ -1037,6 +1070,13 @@ impl ExpensiveSafetyCheckConfig {
             enable_state_consistency_check: true,
             force_disable_state_consistency_check: false,
             enable_secondary_index_checks: false, // Disable by default for now
+        }
+    }
+
+    pub fn new_enable_all_with_secondary_index_checks() -> Self {
+        Self {
+            enable_secondary_index_checks: true,
+            ..Self::new_enable_all()
         }
     }
 

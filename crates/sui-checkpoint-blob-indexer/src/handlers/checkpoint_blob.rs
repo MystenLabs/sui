@@ -33,8 +33,6 @@ pub struct CheckpointBlobPipeline {
 #[async_trait::async_trait]
 impl Processor for CheckpointBlobPipeline {
     const NAME: &'static str = "checkpoint_blob";
-    const FANOUT: usize = 100;
-
     type Value = CheckpointBlob;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {

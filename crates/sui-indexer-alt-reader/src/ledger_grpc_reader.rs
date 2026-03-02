@@ -20,11 +20,17 @@ use tonic::transport::Uri;
 
 use crate::metrics::LedgerGrpcReaderMetrics;
 
+const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
+
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct LedgerGrpcArgs {
     /// Timeout for gRPC statements to the ledger service, in milliseconds.
     #[arg(long)]
     pub ledger_grpc_statement_timeout_ms: Option<u64>,
+
+    /// Maximum gRPC decoding message size for Ledger service responses, in bytes.
+    #[arg(long)]
+    pub ledger_grpc_max_decoding_message_size: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,8 +76,12 @@ impl LedgerGrpcReader {
         }
         let channel = endpoint.tls_config(tls_config)?.connect_lazy();
 
-        let client = LedgerServiceClient::new(channel.clone());
         let timeout = args.statement_timeout();
+        let max_decoding_message_size = args
+            .ledger_grpc_max_decoding_message_size
+            .unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE);
+        let client = LedgerServiceClient::new(channel.clone())
+            .max_decoding_message_size(max_decoding_message_size);
         let metrics = LedgerGrpcReaderMetrics::new(prefix, registry);
 
         Ok(Self {

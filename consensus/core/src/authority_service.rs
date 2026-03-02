@@ -172,7 +172,11 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block", "UnexpectedAuthority"])
+                .with_label_values(&[
+                    peer_hostname.as_str(),
+                    "handle_send_block",
+                    "UnexpectedAuthority",
+                ])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
             info!("Block with wrong authority from {}: {}", peer, e);
@@ -188,7 +192,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
+                    .with_label_values(&[peer_hostname.as_str(), "handle_send_block", e.name()])
                     .inc();
                 info!("Invalid block from {}: {}", peer, e);
             })?;
@@ -200,7 +204,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
+                    .with_label_values(&[peer_hostname.as_str(), "handle_send_block", e.name()])
                     .inc();
             })?;
 
@@ -222,7 +226,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .metrics
             .node_metrics
             .block_timestamp_drift_ms
-            .with_label_values(&[peer_hostname, "handle_send_block"])
+            .with_label_values(&[peer_hostname.as_str(), "handle_send_block"])
             .inc_by(forward_time_drift.as_millis() as u64);
 
         // Observe the block for the commit votes. When local commit is lagging too much,

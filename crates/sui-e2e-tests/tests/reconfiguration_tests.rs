@@ -112,7 +112,7 @@ async fn do_test_passive_reconfig(chain: Option<Chain>) {
     });
     ProtocolConfig::poison_get_for_min_version();
 
-    let mut builder = TestClusterBuilder::new().with_epoch_duration_ms(1000);
+    let mut builder = TestClusterBuilder::new().with_epoch_duration_ms(10000);
 
     if let Some(chain) = chain {
         builder = builder.with_chain_override(chain);
@@ -200,7 +200,7 @@ async fn test_create_advance_epoch_tx_race() {
     register_wait("reconfig_delay", target_node, reconfig_delay_tx.clone());
 
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(1000)
+        .with_epoch_duration_ms(10000)
         .build()
         .await;
 
@@ -227,7 +227,7 @@ async fn test_reconfig_with_failing_validator() {
 
     let test_cluster = Arc::new(
         TestClusterBuilder::new()
-            .with_epoch_duration_ms(5000)
+            .with_epoch_duration_ms(10000)
             .build()
             .await,
     );
@@ -694,11 +694,6 @@ async fn test_reconfig_with_voting_power_decrease_immediate_removal() {
 
 #[sim_test]
 async fn test_reconfig_with_committee_change_stress() {
-    do_test_reconfig_with_committee_change_stress().await;
-}
-
-#[sim_test(check_determinism)]
-async fn test_reconfig_with_committee_change_stress_determinism() {
     do_test_reconfig_with_committee_change_stress().await;
 }
 

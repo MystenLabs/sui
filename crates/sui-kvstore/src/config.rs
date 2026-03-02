@@ -12,6 +12,17 @@ pub struct IndexerConfig {
     pub ingestion: IngestionConfig,
     pub committer: CommitterLayer,
     pub pipeline: PipelineLayer,
+    /// Global rate limit (rows per second) shared across all pipelines.
+    pub total_max_rows_per_second: Option<u64>,
+    /// Default per-pipeline rate limit (rows per second).
+    /// Individual pipelines can override via their `ConcurrentLayer`.
+    pub max_rows_per_second: Option<u64>,
+    /// Number of gRPC channels in the Bigtable connection pool (default: 10).
+    /// A good rule of thumb is to target ~25 concurrent RPCs per channel, so
+    /// ceil(sum of write_concurrency across all pipelines / 25).
+    pub bigtable_connection_pool_size: Option<usize>,
+    /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000).
+    pub bigtable_channel_timeout_ms: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -42,6 +53,15 @@ impl CommitterLayer {
 #[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
+    /// Maximum rows per BigTable batch for this pipeline.
+    pub max_rows: Option<usize>,
+    /// Per-pipeline rate limit (rows per second). Overrides the default
+    /// `IndexerConfig::max_rows_per_second` when set.
+    pub max_rows_per_second: Option<u64>,
+    pub fanout: Option<usize>,
+    pub min_eager_rows: Option<usize>,
+    pub max_pending_rows: Option<usize>,
+    pub max_watermark_updates: Option<usize>,
 }
 
 impl ConcurrentLayer {
@@ -53,6 +73,10 @@ impl ConcurrentLayer {
                 base.committer
             },
             pruner: None,
+            fanout: self.fanout.or(base.fanout).or(Some(num_cpus::get())),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
+            max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
+            max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
         }
     }
 }
@@ -66,7 +90,12 @@ pub struct PipelineLayer {
     pub objects: ConcurrentLayer,
     pub epoch_start: ConcurrentLayer,
     pub epoch_end: ConcurrentLayer,
+    pub protocol_configs: ConcurrentLayer,
     pub epoch_legacy: ConcurrentLayer,
+    pub packages: ConcurrentLayer,
+    pub packages_by_id: ConcurrentLayer,
+    pub packages_by_checkpoint: ConcurrentLayer,
+    pub system_packages: ConcurrentLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be

@@ -818,17 +818,17 @@ impl Type_ {
         Self::single(SingleType_::u256(loc))
     }
 
-    pub fn type_at_index(&self, idx: usize) -> &SingleType {
+    pub fn type_at_index(&self, idx: usize) -> Option<&SingleType> {
         match self {
-            Type_::Unit => panic!("ICE type mismatch on index lookup"),
+            Type_::Unit => None,
             Type_::Single(s) => {
-                assert!(idx == 0);
-                s
+                if idx == 0 {
+                    Some(s)
+                } else {
+                    None
+                }
             }
-            Type_::Multiple(ss) => {
-                assert!(idx < ss.len());
-                ss.get(idx).unwrap()
-            }
+            Type_::Multiple(ss) => ss.get(idx),
         }
     }
 

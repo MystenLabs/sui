@@ -94,6 +94,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -110,7 +115,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test
         run: |
-          cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
+          cargo nextest run --profile ci --cargo-quiet -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -134,6 +139,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -144,7 +154,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test with tidehunter
         run: |
-          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci -p sui-core --features typed-store/tidehunter
+          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core --features typed-store/tidehunter
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -168,6 +178,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -178,7 +193,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test (sui-graphql staging)
         run: |
-          cargo nextest run --profile ci --features staging -E 'package(sui-indexer-alt-graphql)'
+          cargo nextest run --profile ci --cargo-quiet --features staging -E 'package(sui-indexer-alt-graphql)'
       # TODO: run stress against a local Sui network.
       # - name: benchmark (smoke)
       #   run: |
@@ -227,6 +242,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
 
@@ -249,6 +269,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
 
@@ -256,7 +281,7 @@ jobs:
         shell: bash
         run: |
           # We have temporarily disabled the network tests on windows, until we triage + fix the performance issues.
-          cargo nextest run -p sui --no-fail-fast --profile ci --filter-expr "not test(shell_tests::with_network)"
+          cargo nextest run -p sui --no-fail-fast --profile ci --cargo-quiet --filter-expr "not test(shell_tests::with_network)"
 
   simtest:
     needs: [diff, rustfmt, clippy]
@@ -269,6 +294,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -279,7 +309,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
@@ -296,6 +326,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
@@ -306,7 +341,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
@@ -323,10 +358,15 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
         run: |
-          cargo nextest run -p sui-framework-tests --test move_tests
+          cargo nextest run --profile ci --cargo-quiet -p sui-framework-tests --test move_tests
 
   # # Disabled
   # rosetta-validation:
@@ -414,6 +454,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ubuntu-ghcloud
       - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
@@ -470,6 +515,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ubuntu-ghcloud
       - name: Install cargo-hakari, and cache the binary
         uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:
