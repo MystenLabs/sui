@@ -43,7 +43,7 @@ use crate::store::TransactionalStore;
 pub(super) fn committer<H>(
     handler: Arc<H>,
     config: SequentialConfig,
-    mut next_checkpoint: u64,
+    mut checkpoint_hi: u64,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
@@ -76,7 +76,7 @@ where
         let mut batch_checkpoints = 0;
 
         // The task keeps track of the highest (inclusive) checkpoint it has added to the batch
-        // through `next_checkpoint`, and whether that batch needs to be written out. By extension
+        // through `checkpoint_hi`, and whether that batch needs to be written out. By extension
         // it also knows the next checkpoint to expect and add to the batch. In case of db txn
         // failures, we need to know the watermark update that failed, cached to this variable. in
         // case of db txn failures.
@@ -105,7 +105,7 @@ where
                     if batch_checkpoints == 0
                         && rx.is_closed()
                         && rx.is_empty()
-                        && !can_process_pending(next_checkpoint, checkpoint_lag, &pending)
+                        && !can_process_pending(checkpoint_hi, checkpoint_lag, &pending)
                     {
                         info!(pipeline = H::NAME, "Process closed channel and no more data to commit");
                         break;
@@ -134,7 +134,7 @@ where
                     // (and therefore the length of the write transaction).
                     // docs::#batch  (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                     while batch_checkpoints < max_batch_checkpoints {
-                        if !can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
+                        if !can_process_pending(checkpoint_hi, checkpoint_lag, &pending) {
                             break;
                         }
 
@@ -142,7 +142,7 @@ where
                             break;
                         };
 
-                        match next_checkpoint.cmp(entry.key()) {
+                        match checkpoint_hi.cmp(entry.key()) {
                             // Next pending checkpoint is from the future.
                             Ordering::Less => break,
 
@@ -153,7 +153,7 @@ where
                                 batch_checkpoints += 1;
                                 handler.batch(&mut batch, indexed.values.into_iter());
                                 watermark = Some(indexed.watermark);
-                                next_checkpoint += 1;
+                                checkpoint_hi += 1;
                             }
 
                             // Next pending checkpoint is in the past, ignore it to avoid double
@@ -333,7 +333,7 @@ where
 
                     // If we could make more progress immediately, then schedule more work without
                     // waiting.
-                    if can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
+                    if can_process_pending(checkpoint_hi, checkpoint_lag, &pending) {
                         poll.reset_immediately();
                     }
                 }
@@ -359,7 +359,7 @@ where
                     }
 
                     if batch_checkpoints > 0
-                        || can_process_pending(next_checkpoint, checkpoint_lag, &pending)
+                        || can_process_pending(checkpoint_hi, checkpoint_lag, &pending)
                     {
                         poll.reset_immediately();
                     }
@@ -375,10 +375,10 @@ where
 // Tests whether the first checkpoint in the `pending` buffer can be processed immediately, which
 // is subject to the following conditions:
 //
-// - It is at or before the `next_checkpoint` expected by the committer.
+// - It is at or before the `checkpoint_hi` expected by the committer.
 // - It is at least `checkpoint_lag` checkpoints before the last checkpoint in the buffer.
 fn can_process_pending<T>(
-    next_checkpoint: u64,
+    checkpoint_hi: u64,
     checkpoint_lag: u64,
     pending: &BTreeMap<u64, T>,
 ) -> bool {
@@ -390,7 +390,7 @@ fn can_process_pending<T>(
         return false;
     };
 
-    first <= next_checkpoint && first + checkpoint_lag <= last
+    first <= checkpoint_hi && first + checkpoint_lag <= last
 }
 
 #[cfg(test)]
@@ -456,9 +456,9 @@ mod tests {
         committer: Service,
     }
 
-    /// Emulates adding a sequential pipeline to the indexer. The next_checkpoint is the checkpoint
-    /// for the indexer to ingest from.
-    fn setup_test(next_checkpoint: u64, config: SequentialConfig, store: MockStore) -> TestSetup {
+    /// Emulates adding a sequential pipeline to the indexer. The checkpoint_hi is the starting
+    /// checkpoint for the indexer to ingest from.
+    fn setup_test(checkpoint_hi: u64, config: SequentialConfig, store: MockStore) -> TestSetup {
         let metrics = IndexerMetrics::new(None, &Registry::default());
 
         let min_eager_rows = config
@@ -477,7 +477,7 @@ mod tests {
         let committer = committer(
             handler,
             config,
-            next_checkpoint,
+            checkpoint_hi,
             checkpoint_rx,
             commit_hi_tx,
             store_clone,

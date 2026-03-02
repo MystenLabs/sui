@@ -260,12 +260,12 @@ impl MigrationStore {
     pub(crate) async fn init_watermark(
         &self,
         pipeline: &str,
-        _default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
+        checkpoint_hi: u64,
+    ) -> anyhow::Result<u64> {
         Ok(self
             .committer_watermark(pipeline)
             .await?
-            .map(|w| w.checkpoint_hi))
+            .map_or(checkpoint_hi, |w| w.checkpoint_hi))
     }
 
     /// Update watermark for a single pipeline after successful file upload.

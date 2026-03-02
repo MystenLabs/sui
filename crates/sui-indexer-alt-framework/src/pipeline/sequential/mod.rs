@@ -125,7 +125,7 @@ pub struct SequentialConfig {
 /// signalled to shutdown through the returned service handle.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    next_checkpoint: u64,
+    checkpoint_hi: u64,
     config: SequentialConfig,
     db: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
@@ -167,7 +167,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let s_committer = committer::<H>(
         handler,
         config,
-        next_checkpoint,
+        checkpoint_hi,
         committer_rx,
         commit_hi_tx,
         db,

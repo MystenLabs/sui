@@ -13,13 +13,13 @@ use scoped_futures::ScopedBoxFuture;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// If no existing watermark record exists, initializes it with `default_next_checkpoint`.
-    /// Returns the committer watermark `checkpoint_hi`.
+    /// If no existing watermark record exists, initializes it with `checkpoint_hi`. Otherwise,
+    /// returns the existing `checkpoint_hi`.
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>>;
+        checkpoint_hi: u64,
+    ) -> anyhow::Result<u64>;
 
     /// Given a `pipeline_task` representing either a pipeline name or a pipeline with an associated
     /// task (formatted as `{pipeline}{Store::DELIMITER}{task}`), return the committer watermark

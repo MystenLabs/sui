@@ -89,7 +89,11 @@ impl Indexer<Db> {
             IndexerArgs::default(),
             ClientArgs {
                 ingestion: IngestionClientArgs {
-                    local_ingestion_path: Some(tempdir().unwrap().keep()),
+                    local_ingestion_path: Some({
+                        let dir = tempdir().unwrap().keep();
+                        std::fs::write(dir.join("epochs.json"), "[]").unwrap();
+                        dir
+                    }),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -160,7 +164,9 @@ pub mod tests {
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_ingestion_checkpoint, 0);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_checkpoint_hi, 0);
+        assert_eq!(indexer.sequential_min_checkpoint_hi, None);
     }
 
     #[tokio::test]
@@ -182,7 +188,9 @@ pub mod tests {
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_ingestion_checkpoint, 11);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_checkpoint_hi, 11);
+        assert_eq!(indexer.sequential_min_checkpoint_hi, None);
     }
 
     #[tokio::test]
@@ -214,11 +222,15 @@ pub mod tests {
             .concurrent_pipeline(ConcurrentPipeline2, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_ingestion_checkpoint, 21);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_checkpoint_hi, 21);
+        assert_eq!(indexer.sequential_min_checkpoint_hi, None);
         indexer
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_ingestion_checkpoint, 11);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_checkpoint_hi, 11);
+        assert_eq!(indexer.sequential_min_checkpoint_hi, None);
     }
 }

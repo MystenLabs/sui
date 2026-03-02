@@ -85,6 +85,14 @@ pub async fn generate_ingestion(config: Config) {
             info!("Generated {} checkpoints, {} transactions", i + 1, tx_count);
         }
     }
+    let last_checkpoint = starting_checkpoint + num_checkpoints - 1;
+    fs::write(
+        ingestion_dir.join("epochs.json"),
+        format!("[{last_checkpoint}]"),
+    )
+    .await
+    .unwrap();
+
     info!(
         "Generated {} transactions in {} checkpoints. Total time: {:?}",
         tx_count,

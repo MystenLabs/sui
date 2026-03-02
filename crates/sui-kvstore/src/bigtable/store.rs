@@ -80,16 +80,12 @@ impl Store for BigTableStore {
 
 #[async_trait]
 impl Connection for BigTableConnection<'_> {
-    async fn init_watermark(
-        &mut self,
-        pipeline_task: &str,
-        _default_next_checkpoint: u64,
-    ) -> Result<Option<u64>> {
+    async fn init_watermark(&mut self, pipeline_task: &str, checkpoint_hi: u64) -> Result<u64> {
         Ok(self
             .client
             .get_pipeline_watermark(pipeline_task)
             .await?
-            .map(|wm| wm.checkpoint_hi))
+            .map_or(checkpoint_hi, |wm| wm.checkpoint_hi))
     }
 
     async fn committer_watermark(

@@ -44,7 +44,7 @@ use crate::store::pipeline_task;
 ///
 /// The task will shutdown if the `rx` channel closes and the watermark cannot be progressed.
 pub(super) fn commit_watermark<H: Handler + 'static>(
-    mut next_checkpoint: u64,
+    mut checkpoint_hi: u64,
     config: CommitterConfig,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
     store: H::Store,
@@ -73,7 +73,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
         info!(
             pipeline = H::NAME,
-            next_checkpoint, "Starting commit watermark task"
+            checkpoint_hi, "Starting commit watermark task"
         );
 
         let mut next_wake = tokio::time::Instant::now();
@@ -120,14 +120,14 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     break;
                 }
 
-                match next_checkpoint.cmp(&part.checkpoint()) {
+                match checkpoint_hi.cmp(&part.checkpoint()) {
                     // Next pending checkpoint is from the future.
                     Ordering::Less => break,
 
                     // This is the next checkpoint -- include it.
                     Ordering::Equal => {
                         pending_watermark = Some(pending.remove().watermark);
-                        next_checkpoint += 1;
+                        checkpoint_hi += 1;
                     }
 
                     // Next pending checkpoint is in the past. Out of order watermarks can
@@ -370,7 +370,7 @@ mod tests {
 
     fn setup_test<H: Handler<Store = MockStore> + 'static>(
         config: CommitterConfig,
-        next_checkpoint: u64,
+        checkpoint_hi: u64,
         store: MockStore,
     ) -> TestSetup {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
@@ -379,7 +379,7 @@ mod tests {
         let store_clone = store.clone();
 
         let commit_watermark = commit_watermark::<H>(
-            next_checkpoint,
+            checkpoint_hi,
             config,
             watermark_rx,
             store_clone,

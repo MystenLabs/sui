@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
@@ -89,24 +88,22 @@ impl Connection for MockConnection<'_> {
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
-        let &MockWatermark { checkpoint_hi, .. } = self
+        checkpoint_hi: u64,
+    ) -> anyhow::Result<u64> {
+        let watermark = self
             .0
             .watermarks
             .entry(pipeline_task.to_string())
             .or_insert(MockWatermark {
                 epoch_hi_inclusive: 0,
-                checkpoint_hi: default_next_checkpoint,
+                checkpoint_hi,
                 tx_hi: 0,
                 timestamp_ms_hi_inclusive: 0,
-                reader_lo: default_next_checkpoint,
+                reader_lo: checkpoint_hi,
                 pruner_timestamp: 0,
-                pruner_hi: default_next_checkpoint,
-            })
-            .deref();
-
-        Ok(Some(checkpoint_hi))
+                pruner_hi: checkpoint_hi,
+            });
+        Ok(watermark.checkpoint_hi)
     }
 
     async fn committer_watermark(

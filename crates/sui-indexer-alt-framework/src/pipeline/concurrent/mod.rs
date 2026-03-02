@@ -234,7 +234,7 @@ impl Default for PrunerConfig {
 /// signalled to shutdown through the returned service handle.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    next_checkpoint: u64,
+    checkpoint_hi: u64,
     config: ConcurrentConfig,
     store: H::Store,
     task: Option<Task>,
@@ -311,7 +311,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let s_commit_watermark = commit_watermark::<H>(
-        next_checkpoint,
+        checkpoint_hi,
         committer_config,
         watermark_rx,
         store.clone(),
@@ -447,13 +447,13 @@ mod tests {
     }
 
     impl TestSetup {
-        async fn new(config: ConcurrentConfig, store: MockStore, next_checkpoint: u64) -> Self {
+        async fn new(config: ConcurrentConfig, store: MockStore, checkpoint_hi: u64) -> Self {
             let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
             let metrics = IndexerMetrics::new(None, &Registry::default());
 
             let pipeline = pipeline(
                 DataPipeline,
-                next_checkpoint,
+                checkpoint_hi,
                 config,
                 store.clone(),
                 None,
@@ -548,22 +548,32 @@ mod tests {
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
-        // Wait for pruning to occur (5s + delay + processing time)
-        tokio::time::sleep(Duration::from_millis(5_200)).await;
+        // Wait for pruning to occur. The pruner and reader_watermark tasks both run on
+        // the same interval, so poll until the pruner has caught up rather instead of using a
+        // fixed sleep.
+        let pruning_deadline = Duration::from_secs(15);
+        let start = tokio::time::Instant::now();
+        loop {
+            let pruned = {
+                let data = setup.store.data.get(DataPipeline::NAME).unwrap();
+                !data.contains_key(&0) && !data.contains_key(&1) && !data.contains_key(&2)
+            };
+            if pruned {
+                break;
+            }
+            assert!(
+                start.elapsed() < pruning_deadline,
+                "Timed out waiting for pruning to occur"
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
 
-        // Verify pruning has occurred
+        // Verify recent checkpoints are still available
         {
             let data = setup.store.data.get(DataPipeline::NAME).unwrap();
-
-            // Verify recent checkpoints are still available
             assert!(data.contains_key(&3));
             assert!(data.contains_key(&4));
             assert!(data.contains_key(&5));
-
-            // Verify old checkpoints are pruned
-            assert!(!data.contains_key(&0));
-            assert!(!data.contains_key(&1));
-            assert!(!data.contains_key(&2));
         };
     }
 

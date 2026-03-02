@@ -632,21 +632,19 @@ impl Connection for AnalyticsConnection<'_> {
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
+        checkpoint_hi: u64,
+    ) -> anyhow::Result<u64> {
         match &self.store.mode {
             StoreMode::Live(_) => {
                 // Live mode: derive from file names
                 Ok(self
                     .committer_watermark(pipeline_task)
                     .await?
-                    .map(|w| w.checkpoint_hi))
+                    .map_or(checkpoint_hi, |w| w.checkpoint_hi))
             }
             StoreMode::Migration(store) => {
                 let output_prefix = self.pipeline_config(pipeline_task).output_prefix();
-                store
-                    .init_watermark(output_prefix, default_next_checkpoint)
-                    .await
+                store.init_watermark(output_prefix, checkpoint_hi).await
             }
         }
     }

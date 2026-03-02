@@ -27,17 +27,17 @@ impl store::Connection for Connection<'_> {
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
+        checkpoint_hi: u64,
+    ) -> anyhow::Result<u64> {
         let stored_watermark = StoredWatermark {
             pipeline: pipeline_task.to_string(),
             epoch_hi_inclusive: 0,
-            checkpoint_hi: default_next_checkpoint as i64,
+            checkpoint_hi: checkpoint_hi as i64,
             tx_hi: 0,
             timestamp_ms_hi_inclusive: 0,
-            reader_lo: default_next_checkpoint as i64,
+            reader_lo: checkpoint_hi as i64,
             pruner_timestamp: Utc::now().naive_utc(),
-            pruner_hi: default_next_checkpoint as i64,
+            pruner_hi: checkpoint_hi as i64,
         };
 
         use diesel::pg::upsert::excluded;
@@ -50,7 +50,7 @@ impl store::Connection for Connection<'_> {
             .get_result(self)
             .await?;
 
-        Ok(Some(u64::try_from(checkpoint_hi)?))
+        Ok(u64::try_from(checkpoint_hi)?)
     }
 
     async fn committer_watermark(
