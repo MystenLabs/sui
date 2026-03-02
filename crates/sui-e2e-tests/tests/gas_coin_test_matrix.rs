@@ -365,6 +365,7 @@ async fn run_test_case(
     verify_outcome(
         result,
         effective_budget_type,
+        test_case.charge_type,
         available_funds,
         actual_budget,
     )?;
@@ -585,6 +586,7 @@ fn verify_outcome(
         SuiError,
     >,
     budget_type: GasBudgetType,
+    charge_type: GasChargeType,
     available_funds: u64,
     budget: u64,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -635,7 +637,23 @@ fn verify_outcome(
             match result {
                 Ok((_, effects)) => {
                     if effects.status().is_ok() {
-                        tracing::info!("Transaction succeeded as expected");
+                        // For storage rebate cases, verify that net gas usage is actually negative
+                        if charge_type == GasChargeType::NegativeFromStorageRebate {
+                            let net_gas = effects.gas_cost_summary().net_gas_usage();
+                            if net_gas >= 0 {
+                                return Err(format!(
+                                    "Expected negative net gas usage for storage rebate case, got: {}",
+                                    net_gas
+                                )
+                                .into());
+                            }
+                            tracing::info!(
+                                "Transaction succeeded with negative net gas usage: {}",
+                                net_gas
+                            );
+                        } else {
+                            tracing::info!("Transaction succeeded as expected");
+                        }
                         Ok(())
                     } else {
                         // Execution failure is OK as long as it's not gas-related
