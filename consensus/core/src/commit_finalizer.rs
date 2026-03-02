@@ -321,7 +321,7 @@ impl CommitFinalizer {
                 let hostname = &self.context.committee.authority(block_ref.author).hostname;
                 metrics
                     .finalizer_skipped_voting_blocks
-                    .with_label_values(&[hostname, "direct"])
+                    .with_label_values(&[hostname.as_str(), "direct"])
                     .inc();
                 tracing::debug!(
                     "Block {} is potentially outside of GC bound from its leader {} in commit {}. Skipping direct finalization.",
@@ -718,7 +718,7 @@ impl CommitFinalizer {
                         .metrics
                         .node_metrics
                         .finalizer_skipped_voting_blocks
-                        .with_label_values(&[hostname, "indirect"])
+                        .with_label_values(&[hostname.as_str(), "indirect"])
                         .inc();
                     tracing::debug!(
                         "Block {} is potentially outside of GC bound from current block {}. Skipping indirect finalization.",

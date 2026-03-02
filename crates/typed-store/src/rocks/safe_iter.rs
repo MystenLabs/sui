@@ -3,9 +3,11 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use bincode::Options;
-use mysten_common::debug_fatal;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::{DBWithThreadMode, Direction, MultiThreaded};
+
+#[cfg(not(test))]
+use mysten_common::debug_fatal;
 
 use crate::metrics::{DBMetrics, RocksDBPerfContext};
 
@@ -88,14 +90,25 @@ impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeIter<'_, K, V> {
                 Direction::Reverse => self.db_iter.prev(),
             }
 
-            if let Err(e) = &key {
-                debug_fatal!("Failed to deserialize key in cf {}: {e}", self.cf_name);
-            }
-            if let Err(e) = &value {
-                debug_fatal!("Failed to deserialize value in cf {}: {e}", self.cf_name);
+            #[cfg(not(test))]
+            {
+                if let Err(e) = &key {
+                    debug_fatal!("Failed to deserialize key in cf {}: {e}", self.cf_name);
+                }
+                if let Err(e) = &value {
+                    debug_fatal!("Failed to deserialize value in cf {}: {e}", self.cf_name);
+                }
             }
 
-            key.ok().and_then(|k| value.ok().map(|v| Ok((k, v))))
+            match (key, value) {
+                (Ok(key), Ok(value)) => Some(Ok((key, value))),
+                (Err(e), _) => Some(Err(TypedStoreError::SerializationError(format!(
+                    "Failed to deserialize key: {e}"
+                )))),
+                (_, Err(e)) => Some(Err(TypedStoreError::SerializationError(format!(
+                    "Failed to deserialize value: {e}"
+                )))),
+            }
         } else {
             match self.db_iter.status() {
                 Ok(_) => None,

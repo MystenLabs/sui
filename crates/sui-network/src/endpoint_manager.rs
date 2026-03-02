@@ -21,7 +21,7 @@ pub struct EndpointManager {
 }
 
 struct Inner {
-    discovery_handle: discovery::Handle,
+    discovery_sender: discovery::Sender,
     consensus_address_updater: ArcSwapOption<Arc<dyn ConsensusAddressUpdater>>,
 }
 
@@ -35,10 +35,10 @@ pub trait ConsensusAddressUpdater: Send + Sync + 'static {
 }
 
 impl EndpointManager {
-    pub fn new(discovery_handle: discovery::Handle) -> Self {
+    pub fn new(discovery_sender: discovery::Sender) -> Self {
         Self {
             inner: Arc::new(Inner {
-                discovery_handle,
+                discovery_sender,
                 consensus_address_updater: ArcSwapOption::empty(),
             }),
         }
@@ -80,7 +80,7 @@ impl EndpointManager {
                     .collect();
 
                 self.inner
-                    .discovery_handle
+                    .discovery_sender
                     .peer_address_change(peer_id, source, anemo_addresses);
             }
             EndpointId::Consensus(network_pubkey) => {
@@ -115,6 +115,7 @@ pub enum EndpointId {
 pub enum AddressSource {
     Admin,
     Config,
+    Discovery,
     Committee,
 }
 
@@ -156,21 +157,18 @@ mod tests {
         }
     }
 
-    // Mock discovery handle for testing
-    fn create_mock_discovery_handle() -> discovery::Handle {
-        use crate::utils::build_network_and_key;
+    fn create_mock_endpoint_manager() -> EndpointManager {
         use sui_config::p2p::P2pConfig;
 
         let config = P2pConfig::default();
-        let (unstarted, _server) = discovery::Builder::new().config(config).build();
-        let (network, keypair) = build_network_and_key(|router| router);
-        unstarted.start(network, keypair)
+        let (_unstarted, _server, endpoint_manager) =
+            discovery::Builder::new().config(config).build();
+        endpoint_manager
     }
 
     #[tokio::test]
     async fn test_update_consensus_endpoint() {
-        let discovery_handle = create_mock_discovery_handle();
-        let endpoint_manager = EndpointManager::new(discovery_handle);
+        let endpoint_manager = create_mock_endpoint_manager();
 
         let (mock_updater, updates) = MockConsensusAddressUpdater::new();
         endpoint_manager.set_consensus_address_updater(Arc::new(mock_updater));
@@ -199,8 +197,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_consensus_endpoint_without_updater() {
-        let discovery_handle = create_mock_discovery_handle();
-        let endpoint_manager = EndpointManager::new(discovery_handle);
+        let endpoint_manager = create_mock_endpoint_manager();
 
         let (_, network_key): (_, NetworkKeyPair) = get_key_pair();
         let network_pubkey = network_key.public();

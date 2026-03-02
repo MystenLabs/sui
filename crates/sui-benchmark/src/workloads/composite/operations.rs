@@ -10,7 +10,10 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
 };
-use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+use sui_types::{
+    Identifier, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
+};
 
 use super::AccountState;
 
@@ -21,7 +24,15 @@ pub enum InitRequirement {
     SeedBalancePool,
     CreateTestCoinCap,
     SeedTestCoinAddressBalance,
+    EnableAddressAlias,
 }
+
+// Flags reserved for metrics use, even though alias testing is not implemented
+// using Operations.
+pub const ALIAS_TX_FLAG: u32 = 1 << 12;
+pub const ALIAS_REMOVE_FLAG: u32 = 1 << 13;
+pub const ALIAS_ADD_FLAG: u32 = 1 << 14;
+pub const INVALID_ALIAS_TX_FLAG: u32 = 1 << 15;
 
 pub struct OperationDescriptor {
     pub name: &'static str,
@@ -42,6 +53,9 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     TestCoinAddressWithdraw::DESCRIPTOR,
     TestCoinObjectWithdraw::DESCRIPTOR,
     AddressBalanceOverdraw::DESCRIPTOR,
+    AccumulatorBalanceRead::DESCRIPTOR,
+    ObjectBalanceOverdraw::DESCRIPTOR,
+    AuthenticatedEventEmit::DESCRIPTOR,
 ];
 
 pub fn describe_flags(flags: u32) -> String {
@@ -64,6 +78,7 @@ pub enum ResourceRequest {
     AddressBalance,
     ObjectBalance,
     TestCoinCap,
+    AccumulatorRoot,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -74,6 +89,7 @@ pub struct OperationConstraints {
 pub struct OperationResources {
     pub counter: Option<(ObjectID, SequenceNumber)>,
     pub randomness: Option<SequenceNumber>,
+    pub accumulator_root: Option<SequenceNumber>,
     pub package_id: ObjectID,
     pub address_balance_amount: u64,
     pub balance_pool: Option<(ObjectID, SequenceNumber)>,
@@ -917,6 +933,196 @@ impl Operation for AddressBalanceOverdraw {
             Identifier::new("send_funds").unwrap(),
             vec![GAS::type_tag()],
             vec![balance, recipient],
+        );
+    }
+}
+
+pub struct AccumulatorBalanceRead;
+
+impl AccumulatorBalanceRead {
+    pub const FLAG: u32 = 1 << 16;
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: "AccumulatorBalanceRead",
+        flag: Self::FLAG,
+        factory: || Box::new(AccumulatorBalanceRead),
+    };
+}
+
+impl Operation for AccumulatorBalanceRead {
+    fn name(&self) -> &'static str {
+        "accumulator_balance_read"
+    }
+
+    fn operation_flag(&self) -> u32 {
+        Self::FLAG
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::AccumulatorRoot]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::SeedAddressBalance]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let initial_shared_version = resources
+            .accumulator_root
+            .expect("AccumulatorRoot not resolved");
+
+        let root_arg = builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Immutable,
+            })
+            .unwrap();
+
+        let addr_arg = builder.pure(account_state.sender).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("accumulator_read").unwrap(),
+            Identifier::new("read_settled_balance").unwrap(),
+            vec![],
+            vec![root_arg, addr_arg],
+        );
+    }
+}
+
+pub struct ObjectBalanceOverdraw;
+
+impl ObjectBalanceOverdraw {
+    pub const FLAG: u32 = 1 << 17;
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: "ObjectBalanceOverdraw",
+        flag: Self::FLAG,
+        factory: || Box::new(ObjectBalanceOverdraw),
+    };
+}
+
+impl Operation for ObjectBalanceOverdraw {
+    fn name(&self) -> &'static str {
+        "object_balance_overdraw"
+    }
+
+    fn operation_flag(&self) -> u32 {
+        Self::FLAG
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::ObjectBalance]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![
+            InitRequirement::CreateBalancePool,
+            InitRequirement::SeedBalancePool,
+        ]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let (pool_id, initial_shared_version) =
+            resources.balance_pool.expect("Balance pool not resolved");
+
+        let withdraw_amount = if account_state.pool_balance == 0 {
+            0
+        } else {
+            let half_balance = std::cmp::max(1, account_state.pool_balance / 2);
+            get_rng().gen_range(half_balance..=account_state.pool_balance)
+        };
+
+        let pool_arg = builder
+            .obj(ObjectArg::SharedObject {
+                id: pool_id,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap();
+
+        let amount_arg = builder.pure(withdraw_amount).unwrap();
+
+        let withdrawal = builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("balance_pool").unwrap(),
+            Identifier::new("withdraw").unwrap(),
+            vec![GAS::type_tag()],
+            vec![pool_arg, amount_arg],
+        );
+
+        let balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdrawal],
+        );
+
+        let coin = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("from_balance").unwrap(),
+            vec![GAS::type_tag()],
+            vec![balance],
+        );
+
+        let recipient = SuiAddress::random_for_testing_only();
+        builder.transfer_arg(recipient, coin);
+    }
+}
+
+pub struct AuthenticatedEventEmit;
+
+impl AuthenticatedEventEmit {
+    pub const FLAG: u32 = 1 << 18;
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: "AuthenticatedEventEmit",
+        flag: Self::FLAG,
+        factory: || Box::new(AuthenticatedEventEmit),
+    };
+}
+
+impl Operation for AuthenticatedEventEmit {
+    fn name(&self) -> &'static str {
+        "authenticated_event_emit"
+    }
+
+    fn operation_flag(&self) -> u32 {
+        Self::FLAG
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let mut rng = get_rng();
+        let count: u64 = rng.gen_range(1..=5);
+
+        let start_arg = builder.pure(count).unwrap();
+        let count_arg = builder.pure(count).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("auth_event").unwrap(),
+            Identifier::new("emit_multiple").unwrap(),
+            vec![],
+            vec![start_arg, count_arg],
         );
     }
 }

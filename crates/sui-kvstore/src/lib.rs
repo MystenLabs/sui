@@ -4,8 +4,10 @@
 mod bigtable;
 pub mod config;
 mod handlers;
+mod rate_limiter;
 pub mod tables;
 
+use std::sync::Arc;
 use std::sync::OnceLock;
 
 use anyhow::Result;
@@ -18,6 +20,9 @@ use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+
+use crate::rate_limiter::CompositeRateLimiter;
+use crate::rate_limiter::RateLimiter;
 use sui_protocol_config::Chain;
 use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
@@ -38,7 +43,6 @@ use sui_types::transaction::Transaction;
 pub use crate::bigtable::client::BigTableClient;
 pub use crate::bigtable::store::BigTableConnection;
 pub use crate::bigtable::store::BigTableStore;
-pub use crate::handlers::BIGTABLE_MAX_MUTATIONS;
 pub use crate::handlers::BigTableHandler;
 pub use crate::handlers::CheckpointsByDigestPipeline;
 pub use crate::handlers::CheckpointsPipeline;
@@ -47,10 +51,13 @@ pub use crate::handlers::EpochLegacyBatch;
 pub use crate::handlers::EpochLegacyPipeline;
 pub use crate::handlers::EpochStartPipeline;
 pub use crate::handlers::ObjectsPipeline;
+pub use crate::handlers::PackagesByCheckpointPipeline;
+pub use crate::handlers::PackagesByIdPipeline;
+pub use crate::handlers::PackagesPipeline;
 pub use crate::handlers::PrevEpochUpdate;
 pub use crate::handlers::ProtocolConfigsPipeline;
+pub use crate::handlers::SystemPackagesPipeline;
 pub use crate::handlers::TransactionsPipeline;
-pub use crate::handlers::set_max_mutations;
 pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
 pub use config::IndexerConfig;
@@ -73,10 +80,18 @@ pub const PROTOCOL_CONFIGS_PIPELINE: &str =
     <BigTableHandler<ProtocolConfigsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const EPOCH_LEGACY_PIPELINE: &str =
     <EpochLegacyPipeline as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const PACKAGES_PIPELINE: &str =
+    <BigTableHandler<PackagesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const PACKAGES_BY_ID_PIPELINE: &str =
+    <BigTableHandler<PackagesByIdPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const PACKAGES_BY_CHECKPOINT_PIPELINE: &str =
+    <BigTableHandler<PackagesByCheckpointPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const SYSTEM_PACKAGES_PIPELINE: &str =
+    <BigTableHandler<SystemPackagesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 
 /// All pipeline names registered by the indexer. Used by `LegacyWatermarkTracker`
 /// to know when all pipelines have reported.
-pub const ALL_PIPELINE_NAMES: [&str; 8] = [
+pub const ALL_PIPELINE_NAMES: [&str; 12] = [
     CHECKPOINTS_PIPELINE,
     CHECKPOINTS_BY_DIGEST_PIPELINE,
     TRANSACTIONS_PIPELINE,
@@ -85,10 +100,14 @@ pub const ALL_PIPELINE_NAMES: [&str; 8] = [
     EPOCH_END_PIPELINE,
     PROTOCOL_CONFIGS_PIPELINE,
     EPOCH_LEGACY_PIPELINE,
+    PACKAGES_PIPELINE,
+    PACKAGES_BY_ID_PIPELINE,
+    PACKAGES_BY_CHECKPOINT_PIPELINE,
+    SYSTEM_PACKAGES_PIPELINE,
 ];
 
 /// Non-legacy pipeline names used for the default `get_watermark` implementation.
-const WATERMARK_PIPELINES: [&str; 7] = [
+const WATERMARK_PIPELINES: [&str; 11] = [
     CHECKPOINTS_PIPELINE,
     CHECKPOINTS_BY_DIGEST_PIPELINE,
     TRANSACTIONS_PIPELINE,
@@ -96,6 +115,10 @@ const WATERMARK_PIPELINES: [&str; 7] = [
     EPOCH_START_PIPELINE,
     EPOCH_END_PIPELINE,
     PROTOCOL_CONFIGS_PIPELINE,
+    PACKAGES_PIPELINE,
+    PACKAGES_BY_ID_PIPELINE,
+    PACKAGES_BY_CHECKPOINT_PIPELINE,
+    SYSTEM_PACKAGES_PIPELINE,
 ];
 
 static WRITE_LEGACY_DATA: OnceLock<bool> = OnceLock::new();
@@ -168,6 +191,17 @@ pub struct EpochData {
     pub epoch_commitments: Option<Vec<u8>>,
 }
 
+/// Package metadata returned by reader methods.
+/// The actual serialized object is stored in the `objects` table.
+#[derive(Clone, Debug)]
+pub struct PackageData {
+    pub package_id: Vec<u8>,
+    pub package_version: u64,
+    pub original_id: Vec<u8>,
+    pub is_system_package: bool,
+    pub cp_sequence_number: u64,
+}
+
 /// Protocol config data returned by reader methods.
 #[derive(Clone, Debug, Default)]
 pub struct ProtocolConfigData {
@@ -222,6 +256,53 @@ pub trait KeyValueStoreReader {
         &mut self,
         keys: &[TransactionDigest],
     ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>>;
+
+    /// Resolve package_ids to their original_ids.
+    async fn get_package_original_ids(
+        &mut self,
+        package_ids: &[ObjectID],
+    ) -> Result<Vec<(ObjectID, ObjectID)>>;
+
+    /// Get packages by (original_id, version) pairs.
+    async fn get_packages_by_version(
+        &mut self,
+        keys: &[(ObjectID, u64)],
+    ) -> Result<Vec<PackageData>>;
+
+    /// Get the latest version of a package at or before `cp_bound`.
+    async fn get_package_latest(
+        &mut self,
+        original_id: ObjectID,
+        cp_bound: u64,
+    ) -> Result<Option<PackageData>>;
+
+    /// Paginate package versions for an original_id, filtered by cp_bound.
+    async fn get_package_versions(
+        &mut self,
+        original_id: ObjectID,
+        cp_bound: u64,
+        after_version: Option<u64>,
+        before_version: Option<u64>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<PackageData>>;
+
+    /// Get packages created in a checkpoint range, ordered by checkpoint.
+    async fn get_packages_by_checkpoint_range(
+        &mut self,
+        cp_after: Option<u64>,
+        cp_before: Option<u64>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<PackageData>>;
+
+    /// Get all system packages with their latest version at or before `cp_bound`.
+    async fn get_system_packages(
+        &mut self,
+        cp_bound: u64,
+        after_original_id: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<PackageData>>;
 }
 
 impl BigTableIndexer {
@@ -231,6 +312,7 @@ impl BigTableIndexer {
         client_args: ClientArgs,
         ingestion_config: IngestionConfig,
         committer: CommitterConfig,
+        config: IndexerConfig,
         pipeline: PipelineLayer,
         chain: Chain,
         registry: &Registry,
@@ -245,51 +327,138 @@ impl BigTableIndexer {
         )
         .await?;
 
+        let global = config.total_max_rows_per_second.map(RateLimiter::new);
+        let base_rps = config.max_rows_per_second;
+
+        fn build_rate_limiter(
+            layer: &ConcurrentLayer,
+            base_rps: Option<u64>,
+            global: &Option<Arc<RateLimiter>>,
+        ) -> Arc<CompositeRateLimiter> {
+            let mut limiters = Vec::new();
+            if let Some(rps) = layer.max_rows_per_second.or(base_rps) {
+                limiters.push(RateLimiter::new(rps));
+            }
+            if let Some(g) = global {
+                limiters.push(g.clone());
+            }
+            Arc::new(CompositeRateLimiter::new(limiters))
+        }
+
         let base = ConcurrentConfig {
             committer,
             pruner: None,
+            ..Default::default()
         };
 
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(CheckpointsPipeline),
+                BigTableHandler::new(
+                    CheckpointsPipeline,
+                    &pipeline.checkpoints,
+                    build_rate_limiter(&pipeline.checkpoints, base_rps, &global),
+                ),
                 pipeline.checkpoints.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(CheckpointsByDigestPipeline),
+                BigTableHandler::new(
+                    CheckpointsByDigestPipeline,
+                    &pipeline.checkpoints_by_digest,
+                    build_rate_limiter(&pipeline.checkpoints_by_digest, base_rps, &global),
+                ),
                 pipeline.checkpoints_by_digest.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(TransactionsPipeline),
+                BigTableHandler::new(
+                    TransactionsPipeline,
+                    &pipeline.transactions,
+                    build_rate_limiter(&pipeline.transactions, base_rps, &global),
+                ),
                 pipeline.transactions.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(ObjectsPipeline),
+                BigTableHandler::new(
+                    ObjectsPipeline,
+                    &pipeline.objects,
+                    build_rate_limiter(&pipeline.objects, base_rps, &global),
+                ),
                 pipeline.objects.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(EpochStartPipeline),
+                BigTableHandler::new(
+                    EpochStartPipeline,
+                    &pipeline.epoch_start,
+                    build_rate_limiter(&pipeline.epoch_start, base_rps, &global),
+                ),
                 pipeline.epoch_start.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(EpochEndPipeline),
+                BigTableHandler::new(
+                    EpochEndPipeline,
+                    &pipeline.epoch_end,
+                    build_rate_limiter(&pipeline.epoch_end, base_rps, &global),
+                ),
                 pipeline.epoch_end.finish(base.clone()),
             )
             .await?;
         indexer
             .concurrent_pipeline(
-                BigTableHandler::new(ProtocolConfigsPipeline(chain)),
+                BigTableHandler::new(
+                    ProtocolConfigsPipeline(chain),
+                    &pipeline.protocol_configs,
+                    build_rate_limiter(&pipeline.protocol_configs, base_rps, &global),
+                ),
                 pipeline.protocol_configs.finish(base.clone()),
+            )
+            .await?;
+        indexer
+            .concurrent_pipeline(
+                BigTableHandler::new(
+                    PackagesPipeline,
+                    &pipeline.packages,
+                    build_rate_limiter(&pipeline.packages, base_rps, &global),
+                ),
+                pipeline.packages.finish(base.clone()),
+            )
+            .await?;
+        indexer
+            .concurrent_pipeline(
+                BigTableHandler::new(
+                    PackagesByIdPipeline,
+                    &pipeline.packages_by_id,
+                    build_rate_limiter(&pipeline.packages_by_id, base_rps, &global),
+                ),
+                pipeline.packages_by_id.finish(base.clone()),
+            )
+            .await?;
+        indexer
+            .concurrent_pipeline(
+                BigTableHandler::new(
+                    PackagesByCheckpointPipeline,
+                    &pipeline.packages_by_checkpoint,
+                    build_rate_limiter(&pipeline.packages_by_checkpoint, base_rps, &global),
+                ),
+                pipeline.packages_by_checkpoint.finish(base.clone()),
+            )
+            .await?;
+        indexer
+            .concurrent_pipeline(
+                BigTableHandler::new(
+                    SystemPackagesPipeline,
+                    &pipeline.system_packages,
+                    build_rate_limiter(&pipeline.system_packages, base_rps, &global),
+                ),
+                pipeline.system_packages.finish(base.clone()),
             )
             .await?;
 

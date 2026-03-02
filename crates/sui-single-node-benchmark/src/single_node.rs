@@ -17,7 +17,6 @@ use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
@@ -117,11 +116,7 @@ impl SingleValidator {
         );
         let effects = self
             .get_validator()
-            .try_execute_immediately(
-                &executable,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-                &self.epoch_store,
-            )
+            .try_execute_immediately(&executable, ExecutionEnv::new(), &self.epoch_store)
             .await
             .unwrap()
             .0;

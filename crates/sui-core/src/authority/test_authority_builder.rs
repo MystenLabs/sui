@@ -17,7 +17,6 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::RandomnessManager;
 use crate::execution_cache::build_execution_cache;
-use crate::execution_scheduler::SchedulingSource;
 use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
@@ -68,6 +67,7 @@ pub struct TestAuthorityBuilder<'a> {
     authority_overload_config: Option<AuthorityOverloadConfig>,
     cache_config: Option<ExecutionCacheConfig>,
     chain_override: Option<Chain>,
+    dev_inspect_disabled: bool,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -92,6 +92,11 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn with_transaction_deny_config(mut self, config: TransactionDenyConfig) -> Self {
         assert!(self.transaction_deny_config.replace(config).is_none());
+        self
+    }
+
+    pub fn with_dev_inspect_disabled(mut self) -> Self {
+        self.dev_inspect_disabled = true;
         self
     }
 
@@ -288,6 +293,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .get_highest_executed_checkpoint_seq_number()
                 .unwrap()
                 .unwrap_or(0),
+            0,
             Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
         )
         .expect("failed to create authority per epoch store");
@@ -349,6 +355,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.certificate_deny_config = certificate_deny_config;
         config.authority_overload_config = authority_overload_config;
         config.authority_store_pruning_config = pruning_config;
+        config.dev_inspect_disabled = self.dev_inspect_disabled;
 
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
         let policy_config = config.policy_config.clone();
@@ -410,7 +417,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                     genesis.epoch(),
                     genesis.checkpoint().sequence_number,
                 ),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new(),
                 &state.epoch_store_for_testing(),
             )
             .await

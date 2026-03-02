@@ -811,7 +811,7 @@ fn test_sponsored_transaction_validity_check() {
     let sponsor = (&sponsor_kp.public()).into();
 
     // This is a sponsored transaction
-    let gas_price = 10;
+    let gas_price = 1000;
     assert_ne!(sender, sponsor);
     let gas_data = GasData {
         payment: vec![random_object_ref()],

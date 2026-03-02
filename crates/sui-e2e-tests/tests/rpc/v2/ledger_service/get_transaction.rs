@@ -11,7 +11,10 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn get_transaction() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let transaction_digest = stake_with_validator(&test_cluster).await;
 

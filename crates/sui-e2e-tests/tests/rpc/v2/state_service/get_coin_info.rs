@@ -25,7 +25,10 @@ use test_cluster::TestClusterBuilder;
 // not been migrated.
 #[sim_test]
 async fn get_coin_info_sui() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
@@ -80,7 +83,10 @@ async fn get_coin_info_sui() {
 
 #[sim_test]
 async fn test_get_coin_info_registry_coin() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
@@ -285,7 +291,10 @@ async fn test_get_coin_info_registry_coin() {
 
 #[sim_test]
 async fn test_get_coin_info_burnonly_coin() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
@@ -424,7 +433,10 @@ async fn test_get_coin_info_burnonly_coin() {
 
 #[sim_test]
 async fn test_get_coin_info_regulated_coin() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
@@ -474,7 +486,10 @@ async fn test_get_coin_info_regulated_coin() {
 
 #[sim_test]
 async fn test_get_coin_info_non_otw_coin() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
@@ -556,7 +571,10 @@ async fn test_get_coin_info_non_otw_coin() {
 
 #[sim_test]
 async fn test_get_coin_info_legacy_coin() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
@@ -1124,7 +1142,10 @@ async fn finalize_registration(
 
 #[sim_test]
 async fn test_invalid_coin_type() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     // Test with malformed coin type

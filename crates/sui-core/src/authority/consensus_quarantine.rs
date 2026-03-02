@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::{
-    AuthorityEpochTables, EncG, ExecutionIndicesWithStats, LockDetails, LockDetailsWrapper, PkG,
+    AuthorityEpochTables, EncG, ExecutionIndicesWithStatsV2, LockDetails, LockDetailsWrapper, PkG,
 };
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
@@ -59,7 +59,7 @@ pub(crate) struct ConsensusCommitOutput {
     consensus_messages_processed: BTreeSet<SequencedConsensusTransactionKey>,
     end_of_publish: BTreeSet<AuthorityName>,
     reconfig_state: Option<ReconfigState>,
-    consensus_commit_stats: Option<ExecutionIndicesWithStats>,
+    consensus_commit_stats: Option<ExecutionIndicesWithStatsV2>,
 
     // transaction scheduling state
     next_shared_object_versions: Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
@@ -94,6 +94,10 @@ pub(crate) struct ConsensusCommitOutput {
 
     // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
     owned_object_locks: HashMap<ObjectRef, LockDetails>,
+
+    // True when the checkpoint queue had no pending roots after this commit's flush.
+    // Used by quarantine to determine safe commit boundaries on restart.
+    checkpoint_queue_drained: bool,
 }
 
 impl ConsensusCommitOutput {
@@ -178,7 +182,7 @@ impl ConsensusCommitOutput {
             .push((source, generation, estimates));
     }
 
-    pub(crate) fn record_consensus_commit_stats(&mut self, stats: ExecutionIndicesWithStats) {
+    pub(crate) fn record_consensus_commit_stats(&mut self, stats: ExecutionIndicesWithStatsV2) {
         self.consensus_commit_stats = Some(stats);
     }
 
@@ -275,6 +279,10 @@ impl ConsensusCommitOutput {
         self.congestion_control_randomness_object_debts = object_debts;
     }
 
+    pub fn set_checkpoint_queue_drained(&mut self, drained: bool) {
+        self.checkpoint_queue_drained = drained;
+    }
+
     pub fn set_owned_object_locks(&mut self, locks: HashMap<ObjectRef, LockDetails>) {
         assert!(self.owned_object_locks.is_empty());
         self.owned_object_locks = locks;
@@ -311,7 +319,7 @@ impl ConsensusCommitOutput {
         let round = consensus_commit_stats.index.last_committed_round;
 
         batch.insert_batch(
-            &tables.last_consensus_stats,
+            &tables.last_consensus_stats_v2,
             [(LAST_CONSENSUS_STATS_ADDR, consensus_commit_stats)],
         )?;
 
@@ -688,43 +696,57 @@ impl ConsensusOutputQuarantine {
             .protocol_config()
             .split_checkpoints_in_consensus_handler();
 
-        while !self.output_queue.is_empty() {
-            // A consensus commit can have more than one pending checkpoint (a regular one and a randomness one).
-            // We can only write the consensus commit if the highest pending checkpoint associated with it has
-            // been processed by the builder.
-            let output = self.output_queue.front().unwrap();
-            let highest_in_commit = if split_checkpoints_in_consensus_handler {
-                // In V2, use the checkpoint_height from stats which represents the consensus
-                // commit height watermark.
-                output
+        if split_checkpoints_in_consensus_handler {
+            // V2: only commit outputs up to the last one where the checkpoint queue
+            // was fully drained (no pending roots). If the queue is empty after an
+            // output, there are no roots that could be lost on restart. Any outputs
+            // after the last drain point stay in the quarantine and get full-replayed
+            // on restart with correct root reconstruction.
+            let mut last_drain_idx = None;
+            for (i, output) in self.output_queue.iter().enumerate() {
+                let stats = output
                     .consensus_commit_stats
                     .as_ref()
-                    .expect("consensus_commit_stats must be set")
-                    .height
-            } else {
-                // In V1, use the highest pending checkpoint height from the output.
-                let Some(h) = output.get_highest_pending_checkpoint_height() else {
-                    // if highest is none, we have already written the pending checkpoint for the final epoch,
-                    // so there is no more data that needs to be committed.
+                    .expect("consensus_commit_stats must be set");
+                if stats.height > highest_committed_height {
+                    break;
+                }
+                if output.checkpoint_queue_drained {
+                    last_drain_idx = Some(i);
+                }
+            }
+            if let Some(idx) = last_drain_idx {
+                for _ in 0..=idx {
+                    let output = self.output_queue.pop_front().unwrap();
+                    info!("committing drain-boundary output");
+                    self.remove_shared_object_next_versions(&output);
+                    self.remove_processed_consensus_messages(&output);
+                    self.remove_congestion_control_debts(&output);
+                    self.remove_owned_object_locks(&output);
+                    output.write_to_batch(epoch_store, batch)?;
+                }
+            }
+        } else {
+            while !self.output_queue.is_empty() {
+                let output = self.output_queue.front().unwrap();
+                let Some(highest_in_commit) = output.get_highest_pending_checkpoint_height() else {
                     break;
                 };
-                h
-            };
 
-            if highest_in_commit <= highest_committed_height {
-                info!(
-                    "committing output with highest pending checkpoint height {:?}",
-                    highest_in_commit
-                );
-                let output = self.output_queue.pop_front().unwrap();
-                self.remove_shared_object_next_versions(&output);
-                self.remove_processed_consensus_messages(&output);
-                self.remove_congestion_control_debts(&output);
-                self.remove_owned_object_locks(&output);
-
-                output.write_to_batch(epoch_store, batch)?;
-            } else {
-                break;
+                if highest_in_commit <= highest_committed_height {
+                    info!(
+                        "committing output with highest pending checkpoint height {:?}",
+                        highest_in_commit
+                    );
+                    let output = self.output_queue.pop_front().unwrap();
+                    self.remove_shared_object_next_versions(&output);
+                    self.remove_processed_consensus_messages(&output);
+                    self.remove_congestion_control_debts(&output);
+                    self.remove_owned_object_locks(&output);
+                    output.write_to_batch(epoch_store, batch)?;
+                } else {
+                    break;
+                }
             }
         }
 
@@ -1145,5 +1167,144 @@ where
 
     pub fn contains_key(&self, key: &K) -> bool {
         self.map.contains_key(key)
+    }
+}
+
+#[cfg(test)]
+impl ConsensusOutputQuarantine {
+    fn output_queue_len_for_testing(&self) -> usize {
+        self.output_queue.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use sui_types::base_types::ExecutionDigests;
+    use sui_types::gas::GasCostSummary;
+
+    fn make_output(height: u64, round: u64, drained: bool) -> ConsensusCommitOutput {
+        let mut output = ConsensusCommitOutput::new(round);
+        output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
+            height,
+            ..Default::default()
+        });
+        output.set_checkpoint_queue_drained(drained);
+        output
+    }
+
+    fn make_builder_summary(
+        seq: CheckpointSequenceNumber,
+        height: CheckpointHeight,
+        protocol_config: &ProtocolConfig,
+    ) -> (BuilderCheckpointSummary, CheckpointContents) {
+        let contents =
+            CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]);
+        let summary = CheckpointSummary::new(
+            protocol_config,
+            0,
+            seq,
+            0,
+            &contents,
+            None,
+            GasCostSummary::default(),
+            None,
+            0,
+            vec![],
+            vec![],
+        );
+        let builder_summary = BuilderCheckpointSummary {
+            summary,
+            checkpoint_height: Some(height),
+            position_in_commit: 0,
+        };
+        (builder_summary, contents)
+    }
+
+    #[tokio::test]
+    async fn test_drain_boundary_prevents_premature_commit() {
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_split_checkpoints_in_consensus_handler_for_testing(true);
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let metrics = epoch_store.metrics.clone();
+        let mut quarantine = ConsensusOutputQuarantine::new(0, metrics);
+
+        // Output C: height=4, not drained
+        let c = make_output(4, 1, false);
+        quarantine.push_consensus_output(c, &epoch_store).unwrap();
+
+        // Output C2: height=5, drained
+        let c2 = make_output(5, 2, true);
+        quarantine.push_consensus_output(c2, &epoch_store).unwrap();
+
+        assert_eq!(quarantine.output_queue_len_for_testing(), 2);
+
+        // Insert builder summaries for checkpoints 1-4 with checkpoint_height = seq
+        let pc = epoch_store.protocol_config();
+        for seq in 1..=4 {
+            let (summary, contents) = make_builder_summary(seq, seq, pc);
+            quarantine.insert_builder_summary(seq, summary, contents);
+        }
+
+        // Certify up to checkpoint 4
+        let mut batch = epoch_store.db_batch_for_test();
+        quarantine
+            .update_highest_executed_checkpoint(4, &epoch_store, &mut batch)
+            .unwrap();
+        batch.write().unwrap();
+
+        // C has height=4 which is <= 4 but checkpoint_queue_drained=false.
+        // C2 has height=5 which is > 4, so it's skipped.
+        // No drain boundary found => nothing drained.
+        assert_eq!(quarantine.output_queue_len_for_testing(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_drain_boundary_commits_at_safe_point() {
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_split_checkpoints_in_consensus_handler_for_testing(true);
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let metrics = epoch_store.metrics.clone();
+        let mut quarantine = ConsensusOutputQuarantine::new(0, metrics);
+
+        let c = make_output(4, 1, false);
+        quarantine.push_consensus_output(c, &epoch_store).unwrap();
+
+        let c2 = make_output(5, 2, true);
+        quarantine.push_consensus_output(c2, &epoch_store).unwrap();
+
+        assert_eq!(quarantine.output_queue_len_for_testing(), 2);
+
+        // Insert builder summaries for checkpoints 1-5 with checkpoint_height = seq
+        let pc = epoch_store.protocol_config();
+        for seq in 1..=5 {
+            let (summary, contents) = make_builder_summary(seq, seq, pc);
+            quarantine.insert_builder_summary(seq, summary, contents);
+        }
+
+        // Certify up to checkpoint 5
+        let mut batch = epoch_store.db_batch_for_test();
+        quarantine
+            .update_highest_executed_checkpoint(5, &epoch_store, &mut batch)
+            .unwrap();
+        batch.write().unwrap();
+
+        // C has height=4 <= 5, drained=false.
+        // C2 has height=5 <= 5, drained=true => drain boundary at index 1.
+        // Both outputs drained.
+        assert_eq!(quarantine.output_queue_len_for_testing(), 0);
     }
 }

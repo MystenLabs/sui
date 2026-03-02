@@ -45,7 +45,7 @@ use crate::types::full_checkpoint_content::Checkpoint;
 /// The task will shut down if the `checkpoints` range completes.
 pub(super) fn broadcaster<R, S>(
     checkpoints: R,
-    regulated: bool,
+    next_sequential_checkpoint: Option<u64>,
     mut streaming_client: Option<S>,
     config: IngestionConfig,
     client: IngestionClient,
@@ -85,9 +85,10 @@ where
         // Track subscriber watermarks
         let mut subscribers_hi = HashMap::<&'static str, u64>::new();
 
-        // Initialize ingest_hi watch channel from the start of the checkpoint range.
-        let (ingest_hi_tx, ingest_hi_rx) = watch::channel(start_cp.saturating_add(buffer_size));
-        let ingest_hi_rx = regulated.then_some(&ingest_hi_rx);
+        // Initialize ingest_hi watch channel, seeded from the sequential checkpoint if present.
+        let initial_hi = next_sequential_checkpoint.unwrap_or(start_cp);
+        let (ingest_hi_tx, ingest_hi_rx) = watch::channel(initial_hi.saturating_add(buffer_size));
+        let ingest_hi_rx = next_sequential_checkpoint.is_some().then_some(&ingest_hi_rx);
 
         // If the first attempt at streaming connection fails, we back off for an initial number
         // of checkpoints to process using ingestion. This value doubles on each subsequent failure.
@@ -524,7 +525,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster::<_, MockStreamingClient>(
             cps,
-            false,
+            None,
             None,
             test_config(),
             mock_client(metrics.clone()),
@@ -549,7 +550,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster::<_, MockStreamingClient>(
             0..,
-            false,
+            None,
             None,
             test_config(),
             mock_client(metrics.clone()),
@@ -575,7 +576,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let svc = broadcaster::<_, MockStreamingClient>(
             0..,
-            false,
+            None,
             None,
             test_config(),
             mock_client(metrics.clone()),
@@ -605,7 +606,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let _svc = broadcaster::<_, MockStreamingClient>(
             0..,
-            true,
+            Some(0),
             None,
             config,
             mock_client(metrics.clone()),
@@ -636,7 +637,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let _svc = broadcaster::<_, MockStreamingClient>(
             0..,
-            true,
+            Some(0),
             None,
             config,
             mock_client(metrics.clone()),
@@ -667,7 +668,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let _svc = broadcaster::<_, MockStreamingClient>(
             0..,
-            true,
+            Some(0),
             None,
             config,
             mock_client(metrics.clone()),
@@ -709,7 +710,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let _svc = broadcaster::<_, MockStreamingClient>(
             cps,
-            true,
+            Some(0),
             None,
             config,
             mock_client(metrics.clone()),
@@ -757,7 +758,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster::<_, MockStreamingClient>(
             0..,
-            false,
+            None,
             None,
             test_config(),
             mock_client(metrics.clone()),
@@ -797,7 +798,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster::<_, MockStreamingClient>(
             1000..1010,
-            true,
+            Some(1000),
             None,
             config,
             mock_client(metrics.clone()),
@@ -841,7 +842,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..5, // Bounded range
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -873,7 +874,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..60,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -909,7 +910,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..30,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -943,7 +944,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             30..100,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -982,7 +983,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -1018,7 +1019,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..10,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -1063,7 +1064,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            true,
+            Some(0),
             Some(streaming_client),
             config,
             mock_client(metrics.clone()),
@@ -1111,7 +1112,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..15,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -1154,7 +1155,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -1188,7 +1189,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            false,
+            None,
             Some(streaming_service),
             IngestionConfig {
                 streaming_backoff_initial_batch_size: 5,
@@ -1231,7 +1232,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            false,
+            None,
             Some(streaming_client),
             IngestionConfig {
                 streaming_backoff_initial_batch_size: 5,
@@ -1274,7 +1275,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..50,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -1314,7 +1315,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..50,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
@@ -1375,7 +1376,7 @@ mod tests {
         };
         let mut svc = broadcaster(
             0..20,
-            false,
+            None,
             Some(streaming_service),
             config,
             mock_client(metrics.clone()),
@@ -1421,7 +1422,7 @@ mod tests {
         };
         let mut svc = broadcaster(
             0..20,
-            false,
+            None,
             Some(streaming_client),
             config,
             mock_client(metrics.clone()),
@@ -1462,7 +1463,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..15,
-            false,
+            None,
             Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),

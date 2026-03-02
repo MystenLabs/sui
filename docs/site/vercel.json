@@ -749,7 +749,8 @@
       { "source": "/guides/developer/accessing-data/custom-indexer", "destination": "/guides/developer/accessing-data/custom-indexing-framework" },
       { "source": "/guides/developer/accessing-data/custom-indexer/indexer-runtime-perf", "destination": "/concepts/data-access/indexer-runtime-perf" },
       { "source": "/guides/developer/accessing-data/custom-indexer/pipeline-architecture", "destination": "/concepts/data-access/pipeline-architecture" },
-      { "source": "/guides/developer/accessing-data/custom-indexer/indexer-data-integration", "destination": "/concepts/data-access/indexer-data-integration" }
+      { "source": "/guides/developer/accessing-data/custom-indexer/indexer-data-integration", "destination": "/concepts/data-access/indexer-data-integration" },      
+      { "source": "/concepts/cryptography/nautilus/nautilus-design", "destination": "/guides/developer/nautilus/nautilus-design" }
     ],
     "rewrites": [
       {

@@ -663,6 +663,7 @@ impl SuiCommand {
                         // to 0x0
                         let mut config = build_config.clone();
                         config.set_unpublished_deps_to_zero = with_unpublished_deps;
+                        config.root_as_zero = true;
 
                         let mut pkg = SuiBuildConfig {
                             config,

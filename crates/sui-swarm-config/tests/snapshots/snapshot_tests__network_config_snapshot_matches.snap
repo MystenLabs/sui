@@ -63,6 +63,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -111,6 +112,8 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - Credenza3
         - EveFrontier
@@ -160,7 +163,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -231,6 +233,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -279,6 +282,8 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - Credenza3
         - EveFrontier
@@ -328,7 +333,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -399,6 +403,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -447,6 +452,8 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - Credenza3
         - EveFrontier
@@ -496,7 +503,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -567,6 +573,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -615,6 +622,8 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - Credenza3
         - EveFrontier
@@ -664,7 +673,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -735,6 +743,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -783,6 +792,8 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - Credenza3
         - EveFrontier
@@ -832,7 +843,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -903,6 +913,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -951,6 +962,8 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - Credenza3
         - EveFrontier
@@ -1000,7 +1013,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
@@ -1071,6 +1083,7 @@ validator_configs:
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
+    dev-inspect-disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-read-config: []
@@ -1119,6 +1132,8 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu"
+        - "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - Credenza3
         - EveFrontier
@@ -1168,7 +1183,6 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
-        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     verifier-signing-config:
       max-per-fun-meter-units: ~

@@ -179,6 +179,8 @@ impl ValidatorConfigBuilder {
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             parameters: Default::default(),
+            listen_address: None,
+            external_address: None,
         };
 
         let p2p_config = P2pConfig {
@@ -248,6 +250,7 @@ impl ValidatorConfigBuilder {
             name_service_registry_id: None,
             name_service_reverse_registry_id: None,
             transaction_deny_config: Default::default(),
+            dev_inspect_disabled: false,
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
             state_archive_read_config: vec![],
@@ -595,6 +598,7 @@ impl FullnodeConfigBuilder {
             name_service_registry_id: None,
             name_service_reverse_registry_id: None,
             transaction_deny_config: Default::default(),
+            dev_inspect_disabled: false,
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
             state_archive_read_config: vec![],

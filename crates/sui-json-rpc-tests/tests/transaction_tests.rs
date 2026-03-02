@@ -451,7 +451,7 @@ async fn test_query_transaction_blocks() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_display_transaction_block_with_empty_balance_changes() {
     let cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(5_000)
+        .with_epoch_duration_ms(10_000)
         .build()
         .await;
     cluster.wait_for_epoch(Some(1)).await;

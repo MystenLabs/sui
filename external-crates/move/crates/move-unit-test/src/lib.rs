@@ -31,6 +31,8 @@ const DEFAULT_RAND_ITERS: u64 = 10;
 const RAND_NUM_ITERS_FLAG: &str = "rand-num-iters";
 const SEED_FLAG: &str = "seed";
 const TRACE_FLAG: &str = "trace";
+/// The default directory to output test traces to if `--trace` is enabled.
+pub const TRACE_DIR: &str = "traces";
 
 #[derive(Debug, Parser, Clone)]
 #[clap(author, version, about)]
@@ -266,7 +268,7 @@ impl UnitTestingConfig {
 
         writeln!(shared_writer.lock().unwrap(), "Running Move unit tests")?;
         let trace_location = if self.trace {
-            Some("traces".to_string())
+            Some(TRACE_DIR.to_string())
         } else {
             None
         };

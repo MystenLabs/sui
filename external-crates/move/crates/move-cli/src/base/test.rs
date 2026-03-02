@@ -12,15 +12,14 @@ use move_compiler::{
     shared::NumericalAddress,
     unit_test::{TestPlan, plan_builder::construct_test_plan},
 };
-use move_coverage::coverage_map::{CoverageMap, output_map_to_file};
+use move_coverage::coverage_map::{CoverageMap, TraceConsumer, output_map_to_file};
 use move_package_alt::{MoveFlavor, RootPackage};
 use move_package_alt_compilation::{
     build_config::BuildConfig, build_plan::BuildPlan, compiled_package::BuildNamedAddresses,
     find_env,
 };
 use move_symbol_pool::Symbol;
-use move_unit_test::{UnitTestingConfig, vm_test_setup::VMTestSetup};
-
+use move_unit_test::{TRACE_DIR, UnitTestingConfig, vm_test_setup::VMTestSetup};
 // if windows
 #[cfg(target_family = "windows")]
 use std::os::windows::process::ExitStatusExt;
@@ -176,6 +175,11 @@ pub async fn run_move_unit_tests<F: MoveFlavor, V: VMTestSetup + Sync, W: Write 
     // being passed in.
     unit_test_config.named_address_values = addresses;
 
+    // If we are computing coverage, then we need to enable tracing, since the coverage information
+    // is derived from the trace. If the user explicitly set the trace config, then we respect that
+    // and don't override it.
+    unit_test_config.trace = unit_test_config.trace || compute_coverage;
+
     // Compile the package. We need to intercede in the compilation, process being performed by the
     // Move package system, to first grab the compilation env, construct the test plan from it, and
     // then save it, before resuming the rest of the compilation and returning the results and
@@ -210,23 +214,17 @@ pub async fn run_move_unit_tests<F: MoveFlavor, V: VMTestSetup + Sync, W: Write 
     let no_tests = test_plan.is_empty();
     let test_plan = TestPlan::new(test_plan, mapped_files, units, vec![]);
 
-    let trace_path = pkg_path.join(".trace");
+    let trace_path = pkg_path.join(TRACE_DIR);
     let coverage_map_path = pkg_path
         .join(".coverage_map")
         .with_extension(MOVE_COVERAGE_MAP_EXTENSION);
     let cleanup_trace = || {
         if compute_coverage && trace_path.exists() {
-            std::fs::remove_file(&trace_path).unwrap();
+            std::fs::remove_dir_all(&trace_path).unwrap();
         }
     };
 
     cleanup_trace();
-
-    // If we need to compute test coverage set the VM tracking environment variable since we will
-    // need this trace to construct the coverage information.
-    if compute_coverage {
-        unsafe { std::env::set_var("MOVE_VM_TRACE", &trace_path) };
-    }
 
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
@@ -240,7 +238,7 @@ pub async fn run_move_unit_tests<F: MoveFlavor, V: VMTestSetup + Sync, W: Write 
 
     // Compute the coverage map. This will be used by other commands after this.
     if compute_coverage && !no_tests {
-        let coverage_map = CoverageMap::from_trace_file(trace_path);
+        let coverage_map = CoverageMap::from_trace_dir(trace_path);
         output_map_to_file(coverage_map_path, &coverage_map).unwrap();
     }
     Ok((UnitTestResult::Success, warning_diags))

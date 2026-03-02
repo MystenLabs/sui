@@ -36,5 +36,4 @@ impl Processor for CheckpointsPipeline {
 
 impl BigTableProcessor for CheckpointsPipeline {
     const TABLE: &'static str = tables::checkpoints::NAME;
-    const FANOUT: usize = 100;
 }

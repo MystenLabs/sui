@@ -137,6 +137,7 @@ const guides = [
       'guides/developer/accessing-data/query-with-graphql',
       'guides/developer/accessing-data/archival-store',
       'guides/developer/accessing-data/using-events',
+      'guides/developer/accessing-data/authenticated-events',
       {
         type: 'category',
         label: 'Custom Indexing Framework',
@@ -225,8 +226,11 @@ const guides = [
       id: 'guides/developer/nautilus/index',
     },
     items: [
+      'guides/developer/nautilus/nautilus-design',
       'guides/developer/nautilus/using-nautilus',
       'guides/developer/nautilus/customize-nautilus',
+      'guides/developer/nautilus/marlin',
+      'guides/developer/nautilus/seal',
     ],
   },
   {

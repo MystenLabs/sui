@@ -10,7 +10,8 @@ module 0x42::m {
          Option::Other { mut x: mut y } => y,
          Option::Other { x: mut y<u64> } => y,
          Option::Other { mut x: y } => y,
-         x @ mut Option::Some(true) => true,
+         _x @ mut Option::Some(true) => true,
+         _x @ mut Option::Some(false) => false,
          mut Option::None => false,
        }
     }

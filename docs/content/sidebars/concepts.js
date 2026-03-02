@@ -95,7 +95,6 @@ const concepts = [
 		items: [
 			'concepts/cryptography/zklogin',
 			'concepts/cryptography/passkeys',
-			'concepts/cryptography/nautilus/nautilus-design',
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',

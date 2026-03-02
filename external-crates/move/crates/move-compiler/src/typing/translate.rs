@@ -250,12 +250,57 @@ fn modules(
     let used_module_members = used_module_members.into_inner().unwrap();
 
     for (mident, friends) in all_new_friends {
-        let mdef = typed_modules.get_mut(&mident).unwrap();
-        // point of interest: if we have any new friends, we know there can't be any
-        // "current" friends becahse all thew new friends are generated off of
-        // `public(package)` usage, which disallows other friends.
-        mdef.friends = UniqueMap::maybe_from_iter(friends.into_iter())
+        let friends = UniqueMap::maybe_from_iter(friends.into_iter())
             .expect("ICE compiler added duplicate friends to public(package) friend list");
+        if let Some(mdef) = typed_modules.get_mut(&mident) {
+            // point of interest: if we have any new friends, we know there can't be any
+            // "current" friends because all the new friends are generated off of
+            // `public(package)` usage, which disallows other friends.
+            mdef.friends = friends;
+        } else if compilation_env.ide_mode() {
+            // if a module is not in the typed modules, it must be in pre-compiled library
+            // (info contains both typed and pre-compiled modules)
+            if !info.modules.contains_key(&mident) {
+                compilation_env
+                    .diagnostic_reporter_at_top_level()
+                    .add_diag(ice!((
+                        mident.loc,
+                        "Compiler added a friend to module but friend is not in typed modules \
+                         nor in pre-compiled library (in IDE mode)"
+                    )));
+            }
+            // This can happen if some (dependency) modules from the same package are in typed
+            // modules and some are in pre-compiled library. Technically this could lead to
+            // incorrect friends list for one of the pre-compiled modules, but in practice
+            // it does not appear to be a problem.
+            // Consider two modules M1 and M2 in the same package pkg:
+
+            // module pkg::M1 {
+            //     public(package) fun foo() {}
+            // }
+            // module pkg::M2 {
+            // }
+            //
+            // Further, consider that M2 gets an extension:
+            //
+            // extension module pkg::M2 {
+            //     public fun bar() { pkg::M1::foo() }
+            // }
+            //
+            // If M1 is in pre-compiled library but M2 is not, M1's friend list will not contain M2.
+            // However, friends list is only really used in two places:
+            // - when checking visibility function for a friend function in a given module,
+            // which is not a problem as M1 cannot have both friend and public(package) functions
+            // - when building dependency info for typed modules, which is not a problem
+            // because M1 is in pre-compiled library and not in typed modules
+        } else {
+            compilation_env
+                .diagnostic_reporter_at_top_level()
+                .add_diag(ice!((
+                    mident.loc,
+                    "Compiler added a friend to module but friend is not in typed modules"
+                )));
+        }
     }
 
     for (_, mident, mdef) in &typed_modules {
@@ -2327,15 +2372,20 @@ fn match_arm(
         .collect();
 
     let ploc = pattern.loc;
-    let pattern = match_pattern(context, pattern, ref_mut, &rhs_binders);
+    let mut pattern = match_pattern(context, pattern, ref_mut, &rhs_binders);
 
-    subtype(
+    if subtype_opt(
         context,
         ploc,
         || "Invalid pattern",
         &pattern.ty,
         subject_type,
-    );
+    )
+    .is_none()
+    {
+        pattern.ty = context.error_type(ploc);
+        pattern.pat.value = T::UnannotatedPat_::ErrorPat;
+    }
 
     let binder_map: BTreeMap<N::Var, Type> = binders.clone().into_iter().collect();
     for (pat_var, guard_var) in guard_binders.clone() {
@@ -2349,17 +2399,24 @@ fn match_arm(
         context.declare_local(Mutability::Imm, guard_var, ty);
     }
 
-    let guard = guard.map(|guard| exp(context, guard));
+    let mut guard = guard.map(|guard| exp(context, guard));
 
-    if let Some(guard) = &guard {
-        let gloc = guard.exp.loc;
-        subtype(
+    if let Some(ref guard_exp) = guard {
+        let gloc = guard_exp.exp.loc;
+        if subtype_opt(
             context,
             gloc,
             || "Invalid guard condition",
-            &guard.ty,
+            &guard_exp.ty,
             &Type_::bool(gloc),
-        );
+        )
+        .is_none()
+        {
+            guard = Some(Box::new(T::exp(
+                context.error_type(gloc),
+                sp(gloc, T::UnannotatedExp_::UnresolvedError),
+            )));
+        }
     }
 
     let rhs = exp(context, rhs);
@@ -2442,14 +2499,15 @@ fn match_pattern_(
                     match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 // This double-clone should not be necessary, but the borrow checker is unhappy.
                 let fty_ref = rtype!(tpat.pat.loc, fty.clone());
-                let pat_ty = subtype(
+                if let Some(pat_ty) = subtype_opt(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     &tpat.ty,
                     &fty_ref,
-                );
-                tpat.ty = pat_ty;
+                ) {
+                    tpat.ty = pat_ty;
+                }
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2497,14 +2555,15 @@ fn match_pattern_(
                     match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 // This double-clone should not be necessary, but the borrow checker is unhappy.
                 let fty_ref = rtype!(tpat.pat.loc, fty.clone());
-                let pat_ty = subtype(
+                if let Some(pat_ty) = subtype_opt(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     &tpat.ty,
                     &fty_ref,
-                );
-                tpat.ty = pat_ty;
+                ) {
+                    tpat.ty = pat_ty;
+                }
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2558,6 +2617,12 @@ fn match_pattern_(
             let x_ty = context.get_local_type(&x);
             T::pat(x_ty, sp(loc, TP::Binder(mut_, x)))
         }
+        P::Literal(sp!(_, Value_::InferredString(_))) => {
+            let msg = "String literals are not currently supported in match patterns";
+            context.add_diag(diag!(TypeSafety::InvalidString, (loc, msg)));
+            let ty = context.error_type(loc);
+            T::pat(ty, sp(loc, TP::ErrorPat))
+        }
         P::Literal(v) => {
             let ty = match &v.value {
                 Value_::InferredNum(_) => core::make_num_tvar(context, loc),
@@ -2594,15 +2659,18 @@ fn match_pattern_(
         P::Or(lhs, rhs) => {
             let lpat = match_pattern_(context, *lhs, mut_ref, rhs_binders, wildcard_needs_drop);
             let rpat = match_pattern_(context, *rhs, mut_ref, rhs_binders, wildcard_needs_drop);
-            let ty = join(
+            if let Some(ty) = join_opt(
                 context,
                 loc,
-                || -> String { panic!("ICE unresolved error join, failed") },
+                || "Incompatible types in or-pattern",
                 &lpat.ty,
                 &rpat.ty,
-            );
-            let pat = sp(loc, TP::Or(Box::new(lpat), Box::new(rpat)));
-            T::pat(ty, pat)
+            ) {
+                let pat = sp(loc, TP::Or(Box::new(lpat), Box::new(rpat)));
+                T::pat(ty, pat)
+            } else {
+                T::pat(context.error_type(loc), sp(loc, TP::ErrorPat))
+            }
         }
 
         // At patterns are a bit of a mess for typing. The rules are as follows:

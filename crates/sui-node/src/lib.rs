@@ -39,7 +39,6 @@ use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_network::validator::server::SUI_TLS_SERVER_NAME;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
 use sui_core::storage::RestReadStore;
 use sui_json_rpc::bridge_api::BridgeReadApi;
@@ -177,6 +176,7 @@ pub struct P2pComponents {
     discovery_handle: discovery::Handle,
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
+    endpoint_manager: EndpointManager,
 }
 
 #[cfg(msim)]
@@ -566,6 +566,20 @@ impl SuiNode {
             None => ChainIdentifier::from(*genesis.checkpoint().digest()).chain(),
         };
 
+        let highest_executed_checkpoint = checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .expect("checkpoint store read cannot fail")
+            .unwrap_or(0);
+
+        let previous_epoch_last_checkpoint = if cur_epoch == 0 {
+            0
+        } else {
+            checkpoint_store
+                .get_epoch_last_checkpoint_seq_number(cur_epoch - 1)
+                .expect("checkpoint store read cannot fail")
+                .unwrap_or(highest_executed_checkpoint)
+        };
+
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -580,10 +594,8 @@ impl SuiNode {
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
             (chain_id, chain),
-            checkpoint_store
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("checkpoint store read cannot fail")
-                .unwrap_or(0),
+            highest_executed_checkpoint,
+            previous_epoch_last_checkpoint,
             Arc::new(SubmittedTransactionCacheMetrics::new(
                 &registry_service.default_registry(),
             )),
@@ -685,6 +697,7 @@ impl SuiNode {
             discovery_handle,
             state_sync_handle,
             randomness_handle,
+            endpoint_manager,
         } = Self::create_p2p_network(
             &config,
             state_sync_store.clone(),
@@ -692,8 +705,6 @@ impl SuiNode {
             randomness_tx,
             &prometheus_registry,
         )?;
-
-        let endpoint_manager = EndpointManager::new(discovery_handle.clone());
 
         // Inject configured peer address overrides.
         for peer in &config.p2p_config.peer_address_overrides {
@@ -772,11 +783,7 @@ impl SuiNode {
                     ),
                 );
             state
-                .try_execute_immediately(
-                    &transaction,
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-                    &epoch_store,
-                )
+                .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
                 .instrument(span)
                 .await
                 .unwrap();
@@ -1088,9 +1095,17 @@ impl SuiNode {
             .with_metrics(prometheus_registry)
             .build();
 
-        let (discovery, discovery_server) = discovery::Builder::new()
-            .config(config.p2p_config.clone())
-            .build();
+        let mut discovery_builder = discovery::Builder::new().config(config.p2p_config.clone());
+        if let Some(consensus_config) = &config.consensus_config {
+            let effective_addr = consensus_config
+                .external_address
+                .as_ref()
+                .or(consensus_config.listen_address.as_ref());
+            if let Some(addr) = effective_addr {
+                discovery_builder = discovery_builder.consensus_external_address(addr.clone());
+            }
+        }
+        let (discovery, discovery_server, endpoint_manager) = discovery_builder.build();
 
         let discovery_config = config.p2p_config.discovery.clone().unwrap_or_default();
         let known_peers: HashMap<PeerId, String> = discovery_config
@@ -1223,6 +1238,7 @@ impl SuiNode {
             discovery_handle,
             state_sync_handle,
             randomness_handle,
+            endpoint_manager,
         })
     }
 

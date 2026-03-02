@@ -29,18 +29,6 @@ error[E04007]: incompatible types
 37 │             || b"hello", // invalid
    │                -------- Given: 'vector<u8>'
 
-error[E04017]: too many arguments
-   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
-   │
- 3 │         $f(0u64);
-   │         ^^^^^^^^
-   │         │ │
-   │         │ Found 1 argument(s) here
-   │         Invalid lambda call of '$f'. The call expected 0 argument(s) but got 1
-   ·
-10 │             || vector[], // invalid
-   │             ----------- Expected 0 argument(s)
-
 error[E04016]: too few arguments
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
    │
@@ -52,6 +40,18 @@ error[E04016]: too few arguments
    ·
 15 │             |_, _| vector[], // invalid
    │             --------------- Expected 2 argument(s)
+
+error[E04017]: too many arguments
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
+   │
+ 3 │         $f(0u64);
+   │         ^^^^^^^^
+   │         │ │
+   │         │ Found 1 argument(s) here
+   │         Invalid lambda call of '$f'. The call expected 0 argument(s) but got 1
+   ·
+10 │             || vector[], // invalid
+   │             ----------- Expected 0 argument(s)
 
 error[E04016]: too few arguments
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:4:9

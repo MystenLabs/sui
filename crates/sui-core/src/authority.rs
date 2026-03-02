@@ -15,7 +15,6 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
-use crate::execution_scheduler::SchedulingSource;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
@@ -68,6 +67,7 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -132,10 +132,10 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::GasCostSummary;
+use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
 };
@@ -152,6 +152,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
+use sui_types::signature::GenericSignature;
 use sui_types::storage::{
     BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
 };
@@ -234,10 +235,6 @@ mod batch_verification_tests;
 mod coin_deny_list_tests;
 
 #[cfg(test)]
-#[path = "unit_tests/mysticeti_fastpath_execution_tests.rs"]
-mod mysticeti_fastpath_execution_tests;
-
-#[cfg(test)]
 #[path = "unit_tests/auth_unit_test_utils.rs"]
 pub mod auth_unit_test_utils;
 
@@ -301,6 +298,7 @@ pub struct AuthorityMetrics {
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
+    pub(crate) consensus_handler_duplicate_tx_count: Histogram,
 
     pub(crate) authority_overload_status: IntGauge,
     pub(crate) authority_load_shedding_percentage: IntGauge,
@@ -320,6 +318,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
+    pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
@@ -596,6 +595,13 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            consensus_handler_duplicate_tx_count: register_histogram_with_registry!(
+                "consensus_handler_duplicate_tx_count",
+                "Number of times each transaction appears in its first consensus commit",
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             post_processing_total_events_emitted: register_int_counter_with_registry!(
                 "post_processing_total_events_emitted",
                 "Total number of events emitted in post processing",
@@ -652,6 +658,11 @@ impl AuthorityMetrics {
             consensus_handler_congested_transactions: register_int_counter_with_registry!(
                 "consensus_handler_congested_transactions",
                 "Number of transactions deferred by consensus handler due to congestion",
+                registry,
+            ).unwrap(),
+            consensus_handler_unpaid_amplification_deferrals: register_int_counter_with_registry!(
+                "consensus_handler_unpaid_amplification_deferrals",
+                "Number of transactions deferred due to unpaid consensus amplification",
                 registry,
             ).unwrap(),
             consensus_handler_cancelled_transactions: register_int_counter_with_registry!(
@@ -765,8 +776,6 @@ pub struct ExecutionEnv {
     /// The expected digest of the effects of the transaction, if executing from checkpoint or
     /// other sources where the effects are known in advance.
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
-    /// The source of the scheduling of the transaction.
-    pub scheduling_source: SchedulingSource,
     /// Status of the address funds withdraw scheduling of the transaction,
     /// including both address and object funds withdraws.
     pub funds_withdraw_status: FundsWithdrawStatus,
@@ -780,7 +789,6 @@ impl Default for ExecutionEnv {
         Self {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
-            scheduling_source: SchedulingSource::NonFastPath,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
         }
@@ -790,11 +798,6 @@ impl Default for ExecutionEnv {
 impl ExecutionEnv {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    pub fn with_scheduling_source(mut self, scheduling_source: SchedulingSource) -> Self {
-        self.scheduling_source = scheduling_source;
-        self
     }
 
     pub fn with_expected_effects_digest(
@@ -981,6 +984,39 @@ impl AuthorityState {
         self.checkpoint_store.get_epoch_state_commitments(epoch)
     }
 
+    /// Runs deny list checks and processes funds withdrawals. Called before loading input
+    /// objects, since these checks don't depend on object state.
+    fn pre_object_load_checks(
+        &self,
+        tx_data: &TransactionData,
+        tx_signatures: &[GenericSignature],
+        input_object_kinds: &[InputObjectKind],
+        receiving_objects_refs: &[ObjectRef],
+    ) -> SuiResult<BTreeMap<AccumulatorObjId, u64>> {
+        // Note: the deny checks may do redundant package loads but:
+        // - they only load packages when there is an active package deny map
+        // - the loads are cached anyway
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            tx_data,
+            tx_signatures,
+            input_object_kinds,
+            receiving_objects_refs,
+            &self.config.transaction_deny_config,
+            self.get_backing_package_store().as_ref(),
+        )?;
+
+        let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+        )?;
+
+        self.execution_cache_trait_pointers
+            .account_funds_read
+            .check_amounts_available(&declared_withdrawals)?;
+
+        Ok(declared_withdrawals)
+    }
+
     fn handle_transaction_deny_checks(
         &self,
         transaction: &VerifiedTransaction,
@@ -992,26 +1028,12 @@ impl AuthorityState {
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
-        // Note: the deny checks may do redundant package loads but:
-        // - they only load packages when there is an active package deny map
-        // - the loads are cached anyway
-        sui_transaction_checks::deny::check_transaction_for_signing(
+        self.pre_object_load_checks(
             tx_data,
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
-            &self.config.transaction_deny_config,
-            self.get_backing_package_store().as_ref(),
         )?;
-
-        let withdraws = tx_data.process_funds_withdrawals_for_signing(
-            self.chain_identifier,
-            self.coin_reservation_resolver.as_ref(),
-        )?;
-
-        self.execution_cache_trait_pointers
-            .account_funds_read
-            .check_amounts_available(&withdraws)?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             Some(tx_digest),
@@ -1405,7 +1427,7 @@ impl AuthorityState {
             self.execution_scheduler.enqueue(
                 vec![(
                     Schedulable::Transaction(transaction.clone()),
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                    ExecutionEnv::new(),
                 )],
                 epoch_store,
             );
@@ -1491,48 +1513,19 @@ impl AuthorityState {
             return ExecutionOutput::EpochEnded;
         }
 
-        let scheduling_source = execution_env.scheduling_source;
         let accumulator_version = execution_env.assigned_versions.accumulator_version;
-        let mysticeti_fp_outputs = if epoch_store.protocol_config().mysticeti_fastpath() {
-            tx_cache_reader.get_mysticeti_fastpath_outputs(tx_digest)
-        } else {
-            None
-        };
 
-        let (transaction_outputs, timings, execution_error_opt) = if let Some(outputs) =
-            mysticeti_fp_outputs
-        {
-            assert!(
-                !certificate.is_consensus_tx(),
-                "Mysticeti fastpath executed transactions cannot be consensus transactions"
-            );
-            // If this transaction is not scheduled from fastpath, it must be either
-            // from consensus or from checkpoint, i.e. it must be finalized.
-            // To avoid re-executing fastpath transactions, we check if the outputs are already
-            // in the mysticeti fastpath outputs cache. If so, we skip the execution and commit the transaction.
-            debug!(
-                ?tx_digest,
-                "Mysticeti fastpath certified transaction outputs found in cache, skipping execution and committing"
-            );
-            (outputs, None, None)
-        } else {
-            let (transaction_outputs, timings, execution_error_opt) = match self
-                .process_certificate(
-                    &tx_guard,
-                    &execution_guard,
-                    certificate,
-                    execution_env,
-                    epoch_store,
-                ) {
-                ExecutionOutput::Success(result) => result,
-                output => return output.unwrap_err(),
-            };
-            (
-                Arc::new(transaction_outputs),
-                Some(timings),
-                execution_error_opt,
-            )
+        let (transaction_outputs, timings, execution_error_opt) = match self.process_certificate(
+            &tx_guard,
+            &execution_guard,
+            certificate,
+            execution_env,
+            epoch_store,
+        ) {
+            ExecutionOutput::Success(result) => result,
+            output => return output.unwrap_err(),
         };
+        let transaction_outputs = Arc::new(transaction_outputs);
 
         fail_point!("crash");
 
@@ -1544,17 +1537,11 @@ impl AuthorityState {
             (execution_start_time.elapsed().as_micros() as f64) / 1000.0
         );
 
-        if scheduling_source == SchedulingSource::MysticetiFastPath {
-            self.get_cache_writer()
-                .write_fastpath_transaction_outputs(transaction_outputs);
-        } else {
-            let commit_result =
-                self.commit_certificate(certificate, transaction_outputs, epoch_store);
-            if let Err(err) = commit_result {
-                error!(?tx_digest, "Error committing transaction: {err}");
-                tx_guard.release();
-                return ExecutionOutput::Fatal(err);
-            }
+        let commit_result = self.commit_certificate(certificate, transaction_outputs, epoch_store);
+        if let Err(err) = commit_result {
+            error!(?tx_digest, "Error committing transaction: {err}");
+            tx_guard.release();
+            return ExecutionOutput::Fatal(err);
         }
 
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
@@ -1608,14 +1595,12 @@ impl AuthorityState {
         tx_guard.commit_tx();
 
         let elapsed = execution_start_time.elapsed();
-        if let Some(timings) = timings {
-            epoch_store.record_local_execution_time(
-                certificate.data().transaction_data(),
-                &effects,
-                timings,
-                elapsed,
-            );
-        }
+        epoch_store.record_local_execution_time(
+            certificate.data().transaction_data(),
+            &effects,
+            timings,
+            elapsed,
+        );
 
         let elapsed_us = elapsed.as_micros() as f64;
         if elapsed_us > 0.0 {
@@ -2007,6 +1992,7 @@ impl AuthorityState {
                 epoch_store,
             )
         {
+            assert_reachable!("retry object withdraw later");
             return ExecutionOutput::RetryLater;
         }
 
@@ -2422,20 +2408,46 @@ impl AuthorityState {
             .into());
         }
 
+        let dev_inspect = checks.disabled();
+        if dev_inspect && self.config.dev_inspect_disabled {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "simulate with checks disabled is not allowed on this node".to_string(),
+            }
+            .into());
+        }
+
         // Cheap validity checks for a transaction, including input size limits.
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
 
-        sui_transaction_checks::deny::check_transaction_for_signing(
+        // Create and inject mock gas coin before pre_object_load_checks so that
+        // funds withdrawal processing sees non-empty payment and doesn't incorrectly
+        // create an address balance withdrawal for gas.
+        let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() {
+            let obj = Object::new_move(
+                MoveObject::new_gas_coin(
+                    OBJECT_START_VERSION,
+                    ObjectID::MAX,
+                    DEV_INSPECT_GAS_COIN_VALUE,
+                ),
+                Owner::AddressOwner(transaction.gas_data().owner),
+                TransactionDigest::genesis_marker(),
+            );
+            transaction.gas_data_mut().payment = vec![obj.compute_object_reference()];
+            Some(obj)
+        } else {
+            None
+        };
+
+        let declared_withdrawals = self.pre_object_load_checks(
             &transaction,
             &[],
             &input_object_kinds,
             &receiving_object_refs,
-            &self.config.transaction_deny_config,
-            self.get_backing_package_store().as_ref(),
         )?;
+        let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
         let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             // We don't want to cache this transaction since it's a simulation.
@@ -2445,28 +2457,24 @@ impl AuthorityState {
             epoch_store.epoch(),
         )?;
 
-        // mock a gas object if one was not provided
-        let mock_gas_id = if allow_mock_gas_coin && transaction.gas().is_empty() {
-            let mock_gas_object = Object::new_move(
-                MoveObject::new_gas_coin(
-                    OBJECT_START_VERSION,
-                    ObjectID::MAX,
-                    DEV_INSPECT_GAS_COIN_VALUE,
-                ),
-                Owner::AddressOwner(transaction.gas_data().owner),
-                TransactionDigest::genesis_marker(),
-            );
-            let mock_gas_object_ref = mock_gas_object.compute_object_reference();
-            transaction.gas_data_mut().payment = vec![mock_gas_object_ref];
-            input_objects.push(ObjectReadResult::new_from_gas_object(&mock_gas_object));
-            Some(mock_gas_object.id())
-        } else {
-            None
-        };
+        // Add mock gas to input objects after loading (it doesn't exist in the store).
+        let mock_gas_id = mock_gas_object.map(|obj| {
+            let id = obj.id();
+            input_objects.push(ObjectReadResult::new_from_gas_object(&obj));
+            id
+        });
 
         let protocol_config = epoch_store.protocol_config();
 
-        let (gas_status, checked_input_objects) = if checks.enabled() {
+        let (gas_status, checked_input_objects) = if dev_inspect {
+            sui_transaction_checks::check_dev_inspect_input(
+                protocol_config,
+                &transaction,
+                input_objects,
+                receiving_objects,
+                epoch_store.reference_gas_price(),
+            )?
+        } else {
             sui_transaction_checks::check_transaction_input(
                 epoch_store.protocol_config(),
                 epoch_store.reference_gas_price(),
@@ -2475,14 +2483,6 @@ impl AuthorityState {
                 &receiving_objects,
                 &self.metrics.bytecode_verifier_metrics,
                 &self.config.verifier_signing_config,
-            )?
-        } else {
-            sui_transaction_checks::check_dev_inspect_input(
-                protocol_config,
-                &transaction,
-                input_objects,
-                receiving_objects,
-                epoch_store.reference_gas_price(),
             )?
         };
 
@@ -2498,7 +2498,6 @@ impl AuthorityState {
             &transaction.digest(),
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
-            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
             &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
@@ -2508,25 +2507,74 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
+        // Clone inputs for potential retry if object funds check fails post-execution.
+        let cloned_input_objects = checked_input_objects.clone();
+        let cloned_gas = gas_data.clone();
+        let cloned_kind = kind.clone();
+        let tx_digest = transaction.digest();
+        let epoch_id = epoch_store.epoch_start_config().epoch_data().epoch_id();
+        let epoch_timestamp_ms = epoch_store
+            .epoch_start_config()
+            .epoch_data()
+            .epoch_start_timestamp();
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             &tracking_store,
             protocol_config,
             self.metrics.limits_metrics.clone(),
             false, // expensive_checks
             execution_params,
-            &epoch_store.epoch_start_config().epoch_data().epoch_id(),
-            epoch_store
-                .epoch_start_config()
-                .epoch_data()
-                .epoch_start_timestamp(),
+            &epoch_id,
+            epoch_timestamp_ms,
             checked_input_objects,
             gas_data,
             gas_status,
             kind,
             signer,
-            transaction.digest(),
-            checks.disabled(),
+            tx_digest,
+            dev_inspect,
         );
+
+        // Post-execution: check object funds (non-address withdrawals discovered during execution).
+        let (inner_temp_store, effects, execution_result) = if execution_result.is_ok() {
+            let has_insufficient_object_funds = inner_temp_store
+                .accumulator_running_max_withdraws
+                .iter()
+                .filter(|(id, _)| !address_funds.contains(id))
+                .any(|(id, max_withdraw)| {
+                    let (balance, _) = self.get_account_funds_read().get_latest_account_amount(id);
+                    balance < *max_withdraw
+                });
+
+            if has_insufficient_object_funds {
+                let retry_gas_status = SuiGasStatus::new(
+                    cloned_gas.budget,
+                    cloned_gas.price,
+                    epoch_store.reference_gas_price(),
+                    protocol_config,
+                )?;
+                let (store, _, effects, result) = executor.dev_inspect_transaction(
+                    &tracking_store,
+                    protocol_config,
+                    self.metrics.limits_metrics.clone(),
+                    false,
+                    ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
+                    &epoch_id,
+                    epoch_timestamp_ms,
+                    cloned_input_objects,
+                    cloned_gas,
+                    retry_gas_status,
+                    cloned_kind,
+                    signer,
+                    tx_digest,
+                    dev_inspect,
+                );
+                (store, effects, result)
+            } else {
+                (inner_temp_store, effects, execution_result)
+            }
+        } else {
+            (inner_temp_store, effects, execution_result)
+        };
 
         let loaded_runtime_objects = tracking_store.into_read_objects();
         let unchanged_loaded_runtime_objects =
@@ -2610,8 +2658,15 @@ impl AuthorityState {
             .into());
         }
 
-        let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
         let skip_checks = skip_checks.unwrap_or(true);
+        if skip_checks && self.config.dev_inspect_disabled {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "dev-inspect with skip_checks is not allowed on this node".to_string(),
+            }
+            .into());
+        }
+
+        let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
         let reference_gas_price = epoch_store.reference_gas_price();
         let protocol_config = epoch_store.protocol_config();
         let max_tx_gas = protocol_config.max_tx_gas();
@@ -2746,6 +2801,7 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
+
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
             protocol_config,

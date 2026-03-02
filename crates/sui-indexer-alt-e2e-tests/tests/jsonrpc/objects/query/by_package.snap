@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 13 tasks
+processed 12 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -87,22 +87,22 @@ Response: {
       },
       {
         "data": {
-          "objectId": "0x649ae4fb18399ca7134b1861893b428c643616d26bfc8bc72c35155ea0bf2be2",
-          "version": "2",
-          "digest": "DZKT1FKiCjDQngarKPSCkyqBm3ACAR1ghj9y2STSZxhX",
-          "type": "0x428979677f4098b0331ad1ed19f12ceab796c241c7dbee8a7ba056d8587ed27c::N::O1"
-        }
-      },
-      {
-        "data": {
           "objectId": "0x16d742f9a3554e3b7818bc65e6c69f2bd1d887accfa17245a0fb6df8161d8b2b",
           "version": "2",
           "digest": "89yGQheeGPWmpYAyZXQ3zPLw7f7fPg6MmaE8JUtxgka8",
           "type": "0x428979677f4098b0331ad1ed19f12ceab796c241c7dbee8a7ba056d8587ed27c::M::O2"
         }
+      },
+      {
+        "data": {
+          "objectId": "0x649ae4fb18399ca7134b1861893b428c643616d26bfc8bc72c35155ea0bf2be2",
+          "version": "2",
+          "digest": "DZKT1FKiCjDQngarKPSCkyqBm3ACAR1ghj9y2STSZxhX",
+          "type": "0x428979677f4098b0331ad1ed19f12ceab796c241c7dbee8a7ba056d8587ed27c::N::O1"
+        }
       }
     ],
-    "nextCursor": "IBbXQvmjVU47eBi8ZebGnyvR2Iesz6FyRaD7bfgWHYsrAQAAAAAAAAA=",
+    "nextCursor": "fQD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkKJeWd/QJiwMxrR7RnxLOq3lsJBx9vuinugVthYftJ8AAAAAAAAAAFOAAAAAAAAAAJPMQAAAAAAAAAAAGSa5PsYOZynE0sYYYk7QoxkNhbSa/yLxyw1FV6gvyvi",
     "hasNextPage": false
   }
 }
@@ -114,6 +114,14 @@ Response: {
   "id": 1,
   "result": {
     "data": [
+      {
+        "data": {
+          "objectId": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
+          "version": "5",
+          "digest": "AeivCMNPU4DLDUjxZGvzGA7arqzdHDkFZF6RhEbWcMqM",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>"
+        }
+      },
       {
         "data": {
           "objectId": "0xdc3dc5e2b826e43f52f1c098a8050b5bc3a0e375e68b3793df2aa2a45f8d75dd",
@@ -132,14 +140,6 @@ Response: {
       },
       {
         "data": {
-          "objectId": "0xd0f9f481ba2b495556a647469d0d31db7c6dd27cf1c6b4cce6f870a19aee2779",
-          "version": "3",
-          "digest": "6cK8Pyo6i8VeArVX6yMaerj6H8LiQ2fjo1Wf9TuoLJQX",
-          "type": "0x2::coin::Coin<0x2::sui::SUI>"
-        }
-      },
-      {
-        "data": {
           "objectId": "0x287a75df012ad1939fbea40f22754021940d36201dd5c8505956171fc64d5a40",
           "version": "3",
           "digest": "JCehqeC2RVg6YZzHoK4mpPtHwF6zD5ydjdbJjLM6aXp1",
@@ -148,14 +148,14 @@ Response: {
       },
       {
         "data": {
-          "objectId": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
-          "version": "5",
-          "digest": "AeivCMNPU4DLDUjxZGvzGA7arqzdHDkFZF6RhEbWcMqM",
+          "objectId": "0xd0f9f481ba2b495556a647469d0d31db7c6dd27cf1c6b4cce6f870a19aee2779",
+          "version": "3",
+          "digest": "6cK8Pyo6i8VeArVX6yMaerj6H8LiQ2fjo1Wf9TuoLJQX",
           "type": "0x2::coin::Coin<0x2::sui::SUI>"
         }
       }
     ],
-    "nextCursor": "IOEVrn/5tWlE+v72/QFdUQov2WO21C7IpiZkCcDqQPs2AAAAAAAAAAA=",
+    "nextCursor": "zAEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAANzdWkAAAAAAAAAA1NVSQAAAAAAAAAAAf/////////V0Pn0gborSVVWpkdGnQ0x23xt0nzxxrTM5vhwoZruJ3k=",
     "hasNextPage": false
   }
 }
@@ -184,28 +184,7 @@ Response: {
         }
       }
     ],
-    "nextCursor": "IJmDzhus6LijXJd1aB+EFyYR0J7t8b+C34LIF92/IGrYAQAAAAAAAAA=",
+    "nextCursor": "fQD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkKJeWd/QJiwMxrR7RnxLOq3lsJBx9vuinugVthYftJ8AAAAAAAAAAFNAAAAAAAAAAJPMQAAAAAAAAAAAJmDzhus6LijXJd1aB+EFyYR0J7t8b+C34LIF92/IGrY",
     "hasNextPage": true
-  }
-}
-
-task 12, lines 104-116:
-//# run-jsonrpc --cursors bcs(bcs(@{obj_3_2}),1)
-Response: {
-  "jsonrpc": "2.0",
-  "id": 3,
-  "result": {
-    "data": [
-      {
-        "data": {
-          "objectId": "0x16d742f9a3554e3b7818bc65e6c69f2bd1d887accfa17245a0fb6df8161d8b2b",
-          "version": "2",
-          "digest": "89yGQheeGPWmpYAyZXQ3zPLw7f7fPg6MmaE8JUtxgka8",
-          "type": "0x428979677f4098b0331ad1ed19f12ceab796c241c7dbee8a7ba056d8587ed27c::M::O2"
-        }
-      }
-    ],
-    "nextCursor": "IBbXQvmjVU47eBi8ZebGnyvR2Iesz6FyRaD7bfgWHYsrAQAAAAAAAAA=",
-    "hasNextPage": false
   }
 }

@@ -29,6 +29,7 @@ impl KvRpcServer {
         project_id: Option<String>,
         app_profile_id: Option<String>,
         checkpoint_bucket: Option<String>,
+        channel_timeout: Option<Duration>,
         server_version: Option<ServerVersion>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
@@ -36,7 +37,7 @@ impl KvRpcServer {
             instance_id,
             project_id,
             false,
-            None,
+            channel_timeout,
             None,
             "sui-kv-rpc".to_string(),
             Some(registry),

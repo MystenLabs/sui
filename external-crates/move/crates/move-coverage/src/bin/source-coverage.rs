@@ -8,7 +8,10 @@ use clap::Parser;
 use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
 use move_command_line_common::files::DEBUG_INFO_EXTENSION;
-use move_coverage::{coverage_map::CoverageMap, source_coverage::SourceCoverageBuilder};
+use move_coverage::{
+    coverage_map::{CoverageMap, TraceConsumer},
+    source_coverage::SourceCoverageBuilder,
+};
 use std::{
     fs,
     fs::File,
@@ -27,9 +30,6 @@ struct Args {
     /// The path to the coverage map or trace file
     #[clap(long = "input-trace-path", short = 't')]
     pub input_trace_path: String,
-    /// Whether the passed-in file is a raw trace file or a serialized coverage map
-    #[clap(long = "is-raw-trace", short = 'r')]
-    pub is_raw_trace_file: bool,
     /// The path to the module binary
     #[clap(long = "module-path", short = 'b')]
     pub module_binary_path: String,
@@ -44,10 +44,11 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let debug_info_extension = DEBUG_INFO_EXTENSION;
-    let coverage_map = if args.is_raw_trace_file {
-        CoverageMap::from_trace_file(&args.input_trace_path)
+    let input_trace_path = Path::new(&args.input_trace_path);
+    let coverage_map = if input_trace_path.is_dir() {
+        CoverageMap::from_trace_dir(&input_trace_path)
     } else {
-        CoverageMap::from_binary_file(&args.input_trace_path).unwrap()
+        CoverageMap::from_binary_file(&input_trace_path).unwrap()
     };
 
     let bytecode_bytes = fs::read(&args.module_binary_path).expect("Unable to read bytecode file");

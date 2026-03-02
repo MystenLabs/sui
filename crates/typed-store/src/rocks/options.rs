@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, env};
-
 use rocksdb::{BlockBasedOptions, Cache, MergeOperands, ReadOptions, compaction_filter::Decision};
+use std::collections::BTreeMap;
+use std::env;
 use tap::TapFallible;
 use tracing::{info, warn};
 
@@ -193,9 +193,10 @@ impl DBOptions {
         self
     }
 
-    // Optimize tables receiving significant insertions without any deletions.
-    // These tables are dropped with the DBs, for example the epoch and consensus DBs.
-    pub fn optimize_for_no_deletion(mut self) -> DBOptions {
+    // Optimize tables receiving significant insertions, without any deletions.
+    // TODO: merge this function with optimize_for_write_throughput(), and use a flag to
+    // indicate if deletion is received.
+    pub fn optimize_for_write_throughput_no_deletion(mut self) -> DBOptions {
         // Increase write buffer size to 256MiB.
         let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
             .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
@@ -213,12 +214,12 @@ impl DBOptions {
 
         // Switch to universal compactions.
         self.options
-            .set_compaction_style(rocksdb::DBCompactionStyle::Fifo);
-        let mut compaction_options = rocksdb::FifoCompactOptions::default();
-        // Allow each consensus DB column family to grow unlimited, and never drop data because of size limits.
-        compaction_options.set_max_table_files_size(u64::MAX);
+            .set_compaction_style(rocksdb::DBCompactionStyle::Universal);
+        let mut compaction_options = rocksdb::UniversalCompactOptions::default();
+        compaction_options.set_max_size_amplification_percent(10000);
+        compaction_options.set_stop_style(rocksdb::UniversalCompactionStopStyle::Similar);
         self.options
-            .set_fifo_compaction_options(&compaction_options);
+            .set_universal_compaction_options(&compaction_options);
 
         let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
             .unwrap_or(DEFAULT_UNIVERSAL_COMPACTION_L0_NUM_FILES_COMPACTION_TRIGGER);
@@ -230,8 +231,6 @@ impl DBOptions {
         );
         self.options
             .set_level_zero_stop_writes_trigger((max_level_zero_file_num * 16).try_into().unwrap());
-        self.options
-            .set_max_bytes_for_level_base((write_buffer_size * max_level_zero_file_num) as u64);
 
         // Increase sst file size to 128MiB.
         self.options.set_target_file_size_base(
@@ -240,6 +239,10 @@ impl DBOptions {
                 * 1024
                 * 1024,
         );
+
+        // This should be a no-op for universal compaction but increasing it to be safe.
+        self.options
+            .set_max_bytes_for_level_base((write_buffer_size * max_level_zero_file_num) as u64);
 
         self
     }
@@ -294,10 +297,10 @@ pub fn default_db_options() -> DBOptions {
 
     // One common issue when running tests on Mac is that the default ulimit is too low,
     // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
-    fdlimit::raise_fd_limit();
-
-    // Allow files opened by RocksDB to be kept open.
-    opt.set_max_open_files(-1);
+    if let Some(limit) = fdlimit::raise_fd_limit() {
+        // on windows raise_fd_limit return None
+        opt.set_max_open_files((limit / 8) as i32);
+    }
 
     // The table cache is locked for updates and this determines the number
     // of shards, ie 2^10. Increase in case of lock contentions.

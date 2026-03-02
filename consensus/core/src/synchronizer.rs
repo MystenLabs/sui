@@ -486,11 +486,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 "live"
                             ).await {
                                 warn!("Error while processing fetched blocks from peer {peer_index} {peer_hostname}: {err}");
-                                context.metrics.node_metrics.synchronizer_process_fetched_failures.with_label_values(&[peer_hostname, "live"]).inc();
+                                context.metrics.node_metrics.synchronizer_process_fetched_failures.with_label_values(&[peer_hostname.as_str(), "live"]).inc();
                             }
                         },
                         Err(_) => {
-                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname, "live"]).inc();
+                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname.as_str(), "live"]).inc();
                             if retries <= MAX_RETRIES {
                                 requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
                             } else {
@@ -570,13 +570,13 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let peer_hostname = &context.committee.authority(peer_index).hostname;
         metrics
             .synchronizer_fetched_blocks_by_peer
-            .with_label_values(&[peer_hostname, sync_method])
+            .with_label_values(&[peer_hostname.as_str(), sync_method])
             .inc_by(blocks.len() as u64);
         for block in &blocks {
             let block_hostname = &context.committee.authority(block.author()).hostname;
             metrics
                 .synchronizer_fetched_blocks_by_authority
-                .with_label_values(&[block_hostname, sync_method])
+                .with_label_values(&[block_hostname.as_str(), sync_method])
                 .inc();
         }
 
@@ -652,7 +652,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                         .metrics
                         .node_metrics
                         .invalid_blocks
-                        .with_label_values(&[&hostname, "synchronizer", e.clone().name()])
+                        .with_label_values(&[hostname.as_str(), "synchronizer", e.clone().name()])
                         .inc();
                     info!("Invalid block received from {}: {}", peer_index, e);
                 })?;
@@ -669,7 +669,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     .metrics
                     .node_metrics
                     .block_timestamp_drift_ms
-                    .with_label_values(&[peer_hostname, "synchronizer"])
+                    .with_label_values(&[peer_hostname.as_str(), "synchronizer"])
                     .inc_by(drift);
 
                 trace!(
@@ -778,7 +778,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 .metrics
                                 .node_metrics
                                 .invalid_blocks
-                                .with_label_values(&[&hostname, "synchronizer_own_block", err.clone().name()])
+                                .with_label_values(&[hostname.as_str(), "synchronizer_own_block", err.clone().name()])
                                 .inc();
                             warn!("Invalid block received from {}: {}", authority_index, err);
                         })?;
@@ -969,7 +969,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             .node_metrics
                             .synchronizer_process_fetched_failures
                             .with_label_values(&[
-                                &context.committee.authority(peer).hostname,
+                                context.committee.authority(peer).hostname.as_str(),
                                 "periodic",
                             ])
                             .inc();
@@ -1135,7 +1135,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             }
                         },
                         Err(_) => {
-                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname, "periodic"]).inc();
+                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname.as_str(), "periodic"]).inc();
                             // try again if there is any peer left
                             if let Some(next_peer) = peers.next() {
                                 // do best effort to lock guards. If we can't lock then don't bother at this run.

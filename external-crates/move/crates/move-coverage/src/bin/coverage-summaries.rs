@@ -7,7 +7,7 @@
 use clap::Parser;
 use move_binary_format::file_format::CompiledModule;
 use move_coverage::{
-    coverage_map::{CoverageMap, TraceMap},
+    coverage_map::{CoverageMap, TraceConsumer, TraceMap},
     format_csv_summary, format_human_summary, summary,
 };
 use std::{
@@ -27,9 +27,6 @@ struct Args {
     /// The path to the coverage map or trace file
     #[clap(long = "input-trace-path", short = 't')]
     pub input_trace_path: String,
-    /// Whether the passed-in file is a raw trace file or a serialized coverage map
-    #[clap(long = "is-raw-trace", short = 'r')]
-    pub is_raw_trace_file: bool,
     /// The path to the module binary
     #[clap(long = "module-path", short = 'b')]
     pub module_binary_path: Option<String>,
@@ -87,10 +84,12 @@ fn main() {
         None => Box::new(io::stdout()),
     };
 
+    let is_raw_trace_dir = input_trace_path.is_dir();
+
     let modules = get_modules(&args);
     if args.derive_path_coverage {
-        let trace_map = if args.is_raw_trace_file {
-            TraceMap::from_trace_file(input_trace_path)
+        let trace_map = if is_raw_trace_dir {
+            TraceMap::from_trace_dir(input_trace_path)
         } else {
             TraceMap::from_binary_file(input_trace_path)
         };
@@ -111,8 +110,8 @@ fn main() {
             )
         }
     } else {
-        let coverage_map = if args.is_raw_trace_file {
-            CoverageMap::from_trace_file(input_trace_path)
+        let coverage_map = if is_raw_trace_dir {
+            CoverageMap::from_trace_dir(input_trace_path)
         } else {
             CoverageMap::from_binary_file(input_trace_path).unwrap()
         };

@@ -2940,6 +2940,30 @@ impl TransactionDataAPI for TransactionDataV1 {
             && config.enable_address_balance_gas_payments()
             && self.is_gas_paid_from_address_balance()
         {
+            if config.address_balance_gas_reject_gas_coin_arg()
+                && let TransactionKind::ProgrammableTransaction(pt) = &self.kind
+            {
+                fp_ensure!(
+                    !pt.commands.iter().any(|cmd| cmd.is_gas_coin_used()),
+                    UserInputError::Unsupported(
+                        "Argument::GasCoin is not supported with address balance gas payments"
+                            .to_string(),
+                    )
+                    .into()
+                );
+            }
+
+            if config.address_balance_gas_check_rgp_at_signing() {
+                fp_ensure!(
+                    self.gas_data.price >= context.reference_gas_price,
+                    UserInputError::GasPriceUnderRGP {
+                        gas_price: self.gas_data.price,
+                        reference_gas_price: context.reference_gas_price,
+                    }
+                    .into()
+                );
+            }
+
             match self.expiration() {
                 TransactionExpiration::None => {
                     // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
@@ -3130,6 +3154,7 @@ pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
     pub epoch: EpochId,
     pub chain_identifier: ChainIdentifier,
+    pub reference_gas_price: u64,
 }
 
 impl<'a> TxValidityCheckContext<'a> {
@@ -3138,6 +3163,7 @@ impl<'a> TxValidityCheckContext<'a> {
             config,
             epoch: 0,
             chain_identifier: ChainIdentifier::default(),
+            reference_gas_price: 1000,
         }
     }
 }
@@ -4385,6 +4411,7 @@ impl std::fmt::Debug for InputObjects {
 
 // An InputObjects new-type that has been verified by sui-transaction-checks, and can be
 // safely passed to execution.
+#[derive(Clone)]
 pub struct CheckedInputObjects(InputObjects);
 
 // DO NOT CALL outside of sui-transaction-checks, genesis, or replay.

@@ -93,7 +93,7 @@ module P::N {
   ]
 }
 
-//# run-jsonrpc --cursors bcs(bcs(@{obj_5_0}),2)
+//# run-jsonrpc --cursors bcs(bin(0u8,@{A},@{P}::M::O1<u16>,0u8,@{obj_5_0}))
 {
   "method": "suix_getOwnedObjects",
   "params": [

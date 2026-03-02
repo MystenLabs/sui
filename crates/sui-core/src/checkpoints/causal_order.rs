@@ -14,6 +14,34 @@ pub struct CausalOrder {
 }
 
 impl CausalOrder {
+    /// Causally sort effects, extracting the consensus commit prologue (if present at index 0)
+    /// and placing it first in the result. The CCP is identified by its digest matching
+    /// `ccp_digest`. All other effects are causally sorted after the CCP.
+    pub fn causal_sort_with_ccp(
+        effects: Vec<TransactionEffects>,
+        ccp_digest: Option<TransactionDigest>,
+    ) -> Vec<TransactionEffects> {
+        let (ccp_effects, unsorted) = if let Some(digest) = ccp_digest {
+            assert_eq!(effects[0].transaction_digest(), &digest);
+            (Some(effects[0].clone()), effects[1..].to_vec())
+        } else {
+            (None, effects)
+        };
+
+        let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+        if let Some(ccp) = ccp_effects {
+            if cfg!(debug_assertions) {
+                let ccp_digest = ccp_digest.unwrap();
+                for tx in unsorted.iter() {
+                    assert!(tx.transaction_digest() != &ccp_digest);
+                }
+            }
+            sorted.push(ccp);
+        }
+        sorted.extend(Self::causal_sort(unsorted));
+        sorted
+    }
+
     /// Causally sort given vector of effects
     ///
     /// Returned list has effects that

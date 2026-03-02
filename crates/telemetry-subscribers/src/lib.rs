@@ -693,14 +693,14 @@ mod tests {
         let metrics = registry.gather();
         // There should be 1 metricFamily and 1 metric
         assert_eq!(metrics.len(), 1);
-        assert_eq!(metrics[0].get_name(), "tracing_span_latencies");
+        assert_eq!(metrics[0].name(), "tracing_span_latencies");
         assert_eq!(metrics[0].get_field_type(), MetricType::HISTOGRAM);
         let inner = metrics[0].get_metric();
         assert_eq!(inner.len(), 1);
         let labels = inner[0].get_label();
         assert_eq!(labels.len(), 1);
-        assert_eq!(labels[0].get_name(), "span_name");
-        assert_eq!(labels[0].get_value(), "yo span yo");
+        assert_eq!(labels[0].name(), "span_name");
+        assert_eq!(labels[0].value(), "yo span yo");
 
         panic!("This should cause error logs to be printed out!");
     }

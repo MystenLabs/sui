@@ -43,15 +43,25 @@ pub fn apply_stream_updates(
 ) -> EventStreamHead {
     let mut new_head = head.clone();
     for cp_events in events {
-        // Verify that there are events in the checkpoint.
-        debug_assert!(!cp_events.is_empty());
+        assert!(!cp_events.is_empty());
 
-        // TODO: checkpoint_seq in EventCommitment is always 0, so we don't validate it
+        let checkpoint_seq = cp_events[0].checkpoint_seq;
+        assert!(
+            cp_events.iter().all(|e| e.checkpoint_seq == checkpoint_seq),
+            "All events in a batch must share the same checkpoint_seq"
+        );
+        assert!(
+            checkpoint_seq >= new_head.checkpoint_seq || new_head.num_events == 0,
+            "checkpoint_seq must be non-decreasing: head={}, new={}",
+            new_head.checkpoint_seq,
+            checkpoint_seq,
+        );
 
         let digest = build_event_merkle_root(&cp_events);
         let merkle_root = U256::from_le_bytes(&digest.into_inner());
         add_to_stream(&mut new_head.mmr, merkle_root);
         new_head.num_events += cp_events.len() as u64;
+        new_head.checkpoint_seq = checkpoint_seq;
     }
     new_head
 }
@@ -98,8 +108,9 @@ mod tests {
     #[test]
     fn test_verify_stream_head_update() {
         let old_head = EventStreamHead::new();
-        let events = vec![vec![EventCommitment::new(0, 0, 0, Digest::new([1; 32]))]];
+        let events = vec![vec![EventCommitment::new(1, 0, 0, Digest::new([1; 32]))]];
         let new_head = apply_stream_updates(&old_head, events);
-        println!("{:?}", new_head);
+        assert_eq!(new_head.num_events, 1);
+        assert_eq!(new_head.checkpoint_seq, 1);
     }
 }

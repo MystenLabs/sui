@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/matching/bool_nested_25452.move:5:19
+  │
+2 │       public struct S has drop { b: bool }
+  │                                     ---- Expected: 'bool'
+  ·
+5 │               S { b: 0 } => 1,
+  │                   ^  - Given: integer
+  │                   │   
+  │                   Invalid pattern field type
+
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/move_2024/matching/bool_nested_25452.move:5:22
+  │
+5 │               S { b: 0 } => 1,
+  │                      ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

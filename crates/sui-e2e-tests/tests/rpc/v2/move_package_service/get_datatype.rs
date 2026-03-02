@@ -11,7 +11,10 @@ use sui_macros::sim_test;
 
 #[sim_test]
 async fn test_get_struct_datatype() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
@@ -30,7 +33,10 @@ async fn test_get_struct_datatype() {
 
 #[sim_test]
 async fn test_get_datatype_not_found() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
@@ -53,7 +59,10 @@ async fn test_get_datatype_not_found() {
 
 #[sim_test]
 async fn test_get_datatype_invalid_package() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
@@ -72,7 +81,10 @@ async fn test_get_datatype_invalid_package() {
 
 #[sim_test]
 async fn test_get_datatype_module_not_found() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
@@ -91,7 +103,10 @@ async fn test_get_datatype_module_not_found() {
 
 #[sim_test]
 async fn test_get_datatype_missing_package_id() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
@@ -109,7 +124,10 @@ async fn test_get_datatype_missing_package_id() {
 
 #[sim_test]
 async fn test_get_datatype_missing_module_name() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
@@ -127,7 +145,10 @@ async fn test_get_datatype_missing_module_name() {
 
 #[sim_test]
 async fn test_get_datatype_missing_name() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await

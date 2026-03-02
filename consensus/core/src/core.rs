@@ -1137,7 +1137,7 @@ impl Core {
                 ancestors_to_propose.push(ancestor);
                 node_metrics
                     .included_excluded_proposal_ancestors_count_by_authority
-                    .with_label_values(&[block_hostname, "timeout"])
+                    .with_label_values(&[block_hostname.as_str(), "timeout"])
                     .inc();
             } else {
                 excluded_ancestors.push((score, ancestor));
@@ -1224,7 +1224,7 @@ impl Core {
             );
             node_metrics
                 .included_excluded_proposal_ancestors_count_by_authority
-                .with_label_values(&[block_hostname, "quorum"])
+                .with_label_values(&[block_hostname.as_str(), "quorum"])
                 .inc();
         }
 

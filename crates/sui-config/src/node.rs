@@ -154,6 +154,10 @@ pub struct NodeConfig {
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
 
+    /// Whether dev-inspect transaction execution is disabled on this node.
+    #[serde(default)]
+    pub dev_inspect_disabled: bool,
+
     #[serde(default)]
     pub certificate_deny_config: CertificateDenyConfig,
 
@@ -516,8 +520,6 @@ pub enum ExecutionCacheConfig {
         /// Number of uncommitted transactions at which to refuse new transaction
         /// submissions. Defaults to backpressure_threshold if unset.
         backpressure_threshold_for_rpc: Option<u64>,
-
-        fastpath_transaction_outputs_cache_size: Option<u64>,
     },
 }
 
@@ -536,7 +538,6 @@ impl Default for ExecutionCacheConfig {
             effect_cache_size: None,
             events_cache_size: None,
             transaction_objects_cache_size: None,
-            fastpath_transaction_outputs_cache_size: None,
         }
     }
 }
@@ -691,19 +692,6 @@ impl ExecutionCacheConfig {
                 } => backpressure_threshold_for_rpc.unwrap_or(self.backpressure_threshold()),
             })
     }
-
-    pub fn fastpath_transaction_outputs_cache_size(&self) -> u64 {
-        std::env::var("SUI_FASTPATH_TRANSACTION_OUTPUTS_CACHE_SIZE")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_else(|| match self {
-                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
-                ExecutionCacheConfig::WritebackCache {
-                    fastpath_transaction_outputs_cache_size,
-                    ..
-                } => fastpath_transaction_outputs_cache_size.unwrap_or(10_000),
-            })
-    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -769,6 +757,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "EveFrontier".to_string(),
         "TestEveFrontier".to_string(),
         "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5".to_string(), // test Gamma Prime, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu".to_string(), // Gamma Prime, external partner
     ]);
 
     // providers that are available for mainnet and testnet.
@@ -973,6 +963,19 @@ pub struct ConsensusConfig {
     pub submit_delay_step_override_millis: Option<u64>,
 
     pub parameters: Option<ConsensusParameters>,
+
+    /// Override for the consensus network listen address.
+    /// When set, Mysticeti binds to this address instead of deriving from the committee.
+    /// Address override is advertised via the discovery protocol.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub listen_address: Option<Multiaddr>,
+
+    /// External consensus address that should be advertised via the discovery protocol,
+    /// if it is different from `listen_address` above.
+    ///
+    /// When neither this nor `listen_address` is set, peers use the on-chain committee address.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_address: Option<Multiaddr>,
 }
 
 impl ConsensusConfig {
