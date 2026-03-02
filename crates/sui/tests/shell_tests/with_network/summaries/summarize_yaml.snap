@@ -48,6 +48,7 @@ ecvrf.yaml
 ed25519.yaml
 event.yaml
 funds_accumulator.yaml
+gcp_attestation.yaml
 groth16.yaml
 group_ops.yaml
 hash.yaml

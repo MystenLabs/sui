@@ -50,6 +50,7 @@ ecvrf.json
 ed25519.json
 event.json
 funds_accumulator.json
+gcp_attestation.json
 groth16.json
 group_ops.json
 hash.json
