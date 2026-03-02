@@ -410,7 +410,7 @@ impl SequentialUploader {
     ) -> Result<()> {
         self.mode
             .write_to_object_store(
-                &self.output_prefix,
+                &self.pipeline_name,
                 path,
                 checkpoint_range,
                 PutPayload::from(bytes),

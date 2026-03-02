@@ -4641,6 +4641,8 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .include_checkpoint_artifacts_digest_in_summary = true;
                     }
+                    // Disabled while debugging
+                    cfg.feature_flags.defer_unpaid_amplification = false;
                 }
                 115 => {
                     cfg.feature_flags.gasless_transaction_drop_safety = true;

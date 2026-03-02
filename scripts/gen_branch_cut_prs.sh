@@ -2,19 +2,30 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# This script creates two PRs:
-# 1. Generate framework bytecode snapshot PR
-#   cargo run --bin sui-framework-snapshot
-# 2. Generate a version bump PR
+# Generate the framework bytecode snapshot PR for branch cut.
+# Version bump is now handled by version-bump.yml / version-bump.sh.
 
 set -euo pipefail
 
 # check required params
 if [[ $# -ne 1 ]]; then
-  echo "USAGE: gen_branch_cut_prs.sh <snapshot|version-bump>"
+  echo "USAGE: gen_branch_cut_prs.sh <snapshot>"
   exit 1
 fi
 PR_TYPE=$1
+
+# Handle deprecated version-bump argument
+if [[ "$PR_TYPE" == *version-bump* ]]; then
+  echo "DEPRECATED: The 'version-bump' subcommand has been removed from this script." >&2
+  echo "Use the standalone workflow instead:" >&2
+  echo "  gh workflow run version-bump.yml --ref main -f type=minor -f delivery=pr" >&2
+  exit 1
+fi
+
+if [[ "$PR_TYPE" != *snapshot* ]]; then
+  echo "Invalid argument. Use 'snapshot'."
+  exit 1
+fi
 
 # Ensure required binaries are available
 for cmd in gh git cargo; do
@@ -48,109 +59,48 @@ git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 SUI_VERSION=$(sed -nE 's/^version = "([0-9]+\.[0-9]+\.[0-9]+)"/\1/p' ./Cargo.toml)
 STAMP="$(date +%Y%m%d%H%M%S)"
 
-if [[ "$PR_TYPE" == *snapshot* ]]; then
-  echo "Generating framework bytecode snapshot..."
-  # Set up branch for changes.
-  BRANCH="${GITHUB_ACTOR}/sui-v${SUI_VERSION}-bytecode-framework-snapshot-${STAMP}"
-  git checkout -b "$BRANCH"
+echo "Generating framework bytecode snapshot..."
+# Set up branch for changes.
+BRANCH="${GITHUB_ACTOR}/sui-v${SUI_VERSION}-bytecode-framework-snapshot-${STAMP}"
+git checkout -b "$BRANCH"
 
-  # Generate framework bytecode snapshot
-  cargo run --bin sui-framework-snapshot
+# Generate framework bytecode snapshot
+cargo run --bin sui-framework-snapshot
 
-  # Staged all changes
-  echo "Staging all changed files..."
-  git add -A .
+# Staged all changes
+echo "Staging all changed files..."
+git add -A .
 
-  # Generate PR body
-  BODY="Sui v${SUI_VERSION} Framework Bytecode snapshot"
+# Generate PR body
+BODY="Sui v${SUI_VERSION} Framework Bytecode snapshot"
 
-  # Commit, push, and create PR.
-  git commit -m "$BODY"
-  git push -u origin "$BRANCH"
+# Commit, push, and create PR.
+git commit -m "$BODY"
+git push -u origin "$BRANCH"
 
-  # Create PR with proper error handling
-  echo "Creating pull request..."
-  if PR_OUTPUT=$(gh pr create \
-    --base main \
-    --head "$BRANCH" \
-    --title "$BODY" \
-    --reviewer "ebmifa,pei-mysten,tharbert" \
-    --body "$BODY" 2>&1); then
-    
-    # Extract PR URL from output
-    if PR_URL=$(echo "$PR_OUTPUT" | grep -Eo 'https://github.com/[^ ]+'); then
-      echo "Successfully created PR: $PR_URL"
-    else
-      echo "Warning: PR created but could not extract URL from output:"
-      echo "$PR_OUTPUT"
-      PR_URL="(URL extraction failed)"
-    fi
+# Create PR with proper error handling
+echo "Creating pull request..."
+if PR_OUTPUT=$(gh pr create \
+  --base main \
+  --head "$BRANCH" \
+  --title "$BODY" \
+  --reviewer "ebmifa,pei-mysten,tharbert" \
+  --body "$BODY" 2>&1); then
+
+  # Extract PR URL from output
+  if PR_URL=$(echo "$PR_OUTPUT" | grep -Eo 'https://github.com/[^ ]+'); then
+    echo "Successfully created PR: $PR_URL"
   else
-    echo "Error: Failed to create pull request:" >&2
-    echo "$PR_OUTPUT" >&2
-    exit 1
+    echo "Warning: PR created but could not extract URL from output:"
+    echo "$PR_OUTPUT"
+    PR_URL="(URL extraction failed)"
   fi
-
-  # Setting the PR to auto merge
-  gh pr merge --auto --squash --delete-branch "$BRANCH"
-  echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: $PR_URL"
-
-elif [[ "$PR_TYPE" == *version-bump* ]]; then
-  # Generate the version bump PR
-  echo "Generating version bump..."
-  # Bump main branhch version
-  IFS=. read -r major minor patch <<<"$SUI_VERSION"; NEW_SUI_VERSION="$major.$((minor+1)).$patch"
-
-  # Setup new branch for staging
-  BRANCH="${GITHUB_ACTOR}/sui-v${NEW_SUI_VERSION}-version-bump-${STAMP}"
-  git checkout -b "$BRANCH"
-
-  # Update the version in Cargo.toml and openrpc.json
-  sed -i -E "s/^(version = \")[0-9]+\.[0-9]+\.[0-9]+(\"$)/\1${NEW_SUI_VERSION}\2/" Cargo.toml
-  sed -i -E "s/(\"version\": \")([0-9]+\.[0-9]+\.[0-9]+)(\")/\1${NEW_SUI_VERSION}\3/" crates/sui-open-rpc/spec/openrpc.json
-  SNAP_FILE="crates/sui-open-rpc/tests/snapshots/generate_spec__openrpc.snap.json"
-  if [[ -f "$SNAP_FILE" ]]; then
-    sed -i -E "s/(\"version\": \")([0-9]+\.[0-9]+\.[0-9]+)(\")/\1${NEW_SUI_VERSION}\3/" "$SNAP_FILE"
-  fi
-
-  # Cargo check to generate Cargo.lock changes
-  cargo check || true
-
-  # Staged all changes
-  echo "Staging all changed files..."
-  git add -A .
-
-  # Generate PR body
-  BODY="Sui v${NEW_SUI_VERSION} Version Bump"
-
-  git commit -m "$BODY"
-  git push -u origin "$BRANCH"
-
-  # Create PR with proper error handling
-  echo "Creating pull request..."
-  if PR_OUTPUT=$(gh pr create \
-    --base main \
-    --head "$BRANCH" \
-    --title "$BODY" \
-    --reviewer "ebmifa,pei-mysten,tharbert" \
-    --body "$BODY" 2>&1); then
-    
-    # Extract PR URL from output
-    if PR_URL=$(echo "$PR_OUTPUT" | grep -Eo 'https://github.com/[^ ]+'); then
-      echo "Successfully created PR: $PR_URL"
-    else
-      echo "Warning: PR created but could not extract URL from output:"
-      echo "$PR_OUTPUT"
-      PR_URL="(URL extraction failed)"
-    fi
-  else
-    echo "Error: Failed to create pull request:" >&2
-    echo "$PR_OUTPUT" >&2
-    exit 1
-  fi
-
-  echo "Pull request for Sui v${NEW_SUI_VERSION} Version Bump created: $PR_URL"
 else
-  echo "Invalid argument. Use 'snapshot' or 'version-bump'."
+  echo "Error: Failed to create pull request:" >&2
+  echo "$PR_OUTPUT" >&2
   exit 1
 fi
+
+# Setting the PR to auto merge
+gh pr merge --auto --squash --delete-branch "$BRANCH"
+echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: $PR_URL"
