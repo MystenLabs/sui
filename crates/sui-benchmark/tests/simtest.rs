@@ -1558,6 +1558,7 @@ mod test {
         );
         let address_balance_enabled = protocol_config.enable_address_balance_gas_payments();
         let address_aliases_enabled = protocol_config.address_aliases();
+        let auth_events_enabled = protocol_config.enable_authenticated_event_streams();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
@@ -1617,6 +1618,18 @@ mod test {
             assert!(metrics_sum.permanent_failure_count > 100);
             // insufficient_funds_count requires AddressBalanceOverdraw operations
             assert!(metrics_sum.insufficient_funds_count > 2);
+
+            let accum_read_stats = metrics
+                .get_stats(&OperationSet::new().with(AccumulatorBalanceRead::NAME))
+                .expect("expected accumulator balance read stats");
+            info!(
+                "accumulator balance read metrics: success={}",
+                accum_read_stats.success_count
+            );
+            assert!(
+                accum_read_stats.success_count > 0,
+                "expected at least one accumulator balance read"
+            );
         } else {
             assert!(metrics_sum.success_count > 150);
             assert!(metrics_sum.permanent_failure_count > 50);
@@ -1644,31 +1657,21 @@ mod test {
             );
         }
 
-        let accum_read_stats = metrics
-            .get_stats(&OperationSet::new().with(AccumulatorBalanceRead::NAME))
-            .expect("expected accumulator balance read stats");
-        info!(
-            "accumulator balance read metrics: success={}",
-            accum_read_stats.success_count
-        );
-        assert!(
-            accum_read_stats.success_count > 0,
-            "expected at least one accumulator balance read"
-        );
-
-        let auth_event_success_count: u64 = metrics
-            .iter_stats()
-            .filter(|(op_set, _)| op_set.contains(AuthenticatedEventEmit::NAME))
-            .map(|(_, stats)| stats.success_count)
-            .sum();
-        info!(
-            "authenticated event success count: {}",
-            auth_event_success_count
-        );
-        assert!(
-            auth_event_success_count > 0,
-            "expected at least one authenticated event emit"
-        );
+        if auth_events_enabled {
+            let auth_event_success_count: u64 = metrics
+                .iter_stats()
+                .filter(|(op_set, _)| op_set.contains(AuthenticatedEventEmit::NAME))
+                .map(|(_, stats)| stats.success_count)
+                .sum();
+            info!(
+                "authenticated event success count: {}",
+                auth_event_success_count
+            );
+            assert!(
+                auth_event_success_count > 0,
+                "expected at least one authenticated event emit"
+            );
+        }
     }
 
     #[sim_test(config = "test_config()")]
