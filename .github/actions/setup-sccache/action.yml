@@ -6,11 +6,11 @@ description: Configure sccache with S3 backend for CI builds with graceful degra
 
 inputs:
   aws-access-key-id:
-    description: AWS access key ID for S3 cache backend
-    required: true
+    description: AWS access key ID for S3 cache backend (empty for fork PRs)
+    required: false
   aws-secret-access-key:
-    description: AWS secret access key for S3 cache backend
-    required: true
+    description: AWS secret access key for S3 cache backend (empty for fork PRs)
+    required: false
   key-prefix:
     description: S3 key prefix for cache partitioning (e.g., ubuntu-ghcloud, windows-ghcloud)
     required: true
@@ -18,13 +18,16 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+    - name: Configure AWS credentials
+      if: inputs.aws-access-key-id != ''
+      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
       with:
         aws-access-key-id: ${{ inputs.aws-access-key-id }}
         aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
         aws-region: us-west-2
 
     - name: Set sccache environment
+      if: inputs.aws-access-key-id != ''
       shell: bash
       run: |
         echo "SCCACHE_BUCKET=mystenlabs-sccache" >> "$GITHUB_ENV"
@@ -32,6 +35,7 @@ runs:
         echo "SCCACHE_S3_KEY_PREFIX=${{ inputs.key-prefix }}" >> "$GITHUB_ENV"
 
     - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+      if: inputs.aws-access-key-id != ''
       id: sccache
       continue-on-error: true
 
