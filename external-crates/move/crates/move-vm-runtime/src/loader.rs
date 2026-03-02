@@ -2312,17 +2312,6 @@ impl Function {
         )
     }
 
-    #[cfg(any(debug_assertions, feature = "tracing"))]
-    pub(crate) fn pretty_short_string(&self) -> String {
-        let id = &self.module;
-        format!(
-            "0x{}::{}::{}",
-            id.address().short_str_lossless(),
-            id.name().as_str(),
-            self.name.as_str()
-        )
-    }
-
     pub(crate) fn is_native(&self) -> bool {
         self.def_is_native
     }
