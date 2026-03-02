@@ -5,7 +5,7 @@ name: Warm sccache
 
 on:
   schedule:
-    - cron: '0 0 * * *' # every day at midnight UTC
+    - cron: '0 12 * * *' # every day at 4:00 AM PST (noon UTC)
   workflow_dispatch: {}
 
 permissions:
@@ -158,6 +158,24 @@ jobs:
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env
           scripts/simtest/cargo-simtest simtest build
+
+      # external-crates/move workspace (matches external.yml test/clippy jobs)
+      - name: Build external-crates/move targets
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          cd external-crates/move
+          cargo build --all-targets
+
+      - name: Run external-crates/move clippy
+        if: ${{ matrix.os == 'ubuntu-ghcloud' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          rustup component add clippy
+          cd external-crates/move
+          cargo move-clippy
 
   cache-summary:
     name: Cache Summary
