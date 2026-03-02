@@ -13,7 +13,9 @@ use move_vm_types::{
     values::{Struct, Value, Vector, VectorRef, VectorSpecialization},
 };
 use std::collections::VecDeque;
-use sui_types::gcp_attestation::{GcpAttestationDocument, GcpAttestationError, verify_gcp_attestation};
+use sui_types::gcp_attestation::{
+    GcpAttestationDocument, GcpAttestationError, verify_gcp_attestation,
+};
 
 use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -134,4 +136,3 @@ fn to_vector_of_vector_u8(items: Vec<Vec<u8>>) -> PartialVMResult<Value> {
     let inner: Vec<Value> = items.into_iter().map(Value::vector_u8).collect();
     Vector::pack(VectorSpecialization::Container, inner)
 }
-

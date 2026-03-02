@@ -307,7 +307,11 @@ pub fn verify_gcp_attestation(
         hwmodel: payload.hwmodel.into_bytes(),
         swname: payload.swname.into_bytes(),
         dbgstat: payload.dbgstat.into_bytes(),
-        swversion: payload.swversion.into_iter().map(|s| s.into_bytes()).collect(),
+        swversion: payload
+            .swversion
+            .into_iter()
+            .map(|s| s.into_bytes())
+            .collect(),
         image_digest: payload.submods.container.image_digest.into_bytes(),
         image_reference: payload.submods.container.image_reference.into_bytes(),
         restart_policy: payload.submods.container.restart_policy.into_bytes(),

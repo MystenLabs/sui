@@ -13,11 +13,13 @@ use rsa::traits::PublicKeyParts;
 use sha2::Sha256;
 use sui_macros::sim_test;
 use sui_types::base_types::ObjectID;
-use sui_types::object::Owner;
-use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, TransactionData, TransactionKind};
-use sui_types::{SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{
+    CallArg, ObjectArg, SharedObjectMutability, TransactionData, TransactionKind,
+};
+use sui_types::{SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
 
 const GCP_ISS: &str = "https://confidentialcomputing.googleapis.com";
@@ -62,12 +64,14 @@ fn make_gcp_payload(exp: u64, iat: u64) -> serde_json::Value {
 }
 
 /// Signs a JWT (RS256) with the given key and returns the compact serialization as bytes.
-fn sign_gcp_jwt(signing_key: &SigningKey<Sha256>, payload: &serde_json::Value, kid: &str) -> Vec<u8> {
+fn sign_gcp_jwt(
+    signing_key: &SigningKey<Sha256>,
+    payload: &serde_json::Value,
+    kid: &str,
+) -> Vec<u8> {
     let header = serde_json::json!({"alg": "RS256", "typ": "JWT", "kid": kid});
-    let header_b64 =
-        URL_SAFE_NO_PAD.encode(serde_json::to_string(&header).unwrap().as_bytes());
-    let payload_b64 =
-        URL_SAFE_NO_PAD.encode(serde_json::to_string(payload).unwrap().as_bytes());
+    let header_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_string(&header).unwrap().as_bytes());
+    let payload_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_string(payload).unwrap().as_bytes());
     let signing_input = format!("{}.{}", header_b64, payload_b64);
     let mut rng = rand::thread_rng();
     let sig = signing_key.sign_with_rng(&mut rng, signing_input.as_bytes());
@@ -83,13 +87,18 @@ fn unix_now_secs() -> u64 {
 }
 
 /// Returns the initial shared version of a shared object by reading it from the chain.
-async fn get_initial_shared_version(cluster: &test_cluster::TestCluster, id: ObjectID) -> sui_types::base_types::SequenceNumber {
+async fn get_initial_shared_version(
+    cluster: &test_cluster::TestCluster,
+    id: ObjectID,
+) -> sui_types::base_types::SequenceNumber {
     let obj = cluster
         .get_object_from_fullnode_store(&id)
         .await
         .expect("object should exist");
     match obj.owner() {
-        Owner::Shared { initial_shared_version } => *initial_shared_version,
+        Owner::Shared {
+            initial_shared_version,
+        } => *initial_shared_version,
         other => panic!("expected shared object, got {:?}", other),
     }
 }
@@ -114,8 +123,16 @@ async fn test_gcp_attestation_verifies_on_chain() {
     // it to consensus; the subsequent epoch change writes it into AuthenticatorState.
     #[cfg(msim)]
     sui_node::set_gcp_jwk_injector(vec![(
-        JwkId { iss: GCP_ISS.to_string(), kid: TEST_KID.to_string() },
-        JWK { kty: "RSA".to_string(), e: _e_b64, n: _n_b64, alg: "RS256".to_string() },
+        JwkId {
+            iss: GCP_ISS.to_string(),
+            kid: TEST_KID.to_string(),
+        },
+        JWK {
+            kty: "RSA".to_string(),
+            e: _e_b64,
+            n: _n_b64,
+            alg: "RS256".to_string(),
+        },
     )]);
 
     let test_cluster = TestClusterBuilder::new()
@@ -127,7 +144,11 @@ async fn test_gcp_attestation_verifies_on_chain() {
     test_cluster.trigger_reconfiguration().await;
 
     let now = unix_now_secs();
-    let token = sign_gcp_jwt(&signing_key, &make_gcp_payload(now + 3600, now - 10), TEST_KID);
+    let token = sign_gcp_jwt(
+        &signing_key,
+        &make_gcp_payload(now + 3600, now - 10),
+        TEST_KID,
+    );
 
     let sender = test_cluster.get_address_0();
     let rgp = test_cluster.get_reference_gas_price().await;
@@ -187,7 +208,11 @@ async fn test_gcp_attestation_rejects_unknown_kid() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let now = unix_now_secs();
-    let token = sign_gcp_jwt(&signing_key, &make_gcp_payload(now + 3600, now - 10), TEST_KID);
+    let token = sign_gcp_jwt(
+        &signing_key,
+        &make_gcp_payload(now + 3600, now - 10),
+        TEST_KID,
+    );
 
     let sender = test_cluster.get_address_0();
     let rgp = test_cluster.get_reference_gas_price().await;

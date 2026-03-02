@@ -243,9 +243,9 @@ mod simulator {
 }
 
 #[cfg(msim)]
-pub use simulator::set_jwk_injector;
-#[cfg(msim)]
 pub use simulator::set_gcp_jwk_injector;
+#[cfg(msim)]
+pub use simulator::set_jwk_injector;
 #[cfg(msim)]
 use simulator::*;
 use sui_core::authority::authority_store_pruner::PrunerWatermarks;

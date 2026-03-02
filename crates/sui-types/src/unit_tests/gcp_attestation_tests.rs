@@ -382,4 +382,3 @@ fn test_extract_kid_missing() {
         GcpAttestationError::ParseError("missing 'kid' in header".to_string())
     );
 }
-
