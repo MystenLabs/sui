@@ -456,8 +456,8 @@ mod tests {
         committer: Service,
     }
 
-    /// Emulates adding a sequential pipeline to the indexer. The next_checkpoint is the checkpoint
-    /// for the indexer to ingest from.
+    /// Emulates adding a sequential pipeline to the indexer. The next_checkpoint is the starting
+    /// checkpoint for the indexer to ingest from.
     fn setup_test(next_checkpoint: u64, config: SequentialConfig, store: MockStore) -> TestSetup {
         let metrics = IndexerMetrics::new(None, &Registry::default());
 
