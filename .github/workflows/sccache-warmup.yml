@@ -5,7 +5,7 @@ name: Warm sccache
 
 on:
   schedule:
-    - cron: '0 0 * * *' # every day at midnight UTC
+    - cron: '0 12 * * *' # every day at 4:00 AM PST (noon UTC)
   workflow_dispatch: {}
 
 permissions:
