@@ -481,6 +481,10 @@ mod tests {
                 let bytes = test_checkpoint_data(checkpoint);
                 Ok(CheckpointData::Raw(bytes.into()))
             }
+
+            async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+                Ok(0)
+            }
         }
 
         IngestionClient::new_impl(Arc::new(MockClient), metrics)

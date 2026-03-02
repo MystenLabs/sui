@@ -89,7 +89,11 @@ impl Indexer<Db> {
             IndexerArgs::default(),
             ClientArgs {
                 ingestion: IngestionClientArgs {
-                    local_ingestion_path: Some(tempdir().unwrap().keep()),
+                    local_ingestion_path: Some({
+                        let dir = tempdir().unwrap().keep();
+                        std::fs::write(dir.join("epochs.json"), "[]").unwrap();
+                        dir
+                    }),
                     ..Default::default()
                 },
                 ..Default::default()
