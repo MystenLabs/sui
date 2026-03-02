@@ -10,6 +10,7 @@ use serde::Serialize;
 use sui_futures::service::Service;
 use tokio::sync::SetOnce;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tracing::info;
 
 use crate::Task;
@@ -260,6 +261,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let (committer_tx, watermark_rx) =
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
     let main_reader_lo = Arc::new(SetOnce::new());
+    let (watermark_written_tx, watermark_written_rx) = watch::channel(false);
 
     let handler = Arc::new(handler);
 
@@ -299,6 +301,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         store.clone(),
         task.as_ref().map(|t| t.task.clone()),
         metrics.clone(),
+        watermark_written_tx,
     );
 
     let s_track_reader_lo = track_main_reader_lo::<H>(
@@ -307,10 +310,14 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         store.clone(),
     );
 
-    let s_reader_watermark =
-        reader_watermark::<H>(pruner_config.clone(), store.clone(), metrics.clone());
+    let s_reader_watermark = reader_watermark::<H>(
+        pruner_config.clone(),
+        store.clone(),
+        metrics.clone(),
+        watermark_written_rx.clone(),
+    );
 
-    let s_pruner = pruner(handler, pruner_config, store, metrics);
+    let s_pruner = pruner(handler, pruner_config, store, metrics, watermark_written_rx);
 
     s_processor
         .merge(s_collector)
@@ -486,6 +493,10 @@ mod tests {
     #[tokio::test]
     async fn test_e2e_pipeline() {
         let config = ConcurrentConfig {
+            committer: CommitterConfig {
+                watermark_interval_ms: 100, // Short interval to unblock pruner quickly
+                ..Default::default()
+            },
             pruner: Some(PrunerConfig {
                 interval_ms: 5_000, // Long interval to test states before pruning
                 delay_ms: 100,      // Short delay for faster tests

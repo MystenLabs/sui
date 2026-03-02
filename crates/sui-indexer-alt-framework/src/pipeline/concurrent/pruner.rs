@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
+use anyhow::Context;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 use sui_futures::service::Service;
 use tokio::sync::Semaphore;
+use tokio::sync::watch;
 use tokio::time::MissedTickBehavior;
 use tokio::time::interval;
 use tracing::debug;
@@ -100,12 +101,18 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     config: Option<PrunerConfig>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
+    mut watermark_written_rx: watch::Receiver<bool>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         let Some(config) = config else {
             info!(pipeline = H::NAME, "Skipping pruner task");
             return Ok(());
         };
+
+        watermark_written_rx
+            .wait_for(|&b| b)
+            .await
+            .context("Commit watermark task ended before writing initial watermark")?;
 
         info!(
             pipeline = H::NAME,
@@ -153,7 +160,6 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
                     Ok(None) => {
                         guard.stop_and_record();
-                        // This is expected before the initial checkpoint is indexed.
                         warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
                         continue;
                     }
@@ -549,7 +555,8 @@ mod tests {
 
         // Start the pruner
         let store_clone = store.clone();
-        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics);
+        let (_tx, rx) = watch::channel(true);
+        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics, rx);
 
         // Wait a short time within delay_ms
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -628,7 +635,8 @@ mod tests {
 
         // Start the pruner
         let store_clone = store.clone();
-        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics);
+        let (_tx, rx) = watch::channel(true);
+        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics, rx);
 
         // Because the `pruner_timestamp` is in the past, even with the delay_ms it should be pruned
         // close to immediately. To be safe, sleep for 1000ms before checking, which is well under
@@ -697,7 +705,8 @@ mod tests {
 
         // Start the pruner
         let store_clone = store.clone();
-        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics);
+        let (_tx, rx) = watch::channel(true);
+        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics, rx);
 
         // Wait for first pruning cycle - ranges [2,3) and [3,4) should succeed, [1,2) should fail
         tokio::time::sleep(Duration::from_millis(500)).await;

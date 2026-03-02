@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 
+use anyhow::Context;
 use sui_futures::service::Service;
+use tokio::sync::watch;
 use tokio::time::interval;
 use tracing::debug;
 use tracing::info;
@@ -29,12 +31,18 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
     config: Option<PrunerConfig>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
+    mut watermark_written_rx: watch::Receiver<bool>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         let Some(config) = config else {
             info!(pipeline = H::NAME, "Skipping reader watermark task");
             return Ok(());
         };
+
+        watermark_written_rx
+            .wait_for(|&b| b)
+            .await
+            .context("Commit watermark task ended before writing initial watermark")?;
 
         let mut poll = interval(config.interval());
 
@@ -53,7 +61,6 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                 Ok(Some(current)) => current,
 
                 Ok(None) => {
-                    // This is expected before the initial checkpoint is indexed.
                     warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
                     continue;
                 }
@@ -187,7 +194,8 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         let store_clone = store.clone();
-        let handle = reader_watermark::<DataPipeline>(Some(config), store_clone, metrics);
+        let (_tx, rx) = watch::channel(true);
+        let handle = reader_watermark::<DataPipeline>(Some(config), store_clone, metrics, rx);
 
         TestSetup { store, handle }
     }

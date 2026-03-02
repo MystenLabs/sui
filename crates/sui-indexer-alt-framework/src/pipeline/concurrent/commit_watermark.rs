@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -50,6 +51,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     store: H::Store,
     task: Option<String>,
     metrics: Arc<IndexerMetrics>,
+    watermark_written_tx: watch::Sender<bool>,
 ) -> Service {
     // SAFETY: on indexer instantiation, we've checked that the pipeline name is valid.
     let pipeline_task = pipeline_task::<H::Store>(H::NAME, task.as_deref()).unwrap();
@@ -188,9 +190,8 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             }
 
             // DB writes are deferred to the timer interval to avoid excessive DB load.
-            if should_write_db
-                && let Some(watermark) = pending_watermark.take()
-                && write_watermark::<H>(
+            if should_write_db && let Some(watermark) = pending_watermark.take() {
+                if write_watermark::<H>(
                     &store,
                     &pipeline_task,
                     &watermark,
@@ -200,8 +201,12 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                 )
                 .await
                 .is_err()
-            {
-                pending_watermark = Some(watermark);
+                {
+                    pending_watermark = Some(watermark);
+                } else {
+                    // Ignore error: receivers may already be dropped if pruner/reader are disabled (no PrunerConfig).
+                    let _ = watermark_written_tx.send(true);
+                }
             }
 
             if rx.is_closed() && rx.is_empty() {
@@ -377,6 +382,7 @@ mod tests {
     ) -> TestSetup {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
         let metrics = IndexerMetrics::new(None, &Default::default());
+        let (watermark_written_tx, _watermark_written_rx) = watch::channel(false);
 
         let store_clone = store.clone();
 
@@ -387,6 +393,7 @@ mod tests {
             store_clone,
             None,
             metrics,
+            watermark_written_tx,
         );
 
         TestSetup {
