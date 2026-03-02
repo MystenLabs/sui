@@ -31,19 +31,13 @@ jobs:
   release:
     name: Build Release Binaries
     runs-on: [ubuntu-ghcloud]
-    env:
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ubuntu-ghcloud
-      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      - uses: ./.github/actions/setup-sccache
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
+          key-prefix: ubuntu-ghcloud
       - name: cargo build
         run: cargo build --all-targets --all-features --release
 

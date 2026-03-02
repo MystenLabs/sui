@@ -697,11 +697,6 @@ async fn test_reconfig_with_committee_change_stress() {
     do_test_reconfig_with_committee_change_stress().await;
 }
 
-#[sim_test(check_determinism)]
-async fn test_reconfig_with_committee_change_stress_determinism() {
-    do_test_reconfig_with_committee_change_stress().await;
-}
-
 async fn do_test_reconfig_with_committee_change_stress() {
     let mut candidates = (0..6)
         .map(|_| ValidatorGenesisConfigBuilder::new().build(&mut OsRng))

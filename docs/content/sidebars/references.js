@@ -167,6 +167,7 @@ const references = [
 		],
 	},
 	'references/awesome-sui',
+	'references/awesome-sui-gaming',
 	'references/sui-glossary',
 	{
 		type: 'category',

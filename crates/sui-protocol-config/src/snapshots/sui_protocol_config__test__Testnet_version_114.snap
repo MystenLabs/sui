@@ -112,6 +112,7 @@ feature_flags:
   type_tags_in_object_runtime: true
   enable_accumulators: true
   create_root_accumulator_object: true
+  enable_authenticated_event_streams: true
   enable_address_balance_gas_payments: true
   address_balance_gas_check_rgp_at_signing: true
   address_balance_gas_reject_gas_coin_arg: true
@@ -125,6 +126,7 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
+  include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true
@@ -146,6 +148,7 @@ feature_flags:
   flexible_tx_context_positions: true
   disable_entry_point_signature_check: true
   restrict_hot_or_not_entry_functions: true
+  split_checkpoints_in_consensus_handler: true
   consensus_always_accept_system_transactions: true
   validator_metadata_verify_v2: true
   randomize_checkpoint_tx_limit_in_tests: true

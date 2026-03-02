@@ -1588,7 +1588,8 @@ mod test {
         .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
         .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
         .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
-        .with_probability(AddressBalanceOverdraw::FLAG, 0.3);
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.3)
+        .with_probability(AccumulatorBalanceRead::FLAG, 0.3);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1641,6 +1642,18 @@ mod test {
                 "expected at least one alias remove"
             );
         }
+
+        let accum_read_stats = metrics
+            .get_stats(OperationSet::new().with(AccumulatorBalanceRead::FLAG))
+            .expect("expected accumulator balance read stats");
+        info!(
+            "accumulator balance read metrics: success={}",
+            accum_read_stats.success_count
+        );
+        assert!(
+            accum_read_stats.success_count > 0,
+            "expected at least one accumulator balance read"
+        );
     }
 
     #[sim_test(config = "test_config()")]
