@@ -15322,35 +15322,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-indexer-alt-restorer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "clap",
- "diesel",
- "diesel-async",
- "futures",
- "indicatif",
- "object_store 0.13.0",
- "prometheus",
- "sui-config",
- "sui-core",
- "sui-data-ingestion-core",
- "sui-field-count",
- "sui-futures",
- "sui-indexer-alt-schema",
- "sui-pg-db",
- "sui-snapshot",
- "sui-storage",
- "sui-types",
- "telemetry-subscribers",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "sui-indexer-alt-schema"
 version = "1.68.0"
 dependencies = [
