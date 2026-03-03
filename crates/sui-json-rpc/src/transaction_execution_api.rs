@@ -200,14 +200,17 @@ impl TransactionExecutionApi {
             None
         };
 
-        let object_cache = match (response.input_objects, response.output_objects) {
-            (Some(input_objects), Some(output_objects)) => {
-                let mut object_cache = ObjectProviderCache::new(self.state.clone());
+        let object_cache = if opts.show_balance_changes || opts.show_object_changes {
+            let mut object_cache = ObjectProviderCache::new(self.state.clone());
+            if let Some(input_objects) = response.input_objects {
                 object_cache.insert_objects_into_cache(input_objects);
-                object_cache.insert_objects_into_cache(output_objects);
-                Some(object_cache)
             }
-            _ => None,
+            if let Some(output_objects) = response.output_objects {
+                object_cache.insert_objects_into_cache(output_objects);
+            }
+            Some(object_cache)
+        } else {
+            None
         };
 
         let balance_changes = match &object_cache {
