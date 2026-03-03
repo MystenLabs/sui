@@ -106,10 +106,49 @@ jobs:
           # Set the output for other jobs to use
           echo "protocol_message=${message}" >> $GITHUB_OUTPUT
 
-      # Run simulator tests
-      - name: Run simtest
+      # Run simulator tests via detached execution to survive SSH session drops.
+      # The test script runs independently on the remote machine; we poll for completion
+      # with short-lived SSH calls instead of holding a single long-lived session.
+      - name: Start simtest (detached)
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} ./scripts/simtest/simtest-run.sh"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_exit_code"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && nohup bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} ./scripts/simtest/simtest-run.sh > ~/simtest_stdout.log 2>&1; echo \$? > ~/simtest_exit_code' &"
+
+      - name: Wait for simtest completion
+        run: |
+          ssh_failures=0
+          max_ssh_failures=3
+          while true; do
+            sleep 120
+            # Use echo-based check so we can distinguish "SSH failed" from "file not found".
+            # If SSH succeeds, we get DONE or RUNNING. If SSH fails, output is empty.
+            result=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
+              "if test -f ~/simtest_exit_code; then echo DONE; else echo RUNNING; fi" 2>/dev/null) || true
+            if [ "$result" = "DONE" ]; then
+              echo "Simtest completed."
+              break
+            elif [ "$result" = "RUNNING" ]; then
+              ssh_failures=0
+              echo "$(date): simtest still running..."
+              tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -5 ~/simtest_stdout.log" 2>/dev/null || true
+            else
+              # No output — SSH call itself failed
+              ssh_failures=$((ssh_failures + 1))
+              echo "$(date): SSH connection failed (attempt $ssh_failures/$max_ssh_failures)"
+              if [ $ssh_failures -ge $max_ssh_failures ]; then
+                echo "Too many consecutive SSH failures. The test may still be running on the remote machine."
+                exit 1
+              fi
+            fi
+          done
+
+      - name: Check simtest results
+        run: |
+          exit_code=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cat ~/simtest_exit_code")
+          echo "Remote simtest exited with code: $exit_code"
+          echo "--- Last 200 lines of simtest output ---"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -200 ~/simtest_stdout.log" || true
+          exit "$exit_code"
 
       - name: Collect failing tests
         id: failures
