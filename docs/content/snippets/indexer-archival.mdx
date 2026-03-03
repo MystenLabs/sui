@@ -1,5 +1,3 @@
 The Archival Store and Service are part of the [Sui data access infrastructure](/concepts/data-access/data-serving.mdx). The stack provides long-term storage and low-latency point lookups of historical on-chain data through a gRPC service backed by Google Cloud Bigtable. This stack is optimized for operators and data providers who need to serve historical transactions, checkpoints, objects, and epoch data beyond the retention horizon of full nodes or indexer databases.
 
 The Archival Service exposes the same [gRPC LedgerService API](/concepts/data-access/grpc) as a Sui full node, so existing gRPC clients can query it by changing the endpoint. The service is powered by an indexer (`sui-kvstore-alt`) that reads checkpoints from the remote checkpoint store and writes processed data to Bigtable, and a gRPC server (`sui-kv-rpc`) that reads from Bigtable to serve client requests.
-
-Together, the indexer, Bigtable store, and gRPC service form a modular archival stack for RPC providers, data indexer operators, and builders who need access to the full history of the Sui network.
