@@ -1,7 +1,17 @@
 ---
 title: Address Balances Migration Guide
 description: Migrating from Coin objects to address balances on Sui.
-keywords: [address balances, migration, coin objects, funds withdrawal, balance transfer, gas payment, SIP-58, fungible assets]
+keywords:
+  [
+    address balances,
+    migration,
+    coin objects,
+    funds withdrawal,
+    balance transfer,
+    gas payment,
+    SIP-58,
+    fungible assets,
+  ]
 ---
 
 Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This replaces the UTXO-style `Coin<T>` model with direct address-owned balances, simplifying transaction construction and eliminating coin selection complexity.
@@ -13,6 +23,7 @@ For the full specification, see [SIP-58: Sui Address Balances](https://github.co
 Previously, balances on Sui were computed by summing the values of all `Coin<T>` objects owned by an address. With address balances, each address may additionally have one address-owned balance for each currency type `T`. The total balance is the sum of all `Coin<T>` objects plus the address balance value for that coin type.
 
 `Coin<T>` and address balances coexist. Existing coins remain functional and can still be transferred with `transfer::public_transfer`. However, address balances provide significant operational advantages:
+
 - No coin selection logic required.
 - Automatic deposit merging into a single canonical balance.
 - Stateless transaction construction without querying object states.
@@ -20,45 +31,27 @@ Previously, balances on Sui were computed by summing the values of all `Coin<T>`
 
 ## Funding transactions from address balances
 
-### Before: Coin selection
+If you are not explicitly selecting coin objects for gas or as transaction arguments, the TypeScript SDK automatically checks both coin objects and address balances and draws from the correct sources. Gas is paid from address balances by default, and `coinWithBalance` draws from address balances first, falling back to coin objects only when needed.
 
-With the coin-based model, `coinWithBalance` queries owned coins and handles selection automatically at build time:
-
-```typescript
-import { coinWithBalance } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-const coin = coinWithBalance({ balance: requiredAmount });
-tx.transferObjects([coin], recipient);
-```
-
-While `coinWithBalance` abstracts away coin selection, the underlying coin-based model still requires network queries to fetch coin objects and their versions. This creates concurrency challenges when building multiple transactions in parallel.
-
-### After: Address balance withdrawals
-
-With address balances and `forceAddressBalance: true`, transactions can be built entirely offline with no network queries:
+### Using `coinWithBalance`
 
 [TypeScript SDK - `coinWithBalance`](https://sui-typescript-docs-git-mh-address-balance-docs-mysten-labs.vercel.app/sui/transactions/intents#coinwithbalance):
 
 ```typescript
-import { coinWithBalance } from '@mysten/sui/transactions';
+import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 
 const tx = new Transaction();
-const coin = coinWithBalance({ balance: requiredAmount, forceAddressBalance: true });
-tx.transferObjects([coin], recipient);
+tx.transferObjects([coinWithBalance({ balance: requiredAmount })], recipient);
 ```
 
-With `forceAddressBalance: true`, the SDK skips all coin object lookups and uses a `FundsWithdrawal` input directly. This enables fully offline transaction building with no network client required, and eliminates concurrency issues when building multiple transactions in parallel.
-
-If your funds are mixed between coins and address balances, omit `forceAddressBalance: true` and the SDK will use both address balances and coins as necessary. The address balance will be prioritized first, coins will only be used if necessary.
+If you have funds split across both address balances and coin objects, the SDK handles the combination automatically, using address balances first and falling back to coins only if necessary.
 
 `coinWithBalance` options:
+
 - `balance` (required): Amount in base units (MIST for SUI).
 - `type` (optional): Coin type, defaults to `0x2::sui::SUI`.
 - `useGasCoin` (optional): Whether to split from gas coin for SUI (default `true`). Set to `false` for sponsored transactions.
-- `forceAddressBalance` (optional): Force address balance withdrawals, enabling fully offline building (default `false`).
-
-For manual PTB construction, add a `FundsWithdrawalArg` to declare the withdrawal.
+- `forceAddressBalance` (optional): Force address balance withdrawals, skipping balance/coin lookups.
 
 ### TypeScript SDK: Manual withdrawals
 
@@ -73,17 +66,17 @@ const tx = new Transaction();
 
 // Withdraw SUI from address balance and redeem to Coin
 const [coin] = tx.moveCall({
-    target: '0x2::coin::redeem_funds',
-    typeArguments: ['0x2::sui::SUI'],
-    arguments: [tx.withdrawal({ amount: 1_000_000_000 })], // 1 SUI in MIST
+	target: '0x2::coin::redeem_funds',
+	typeArguments: ['0x2::sui::SUI'],
+	arguments: [tx.withdrawal({ amount: 1_000_000_000 })], // 1 SUI in MIST
 });
 
 // Withdraw a custom coin type
 const coinType = '0xPackageId::module::CoinType';
 const [customCoin] = tx.moveCall({
-    target: '0x2::coin::redeem_funds',
-    typeArguments: [coinType],
-    arguments: [tx.withdrawal({ amount: 1_000_000, type: coinType })],
+	target: '0x2::coin::redeem_funds',
+	typeArguments: [coinType],
+	arguments: [tx.withdrawal({ amount: 1_000_000, type: coinType })],
 });
 
 // Transfer to recipient
@@ -91,6 +84,7 @@ tx.transferObjects([coin], recipient);
 ```
 
 Parameters for `tx.withdrawal()`:
+
 - `amount` (required): Amount to withdraw in base units (number, bigint, or string).
 - `type` (optional): Coin type, defaults to SUI.
 
@@ -114,6 +108,7 @@ let withdrawal_arg = FundsWithdrawalArg {
 The helper `FundsWithdrawalArg::balance_from_sender(amount, balance_type)` provides a convenient constructor.
 
 In your PTB, pass the withdrawal input to either:
+
 - `0x2::balance::redeem_funds<T>()` to obtain a `Balance<T>`.
 - `0x2::coin::redeem_funds<T>()` to obtain a `Coin<T>`.
 
@@ -164,11 +159,10 @@ public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: With
 Transferring coins sends a coin object to the recipient:
 
 ```typescript
-import { coinWithBalance } from '@mysten/sui/transactions';
+import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 
 const tx = new Transaction();
-const coin = coinWithBalance({ balance: amount });
-tx.transferObjects([coin], recipient);
+tx.transferObjects([coinWithBalance({ balance: amount })], recipient);
 ```
 
 Each transfer creates a new object for the recipient, contributing to object proliferation. Recipients accumulate many small coin objects over time, requiring periodic consolidation.
@@ -178,14 +172,13 @@ Each transfer creates a new object for the recipient, contributing to object pro
 With address balances, use `send_funds` to deposit directly into the recipient's address balance:
 
 ```typescript
-import { coinWithBalance } from '@mysten/sui/transactions';
+import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 
 const tx = new Transaction();
-const coin = coinWithBalance({ balance: amount });
 tx.moveCall({
-    target: '0x2::coin::send_funds',
-    typeArguments: ['0x2::sui::SUI'],
-    arguments: [coin, tx.pure.address(recipient)],
+	target: '0x2::coin::send_funds',
+	typeArguments: ['0x2::sui::SUI'],
+	arguments: [coinWithBalance({ balance: amount }), tx.pure.address(recipient)],
 });
 ```
 
@@ -250,6 +243,7 @@ const tx = new Transaction();
 ```
 
 Gas coin management creates coordination challenges:
+
 - Must query current gas coin state before each transaction.
 - Parallel transactions require separate gas coins or careful sequencing.
 - Gas coin version changes after each transaction.
@@ -291,6 +285,7 @@ TransactionData::V1(TransactionDataV1 {
 ```
 
 Requirements for address balance gas payments:
+
 - `gas_data.payment` must be empty.
 - `expiration` must be `ValidDuring` with both `min_epoch` and `max_epoch` specified.
 - `max_epoch` must be at most `min_epoch + 1` (single epoch or 1-epoch range).
@@ -341,14 +336,15 @@ await send_tx_to_sponsor(userSignature, bytes);
 const { signature: sponsorSignature } = await sponsorKeypair.signTransaction(bytes);
 
 const result = await client.executeTransaction({
-    transaction: bytes,
-    signatures: [userSignature, sponsorSignature],
+	transaction: bytes,
+	signatures: [userSignature, sponsorSignature],
 });
 ```
 
 Both sender and sponsor must sign. Storage rebates are credited to the sponsor's address balance.
 
 Benefits over coin-based sponsorship:
+
 - No gas coin locking risk.
 - Sponsor doesn't need to manage gas coin inventory.
 - User can sign before sponsor, enabling simpler async flows.
@@ -365,14 +361,14 @@ To determine total balance, the RPC layer sums all coin objects for you:
 ```typescript
 // Before: Get balance (RPC sums all coin objects)
 const balance = await client.core.getBalance({ owner: address, coinType: '0x2::sui::SUI' });
-console.log(balance.totalBalance);  // Sum of all Coin<SUI> objects
+console.log(balance.totalBalance); // Sum of all Coin<SUI> objects
 ```
 
 ```typescript
 // List all balances for an address
 const { balances } = await client.core.listBalances({ owner: address });
 for (const balance of balances) {
-    console.log(`${balance.coinType}: ${balance.totalBalance}`);
+	console.log(`${balance.coinType}: ${balance.totalBalance}`);
 }
 ```
 
@@ -392,8 +388,8 @@ The same RPC methods now include address balance information:
 
 ```typescript
 const balance = await client.core.getBalance({ owner: address, coinType: '0x2::sui::SUI' });
-console.log(balance.totalBalance);           // Sum of coins + address balance
-console.log(balance.fundsInAddressBalance);  // Amount in address balance only
+console.log(balance.totalBalance); // Sum of coins + address balance
+console.log(balance.fundsInAddressBalance); // Amount in address balance only
 ```
 
 A new `fundsInAddressBalance` field indicates address balance holdings.
@@ -413,13 +409,14 @@ curl -s https://fullnode.testnet.sui.io \
 ```
 
 Response:
+
 ```json
 {
-    "coinType": "0x2::sui::SUI",
-    "coinObjectCount": 2,
-    "totalBalance": "99998990120",
-    "lockedBalance": {},
-    "fundsInAddressBalance": "5000000"
+	"coinType": "0x2::sui::SUI",
+	"coinObjectCount": 2,
+	"totalBalance": "99998990120",
+	"lockedBalance": {},
+	"fundsInAddressBalance": "5000000"
 }
 ```
 
@@ -454,18 +451,20 @@ buf curl --protocol grpc https://fullnode.testnet.sui.io/sui.rpc.v2.StateService
 ```
 
 Response:
+
 ```json
 {
-    "balance": {
-        "coinType": "0x2::sui::SUI",
-        "balance": "99998990120",
-        "addressBalance": "5000000",
-        "coinBalance": "99993990120"
-    }
+	"balance": {
+		"coinType": "0x2::sui::SUI",
+		"balance": "99998990120",
+		"addressBalance": "5000000",
+		"coinBalance": "99993990120"
+	}
 }
 ```
 
 Fields:
+
 - `coinBalance`: Total held in coin objects.
 - `addressBalance`: Amount held in address balance.
 - `balance`: Sum of the two.
@@ -486,28 +485,32 @@ Copy the examples below into [GraphQL IDE (Testnet)](https://graphql.testnet.sui
 ```graphql
 # Single balance
 {
-    address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
-        balance(coinType: "0x2::sui::SUI") {
-            coinType { repr }
-            addressBalance
-            coinBalance
-            totalBalance
-        }
-    }
+	address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
+		balance(coinType: "0x2::sui::SUI") {
+			coinType {
+				repr
+			}
+			addressBalance
+			coinBalance
+			totalBalance
+		}
+	}
 }
 
 # All balances
 {
-    address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
-        balances {
-            nodes {
-                coinType { repr }
-                addressBalance
-                coinBalance
-                totalBalance
-            }
-        }
-    }
+	address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
+		balances {
+			nodes {
+				coinType {
+					repr
+				}
+				addressBalance
+				coinBalance
+				totalBalance
+			}
+		}
+	}
 }
 ```
 
@@ -565,6 +568,7 @@ let balance_changes: Vec<BalanceChange> = derive_balance_changes(
 ```
 
 The algorithm:
+
 1. **Subtract input coins**: For each input coin object, subtract its value from `(owner, coin_type)`.
 2. **Add output coins**: For each mutated/created coin object, add its value to `(owner, coin_type)`.
 3. **Process accumulator events**: For each accumulator event with a `Balance<T>` type:
@@ -635,14 +639,14 @@ Or using `coinWithBalance` in TypeScript:
 [TypeScript SDK - `coinWithBalance`](https://sui-typescript-docs-git-mh-address-balance-docs-mysten-labs.vercel.app/sui/transactions/intents#coinwithbalance):
 
 ```typescript
-import { coinWithBalance } from '@mysten/sui/transactions';
+import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 
 const tx = new Transaction();
-const coin = coinWithBalance({ balance: totalAmount });
+
 tx.moveCall({
-    target: '0x2::coin::send_funds',
-    typeArguments: ['0x2::sui::SUI'],
-    arguments: [coin, tx.pure.address(yourAddress)],
+	target: '0x2::coin::send_funds',
+	typeArguments: ['0x2::sui::SUI'],
+	arguments: [coinWithBalance({ balance: totalAmount }), tx.pure.address(yourAddress)],
 });
 ```
 
