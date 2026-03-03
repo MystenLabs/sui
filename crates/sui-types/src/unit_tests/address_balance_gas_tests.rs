@@ -259,7 +259,8 @@ fn test_address_balance_payment_one_epoch_range_validation() {
 
 #[test]
 fn test_address_balance_payment_multi_epoch_range_rejected() {
-    let config = create_config_with_address_balance_gas_payments_enabled();
+    // Use config without relax_valid_during_for_owned_inputs to test legacy behavior
+    let config = create_config_without_relax_valid_during();
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -315,7 +316,8 @@ fn test_address_balance_payment_timestamp_validation() {
 
 #[test]
 fn test_address_balance_payment_missing_epochs() {
-    let config = create_config_with_address_balance_gas_payments_enabled();
+    // Use config without relax_valid_during_for_owned_inputs to test legacy behavior
+    let config = create_config_without_relax_valid_during();
 
     fn assert_missing_epoch_error(
         config: &ProtocolConfig,
@@ -441,7 +443,8 @@ fn test_regular_gas_payment_with_invalid_valid_during_timestamp() {
 
 #[test]
 fn test_regular_gas_payment_with_invalid_valid_during_multi_epoch() {
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    // Use config without relax_valid_during_for_owned_inputs to test legacy behavior
+    let config = create_config_without_relax_valid_during();
 
     let tx_data = create_test_transaction_data(
         vec![random_object_ref()],
@@ -469,7 +472,8 @@ fn test_regular_gas_payment_with_invalid_valid_during_multi_epoch() {
 
 #[test]
 fn test_regular_gas_payment_with_invalid_valid_during_missing_epochs() {
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    // Use config without relax_valid_during_for_owned_inputs to test legacy behavior
+    let config = create_config_without_relax_valid_during();
 
     let tx_data = create_test_transaction_data(
         vec![random_object_ref()],
@@ -497,7 +501,8 @@ fn test_regular_gas_payment_with_invalid_valid_during_missing_epochs() {
 
 #[test]
 fn test_regular_gas_payment_with_invalid_valid_during_partial_epochs() {
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    // Use config without relax_valid_during_for_owned_inputs to test legacy behavior
+    let config = create_config_without_relax_valid_during();
 
     let tx_data = create_test_transaction_data(
         vec![random_object_ref()],
