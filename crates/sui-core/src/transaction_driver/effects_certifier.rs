@@ -771,16 +771,8 @@ impl EffectsCertifier {
         QuorumTransactionResponse {
             effects: details,
             events: executed_data.events,
-            input_objects: if !executed_data.input_objects.is_empty() {
-                Some(executed_data.input_objects)
-            } else {
-                None
-            },
-            output_objects: if !executed_data.output_objects.is_empty() {
-                Some(executed_data.output_objects)
-            } else {
-                None
-            },
+            input_objects: Some(executed_data.input_objects),
+            output_objects: Some(executed_data.output_objects),
             auxiliary_data: None,
         }
     }

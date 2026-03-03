@@ -3435,3 +3435,65 @@ async fn test_two_large_reservations_overflow() {
         .await;
     assert!(result.is_err());
 }
+
+/// Regression test: sui_executeTransactionBlock with showBalanceChanges should return
+/// non-empty balance changes for address-balance-backed transactions.
+/// Previously, empty input_objects were converted to None, causing balance change
+/// computation to be skipped entirely in the JSON RPC execute path.
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_execute_balance_changes_with_address_balance_gas() {
+    use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let deposit_amount = 10_000_000u64;
+    let (sender, _gas_package_id) =
+        setup_address_balance_account(&mut test_env, deposit_amount).await;
+
+    let withdraw_amount = 1_000u64;
+    let tx_data = create_withdraw_balance_transaction(
+        sender,
+        test_env.rgp,
+        test_env.chain_id,
+        withdraw_amount,
+        0,
+    );
+
+    let signed_tx = test_env.cluster.sign_transaction(&tx_data).await;
+
+    // Execute via JSON RPC (the buggy path) with show_balance_changes
+    let sui_client = test_env.cluster.sui_client();
+    let options = SuiTransactionBlockResponseOptions {
+        show_balance_changes: true,
+        show_effects: true,
+        ..Default::default()
+    };
+    let response = sui_client
+        .quorum_driver_api()
+        .execute_transaction_block(signed_tx, options, None)
+        .await
+        .expect("Transaction execution should succeed");
+
+    // The transaction should succeed
+    assert!(
+        response.effects.as_ref().unwrap().status().is_ok(),
+        "Transaction should succeed, got: {:?}",
+        response.effects.as_ref().unwrap().status()
+    );
+
+    // Balance changes should NOT be empty — this was the bug
+    let balance_changes = response
+        .balance_changes
+        .expect("balance_changes should be Some");
+    assert!(
+        !balance_changes.is_empty(),
+        "balance_changes should not be empty for address-balance transaction executed via JSON RPC"
+    );
+}
