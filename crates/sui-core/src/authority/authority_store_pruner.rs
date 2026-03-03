@@ -819,15 +819,9 @@ impl AuthorityStorePruner {
 
         let tick_duration =
             Duration::from_millis(Self::pruning_tick_duration_ms(epoch_duration_ms));
-        let pruning_initial_delay = if cfg!(msim) {
-            Duration::from_millis(1)
-        } else {
-            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60 * 60))
-        };
-        let mut objects_prune_interval =
-            tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+        let mut objects_prune_interval = tokio::time::interval_at(Instant::now(), tick_duration);
         let mut checkpoints_prune_interval =
-            tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+            tokio::time::interval_at(Instant::now(), tick_duration);
 
         metrics
             .num_epochs_to_retain_for_objects
