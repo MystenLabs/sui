@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::graph_map::{GraphMap, NodeIndex};
+use crate::graph_map::{EdgeEntry, GraphMap, NodeIndex};
 use crate::{
     MeterResult, Result, bail, ensure, error,
     meter::Meter,
@@ -116,10 +116,12 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         r: Ref,
     ) -> Result<impl Iterator<Item = (&Edge<Loc, Lbl>, Ref)> + '_> {
         let r_idx = self.node(&r)?.node_index();
-        Ok(self.successors_idx(r_idx)?.map(move |(e, s_idx)| {
-            let s = *self.graph.node_weight(s_idx).unwrap();
-            (e, s)
-        }))
+        ensure!(
+            self.graph.contains_node(r_idx),
+            "missing ref {:?} in graph",
+            r_idx
+        );
+        Ok(self.graph.outgoing_edges(r_idx).map(|(e, s)| (e, *s)))
     }
 
     /// Returns the direct successors of the specified reference by NodeIndex
@@ -128,25 +130,28 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         r: NodeIndex,
     ) -> Result<impl Iterator<Item = (&Edge<Loc, Lbl>, NodeIndex)> + '_> {
         ensure!(self.graph.contains_node(r), "missing ref {:?} in graph", r);
-        Ok(self.graph.outgoing_edges(r))
+        Ok(self.graph.outgoing_edges_idx(r))
     }
 
     /// Returns the direct predecessors of the specified reference
     fn predecessors(&self, r: Ref) -> Result<impl Iterator<Item = (Ref, &Edge<Loc, Lbl>)> + '_> {
         let r_idx = self.node(&r)?.node_index();
-        Ok(self.predecessors_idx(r_idx)?.map(move |(p_idx, e)| {
-            let p = *self.graph.node_weight(p_idx).unwrap();
-            (p, e)
-        }))
+        ensure!(
+            self.graph.contains_node(r_idx),
+            "missing ref {:?} in graph",
+            r_idx
+        );
+        Ok(self.graph.incoming_edges(r_idx).map(|(p, e)| (*p, e)))
     }
 
     /// Returns the direct predecessors of the specified reference by NodeIndex
+    #[allow(unused)]
     fn predecessors_idx(
         &self,
         r: NodeIndex,
     ) -> Result<impl Iterator<Item = (NodeIndex, &Edge<Loc, Lbl>)> + '_> {
         ensure!(self.graph.contains_node(r), "missing ref {:?} in graph", r);
-        Ok(self.graph.incoming_edges(r))
+        Ok(self.graph.incoming_edges_idx(r))
     }
 
     fn add_ref(&mut self, loc: Loc, is_mut: bool) -> Result<(Ref, NodeIndex)> {
@@ -327,7 +332,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     /// for each new reference, determine the edge new --> x and x --> new based on the extension
     /// provided
     fn determine_all_new_edges<M: Meter>(
-        &mut self,
+        &self,
         acc: &mut BTreeMap<(NodeIndex, NodeIndex), Vec<Regex<Lbl>>>,
         sources: &BTreeSet<NodeIndex>,
         ext: Extension<Lbl>,
@@ -346,7 +351,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         for source in sources {
             nodes_visited = nodes_visited.saturating_add(1);
             // x --> source
-            for (x, edge) in self.graph.incoming_edges(*source) {
+            for (x, edge) in self.graph.incoming_edges_idx(*source) {
                 nodes_visited = nodes_visited.saturating_add(1);
                 for x_to_source in edge.regexes() {
                     edges_visited = edges_visited.saturating_add(1);
@@ -357,7 +362,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
                 }
             }
             // source --> x
-            for (edge, x) in self.graph.outgoing_edges(*source) {
+            for (edge, x) in self.graph.outgoing_edges_idx(*source) {
                 nodes_visited = nodes_visited.saturating_add(1);
                 for source_to_x in edge.regexes() {
                     edges_visited = edges_visited.saturating_add(1);
@@ -534,29 +539,24 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         self.check_join_invariants(other);
         let mut total_edge_size_increase = 0usize;
         let self_keys = self.keys().collect::<BTreeSet<_>>();
-        let other_all_edges = other
+        for (p, other_edge, s) in other
             .graph
             .all_edges()
-            .map(|(p_other_idx, e, s_other_idx)| {
-                let p = *other.graph.node_weight(p_other_idx).unwrap();
-                let s = *other.graph.node_weight(s_other_idx).unwrap();
-                (p, e, s)
-            });
-        for (p, other_edge, s) in
-            other_all_edges.filter(|(p, _, s)| self_keys.contains(p) && self_keys.contains(s))
+            .filter(|(p, _, s)| self_keys.contains(p) && self_keys.contains(s))
         {
-            let p_self_idx = self.node(&p)?.node_index();
-            let s_self_idx = self.node(&s)?.node_index();
-            let self_edge_size_increase =
-                if let Some(self_edge) = self.graph.edge_weight_mut(p_self_idx, s_self_idx) {
-                    self_edge.join(other_edge)
-                } else {
+            let p_self_idx = self.node(p)?.node_index();
+            let s_self_idx = self.node(s)?.node_index();
+            let self_edge_size_increase = match self.graph.edge_weight_entry(p_self_idx, s_self_idx)
+            {
+                EdgeEntry::Occupied(self_edge) => self_edge.into_mut().join(other_edge),
+                EdgeEntry::Vacant(vacant_self_edge) => {
                     let edge = other_edge.clone();
                     let size = edge.abstract_size();
                     debug_assert!(size > 0);
-                    self.graph.add_edge(p_self_idx, edge, s_self_idx);
+                    vacant_self_edge.insert(edge);
                     size
-                };
+                }
+            };
             total_edge_size_increase =
                 total_edge_size_increase.saturating_add(self_edge_size_increase);
         }
@@ -637,6 +637,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     // - both graphs satisfy their invariants
     // - all nodes are canonical
     // - all nodes in self are also in other
+    #[inline(always)]
     fn check_join_invariants(&self, _other: &Self) {
         #[cfg(debug_assertions)]
         {
@@ -662,6 +663,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     // - all nodes are present in map and graph
     // - all nodes have a self epsilon
     // - the abstract size is correct
+    #[inline(always)]
     pub fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {
@@ -676,11 +678,9 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
                 let is_new = node_indices.insert(node.node_index());
                 debug_assert!(is_new, "duplicate node index");
             }
-            for (p_idx, e, s_idx) in self.graph.all_edges() {
-                let p = *self.graph.node_weight(p_idx).unwrap();
-                let s = *self.graph.node_weight(s_idx).unwrap();
-                debug_assert!(self.nodes.contains_key(&p));
-                debug_assert!(self.nodes.contains_key(&s));
+            for (p, e, s) in self.graph.all_edges() {
+                debug_assert!(self.nodes.contains_key(p));
+                debug_assert!(self.nodes.contains_key(s));
                 e.check_invariants();
             }
             for node in self.nodes.values() {
@@ -689,7 +689,8 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         }
     }
 
-    /// Check that nodes have exactly one self edge and that it is epsilon
+    // Check that nodes have exactly one self edge and that it is epsilon
+    #[inline(always)]
     pub fn check_self_epsilon_invariant(&self, _r: NodeIndex) {
         #[cfg(debug_assertions)]
         {

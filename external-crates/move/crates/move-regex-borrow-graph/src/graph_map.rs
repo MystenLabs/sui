@@ -17,8 +17,10 @@ pub struct GraphMap<N, E> {
     edge_weights: IndexMap<(NodeIndex, NodeIndex), E>,
 }
 
+pub type EdgeEntry<'a, E> = indexmap::map::Entry<'a, (NodeIndex, NodeIndex), E>;
+
 impl<N, E> GraphMap<N, E> {
-    /// Creates a  new graph with a given capacity for the nodes. This number is assumed to be
+    /// Creates a new graph with a given capacity for the nodes. This number is assumed to be
     /// the maximum number of canonical references at the end of a block
     pub fn new(canonical_reference_capacity: usize) -> Self {
         debug_assert!(canonical_reference_capacity < 512);
@@ -38,7 +40,7 @@ impl<N, E> GraphMap<N, E> {
         self.edge_weights.clear();
     }
 
-    /// Recalculate the `next` field basedo on the current nodes. This should be called after
+    /// Recalculate the `next` field based on the current nodes. This should be called after
     /// canonicalization
     pub fn minimize(&mut self) {
         let mut max_next = 0;
@@ -57,12 +59,23 @@ impl<N, E> GraphMap<N, E> {
     pub fn add_node(&mut self, weight: N) -> NodeIndex {
         let index = NodeIndex(self.next);
         self.next = self.next.checked_add(1).expect("NodeIndex overflow");
-        self.node_weights.insert(index, weight);
+        let prev = self.node_weights.insert(index, weight);
+        assert!(prev.is_none(), "NodeIndex {:?} already exists", index);
         index
     }
 
     /// Adds an edge (with the given weight) to the graph. The nodes must already exist.
     pub fn add_edge(&mut self, from: NodeIndex, weight: E, to: NodeIndex) {
+        assert!(
+            self.contains_node(from),
+            "Cannot add edge from unbound node: {:?}",
+            from
+        );
+        assert!(
+            self.contains_node(to),
+            "Cannot add edge to unbound node: {:?}",
+            to
+        );
         let prev = self.edge_weights.insert((from, to), weight);
         assert!(
             prev.is_none(),
@@ -100,8 +113,15 @@ impl<N, E> GraphMap<N, E> {
 
     /// Returns a mutable reference to the weight of the edge from `from` to `to`, or None if the
     /// edge does not exist.
+    #[allow(unused)]
     pub fn edge_weight_mut(&mut self, from: NodeIndex, to: NodeIndex) -> Option<&mut E> {
         self.edge_weights.get_mut(&(from, to))
+    }
+
+    /// Returns a mutable entry to the weight of the edge from `from` to `to`, or None if the
+    /// edge does not exist.
+    pub fn edge_weight_entry(&mut self, from: NodeIndex, to: NodeIndex) -> EdgeEntry<'_, E> {
+        self.edge_weights.entry((from, to))
     }
 
     /// Removes the specified node and all edges to/from it. Searching for the edges to remove
@@ -115,7 +135,10 @@ impl<N, E> GraphMap<N, E> {
     }
 
     /// Returns an iterator over the outgoing edges from the specified node
-    pub fn outgoing_edges(&self, index: NodeIndex) -> impl Iterator<Item = (&E, NodeIndex)> + '_ {
+    pub fn outgoing_edges_idx(
+        &self,
+        index: NodeIndex,
+    ) -> impl Iterator<Item = (&E, NodeIndex)> + '_ {
         self.edge_weights.iter().filter_map(
             move |((p, s), e)| {
                 if *p == index { Some((e, *s)) } else { None }
@@ -123,8 +146,22 @@ impl<N, E> GraphMap<N, E> {
         )
     }
 
+    /// Returns an iterator over the outgoing edges (with the node weight) from the specified node
+    pub fn outgoing_edges(&self, index: NodeIndex) -> impl Iterator<Item = (&E, &N)> + '_ {
+        self.edge_weights.iter().filter_map(move |((p, s), e)| {
+            if *p == index {
+                Some((e, self.node_weight(*s).unwrap()))
+            } else {
+                None
+            }
+        })
+    }
+
     /// Returns an iterator over the incoming edges to the specified node
-    pub fn incoming_edges(&self, index: NodeIndex) -> impl Iterator<Item = (NodeIndex, &E)> + '_ {
+    pub fn incoming_edges_idx(
+        &self,
+        index: NodeIndex,
+    ) -> impl Iterator<Item = (NodeIndex, &E)> + '_ {
         self.edge_weights.iter().filter_map(
             move |((p, s), e)| {
                 if *s == index { Some((*p, e)) } else { None }
@@ -132,16 +169,37 @@ impl<N, E> GraphMap<N, E> {
         )
     }
 
+    /// Returns an iterator over the incoming edges (with the node weight) to the specified node
+    pub fn incoming_edges(&self, index: NodeIndex) -> impl Iterator<Item = (&N, &E)> + '_ {
+        self.edge_weights.iter().filter_map(move |((p, s), e)| {
+            if *s == index {
+                Some((self.node_weight(*p).unwrap(), e))
+            } else {
+                None
+            }
+        })
+    }
+
     /// Returns an iterator over all edges in the graph, as (from, weight, to) triples.
-    pub fn all_edges(&self) -> impl Iterator<Item = (NodeIndex, &E, NodeIndex)> + '_ {
+    pub fn all_edges_idx(&self) -> impl Iterator<Item = (NodeIndex, &E, NodeIndex)> + '_ {
         self.edge_weights.iter().map(|((p, s), e)| (*p, e, *s))
+    }
+
+    /// Returns an iterator over all edges in the graph, as (from, weight, to) triples with
+    /// node weights.
+    pub fn all_edges(&self) -> impl Iterator<Item = (&N, &E, &N)> + '_ {
+        self.edge_weights.iter().map(|((p, s), e)| {
+            let p_weight = self.node_weight(*p).unwrap();
+            let s_weight = self.node_weight(*s).unwrap();
+            (p_weight, e, s_weight)
+        })
     }
 
     pub(crate) fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {
             // Check all edges point to nodes in the graph
-            for (from, _weight, to) in self.all_edges() {
+            for (from, _weight, to) in self.all_edges_idx() {
                 debug_assert!(
                     self.contains_node(from),
                     "Edge from non-existent node: {:?}",

@@ -186,7 +186,7 @@ fn outgoing_edges_returns_correct_edges() {
     g.add_edge(n1, "n1_to_n3", n3);
     g.add_edge(n2, "n2_to_n3", n3);
 
-    let n1_outgoing: Vec<_> = g.outgoing_edges(n1).collect();
+    let n1_outgoing: Vec<_> = g.outgoing_edges_idx(n1).collect();
     assert_eq!(n1_outgoing.len(), 2);
     assert!(n1_outgoing.contains(&(&"n1_to_n2", n2)));
     assert!(n1_outgoing.contains(&(&"n1_to_n3", n3)));
@@ -199,7 +199,7 @@ fn outgoing_edges_empty_for_node_with_no_outgoing() {
     let n2 = g.add_node(2);
     g.add_edge(n2, "n2_to_n1", n1);
 
-    let outgoing: Vec<_> = g.outgoing_edges(n1).collect();
+    let outgoing: Vec<_> = g.outgoing_edges_idx(n1).collect();
     assert!(outgoing.is_empty());
 }
 
@@ -213,7 +213,7 @@ fn incoming_edges_returns_correct_edges() {
     g.add_edge(n2, "n2_to_n3", n3);
     g.add_edge(n1, "n1_to_n2", n2);
 
-    let incoming: Vec<_> = g.incoming_edges(n3).collect();
+    let incoming: Vec<_> = g.incoming_edges_idx(n3).collect();
     assert_eq!(incoming.len(), 2);
     assert!(incoming.contains(&(n1, &"n1_to_n3")));
     assert!(incoming.contains(&(n2, &"n2_to_n3")));
@@ -240,7 +240,7 @@ fn all_edges_returns_all_edges() {
     g.add_edge(n2, "n2_to_n3", n3);
     g.add_edge(n1, "n1_to_n3", n3);
 
-    let all: Vec<_> = g.all_edges().collect();
+    let all: Vec<_> = g.all_edges_idx().collect();
     assert_eq!(all.len(), 3);
     assert!(all.contains(&(n1, &"n1_to_n2", n2)));
     assert!(all.contains(&(n2, &"n2_to_n3", n3)));
@@ -424,21 +424,29 @@ fn edge_iterators_consistent_and_all_contained() {
     g.add_edge(n2, "n2_n3", n3);
 
     // Collect edges from all_edges
-    let all_edges_set: BTreeSet<(NodeIndex, &str, NodeIndex)> =
-        g.all_edges().map(|(from, e, to)| (from, *e, to)).collect();
+    let all_edges_set: BTreeSet<(NodeIndex, &str, NodeIndex)> = g
+        .all_edges_idx()
+        .map(|(from, e, to)| (from, *e, to))
+        .collect();
 
     // Collect edges by iterating outgoing_edges for each node
     let outgoing_set = nodes
         .iter()
         .copied()
-        .flat_map(|from| g.outgoing_edges(from).map(move |(e, to)| (from, *e, to)))
+        .flat_map(|from| {
+            g.outgoing_edges_idx(from)
+                .map(move |(e, to)| (from, *e, to))
+        })
         .collect();
 
     // Collect edges by iterating incoming_edges for each node
     let incoming_set = nodes
         .iter()
         .copied()
-        .flat_map(|to| g.incoming_edges(to).map(move |(from, e)| (from, *e, to)))
+        .flat_map(|to| {
+            g.incoming_edges_idx(to)
+                .map(move |(from, e)| (from, *e, to))
+        })
         .collect();
 
     // All three methods should produce the same set of edges

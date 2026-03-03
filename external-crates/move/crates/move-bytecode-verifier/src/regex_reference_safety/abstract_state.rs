@@ -657,9 +657,12 @@ impl AbstractState {
             && self.graph.is_fresh()
     }
 
+    #[inline(always)]
     pub(crate) fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {
+            // We use a dummy meter because these only happen in debug mode, and we
+            // do not want to impact metering behavior to check them.
             let dummy_meter = &mut move_regex_borrow_graph::meter::DummyMeter;
             self.graph.check_invariants();
             debug_assert!(self.is_canonical() || self.is_fresh());
@@ -756,43 +759,3 @@ impl<M: Meter + ?Sized> move_regex_borrow_graph::meter::Meter for GraphMeter<'_,
             .add_items(Scope::Function, PER_GRAPH_ITEM, total_edge_size)
     }
 }
-
-// fn charge_graph_size(size: usize, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
-//     let size = max(size, 1);
-//     meter.add_items(Scope::Function, PER_GRAPH_ITEM, size)
-// }
-
-// fn charge_graph_size_increase(
-//     previous: usize,
-//     current: usize,
-//     meter: &mut (impl Meter + ?Sized),
-// ) -> PartialVMResult<()> {
-//     let increase = max(current.saturating_sub(previous), 1);
-//     charge_graph_size(increase, meter)
-// }
-
-// fn charge_join(
-//     size1: usize,
-//     size2: usize,
-//     meter: &mut (impl Meter + ?Sized),
-// ) -> PartialVMResult<()> {
-//     let size1 = max(size1, 1);
-//     let size2 = max(size2, 1);
-//     let size = size1.saturating_add(size2);
-//     meter.add_items(Scope::Function, JOIN_ITEM_COST, size)
-// }
-
-// fn all_borrowed_by_size(borrows_map: &BTreeMap<Ref, BTreeMap<Ref, Paths>>) -> usize {
-//     borrows_map
-//         .iter()
-//         .flat_map(|(_, paths_map)| paths_map.values())
-//         .flatten()
-//         .fold(0, |acc, path| acc.saturating_add(path.abstract_size()))
-// }
-
-// fn borrowed_by_size(paths_map: &BTreeMap<Ref, Paths>) -> usize {
-//     paths_map
-//         .iter()
-//         .flat_map(|(_, paths)| paths)
-//         .fold(0, |acc, path| acc.saturating_add(path.abstract_size()))
-// }
