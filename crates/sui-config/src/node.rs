@@ -550,7 +550,7 @@ impl ExecutionCacheConfig {
             .unwrap_or_else(|| match self {
                 ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
                 ExecutionCacheConfig::WritebackCache { max_cache_size, .. } => {
-                    max_cache_size.unwrap_or(100000)
+                    max_cache_size.unwrap_or(200000)
                 }
             })
     }
