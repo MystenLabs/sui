@@ -1,0 +1,46 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E04021]: invalid number after type inference
+  ┌─ tests/development/typing/signed_int_inferred_literal_bounds.move:7:22
+  │
+7 │         let _x: i8 = 128;
+  │                 --   ^^^
+  │                 │    │
+  │                 │    Invalid numerical literal
+  │                 │    Annotating the literal might help inference: '128i16'
+  │                 Expected a literal of type 'i8', but the value is too large.
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/development/typing/signed_int_inferred_literal_bounds.move:15:23
+   │
+15 │         let _x: i16 = 32768;
+   │                 ---   ^^^^^
+   │                 │     │
+   │                 │     Invalid numerical literal
+   │                 │     Annotating the literal might help inference: '32768i32'
+   │                 Expected a literal of type 'i16', but the value is too large.
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/development/typing/signed_int_inferred_literal_bounds.move:23:23
+   │
+23 │         let _x: i32 = 2147483648;
+   │                 ---   ^^^^^^^^^^
+   │                 │     │
+   │                 │     Invalid numerical literal
+   │                 │     Annotating the literal might help inference: '2147483648i64'
+   │                 Expected a literal of type 'i32', but the value is too large.
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/development/typing/signed_int_inferred_literal_bounds.move:31:23
+   │
+31 │         let _x: i64 = 9223372036854775808;
+   │                 ---   ^^^^^^^^^^^^^^^^^^^
+   │                 │     │
+   │                 │     Invalid numerical literal
+   │                 │     Annotating the literal might help inference: '9223372036854775808i128'
+   │                 Expected a literal of type 'i64', but the value is too large.

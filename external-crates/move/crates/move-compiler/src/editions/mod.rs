@@ -55,6 +55,7 @@ pub enum FeatureGate {
     ModuleLabel,
     ModuleExtension,
     StringLiterals,
+    SignedIntegers,
 }
 
 /// Compiler flavor — selects syntax and semantic rules (e.g. `Core` vs `Sui`).
@@ -152,7 +153,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[FeatureGate::ModuleExtension];
 
 const E2024_BETA_FEATURES: &[FeatureGate] = &[];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::SignedIntegers];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 
@@ -320,6 +321,7 @@ impl FeatureGate {
             FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
             FeatureGate::ModuleExtension => "module extensions are",
             FeatureGate::StringLiterals => "string literals (without a leading 'b' or 'x') are",
+            FeatureGate::SignedIntegers => "Signed integer types are",
         }
     }
 }
