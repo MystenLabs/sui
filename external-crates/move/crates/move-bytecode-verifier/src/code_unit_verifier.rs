@@ -158,6 +158,7 @@ pub fn verify_function<'env>(
     AcquiresVerifier::verify(verifier_config, module, index, function_definition, meter)?;
 
     meter.transfer(Scope::Function, Scope::Module, 1.0)?;
+    regex_reference_safety_meter.transfer(Scope::Function, Scope::Module, 1.0)?;
 
     Ok(num_back_edges)
 }
