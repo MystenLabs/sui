@@ -160,11 +160,13 @@ impl<'a> TransactionPackageStore<'a> {
     /// the cache for any packages that have been loaded this transaction, and then in the backing store.
     /// If found, it will be returned as a [`SerializedPackage`].
     fn fetch_package(&self, package_version_id: VersionId) -> SuiResult<Option<SerializedPackage>> {
-        self.fetch_move_package(package_version_id).map(|opt_pkg| {
-            opt_pkg
-                .as_ref()
-                .map(|pkg| pkg.as_ref().into_serialized_move_package())
-        })
+        self.fetch_move_package(package_version_id)
+            .and_then(|opt_pkg| {
+                opt_pkg
+                    .as_ref()
+                    .map(|pkg| pkg.as_ref().into_serialized_move_package())
+                    .transpose()
+            })
     }
 }
 

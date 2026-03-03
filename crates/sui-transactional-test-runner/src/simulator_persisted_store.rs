@@ -490,7 +490,8 @@ impl ModuleResolver for PersistedStore {
         for (i, id) in ids.iter().enumerate() {
             packages[i] = self
                 .get_package_object(&ObjectID::from(*id))?
-                .map(|pkg| pkg.move_package().into_serialized_move_package());
+                .map(|pkg| pkg.move_package().into_serialized_move_package())
+                .transpose()?;
         }
         Ok(packages)
     }
@@ -500,8 +501,9 @@ impl ModuleResolver for PersistedStore {
         ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         ids.map(|id| {
-            self.get_package_object(&ObjectID::from(*id))
-                .map(|x| x.map(|pkg| pkg.move_package().into_serialized_move_package()))
+            let pkg = self.get_package_object(&ObjectID::from(*id))?;
+            pkg.map(|pkg| pkg.move_package().into_serialized_move_package())
+                .transpose()
         })
         .collect()
     }
