@@ -253,8 +253,7 @@ impl CheckpointStoreTables {
             (
                 "checkpoint_content",
                 digest_config.clone().with_config(
-                    KeySpaceConfig::new()
-                        .with_relocation_filter(|_, _| Decision::Remove),
+                    KeySpaceConfig::new().with_relocation_filter(|_, _| Decision::Remove),
                 ),
             ),
             (
