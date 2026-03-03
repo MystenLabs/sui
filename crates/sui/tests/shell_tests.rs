@@ -90,31 +90,52 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         std::fs::read_to_string(path)?,
         output.status.success(),
         output.status.code().unwrap_or(!0),
-        // Convert windows path outputs on the snapshot to regular linux ones.
-        String::from_utf8_lossy(&output.stdout)
-            .replace(r"\\", "/")
-            .replace(r"\", "/"),
-        String::from_utf8_lossy(&output.stderr)
-            .replace(r"\\", "/")
-            .replace(r"\", "/"),
+        // Convert Windows paths in snapshots to Unix-like separators for consistency.
+        normalize_snapshot_output(&output.stdout),
+        normalize_snapshot_output(&output.stderr),
     );
 
-    let result = result
-        // redact the temporary directory path
-        .replace(temp_config_dir.path().to_string_lossy().as_ref(), "<ROOT>")
-        // Redact the sandbox directory path so we can retain snapshots easily.
-        // We canonicalize also to make sure we catch absolute paths too.
-        .replace(
-            sandbox.canonicalize().unwrap().to_string_lossy().as_ref(),
-            "<SANDBOX_DIR>",
-        )
-        .replace(sandbox.to_string_lossy().as_ref(), "<SANDBOX_DIR>");
+    let result = redact_path_variants(result, temp_config_dir.path(), "<ROOT>");
+    let result = redact_path_variants(result, sandbox, "<SANDBOX_DIR>");
 
     insta_assert! {
         input_path: path,
         contents: result,
     }
     Ok(())
+}
+
+fn normalize_snapshot_output(bytes: &[u8]) -> String {
+    normalize_snapshot_text(String::from_utf8_lossy(bytes).as_ref())
+}
+
+fn normalize_snapshot_text(value: &str) -> String {
+    value.replace(r"\\", "/").replace(r"\", "/")
+}
+
+fn path_variants_for_snapshot(path: &Path) -> Vec<String> {
+    let mut variants = vec![normalize_snapshot_text(path.to_string_lossy().as_ref())];
+
+    if let Ok(canonical_path) = path.canonicalize() {
+        let canonical = canonical_path.to_string_lossy();
+        variants.push(normalize_snapshot_text(canonical.as_ref()));
+
+        #[cfg(windows)]
+        if let Some(stripped) = canonical.strip_prefix(r"\\?\") {
+            variants.push(normalize_snapshot_text(stripped));
+        }
+    }
+
+    variants.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+    variants.dedup();
+    variants
+}
+
+fn redact_path_variants(mut text: String, path: &Path, marker: &str) -> String {
+    for variant in path_variants_for_snapshot(path) {
+        text = text.replace(variant.as_str(), marker);
+    }
+    text
 }
 
 /// Create a config directory containing a single environment called "testnet" with no cached
