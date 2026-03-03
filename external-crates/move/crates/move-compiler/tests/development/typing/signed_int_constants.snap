@@ -1,0 +1,141 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E04012]: invalid type for constant
+  ┌─ tests/development/typing/signed_int_constants.move:5:17
+  │
+5 │     const C_I8: i8 = 42i8;
+  │                 ^^
+  │                 │
+  │                 Unpermitted constant type
+  │                 Found: 'i8'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+  ┌─ tests/development/typing/signed_int_constants.move:6:18
+  │
+6 │     const C_I16: i16 = 1000i16;
+  │                  ^^^
+  │                  │
+  │                  Unpermitted constant type
+  │                  Found: 'i16'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+  ┌─ tests/development/typing/signed_int_constants.move:7:18
+  │
+7 │     const C_I32: i32 = 100000i32;
+  │                  ^^^
+  │                  │
+  │                  Unpermitted constant type
+  │                  Found: 'i32'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+  ┌─ tests/development/typing/signed_int_constants.move:8:18
+  │
+8 │     const C_I64: i64 = 1000000i64;
+  │                  ^^^
+  │                  │
+  │                  Unpermitted constant type
+  │                  Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+  ┌─ tests/development/typing/signed_int_constants.move:9:19
+  │
+9 │     const C_I128: i128 = 1000000000000i128;
+  │                   ^^^^
+  │                   │
+  │                   Unpermitted constant type
+  │                   Found: 'i128'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:12:21
+   │
+12 │     const ZERO_I64: i64 = 0i64;
+   │                     ^^^
+   │                     │
+   │                     Unpermitted constant type
+   │                     Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:15:19
+   │
+15 │     const MAX_I8: i8 = 127i8;
+   │                   ^^
+   │                   │
+   │                   Unpermitted constant type
+   │                   Found: 'i8'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:16:20
+   │
+16 │     const MAX_I16: i16 = 32767i16;
+   │                    ^^^
+   │                    │
+   │                    Unpermitted constant type
+   │                    Found: 'i16'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:17:20
+   │
+17 │     const MAX_I32: i32 = 2147483647i32;
+   │                    ^^^
+   │                    │
+   │                    Unpermitted constant type
+   │                    Found: 'i32'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:18:20
+   │
+18 │     const MAX_I64: i64 = 9223372036854775807i64;
+   │                    ^^^
+   │                    │
+   │                    Unpermitted constant type
+   │                    Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:21:20
+   │
+21 │     const NEG_ONE: i64 = -1i64;
+   │                    ^^^
+   │                    │
+   │                    Unpermitted constant type
+   │                    Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:22:23
+   │
+22 │     const NEG_MAX_I8: i8 = -127i8;
+   │                       ^^
+   │                       │
+   │                       Unpermitted constant type
+   │                       Found: 'i8'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:25:17
+   │
+25 │     const EXPR: i64 = 10i64 + 20i64;
+   │                 ^^^
+   │                 │
+   │                 Unpermitted constant type
+   │                 Found: 'i64'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:26:18
+   │
+26 │     const EXPR2: i32 = 100i32 - 50i32;
+   │                  ^^^
+   │                  │
+   │                  Unpermitted constant type
+   │                  Found: 'i32'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04012]: invalid type for constant
+   ┌─ tests/development/typing/signed_int_constants.move:27:18
+   │
+27 │     const EXPR3: i16 = 6i16 * 7i16;
+   │                  ^^^
+   │                  │
+   │                  Unpermitted constant type
+   │                  Found: 'i16'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'

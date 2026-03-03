@@ -2736,6 +2736,8 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             Exp_::UnaryExp(op, Box::new(e))
         }
         Tok::Minus => {
+            let loc = current_token_loc(context.tokens);
+            context.check_feature(FeatureGate::SignedIntegers, loc);
             context.tokens.advance()?;
             let op_end_loc = context.tokens.previous_end_loc();
             let op = spanned(
