@@ -4,18 +4,15 @@ expression: "result[\"errors\"]"
 ---
 [
   {
-    "message": "Scan range of 20 checkpoints exceeds maximum of 10. Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to narrow the range.",
+    "message": "Failed to parse \"TransactionFilter\": Scan of 20 checkpoints exceeds maximum of 10. Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to reduce the range.",
     "locations": [
       {
         "line": 3,
-        "column": 13
+        "column": 38
       }
     ],
     "path": [
       "scanTransactions"
-    ],
-    "extensions": {
-      "code": "BAD_USER_INPUT"
-    }
+    ]
   }
 ]

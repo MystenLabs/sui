@@ -13,6 +13,7 @@ use sui_types::transaction::TransactionDataAPI as _;
 use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::uint53::UInt53;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::config::Limits;
 use crate::intersect;
@@ -70,9 +71,7 @@ pub(crate) struct ScanFilterValidator {
 
 impl ScanFilterValidator {
     pub fn new(ctx: &Context<'_>) -> Self {
-        let max_scan_limit = ctx
-            .data::<Limits>()
-            .map_or(Limits::default().max_scan_limit, |l| l.max_scan_limit);
+        let &Limits { max_scan_limit, .. } = ctx.data_unchecked();
         Self { max_scan_limit }
     }
 }
@@ -245,23 +244,25 @@ impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
 
 impl CustomValidator<TransactionFilter> for ScanFilterValidator {
     fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
-        let (cp_lo, cp_hi) = if let Some(at) = filter.at_checkpoint.map(u64::from) {
-            (at, at.saturating_add(1))
-        } else if let Some(before) = filter.before_checkpoint.map(u64::from) {
-            (
-                filter
-                    .after_checkpoint
-                    .map_or(0, |a| u64::from(a).saturating_add(1)),
-                before,
-            )
-        } else {
-            return Err(InputValueError::custom(format!(
-                "Unbounded scan, add beforeCheckpoint or atCheckpoint filters (Scan limit: {}).",
-                self.max_scan_limit,
-            )));
+        let Some(range) = checkpoint_bounds(
+            filter.after_checkpoint.map(u64::from),
+            filter.at_checkpoint.map(u64::from),
+            filter.before_checkpoint.map(u64::from),
+            0,
+            u64::MAX,
+        ) else {
+            return Ok(());
         };
 
-        let cps_scanned = cp_hi.saturating_sub(cp_lo);
+        if range.end() == &u64::MAX {
+            return Err(InputValueError::custom(format!(
+                "Unbounded scan, add beforeCheckpoint or atCheckpoint filters \
+                (Scan limit: {}).",
+                self.max_scan_limit,
+            )));
+        }
+
+        let cps_scanned = range.end() - range.start() + 1;
         if cps_scanned > self.max_scan_limit {
             return Err(InputValueError::custom(format!(
                 "Scan of {cps_scanned} checkpoints exceeds maximum of {}. \

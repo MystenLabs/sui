@@ -54,6 +54,7 @@ use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::protocol_configs::ProtocolConfigs;
 use crate::api::types::service_config::ServiceConfig;
 use crate::api::types::simulation_result::SimulationResult;
+use crate::api::types::transaction::CScanTransaction;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::ScanFilterValidator;
@@ -726,9 +727,9 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<CTransaction>,
+        after: Option<CScanTransaction>,
         last: Option<u64>,
-        before: Option<CTransaction>,
+        before: Option<CScanTransaction>,
         #[graphql(validator(custom = "ScanFilterValidator::new(ctx)"))] filter: TransactionFilter,
     ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
         Some(
