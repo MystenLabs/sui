@@ -359,6 +359,8 @@ pub(crate) struct ChargeInfo {
     pub instructions: u64,
     pub pushes: u64,
     pub pops: u64,
+    pub push_size: u64,
+    pub pop_size: u64,
 }
 
 pub(crate) enum Bytecode {
@@ -1478,8 +1480,8 @@ impl ::std::fmt::Debug for Bytecode {
         match self {
             Bytecode::Charge(info) => write!(
                 f,
-                "Charge(instrs={}, pushes={}, pops={})",
-                info.instructions, info.pushes, info.pops
+                "Charge(instrs={}, pushes={}, pops={}, push_size={}, pop_size={})",
+                info.instructions, info.pushes, info.pops, info.push_size, info.pop_size
             ),
             Bytecode::Pop => write!(f, "Pop"),
             Bytecode::Ret => write!(f, "Ret"),
@@ -1833,8 +1835,8 @@ impl<B: std::fmt::Write> InternedDisplay<B> for Bytecode {
         match self {
             Bytecode::Charge(info) => write!(
                 f,
-                "Charge(instrs={}, pushes={}, pops={})",
-                info.instructions, info.pushes, info.pops
+                "Charge(instrs={}, pushes={}, pops={}, push_size={}, pop_size={})",
+                info.instructions, info.pushes, info.pops, info.push_size, info.pop_size
             ),
             Bytecode::Pop => write!(f, "Pop"),
             Bytecode::Ret => write!(f, "Ret"),

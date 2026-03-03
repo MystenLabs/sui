@@ -473,6 +473,8 @@ impl GasMeter for GasStatus<'_> {
         instructions: u64,
         _pushes: u64,
         _pops: u64,
+        _push_size: u64,
+        _pop_size: u64,
     ) -> PartialVMResult<()> {
         // Simple model: charge based on instruction count only
         let cost = InternalGas::new(instructions);
