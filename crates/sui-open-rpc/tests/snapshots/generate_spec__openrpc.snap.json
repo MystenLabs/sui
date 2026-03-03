@@ -1338,7 +1338,6 @@
                 "correct_gas_payment_limit_check": false,
                 "create_root_accumulator_object": false,
                 "debug_fatal_on_move_invariant_violation": false,
-                "defer_unpaid_amplification": false,
                 "dependency_linkage_error": false,
                 "deprecate_global_storage_ops": false,
                 "deprecate_global_storage_ops_during_deserialization": false,
