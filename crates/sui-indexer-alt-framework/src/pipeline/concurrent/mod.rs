@@ -16,7 +16,6 @@ use crate::Task;
 use crate::config::ConcurrencyConfig;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
-use crate::pipeline::PIPELINE_BUFFER;
 use crate::pipeline::Processor;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::collector::collector;
@@ -136,6 +135,12 @@ pub struct ConcurrentConfig {
 
     /// Size of the channel between the processor and collector.
     pub processor_channel_size: Option<usize>,
+
+    /// Size of the channel between the collector and committer.
+    pub collector_channel_size: Option<usize>,
+
+    /// Size of the channel between the committer and the watermark updater.
+    pub committer_channel_size: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -249,6 +254,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         max_pending_rows,
         max_watermark_updates,
         processor_channel_size,
+        collector_channel_size,
+        committer_channel_size,
     } = config;
 
     let concurrency = fanout.unwrap_or(ConcurrencyConfig::Adaptive {
@@ -264,12 +271,12 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let processor_channel_size = processor_channel_size.unwrap_or(num_cpus::get() / 2);
     let (processor_tx, collector_rx) = mpsc::channel(processor_channel_size);
 
+    let collector_channel_size = collector_channel_size.unwrap_or(num_cpus::get() / 2);
     //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-    let (collector_tx, committer_rx) =
-        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
+    let (collector_tx, committer_rx) = mpsc::channel(collector_channel_size);
     //docs::/#buff
-    let (committer_tx, watermark_rx) =
-        mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
+    let committer_channel_size = committer_channel_size.unwrap_or(num_cpus::get());
+    let (committer_tx, watermark_rx) = mpsc::channel(committer_channel_size);
     let main_reader_lo = Arc::new(SetOnce::new());
 
     let handler = Arc::new(handler);
@@ -694,6 +701,8 @@ mod tests {
                 ..Default::default()
             },
             fanout: Some(ConcurrencyConfig::Fixed { value: 2 }),
+            processor_channel_size: Some(7),
+            collector_channel_size: Some(6),
             ..Default::default()
         };
         let store = MockStore::default();
@@ -703,12 +712,12 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(200)).await;
 
         // Pipeline capacity analysis with collector back pressure:
-        // Configuration: MAX_PENDING_ROWS=4, fanout=2, PIPELINE_BUFFER=5
+        // Configuration: MAX_PENDING_ROWS=4, fanout=2
         //
         // Channel and task breakdown:
         // - Checkpoint->Processor channel: 3 slots (TEST_CHECKPOINT_BUFFER_SIZE)
         // - Processor tasks: 2 tasks (fanout=2)
-        // - Processor->Collector channel: 7 slots (fanout=2 + PIPELINE_BUFFER=5)
+        // - Processor->Collector channel: 7 slots (processor_channel_size=7)
         // - Collector pending: 2 checkpoints × 2 values = 4 values (hits MAX_PENDING_ROWS=4)
         //
         // Total capacity: 3 + 2 + 7 + 2 = 14 checkpoints
@@ -749,8 +758,8 @@ mod tests {
         // │   Input    │    │ (fanout=2) │    │            │    │🐌 10s Delay│
         // └────────────┘    └────────────┘    └────────────┘    └[BOTTLENECK]┘
         //                │                 │                 │
-        //              [●●●]           [●●●●●●●]         [●●●●●●]
-        //            buffer: 3         buffer: 7         buffer: 6
+        //              [●●●]           [●●●●●●●]          [●●●●●●]
+        //            buffer: 3    proc_chan: 7       coll_chan: 6
         //
         // BOTTLENECK: Committer with 10s delay blocks entire pipeline
 
@@ -764,19 +773,21 @@ mod tests {
                 ..Default::default()
             },
             fanout: Some(ConcurrencyConfig::Fixed { value: 2 }),
+            processor_channel_size: Some(7),
+            collector_channel_size: Some(6),
             ..Default::default()
         };
         let store = MockStore::default().with_commit_delay(10_000); // 10 seconds delay
         let setup = TestSetup::new(config, store, 0).await;
 
         // Pipeline capacity analysis with slow commits:
-        // Configuration: fanout=2, write_concurrency=1, PIPELINE_BUFFER=5
+        // Configuration: fanout=2, write_concurrency=1
         //
         // Channel and task breakdown:
         // - Checkpoint->Processor channel: 3 slots (TEST_CHECKPOINT_BUFFER_SIZE)
         // - Processor tasks: 2 tasks (fanout=2)
-        // - Processor->Collector channel: 7 slots (fanout=2 + PIPELINE_BUFFER=5)
-        // - Collector->Committer channel: 6 slots (write_concurrency=1 + PIPELINE_BUFFER=5)
+        // - Processor->Collector channel: 7 slots (processor_channel_size=7)
+        // - Collector->Committer channel: 6 slots (collector_channel_size=6)
         // - Committer task: 1 task (blocked by slow commit)
         //
         // Total theoretical capacity: 3 + 2 + 7 + 6 + 1 = 19 checkpoints

@@ -15,10 +15,6 @@ mod logging;
 mod processor;
 pub mod sequential;
 
-/// Extra buffer added to channels between tasks in a pipeline. There does not need to be a huge
-/// capacity here because tasks already buffer rows to insert internally.
-const PIPELINE_BUFFER: usize = 5;
-
 /// Issue a warning every time the number of pending watermarks exceeds this number. This can
 /// happen if the pipeline was started with its initial checkpoint overridden to be strictly
 /// greater than its current watermark -- in that case, the pipeline will never be able to update

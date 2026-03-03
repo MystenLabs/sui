@@ -80,6 +80,8 @@ pub struct ConcurrentLayer {
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
     pub processor_channel_size: Option<usize>,
+    pub collector_channel_size: Option<usize>,
+    pub committer_channel_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -235,6 +237,8 @@ impl ConcurrentLayer {
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
+            collector_channel_size: self.collector_channel_size.or(base.collector_channel_size),
+            committer_channel_size: self.committer_channel_size.or(base.committer_channel_size),
         })
     }
 }
@@ -352,6 +356,8 @@ impl Merge for ConcurrentLayer {
             max_pending_rows: other.max_pending_rows.or(self.max_pending_rows),
             max_watermark_updates: other.max_watermark_updates.or(self.max_watermark_updates),
             processor_channel_size: other.processor_channel_size.or(self.processor_channel_size),
+            collector_channel_size: other.collector_channel_size.or(self.collector_channel_size),
+            committer_channel_size: other.committer_channel_size.or(self.committer_channel_size),
         })
     }
 }
@@ -465,6 +471,8 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
             max_pending_rows: config.max_pending_rows,
             max_watermark_updates: config.max_watermark_updates,
             processor_channel_size: config.processor_channel_size,
+            collector_channel_size: config.collector_channel_size,
+            committer_channel_size: config.committer_channel_size,
         }
     }
 }

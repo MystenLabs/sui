@@ -64,6 +64,8 @@ pub struct ConcurrentLayer {
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
     pub processor_channel_size: Option<usize>,
+    pub collector_channel_size: Option<usize>,
+    pub committer_channel_size: Option<usize>,
 }
 
 impl ConcurrentLayer {
@@ -80,6 +82,8 @@ impl ConcurrentLayer {
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
+            collector_channel_size: self.collector_channel_size.or(base.collector_channel_size),
+            committer_channel_size: self.committer_channel_size.or(base.committer_channel_size),
         }
     }
 }

@@ -483,9 +483,9 @@ Each channel has a fixed buffer size that automatically blocks when full:
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" variable="processor_tx" />
     
-**`Collector` to `Committer`**: `write_concurrency + PIPELINE_BUFFER` slots → `Collector` stops accepting.
+**`Collector` to `Committer`**: `collector_channel_size` slots (defaults to `num_cpus / 2`) → `Collector` stops accepting.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" tag="buff" /> 
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" tag="buff" />
 
 When any channel fills, pressure automatically propagates backward through the entire pipeline.
 
@@ -574,6 +574,8 @@ let config = ConcurrentConfig {
     max_pending_rows: Some(10000),
     max_watermark_updates: Some(5000),
     processor_channel_size: None, // defaults to num_cpus / 2
+    collector_channel_size: None, // defaults to num_cpus / 2
+    committer_channel_size: None, // defaults to num_cpus
 };
 ```
 
@@ -581,6 +583,8 @@ Tuning guidelines:
 
 - **`fanout`:** By default, processor concurrency is adaptive: it starts at 1 and scales up to the number of CPUs based on downstream channel pressure. The controller monitors the fill fraction of the processor-to-collector channel and adjusts concurrency using a dead band between 60% and 85% fill. You can override this with fixed concurrency (`ConcurrencyConfig::Fixed`) or customize the adaptive bounds (`ConcurrencyConfig::Adaptive`). The default max of `num_cpus` assumes your processor is CPU-bound. If your processor performs IO (for example, fetching data from an external service), you may want a higher max. The adaptive controller also exposes a `dead_band` parameter to override the fill-fraction thresholds, but the defaults should work well for most workloads.
 - **`processor_channel_size`:** Controls the size of the channel between the processor and the collector. Defaults to `num_cpus / 2`. This channel is also the signal that drives the adaptive concurrency controller.
+- **`collector_channel_size`:** Controls the size of the channel between the collector and the committer. Defaults to `num_cpus / 2`. Increase if the committer drains batches faster than the collector can supply them.
+- **`committer_channel_size`:** Controls the size of the channel between the committer and the watermark updater. Defaults to `num_cpus`. Rarely needs tuning.
 - **`MIN_EAGER_ROWS`:** Lower values reduce data commit latency (individual data appears in database sooner), higher values improve overall throughput (more efficient larger batches).
 - **`MAX_PENDING_ROWS`:** Controls how much data can accumulate when the committer falls behind. Higher values provide more buffer space but use more memory during bottlenecks.
 - **`MAX_WATERMARK_UPDATES`:** Lower for sparse pipelines (rare events), keep default for dense pipelines.
