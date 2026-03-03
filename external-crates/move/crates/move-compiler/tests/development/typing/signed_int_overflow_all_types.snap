@@ -1,0 +1,72 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E01006]: invalid number literal
+  ┌─ tests/development/typing/signed_int_overflow_all_types.move:8:22
+  │
+8 │         let _x: i8 = 128i8;
+  │                      ^^^^^ Invalid number literal. The given literal is too large to fit into 'i8'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:12:22
+   │
+12 │         let _x: i8 = 255i8;
+   │                      ^^^^^ Invalid number literal. The given literal is too large to fit into 'i8'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:16:23
+   │
+16 │         let _x: i16 = 32768i16;
+   │                       ^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i16'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:20:23
+   │
+20 │         let _x: i16 = 65535i16;
+   │                       ^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i16'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:24:23
+   │
+24 │         let _x: i32 = 2147483648i32;
+   │                       ^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i32'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:28:23
+   │
+28 │         let _x: i64 = 9223372036854775808i64;
+   │                       ^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i64'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:32:24
+   │
+32 │         let _x: i128 = 170141183460469231731687303715884105728i128;
+   │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i128'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:37:22
+   │
+37 │         let _x: i8 = 0x80i8;
+   │                      ^^^^^^ Invalid number literal. The given literal is too large to fit into 'i8'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:41:23
+   │
+41 │         let _x: i16 = 0x8000i16;
+   │                       ^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i16'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:45:23
+   │
+45 │         let _x: i32 = 0x80000000i32;
+   │                       ^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i32'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_overflow_all_types.move:49:23
+   │
+49 │         let _x: i64 = 0x8000000000000000i64;
+   │                       ^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i64'

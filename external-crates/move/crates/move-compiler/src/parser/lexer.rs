@@ -625,7 +625,7 @@ fn find_token(
     let (res, len) = match c {
         '0'..='9' => {
             if text.starts_with("0x") && text.len() > 2 {
-                let (tok, hex_len) = get_hex_number(&text[2..]);
+                let (tok, hex_len) = get_hex_number(&text[2..], edition);
                 if hex_len == 0 {
                     // Fall back to treating this as a "0" token.
                     (Ok(Tok::NumValue), 1)
@@ -633,7 +633,7 @@ fn find_token(
                     (Ok(tok), 2 + hex_len)
                 }
             } else {
-                let (tok, len) = get_decimal_number(text);
+                let (tok, len) = get_decimal_number(text, edition);
                 (Ok(tok), len)
             }
         }
@@ -904,37 +904,41 @@ fn get_name_len(text: &str) -> usize {
         .unwrap_or(text.len())
 }
 
-fn get_decimal_number(text: &str) -> (Tok, usize) {
+fn get_decimal_number(text: &str, edition: Edition) -> (Tok, usize) {
     let num_text_len = text
         .chars()
         .position(|c| !matches!(c, '0'..='9' | '_'))
         .unwrap_or(text.len());
-    get_number_maybe_with_suffix(text, num_text_len)
+    get_number_maybe_with_suffix(text, num_text_len, edition)
 }
 
 // Return the length of the substring containing characters in [0-9a-fA-F].
-fn get_hex_number(text: &str) -> (Tok, usize) {
+fn get_hex_number(text: &str, edition: Edition) -> (Tok, usize) {
     let num_text_len = text
         .find(|c| !matches!(c, 'a'..='f' | 'A'..='F' | '0'..='9'| '_'))
         .unwrap_or(text.len());
-    get_number_maybe_with_suffix(text, num_text_len)
+    get_number_maybe_with_suffix(text, num_text_len, edition)
 }
 
 // Given the text for a number literal and the length for the characters that match to the number
 // portion, checks for a typed suffix.
-fn get_number_maybe_with_suffix(text: &str, num_text_len: usize) -> (Tok, usize) {
+fn get_number_maybe_with_suffix(text: &str, num_text_len: usize, edition: Edition) -> (Tok, usize) {
     let rest = &text[num_text_len..];
-    if rest.starts_with("u8") || rest.starts_with("i8") {
+    let signed = edition.supports(FeatureGate::SignedIntegers);
+    if rest.starts_with("u8") || (signed && rest.starts_with("i8")) {
         (Tok::NumTypedValue, num_text_len + 2)
     } else if rest.starts_with("u64")
         || rest.starts_with("u16")
         || rest.starts_with("u32")
-        || rest.starts_with("i64")
-        || rest.starts_with("i16")
-        || rest.starts_with("i32")
+        || (signed && rest.starts_with("i64"))
+        || (signed && rest.starts_with("i16"))
+        || (signed && rest.starts_with("i32"))
     {
         (Tok::NumTypedValue, num_text_len + 3)
-    } else if rest.starts_with("u128") || rest.starts_with("u256") || rest.starts_with("i128") {
+    } else if rest.starts_with("u128")
+        || rest.starts_with("u256")
+        || (signed && rest.starts_with("i128"))
+    {
         (Tok::NumTypedValue, num_text_len + 4)
     } else {
         // No typed suffix

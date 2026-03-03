@@ -1,0 +1,112 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/development/typing/signed_int_neg_non_numeric.move:7:19
+  │
+7 │         let _x = -true;
+  │                   ^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+  ┌─ tests/development/typing/signed_int_neg_non_numeric.move:7:19
+  │
+7 │         let _x = -true;
+  │                   ^^^^
+  │                   │
+  │                   Invalid argument to '-'
+  │                   Expected: '_'
+  │                   Given: 'bool'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_non_numeric.move:12:19
+   │
+12 │         let _x = -b;
+   │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_non_numeric.move:12:19
+   │
+11 │         let b = false;
+   │                 ----- Given: 'bool'
+12 │         let _x = -b;
+   │                   ^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_non_numeric.move:17:19
+   │
+17 │         let _x = -@0x42;
+   │                   ^^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_non_numeric.move:17:19
+   │
+17 │         let _x = -@0x42;
+   │                   ^^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'
+   │                   Given: 'address'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_non_numeric.move:23:19
+   │
+23 │         let _x = -v;
+   │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_non_numeric.move:23:19
+   │
+22 │         let v = vector[1i8];
+   │                 ----------- Given: 'vector<i8>'
+23 │         let _x = -v;
+   │                   ^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'
+
+error[E01003]: invalid modifier
+   ┌─ tests/development/typing/signed_int_neg_non_numeric.move:27:5
+   │
+27 │     struct S has copy, drop { val: i64 }
+   │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+   │
+   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_non_numeric.move:31:19
+   │
+31 │         let _x = -s;
+   │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_non_numeric.move:31:19
+   │
+30 │         let s = S { val: 1i64 };
+   │                 --------------- Given: '0x42::m::S'
+31 │         let _x = -s;
+   │                   ^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'
