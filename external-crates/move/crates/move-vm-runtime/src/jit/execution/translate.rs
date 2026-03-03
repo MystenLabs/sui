@@ -1391,6 +1391,8 @@ fn bytecode(
                 instructions: info.instructions,
                 pushes: info.pushes,
                 pops: info.pops,
+                push_size: info.push_size,
+                pop_size: info.pop_size,
             })?,
         ),
 

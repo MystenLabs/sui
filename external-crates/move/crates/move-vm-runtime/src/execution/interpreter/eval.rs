@@ -407,7 +407,7 @@ fn op_step_impl(
         // -- GAS BATCHING ----------------------
         // Charge for a basic block's fixed-cost instructions at once.
         Bytecode::Charge(info) => {
-            gas_meter.charge_block(info.instructions, info.pushes, info.pops)?;
+            gas_meter.charge_block(info.instructions, info.pushes, info.pops, info.push_size, info.pop_size)?;
         }
         // -- INTERNAL CONTROL FLOW --------------
         // These all update the current frame's program counter.

@@ -369,12 +369,11 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         instructions: u64,
         pushes: u64,
         pops: u64,
+        push_size: u64,
+        pop_size: u64,
     ) -> PartialVMResult<()> {
-        // Use a conservative size estimate: assume each push/pop is 8 bytes (u64 size)
-        let size_increase = pushes * 8;
-        let size_decrease = pops * 8;
         self.0
-            .charge(instructions, pushes, pops, size_increase, size_decrease)
+            .charge(instructions, pushes, pops, push_size, pop_size)
     }
 
     fn remaining_gas(&self) -> InternalGas {

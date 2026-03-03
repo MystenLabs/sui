@@ -174,11 +174,15 @@ pub trait GasMeter {
     /// * `instructions` - Number of fixed-cost instructions in the block
     /// * `pushes` - Total stack pushes from fixed-cost instructions
     /// * `pops` - Total stack pops from fixed-cost instructions
+    /// * `push_size` - Total bytes pushed onto the stack
+    /// * `pop_size` - Total bytes popped from the stack
     fn charge_block(
         &mut self,
         instructions: u64,
         pushes: u64,
         pops: u64,
+        push_size: u64,
+        pop_size: u64,
     ) -> PartialVMResult<()>;
 
     /// Returns the gas left
@@ -343,6 +347,8 @@ impl GasMeter for UnmeteredGasMeter {
         _instructions: u64,
         _pushes: u64,
         _pops: u64,
+        _push_size: u64,
+        _pop_size: u64,
     ) -> PartialVMResult<()> {
         Ok(())
     }

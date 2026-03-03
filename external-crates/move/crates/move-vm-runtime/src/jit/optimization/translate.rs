@@ -23,6 +23,8 @@ struct BlockGasCost {
     instructions: u64,
     pushes: u64,
     pops: u64,
+    push_size: u64,
+    pop_size: u64,
 }
 
 impl BlockGasCost {
@@ -30,10 +32,12 @@ impl BlockGasCost {
         self.instructions > 0
     }
 
-    fn add(&mut self, pops: u64, pushes: u64, _pop_size: AbstractMemorySize, _push_size: AbstractMemorySize) {
+    fn add(&mut self, pops: u64, pushes: u64, pop_size: AbstractMemorySize, push_size: AbstractMemorySize) {
         self.instructions += 1;
         self.pushes += pushes;
         self.pops += pops;
+        self.push_size += u64::from(push_size);
+        self.pop_size += u64::from(pop_size);
     }
 }
 
@@ -225,6 +229,8 @@ fn generate_basic_blocks(
                     instructions: block_cost.instructions,
                     pushes: block_cost.pushes,
                     pops: block_cost.pops,
+                    push_size: block_cost.push_size,
+                    pop_size: block_cost.pop_size,
                 })));
                 new_code.extend(code);
                 new_code
@@ -487,6 +493,8 @@ mod tests {
             instructions: 99,
             pushes: 99,
             pops: 99,
+            push_size: 99,
+            pop_size: 99,
         }))];
         let cost = compute_block_fixed_costs(&code);
         assert_eq!(cost.instructions, 0);
