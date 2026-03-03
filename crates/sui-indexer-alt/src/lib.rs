@@ -34,7 +34,6 @@ use crate::handlers::kv_objects::KvObjects;
 use crate::handlers::kv_packages::KvPackages;
 use crate::handlers::kv_protocol_configs::KvProtocolConfigs;
 use crate::handlers::kv_transactions::KvTransactions;
-use crate::handlers::obj_info::ObjInfo;
 use crate::handlers::obj_versions::ObjVersions;
 use crate::handlers::sum_displays::SumDisplays;
 use crate::handlers::tx_affected_addresses::TxAffectedAddresses;
@@ -85,7 +84,6 @@ pub async fn setup_indexer(
         kv_packages,
         kv_protocol_configs,
         kv_transactions,
-        obj_info,
         obj_versions,
         tx_affected_addresses,
         tx_affected_objects,
@@ -184,7 +182,6 @@ pub async fn setup_indexer(
 
     // Concurrent pipelines with retention
     add_concurrent!(CoinBalanceBuckets, coin_balance_buckets);
-    add_concurrent!(ObjInfo, obj_info);
 
     // Unpruned concurrent pipelines
     add_concurrent!(CpBlooms, cp_blooms);
