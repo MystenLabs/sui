@@ -99,7 +99,6 @@ impl RocksDBStore {
         let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
         let u32_prefix = KeyType::from_prefix_bits(3 * 8);
         let u64_prefix = KeyType::from_prefix_bits(6 * 8);
-        let override_dirty_keys_config = KeySpaceConfig::new().with_max_dirty_keys(4_000);
         let configs = vec![
             (
                 Self::BLOCKS_CF.to_string(),
@@ -107,7 +106,7 @@ impl RocksDBStore {
                     index_index_digest_key.clone(),
                     mutexes,
                     u32_prefix.clone(),
-                    override_dirty_keys_config.clone(),
+                    KeySpaceConfig::new(),
                 ),
             ),
             (
@@ -116,7 +115,7 @@ impl RocksDBStore {
                     index_index_digest_key.clone(),
                     mutexes,
                     u64_prefix.clone(),
-                    override_dirty_keys_config.clone(),
+                    KeySpaceConfig::new(),
                 ),
             ),
             (
@@ -129,7 +128,7 @@ impl RocksDBStore {
                     commit_vote_key,
                     mutexes,
                     u32_prefix.clone(),
-                    override_dirty_keys_config.clone(),
+                    KeySpaceConfig::new(),
                 ),
             ),
             (
