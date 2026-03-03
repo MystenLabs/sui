@@ -11,15 +11,15 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
-walkdir.workspace = true
-sha2.workspace = true
+bcs.workspace = true
+dirs-next.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["serde"] }
 packed_struct.workspace = true
 serde.workspace = true
-dirs-next.workspace = true
+sha2.workspace = true
 vfs.workspace = true
-bcs.workspace = true
+walkdir.workspace = true
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
