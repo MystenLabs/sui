@@ -1840,8 +1840,10 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             // constrain the subject's divergent type variable, masking the divergence.
             if core::is_type_divergent(&context.subst, &esubject.ty) {
                 let msg = "Cannot match on an expression that always diverges";
-                context
-                    .add_diag(diag!(TypeSafety::InvalidControlFlow, (esubject.exp.loc, msg)));
+                context.add_diag(diag!(
+                    TypeSafety::InvalidControlFlow,
+                    (esubject.exp.loc, msg)
+                ));
             }
             let subject_type = core::unfold_type(&context.subst, &esubject.ty);
             let ref_mut = match subject_type.value.inner() {

@@ -103,8 +103,12 @@ fn invalid_match(
     let subject_ty = core::unfold_type(&context.subst, &subject.ty);
     match subject_ty.value.inner() {
         TypeInner::Anything | TypeInner::Void => {
-            ice_assert!(context, context.env().has_errors(), subject.exp.loc,
-                "Divergent match subject reached match analysis without a prior error");
+            ice_assert!(
+                context,
+                context.env().has_errors(),
+                subject.exp.loc,
+                "Divergent match subject reached match analysis without a prior error"
+            );
             return true;
         }
         TypeInner::UnresolvedError => return true,
@@ -386,10 +390,18 @@ fn find_counterexample_impl(
             // recur. If we don't, we check it as a default specialization.
             if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
                 let ctor_arity = arg_types.len() as u32;
-                let decl_fields = context
-                    .info()
-                    .struct_fields(&mident, &datatype_name)
-                    .unwrap();
+                // Native structs have no fields. An error for destructuring a native struct
+                // should have already been reported during typing.
+                let Some(decl_fields) = context.info().struct_fields(&mident, &datatype_name)
+                else {
+                    ice_assert!(
+                        context,
+                        context.env().has_errors(),
+                        ploc,
+                        "Native struct reached match counterexample without a prior error"
+                    );
+                    return None;
+                };
                 let fringe_binders =
                     context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                 let is_positional = context.info().struct_is_positional(&mident, &datatype_name);
