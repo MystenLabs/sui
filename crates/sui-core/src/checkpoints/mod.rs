@@ -227,7 +227,7 @@ impl CheckpointStoreTables {
         let mutexes = default_mutex_count();
         let u64_sequence_key = KeyType::from_prefix_bits(6 * 8);
         let override_dirty_keys_config = KeySpaceConfig::new()
-            .with_max_dirty_keys(64_000)
+            .with_max_dirty_keys(16_000)
             .with_value_cache_size(default_value_cache_size());
         let config_u64 = ThConfig::new_with_config(
             8,
