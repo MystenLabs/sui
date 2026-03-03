@@ -1097,6 +1097,9 @@ MoveType.abilities
 MoveValue.asAddress
   => {}
 
+MoveValue.asVector
+  => {}
+
 MoveValue.bcs
   => {}
 
