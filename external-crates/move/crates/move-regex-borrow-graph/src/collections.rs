@@ -9,6 +9,7 @@ use crate::{
     regex::{Extension, Regex},
 };
 use core::fmt;
+use std::ops::Add;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
@@ -335,9 +336,10 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     ) -> MeterResult<(), M::Error> {
         self.check_invariants();
         let mut nodes_visited = 0usize;
-        let mut total_edge_size = 0usize;
+        let mut edges_visited = 0usize;
+        let mut edges_added = 0usize;
         let mut edge_to_add = |p: NodeIndex, r: Regex<Lbl>, s: NodeIndex| {
-            total_edge_size = total_edge_size.saturating_add(r.abstract_size());
+            edges_added = edges_added.saturating_add(r.abstract_size());
             acc.entry((p, s)).or_default().push(r);
         };
         // look for all edges of the form source --> x or x --> source
@@ -347,6 +349,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             for (x, edge) in self.graph.incoming_edges(*source) {
                 nodes_visited = nodes_visited.saturating_add(1);
                 for x_to_source in edge.regexes() {
+                    edges_visited = edges_visited.saturating_add(1);
                     let extended = x_to_source.clone().extend(&ext);
                     for &new_ref in new_refs {
                         edge_to_add(x, extended.clone(), new_ref)
@@ -357,6 +360,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             for (edge, x) in self.graph.outgoing_edges(*source) {
                 nodes_visited = nodes_visited.saturating_add(1);
                 for source_to_x in edge.regexes() {
+                    edges_visited = edges_visited.saturating_add(1);
                     // For the edge source --> x, we adding a new edge source --> new_ref
                     // In cases of a label extension, we might need to add an edge new_ref --> x
                     // if the extension is a prefix of source_to_x.
@@ -381,7 +385,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             }
         }
         meter.visit_nodes(nodes_visited)?;
-        meter.visit_edges(total_edge_size)?;
+        meter.visit_edges(edges_visited.add(edges_added))?;
         Ok(())
     }
 
