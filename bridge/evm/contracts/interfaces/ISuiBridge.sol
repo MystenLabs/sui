@@ -11,7 +11,7 @@ interface ISuiBridge {
     /// @param tokenID The code of the token.
     /// @param suiAdjustedAmount The amount of tokens to transfer, adjusted for Sui decimals.
     /// @param senderAddress The address of the sender.
-    /// @param recipientAddress The address of the sender.
+    /// @param recipientAddress The address of the recipient.
     event TokensDeposited(
         uint8 indexed sourceChainID,
         uint64 indexed nonce,
@@ -29,7 +29,7 @@ interface ISuiBridge {
     /// @param tokenID The code of the token.
     /// @param erc20AdjustedAmount The amount of tokens claimed, adjusted for ERC20 decimals.
     /// @param senderAddress The address of the sender.
-    /// @param recipientAddress The address of the sender.
+    /// @param recipientAddress The address of the recipient.
     // event BridgedTokensTransferred(
     event TokensClaimed(
         uint8 indexed sourceChainID,
