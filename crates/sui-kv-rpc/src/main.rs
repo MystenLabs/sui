@@ -56,11 +56,6 @@ async fn main() -> Result<()> {
         .install_default()
         .expect("Failed to install CryptoProvider");
     let app = App::parse();
-    if let Some(credentials) = &app.credentials {
-        unsafe {
-            std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", credentials);
-        }
-    }
     let server_version = Some(ServerVersion::new("sui-kv-rpc", VERSION));
     let registry_service = mysten_metrics::start_prometheus_server(
         format!("{}:{}", app.metrics_host, app.metrics_port).parse()?,
@@ -76,6 +71,7 @@ async fn main() -> Result<()> {
         channel_timeout,
         server_version,
         &registry,
+        app.credentials,
     )
     .await?;
     let addr = app.address.parse()?;
