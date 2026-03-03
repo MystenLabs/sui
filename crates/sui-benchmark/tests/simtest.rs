@@ -1577,20 +1577,20 @@ mod test {
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::FLAG, 0.1)
-        .with_probability(SharedCounterRead::FLAG, 0.1)
-        .with_probability(RandomnessRead::FLAG, 0.1)
-        .with_probability(AddressBalanceDeposit::FLAG, 0.1)
-        .with_probability(AddressBalanceWithdraw::FLAG, 0.1)
-        .with_probability(ObjectBalanceDeposit::FLAG, 0.1)
-        .with_probability(ObjectBalanceWithdraw::FLAG, 0.1)
-        .with_probability(TestCoinMint::FLAG, 0.1)
-        .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
-        .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
-        .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
-        .with_probability(AddressBalanceOverdraw::FLAG, 0.3)
-        .with_probability(AccumulatorBalanceRead::FLAG, 0.3)
-        .with_probability(AuthenticatedEventEmit::FLAG, 0.1);
+        .with_probability(SharedCounterIncrement::NAME, 0.1)
+        .with_probability(SharedCounterRead::NAME, 0.1)
+        .with_probability(RandomnessRead::NAME, 0.1)
+        .with_probability(AddressBalanceDeposit::NAME, 0.1)
+        .with_probability(AddressBalanceWithdraw::NAME, 0.1)
+        .with_probability(ObjectBalanceDeposit::NAME, 0.1)
+        .with_probability(ObjectBalanceWithdraw::NAME, 0.1)
+        .with_probability(TestCoinMint::NAME, 0.1)
+        .with_probability(TestCoinAddressDeposit::NAME, 0.1)
+        .with_probability(TestCoinAddressWithdraw::NAME, 0.05)
+        .with_probability(TestCoinObjectWithdraw::NAME, 0.05)
+        .with_probability(AddressBalanceOverdraw::NAME, 0.3)
+        .with_probability(AccumulatorBalanceRead::NAME, 0.3)
+        .with_probability(AuthenticatedEventEmit::NAME, 0.1);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1625,10 +1625,10 @@ mod test {
 
         if address_aliases_enabled {
             let alias_add_stats = metrics
-                .get_stats(OperationSet::new().with(ALIAS_ADD_FLAG))
+                .get_stats(&OperationSet::new().with(ALIAS_ADD))
                 .expect("expected alias add stats");
             let alias_remove_stats = metrics
-                .get_stats(OperationSet::new().with(ALIAS_REMOVE_FLAG))
+                .get_stats(&OperationSet::new().with(ALIAS_REMOVE))
                 .expect("expected alias remove stats");
             info!(
                 "alias metrics: add_success={}, remove_success={}",
@@ -1645,7 +1645,7 @@ mod test {
         }
 
         let accum_read_stats = metrics
-            .get_stats(OperationSet::new().with(AccumulatorBalanceRead::FLAG))
+            .get_stats(&OperationSet::new().with(AccumulatorBalanceRead::NAME))
             .expect("expected accumulator balance read stats");
         info!(
             "accumulator balance read metrics: success={}",
@@ -1689,8 +1689,8 @@ mod test {
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::FLAG, 0.5)
-        .with_probability(RandomnessRead::FLAG, 0.5);
+        .with_probability(SharedCounterIncrement::NAME, 0.5)
+        .with_probability(RandomnessRead::NAME, 0.5);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1709,8 +1709,8 @@ mod test {
         let mut shared_plus_randomness_cancellations = 0u64;
 
         for (op_set, stats) in metrics.iter_stats() {
-            let has_shared_mutation = op_set.contains(SharedCounterIncrement::FLAG);
-            let has_randomness = op_set.contains(RandomnessRead::FLAG);
+            let has_shared_mutation = op_set.contains(SharedCounterIncrement::NAME);
+            let has_randomness = op_set.contains(RandomnessRead::NAME);
 
             if has_shared_mutation && has_randomness {
                 shared_plus_randomness_txns +=
