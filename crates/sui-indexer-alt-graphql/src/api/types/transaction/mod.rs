@@ -57,6 +57,19 @@ pub(crate) mod filter;
 /// Cursor for transaction pagination
 pub(crate) type CTransaction = JsonCursor<u64>;
 
+/// Cursor for transaction scanning.
+#[derive(
+    serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord,
+)]
+pub(crate) struct ScanTransactionCursor {
+    #[serde(rename = "c")]
+    pub(crate) cp_sequence_number: u64,
+    #[serde(rename = "t")]
+    pub(crate) tx_sequence_number: u64,
+}
+
+pub(crate) type CScanTransaction = JsonCursor<ScanTransactionCursor>;
+
 #[derive(Clone)]
 pub(crate) struct Transaction {
     pub(crate) digest: TransactionDigest,
@@ -308,7 +321,7 @@ impl Transaction {
     pub(crate) async fn scan(
         ctx: &Context<'_>,
         scope: Scope,
-        page: Page<CTransaction>,
+        page: Page<CScanTransaction>,
         filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
@@ -333,7 +346,7 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         };
 
-        let transactions = bloom::transactions(ctx, &filter, &page, cp_bounds).await?;
+        let transactions = bloom::transactions(ctx, &page, &filter, cp_bounds).await?;
 
         page.paginate_filtered(
             &transactions,

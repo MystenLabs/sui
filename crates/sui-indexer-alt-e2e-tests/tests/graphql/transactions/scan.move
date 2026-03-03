@@ -121,7 +121,7 @@ fragment TX on TransactionConnection {
   edges { cursor node { digest effects { checkpoint { sequenceNumber } } } }
 }
 
-//# run-graphql --cursors 5 7 20
+//# run-graphql --cursors {"t":5,"c":4} {"t":7,"c":5} {"t":20,"c":1001}
 # Cursor pagination: cursor_0 is a checkpoint boundary (cp4,tx_seq=5),
 # cursor_1 is mid-checkpoint (cp5,tx_seq=7). Tests all first/last/after/before combos.
 {
