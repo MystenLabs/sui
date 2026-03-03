@@ -4993,6 +4993,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_authenticated_event_streams = false;
     }
 
+    pub fn disable_randomize_checkpoint_tx_limit_for_testing(&mut self) {
+        self.feature_flags.randomize_checkpoint_tx_limit_in_tests = false;
+    }
+
     pub fn enable_non_exclusive_writes_for_testing(&mut self) {
         self.feature_flags.enable_non_exclusive_writes = true;
     }
