@@ -24,7 +24,7 @@ use crate::{
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     runtime::telemetry::TransactionTelemetryContext,
     shared::{
-        gas::{GasMeter, SimpleInstruction},
+        gas::GasMeter,
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         vm_pointer::VMPointer,
     },
@@ -178,7 +178,6 @@ fn step(
     // `op_step` into this function.
     match instruction {
         Bytecode::Ret => {
-            let charge_result = gas_meter.charge_simple_instr(SimpleInstruction::Ret);
             trace!(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
@@ -187,8 +186,6 @@ fn step(
                     None,
                 )
             });
-
-            partial_error_to_error(state, run_context, charge_result)?;
 
             let non_ref_vals = state
                 .call_stack
@@ -395,8 +392,6 @@ fn op_step_impl(
     gas_meter: &mut impl GasMeter,
     instruction: &Bytecode,
 ) -> PartialVMResult<()> {
-    use SimpleInstruction as S;
-
     match instruction {
         // -- CALL/RETURN OPERATIONS -------------
         // These should have been handled in `step` above.
@@ -417,7 +412,6 @@ fn op_step_impl(
         // -- INTERNAL CONTROL FLOW --------------
         // These all update the current frame's program counter.
         Bytecode::BrTrue(offset) => {
-            gas_meter.charge_simple_instr(S::BrTrue)?;
             state.call_stack.current_frame.pc = if state.pop_operand_as::<bool>()? {
                 *offset
             } else {
@@ -425,7 +419,6 @@ fn op_step_impl(
             };
         }
         Bytecode::BrFalse(offset) => {
-            gas_meter.charge_simple_instr(S::BrFalse)?;
             state.call_stack.current_frame.pc = if !state.pop_operand_as::<bool>()? {
                 *offset
             } else {
@@ -433,7 +426,6 @@ fn op_step_impl(
             };
         }
         Bytecode::Branch(offset) => {
-            gas_meter.charge_simple_instr(S::Branch)?;
             state.call_stack.current_frame.pc = *offset;
         }
         Bytecode::VariantSwitch(jump_table_ptr) => {
@@ -448,27 +440,21 @@ fn op_step_impl(
             gas_meter.charge_pop(popped_val)?;
         }
         Bytecode::LdU8(int_const) => {
-            gas_meter.charge_simple_instr(S::LdU8)?;
             state.push_operand(Value::u8(*int_const))?;
         }
         Bytecode::LdU16(int_const) => {
-            gas_meter.charge_simple_instr(S::LdU16)?;
             state.push_operand(Value::u16(*int_const))?;
         }
         Bytecode::LdU32(int_const) => {
-            gas_meter.charge_simple_instr(S::LdU32)?;
             state.push_operand(Value::u32(*int_const))?;
         }
         Bytecode::LdU64(int_const) => {
-            gas_meter.charge_simple_instr(S::LdU64)?;
             state.push_operand(Value::u64(*int_const))?;
         }
         Bytecode::LdU128(int_const) => {
-            gas_meter.charge_simple_instr(S::LdU128)?;
             state.push_operand(Value::u128(**int_const))?;
         }
         Bytecode::LdU256(int_const) => {
-            gas_meter.charge_simple_instr(S::LdU256)?;
             state.push_operand(Value::u256(**int_const))?;
         }
         Bytecode::LdConst(const_ptr) => {
@@ -478,11 +464,9 @@ fn op_step_impl(
             state.push_operand(val)?
         }
         Bytecode::LdTrue => {
-            gas_meter.charge_simple_instr(S::LdTrue)?;
             state.push_operand(Value::bool(true))?;
         }
         Bytecode::LdFalse => {
-            gas_meter.charge_simple_instr(S::LdFalse)?;
             state.push_operand(Value::bool(false))?;
         }
         Bytecode::CopyLoc(idx) => {
@@ -515,11 +499,6 @@ fn op_step_impl(
                 .store_loc(*idx as usize, value_to_store)?;
         }
         Bytecode::MutBorrowLoc(idx) | Bytecode::ImmBorrowLoc(idx) => {
-            let instr = match instruction {
-                Bytecode::MutBorrowLoc(_) => S::MutBorrowLoc,
-                _ => S::ImmBorrowLoc,
-            };
-            gas_meter.charge_simple_instr(instr)?;
             let loc_ref = state
                 .call_stack
                 .current_frame
@@ -528,12 +507,6 @@ fn op_step_impl(
             state.push_operand(loc_ref)?;
         }
         Bytecode::ImmBorrowField(fh_ptr) | Bytecode::MutBorrowField(fh_ptr) => {
-            let instr = match instruction {
-                Bytecode::MutBorrowField(_) => S::MutBorrowField,
-                _ => S::ImmBorrowField,
-            };
-            gas_meter.charge_simple_instr(instr)?;
-
             let reference = state.pop_operand_as::<StructRef>()?;
 
             let offset = fh_ptr.offset;
@@ -541,12 +514,6 @@ fn op_step_impl(
             state.push_operand(field_ref)?;
         }
         Bytecode::ImmBorrowFieldGeneric(fi_ptr) | Bytecode::MutBorrowFieldGeneric(fi_ptr) => {
-            let instr = match instruction {
-                Bytecode::MutBorrowFieldGeneric(_) => S::MutBorrowFieldGeneric,
-                _ => S::ImmBorrowFieldGeneric,
-            };
-            gas_meter.charge_simple_instr(instr)?;
-
             let reference = state.pop_operand_as::<StructRef>()?;
 
             let offset = fi_ptr.offset;
@@ -601,106 +568,83 @@ fn op_step_impl(
             reference.write_ref(value)?;
         }
         Bytecode::CastU8 => {
-            gas_meter.charge_simple_instr(S::CastU8)?;
             let integer_value = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(Value::u8(integer_value.cast_u8()?))?;
         }
         Bytecode::CastU16 => {
-            gas_meter.charge_simple_instr(S::CastU16)?;
             let integer_value = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(Value::u16(integer_value.cast_u16()?))?;
         }
         Bytecode::CastU32 => {
-            gas_meter.charge_simple_instr(S::CastU32)?;
             let integer_value = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(Value::u32(integer_value.cast_u32()?))?;
         }
         Bytecode::CastU64 => {
-            gas_meter.charge_simple_instr(S::CastU64)?;
             let integer_value = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(Value::u64(integer_value.cast_u64()?))?;
         }
         Bytecode::CastU128 => {
-            gas_meter.charge_simple_instr(S::CastU128)?;
             let integer_value = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(Value::u128(integer_value.cast_u128()?))?;
         }
         Bytecode::CastU256 => {
-            gas_meter.charge_simple_instr(S::CastU256)?;
             let integer_value = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(Value::u256(integer_value.cast_u256()?))?;
         }
         // Arithmetic Operations
         Bytecode::Add => {
-            gas_meter.charge_simple_instr(S::Add)?;
             binop_int(state, IntegerValue::add_checked)?
         }
         Bytecode::Sub => {
-            gas_meter.charge_simple_instr(S::Sub)?;
             binop_int(state, IntegerValue::sub_checked)?
         }
         Bytecode::Mul => {
-            gas_meter.charge_simple_instr(S::Mul)?;
             binop_int(state, IntegerValue::mul_checked)?
         }
         Bytecode::Mod => {
-            gas_meter.charge_simple_instr(S::Mod)?;
             binop_int(state, IntegerValue::rem_checked)?
         }
         Bytecode::Div => {
-            gas_meter.charge_simple_instr(S::Div)?;
             binop_int(state, IntegerValue::div_checked)?
         }
         Bytecode::BitOr => {
-            gas_meter.charge_simple_instr(S::BitOr)?;
             binop_int(state, IntegerValue::bit_or)?
         }
         Bytecode::BitAnd => {
-            gas_meter.charge_simple_instr(S::BitAnd)?;
             binop_int(state, IntegerValue::bit_and)?
         }
         Bytecode::Xor => {
-            gas_meter.charge_simple_instr(S::Xor)?;
             binop_int(state, IntegerValue::bit_xor)?
         }
         Bytecode::Shl => {
-            gas_meter.charge_simple_instr(S::Shl)?;
             let rhs = state.pop_operand_as::<u8>()?;
             let lhs = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(lhs.shl_checked(rhs)?.into_value())?;
         }
         Bytecode::Shr => {
-            gas_meter.charge_simple_instr(S::Shr)?;
             let rhs = state.pop_operand_as::<u8>()?;
             let lhs = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(lhs.shr_checked(rhs)?.into_value())?;
         }
         Bytecode::Or => {
-            gas_meter.charge_simple_instr(S::Or)?;
             binop_bool(state, |l, r| Ok(l || r))?
         }
         Bytecode::And => {
-            gas_meter.charge_simple_instr(S::And)?;
             binop_bool(state, |l, r| Ok(l && r))?
         }
         Bytecode::Lt => {
-            gas_meter.charge_simple_instr(S::Lt)?;
             binop_bool(state, IntegerValue::lt)?
         }
         Bytecode::Gt => {
-            gas_meter.charge_simple_instr(S::Gt)?;
             binop_bool(state, IntegerValue::gt)?
         }
         Bytecode::Le => {
-            gas_meter.charge_simple_instr(S::Le)?;
             binop_bool(state, IntegerValue::le)?
         }
         Bytecode::Ge => {
-            gas_meter.charge_simple_instr(S::Ge)?;
             binop_bool(state, IntegerValue::ge)?
         }
         Bytecode::Abort => {
-            gas_meter.charge_simple_instr(S::Abort)?;
             let error_code = state.pop_operand_as::<u64>()?;
             let error = partial_vm_error!(ABORTED)
                 .with_sub_status(error_code)
@@ -728,17 +672,14 @@ fn op_step_impl(
             state.push_operand(Value::bool(!lhs.equals(&rhs)?))?;
         }
         Bytecode::FreezeRef => {
-            gas_meter.charge_simple_instr(S::FreezeRef)?;
             // FreezeRef should just be a null op as we don't distinguish between mut
             // and immut ref at runtime.
         }
         Bytecode::Not => {
-            gas_meter.charge_simple_instr(S::Not)?;
             let value = !state.pop_operand_as::<bool>()?;
             state.push_operand(Value::bool(value))?;
         }
         Bytecode::Nop => {
-            gas_meter.charge_simple_instr(S::Nop)?;
         }
         Bytecode::VecPack(ty_ptr, num) => {
             let num = checked_as!(*num, u16)?;
