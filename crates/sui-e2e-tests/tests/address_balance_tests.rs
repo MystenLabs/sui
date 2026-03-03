@@ -3435,3 +3435,148 @@ async fn test_two_large_reservations_overflow() {
         .await;
     assert!(result.is_err());
 }
+
+/// Test that JSON-RPC sui_executeTransactionBlock returns correct balance changes
+/// when using address balance withdrawals (FundsWithdrawal).
+///
+/// This test reproduces a bug where sui_executeTransactionBlock returns balanceChanges: []
+/// despite the transaction producing balance changes that are visible when querying
+/// the same digest via sui_getTransactionBlock.
+#[sim_test]
+async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
+    use sui_json_rpc_api::{ReadApiClient, WriteApiClient};
+    use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+    use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, gas_coin) = test_env.get_sender_and_gas(0);
+    let receiver = SuiAddress::random_for_testing_only();
+
+    // Fund sender's address balance with enough for gas + withdrawal
+    let deposit_amount = 100_000_000u64;
+    let deposit_tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::coin(gas_coin), vec![(deposit_amount, sender)])
+        .build();
+    test_env.exec_tx_directly(deposit_tx).await.unwrap();
+    test_env.verify_accumulator_exists(sender, deposit_amount);
+
+    // Create a transaction that withdraws from address balance and transfers to receiver
+    let withdraw_amount = 1_000_000u64;
+    let tx = create_redeem_and_transfer_transaction(
+        sender,
+        receiver,
+        withdraw_amount,
+        test_env.rgp,
+        test_env.chain_id,
+        0,
+    );
+
+    // Sign the transaction
+    let signed_tx = test_env.cluster.sign_transaction(&tx).await;
+    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
+    let tx_digest = *signed_tx.digest();
+
+    // Execute via JSON-RPC with show_balance_changes: true
+    #[allow(deprecated)]
+    let rpc_client = test_env.cluster.rpc_client();
+    let execute_response = rpc_client
+        .execute_transaction_block(
+            tx_bytes,
+            signatures,
+            Some(SuiTransactionBlockResponseOptions::new().with_balance_changes()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await
+        .expect("Transaction execution should succeed");
+
+    // Now get the same transaction by digest
+    let get_response = rpc_client
+        .get_transaction_block(
+            tx_digest,
+            Some(SuiTransactionBlockResponseOptions::new().with_balance_changes()),
+        )
+        .await
+        .expect("Get transaction should succeed");
+
+    let get_balance_changes = get_response
+        .balance_changes
+        .as_ref()
+        .expect("balance_changes should be present in get_transaction_block response");
+
+    // Verify that get_transaction_block returns balance changes
+    assert!(
+        !get_balance_changes.is_empty(),
+        "get_transaction_block should return non-empty balance_changes, got: {:?}",
+        get_balance_changes
+    );
+
+    // The bug: execute_transaction_block returns None or empty balance_changes
+    // while get_transaction_block returns the correct balance changes
+    let execute_balance_changes = execute_response.balance_changes.as_ref();
+
+    // This assertion demonstrates the bug - execute_transaction_block should return
+    // the same balance changes as get_transaction_block
+    assert!(
+        execute_balance_changes.is_some() && !execute_balance_changes.unwrap().is_empty(),
+        "BUG: execute_transaction_block should return non-empty balance_changes. \
+         Got {:?} while get_transaction_block returned: {:?}",
+        execute_balance_changes,
+        get_balance_changes
+    );
+}
+
+fn create_redeem_and_transfer_transaction(
+    sender: SuiAddress,
+    receiver: SuiAddress,
+    amount: u64,
+    rgp: u64,
+    chain_id: ChainIdentifier,
+    nonce: u32,
+) -> TransactionData {
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    // Create FundsWithdrawal input for the amount
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag());
+    let withdrawal = builder.funds_withdrawal(withdraw_arg).unwrap();
+
+    // Call coin::redeem_funds to convert the withdrawal to a Coin
+    let coin = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("coin").unwrap(),
+        Identifier::new("redeem_funds").unwrap(),
+        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![withdrawal],
+    );
+
+    // Transfer the coin to the receiver
+    let receiver_arg = builder.pure(receiver).unwrap();
+    builder.command(Command::TransferObjects(vec![coin], receiver_arg));
+
+    let tx = TransactionKind::ProgrammableTransaction(builder.finish());
+    TransactionData::V1(TransactionDataV1 {
+        kind: tx,
+        sender,
+        gas_data: GasData {
+            payment: vec![], // Empty - use address balance for gas
+            owner: sender,
+            price: rgp,
+            budget: 10_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: chain_id,
+            nonce,
+        },
+    })
+}
