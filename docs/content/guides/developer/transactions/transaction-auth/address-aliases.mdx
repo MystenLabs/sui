@@ -1,0 +1,51 @@
+---
+title: Address Aliases
+description: Address aliases can be used to configure the set of keys that are allowed to sign transactions for a particular address on the Sui network.
+keywords: [ address aliases, aliases, key rotation, changing keys ]
+---
+
+Address aliases can be used to configure the set of keys that are allowed to sign transactions for a particular address on the Sui network.
+
+You can use address aliases to:
+- Perform simple key rotation for an address.
+- Grant multiple signers full access to everything owned by an address.
+- Implement more complicated authentication schemes, such as smart wallets with passkeys.
+
+:::warning
+
+All aliases for a given address have the ability to **unilaterally control or take** all coins, balances, and other resources owned by the address.
+
+Be extremely careful when making any changes to your aliases! Any new alias you add effectively becomes a joint owner of your address.
+
+:::
+
+## How aliases work
+
+Each address on Sui has a set of aliases. New addresses begin as their own alias. That is, a new address `A` has the alias set `{A}`.
+
+You can modify aliases for an address using the Move API in the <UnsafeLink href="/references/framework/sui-framework/sui_sui/address_alias">`sui::address_alias` module</UnsafeLink>. These modification functions must be invoked as top-level PTB commands and cannot be called from other Move functions.
+
+Some constraints for modifying aliases:
+- An address must always have at least one alias.
+- An address can be removed from its own alias set. For example, you can have an address `A` which only allows signatures from `{B, C}`.
+- The maximum number of allowed aliases for an address is 8.
+
+### Authenticating transactions with aliased addresses
+
+Transactions on Sui are configured with two addresses: a `sender` and a `gas_owner` (which might or might not be the same). For each configured address, a signature is required from one of the signers in its alias set.
+
+For example, with the following transaction and aliases:
+```
+transaction T {
+  sender: A
+  gas_owner: X
+  ...
+}
+
+aliases[A] = {A, B}
+aliases[X] = {Y}
+```
+
+To be valid, the transaction `T` would require a signature from either `A` or `B`, *and* a signature from `Y`.
+
+In this example, even if the transaction had signatures from `[B, Y]` and not from `A`, during execution it would nonetheless have access to everything owned by `A`, and during Move call execution its `TxContext::sender` would be `A`.
